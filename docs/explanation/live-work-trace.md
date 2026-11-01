@@ -79,7 +79,7 @@ Rules for fields:
   keys fall back to a generic label for the `kind`, never to the raw key.
 - `items` by kind: sources = `{ref: domain, label: page title or domain}`; papers = `{ref: paper id,
   label: title, sub: "Author et al., 2021"}`; records = `{ref: record id, label: title of the
-  person's own quest or reflection, kind: "quest"|"reflection"|"goal"|"note"}`; check = none, counts only.
+  person's own quest or reflection, kind: "quest"|"reflection"|"goal"|"note"}`; check = the bare domain of each link left out (`kind` `removed`, `ref` and `label` both the domain, never a path or query), nothing for links that checked out.
 - Unknown `kind` or `solution_id` still renders as one generic row (label plus count). A new hub
   solution therefore shows up with zero frontend change, and gets a custom look later.
 
@@ -88,7 +88,7 @@ page or paper content, snippets, model reasoning or narration, tool arguments, f
 (domain only; no query strings, tokens or paths), other people's record titles, or conversation turn
 text (the existing `_safe_event_title` already collapses history cards to "Conversation turn"; keep
 that). Personal record titles go only to the owner. In team chat or any shared thread, records are
-sent as counts only. The projector is an allowlist: it builds the event from named fields, so a new
+sent as counts only, except a record every human participant may see (section 10). The projector is an allowlist: it builds the event from named fields, so a new
 field cannot leak by accident. It also trims labels to 80 chars and strips newlines.
 
 Where it is emitted (the seam, not each arm):
@@ -350,10 +350,9 @@ person or covers a plausible unstated need. Each failure was read against the ca
   and papers retrieved in a result set are not shown live: whether the answer rests on them is not known until it is final.
 - The summary "Read N of your quest records" was a bare count. Records are now named: one or two ("Used your record: Run a half marathon
   by June"), or the first and the rest counted ("Used "Run a half marathon" and 3 more of your records"). Pages and papers follow the same
-  rule ("Read blog.rust-lang.org", "Read papers by Santos et al., 2026 and 4 more"). A shared (team) thread keeps counts only, so no
-  member's title is shown. Where nothing can be named the count stays.
+  rule ("Read blog.rust-lang.org", "Read papers by Santos et al., 2026 and 4 more"). A shared (team) thread names only records every participant may see (section 10). Where nothing can be named the count stays.
 - The removed-link heading "Good to know" was vague, and the group under it repeated one line. Removed links are now a sentence in the
-  summary ("Removed 2 links I could not verify"), shown only when a link was removed; there is no such heading and no group behind it.
+  summary ("Left out a link to example.com that I could not verify", section 10), shown only when a link was removed; there is no such heading and no group behind it.
 - A correct count of five cited papers was called a conflict. The judge was wrong, caused by the harness: `score.py` showed it the first
   900 characters of the reply, and two of the five papers stood further down. It now reads the whole reply (`REPLY_CHARS`).
 
@@ -361,11 +360,35 @@ One source of truth for the words: `workTrace.ts` composes the live line, the su
 `expandedGroups`); `WorkTrace.tsx` renders them and `scripts/run-worktrace-view.js` prints the same strings for the judge, through
 the same English pack. Nothing is re-worded in Python or in a parallel script.
 
-Still failing after this, and why (per element, not tuned away):
-- "Used 1 of your team's records" in a shared thread: the judge wants a name, and a team thread must not show one member's titles.
-  Whether to show a bare count there at all is a product call; the rule above keeps it.
-- "Removed 1 link I could not verify" on a turn whose reply holds no link: the removed link is, by definition, absent from the reply the
-  judge reads, so it cannot see what was removed. The person has the same view.
-- "Used your record: Conversational Spanish" on a spaced-repetition question: a real false positive of the emitter's used-record rule (the
-  card text and the reply share the long words "practice" and "second"). Naming the record made it visible. Fixing it means changing
-  `reply_draws_on` in `core/work_trace.py`, which needs new real turns to confirm.
+Three elements still failed after this (a bare team count, a removed link that cannot be seen, and a false positive of the used-record
+rule). Section 10 records what each was changed to.
+
+## 10. Fixing the last three judge failures (2026-11-01)
+
+Joshua's rule: fix every instance now; everything shown adds value; never overstate; no keyword gating on model output.
+
+- **Shared thread: name a record only when every human participant can see it.** A bare "Used 1 of your team's records" adds nothing, so a
+  shared thread now names a record when it is visible to EVERY human of the thread and otherwise counts it; a line that would only say a
+  count is dropped. Visibility is decided from structure by the backend (`app/business/conversations/work_trace_visibility.py`), never by
+  the runner and never from what a record says: a quest card (`quest-<quest id>`) is visible when the quest, loaded by id, passes
+  `user_can_access_quest` for every human of the thread; a team-scoped card in a team thread is visible when every human is a member of
+  that team; anything else, and anything that cannot be resolved, is private. The backend sets `visible_to_all` on each records item
+  (overwriting any mark that arrives), for the asker's stream too so the asker, the others and the stored reply show the same line. The hub
+  projector keeps a title for a viewer who may not see titles only on an item whose mark is exactly `true`. The app
+  (`redactForShared`) does the same and treats an unmarked item as private. Wording: "Used the team's record: A", "Used the team's records: A
+  and B", `Used the team's record "A" and 2 more records`. `work_trace_check` flags any titled item in a shared thread that is not marked, and
+  any private title anywhere in the trace; the backend endpoint tests carry private-title canaries (a quest only the asker owns, a quest a
+  third participant cannot open, a card nobody can place, a forged mark from the emitter).
+- **Removed link: show where it pointed.** The link-check step now carries one item per link left out, the bare domain only (`kind`
+  `removed`; the path, query string and fragment never leave, and a link with no domain such as a DOI is counted, not named). The line reads
+  "Left out a link to example.com that I could not verify", "Left out links to a.org and b.org that I could not verify", "Left out 2 links to
+  a.org that I could not verify", or, when some link has no domain, "Left out 2 links I could not verify". The judge sees these words
+  exactly as the person does (the rubric is unchanged). `work_trace_check` requires bare hostnames that belong to a removed link and fails on
+  any path, query or fragment of an address anywhere in the trace.
+- **Used-record false positive.** `reply_draws_on` counted words common in general English ("practice", "second"). A word now counts toward a
+  record only if it is rare in general English (absent from the three frequency bands the context adapters already ship,
+  `adapters/english_word_bands.py`, registered into core with `set_word_rarity` because core imports no adapter): the reply draws on a record
+  when its title stands in it, every rare word of its title does, a run of three of the card's words does, or it shares THREE distinct rare
+  words or numbers of two digits or more with the card's text. This is a table lookup over stored text and the reply, never a keyword list
+  over model output. Unregistered, no word is rare, so only a title or a quote can show a record (an undercount, never an overcount).
+  The saved spaced-repetition turn is an offline case in `tests/test_work_trace.py`.

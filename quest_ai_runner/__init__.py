@@ -20,6 +20,10 @@ from .runner.quest_client import quest_client_from_env as _quest_client_from_env
 # (``core.goal_runner.cli_safe_model``) and the Quest client factory for the standard tools.
 core.goal_runner.set_cli_model_translator(_cli_model)
 core.tools.set_quest_client_factory(_quest_client_from_env)
+# the work trace judges whether a reply draws on a record by words rare in general English, a table that lives with the context adapters.
+from .adapters.personal_lexicon import word_idf as _word_idf, MAX_IDF as _MAX_IDF  # noqa: E402
+from .core import work_trace as _work_trace  # noqa: E402
+_work_trace.set_word_rarity(lambda word: _word_idf(word) >= _MAX_IDF)
 # core reads no environment: the prepaid credit the tier selector counts comes from the environment through providers.py.
 from .providers import credits_from_environment as _credits_from_environment  # noqa: E402
 

@@ -151,7 +151,9 @@ def test_link_check_counts_only_and_affects_user_when_one_was_removed():
                          {"url": "https://b.example.org/p", "verdict": "DEAD", "reason": "404"}])
     step = sink.latest()["links"]
     assert step["kind"] == "check" and step["counts"] == {"checked": 2, "failed": 1} and step["affects_user"] is True
-    assert step["items"] == [] and "SECRET" not in json.dumps(step)
+    # Only the domain of the link that was left out leaves: no path, no query, nothing about the link that checked out.
+    assert step["items"] == [{"ref": "b.example.org", "label": "b.example.org", "kind": "removed"}]
+    assert "SECRET" not in json.dumps(step) and "/p" not in json.dumps(step) and "a.example.org" not in json.dumps(step)
     sink2, trace2 = make()
     trace2.links_checked([])
     assert sink2.events == []
@@ -375,3 +377,78 @@ def test_a_vector_hit_is_titled_by_its_own_name_not_by_the_slice_of_its_text():
     trace.records_used(light)
     trace.finish("Run a marathon in April is the quest to protect, and Morning pages habit can wait.")
     assert [i["label"] for i in sink.latest()["records"]["items"]] == ["Run a marathon in April"]
+
+
+def test_each_removed_link_is_named_by_its_domain_only_and_a_clean_check_names_none():
+    sink, trace = make()
+    trace.links_checked([{"url": "https://www.one.example.org/a/b?token=SECRET#frag", "verdict": "DEAD"},
+                         {"url": "http://user:pw@two.example.org:8080/x", "verdict": "UNKNOWN"},
+                         {"url": "doi:10.1/x", "verdict": "UNKNOWN"},
+                         {"url": "https://ok.example.org/fine", "verdict": "OK"}])
+    step = sink.latest()["links"]
+    assert step["counts"] == {"checked": 4, "failed": 3}
+    assert [i["ref"] for i in step["items"]] == ["one.example.org", "two.example.org"]   # a link with no domain is counted, not named
+    blob = json.dumps(step)
+    assert not any(bit in blob for bit in ("SECRET", "frag", "pw", "8080", "/a/b", "ok.example.org"))
+    clean, trace2 = make()
+    trace2.links_checked([{"url": "https://ok.example.org/fine", "verdict": "OK"}])
+    assert clean.latest()["links"]["items"] == [] and clean.latest()["links"]["affects_user"] is False
+
+
+# The saved turn where a spaced-repetition question about language-learning papers was wrongly shown "Used your record: Conversational Spanish":
+# the card and the reply shared only the common words "practice" and "second".
+SPANISH_CARD = {"title": "Conversational Spanish", "text": "25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday."}
+SPANISH_FACT = 'spanish-practice card: "25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday."'
+SPACING_REPLY = (
+    "I found no meta-analysis of spaced repetition itself for second-language learning. "
+    "- Nakata (2015), \"Effects of Expanding and Equal Spacing on Second Language Vocabulary Learning\". "
+    "- Nakata (2016), \"Does Repeated Practice Make Perfect? The Effects of Within-Session Repeated Retrieval on Second Language Vocabulary Learning\". "
+    "This concerns repetition within a session, not spacing across days.")
+
+
+def test_common_words_shared_with_a_card_do_not_make_the_reply_draw_on_it():
+    assert not work_trace.reply_draws_on(SPANISH_CARD, [SPANISH_FACT], SPACING_REPLY)
+    assert work_trace.distinctive_words(SPACING_REPLY) & work_trace.distinctive_words(SPANISH_CARD["text"]) == set()
+
+
+def test_a_reply_that_really_uses_the_record_still_draws_on_it():
+    marathon = {"title": "Run a marathon in April",
+                "text": "Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Swimming twice a week. Long run of 24 km planned for Sunday."}
+    # three rare words or numbers shared (knee, physio, 24)
+    assert work_trace.reply_draws_on(marathon, [], "Rest the knee until the physio visit; the 24 long run can wait.")
+    # the title's rare words stand in the reply
+    assert work_trace.reply_draws_on(marathon, [], "Your marathon plan is on track; April is far off.")
+    # a verbatim run of the card's words
+    assert work_trace.reply_draws_on(SPANISH_CARD, [], "You said you are stuck on past tenses, so start there.")
+    assert work_trace.reply_draws_on(SPANISH_CARD, [], "Your conversational Spanish practice is the one slipping.")
+    # but two rare words alone, or common words however many, are not enough
+    assert not work_trace.reply_draws_on(marathon, [], "A knee needs rest and a physio.")
+    assert not work_trace.reply_draws_on(SPANISH_CARD, [], "Daily practice every second day with a tutor session minutes long.")
+    # one word of a two-word title is not the title
+    assert not work_trace.reply_draws_on(SPANISH_CARD, [], "Learning Spanish takes time.")
+    # numbers of one digit are not distinctive
+    assert not work_trace.reply_draws_on({"title": "Plan", "text": "Week 6 of 7 weeks, then 8 more."}, [], "There are 6 steps, 7 notes and 8 items.")
+
+
+def test_without_a_registered_word_table_only_a_title_or_a_quote_can_show_a_record():
+    registered = work_trace._rare_word
+    try:
+        work_trace.set_word_rarity(lambda word: False)
+        assert not work_trace.reply_draws_on(SPANISH_CARD, [], "Daily practice, tenses, tutor, Tuesday, minutes.")
+        assert work_trace.reply_draws_on(SPANISH_CARD, [], "Your conversational spanish goal is slipping.")
+    finally:
+        work_trace.set_word_rarity(registered)
+
+
+def test_a_fact_that_names_several_cards_is_not_a_quote_of_any_of_them():
+    cards = {"candle-shop-launch": {"title": "Launch the candle shop", "text": ""}, "morning-pages-habit": {"title": "Morning pages habit", "text": ""}}
+    remark = "Vector hit candle-shop-launch and morning-pages-habit are WEAK subject matches, so they are not used."
+    own = "[morning-pages-habit] Morning pages habit: Skipping pages on travel days."
+    assert work_trace.facts_about("morning-pages-habit", [remark, own], cards) == [own]
+    assert work_trace.facts_about("candle-shop-launch", [remark, own], cards) == []
+    sink, trace = make()
+    light = [{"id": cid, "title": c["title"], "adapter": "quest"} for cid, c in cards.items()]
+    trace.records_selected(light, [])
+    trace.facts_noted([remark])
+    trace.finish("Skipping a few pages on travel days is fine; the vector hits were weak matches.")
+    assert "records" not in sink.latest()

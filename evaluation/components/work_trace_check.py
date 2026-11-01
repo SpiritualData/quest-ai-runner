@@ -18,7 +18,10 @@ violations. An esoi metric scores a turn as passing when the list is empty (``pa
    that is a sentence of card text, a "Topic: ..." line, a conversation turn or the card's own id is a violation. Matching is of known
    stored values against the reply, never of the reply's wording.
 2. No leak. No private title (``private_titles``: the labels of records that must not be shown) appears in any event a
-   shared thread's viewer gets, and in a shared thread no event of kind ``records`` or ``action`` carries items. No event holds a
+   shared thread's viewer gets, and in a shared thread an event of kind ``records`` or ``action`` carries only items marked
+   ``visible_to_all`` (records every participant of the thread may see; the consumer sets the mark from structure, never the emitter).
+   A link step names only the bare domain of a link that was left out: one per removed link at most, each a hostname with no scheme,
+   path, query string or fragment, and no path or query of any link the guard saw appears anywhere in an event. No event holds a
    full URL, a query string, a file path or a newline in a label, and every event passes the hub's validator.
 3. Terminal states. Every step reaches ``done`` or ``failed`` by the end of the turn, and the latest event per ``step_id`` is the one
    judged (replace-by-``step_id``).
@@ -34,11 +37,13 @@ from __future__ import annotations
 import json
 import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from urllib.parse import urlsplit
 
-from hubofhubs.ports.trace import validate
-from quest_ai_runner.core.work_trace import cards_cited, host_cited, is_record_title, reply_draws_on
+from hubofhubs.ports.trace import domain_of, validate
+from quest_ai_runner.core.work_trace import facts_about, host_cited, is_record_title, reply_draws_on
 
 PRIVATE_KINDS = ("records", "action")
+HOSTNAME = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$")
 URL_OR_PATH = re.compile(r"https?://|www\.|\?[a-z_]+=|(?:^|\s)(?:/|~/)[\w.-]+/")
 
 
@@ -96,9 +101,35 @@ def reply_problems(calls: Sequence[Mapping[str, Any]], steps: Mapping[str, Mappi
     for item in (steps.get("records") or {}).get("items") or []:
         card = cards.get(str(item.get("ref"))) or {}
         known = {"title": item.get("label"), "text": card.get("text") or ""}
-        took = [f for f in facts if cards_cited([f], {str(item.get("ref")): dict(known)})]
+        took = facts_about(str(item.get("ref")), facts, {cid: {"title": c.get("title"), "text": c.get("text") or ""} for cid, c in cards.items()})
         if not reply_draws_on(known, took, reply):
             problems.append(f"records: lists a record the reply does not draw on ({item.get('ref')})")
+    return problems
+
+
+def link_problems(calls: Sequence[Mapping[str, Any]], data: Mapping[str, Any], blob: str) -> List[str]:
+    """What a link step shows beyond the domains of links left out: nothing else of an address."""
+    problems: List[str] = []
+    failed = (data.get("counts") or {}).get("failed", 0)
+    items = data.get("items") or []
+    if items and not failed:
+        problems.append("links: names a link although none was left out")
+    if len(items) > failed:
+        problems.append("links: names more links than were left out")
+    for item in items:
+        for key in ("ref", "label"):
+            if not HOSTNAME.match(str(item.get(key) or "")):
+                problems.append(f"links: item {key} is not a bare domain ({str(item.get(key))[:40]!r})")
+    seen = [v for call in calls if call.get("kind") == "links" for v in call.get("verdicts") or [] if isinstance(v, Mapping) and v.get("url")]
+    left_out = {domain_of(v["url"]) for v in seen if str(v.get("verdict") or "").upper() != "OK"}
+    for item in items:
+        if item.get("ref") not in left_out:
+            problems.append(f"links: names a domain no removed link has ({item.get('ref')})")
+    for v in seen:
+        parts = urlsplit(str(v["url"]))
+        for piece in (parts.path.strip("/"), parts.query, parts.fragment):
+            if len(piece) >= 3 and piece in blob:
+                problems.append("links: a path, query or fragment of an address appears in the trace")
     return problems
 
 
@@ -147,8 +178,10 @@ def check_turn(calls: Sequence[Mapping[str, Any]], events: Iterable[Any], *, sha
         for title in private_titles:
             if title and title in blob:
                 problems.append(f"{data.get('step_id')}: a private title appears in the trace")
-        if shared and data.get("kind") in PRIVATE_KINDS and data.get("items"):
-            problems.append(f"{data.get('step_id')}: a shared thread's {data.get('kind')} step carries items, counts only is allowed")
+        if shared and data.get("kind") in PRIVATE_KINDS and any(i.get("visible_to_all") is not True for i in data.get("items") or []):
+            problems.append(f"{data.get('step_id')}: a shared thread's {data.get('kind')} step names a record that is not visible to everyone")
+        if data.get("kind") == "check":
+            problems += link_problems(calls, data, blob)
         for item in data.get("items") or []:
             for key in ("ref", "label", "sub"):
                 if URL_OR_PATH.search(str(item.get(key) or "")):

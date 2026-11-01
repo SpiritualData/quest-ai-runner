@@ -28,12 +28,13 @@ def bridge(arm, variants):
 
 
 def projected(events):
-    """What the hub sends other participants of a shared thread: record and action steps carry counts only."""
+    """What the hub sends other participants of a shared thread: record and action steps carry counts only, except records the backend
+    marked ``visible_to_all`` (a record every participant may see), which keep their title."""
     out = []
     for e in events:
         e = dict(e)
         if e.get("kind") in PRIVATE_KINDS:
-            e["items"] = []
+            e["items"] = [i for i in e.get("items") or [] if i.get("visible_to_all") is True]
         out.append(e)
     return out
 
@@ -73,6 +74,10 @@ def totals(case):
 def has_work(case):
     """The turn did something the person could be shown: a search, a read, records used, a link left out, or a slowdown they felt."""
     t = totals(case)
+    if case.get("surface") == "group":
+        # A shared thread names a record only when every participant may see it; a bare count of the rest adds nothing, so it is not work to show.
+        named = any(i.get("visible_to_all") is True for e in case["events"] if e.get("kind") == "records" for i in e.get("items") or [])
+        t = dict(t, records=t["records"] if named else 0)
     felt = any(e.get("kind") == "notice" and e.get("affects_user") for e in case["events"])
     return felt or any(t[k] for k in ("web_read", "web_found", "papers_read", "papers_found", "records", "links_removed"))
 

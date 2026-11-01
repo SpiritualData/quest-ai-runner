@@ -5,8 +5,7 @@ events and the structural records of what the calls returned. Nothing here calls
     python3 evaluation/components/work_trace_experience/live_turns.py --turn records --out /tmp/records.json
 
 Turns: ``web`` (a current-facts question), ``records`` (a question about the person's own quests), ``papers`` (a scholarly question),
-``unrelated`` (a coding question with the records seeded: no records step should show), ``group`` (the records question in a shared thread,
-``audience`` shared). Each case also records which selected cards the answer used and which returned works the reply cited, computed
+``unrelated`` (a coding question with the records seeded: no records step should show), ``group`` (the records question in a shared thread: the backend always asks the runner for the owner's view and projects it per viewer, so the events carry titles and are then marked ``visible_to_all`` as the backend does). Each case also records which selected cards the answer used and which returned works the reply cited, computed
 from the run's own planner facts and reply by ``quest_ai_runner.core.work_trace`` (a quote found in the card, a DOI or title in the reply). The web search needs ``GOOGLE_AI_API_KEY`` (or another
 backend ``web_search`` knows) and the scholarly search ``OPENALEX_API_KEY`` in the environment; they are read by name and never
 printed. The environment is rebuilt from an allowlist so no deployment's card store, tools file or keys leak into the run, and the
@@ -41,8 +40,11 @@ TURNS = {
                       message="In Python, what is the difference between a list and a tuple, and when should I use each?"),
     "unrelated2": dict(kind="records", surface="solo", audience="owner", message="Explain what a hash map is in two short paragraphs."),
     "greeting": dict(kind="none", surface="solo", audience="owner", message="Thanks, that is all for now."),
-    "group": dict(kind="group", surface="group", audience="shared", message=KNEE),
+    "group": dict(kind="group", surface="group", audience="owner", message=KNEE),
+    "teamgroup": dict(kind="group", surface="group", audience="owner", message="Which of my quests is slipping most right now, and what is one small step for it?"),
 }
+#: Cards the backend would mark visible to every participant of the shared thread (a record on the team's own quest): the rest are one member's private records.
+TEAM_VISIBLE = ("candle-shop-launch",)
 #: A fictional person's records written as the cards the context store holds: ``(id, title, details, keywords)``. The title is the short name
 #: a person gave the quest (the card's ``summary``, which is what the store shows as its title); the details are a note item the answer can read.
 CARDS = [("marathon-april-quest", "Run a marathon in April",
@@ -136,7 +138,7 @@ def run_turn(name):
     details = {c[0]: c[2] for c in CARDS}
     for card_id, card in cards.items():
         card["text"] = details.get(card_id.split(":")[-1], "")
-    took = {cid: [f for f in facts if work_trace.cards_cited([f], {cid: card})] for cid, card in cards.items()}
+    took = {cid: work_trace.facts_about(cid, facts, cards) for cid in cards}
     # The reference definition of "used": the planner took it AND the finished reply draws on it (core/work_trace.py).
     for card_id, card in cards.items():
         card["used"] = bool(took[card_id]) and work_trace.reply_draws_on(card, took[card_id], reply)
@@ -147,10 +149,15 @@ def run_turn(name):
     calls.append({"kind": "records", "cards": list(cards.values())})
     links = [c for c in (getattr(result, "link_checks", None) or []) if isinstance(c, dict)]
     if links:
-        calls.append({"kind": "links", "verdicts": [{"verdict": str(c.get("verdict") or "")} for c in links]})
+        calls.append({"kind": "links", "verdicts": [{"verdict": str(c.get("verdict") or ""), "url": str(c.get("url") or "")} for c in links]})
+    if spec["surface"] == "group":
+        # What quest-backend does for a shared thread (work_trace_visibility): mark each record visible to all or not, from structure.
+        for event in events:
+            if event.get("kind") == "records":
+                event["items"] = [dict(i, visible_to_all=str(i.get("ref")).split(":")[-1] in TEAM_VISIBLE) for i in event.get("items") or []]
     return dict(id=f"TRACE-REAL-{name.upper()}", stage="real", stratum="a-real", kind=spec["kind"], surface=spec["surface"], message=spec["message"],
                 reply=str(getattr(result, "text", "") or ""), events=events, calls=calls,
-                private_titles=[c[1] for c in CARDS] if spec["surface"] == "group" else [],
+                private_titles=[c[1] for c in CARDS if c[0] not in TEAM_VISIBLE] if spec["surface"] == "group" else [],
                 seconds=round(time.time() - started, 1),
                 source="real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles")
 

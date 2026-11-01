@@ -962,20 +962,26 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "t1",
+    "trace_id": "trace-1",
     "step_id": "links",
     "solution_id": "watch-for-risk",
     "kind": "check",
-    "label_key": "workTrace.x",
+    "label_key": "workTrace.links.checking",
     "state": "done",
     "counts": {
      "checked": 3,
      "failed": 1
     },
-    "items": [],
+    "items": [
+     {
+      "ref": "registration.springtenk.example.org",
+      "label": "registration.springtenk.example.org",
+      "kind": "removed"
+     }
+    ],
     "affects_user": true,
-    "started_at": "2026-11-01T10:00:00.000Z",
-    "ended_at": "2026-11-01T10:00:09.000Z"
+    "started_at": "2026-11-01T16:15:35.574Z",
+    "ended_at": "2026-11-01T16:15:35.574Z"
    }
   ],
   "calls": [
@@ -983,12 +989,15 @@
     "kind": "links",
     "verdicts": [
      {
+      "url": "https://www.springtenk.example.org/results",
       "verdict": "OK"
      },
      {
+      "url": "https://www.example.net/news",
       "verdict": "OK"
      },
      {
+      "url": "https://registration.springtenk.example.org/signup/2026?ref=SECRET42",
       "verdict": "BAD"
      }
     ]
@@ -1633,7 +1642,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "9bfaa99fbef24f63a7f53f03",
+    "trace_id": "trace-2",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1649,7 +1658,7 @@
    },
    {
     "v": 1,
-    "trace_id": "9bfaa99fbef24f63a7f53f03",
+    "trace_id": "trace-2",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1667,7 +1676,7 @@
    },
    {
     "v": 1,
-    "trace_id": "9bfaa99fbef24f63a7f53f03",
+    "trace_id": "trace-2",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1763,6 +1772,204 @@
   "source": "reproduces the 2026-11-01 review finding (a Go reply that says it has no working web search showed 7 of the team's quest records as read); events produced by the fixed emitter from fictional inputs"
  },
  {
+  "id": "TRACE-OFF-17",
+  "stage": "offline",
+  "stratum": "a-handbuilt",
+  "kind": "group",
+  "surface": "group",
+  "message": "Given our team's quests, what is at risk this week?",
+  "reply": "Two things are at risk. The Launch the candle shop quest: the wax shipment slipped a week, so the soft launch moved to 3 Nov. And your own Run a marathon in April quest: your left knee is sore after hills, with a physio booked for Thursday.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-3",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 2,
+     "read": 2
+    },
+    "items": [
+     {
+      "ref": "quest-candle",
+      "label": "Launch the candle shop",
+      "kind": "quest",
+      "visible_to_all": true
+     },
+     {
+      "ref": "quest-marathon",
+      "label": "Run a marathon in April",
+      "kind": "quest",
+      "visible_to_all": false
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T16:15:35.574Z",
+    "ended_at": "2026-11-01T16:15:35.574Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "quest-candle",
+      "title": "Launch the candle shop",
+      "text": "Wax shipment slipped a week; soft launch moved to 3 Nov; budget 2000 USD.",
+      "used": true
+     },
+     {
+      "id": "quest-marathon",
+      "title": "Run a marathon in April",
+      "text": "Week 6 of 16; left knee sore after hills; physio on Thursday.",
+      "used": true
+     }
+    ]
+   },
+   {
+    "kind": "plan_facts",
+    "facts": [
+     "Launch the candle shop: wax shipment slipped a week; soft launch moved to 3 Nov",
+     "Run a marathon in April: Week 6 of 16; left knee sore after hills"
+    ]
+   }
+  ],
+  "private_titles": [
+   "Run a marathon in April"
+  ],
+  "source": "hand-built from the emitter's own events; the visible_to_all marks are what quest-backend sets for a thread of two people on the team"
+ },
+ {
+  "id": "TRACE-OFF-18",
+  "stage": "offline",
+  "stratum": "a-handbuilt",
+  "kind": "group",
+  "surface": "group",
+  "message": "What is at risk for me this week?",
+  "reply": "Your Run a marathon in April quest is the one at risk: your left knee is sore after hills.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-4",
+    "step_id": "records",
+    "solution_id": "context-assembler",
+    "kind": "records",
+    "label_key": "workTrace.records.looking",
+    "state": "done",
+    "counts": {
+     "found": 1,
+     "read": 1
+    },
+    "items": [
+     {
+      "ref": "quest-marathon",
+      "label": "Run a marathon in April",
+      "kind": "quest",
+      "visible_to_all": false
+     }
+    ],
+    "affects_user": false,
+    "started_at": "2026-11-01T16:15:35.575Z",
+    "ended_at": "2026-11-01T16:15:35.575Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "records",
+    "cards": [
+     {
+      "id": "quest-marathon",
+      "title": "Run a marathon in April",
+      "text": "Week 6 of 16; left knee sore after hills; physio on Thursday.",
+      "used": true
+     }
+    ]
+   },
+   {
+    "kind": "plan_facts",
+    "facts": [
+     "Run a marathon in April: Week 6 of 16; left knee sore after hills"
+    ]
+   }
+  ],
+  "private_titles": [
+   "Run a marathon in April"
+  ],
+  "source": "hand-built from the emitter's own events; the only used record is private to the asker"
+ },
+ {
+  "id": "TRACE-OFF-19",
+  "stage": "offline",
+  "stratum": "a-handbuilt",
+  "kind": "links",
+  "surface": "solo",
+  "message": "Where can I read the release notes and the install guide?",
+  "reply": "I could not verify the release notes or the install guide addresses, so I left those links out. Search the project name plus 'release notes' to find them.",
+  "events": [
+   {
+    "v": 1,
+    "trace_id": "trace-5",
+    "step_id": "links",
+    "solution_id": "watch-for-risk",
+    "kind": "check",
+    "label_key": "workTrace.links.checking",
+    "state": "done",
+    "counts": {
+     "checked": 4,
+     "failed": 3
+    },
+    "items": [
+     {
+      "ref": "news.example.com",
+      "label": "news.example.com",
+      "kind": "removed"
+     },
+     {
+      "ref": "news.example.com",
+      "label": "news.example.com",
+      "kind": "removed"
+     },
+     {
+      "ref": "docs.other-site.example.org",
+      "label": "docs.other-site.example.org",
+      "kind": "removed"
+     }
+    ],
+    "affects_user": true,
+    "started_at": "2026-11-01T16:15:35.575Z",
+    "ended_at": "2026-11-01T16:15:35.575Z"
+   }
+  ],
+  "calls": [
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "url": "https://news.example.com/2026/11/release-notes?id=SECRET99",
+      "verdict": "DEAD"
+     },
+     {
+      "url": "https://news.example.com/archive/old-page",
+      "verdict": "UNKNOWN"
+     },
+     {
+      "url": "https://docs.other-site.example.org/guide#install",
+      "verdict": "UNKNOWN"
+     },
+     {
+      "url": "https://fine.example.org/ok",
+      "verdict": "OK"
+     }
+    ]
+   }
+  ],
+  "private_titles": [],
+  "source": "hand-built from the emitter's own events"
+ },
+ {
   "id": "TRACE-REAL-WEB",
   "stage": "real",
   "stratum": "a-real",
@@ -1773,7 +1980,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1789,7 +1996,7 @@
    },
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1826,7 +2033,7 @@
    },
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1884,7 +2091,7 @@
    },
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1941,7 +2148,7 @@
    },
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -1999,7 +2206,7 @@
    },
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "links",
     "solution_id": "watch-for-risk",
     "kind": "check",
@@ -2016,7 +2223,7 @@
    },
    {
     "v": 1,
-    "trace_id": "d13164240d93410f84176e72",
+    "trace_id": "trace-6",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2164,11 +2371,11 @@
   "kind": "web",
   "surface": "solo",
   "message": "What is the latest stable Rust release, and what was the previous one?",
-  "reply": "My best estimate is **Rust 1.99** as the latest stable release and **Rust 1.98** as the one before it. I could not verify this live, so treat it as unconfirmed.\n\nThe estimate comes from Rust's six-week release schedule, counted forward from 1.91 (30 October 2025), the most recent release I can state from memory. The schedule puts 1.98 on 20 August 2026 and 1.99 on 1 October 2026. Rust occasionally shifts a release date, so check the Rust release notes to confirm both versions.",
+  "reply": "The latest stable Rust release is most likely **1.99.0**, from about 1 October 2026, and the one before it is most likely **1.98.0**, from about 20 August 2026. I can't check a live source from here, so treat these as estimates. Rust ships a new stable every six weeks, and I'm extrapolating that schedule from the last release I know well, 1.85.0 on 20 February 2025. Confirm against the Rust release announcements before you rely on them.",
   "events": [
    {
     "v": 1,
-    "trace_id": "ff82a6be3bff40e7a7f06d77",
+    "trace_id": "trace-7",
     "step_id": "links",
     "solution_id": "watch-for-risk",
     "kind": "check",
@@ -2178,10 +2385,16 @@
      "checked": 1,
      "failed": 1
     },
-    "items": [],
+    "items": [
+     {
+      "ref": "blog.rust-lang.org",
+      "label": "blog.rust-lang.org",
+      "kind": "removed"
+     }
+    ],
     "affects_user": true,
-    "started_at": "2026-11-01T15:31:28.216Z",
-    "ended_at": "2026-11-01T15:31:28.216Z"
+    "started_at": "2026-11-01T16:16:45.320Z",
+    "ended_at": "2026-11-01T16:16:45.320Z"
    }
   ],
   "calls": [
@@ -2195,35 +2408,35 @@
      {
       "id": "card:candle-shop-launch",
       "title": "Launch the candle shop",
-      "relevance": 0.5340022588889485,
+      "relevance": 0.5424728701828512,
       "text": "Wax shipment slipped by a week. Soft launch moved to 3 Nov. Budget 2000 USD, 1400 USD spent.",
       "used": false
      },
      {
       "id": "card:esoi-framework-rollout",
       "title": "ESOI framework rollout",
-      "relevance": 0.522274759060632,
+      "relevance": 0.5369130033827435,
       "text": "Connects the ESOI framework and Quest product intent to the competitive alternatives. Owner Payal, review on Friday.",
       "used": false
      },
      {
       "id": "card:marathon-april-quest",
       "title": "Run a marathon in April",
-      "relevance": 0.5273089297083114,
+      "relevance": 0.47328271434915714,
       "text": "Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Swimming twice a week as cross-training. Long run of 24 km planned for Sunday.",
       "used": false
      },
      {
       "id": "card:morning-pages-habit",
       "title": "Morning pages habit",
-      "relevance": 0.5194637675970835,
+      "relevance": 0.5208903960179367,
       "text": "Skipping pages on travel days. Goal is 20 days in a row; current streak is 4 days.",
       "used": false
      },
      {
       "id": "card:spanish-practice",
       "title": "Conversational Spanish",
-      "relevance": 0.5340051973687467,
+      "relevance": 0.5173314544388721,
       "text": "25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday.",
       "used": false
      }
@@ -2233,14 +2446,15 @@
     "kind": "links",
     "verdicts": [
      {
-      "verdict": "unknown"
+      "verdict": "unknown",
+      "url": "https://blog.rust-lang.org/"
      }
     ]
    }
   ],
   "private_titles": [],
-  "seconds": 31.4,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles; captured 2026-11-01 on the fixed emitter (record titles by card name, records settled on the finished reply, sites cited by the reply)"
+  "seconds": 33.6,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles"
  },
  {
   "id": "TRACE-REAL-GO",
@@ -2253,7 +2467,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2269,7 +2483,7 @@
    },
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2301,7 +2515,7 @@
    },
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2344,7 +2558,7 @@
    },
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2386,7 +2600,7 @@
    },
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2429,7 +2643,7 @@
    },
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "links",
     "solution_id": "watch-for-risk",
     "kind": "check",
@@ -2446,7 +2660,7 @@
    },
    {
     "v": 1,
-    "trace_id": "0a167752f92d46b7b3834435",
+    "trace_id": "trace-8",
     "step_id": "web",
     "solution_id": "search-backend",
     "kind": "sources",
@@ -2587,7 +2801,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "2863f55e9af740018c39824b",
+    "trace_id": "trace-9",
     "step_id": "records",
     "solution_id": "context-assembler",
     "kind": "records",
@@ -2649,7 +2863,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "44bf47baf6da447688f68ae6",
+    "trace_id": "trace-10",
     "step_id": "records",
     "solution_id": "context-assembler",
     "kind": "records",
@@ -2709,7 +2923,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "eaa800dca1f647f6b249c77d",
+    "trace_id": "trace-11",
     "step_id": "records",
     "solution_id": "context-assembler",
     "kind": "records",
@@ -2801,7 +3015,7 @@
   "events": [
    {
     "v": 1,
-    "trace_id": "b76d2e8c81c745f59195cd06",
+    "trace_id": "trace-12",
     "step_id": "papers",
     "solution_id": "know-the-world",
     "kind": "papers",
@@ -2817,7 +3031,7 @@
    },
    {
     "v": 1,
-    "trace_id": "b76d2e8c81c745f59195cd06",
+    "trace_id": "trace-12",
     "step_id": "papers",
     "solution_id": "know-the-world",
     "kind": "papers",
@@ -2855,7 +3069,7 @@
    },
    {
     "v": 1,
-    "trace_id": "b76d2e8c81c745f59195cd06",
+    "trace_id": "trace-12",
     "step_id": "papers",
     "solution_id": "know-the-world",
     "kind": "papers",
@@ -2892,7 +3106,7 @@
    },
    {
     "v": 1,
-    "trace_id": "b76d2e8c81c745f59195cd06",
+    "trace_id": "trace-12",
     "step_id": "papers",
     "solution_id": "know-the-world",
     "kind": "papers",
@@ -2955,7 +3169,7 @@
    },
    {
     "v": 1,
-    "trace_id": "b76d2e8c81c745f59195cd06",
+    "trace_id": "trace-12",
     "step_id": "papers",
     "solution_id": "know-the-world",
     "kind": "papers",
@@ -3004,12 +3218,12 @@
      {
       "title": "ASSOCIATION BETWEEN RUNNING VOLUME AND KNEE OSTEOARTHRITIS IN ADULT RUNNERS: A NARRATIVE REVIEW",
       "authors": [
-       "João Carlos Dos Santos",
-       "Gabriel de José Schuler",
+       "Jo\u00e3o Carlos Dos Santos",
+       "Gabriel de Jos\u00e9 Schuler",
        "Renzo Vasquez Flores",
        "Ricardo Trautwein Facci Segundo",
        "Matheus de Carvalho Pita",
-       "Natália Ferreira Souza",
+       "Nat\u00e1lia Ferreira Souza",
        "Carlos Eduardo Da Vitoria Fiore",
        "Maria Eduarda Abrahim Pinto de Andrade"
       ],
@@ -3021,8 +3235,8 @@
       "title": "CHARACTERISTICS OF TRAINING AND ASSOCIATION WITH INJURIES IN RECREATIONAL ROAD RUNNERS",
       "authors": [
        "Fernando Carmelo Torres",
-       "Antônio Carlos Gomes",
-       "Sérgio Gregório da Silva"
+       "Ant\u00f4nio Carlos Gomes",
+       "S\u00e9rgio Greg\u00f3rio da Silva"
       ],
       "year": 2020,
       "doi": "10.1590/1517-8692202026052020_0045",
@@ -3032,8 +3246,8 @@
       "title": "CHARACTERISTICS OF TRAINING AND ASSOCIATION WITH INJURIES IN RECREATIONAL ROAD RUNNERS",
       "authors": [
        "Fernando Carmelo Torres",
-       "Antônio Carlos Gomes",
-       "Sérgio Gregório da Silva"
+       "Ant\u00f4nio Carlos Gomes",
+       "S\u00e9rgio Greg\u00f3rio da Silva"
       ],
       "year": 2021,
       "doi": "10.6084/m9.figshare.14285302",
@@ -3160,15 +3374,15 @@
   "kind": "papers",
   "surface": "solo",
   "message": "What does the research say about spaced repetition for learning a second language? Please cite a few papers.",
-  "reply": "I found no meta-analysis of spaced repetition itself for second-language learning. I read only titles and abstracts, so treat these as leads to check, not verified findings.\n\n- **Nakata (2015)**, \"Effects of Expanding and Equal Spacing on Second Language Vocabulary Learning,\" *Studies in Second Language Acquisition*, DOI 10.1017/s0272263114000825. This is the most direct test of spacing. Its abstract says expanding spacing (gaps that grow over time) is often regarded as the most effective schedule, but earlier comparisons with equal spacing gave mixed results. The study tested whether the amount of spacing and the retention interval change that comparison. The abstract does not report the outcome, so check the full paper before relying on a conclusion.\n- **Nakata (2016)**, \"Does Repeated Practice Make Perfect? The Effects of Within-Session Repeated Retrieval on Second Language Vocabulary Learning,\" *Studies in Second Language Acquisition*, DOI 10.1017/s0272263116000280. It tests repeated retrieval within one study session and measures vocabulary after a longer delay. This concerns repetition within a session, not spacing across days.\n- **Uchihara, Webb & Yanagisawa (2019)**, \"The Effects of Repetition on Incidental Vocabulary Learning: A Meta-Analysis of Correlational Studies,\" *Language Learning*, DOI 10.1111/lang.12343. It pools 45 effect sizes from 26 studies (N = 1,918) on how the number of word encounters relates to incidental vocabulary learning. It covers repetition in general, not spacing.\n\nThe abstracts agree that repetition helps L2 vocabulary learning. On spacing specifically, the abstracts I read do not settle the question.",
+  "reply": "Spaced practice appears to help second-language learning. The strongest source I found is a 2022 meta-analysis. I couldn't search scientific databases here, so these come from web summaries, and I haven't read the full papers.\n\n- [The Effects of Spaced Practice on Second Language Learning: A Meta-Analysis](https://www.researchgate.net/publication/358406370_The_Effects_of_Spaced_Practice_on_Second_Language_Learning_A_Meta-Analysis), *Language Learning*, 2022. Its summary reports 48 experiments with 3,411 learners and a medium-to-large benefit for vocabulary and grammar retention.\n- [GrammarDots' review of spaced repetition research](https://grammardots.com/en/blog/spaced-repetition-language-learning-research) reports that shorter gaps may match longer ones for immediate recall, but longer gaps do better on delayed tests.\n- [A JAIGS article](https://jaigs.org/index.php/JAIGS/article/download/103/67/226) suggests that expanding intervals, where review gaps grow over time, may help long-term retention. I only saw a snippet of this one.\n\nFor your Conversational Spanish quest, this suggests spreading the past tenses across several days rather than drilling them in one session.",
   "events": [
    {
     "v": 1,
-    "trace_id": "e8f0aed21db2475c8db9ee37",
-    "step_id": "papers",
-    "solution_id": "know-the-world",
-    "kind": "papers",
-    "label_key": "workTrace.papers.searching",
+    "trace_id": "trace-13",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
     "state": "running",
     "counts": {
      "found": 0,
@@ -3176,191 +3390,255 @@
     },
     "items": [],
     "affects_user": false,
-    "started_at": "2026-11-01T15:28:31.313Z"
+    "started_at": "2026-11-01T16:16:28.412Z"
    },
    {
     "v": 1,
-    "trace_id": "e8f0aed21db2475c8db9ee37",
-    "step_id": "papers",
-    "solution_id": "know-the-world",
-    "kind": "papers",
-    "label_key": "workTrace.papers.searching",
+    "trace_id": "trace-13",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
     "state": "done",
     "counts": {
-     "found": 132,
-     "read": 5
+     "found": 8,
+     "read": 0
     },
     "items": [
      {
-      "ref": "10.1111/lang.12343",
-      "label": "The Effects of Repetition on Incidental Vocabulary Learning: A Meta‐Analysis...",
-      "sub": "Uchihara et al., 2019"
+      "ref": "minddory.com",
+      "label": "minddory.com",
+      "kind": "found"
      },
      {
-      "ref": "10.1002/9781118660584.ese0431",
-      "label": "The Cattell‐Horn‐Carroll Theory of Cognitive Abilities",
-      "sub": "Flanagan and Dixon, 2014"
+      "ref": "notelyn.com",
+      "label": "notelyn.com",
+      "kind": "found"
      },
      {
-      "ref": "10.5944/ried.19.1.14581",
-      "label": "THE CASE FOR USING DUOLINGO AS PART OF THE LANGUAGE CLASSROOM EXPERIENCE",
-      "sub": "Munday, 2015"
+      "ref": "medium.com",
+      "label": "medium.com",
+      "kind": "found"
      },
      {
-      "ref": "10.1017/s0272263114000825",
-      "label": "EFFECTS OF EXPANDING AND EQUAL SPACING ON SECOND LANGUAGE VOCABULARY LEARNING",
-      "sub": "Nakata, 2015"
+      "ref": "grammardots.com",
+      "label": "grammardots.com",
+      "kind": "found"
      },
      {
-      "ref": "10.1017/s0272263116000280",
-      "label": "DOES REPEATED PRACTICE MAKE PERFECT? THE EFFECTS OF WITHIN-SESSION REPEATED R...",
-      "sub": "Nakata, 2016"
+      "ref": "researchgate.net",
+      "label": "researchgate.net",
+      "kind": "found"
+     },
+     {
+      "ref": "lexylearn.com",
+      "label": "lexylearn.com",
+      "kind": "found"
+     },
+     {
+      "ref": "jaigs.org",
+      "label": "jaigs.org",
+      "kind": "found"
      }
     ],
     "affects_user": false,
-    "started_at": "2026-11-01T15:28:31.313Z",
-    "ended_at": "2026-11-01T15:28:31.871Z"
+    "started_at": "2026-11-01T16:16:28.412Z",
+    "ended_at": "2026-11-01T16:16:33.275Z"
    },
    {
     "v": 1,
-    "trace_id": "e8f0aed21db2475c8db9ee37",
-    "step_id": "records",
-    "solution_id": "context-assembler",
-    "kind": "records",
-    "label_key": "workTrace.records.looking",
+    "trace_id": "trace-13",
+    "step_id": "links",
+    "solution_id": "watch-for-risk",
+    "kind": "check",
+    "label_key": "workTrace.links.checking",
     "state": "done",
     "counts": {
-     "found": 1,
-     "read": 1
+     "checked": 3,
+     "failed": 0
     },
-    "items": [
-     {
-      "ref": "spanish-practice",
-      "label": "Conversational Spanish",
-      "kind": "note"
-     }
-    ],
+    "items": [],
     "affects_user": false,
-    "started_at": "2026-11-01T15:29:05.757Z",
-    "ended_at": "2026-11-01T15:29:05.757Z"
+    "started_at": "2026-11-01T16:17:03.198Z",
+    "ended_at": "2026-11-01T16:17:03.198Z"
    },
    {
     "v": 1,
-    "trace_id": "e8f0aed21db2475c8db9ee37",
-    "step_id": "papers",
-    "solution_id": "know-the-world",
-    "kind": "papers",
-    "label_key": "workTrace.papers.searching",
+    "trace_id": "trace-13",
+    "step_id": "web",
+    "solution_id": "search-backend",
+    "kind": "sources",
+    "label_key": "workTrace.web.reading",
     "state": "done",
     "counts": {
-     "found": 132,
-     "read": 3
+     "found": 8,
+     "read": 0
     },
     "items": [
      {
-      "ref": "10.1111/lang.12343",
-      "label": "The Effects of Repetition on Incidental Vocabulary Learning: A Meta‐Analysis...",
-      "sub": "Uchihara et al., 2019"
+      "ref": "grammardots.com",
+      "label": "grammardots.com",
+      "kind": "found"
      },
      {
-      "ref": "10.1017/s0272263114000825",
-      "label": "EFFECTS OF EXPANDING AND EQUAL SPACING ON SECOND LANGUAGE VOCABULARY LEARNING",
-      "sub": "Nakata, 2015"
+      "ref": "researchgate.net",
+      "label": "researchgate.net",
+      "kind": "found"
      },
      {
-      "ref": "10.1017/s0272263116000280",
-      "label": "DOES REPEATED PRACTICE MAKE PERFECT? THE EFFECTS OF WITHIN-SESSION REPEATED R...",
-      "sub": "Nakata, 2016"
+      "ref": "jaigs.org",
+      "label": "jaigs.org",
+      "kind": "found"
      }
     ],
     "affects_user": false,
-    "started_at": "2026-11-01T15:28:31.313Z",
-    "ended_at": "2026-11-01T15:29:05.757Z"
+    "started_at": "2026-11-01T16:16:28.412Z",
+    "ended_at": "2026-11-01T16:17:03.200Z"
    }
   ],
   "calls": [
    {
-    "kind": "papers",
-    "works": [
+    "kind": "web_search",
+    "hits": [
      {
-      "title": "The Effects of Repetition on Incidental Vocabulary Learning: A Meta‐Analysis of Correlational Studies",
-      "authors": [
-       "Takumi Uchihara",
-       "Stuart Webb",
-       "Akifumi Yanagisawa"
-      ],
-      "year": 2019,
-      "doi": "10.1111/lang.12343",
-      "cited": true
+      "url": "https://minddory.com/blog/spaced-repetition-language-learning-effectiveness"
      },
      {
-      "title": "The Cattell‐Horn‐Carroll Theory of Cognitive Abilities",
-      "authors": [
-       "Dawn P. Flanagan",
-       "Shauna G. Dixon"
-      ],
-      "year": 2014,
-      "doi": "10.1002/9781118660584.ese0431",
-      "cited": false
+      "url": "https://www.notelyn.com/blog/spaced-repetition-effectiveness-vocabulary-learning-research"
      },
      {
-      "title": "THE CASE FOR USING DUOLINGO AS PART OF THE LANGUAGE CLASSROOM EXPERIENCE",
-      "authors": [
-       "Pilar Munday"
-      ],
-      "year": 2015,
-      "doi": "10.5944/ried.19.1.14581",
-      "cited": false
+      "url": "https://medium.com/language-mind/the-spacing-effect-how-to-triple-your-language-learning-retention-d9c90cf4d3f4"
      },
      {
-      "title": "EFFECTS OF EXPANDING AND EQUAL SPACING ON SECOND LANGUAGE VOCABULARY LEARNING",
-      "authors": [
-       "Tatsuya Nakata"
-      ],
-      "year": 2015,
-      "doi": "10.1017/s0272263114000825",
-      "cited": true
+      "url": "https://minddory.com/blog/benefits-of-spaced-repetition-language-learning"
      },
      {
-      "title": "DOES REPEATED PRACTICE MAKE PERFECT? THE EFFECTS OF WITHIN-SESSION REPEATED RETRIEVAL ON SECOND LANGUAGE VOCABULARY LEARNING",
-      "authors": [
-       "Tatsuya Nakata"
-      ],
-      "year": 2016,
-      "doi": "10.1017/s0272263116000280",
-      "cited": true
+      "url": "https://grammardots.com/en/blog/spaced-repetition-language-learning-research"
+     },
+     {
+      "url": "https://www.researchgate.net/publication/358406370_The_Effects_of_Spaced_Practice_on_Second_Language_Learning_A_Meta-Analysis"
+     },
+     {
+      "url": "https://lexylearn.com/en/blog/spaced-learning-l2.html"
+     },
+     {
+      "url": "https://jaigs.org/index.php/JAIGS/article/download/103/67/226"
      }
     ],
-    "total": 132
+    "held": [
+     {
+      "title": "minddory.com",
+      "url": "https://minddory.com/blog/spaced-repetition-language-learning-effectiveness",
+      "snippet": "Studies indicate that this method can lead to 2\u20133 times better long-term recall"
+     },
+     {
+      "title": "notelyn.com",
+      "url": "https://www.notelyn.com/blog/spaced-repetition-effectiveness-vocabulary-learning-research",
+      "snippet": "Studies indicate that this method can lead to 2\u20133 times better long-term recall Integrating spaced repetition with contextual learning and active recall further boosts its effectiveness"
+     },
+     {
+      "title": "medium.com",
+      "url": "https://medium.com/language-mind/the-spacing-effect-how-to-triple-your-language-learning-retention-d9c90cf4d3f4",
+      "snippet": "Studies indicate that this method can lead to 2\u20133 times better long-term recall"
+     },
+     {
+      "title": "minddory.com",
+      "url": "https://minddory.com/blog/benefits-of-spaced-repetition-language-learning",
+      "snippet": "A 2008 meta-analysis found spaced practice improved retention by approximately 64% over massed practice, with the gap widening over time"
+     },
+     {
+      "title": "grammardots.com",
+      "url": "https://grammardots.com/en/blog/spaced-repetition-language-learning-research",
+      "snippet": "Some research suggests that shorter gaps may be as effective as longer ones for immediate recall, but longer gaps perform better for delayed tests"
+     },
+     {
+      "title": "researchgate.net",
+      "url": "https://www.researchgate.net/publication/358406370_The_Effects_of_Spaced_Practice_on_Second_Language_Learning_A_Meta-Analysis",
+      "snippet": "A meta-analysis published in *Language Learning* in 2022, combining data from 48 experiments and 3,411 learners, found that spaced practice has a medium-to-large effect on second language acquisition, significantly improving vocabulary and grammar retention While shorter spacing intervals were as..."
+     },
+     {
+      "title": "lexylearn.com",
+      "url": "https://lexylearn.com/en/blog/spaced-learning-l2.html",
+      "snippet": "A meta-analysis published in *Language Learning* in 2022, combining data from 48 experiments and 3,411 learners, found that spaced practice has a medium-to-large effect on second language acquisition, significantly improving vocabulary and grammar retention Audio and speech-based spaced repetition.."
+     },
+     {
+      "title": "jaigs.org",
+      "url": "https://jaigs.org/index.php/JAIGS/article/download/103/67/226",
+      "snippet": "Expanding spacing intervals, where review times gradually increase, also showed potential for long-term retention"
+     }
+    ]
    },
    {
     "kind": "plan_facts",
     "facts": [
-     "spanish-practice card: \"25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday.\"",
-     "Search 'spaced repetition second language vocabulary learning' (openalex, 5 of 132 matches): Nakata 2015, 'Effects of Expanding and Equal Spacing on Second Language Vocabulary Learning', Studies in Se",
-     "Nakata 2016, 'Does Repeated Practice Make Perfect? The Effects of Within-Session Repeated Retrieval on Second Language Vocabulary Learning', Studies in Second Language Acquisition, DOI 10.1017/s027226",
-     "Uchihara, Webb & Yanagisawa 2019, 'The Effects of Repetition on Incidental Vocabulary Learning: A Meta-Analysis of Correlational Studies', Language Learning, DOI 10.1111/lang.12343: 45 effect sizes fr",
-     "Munday 2015, 'The Case for Using Duolingo as Part of the Language Classroom Experience', RIED, DOI 10.5944/ried.19.1.14581: Duolingo as a complement to university Spanish courses.",
-     "Flanagan & Dixon 2014, CHC theory of cognitive abilities (DOI 10.1002/9781118660584.ese0431): off-topic, not about language learning, exclude.",
-     "Only titles and abstracts were read, not full papers."
+     "Web results (gemini-grounding, query 'spacing effect foreign language retention meta-analysis peer-reviewed'): a meta-analysis in Language Learning (2022), 48 experiments and 3,411 learners, found spa",
+     "Web results (query 'spaced repetition second language vocabulary learning research studies'): spaced repetition beats massed practice for L2 vocabulary; blog summaries report 2-3x better long-term rec",
+     "Web results: shorter spacing gaps may match longer ones for immediate recall, while longer gaps perform better on delayed tests; source https://grammardots.com/en/blog/spaced-repetition-language-learn",
+     "Web results: expanding spacing intervals also show potential for long-term retention; source https://jaigs.org/index.php/JAIGS/article/download/103/67/226",
+     "Tool note: search_scientific_literature is not set up here, so no paper, author or DOI may be named from memory"
     ]
    },
    {
     "kind": "records",
     "cards": [
      {
-      "id": "spanish-practice",
+      "id": "card:candle-shop-launch",
+      "title": "Launch the candle shop",
+      "relevance": 0.44624680687810653,
+      "text": "Wax shipment slipped by a week. Soft launch moved to 3 Nov. Budget 2000 USD, 1400 USD spent.",
+      "used": false
+     },
+     {
+      "id": "card:esoi-framework-rollout",
+      "title": "ESOI framework rollout",
+      "relevance": 0.49128704123223166,
+      "text": "Connects the ESOI framework and Quest product intent to the competitive alternatives. Owner Payal, review on Friday.",
+      "used": false
+     },
+     {
+      "id": "card:marathon-april-quest",
+      "title": "Run a marathon in April",
+      "relevance": 0.5015235529440113,
+      "text": "Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Swimming twice a week as cross-training. Long run of 24 km planned for Sunday.",
+      "used": false
+     },
+     {
+      "id": "card:morning-pages-habit",
+      "title": "Morning pages habit",
+      "relevance": 0.6385756369383698,
+      "text": "Skipping pages on travel days. Goal is 20 days in a row; current streak is 4 days.",
+      "used": false
+     },
+     {
+      "id": "card:spanish-practice",
       "title": "Conversational Spanish",
-      "relevance": 1.0,
+      "relevance": 0.7009996972611536,
       "text": "25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday.",
-      "used": true
+      "used": false
+     }
+    ]
+   },
+   {
+    "kind": "links",
+    "verdicts": [
+     {
+      "verdict": "ok",
+      "url": "https://www.researchgate.net/publication/358406370_The_Effects_of_Spaced_Practice_on_Second_Language_Learning_A_Meta-Analysis"
+     },
+     {
+      "verdict": "ok",
+      "url": "https://grammardots.com/en/blog/spaced-repetition-language-learning-research"
+     },
+     {
+      "verdict": "ok",
+      "url": "https://jaigs.org/index.php/JAIGS/article/download/103/67/226"
      }
     ]
    }
   ],
   "private_titles": [],
-  "seconds": 49.0,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles; captured 2026-11-01 on the fixed emitter (record titles by card name, records settled on the finished reply, sites cited by the reply)"
+  "seconds": 54.2,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles"
  },
  {
   "id": "TRACE-REAL-GROUP",
@@ -3368,45 +3646,90 @@
   "stratum": "a-real",
   "kind": "group",
   "surface": "group",
-  "message": "I have a sore knee again. Given my current quests, what should I change this week?",
-  "reply": "Ease off this week and keep the knee away from hills until your physio visit on Thursday. Consider moving the 24 km long run planned for Sunday, or cutting it short. Keep the twice-weekly swimming, since it puts little load on the knee.\n\nI couldn't read this week's goals, so I can't check them against this plan. Your quest note has no date, so confirm it still matches how the knee feels now. If the pain worsens, or the knee swells, locks, or gives way, see a doctor before Thursday.",
+  "message": "Which of my quests is slipping most right now, and what is one small step for it?",
+  "reply": "The candle shop launch is slipping most. The wax shipment is a week late, and the soft launch has moved to 3 Nov, two days from today.\n\nOne small step: email or call the wax supplier today and ask for a firm delivery date. That will show whether 3 Nov still works before you spend more of the budget.\n\nYour marathon isn't behind schedule, but your left knee has been sore after hills, so keep Thursday's physio visit. Next up: the candle shop soft launch on 3 Nov, and the marathon, now in week 6 of 16.",
   "events": [
    {
     "v": 1,
-    "trace_id": "50ba40915cc74688bc5510c0",
+    "trace_id": "trace-14",
     "step_id": "records",
     "solution_id": "context-assembler",
     "kind": "records",
     "label_key": "workTrace.records.looking",
     "state": "done",
     "counts": {
-     "found": 1,
-     "read": 1
+     "found": 2,
+     "read": 2
     },
-    "items": [],
+    "items": [
+     {
+      "ref": "card:candle-shop-launch",
+      "label": "Launch the candle shop",
+      "visible_to_all": true
+     },
+     {
+      "ref": "card:marathon-april-quest",
+      "label": "Run a marathon in April",
+      "visible_to_all": false
+     }
+    ],
     "affects_user": false,
-    "started_at": "2026-11-01T15:27:21.956Z",
-    "ended_at": "2026-11-01T15:27:21.956Z"
+    "started_at": "2026-11-01T16:20:01.817Z",
+    "ended_at": "2026-11-01T16:20:01.818Z"
    }
   ],
   "calls": [
    {
     "kind": "plan_facts",
     "facts": [
-     "marathon-april-quest note: Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Swimming twice a week as cross-training. Long run of 24 km planned for Sunday.",
-     "marathon-april-quest note: \"Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Swimming twice a week as cross-training. Long run of 24 km planned for Sunday.\" (undated)",
-     "list_quest_goals for marathon-april-quest failed: team_id is required, so this week's goals were not read."
+     "\"Run a marathon in April\": Week 6 of 16, left knee sore after hills, physio visit booked for Thursday, long run of 24 km planned for Sunday (on-subject quest card)",
+     "\"ESOI framework rollout\": owner Payal, review on Friday (on-subject quest card)",
+     "\"Launch the candle shop\": wax shipment slipped a week, soft launch moved to 3 Nov (weak subject match, likely not a quest card)",
+     "\"Morning pages habit\" and \"Conversational Spanish\": weak subject matches, not quests",
+     "card:candle-shop-launch: Wax shipment slipped by a week. Soft launch moved to 3 Nov. Budget 2000 USD, 1400 USD spent.",
+     "card:marathon-april-quest: Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Long run of 24 km planned for Sunday.",
+     "card:morning-pages-habit: Skipping pages on travel days. Goal is 20 days in a row; current streak is 4 days.",
+     "card:esoi-framework-rollout: Owner Payal, review on Friday.",
+     "card:spanish-practice: 25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday."
     ]
    },
    {
     "kind": "records",
     "cards": [
      {
-      "id": "marathon-april-quest",
+      "id": "card:candle-shop-launch",
+      "title": "Launch the candle shop",
+      "relevance": 0.5642882657801587,
+      "text": "Wax shipment slipped by a week. Soft launch moved to 3 Nov. Budget 2000 USD, 1400 USD spent.",
+      "used": true
+     },
+     {
+      "id": "card:esoi-framework-rollout",
+      "title": "ESOI framework rollout",
+      "relevance": 0.6402727583261055,
+      "text": "Connects the ESOI framework and Quest product intent to the competitive alternatives. Owner Payal, review on Friday.",
+      "used": false
+     },
+     {
+      "id": "card:marathon-april-quest",
       "title": "Run a marathon in April",
-      "relevance": 1.0,
+      "relevance": 0.5860937161647348,
       "text": "Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday. Swimming twice a week as cross-training. Long run of 24 km planned for Sunday.",
       "used": true
+     },
+     {
+      "id": "card:morning-pages-habit",
+      "title": "Morning pages habit",
+      "relevance": 0.6538076015107875,
+      "text": "Skipping pages on travel days. Goal is 20 days in a row; current streak is 4 days.",
+      "used": false
+     },
+     {
+      "id": "card:spanish-practice",
+      "title": "Conversational Spanish",
+      "relevance": 0.5596987798015511,
+      "text": "25 minutes of daily practice, stuck on past tenses. Tutor session every second Tuesday.",
+      "used": false
      }
     ]
    }
@@ -3414,12 +3737,11 @@
   "private_titles": [
    "Run a marathon in April",
    "Morning pages habit",
-   "Launch the candle shop",
    "Conversational Spanish",
    "ESOI framework rollout"
   ],
-  "seconds": 40.8,
-  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles; captured 2026-11-01 on the fixed emitter (record titles by card name, records settled on the finished reply, sites cited by the reply)"
+  "seconds": 46.3,
+  "source": "real run on the Claude Code subscription (haiku), real web and scholarly search, seeded fictional card store with realistic titles"
  },
  {
   "id": "TRACE-REAL-UNRELATED",

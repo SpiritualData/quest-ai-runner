@@ -14,7 +14,7 @@ Honest counts: ``read`` of a page is a page actually fetched (a site a search on
 search that opened and cited nothing is left as a found count with no list: "searched, no page opened"); of a paper, a work the finished
 answer cites (its DOI or full title appears in the reply, or its first author and year stand together there); of a record, a card the
 answer drew on: the planner took it (a quote of the card's own text in ``facts_read``, its id or title named there, or it was fetched
-by id) AND the finished reply draws on it (its title stands in the reply, a run of three of its words does, or the reply shares two distinct long words or numbers with the card's text).
+by id) AND the finished reply draws on it (its title stands in the reply, a run of three of its words does, every rare word of its title does, or the reply shares three distinct rare words or numbers with the card's text; a word common in general English never counts).
 ``found`` is what a search listed. A card the context assembler merely selected is a candidate, not a record read, so an unrelated
 question shows no records step, and a reply that found nothing in a record it looked at does not carry that record. A record is shown by
 its human title only (``is_record_title``): never a conversation turn, a topic line or any text of a card; a card without such a title is
@@ -43,8 +43,9 @@ HISTORY_ADAPTER = "turn"
 HISTORY_TITLE = "Conversation turn"
 #: A quoted fact counts as taken from a card when this many consecutive words (at least this many characters) stand in the card's text.
 QUOTE_WORDS, QUOTE_CHARS = 4, 18
-#: A reply also draws on a record when it shares this many distinct long words (or numbers) with the card's own text, title words aside.
-SHARED_WORDS, SHARED_WORD_CHARS = 2, 5
+#: A reply also draws on a record when it shares this many distinct RARE words (or numbers of two digits or more) with the card's own text:
+#: a word common in general English ("practice", "second") says nothing about a card, so it never counts. Title words are judged separately.
+SHARED_WORDS, SHARED_WORD_CHARS = 3, 4
 #: A reply restates a record's words more loosely than a planner quotes them: this shorter run of the card's own words counts.
 REPLY_WORDS, REPLY_CHARS = 3, 14
 #: Names shorter than this are too common to prove a card was named.
@@ -80,14 +81,32 @@ def host_cited(domain: str, answer: str) -> bool:
     return bool(re.search(r"(?:(?<![\w.-])|(?<=www\.))" + re.escape(host) + r"(?![\w-]|\.\w)", str(answer or "").lower()))
 
 
+#: Whether a word is rare in general English. The brain knows no word list: the package registers one (``set_word_rarity``, from the
+#: general-English bands the context adapters already use). Unregistered, no word counts as rare, so only a record's title can show it.
+_rare_word = lambda word: False  # noqa: E731
+
+
+def set_word_rarity(is_rare: Any) -> None:
+    """Register ``is_rare(word) -> bool``: True for a word absent from common English (it can single out one record)."""
+    global _rare_word
+    _rare_word = is_rare
+
+
 def distinctive_words(text: Any) -> set:
-    """The words of ``text`` long enough to say something (``SHARED_WORD_CHARS`` characters) and every number: the comparable part of a card."""
-    return {w for w in flat(text).split() if len(w) >= SHARED_WORD_CHARS or w.isdigit()}
+    """The rare words of ``text`` (``SHARED_WORD_CHARS`` characters or more, absent from common English) and its numbers of two digits or
+    more: the part of a card that can tell it apart from any other text."""
+    return {w for w in flat(text).split() if (w.isdigit() and len(w) >= 2) or (len(w) >= SHARED_WORD_CHARS and not w.isdigit() and _rare_word(w))}
+
+
+def title_stands_in(card: Mapping[str, Any], answer: str) -> bool:
+    """True when every rare word of the card's title stands in the reply (at least one exists): a reply that names the record's subject."""
+    words = {w for w in flat(card.get("title")).split() if len(w) >= SHARED_WORD_CHARS and not w.isdigit() and _rare_word(w)}
+    return bool(words) and words <= set(flat(answer).split())
 
 
 def reply_draws_on(card: Mapping[str, Any], facts: Any, answer: str) -> bool:
     """True when the finished reply draws on this card: its title stands in the reply, a run of ``REPLY_WORDS`` words of the card's text
-    does, the reply shares ``SHARED_WORDS`` distinct long words or numbers with the card's text (a paraphrase of it), or a run of words of a fact that took something from the card does. A record the planner read but the reply left out (or said
+    does, every rare word of its title does, the reply shares ``SHARED_WORDS`` distinct rare words or numbers with the card's text (a paraphrase of it), or a run of words of a fact that took something from the card does. A record the planner read but the reply left out (or said
     it found nothing in) shares none of these. Compares stored text with the reply; it reads no meaning out of the reply."""
     title = flat(card.get("title"))
     if len(title) >= MIN_NAME_CHARS and " " + title + " " in " " + flat(answer) + " ":
@@ -95,8 +114,9 @@ def reply_draws_on(card: Mapping[str, Any], facts: Any, answer: str) -> bool:
     text = card.get("text") or ""
     if quoted_from(answer, text, REPLY_WORDS, REPLY_CHARS):
         return True
-    own = distinctive_words(text) - set(flat(card.get("title")).split())
-    if len(own & distinctive_words(answer)) >= SHARED_WORDS:
+    if title_stands_in(card, answer):
+        return True
+    if len(distinctive_words(text) & distinctive_words(answer)) >= SHARED_WORDS:
         return True
     return any(quoted_from(answer, f, REPLY_WORDS, REPLY_CHARS) for f in facts or [])
 
@@ -126,6 +146,12 @@ def cards_cited(facts: Any, cards: Mapping[str, Mapping[str, Any]]) -> List[str]
                 out.append(card_id)
                 break
     return out
+
+
+def facts_about(card_id: str, facts: Any, cards: Mapping[str, Mapping[str, Any]]) -> List[str]:
+    """The facts that took something from THIS card alone: a fact that names or quotes several cards (a remark about which hits were weak, a
+    list of titles) is not a quote of any one of them, so its words say nothing about whether the reply used this card."""
+    return [f for f in (facts or []) if isinstance(f, str) and cards_cited([f], {k: v for k, v in cards.items()}) == [card_id]]
 
 
 def paper_cited(work: Mapping[str, Any], answer: str) -> bool:
@@ -379,9 +405,8 @@ class TurnTrace:
             pool = {cid: self.card_texts.get(cid, {"title": item["label"], "text": ""}) for cid, item in self.candidates.items()}
             for card_id in cards_cited(facts, pool):
                 self.taken.setdefault(card_id, self.candidates[card_id])
-                for fact in facts:
-                    if cards_cited([fact], {card_id: pool[card_id]}):
-                        self.taken_facts.setdefault(card_id, []).append(fact)
+                for fact in facts_about(card_id, facts, pool):
+                    self.taken_facts.setdefault(card_id, []).append(fact)
 
     def settle_records(self, answer: str) -> None:
         """The reply is final: of the cards the planner took, keep those the reply draws on, and send the records step once."""
@@ -396,14 +421,16 @@ class TurnTrace:
 
     @safe
     def links_checked(self, link_checks: Any) -> None:
-        """``link_checks`` are the guard's verdict dicts. Counts only: the addresses never leave."""
+        """``link_checks`` are the guard's verdict dicts. Only the DOMAIN of a link that was left out leaves (one item per removed link, so
+        the person can tell which link is missing); the path, query string and every link that checked out stay behind."""
         checks = [c for c in (link_checks or []) if isinstance(c, Mapping)]
         if not checks or self.sent_links:
             return
         self.sent_links = True
-        removed = sum(1 for c in checks if str(c.get("verdict") or "").upper() != "OK")
+        left_out = [c for c in checks if str(c.get("verdict") or "").upper() != "OK"]
+        items = [{"ref": domain, "label": domain, "kind": "removed"} for domain in (domain_of(c.get("url")) for c in left_out) if domain]
         self.trace.update(STEP_LINKS, solution_id=SOLUTION_LINKS, kind="check", label_key=LABEL_LINKS, state="done",
-                          counts={"checked": len(checks), "failed": removed}, affects_user=removed > 0)
+                          counts={"checked": len(checks), "failed": len(left_out)}, items=items, affects_user=bool(left_out))
 
     @safe
     def finish(self, answer: Any = None) -> None:
