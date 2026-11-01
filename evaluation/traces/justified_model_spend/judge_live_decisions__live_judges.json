@@ -1,108 +1,108 @@
 {
  "calls": [
   {
-   "cost_usd": 3.364e-05,
+   "cost_usd": 0.0002795,
    "critical_path": true,
-   "seconds": 3.3453772659995593,
+   "seconds": 2.673961294000037,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1296,
    "tokens_out": 41,
    "turn": 1
   },
   {
-   "cost_usd": 7.412e-05,
+   "cost_usd": 0.0003266,
    "critical_path": true,
-   "seconds": 1.9626515649724752,
+   "seconds": 2.384772359044291,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1294,
-   "tokens_out": 122,
+   "tokens_out": 136,
    "turn": 2
   },
   {
-   "cost_usd": 3.3650000000000005e-05,
+   "cost_usd": 0.0002797,
    "critical_path": true,
-   "seconds": 2.1544074160046875,
+   "seconds": 1.956037079973612,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1297,
    "tokens_out": 41,
    "turn": 3
   },
   {
-   "cost_usd": 3.361e-05,
+   "cost_usd": 0.0002789,
    "critical_path": true,
-   "seconds": 2.4845336779835634,
+   "seconds": 2.284993601962924,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1293,
    "tokens_out": 41,
    "turn": 4
   },
   {
-   "cost_usd": 3.257999999999999e-05,
+   "cost_usd": 0.0003248000000000001,
    "critical_path": true,
-   "seconds": 2.104408056999091,
+   "seconds": 4.494201219000388,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1290,
-   "tokens_out": 39,
+   "tokens_out": 134,
    "turn": 5
   },
   {
-   "cost_usd": 4.999000000000003e-05,
+   "cost_usd": 0.00030250000000000003,
    "critical_path": true,
-   "seconds": 2.2653762699919753,
+   "seconds": 1.7454737320076674,
    "spec_id": "judge-a-decision.quest-ranking",
    "tokens_in": 1331,
    "tokens_out": 73,
    "turn": 6
   },
   {
-   "cost_usd": 3.3529999999999986e-05,
+   "cost_usd": 0.0003438,
    "critical_path": true,
-   "seconds": 2.157451178994961,
+   "seconds": 1.6201306369621307,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1635,
    "tokens_out": 34,
    "turn": 7
   },
   {
-   "cost_usd": 3.552999999999998e-05,
+   "cost_usd": 0.00034579999999999984,
    "critical_path": true,
-   "seconds": 2.1031337290187366,
+   "seconds": 2.5300607650424354,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1635,
    "tokens_out": 38,
    "turn": 8
   },
   {
-   "cost_usd": 0.0001541,
+   "cost_usd": 0.00034519999999999993,
    "critical_path": true,
-   "seconds": 3.122106913011521,
+   "seconds": 2.0792182849836536,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1642,
-   "tokens_out": 275,
+   "tokens_out": 34,
    "turn": 9
   },
   {
-   "cost_usd": 3.307000000000001e-05,
+   "cost_usd": 0.00034409999999999996,
    "critical_path": true,
-   "seconds": 1.778347528015729,
+   "seconds": 1.7411779959802516,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1639,
    "tokens_out": 33,
    "turn": 10
   },
   {
-   "cost_usd": 0.00027704999999999993,
+   "cost_usd": 0.0004921999999999999,
    "critical_path": true,
-   "seconds": 4.156074378988706,
+   "seconds": 3.1582009849953465,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1637,
-   "tokens_out": 521,
+   "tokens_out": 330,
    "turn": 11
   },
   {
-   "cost_usd": 0.0003428000000000001,
+   "cost_usd": 0.0003427999999999999,
    "critical_path": true,
-   "seconds": 2.3307419319753535,
+   "seconds": 2.067304940021131,
    "spec_id": "act-in-the-world.reach-judge",
    "tokens_in": 1630,
    "tokens_out": 34,
@@ -112,12 +112,12 @@
  "cases_sha": "5a83064b",
  "component": "judge_live_decisions",
  "defaulted_tags": 0,
- "git_sha": "9f363a7",
+ "git_sha": "eeaeb69",
  "impl": "live_judges",
  "label": "eval-trace",
  "summary": {
   "cases": 12,
-  "cli_reported_cost_usd": 0.0011,
+  "cli_reported_cost_usd": 0.004,
   "component": "judge_live_decisions",
   "details": "quest_rank 6/6, reach 6/6",
   "dev": "12/12",
@@ -127,9 +127,9 @@
   "model_calls": 12,
   "passed": 12,
   "sample": "",
-  "seconds": 30.0,
+  "seconds": 28.7,
   "tokens_in": 17619,
-  "tokens_out": 1292
+  "tokens_out": 969
  },
  "turns": [
   {
