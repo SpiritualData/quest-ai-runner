@@ -12,6 +12,8 @@ HERE = Path(__file__).resolve().parent
 
 
 def load_cases():
+    if os.environ.get("QAR_EVAL_REAL_CASES"):   # the second real tier alone: its own frozen file, the turns run only with the live switch
+        return json.loads((HERE / os.environ["QAR_EVAL_REAL_CASES"]).read_text(encoding="utf-8"))
     cases = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
     if os.environ.get("QAR_EVAL_LIVE_TURNS") == "1":
         cases = cases + json.loads((HERE / "real_cases.json").read_text(encoding="utf-8"))

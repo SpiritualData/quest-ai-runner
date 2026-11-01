@@ -61,6 +61,11 @@ TURNS = {
         "the club cheque book. Nothing else is needed from me.")),
 }
 
+#: A second tier: ``QAR_INTERIM_TURNS_FILE`` names a case file (``real_cases2.json``) whose cases carry their own turn spec in ``args.spec``.
+if os.environ.get("QAR_INTERIM_TURNS_FILE"):
+    for extra in json.loads((HERE / os.environ["QAR_INTERIM_TURNS_FILE"]).read_text(encoding="utf-8")):
+        TURNS[extra["args"]["turn"]] = extra["args"]["spec"]
+
 
 def load_keys():
     """Read the two key names from the environment or the .env files into the allowlisted environment. Values are never printed."""
@@ -257,7 +262,7 @@ def run_turn(name, interim_replies):
                 messages=messages, frame_types=[f.get("type") for f in frames], log=record["log"],
                 asks_filed=sink.filed, callers=getattr(sink, 'callers', []), sink_calls=sink.calls, decision_id=getattr(result, "decision_id", None),
                 events=[f["data"] for f in frames if f.get("type") == "work_trace"], seconds=seconds,
-                private_titles=[c[1][:60] for c in CARDS] if spec["surface"] == "group" else [],
+                private_titles=([c[1][:60] for c in CARDS] if spec["surface"] == "group" else []) + list(spec.get("private_markers") or []),
                 source="real run on the Claude Code subscription (haiku), real web search, seeded fictional card store, in-memory decision sink")
 
 
@@ -326,6 +331,8 @@ def check(case):
     # a quiet turn (spam check): the simple input must send no interim and no ask.
     if case["expect_interim"] is False and interims:
         problems.append("an interim on a turn that needed none")
+    if case["expect_interim"] is True and not interims:
+        problems.append("no interim on a turn that needed more than one pass")
     if case["expect_ask"] is False and case["asks_filed"]:
         problems.append("an ask on a turn that needed none")
     # privacy in the group turn: the asker's private cards must not appear in what other participants see.

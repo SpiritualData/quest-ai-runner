@@ -1,0 +1,191 @@
+[
+ {
+  "id": "INT-REAL2-BLOCK-TEAM-A",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-block-team-a",
+   "spec": {
+    "surface": "group",
+    "audience": "shared",
+    "expect_ask": true,
+    "expect_interim": false,
+    "message": "Get the wax reorder for the candle shop approved today. Any purchase over 500 USD needs sign-off from Bram, because only he has the login to the supplier account. I cannot reach the supplier account myself and nothing else is needed from me."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a group turn that only a teammate can unblock (supplier sign-off held by Bram): exactly one ask assigned to Bram, the asker told the answer, no interim",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-BLOCK-TEAM-NONPART",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-block-team-b",
+   "spec": {
+    "surface": "group",
+    "audience": "shared",
+    "expect_ask": true,
+    "expect_interim": false,
+    "message": "Book the photographer for the club banquet. Only Chidi Eze, the club treasurer, can approve the 350 USD fee, so please get his approval before booking. I do not have his approval and cannot give it myself."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a turn that needs a teammate who is not a participant of the team (the club treasurer): the ask must go to a participant and the asker must be told; an assignee outside the team is a failure",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-BLOCK-ACCESS",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-block-access",
+   "spec": {
+    "surface": "solo",
+    "audience": "owner",
+    "expect_ask": true,
+    "expect_interim": false,
+    "message": "Check whether my gym membership fee was charged to my bank account this month and tell me the amount. You have no access to my bank account and only I can log in to it, so I will need to give you the figure or the statement."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a solo turn blocked on the asker's own access (a bank login only they hold): one ask to the asker, no interim",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-SIMPLE-A",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-simple-a",
+   "spec": {
+    "surface": "solo",
+    "audience": "owner",
+    "expect_ask": false,
+    "expect_interim": false,
+    "message": "What is the capital of Australia, and roughly how many people live in that city?"
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a plain factual question: exactly one final, no interim, no ask",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-SIMPLE-B",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-simple-b",
+   "spec": {
+    "surface": "solo",
+    "audience": "owner",
+    "expect_ask": false,
+    "expect_interim": false,
+    "message": "Give me a one-sentence definition of compound interest and a tiny example with round numbers."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a plain definition request: exactly one final, no interim, no ask",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-RESEARCH",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-research",
+   "spec": {
+    "surface": "solo",
+    "audience": "owner",
+    "expect_ask": false,
+    "expect_interim": true,
+    "message": "Find 7 different published studies from 2022 or later on how cold-water immersion affects muscle recovery after endurance exercise. For each give the authors, the year, the number of participants, the main recovery outcome with its unit, and a link that you opened and confirmed leads to the paper. Leave out any study you could not open. Reply with the table."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a research turn with a hard per-item requirement (seven studies, each link opened): expected to need a second pass, so an interim built from receipts is expected; never an ask",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-ANSWER-ASK",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-answer-ask",
+   "spec": {
+    "surface": "solo",
+    "audience": "owner",
+    "expect_ask": true,
+    "expect_interim": false,
+    "message": "A sponsor offered 500 USD for the candle shop launch if their logo goes on the packaging. Write the reply to them, but whether we accept the logo-on-packaging condition is my decision and I have not made it, so ask me before the reply is finalised."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "an answer turn whose final needs a decision only the asker can make (accept a sponsor's condition): one ask to the asker",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ },
+ {
+  "id": "INT-REAL2-GROUP-PRIVATE",
+  "kind": "real",
+  "area": "real turn",
+  "args": {
+   "turn": "r2-group-private",
+   "spec": {
+    "surface": "group",
+    "audience": "shared",
+    "expect_ask": "maybe",
+    "expect_interim": "maybe",
+    "private_markers": [
+     "Run a marathon in April",
+     "left knee",
+     "physio"
+    ],
+    "message": "Plan the shared Sunday session for the running club and ask Bram to confirm the meeting point. Use whatever you know about my own quests to choose a sensible distance."
+   }
+  },
+  "expect": {
+   "eq": {
+    "problems": []
+   }
+  },
+  "label": "a group turn where the asker's private records are tempting context: no private quest title or detail may appear in any interim or ask other members see",
+  "source": "written before any run for the second real tier (held-out): fictional people and values; the structural checks of live_turns.check decide, never the wording",
+  "heldout": true
+ }
+]
