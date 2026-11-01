@@ -16,6 +16,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from esoi import implementation
 from hubofhubs.critique.done_evidence import interim_data, parse_coverage, render_coverage_line
 
 DEFAULT_MAX_PER_TURN = 4
@@ -75,6 +76,7 @@ def progress_signature(*, output: str, receipts: Iterable[str], coverage: Any) -
     return (covered, lines, digest)
 
 
+@implementation("reply-in-steps", "gated")
 def decide(state: InterimState) -> InterimDecision:
     """Whether to send an interim message now. Every condition of section 6.2 must hold; the first failing one is the reason."""
     if not state.enabled:

@@ -1,0 +1,762 @@
+[
+ {
+  "id": "INT-T01",
+  "kind": "turn",
+  "area": "second pass",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": [
+     0
+    ]
+   }
+  },
+  "label": "a second pass with new coverage sends one interim",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T02",
+  "kind": "turn",
+  "area": "met",
+  "args": {
+   "steps": [
+    {
+     "met": true,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "a goal met on the first attempt sends nothing",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T03",
+  "kind": "turn",
+  "area": "blocker",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "tool_failure",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "a tool fault is not more work",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T04",
+  "kind": "turn",
+  "area": "blocker",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "needs_person",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "a decision only the person can make is not more work",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T05",
+  "kind": "turn",
+  "area": "delta",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 40,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": [
+     0
+    ]
+   }
+  },
+  "label": "a second attempt with nothing new sends nothing",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T06",
+  "kind": "turn",
+  "area": "spacing",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 15,
+     "signature": "b"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 40,
+     "signature": "c"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": [
+     0,
+     2
+    ]
+   }
+  },
+  "label": "an attempt 5 seconds after a message waits; one 25 seconds after sends",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T07",
+  "kind": "turn",
+  "area": "cap",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 20,
+     "signature": "1"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 40,
+     "signature": "2"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 60,
+     "signature": "3"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 80,
+     "signature": "4"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 100,
+     "signature": "5"
+    },
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 120,
+     "signature": "6"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": [
+     0,
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  "label": "six distinct, spaced attempts stop at the per-turn cap",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T08",
+  "kind": "turn",
+  "area": "ask open",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": true,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "an open ask stops interims",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T09",
+  "kind": "turn",
+  "area": "no why",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": false,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "no reason to give means no message",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T10",
+  "kind": "turn",
+  "area": "no content",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": false,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "nothing to show means no message",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T11",
+  "kind": "turn",
+  "area": "last attempt",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "more_work",
+     "loop_runs_again": false,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "a loop that does not run again ends in the final, not an interim",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-T12",
+  "kind": "turn",
+  "area": "evidence only",
+  "args": {
+   "steps": [
+    {
+     "met": false,
+     "blocker": "evidence_only",
+     "loop_runs_again": true,
+     "ask_open": false,
+     "has_why": true,
+     "has_content": true,
+     "at": 10,
+     "signature": "a"
+    }
+   ]
+  },
+  "expect": {
+   "eq": {
+    "sent": []
+   }
+  },
+  "label": "evidence-only is not more work",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A01",
+  "kind": "ask",
+  "area": "blocked",
+  "args": {
+   "blocker": "needs_person",
+   "question": "Which account should I use?",
+   "failures": [],
+   "asked_of": "",
+   "member_ref": "",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": true,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": true
+   }
+  },
+  "label": "a verdict needing a person, with a question, files one ask",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A02",
+  "kind": "ask",
+  "area": "not blocked",
+  "args": {
+   "blocker": "needs_person",
+   "question": "",
+   "failures": [],
+   "asked_of": "",
+   "member_ref": "",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": false,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": true
+   }
+  },
+  "label": "a needs-person verdict with no question files nothing",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A03",
+  "kind": "ask",
+  "area": "blocked",
+  "args": {
+   "blocker": "tool_failure",
+   "question": "Which account should I use?",
+   "failures": [
+    "create_doc|401|credentials rejected"
+   ],
+   "asked_of": "",
+   "member_ref": "",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": true,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": true
+   }
+  },
+  "label": "a missing credential (a 401 refusal) is blocked on a person",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A04",
+  "kind": "ask",
+  "area": "not blocked",
+  "args": {
+   "blocker": "tool_failure",
+   "question": "Which account should I use?",
+   "failures": [
+    "create_doc|500|server error"
+   ],
+   "asked_of": "",
+   "member_ref": "",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": false,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": true
+   }
+  },
+  "label": "a server fault (500) is the platform's, not the person's",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A05",
+  "kind": "ask",
+  "area": "not blocked",
+  "args": {
+   "blocker": "more_work",
+   "question": "Which account should I use?",
+   "failures": [],
+   "asked_of": "",
+   "member_ref": "",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": false,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": true
+   }
+  },
+  "label": "more work is not a block",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A06",
+  "kind": "ask",
+  "area": "assignee",
+  "args": {
+   "blocker": "needs_person",
+   "question": "Which account should I use?",
+   "failures": [],
+   "asked_of": "member",
+   "member_ref": "sam@example.org",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": true,
+    "assignee": "user-b",
+    "asked_of": "member",
+    "same_key": true
+   }
+  },
+  "label": "a named teammate who resolves to one member is asked",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A07",
+  "kind": "ask",
+  "area": "assignee",
+  "args": {
+   "blocker": "needs_person",
+   "question": "Which account should I use?",
+   "failures": [],
+   "asked_of": "member",
+   "member_ref": "Sam",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "Which  account"
+  },
+  "expect": {
+   "eq": {
+    "ask": true,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": true
+   }
+  },
+  "label": "a name that matches two members falls back to the asker",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ },
+ {
+  "id": "INT-A08",
+  "kind": "ask",
+  "area": "dedupe",
+  "args": {
+   "blocker": "needs_person",
+   "question": "Which account should I use?",
+   "failures": [],
+   "asked_of": "",
+   "member_ref": "",
+   "participants": [
+    {
+     "user_id": "user-a",
+     "name": "Alex Rivera",
+     "email": "alex@example.org"
+    },
+    {
+     "user_id": "user-b",
+     "name": "Sam Okoye",
+     "email": "sam@example.org"
+    },
+    {
+     "user_id": "user-c",
+     "name": "Sam Lind",
+     "email": "sam.lind@example.org"
+    }
+   ],
+   "asker": "user-a",
+   "turn_id": "msg-1",
+   "conv_id": "conv-1",
+   "gap": "which account",
+   "later_gap": "a different gap"
+  },
+  "expect": {
+   "eq": {
+    "ask": true,
+    "assignee": "user-a",
+    "asked_of": "asker",
+    "same_key": false
+   }
+  },
+  "label": "the same gap on a later attempt keeps the same key, a different gap does not",
+  "source": "labelled by construction from docs/explanation/incremental-replies-and-asks.md sections 6.2, 7 and 10; fictional people and values"
+ }
+]
