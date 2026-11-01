@@ -13,14 +13,14 @@ the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for call-a-model. | `cli_chat.py`, `cli_config.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/deployment.md` +5 |
+| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for call-a-model. | `cli_chat.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/deployment.md` +5 |
 | `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `adapters/claude_live_models.py`, `config_core_settings.py` | - |
 | `DEEPSEEK_API_KEY` | DeepSeek API key; declared by the hub for call-a-model. | `config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md` |
 | `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `core/repo_specs.py` | - |
-| `GOOGLE_API_KEY` | Gemini API key; declared by the hub for call-a-model. | `cli_chat.py`, `cli_config.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/web-search.md` |
+| `GOOGLE_API_KEY` | Gemini API key; declared by the hub for call-a-model. | `cli_chat.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/web-search.md` |
 | `HF_HUB_OFFLINE` | Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls. | `core/repo_specs.py` | - |
 | `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `cli.py` | - |
-| `OPENAI_API_KEY` | Fills the 'api_key' option of call-a-model:openai; declared by the hub. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `cli_config.py` +1 | `.env.example` |
+| `OPENAI_API_KEY` | Fills the 'api_key' option of call-a-model:openai; declared by the hub. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `textual_ui_helpers.py` | `.env.example` |
 | `OPENALEX_API_KEY` | OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers. | `core/tools_science.py` | `docs/how-to/tools.md` |
 | `OPENALEX_MAILTO` | Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's). | `core/tools_science.py` | `docs/how-to/tools.md` |
 | `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/acp-deep-runner.md` |
