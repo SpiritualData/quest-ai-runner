@@ -198,3 +198,14 @@ def test_the_metric_requires_an_ask_when_one_is_expected_and_reads_the_final_for
     assert "a private card's text reached an interim, an ask or the final in the shared thread" in live.check(case)
     live, case = real_case(expect_ask="maybe", private_titles=["Run a marathon in April"])
     assert not live.check(case)
+
+
+def test_the_metric_accepts_an_ask_from_a_person_block_an_asking_final_or_an_adopted_worker_ask_and_nothing_else():
+    row = {"id": "d-1", "assigned_to": "user-alice", "notify_user_id": "user-alice", "dedupe_key": "k", "summary": "s"}
+    live, base = real_case(expect_ask="maybe", asks_filed=[row], messages=[{"kind": "ask", "text": "q", "data": {}}, {"kind": "final", "text": "ok"}])
+    unexplained = [p for p in live.check(dict(base, log=[{"step": "verdict", "blocker": "more_work", "question": "q"}])) if "verdict was" in p]
+    assert unexplained                                                       # an ask with no structural source is still a problem
+    for log, callers in (([{"step": "verdict", "blocker": "needs_person", "question": "q"}], []),
+                         ([{"step": "verdict", "blocker": "more_work", "asks_person": True, "question": "q"}], []),
+                         ([], [["create_decision", "handler"]])):
+        assert not [p for p in live.check(dict(base, log=log, callers=callers)) if "verdict was" in p]

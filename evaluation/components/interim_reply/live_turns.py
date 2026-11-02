@@ -204,7 +204,7 @@ def instrument(orch, record):
         verdict = out[0] if isinstance(out, tuple) else out
         if isinstance(verdict, dict):
             import sys as _s
-            record["log"].append({"step": "verdict", "caller": _s._getframe(1).f_code.co_name, **{key: verdict.get(key) for key in ("met", "blocker", "reason", "next_action", "question", "asked_of", "member_ref", "claims_unexecuted", "claims_unsupported")}})
+            record["log"].append({"step": "verdict", "caller": _s._getframe(1).f_code.co_name, **{key: verdict.get(key) for key in ("met", "blocker", "reason", "next_action", "question", "asked_of", "member_ref", "asks_person", "claims_unexecuted", "claims_unsupported")}})
         return out
     orch._verify_goal = verified
     send = deep.maybe_send_interim
@@ -297,7 +297,10 @@ def check(case):
     if messages[-1]["kind"] != "final":
         problems.append("the turn does not end with its final")
     # ask exactly when the verifier's own verdict was a block on a person with a question.
-    blocked = any(e["step"] == "verdict" and e.get("blocker") == "needs_person" and str(e.get("question") or "").strip() for e in log)
+    # Three structural sources of a legitimate ask: a block on a person, a final the verifier says asks the person for something, and a
+    # decision-request the worker raised with its own create_decision call (the runner adopts it as the turn's ask).
+    blocked = (any(e["step"] == "verdict" and str(e.get("question") or "").strip() and (e.get("blocker") == "needs_person" or e.get("asks_person")) for e in log)
+               or any("create_decision" in (caller or []) for caller in case.get("callers") or []))
     if bool(case["asks_filed"]) != blocked:
         problems.append(f"ask filed={bool(case['asks_filed'])} but the verdict was {'blocked' if blocked else 'not blocked on a person'}")
     if asks and not case["asks_filed"]:
