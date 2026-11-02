@@ -161,7 +161,11 @@ entirely (not shown at all) and the answer could not have known whether history 
       more_work: the work is genuinely incomplete or wrong, so another attempt can fix it (default).
       evidence_only: the output states the work is complete and names the specifics, and the ONLY gap
         is proof beyond what the request asked for. Put in question what was not independently
-        confirmed. Never use this for work that is vague, partial, or only planned.
+        confirmed. Also use it for an answer that states the facts asked for, when the only gap is
+        that a source it cites was found and opened but is a weaker or less specific page than ideal
+        (for example a site's home page, not the exact page) and the answer says what it could not
+        confirm: put that one thing in question. Never use this for work that is vague, partial,
+        or only planned, for a fact the answer lacks, or while a tool that could close the gap is untried.
       needs_person: the work cannot be finished without something only a person can give: an
         identity, an access grant, a real-world act, a taste or direction call, or sign-off on
         something irreversible. Put the ONE specific question in question. Never use it for work the

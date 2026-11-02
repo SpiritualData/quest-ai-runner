@@ -262,3 +262,8 @@ When the request asks for an official page or a source link, the planner's web b
 address from the search results in `unread_pages` and the loop reads it. A reply that stays partly unconfirmed ends with the
 stop reason `unverified` ("Some of this I could not confirm."), not `attempt_cap`; the reason comes from the verdict's
 `blocker == evidence_only`.
+
+An answer that states the facts asked for, whose only gap is that a cited source was opened but is less specific than
+ideal (a site's home page, not the exact page), gets `blocker=evidence_only` with the one unconfirmed thing in `question`.
+The answer ships as written, with no deep run, and its footer reads "Some of this I could not confirm." without a Continue
+button. `more_work` stays for missing facts or tools not yet tried.

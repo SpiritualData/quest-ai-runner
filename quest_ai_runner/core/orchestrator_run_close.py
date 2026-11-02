@@ -428,6 +428,13 @@ class RunCloseMixin:
                             break  # out of attempts, proceeds unverified
                         _attempt += 1
                         continue  # retry the verification call
+                    # THE FACTS ARE THERE, ONLY SOURCE SPECIFICITY IS UNCONFIRMED: the verifier's own enum says evidence_only
+                    # and it named the one thing in ``question``. Another attempt (or a deep run) cannot improve on it, so the
+                    # answer ships as written; the turn ends with the stop reason ``unverified``. Same rule the deep goal loop has.
+                    if (str(verdict.get("blocker") or "") == "evidence_only" and str(verdict.get("question") or "").strip()
+                            and not verdict.get("claims_unexecuted") and not verdict.get("claims_unsupported")):
+                        rs.page_unopenable = True   # no last-resort deep run for a gap that more work cannot close
+                        break
                     # A BLOCK ONLY A PERSON CAN LIFT (incremental replies, section 6.3): the verifier's own enum
                     # says needs_person and it gave the question. Regenerating the same answer cannot unblock it,
                     # so ONE deduplicated ask is filed (to the asker, or the participant the verifier named and the

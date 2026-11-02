@@ -125,3 +125,25 @@ def test_an_unconfirmed_reply_stops_with_its_own_reason_and_a_real_out_of_tries_
     more_work = SimpleNamespace(deep_results=[], goal_verdict={"met": False, "blocker": "more_work"})
     assert turn_outcome(more_work) == {"outcome": "stopped", "stop_reason": "attempt_cap"}
     assert turn_outcome(SimpleNamespace(deep_results=[], goal_verdict={"met": True})) == {"outcome": "met"}
+
+
+def test_an_evidence_only_verdict_ships_the_answer_with_no_deep_run_and_the_unverified_stop_reason():
+    from quest_ai_runner.core.orchestrator_turn_messages import turn_outcome
+    provider = PageProvider(
+        plan_decisions=[{"action": "answer", "rationale": "x"}],
+        goal_verdicts=[{"met": False, "blocker": "evidence_only", "reason": "cited page is a home page",
+                        "question": "whether a dedicated release page exists"}, {"met": True}],
+        answer_text=FIRST)
+    res, runner = run(provider, FakeWeb())
+    assert runner.calls == 0
+    assert res.text.startswith(FIRST)
+    assert provider.verify_calls == 1
+    assert turn_outcome(res) == {"outcome": "stopped", "stop_reason": "unverified"}
+
+
+def test_evidence_only_without_a_question_or_more_work_behaves_as_before():
+    for verdict in ({"met": False, "blocker": "evidence_only"}, {"met": False, "blocker": "more_work", "question": "q"}):
+        provider = PageProvider(plan_decisions=[{"action": "answer", "rationale": "x"}],
+                                goal_verdicts=[verdict, {"met": False}], answer_text=FIRST)
+        res, runner = run(provider, FakeWeb())
+        assert runner.calls == 1          # the last-resort deep run, unchanged
