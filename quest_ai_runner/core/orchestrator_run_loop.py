@@ -453,19 +453,10 @@ class RunLoopMixin:
             # planning, so the planner answers from it instead of recalling older chats or searching.
             if step == 0 and message_is_user_turn and rs._forced_plan is None:
                 try:
-                    updates = self.read_own_updates(rs.user_message)
-                    if isinstance(updates, OwnUpdates):
-                        # The consumer wrote the reply: it IS the answer. No planner, reads, web or deep run,
-                        # no reply-standard repair, and the answer counts as verified.
-                        rs.plan = PlanDecision(action="answer", rationale="the person's own updates, answered directly")
-                        rs.final = "answer"
-                        rs.text = updates.text
-                        if rs.trace is not None:
-                            rs.trace.answered()
-                        return finish(OrchestratorResult(
-                            kind="answer", text=updates.text, rationale=rs.plan.rationale, exit_reason="verified",
-                            goal_verdict={"met": True, "reason": "answered from the person's own updates read"}))
-                    if updates is not None:
+                    # Read once, before understanding (``_run_own_updates_early``). An ``OwnUpdates`` already ended the
+                    # turn there; only the plain Observation form is left, gathered for the planner.
+                    updates = getattr(rs, "own_updates_read", None)
+                    if updates is not None and not isinstance(updates, OwnUpdates):
                         gathered.extend(self.own_updates_observations(rs.user_message, updates))
                 except Exception as e:  # noqa: BLE001
                     log.debug(f"Own-updates pre-read failed: {type(e).__name__}: {e}")

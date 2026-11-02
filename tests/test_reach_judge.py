@@ -289,10 +289,10 @@ NEEDS_RECORDS_PARAGRAPH = (
 )
 
 ASKS_OWN_UPDATES_PARAGRAPH = (
-    'ALSO set "asks_own_updates": true only when it asks what is new or what changed in the person\'s OWN work\n'
-    'since they last looked ("what\'s new", "what\'s the latest", "catch me up", "anything happen while I was away")\n'
-    'and names no subject. False for any request that names a subject, a product, a topic or a thing in the\n'
-    'world ("the latest version of X", "latest news on Y"), and false for everything else.\n'
+    'ALSO set "asks_own_updates": true when the meaning of the request is "tell me what happened in my own work\n'
+    'since I last looked", however short, lowercase or unpunctuated it is, and it names no subject. Wording and\n'
+    'spelling never matter, only the meaning. False for any request that names a subject, a product, a topic or\n'
+    'a thing in the world, and false for everything else.\n'
 )
 
 
@@ -824,3 +824,25 @@ def test_a_failed_read_falls_through_to_the_normal_planner_path():
         result = orch.run("what's the latest?")
         assert retrieval.update_reads == 1 and planner_calls(provider), bad
         assert result.text != "  "
+
+
+def test_own_updates_wins_over_a_turn_start_clarifying_question():
+    """A short message the understanding step would end on a clarifying question is still answered from the updates."""
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": True}, OwnUpdates(text="Two tasks finished."))
+    orch.conversation_store = object()
+    orch._needs_context_to_understand = lambda message: True
+    orch._understand_input = lambda *a, **k: (_ for _ in ()).throw(AssertionError("understanding must not run"))
+    result = orch.run("whats the latest", conv_id="c1")
+    assert result.kind == "answer" and result.text == "Two tasks finished."
+    assert retrieval.update_reads == 1 and planner_calls(provider) == []
+
+
+def test_a_missing_verdict_skips_the_short_circuit_and_says_why(caplog):
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": True}, OwnUpdates(text="X"))
+    orch.reach_verdict = lambda message: None
+    with caplog.at_level("INFO"):
+        result = orch.run("whats the latest")
+    assert retrieval.update_reads == 0 and result.text != "X"
+    assert "short circuit skipped: no reach verdict" in caplog.text

@@ -15,6 +15,7 @@ from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
 from hubofhubs.ports.deep import ProgressEvent
 from . import shared_thread
+from .adapters_retrieval import OwnUpdates
 from .adapters_values import PlanDecision
 from hubofhubs.recall.card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from .context_doctrine import CACHED_HINT_GATE
@@ -386,6 +387,53 @@ class RunBeginMixin:
 
                 rs.pending_inputs = _drain_conversation
 
+    def _run_own_updates_early(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
+        """A request for the person's OWN updates is answered here, ahead of understanding, context and planning.
+
+        The reach judge's structured ``asks_own_updates`` verdict is AWAITED (``reach_verdict`` waits for the judge the
+        turn already started, up to its timeout) because a peek would race the understanding step, which can end a
+        short message on a clarifying question first. When the adapter's ``own_updates()`` returns an ``OwnUpdates``
+        its ``text`` is the whole reply (no planner, reads, web search, deep run or reply repair; counted as
+        verified). A plain Observation is kept in ``rs.own_updates_read`` for the planner to gather. One INFO line
+        says why the short circuit fired or was skipped."""
+        rs.own_updates_read = None
+        if not rs.message_is_user_turn or rs.caller_deep_plan is not None or getattr(rs, "_forced_plan", None) is not None:
+            return None
+        if self.retrieval is None or getattr(self.retrieval, "own_updates", None) is None:
+            return None
+        try:
+            verdict = self.reach_verdict(rs.user_message)
+            if verdict is None:
+                log.info("Own-updates short circuit skipped: no reach verdict (judge off, failed or timed out)")
+                return None
+            if verdict.get("asks_own_updates") is not True:
+                log.info("Own-updates short circuit skipped: the judge says the request does not ask for them")
+                return None
+            updates = self.read_own_updates(rs.user_message)
+            if updates is None:
+                log.info("Own-updates short circuit skipped: the read failed or came back empty")
+                return None
+            if not isinstance(updates, OwnUpdates):
+                rs.own_updates_read = updates
+                log.info("Own-updates read gathered for the planner (not a direct reply)")
+                return None
+            log.info("Own-updates short circuit fired: replying with the read text (nothing_new=%s)", updates.nothing_new)
+            rs.card_context = TurnCardCache(self.context_assembler, rs._ctx_meta)
+            rs.steps = 0
+            rs.retrieval_constraints = None
+            self._run_define_finish(rs)
+            rs.plan = PlanDecision(action="answer", rationale="the person's own updates, answered directly")
+            rs.final = "answer"
+            rs.text = updates.text
+            if rs.trace is not None:
+                rs.trace.answered()
+            return rs.finish(OrchestratorResult(
+                kind="answer", text=updates.text, rationale=rs.plan.rationale, exit_reason="verified",
+                goal_verdict={"met": True, "reason": "answered from the person's own updates read"}))
+        except Exception as e:  # noqa: BLE001 - the shortcut must never take the turn down
+            log.warning("Own-updates short circuit failed, planning normally: %s: %s", type(e).__name__, str(e)[:200])
+            return None
+
     def _run_gather_context(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """Understand the request and gather the turn's context: conversation slice, recent cards, anticipation, assembled context and guidance."""
         _ctx_meta = rs._ctx_meta
@@ -402,6 +450,11 @@ class RunBeginMixin:
         now = rs.now
         quest_id = rs.quest_id
         transcript = rs.transcript
+
+        # --- THE PERSON'S OWN UPDATES, before anything can ask or plan --------------------------------
+        early = self._run_own_updates_early(rs)
+        if early is not None:
+            return early
 
         # --- BRAINSTORM RELEASE (latched turns only; the exit authority) -----------------------
         # While the latch is held, ONE dedicated structured judgment decides whether this message

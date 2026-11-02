@@ -99,10 +99,10 @@ about their own life or work that the request itself does not state: a note, a d
 measurement, what a named person can do and when, a date, a deadline, a preference. A request to book,
 schedule, send or arrange something with or for a named person or on a date is always true. False for
 small talk, general knowledge and a request that carries everything it needs.
-ALSO set "asks_own_updates": true only when it asks what is new or what changed in the person's OWN work
-since they last looked ("what's new", "what's the latest", "catch me up", "anything happen while I was away")
-and names no subject. False for any request that names a subject, a product, a topic or a thing in the
-world ("the latest version of X", "latest news on Y"), and false for everything else.
+ALSO set "asks_own_updates": true when the meaning of the request is "tell me what happened in my own work
+since I last looked", however short, lowercase or unpunctuated it is, and it names no subject. Wording and
+spelling never matter, only the meaning. False for any request that names a subject, a product, a topic or
+a thing in the world, and false for everything else.
 """
 
 #: What the planner is told when the work is out of reach AND something can do it.
