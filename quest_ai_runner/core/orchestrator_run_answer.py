@@ -328,8 +328,15 @@ class RunAnswerMixin:
 
         emit.status(f"Answering {len(rs.plan.subquestions)} parts in parallel…"
                     if len(rs.plan.subquestions) >= 2 else "Answering")
-        rs.text = _gen_answer(None)
-        rs._ti = getattr(self.provider, 'tokens_in', 0)
+        if rs.trace is not None:
+            rs.trace.answering()    # liveness only: the wait between the last read and the first words
+        try:
+            rs.text = _gen_answer(None)
+        except BaseException:
+            if rs.trace is not None:
+                rs.trace.answered()    # a failed or cancelled draft never leaves the line running
+            raise
+        rs._ti =getattr(self.provider, 'tokens_in', 0)
         rs._to = getattr(self.provider, 'tokens_out', 0)
         if rs._ti or rs._to:
             emit.emit(ProgressEvent(type=EVENT_TOKENS,

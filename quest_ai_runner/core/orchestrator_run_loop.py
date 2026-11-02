@@ -138,6 +138,8 @@ class RunLoopMixin:
                     res.tokens_out = self.provider.tokens_out
             except Exception:  # noqa: BLE001
                 pass
+            if rs.trace is not None:
+                rs.trace.answered()    # the draft exists (or the turn ended another way): the answering step never outlives it
             if res.kind == "cancelled":
                 # Cooperative mid-run cancellation: there is no real outcome to write back or verify
                 # against the goal, and no answer/deep/confirm event to surface. Just close out the

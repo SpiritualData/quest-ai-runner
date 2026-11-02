@@ -36,7 +36,9 @@ SOLUTION_WEB, SOLUTION_PAPERS, SOLUTION_RECORDS, SOLUTION_LINKS = (
     "search-backend", "know-the-world", "context-assembler", "watch-for-risk")
 LABEL_WEB, LABEL_PAPERS, LABEL_RECORDS, LABEL_LINKS = (
     "workTrace.web.reading", "workTrace.papers.searching", "workTrace.records.looking", "workTrace.links.checking")
-SCHOLARLY_TOOL = "search_scientific_literature"
+#: The answering step is only a liveness signal ("Putting the answer together"): its own kind, so no summary counts it.
+STEP_ANSWER, SOLUTION_ANSWER, LABEL_ANSWER = "answer", "call-a-model", "workTrace.answer.composing"
+SCHOLARLY_TOOL ="search_scientific_literature"
 RECORD_KINDS = ("quest", "reflection", "goal", "note")
 #: A conversation-history card is not one of the person's records.
 HISTORY_ADAPTER = "turn"
@@ -244,6 +246,7 @@ class TurnTrace:
         self.final = False
         self.sent_links = False
         self.links_running = False
+        self.answer_running = False
 
     # -- web -----------------------------------------------------------------------------------
 
@@ -431,10 +434,33 @@ class TurnTrace:
 
     # -- the link check ------------------------------------------------------------------------
 
+    # -- the answer being written ----------------------------------------------------------------
+
+    @safe
+    def answering(self) -> None:
+        """The reply is about to be written. Only when the turn already did visible work (a search, papers, records): an instant answer
+        has nothing to bridge, so nothing is sent and the screen never flashes a line. A pure liveness step of its own kind, which no
+        summary counts. ``answered`` closes it."""
+        with self.lock:
+            if self.answer_running or not any(step != STEP_ANSWER for step in self.trace.latest):
+                return
+            self.answer_running = True
+        self.trace.update(STEP_ANSWER, solution_id=SOLUTION_ANSWER, kind="answer", label_key=LABEL_ANSWER, state="running")
+
+    @safe
+    def answered(self) -> None:
+        """The reply exists, or the turn ended or failed: close the answering step. Harmless when it never started."""
+        with self.lock:
+            if not self.answer_running:
+                return
+            self.answer_running = False
+        self.trace.update(STEP_ANSWER, solution_id=SOLUTION_ANSWER, kind="answer", label_key=LABEL_ANSWER, state="done")
+
     @safe
     def links_checking(self) -> None:
         """The link guard is about to run (it fetches addresses, which takes seconds): send the running step now, so the live line has
         words for the whole check instead of the step appearing only once it is done. ``links_checked`` closes it."""
+        self.answered()    # the draft exists: the link check is the live line from here
         if self.sent_links or self.links_running:
             return
         self.links_running = True
@@ -466,6 +492,7 @@ class TurnTrace:
         the reply used. Web: only sites the reply names are listed (a page that was opened is always a read page); a search that opened
         and cited nothing keeps its found count and an empty list, which the screen shows no settled line for. Papers: the works
         the reply cites are read, the rest of the search is only found. Records: the cards the planner took AND the reply draws on."""
+        self.answered()    # never left running, whatever way the turn ended
         with self.lock:
             w = self.web
             if w["inflight"]:

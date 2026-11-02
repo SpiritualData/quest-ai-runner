@@ -217,3 +217,13 @@ async def test_every_glyph_the_terminal_draws_is_in_a_plain_monospace_font():
     async with Harness() as h:
         header = h.app.query_one(Header)
         assert header.icon == "≡"
+
+
+async def test_the_live_row_says_the_answer_is_being_put_together_while_that_step_runs():
+    async with Harness() as h:
+        h.begin()
+        h.feed(trace("a", kind="answer"))
+        assert h.app._trail_line.display and "Putting the answer together" in str(h.app._trail_line.render())
+        h.feed(trace("a", kind="answer", state="done"))
+        h.finish()
+        assert not h.app._trail_line.display

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- The live Trail no longer goes quiet while the answer is written. After a search the line showed "Searching the web" for about 2 seconds of a 14 second turn and then only the working dots. `TurnTrace.answering` now sends a running `answer` step (only when the turn already did visible work, so an instant answer sends nothing), shown live as "Putting the answer together" and closed by `answered` when the draft exists, the link check starts, or the turn ends, fails or is cancelled. It is a liveness signal only: its kind is not counted by any settled summary.
+
 - The live Trail now stays on screen during the link check. The `links` step was sent only once finished, so "Searching the web" showed for about 1.3 seconds of an 11 second turn; `WorkTraceCollector.links_checking` now sends it running before the link guard fetches addresses (only when the reply holds a link) and `links_checked` closes it. The live line reads "Checking the links" (frontend `checkingLinks`, terminal string in the hub).
 
 - The reach judge now reads the start and the end of a long request instead of only the start. A consumer that composes a request (instructions, a thread transcript, then the latest message) put the ask last, so the judge never saw it, judged the instructions as "the person's own records", and vetoed the web search: a team-chat question about a public fact got "web search is not enabled" while the same question in a solo chat was searched and cited.

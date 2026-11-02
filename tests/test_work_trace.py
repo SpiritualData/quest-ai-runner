@@ -536,3 +536,42 @@ def test_a_slug_titled_card_stays_counts_only_for_other_members():
     step = sink.latest()["records"]
     assert "Morning pages" not in json.dumps(step)
     assert step["counts"]["read"] == 1
+
+
+def test_answering_step_runs_after_work_and_is_closed_by_the_draft_the_link_check_or_the_end():
+    sink, trace = make()
+    trace.web_started()
+    trace.answering()
+    assert sink.latest()["answer"]["state"] == "running" and sink.latest()["answer"]["kind"] == "answer"
+    trace.answered()
+    assert sink.latest()["answer"]["state"] == "done"
+    trace.answered()    # closing twice is harmless
+    sink2, trace2 = make()
+    trace2.web_started()
+    trace2.answering()
+    trace2.links_checking()
+    assert sink2.latest()["answer"]["state"] == "done" and sink2.latest()["links"]["state"] == "running"
+    sink3, trace3 = make()
+    trace3.web_started()
+    trace3.answering()
+    trace3.finish("")    # an ended or failed turn never leaves it running
+    assert sink3.latest()["answer"]["state"] == "done"
+
+
+def test_answering_step_is_not_sent_for_an_instant_answer_with_no_prior_work():
+    sink, trace = make()
+    trace.answering()
+    trace.finish("hello")
+    assert "answer" not in sink.latest()
+
+
+def test_the_answering_step_changes_no_counts_or_items_of_the_other_steps():
+    sink, trace = make()
+    trace.web_started()
+    trace.web_searched(Observation(kind="query", hits=[{"title": "A", "url": "https://a.example.org/p", "snippet": "s", "query": "q"}]))
+    before = {k: v for k, v in sink.latest().items() if k != "answer"}
+    trace.answering()
+    trace.finish("")
+    after = {k: v for k, v in sink.latest().items() if k != "answer"}
+    for step in ("web",):
+        assert before[step]["counts"] == after[step]["counts"]
