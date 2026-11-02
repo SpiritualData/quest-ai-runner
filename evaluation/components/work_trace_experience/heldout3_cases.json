@@ -1,0 +1,90 @@
+[
+ {
+  "id": "TRACE-HELD3-WEB-UBUNTU",
+  "stage": "real",
+  "heldout": true,
+  "kind": "web",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "available",
+  "message": "What is the latest Ubuntu long-term-support release, and until what year does standard support for it run?",
+  "want": "web research: sources searched and read are shown"
+ },
+ {
+  "id": "TRACE-HELD3-WEB-POSTGRES",
+  "stage": "real",
+  "heldout": true,
+  "kind": "web",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "available",
+  "message": "Which major version of PostgreSQL is the newest stable one right now, and which older major version is next to lose support?",
+  "want": "web research: sources searched and read are shown"
+ },
+ {
+  "id": "TRACE-HELD3-PAPERS-MINDFULNESS",
+  "stage": "real",
+  "heldout": true,
+  "kind": "papers",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "available",
+  "message": "What does published research say about mindfulness meditation for chronic low back pain? Please cite a few papers.",
+  "want": "papers question: works found and the cited ones are shown"
+ },
+ {
+  "id": "TRACE-HELD3-PAPERS-STANDING",
+  "stage": "real",
+  "heldout": true,
+  "kind": "papers",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "available",
+  "message": "Is there published evidence that sit-stand desks change sedentary time or health outcomes in office workers? Cite a few papers.",
+  "want": "papers question: works found and the cited ones are shown"
+ },
+ {
+  "id": "TRACE-HELD3-RECORDS",
+  "stage": "real",
+  "heldout": true,
+  "kind": "records",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "available",
+  "message": "What cross-training am I doing for the marathon, and how long is my long run planned for this Sunday?",
+  "want": "answered from the person's own records: the used record is shown"
+ },
+ {
+  "id": "TRACE-HELD3-GROUP",
+  "stage": "real",
+  "heldout": true,
+  "kind": "group",
+  "surface": "group",
+  "audience": "owner",
+  "search": "available",
+  "message": "Am I keeping up my writing habit, and how many days in a row am I at?",
+  "want": "shared thread, one member's private record: other participants see counts only, never the title"
+ },
+ {
+  "id": "TRACE-HELD3-NOSEARCH",
+  "stage": "real",
+  "heldout": true,
+  "kind": "web",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "unavailable",
+  "message": "What is the euro to Japanese yen exchange rate right now?",
+  "want": "web search is unavailable for the run: the person must be told honestly that it could not search"
+ },
+ {
+  "id": "TRACE-HELD3-CHAT",
+  "stage": "real",
+  "heldout": true,
+  "kind": "none",
+  "surface": "solo",
+  "audience": "owner",
+  "search": "available",
+  "message": "Hello! Any fun ideas for naming a new houseplant?",
+  "want": "unrelated chit-chat: nothing is shown"
+ }
+]
