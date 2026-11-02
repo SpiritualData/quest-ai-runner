@@ -58,7 +58,9 @@ from .prompt_layers import compose_layers
 from .orchestrator_constants import log
 from .tools_status import ToolStatus
 from .orchestrator_events import _REPLAN_CONTEXT_REF, _REPLAN_TRANSCRIPT_REF
-from .orchestrator_capabilities import provider_call_accepts_layers, provider_call_accepts_tier
+from .orchestrator_capabilities import (
+    planner_note_observation, provider_call_accepts_layers, provider_call_accepts_tier,
+)
 from .orchestrator_decisions import normalize_decision
 from .orchestrator_decide_tool import decide_tool_for, planner_prompt_for_profile
 
@@ -399,6 +401,35 @@ class PlanningMixin:
             log.warning("Reach judge failed, planning without a verdict: %s: %s",
                         type(e).__name__, str(e)[:200])
         return None
+
+    def own_updates_observations(self, user_message: str) -> List[Dict[str, Any]]:
+        """The gathered entries for a request the reach judge says asks for the person's OWN updates.
+
+        Decided only by the judge's structured ``asks_own_updates`` boolean (a real ``True``), never by
+        words. Runs the retrieval adapter's optional ``own_updates`` read once and returns its
+        observation plus a note that it IS the answer, so the planner answers from it instead of
+        recalling older conversations or searching the web. ``[]`` when the judge did not say so, no
+        adapter offers it, or the read failed (the planner then runs exactly as before)."""
+        verdict = self.reach_verdict(user_message)
+        if not verdict or verdict.get("asks_own_updates") is not True:
+            return []
+        read = getattr(self.retrieval, "own_updates", None) if self.retrieval is not None else None
+        if read is None:
+            return []
+        try:
+            obs = read()
+        except Exception as e:  # noqa: BLE001 - a pre-read must never take the turn down
+            log.warning("Own-updates read failed, planning without it: %s: %s", type(e).__name__, str(e)[:200])
+            return []
+        if obs is None or getattr(obs, "kind", None) == "error":
+            return []
+        entry = obs.to_dict()
+        note = planner_note_observation(
+            "The request asks what is new for the person in their own work since they last looked, and "
+            "the read above IS that answer. Answer from it: say what needs them first, then what "
+            "finished, then what failed. Do not recall older conversations or search the web for it, "
+            "and if it holds nothing new say so plainly.", "own_updates")
+        return [entry, note]
 
     def judge_reach(self, user_message: str) -> Optional[Dict[str, Any]]:
         """Ask the judging tier the one reach question. Never raises; None on any failure."""

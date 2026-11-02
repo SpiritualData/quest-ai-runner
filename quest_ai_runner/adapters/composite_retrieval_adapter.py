@@ -258,6 +258,16 @@ class CompositeRetrievalAdapter:
         combined = "\n".join(line for _, line in sorted(all_ops.items()))
         return Observation(kind="query", text=combined)
 
+    def own_updates(self) -> Observation:
+        """The person's own updates, from the first member adapter that offers the optional read.
+
+        Only that one member is asked (reading updates marks them as given), never all of them."""
+        for adapter in self.adapters:
+            read = getattr(adapter, "own_updates", None)
+            if read is not None:
+                return read()
+        return Observation(kind="error", error="no adapter offers the person's own updates")
+
     def describe_operation(self, name: str) -> Observation:
         """Describe an operation. Try adapters in order until one succeeds."""
         for adapter in self.adapters:

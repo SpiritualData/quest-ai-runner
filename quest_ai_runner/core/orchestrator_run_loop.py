@@ -447,6 +447,15 @@ class RunLoopMixin:
                 except Exception:  # noqa: BLE001 — the overseer must never break the loop
                     pass
 
+            # THE PERSON'S OWN UPDATES, first: when the reach judge's structured verdict says this request
+            # asks what is new in their own work, the retrieval adapter's update read runs before any
+            # planning, so the planner answers from it instead of recalling older chats or searching.
+            if step == 0 and message_is_user_turn and rs._forced_plan is None:
+                try:
+                    gathered.extend(self.own_updates_observations(rs.user_message))
+                except Exception as e:  # noqa: BLE001
+                    log.debug(f"Own-updates pre-read failed: {type(e).__name__}: {e}")
+
             # AUTO-INJECT FUNCTION DISCOVERY on step 0: pre-load all available operations
             # so the planner sees them from the start, ordered by relevance. This eliminates
             # the need for the planner to first ASK for operations; they're already in hand.

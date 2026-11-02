@@ -64,6 +64,17 @@ class RetrievalAdapter(Protocol):
         """DISCOVERY (drill-down): the full signature/usage/example for ONE operation named
         by ``list_operations``. Never raises."""
 
+    # --- OPTIONAL: THE PERSON'S OWN UPDATES -------------------------------------------
+    # An adapter whose source knows what is NEW for the person since they last looked may define
+    # ``own_updates``. The brain runs it first, before planning, only when the reach judge's structured
+    # verdict says the request asks for exactly that (``asks_own_updates``), and puts the result in what
+    # the planner has gathered. An adapter without it is simply never asked.
+
+    def own_updates(self) -> Observation:
+        """The person's own updates since they last looked (what needs them, what finished, what
+        failed), as one Observation. Reading it is what marks those updates as given, so the brain
+        calls it at most once per turn. Never raises; return Observation(kind="error", ...) instead."""
+
     # --- OPTIONAL: PERSISTED REFERENCE RESOLUTION ------------------------------------
     # A context card can LEARN a source hit as a durable, typed REFERENCE that is re-resolved
     # FRESH every time the card is used (see adapters/reference_resolver.py +

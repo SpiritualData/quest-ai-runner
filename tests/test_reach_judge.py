@@ -44,6 +44,7 @@ from quest_ai_runner.core.reach_judge import (
 )
 
 from .conftest import StubRetrieval
+from quest_ai_runner.core.adapters_values import Observation
 
 
 # ---------------------------------------------------------------------------
@@ -287,12 +288,19 @@ NEEDS_RECORDS_PARAGRAPH = (
     'small talk, general knowledge and a request that carries everything it needs.\n'
 )
 
+ASKS_OWN_UPDATES_PARAGRAPH = (
+    'ALSO set "asks_own_updates": true only when it asks what is new or what changed in the person\'s OWN work\n'
+    'since they last looked ("what\'s new", "what\'s the latest", "catch me up", "anything happen while I was away")\n'
+    'and names no subject. False for any request that names a subject, a product, a topic or a thing in the\n'
+    'world ("the latest version of X", "latest news on Y"), and false for everything else.\n'
+)
+
 
 def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
     # Unchanged apart from the no-em-dash rule every registered prompt now carries.
     assert prompt_default == (_PRE_CHANGE_JUDGE_PROMPT_NO_WEB + ASKS_CHANGE_PARAGRAPH + NEEDS_RECORDS_PARAGRAPH
-                              + "\n" + NO_EM_DASH_RULE)
+                              + ASKS_OWN_UPDATES_PARAGRAPH + "\n" + NO_EM_DASH_RULE)
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
     assert prompt_explicit_false == prompt_default
@@ -660,3 +668,88 @@ def test_the_planner_prompt_carries_the_records_line_only_for_a_flagged_request(
         build(plain, planner_reach_judge=True, read_reach_summary="Can read notes.",
               planner_prompt_profile=profile)._plan("Thanks!", "", "", [])
         assert RECORDS_LINE not in plain.prompts[-1], profile
+
+
+# ---------------------------------------------------------------------------
+# asks_own_updates: the person's own updates are read FIRST, decided by the judge's boolean only
+# ---------------------------------------------------------------------------
+
+class UpdatesRetrieval(StubRetrieval):
+    """A retrieval that offers the optional own-updates read, counting how often it ran."""
+
+    def __init__(self):
+        super().__init__({})
+        self.update_reads = 0
+
+    def own_updates(self):
+        self.update_reads += 1
+        return Observation(kind="query", locator="own_updates", text="One task needs you.")
+
+
+def build_with_updates(reach_response):
+    provider = DispatchingProvider(reach_response=reach_response,
+                                   decide_response={"action": "answer", "rationale": "ok"})
+    retrieval = UpdatesRetrieval()
+    orch = Orchestrator(retrieval=retrieval, provider=provider, registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(planner_reach_judge=True,
+                                                  read_reach_summary="Can read local notes."))
+    return orch, retrieval, provider
+
+
+def test_asks_own_updates_is_kept_only_as_a_real_boolean_and_means_inside():
+    assert normalize_verdict({"reach": "world", "asks_own_updates": True}) == {
+        "reach": "inside", "covered_by": None, "asks_own_updates": True}
+    assert normalize_verdict({"reach": "world", "asks_own_updates": False})["reach"] == "world"
+    for garbled in ("true", 1, None, "yes"):
+        verdict = normalize_verdict({"reach": "world", "asks_own_updates": garbled})
+        assert "asks_own_updates" not in verdict and verdict["reach"] == "world", garbled
+    assert REACH_JUDGE_TOOL["input_schema"]["properties"]["asks_own_updates"]["type"] == "boolean"
+    assert "asks_own_updates" not in REACH_JUDGE_TOOL["input_schema"]["required"]
+
+
+def test_a_request_for_own_updates_runs_the_update_read_first_and_gathers_the_digest():
+    orch, retrieval, _ = build_with_updates({"reach": "world", "asks_own_updates": True})
+    entries = orch.own_updates_observations("what's the latest?")
+    assert retrieval.update_reads == 1
+    assert entries[0]["text"] == "One task needs you."
+    assert entries[1].get("planner_only") is True and "IS that answer" in entries[1]["text"]
+    assert "\u2014" not in entries[1]["text"]
+
+
+def test_the_update_read_runs_before_any_other_read_in_a_turn():
+    orch, retrieval, provider = build_with_updates({"reach": "inside", "asks_own_updates": True})
+    result = orch.run("what's the latest?")
+    assert retrieval.update_reads == 1
+    assert any(g.get("locator") == "own_updates" for g in (result.gathered or [])) or any(
+        "One task needs you." in p for p in provider.prompts)
+
+
+def test_no_update_read_when_the_judge_says_false_or_names_a_subject_or_is_silent():
+    for reach in ({"reach": "world", "asks_own_updates": False}, {"reach": "world"},
+                  {"reach": "world", "asks_own_updates": "true"}):
+        orch, retrieval, _ = build_with_updates(reach)
+        assert orch.own_updates_observations("what is the latest version of Go?") == []
+        assert retrieval.update_reads == 0
+
+
+def test_an_adapter_without_the_read_or_a_failing_one_changes_nothing():
+    provider = DispatchingProvider(reach_response={"reach": "inside", "asks_own_updates": True},
+                                   decide_response={"action": "answer"})
+    plain = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    assert plain.own_updates_observations("what's new?") == []
+
+    class Failing(UpdatesRetrieval):
+        def own_updates(self):
+            raise RuntimeError("down")
+    orch, _, _ = build_with_updates({"reach": "inside", "asks_own_updates": True})
+    orch.retrieval = Failing()
+    assert orch.own_updates_observations("what's new?") == []
+
+
+def test_the_composite_asks_only_the_first_member_that_offers_the_update_read():
+    from quest_ai_runner.adapters import CompositeRetrievalAdapter
+    first, second = UpdatesRetrieval(), UpdatesRetrieval()
+    composite = CompositeRetrievalAdapter([StubRetrieval({}), first, second])
+    assert composite.own_updates().text == "One task needs you."
+    assert (first.update_reads, second.update_reads) == (1, 0)
+    assert CompositeRetrievalAdapter([StubRetrieval({})]).own_updates().kind == "error"

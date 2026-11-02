@@ -387,6 +387,17 @@ Planner prompt tokens (`estimate_tokens`): full 10,181 to 10,149 and compact 3,8
 gains one bare field (full 1,680 to 1,702, compact 852 to 874), so body plus schema is 11,861 to 11,851 (full) and 4,710 to 4,699 (compact).
 
 
+## A request for the person's own updates is a read, not a planner choice (2026-11-02)
+
+A short request such as "what's the latest?" names no subject, and a planner given the person's other recent conversations
+answered about whatever those were about, even with a prompt rule telling it not to. So the choice is structural. The reach
+judge answers one more boolean, `asks_own_updates` (what is new in the person's OWN work since they last looked, no subject
+named; only a real `True` counts, a garbled value is ignored). When it is true the verdict is also forced to "inside" (it is
+never a public fact, so no web read is owed), and before the first plan the brain calls the retrieval adapter's optional
+`own_updates()` read once and puts the result in what the planner has gathered, with a note that it is the answer. No extra
+model call: the judge already runs per turn. An adapter without `own_updates` is never asked; the composite forwards it to
+the first member that has one. A request that names a subject ("the latest version of X") gets false and is unchanged.
+
 ## Planner prompt design notes (moved from comments in `core/planner_prompt.py`)
 
 ```

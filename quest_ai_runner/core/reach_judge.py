@@ -62,6 +62,8 @@ REACH_JUDGE_TOOL: Dict[str, Any] = {
             "asks_change": {"type": "boolean", "description": "Whether it asks for something to be done."},
             "needs_records": {"type": "boolean", "description": "Whether a correct answer or action depends on "
                                                                  "something the person stored that the request does not state."},
+            "asks_own_updates": {"type": "boolean", "description": "Whether it asks what is new or what changed in the "
+                                                                    "person's own work since they last looked, naming no subject."},
         },
         "required": ["reach"],
     },
@@ -97,6 +99,10 @@ about their own life or work that the request itself does not state: a note, a d
 measurement, what a named person can do and when, a date, a deadline, a preference. A request to book,
 schedule, send or arrange something with or for a named person or on a date is always true. False for
 small talk, general knowledge and a request that carries everything it needs.
+ALSO set "asks_own_updates": true only when it asks what is new or what changed in the person's OWN work
+since they last looked ("what's new", "what's the latest", "catch me up", "anything happen while I was away")
+and names no subject. False for any request that names a subject, a product, a topic or a thing in the
+world ("the latest version of X", "latest news on Y"), and false for everything else.
 """
 
 #: What the planner is told when the work is out of reach AND something can do it.
@@ -184,9 +190,13 @@ def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
     if covered and covered.lower() in ("null", "none", "n/a"):
         covered = None
     verdict = {"reach": reach.strip().lower(), "covered_by": covered}
-    for flag in ("asks_change", "needs_records"):
+    for flag in ("asks_change", "needs_records", "asks_own_updates"):
         if isinstance(raw.get(flag), bool):
             verdict[flag] = raw[flag]
+    if verdict.get("asks_own_updates") is True:
+        # What changed in the person's own work lives in their own records, whatever else the judge
+        # said: never a current public fact (no web read owed) and never a hand-off.
+        verdict["reach"], verdict["covered_by"] = "inside", None
     return verdict
 
 
