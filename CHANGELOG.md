@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- The reach judge now reads the start and the end of a long request instead of only the start. A consumer that composes a request (instructions, a thread transcript, then the latest message) put the ask last, so the judge never saw it, judged the instructions as "the person's own records", and vetoed the web search: a team-chat question about a public fact got "web search is not enabled" while the same question in a solo chat was searched and cited.
+
 - An ask built by the goal verifier now runs the `found_constraint` judge itself when no answer step ran this turn (the planner read until the cap), so the ask opens with the records' fact; the judge also treats a request that already fits the fact as no conflict.
 
 - `found_constraint` follow-up: the judge now runs only on turns whose assembled context carried the person's records (a `records` source with items, or any read this turn; live, the records often arrive through the planner's reads and not the turn-start context); its verdict also returns `leaves_request_open`, so a reply that states the conflict but still offers the conflicting request ("go ahead anyway") is regenerated; a found conflict counts as `act_declined` (nothing is queued, whatever the planner set); and the ask built from a blocked goal loop opens its question, shown and filed, with the verdict's fact and consequence.

@@ -190,6 +190,17 @@ def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
     return verdict
 
 
+def clip_keeping_ends(text: str, limit: int) -> str:
+    """``text`` cut to ``limit`` characters from the MIDDLE: a quarter from the start, the rest from the end.
+
+    A request a consumer composes (instructions, then a thread transcript, then the latest message) carries the ask at
+    its end, so cutting only the end made the judge read the instructions and never the question."""
+    if limit <= 0 or len(text) <= limit:
+        return text[:limit] if limit > 0 else text
+    head = limit // 4
+    return text[:head] + "\n...\n" + text[len(text) - (limit - head):]
+
+
 def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000, *,
                  web_configured: bool = False) -> str:
     """The judge's own prompt. ``web_configured=False`` (the default) is byte-for-byte unchanged
@@ -202,7 +213,7 @@ def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000
     """
     return render_prompt(
         "act-in-the-world.reach-judge",
-        reach_summary=reach_summary.strip(), message=(message or "")[:max_message_chars],
+        reach_summary=reach_summary.strip(), message=clip_keeping_ends(message or "", max_message_chars),
         web_note=("\n" + WEB_REACH_NOTE + "\n") if web_configured else "")
 
 

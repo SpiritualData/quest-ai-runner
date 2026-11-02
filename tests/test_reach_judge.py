@@ -256,11 +256,12 @@ def test_judge_prompt_includes_the_reach_summary_and_the_message():
     assert "Can read local project notes." in prompt
 
 
-def test_judge_prompt_truncates_an_over_long_message():
-    message = ("a" * 20) + "TAIL_THAT_SHOULD_BE_CUT"
-    prompt = judge_prompt(message, "a short summary", max_message_chars=20)
-    assert "a" * 20 in prompt
-    assert "TAIL_THAT_SHOULD_BE_CUT" not in prompt
+def test_judge_prompt_cuts_the_middle_of_an_over_long_message_and_keeps_the_ask_at_the_end():
+    message = "START" + ("x" * 500) + "THE_ASK_AT_THE_END"
+    prompt = judge_prompt(message, "a short summary", max_message_chars=100)
+    assert "START" in prompt
+    assert "THE_ASK_AT_THE_END" in prompt
+    assert "x" * 200 not in prompt
 
 
 # Captured by running quest-ai-runner's core/reach_judge.py AT ITS COMMIT PARENT TO bf609a8
