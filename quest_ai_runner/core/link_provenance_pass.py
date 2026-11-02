@@ -103,6 +103,12 @@ def failed_page_reads(gathered: Iterable) -> frozenset:
                      and str(o.get("rel_path") or "").lower().startswith(("http://", "https://")))
 
 
+def opened_web_pages(gathered: Iterable) -> bool:
+    """True when the turn holds at least one web page read that succeeded (a read observation whose rel_path is an http(s) address)."""
+    return any(isinstance(o, dict) and o.get("kind") == "read"
+               and str(o.get("rel_path") or "").lower().startswith(("http://", "https://")) for o in (gathered or []))
+
+
 def unopened_pages_note(addresses: Sequence[str]) -> str:
     """One honest sentence naming the sites whose page could not be opened (domains only, so the link guard has nothing to strip)."""
     hosts = sorted({host_of(a) for a in addresses if host_of(a)})

@@ -26,7 +26,7 @@ from .orchestrator_turn_messages import adopt_turn_ask, ensure_found_constraint_
 from .reply_standards import turn_holds_records
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
-from .link_provenance_pass import failed_page_reads, unopened_pages_note
+from .link_provenance_pass import opened_web_pages, failed_page_reads, unopened_pages_note
 from hubofhubs.critique.link_guard import normalize_url_for_match
 from .planner_prompt import NOT_QUEUED_NOTE
 from .tools_status import fact_is_held
@@ -431,7 +431,11 @@ class RunCloseMixin:
                     # THE FACTS ARE THERE, ONLY SOURCE SPECIFICITY IS UNCONFIRMED: the verifier's own enum says evidence_only
                     # and it named the one thing in ``question``. Another attempt (or a deep run) cannot improve on it, so the
                     # answer ships as written; the turn ends with the stop reason ``unverified``. Same rule the deep goal loop has.
-                    if (str(verdict.get("blocker") or "") == "evidence_only" and str(verdict.get("question") or "").strip()
+                    # A second structured route to the same end: the verifier's narrower boolean ``states_requested_facts`` (every
+                    # asked-for fact is in the answer) with at least one page opened this turn; ``question`` is optional there.
+                    if ((str(verdict.get("blocker") or "") == "evidence_only" and str(verdict.get("question") or "").strip()
+                         or (verdict.get("states_requested_facts") and opened_web_pages(gathered)
+                             and str(verdict.get("blocker") or "") not in ("needs_person", "tool_failure")))
                             and not verdict.get("claims_unexecuted") and not verdict.get("claims_unsupported")):
                         rs.page_unopenable = True   # no last-resort deep run for a gap that more work cannot close
                         break

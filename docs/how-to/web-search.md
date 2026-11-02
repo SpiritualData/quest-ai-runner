@@ -267,3 +267,9 @@ An answer that states the facts asked for, whose only gap is that a cited source
 ideal (a site's home page, not the exact page), gets `blocker=evidence_only` with the one unconfirmed thing in `question`.
 The answer ships as written, with no deep run, and its footer reads "Some of this I could not confirm." without a Continue
 button. `more_work` stays for missing facts or tools not yet tried.
+
+The verdict also carries `states_requested_facts`, a boolean the verifier answers on its own: every asked-for fact is in the
+answer, whatever the quality of its sources. A not-met verdict with it true, a page opened this turn, no unexecuted or
+unsupported claim flag and a blocker other than `needs_person` or `tool_failure` ships the answer as written with the
+`unverified` stop reason and no deep run (`question` is optional there). With it false, or with no page opened, the verdict
+behaves as before.

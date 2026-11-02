@@ -147,3 +147,39 @@ def test_evidence_only_without_a_question_or_more_work_behaves_as_before():
                                 goal_verdicts=[verdict, {"met": False}], answer_text=FIRST)
         res, runner = run(provider, FakeWeb())
         assert runner.calls == 1          # the last-resort deep run, unchanged
+
+
+READ_THEN_ANSWER = [{"action": "read", "rationale": "open it", "reads": [{"web_page": URL}]},
+                    {"action": "answer", "rationale": "x"}]
+WEAK = {"met": False, "blocker": "more_work", "reason": "the cited page is only a home page", "states_requested_facts": True}
+
+
+def test_facts_stated_and_a_page_opened_ships_the_answer_unverified_with_no_deep_run():
+    from quest_ai_runner.core.orchestrator_turn_messages import turn_outcome
+    provider = PageProvider(plan_decisions=list(READ_THEN_ANSWER), goal_verdicts=[WEAK, {"met": False}], answer_text=FIRST)
+    web = FakeWeb()
+    res, runner = run(provider, web)
+    assert web.fetched == [URL] and runner.calls == 0
+    assert provider.verify_calls == 1 and res.text.startswith(FIRST)
+    assert turn_outcome(res) == {"outcome": "stopped", "stop_reason": "unverified"}
+
+
+def test_facts_not_stated_still_goes_to_the_deep_run():
+    provider = PageProvider(plan_decisions=list(READ_THEN_ANSWER),
+                            goal_verdicts=[dict(WEAK, states_requested_facts=False), {"met": False}], answer_text=FIRST)
+    res, runner = run(provider, FakeWeb())
+    assert runner.calls == 1
+
+
+def test_facts_stated_but_no_page_opened_behaves_as_before():
+    provider = PageProvider(plan_decisions=[{"action": "answer", "rationale": "x"}],
+                            goal_verdicts=[WEAK, {"met": False}], answer_text=FIRST)
+    res, runner = run(provider, FakeWeb())
+    assert runner.calls == 1
+
+
+def test_facts_stated_with_an_unexecuted_claim_still_goes_to_the_deep_run():
+    provider = PageProvider(plan_decisions=list(READ_THEN_ANSWER),
+                            goal_verdicts=[dict(WEAK, claims_unexecuted=True), {"met": False}], answer_text=FIRST)
+    res, runner = run(provider, FakeWeb())
+    assert runner.calls >= 1

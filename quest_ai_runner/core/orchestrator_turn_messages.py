@@ -227,5 +227,6 @@ def turn_outcome(res: Any) -> Dict[str, Any]:
     verdict = getattr(res, "goal_verdict", None)
     if isinstance(verdict, dict) and not verdict.get("met"):
         # The verifier's own enum: the reply is complete but part of it could not be confirmed. Not a failure to try enough.
-        return {"outcome": "stopped", "stop_reason": "unverified" if verdict.get("blocker") == "evidence_only" else "attempt_cap"}
+        return {"outcome": "stopped", "stop_reason": "unverified" if (
+            verdict.get("blocker") == "evidence_only" or verdict.get("states_requested_facts")) else "attempt_cap"}
     return {"outcome": "met"}

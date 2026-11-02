@@ -356,6 +356,7 @@ class JudgesMixin:
                             "member_ref": str(raw.get("member_ref") or "").strip(),
                             "asks_person": bool(raw.get("asks_person")),
                             "unread_pages": clean_unread_pages(raw.get("unread_pages")),
+                            "states_requested_facts": bool(raw.get("states_requested_facts")),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted")),
                             "claims_unsupported": bool(
                                 check_support and raw.get("claims_unsupported")

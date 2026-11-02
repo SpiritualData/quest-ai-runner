@@ -88,6 +88,10 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
                                             "whole gap. This includes a page the request asks for (an official page, a "
                                             "source link) that the answer lacks, when its address is in the search "
                                             "results shown: name that address. Leave empty otherwise."},
+            "states_requested_facts": {"type": "boolean",
+                                       "description": "True when the output already states every fact the request asked "
+                                                      "for, whatever the quality of its sources. False if any asked-for "
+                                                      "fact is missing."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
                                                  "execution record does not back."},
@@ -175,6 +179,8 @@ entirely (not shown at all) and the answer could not have known whether history 
         permission), and the worker said so plainly. Put ONE plain sentence in question naming the
         tool and the error. Never use it for a failure that was the worker's own mistake (a wrong
         argument, a typo, a wrong file), which another attempt can fix: that is more_work.
+  - set states_requested_facts, whatever met is: true when the output already states every fact the request asked for, even if a
+    source it cites is weaker than ideal; false when any asked-for fact is missing.
   - set asks_person, whatever met is: true when the output ends by asking the person for something only they can give (a decision,
     a figure, a file, an access grant) and what they asked for cannot be complete without it; put that ONE thing in question. False when
     the output only offers optional follow-ups or further help.
