@@ -137,8 +137,7 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   therefore sent once, when the reply is final (a live "Looking through records" line shows only if a records step is running; see section 9).
   These are overlap tests of known stored text against the reply, never keyword lists over the reply's wording. The numbers (four, three, two,
   five characters) are parameters, not tuned values. Sites: only a site the reply names (its exact host, with or without `www.`; a parent or sibling host does not count) is listed beside the
-  opened pages; a search that opened and cited nothing ends as a found count with no list, which the screen says as "Searched the web, found N
-  results" (`counts.read` is 0, `items` is empty; never "no page opened", because a link check can still have run, and never a claim of reading). `work_trace_check` enforces both when it is given the reply.
+  opened pages; a search that opened and cited nothing ends as a found count with no list, and the screen shows no settled line for it (`counts.read` is 0, `items` is empty; section 9). A site the reply cites stays as a `found` item and the line says "Searched the web and cited a.org", never "read". `work_trace_check` enforces both when it is given the reply.
 - Steps QAR emits (one `step_id` per turn each): `web` (seat `search-backend`, kind `sources`, key `workTrace.web.reading`),
   `papers` (`know-the-world`, `papers`, `workTrace.papers.searching`), `records` (`context-assembler`, `records`,
   `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
@@ -373,8 +372,8 @@ the same English pack. Nothing is re-worded in Python or in a parallel script.
 - **A settled web search that found results but opened no page, and whose results the reply did not cite, shows NO line (product decision,
   2026-11-01).** Listing unused sources, collapsed or not, fails the value judge ("unused source, never opened") and the earlier real-turn review
   found it a value failure; the working dots and the live line already showed the search while it ran. The emitter leaves such a step as a found
-  count with no items; the screen shows a settled line only when the step has items, that is, a page was opened or the reply cited the site
-  ("Searched the web, found {{count}} results" from `counts.found`, never "read": `counts.read` is 0 for a cited-only site). The earlier
+  count with no items; the screen shows a settled line only when the step has items, that is, a page was opened or the reply cited the site,
+  and it names the cited sites in the shape of the "Read" sentences: "Searched the web and cited a.org", "... cited a.org and b.org", "... cited a.org and 3 more sites" (strings `summary.citedOne/Two/More`; "cited", never "read", because `counts.read` is 0 for a cited-only site, and "Read ..." stays for opened pages). The earlier
   attempt to list found-but-uncited sites as expandable rows was reverted. Implemented once in `workTrace.ts` `summaryClauses` and mirrored in
   the hub terminal `trail.py`.
 
