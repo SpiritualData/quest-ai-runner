@@ -30,6 +30,7 @@ STOP_BUDGET = "budget"
 STOP_STALLED = "stalled"
 STOP_ATTEMPT_CAP = "attempt_cap"
 STOP_TOOL_FAULT = "tool_fault"
+STOP_UNVERIFIED = "unverified"   # a usable reply with part of it not confirmed (the verdict blocker is evidence_only)
 
 
 def failure_status(signature: str) -> str:

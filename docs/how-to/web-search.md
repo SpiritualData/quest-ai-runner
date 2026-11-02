@@ -254,3 +254,11 @@ and the verdict is recorded as `evidence_only`. An address the planner's own `we
 again. Separately, the reply-standard repair rounds treat any web address in the draft as an item the person may have asked
 for: the repair hint says to keep it even past the length limit, and a repaired draft that drops an address the previous
 draft held is discarded in favour of the longer draft (the two address sets are compared; no prose is read).
+
+### Asking for an official page
+
+When the request asks for an official page or a source link, the planner's web block tells it to open that page with one
+`web_page` read before answering (not to cite from snippets). If the first pass still misses it, the verifier names the
+address from the search results in `unread_pages` and the loop reads it. A reply that stays partly unconfirmed ends with the
+stop reason `unverified` ("Some of this I could not confirm."), not `attempt_cap`; the reason comes from the verdict's
+`blocker == evidence_only`.

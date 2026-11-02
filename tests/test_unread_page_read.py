@@ -106,3 +106,22 @@ def test_failed_reads_are_found_from_the_error_observations_alone():
     from quest_ai_runner.core.link_provenance_pass import failed_page_reads
     assert failed_page_reads([{"kind": "error", "rel_path": URL, "error": "x"}, {"kind": "read", "rel_path": "https://ok.example/"}])
     assert not failed_page_reads([{"kind": "read", "rel_path": URL}, {"kind": "error", "error": "no address"}])
+
+
+def test_planner_web_block_tells_the_planner_to_open_a_requested_official_page():
+    from quest_ai_runner.core.planner_context import PLANNER_WEB_HEAD, planner_web_block
+    assert "official page or a link to a source" in PLANNER_WEB_HEAD
+    assert "one web_page read before you answer" in PLANNER_WEB_HEAD
+    assert "—" not in PLANNER_WEB_HEAD
+    assert "official page" in planner_web_block(FakeWeb())      # rides the block whenever a web adapter is wired
+    assert planner_web_block(None) == ""
+
+
+def test_an_unconfirmed_reply_stops_with_its_own_reason_and_a_real_out_of_tries_stop_keeps_its_own():
+    from types import SimpleNamespace
+    from quest_ai_runner.core.orchestrator_turn_messages import turn_outcome
+    unconfirmed = SimpleNamespace(deep_results=[], goal_verdict={"met": False, "blocker": "evidence_only"})
+    assert turn_outcome(unconfirmed) == {"outcome": "stopped", "stop_reason": "unverified"}
+    more_work = SimpleNamespace(deep_results=[], goal_verdict={"met": False, "blocker": "more_work"})
+    assert turn_outcome(more_work) == {"outcome": "stopped", "stop_reason": "attempt_cap"}
+    assert turn_outcome(SimpleNamespace(deep_results=[], goal_verdict={"met": True})) == {"outcome": "met"}

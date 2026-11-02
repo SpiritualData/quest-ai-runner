@@ -104,7 +104,7 @@ Ids are `turn_id:seq`, so a replayed stream (the app re-posts with `client_messa
 | kind | meaning | required fields | must never |
 |---|---|---|---|
 | `interim` | work continues | `done` (what exists now), `why_more` (the gap, from the verifier `reason`), `next` (verifier `next_action`), optional `coverage`, `will_continue: true` | be last in a turn, repeat the previous interim, carry a claim the run's record does not support |
-| `final` (today's reply) | the turn ended | text, `outcome`: `met` or `stopped` with `stop_reason` (`budget`, `stalled`, `attempt_cap`, `tool_fault`) and what is left | say more is coming |
+| `final` (today's reply) | the turn ended | text, `outcome`: `met` or `stopped` with `stop_reason` (`budget`, `stalled`, `attempt_cap`, `tool_fault`, `unverified`) and what is left | say more is coming |
 | `ask` | blocked on a person | `decision_id`, `assigned_to`, `question`, `why_only_you`, `done` so far, `options?` | exist without a real decision-request row |
 
 Wire: `interim` and `final` reuse existing frames; `ask` reuses `EVENT_DECISION`. No new hub event type; `interim`
@@ -264,7 +264,7 @@ Message fields (stored on the message document, solo and team; absent on old mes
   `superseded` by this feature, but the backend still writes `superseded: true` on them when the final lands so old
   builds hide them (new builds read `turn_id` and ignore `superseded` for grouping).
 - final: the ordinary assistant reply plus `turn_id`, `seq`, `outcome: "met" | "stopped"`, `stop_reason?`
-  (`budget | stalled | attempt_cap | tool_fault`). Stored `kind` stays what it is today (absent or "answer"); `final` is
+  (`budget | stalled | attempt_cap | tool_fault | unverified`). Stored `kind` stays what it is today (absent or "answer"); `final` is
   carried by `turn_kind: "final"` so existing kind-based code is untouched.
 - ask: `decision_id`, `assigned_to` (user id), `assigned_to_name`, `question`, `why_only_you`, `done`, `options?: [str]`,
   `waiting_on_name`. For viewers who may not see the question, the server redacts: they get `kind: "ask"` with
@@ -289,7 +289,7 @@ What the runner sends (as built). Context the consumer passes in the turn's `con
   ONE `ask` message for the turn, not an extra final. If filing fails, the turn ends as a final whose text says the
   question could not be filed.
 - Final: the result frame's `data` gains `outcome` (`met | stopped | asked`) and, for `stopped`, `stop_reason`
-  (`budget | stalled | attempt_cap | tool_fault`). A platform fault (any tool failure other than 401 or 403), spent budget and
+  (`budget | stalled | attempt_cap | tool_fault | unverified`). A platform fault (any tool failure other than 401 or 403), spent budget and
   a stalled loop are finals, never asks.
 - The verifier schema gains `asked_of` (`asker | member`) and `member_ref`, offered only when the turn lists more than one
   participant; code resolves `member_ref` against `participants` and falls back to the asker.

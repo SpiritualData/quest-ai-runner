@@ -85,7 +85,9 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
                              "description": "Only when met=false: web addresses (full http or https) that the output "
                                             "cites or must cite as the page the request asked for, and that the run "
                                             "only saw in search results and never opened, when opening them is the "
-                                            "whole gap. Leave empty otherwise."},
+                                            "whole gap. This includes a page the request asks for (an official page, a "
+                                            "source link) that the answer lacks, when its address is in the search "
+                                            "results shown: name that address. Leave empty otherwise."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
                                                  "execution record does not back."},
