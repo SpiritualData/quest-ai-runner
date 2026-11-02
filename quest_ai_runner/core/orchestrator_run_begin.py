@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
 from hubofhubs.ports.deep import ProgressEvent
+from . import shared_thread
 from .adapters_values import PlanDecision
 from hubofhubs.recall.card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from .context_doctrine import CACHED_HINT_GATE
@@ -325,6 +326,8 @@ class RunBeginMixin:
         # The default FileContextStore ignores it. Threaded to both assemble() and record().
         _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
         rs._ctx_meta = _ctx_meta
+        rs.turn_asks = []          # decision-requests a worker raised with its own create_decision call this turn (core/ask_policy.py)
+        rs.private_cards = []      # a shared thread: the selected cards the reply must not draw on (core/shared_thread.py)
         if quest_id is not None:
             _ctx_meta.setdefault("quest_id", quest_id)
         # Carry the conversation identity into the context meta so PER-GOAL deep context selection
@@ -842,9 +845,14 @@ class RunBeginMixin:
                 # assembled a second time (see ``TurnCardCache.turn_start_context``).
                 card_context.note_turn_start_result(_assembled)
                 try:
-                    if _assembled.context_view:
-                        rs.context_view = (_assembled.context_view + "\n\n" + rs.context_view if rs.context_view
-                                        else _assembled.context_view)
+                    _assembled_view = _assembled.context_view
+                    if shared_thread.is_shared_thread(_ctx_meta):
+                        # A reply every participant reads is not written from the asker's private records.
+                        rs.private_cards = shared_thread.private_cards(getattr(_assembled, "card_metadata", None) or [], _ctx_meta)
+                        _assembled_view = shared_thread.strip_private_sections(_assembled_view, rs.private_cards)
+                    if _assembled_view:
+                        rs.context_view = (_assembled_view + "\n\n" + rs.context_view if rs.context_view
+                                        else _assembled_view)
                     if rs.model_hint is None and _assembled.model_tier_hint:
                         rs.model_hint = _assembled.model_tier_hint
                 except Exception:  # noqa: BLE001

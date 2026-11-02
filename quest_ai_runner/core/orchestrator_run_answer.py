@@ -11,6 +11,8 @@ from typing import Optional
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.ports.events import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
 from hubofhubs.ports.deep import ProgressEvent
+from . import shared_thread
+from .ask_policy import ask_state_block
 from .adapters_values import PlanDecision
 from .context_doctrine import CARD_LIFECYCLE_GATE
 from .orchestrator_constants import log
@@ -139,6 +141,14 @@ class RunAnswerMixin:
         def _answer_grounding(steering: Optional[str] = None) -> str:
             # The L2 grounding EVERY reply this turn is built on.
             cv = rs.context_view
+            # What the system's own record says about asks, and who may read the reply: facts the reply is written from, never
+            # something it is left to guess. Only for a thread turn (the asker is known) with the incremental replies switched on.
+            if getattr(cfg, "interim_replies", False) and (rs._ctx_meta or {}).get("asker_user_id"):
+                meta = rs._ctx_meta
+                facts = ask_state_block(getattr(rs, "turn_asks", None), meta.get("participants") or [], str(meta.get("asker_user_id")))
+                if shared_thread.is_shared_thread(meta):
+                    facts = shared_thread.SHARED_THREAD_RULE + "\n\n" + facts
+                cv = (cv + "\n\n" + facts) if cv else facts
             if steering:
                 cv = ((rs.context_view + "\n\n" if rs.context_view else "")
                       + "--- IMPROVE YOUR ANSWER (it did not yet meet the goal) ---\n" + steering)

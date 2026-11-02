@@ -19,7 +19,8 @@ from .auxiliary_prompts import INTERIM_PROGRESS_TOOL
 from .card_filter import _extract_json
 from .prompt_specs import render_prompt
 from .reply_standards import found_constraint_head, turn_holds_records
-from .ask_policy import ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee, why_only_you_of
+from .ask_policy import (Assignee, adopted_assignee, ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee,
+                         why_only_you_of)
 from .interim_policy import (
     InterimLedger, InterimState, SEND, SKIP_NO_WHY, decide, done_text, interim_event_data, interim_text_of, progress_signature,
     ungrounded_terms)
@@ -169,6 +170,42 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
     if emit is not None:
         emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.output, decision_id=outcome.decision_id,
                                 result_kind="ask", data=data))
+    return True
+
+
+def records_text(context_view: Any, gathered: Any, view_chars: int = 3500, gathered_chars: int = 2500) -> str:
+    """The turn's records as text for a judge: the rendered context, then what the turn gathered (a list of reads, each a dict or text)."""
+    parts = []
+    for item in gathered or []:
+        parts.append(str(item.get("text") or item.get("hits") or "") if isinstance(item, dict) else str(item))
+    return str(context_view or "")[:view_chars] + "\n" + "\n".join(p for p in parts if p)[:gathered_chars]
+
+
+def adopt_turn_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], res: Any, turn_asks: Sequence[Mapping[str, Any]]) -> bool:
+    """The turn's ask belongs to the runner even when the worker raised it with its own create_decision call. When the turn's ledger holds a
+    decision-request, it becomes THE ask: shown as the ending (an ``EVENT_DECISION``), its assignee checked against the thread's participants
+    (a stranger or nobody is the asker), the asker named as the one told the answer, and the reply text is the code-written ask text, so
+    the reply cannot claim a request that no record backs. True when adopted."""
+    entries = [e for e in turn_asks or [] if isinstance(e, Mapping) and e.get("decision_id")]
+    if not entries:
+        return False
+    meta = ctx_meta or {}
+    asker = str(meta.get("asker_user_id") or meta.get("requester_user_id") or meta.get("user_id") or "")
+    participants = meta.get("participants") or []
+    first = entries[0]
+    assignee = adopted_assignee(first, participants, asker)
+    teammate = next((str(p.get("name") or "").strip() for p in participants if isinstance(p, dict)
+                     and str(p.get("user_id") or "") == assignee.user_id), "") if assignee.asked_of == "member" else ""
+    question = str(first.get("summary") or "").strip()
+    receipts = list(getattr(res, "observations", None) or []) if getattr(res, "observations_reported", False) else []
+    done = done_text(receipts=receipts, coverage=getattr(res, "coverage", None))
+    res.decision_id = str(first["decision_id"])
+    res.output = ask_text(done, question, teammate)
+    from .ask_policy import AskOutcome
+    data = ask_event_data(question=question, why_only_you=why_only_you_of("needs_person", assignee, participants), done=done, options=None,
+                          outcome=AskOutcome(decision_id=res.decision_id, assignee=assignee), asker_user_id=asker)
+    if emit is not None:
+        emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.output, decision_id=res.decision_id, result_kind="ask", data=data))
     return True
 
 

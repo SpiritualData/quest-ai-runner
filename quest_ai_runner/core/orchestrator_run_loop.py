@@ -24,6 +24,7 @@ from hubofhubs.ports.events import (
     Mode,
 )
 from hubofhubs.ports.deep import ProgressEvent
+from . import shared_thread
 from .orchestrator_turn_messages import turn_outcome
 from .adapters_values import PlanDecision
 from .answer_explanation import is_eligible, trace_from_result
@@ -77,6 +78,9 @@ class RunLoopMixin:
         rs.budget_exhausted = budget_exhausted
 
         def finish(res: OrchestratorResult) -> OrchestratorResult:
+            if res.kind == "answer" and res.text and getattr(rs, "private_cards", None):
+                # A shared thread: a sentence of the reply that draws on a record only the asker may see is dropped (stored-text overlap).
+                res.text = shared_thread.scrub_private_sentences(res.text, rs.private_cards)
             res.steps = rs.steps
             res.gathered = gathered_content(gathered)
             res.execution_record = exec_record
@@ -755,7 +759,7 @@ class RunLoopMixin:
                                          quest_id=quest_id,
                                          user_id=_ctx_meta.get("user_id"),
                                          task_id=_ctx_meta.get("task_id"),
-                                         meta=dict(_ctx_meta)),
+                                         meta={**_ctx_meta, "turn_asks": rs.turn_asks}),
                                      on_success=self._recipe_learner(
                                          rs.user_message, _ctx_meta.get("scope_tags"),
                                          learnable=message_is_user_turn),

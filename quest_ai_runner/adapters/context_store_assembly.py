@@ -786,6 +786,8 @@ class AssemblyMixin:
                 # ``meta["scope_tags"]`` was empty. See vector_context_assembler's matching field
                 # for why this matters. Empty when the card is untagged.
                 "scope_tags": list(card.get("scope_tags") or []),
+                # The consumer's mark that every participant of a shared thread may see this card (core/shared_thread.py).
+                "visible_to_all": card.get("visible_to_all") is True,
                 # The VERBATIM rendered section this card contributed to context_view (the whole
                 # ``### Card: ...`` block: summary + Files listing + Content + Conventions). The hybrid
                 # consolidator rebuilds from this so a keyword card's file listings are never lost when

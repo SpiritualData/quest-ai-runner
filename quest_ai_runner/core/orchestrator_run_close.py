@@ -22,7 +22,7 @@ from .orchestrator_decide_tool import (
 from .orchestrator_decisions import _truncate_goal, user_ordered_work
 from .orchestrator_events import grounding_context_layer
 from .orchestrator_text import _strip_future_context, unconfirmed_no_change_text
-from .orchestrator_turn_messages import ensure_found_constraint_head, file_blocked_ask
+from .orchestrator_turn_messages import adopt_turn_ask, ensure_found_constraint_head, file_blocked_ask, records_text
 from .reply_standards import turn_holds_records
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
@@ -333,6 +333,16 @@ class RunCloseMixin:
         take_resume_session = rs.take_resume_session
         transcript = rs.transcript
         working_dir_override = rs.working_dir_override
+        # THE RUNNER OWNS THE TURN'S ASK. A decision-request the worker raised itself (the create_decision tool, noted in the turn's
+        # ledger) becomes the turn's one ask: shown as the ending, assignee checked against the participants, reply text from the
+        # ask record, so the reply never claims a request that no record backs (a real team turn said "I've sent X a request" while
+        # the ask was filed to someone else and never shown, 2026-11-01).
+        if getattr(self.cfg, "interim_replies", False) and not rs._decision_parked and getattr(rs, "turn_asks", None):
+            adopted = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+            if adopt_turn_ask(self, emit, _ctx_meta, adopted, rs.turn_asks):
+                rs.text = adopted.output
+                rs._parked_decision_id = adopted.decision_id
+                rs._decision_parked = True
         if (not rs._deferred_handoff_confirmed and not rs._decision_parked and not rs.deferred_unconfirmed
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
@@ -381,6 +391,17 @@ class RunCloseMixin:
                         participants=(_ctx_meta or {}).get("participants"))
                     if verdict is not None:
                         rs._last_verdict = verdict
+                    # A FINAL THAT NEEDS THE PERSON (the answer asks for a decision, a figure, access or a file only they can give):
+                    # the verifier's own structured judgement, ``asks_person`` with the one ``question``, files the ask even when the goal
+                    # is met, instead of leaving the question in plain text where nothing tracks it. The answer text stays as written.
+                    if (verdict is not None and verdict.get("asks_person") and str(verdict.get("question") or "").strip()
+                            and getattr(self.cfg, "interim_replies", False) and not rs._decision_parked):
+                        asked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+                        if file_blocked_ask(self, emit, _ctx_meta, asked, dict(verdict, blocker="needs_person"),
+                                            question=str(verdict.get("question") or "").strip()):
+                            rs._parked_decision_id = asked.decision_id
+                            rs._decision_parked = True
+                            break
                     if verdict is not None and verdict.get("met"):
                         if emit is not None:
                             emit.status("Answer verified against the goal.")
@@ -408,7 +429,7 @@ class RunCloseMixin:
                         if getattr(self.cfg, "reply_standards", False) and turn_holds_records(getattr(rs, "_sources", None), rs.gathered):
                             ensure_found_constraint_head(
                                 self, _ctx_meta, request=rs.user_message,
-                                records=(getattr(rs, "context_view", "") or "")[:3500] + "\n" + (gathered_content(rs.gathered) or "")[:2500],
+                                records=records_text(getattr(rs, "context_view", ""), gathered_content(rs.gathered)),
                                 question=str(verdict.get("question") or "").strip())
                         if file_blocked_ask(self, emit, _ctx_meta, blocked, verdict,
                                             question=str(verdict.get("question") or "").strip()):

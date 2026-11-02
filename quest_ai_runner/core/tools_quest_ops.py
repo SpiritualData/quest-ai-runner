@@ -103,6 +103,7 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
     factory = client_factory or (lambda: quest_client_from_env(env))
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        from .ask_policy import ask_dedupe_key, record_turn_ask   # ask_policy imports this module, so the import is here
         summary = str(args.get("summary") or "").strip()
         if not summary:
             return ToolResult(ok=False, text="Nothing was raised: summary is empty. Write what the "
@@ -133,6 +134,12 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                 kwargs["assignee_user_id"] = member
         if "assignee_user_id" not in kwargs and asker:
             kwargs["assignee_user_id"] = asker
+        # One ask per turn, however the worker words it: the same key the runner files its own ask under (core/ask_policy.py).
+        turn_id, conv_id = str(ctx.value("turn_id") or ""), str(ctx.value("conv_id") or "")
+        if turn_id or conv_id:
+            kwargs["dedupe_key"] = ask_dedupe_key(turn_id, conv_id)
+            if conv_id:
+                kwargs["conv_id"] = conv_id
         try:
             row = client.create_decision(summary, **kwargs)
         except Exception as e:  # QuestWriteError: refused (for example the person already answered this), failed, unknown
@@ -158,6 +165,7 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                 "Quest did not accept the ask (the runner log has the reason), so the person has "
                 "NOT been asked. Do not report it as raised; try once more with a shorter summary, "
                 "or put it in your result as something you could not raise."))
+        record_turn_ask(ctx.value("turn_asks"), decision_id=str(ident), assignee_user_id=str(kwargs.get("assignee_user_id") or ""), summary=summary)
         return ToolResult(ok=status in (ToolStatus.APPLIED, ToolStatus.NOOP), status=status, data=data,
                           text=f"Raised ask {ident} for the person on quest {quest_id or '(no quest)'}.")
 

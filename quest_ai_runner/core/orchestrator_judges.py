@@ -340,6 +340,7 @@ class JudgesMixin:
                             "question": str(raw.get("question") or "").strip(),
                             "asked_of": ("member" if str(raw.get("asked_of") or "").strip().lower() == "member" else "asker"),
                             "member_ref": str(raw.get("member_ref") or "").strip(),
+                            "asks_person": bool(raw.get("asks_person")),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted")),
                             "claims_unsupported": bool(
                                 check_support and raw.get("claims_unsupported")

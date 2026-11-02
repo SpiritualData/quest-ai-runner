@@ -157,3 +157,35 @@ def stop_reason_of(*, exhausted_budget: bool, stalled: bool, tool_failure: bool,
     if stalled:
         return STOP_STALLED
     return STOP_ATTEMPT_CAP if attempts_spent else ""
+
+
+# ---- asks a worker raised itself in this process (the create_decision tool): the runner adopts them -------------------------------
+
+def record_turn_ask(ledger: Any, *, decision_id: str, assignee_user_id: str, summary: str) -> None:
+    """Note, in the turn's ledger (a list the orchestrator put in the tool context), that a decision-request exists for this turn."""
+    if isinstance(ledger, list) and decision_id:
+        ledger.append({"decision_id": str(decision_id), "assignee_user_id": str(assignee_user_id or ""), "summary": str(summary or "")})
+
+
+def adopted_assignee(entry: Mapping[str, Any], participants: Sequence[Mapping[str, Any]], asker_user_id: str) -> Assignee:
+    """Who a worker-raised ask is for, validated against the thread's participants: a participant other than the asker is a teammate;
+    the asker, a stranger or nobody is the asker (the tool already filed it to the asker in that case, so nothing is claimed that is not so)."""
+    who = str(entry.get("assignee_user_id") or "")
+    people = {str(p.get("user_id") or "") for p in participants or [] if isinstance(p, Mapping)}
+    if who and who != str(asker_user_id or "") and who in people:
+        return Assignee(who, "member")
+    return Assignee(str(asker_user_id or ""), "asker")
+
+
+def ask_state_block(ledger: Any, participants: Sequence[Mapping[str, Any]], asker_user_id: str) -> str:
+    """The structural fact the reply is written from: whether a decision-request exists for this turn and for whom. The reply may say
+    someone was asked only when this says an ask exists."""
+    entries = [e for e in (ledger or []) if isinstance(e, Mapping)]
+    if not entries:
+        return ("--- ASK STATE (INTERNAL, from the system's record) ---\nNo decision-request exists for this turn. Nobody has been asked, "
+                "messaged or sent a request. Do not say or imply that anyone was.")
+    assignee = adopted_assignee(entries[0], participants, asker_user_id)
+    name = next((str(p.get("name") or "").strip() for p in participants or [] if isinstance(p, Mapping)
+                 and str(p.get("user_id") or "") == assignee.user_id), "")
+    target = name if assignee.asked_of == "member" and name else "the person who asked"
+    return f"--- ASK STATE (INTERNAL, from the system's record) ---\nOne decision-request exists for this turn, addressed to {target}. No one else has been asked."

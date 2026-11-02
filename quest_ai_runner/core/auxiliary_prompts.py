@@ -78,6 +78,9 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
                                         "thing needed can only come from a listed person other than the asker, else asker."},
             "member_ref": {"type": "string",
                            "description": "If asked_of is member: the user id of that listed person, copied exactly."},
+            "asks_person": {"type": "boolean",
+                            "description": "True when the output asks the person for a decision, figure, file or access only they "
+                                           "can give, per the rules above (put the one thing in question)."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
                                                  "execution record does not back."},
@@ -161,6 +164,9 @@ entirely (not shown at all) and the answer could not have known whether history 
         permission), and the worker said so plainly. Put ONE plain sentence in question naming the
         tool and the error. Never use it for a failure that was the worker's own mistake (a wrong
         argument, a typo, a wrong file), which another attempt can fix: that is more_work.
+  - set asks_person, whatever met is: true when the output ends by asking the person for something only they can give (a decision,
+    a figure, a file, an access grant) and what they asked for cannot be complete without it; put that ONE thing in question. False when
+    the output only offers optional follow-ups or further help.
 Do NOT use em dashes.
 
 {persona}{standards}--- GOAL (done-standard) ---
