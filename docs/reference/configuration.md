@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-227 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+228 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -240,3 +240,4 @@ the docs and `.env.example` that describe what it does.
 | `WEB_SEARCH_ENABLED` |  | `config_orchestrator.py` | `.env.example`, `docs/how-to/web-search.md` |
 | `WEB_SEARCH_MAX_RESULTS` |  | `config_orchestrator.py` | `.env.example`, `docs/how-to/web-search.md` |
 | `WEB_SEARCH_TIER` |  | `config_orchestrator.py` | `.env.example` |
+| `XDG_STATE_HOME` |  | `runner/lane_supervisor.py` | `docs/how-to/deployment.md` |

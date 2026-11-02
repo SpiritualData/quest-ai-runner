@@ -466,6 +466,9 @@ from .cli_poll import (  # noqa: F401
 from .cli_doctor import (  # noqa: F401
     _cmd_doctor,
 )
+from .cli_lane import (  # noqa: F401
+    run_lane_command,
+)
 from .cli_serve_files import (  # noqa: F401
     _cmd_serve_files,
 )
@@ -512,6 +515,7 @@ def main(argv=None) -> int:
         "channel": _cmd_channel,
         "serve-files": _cmd_serve_files,
         "doctor": _cmd_doctor,
+        "lane": run_lane_command,
     }
     # No subcommand (the legacy flat flags) and `poll` both run the poller.
     return handlers.get(args.command, _cmd_poll)(args, log)

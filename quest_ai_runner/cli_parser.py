@@ -258,6 +258,24 @@ def _build_parser() -> argparse.ArgumentParser:
                              "QAR_CONFIG_FILE also works. Environment variables always win over "
                              "a value the file also sets.")
 
+    # --- lane subcommand: supervise a lane with no systemd and no root --------------------------
+    lane_p = sub.add_parser(
+        "lane", help="run a lane under the built-in supervisor: start|stop|restart|status|ensure (no systemd, no root)")
+    lane_p.add_argument("lane_op", choices=["start", "stop", "restart", "status", "ensure"])
+    lane_p.add_argument("--config", default=None, metavar="PATH",
+                        help="the lane's TOML config (the lane runs `poll --config PATH`)")
+    lane_p.add_argument("--env-file", default=None, metavar="PATH",
+                        help="KEY=VALUE file (systemd EnvironmentFile format, never shell-evaluated) "
+                             "loaded into the lane's environment on every (re)start")
+    lane_p.add_argument("--name", default=None, help="lane name (default: <config parent dir>-<config stem>)")
+    lane_p.add_argument("--state-dir", default=None, metavar="DIR",
+                        help="pidfile, lock and log directory (default: $XDG_STATE_HOME or "
+                             "~/.local/state, then quest-ai-runner/lanes/<name>)")
+    lane_p.add_argument("--if-idle", action="store_true",
+                        help="restart only: skip while a deep run (a claude or node process) is in flight")
+    lane_p.add_argument("--exec", dest="exec_command", default=None, metavar="CMD",
+                        help="advanced: supervise this command line instead of `poll`")
+
     # --- channel subcommand: hold a live, two-way conversation over a messaging channel -------
     channel_p = sub.add_parser(
         "channel", help="drive a live ChannelTransport (e.g. OpenClaw) as a real-time chat lane")

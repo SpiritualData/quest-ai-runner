@@ -74,6 +74,7 @@ Steps for a task you already know you want to do.
 - **[A lane is a config file](how-to/a-lane-is-a-config-file.md)**: express an executor lane as a `qar.toml` (env files, aliases, folder maps, context sources) instead of a Python consumer.
 - **[Multi-source retrieval](how-to/multi-source-retrieval.md)**: wire several adapters (files, databases, conversations) to be queried in parallel.
 - **[Claude conversations](how-to/claude-conversations-integration.md)**: make your Claude conversations part of the corpus the brain reads.
+- **[Deployment](how-to/deployment.md)**: cron, systemd, or `quest-ai-runner lane ensure` (no systemd, no root).
 - **[File server](how-to/file-server.md)**: `quest-ai-runner serve-files`, a small read-only server so a brain on one machine can read files on another.
 - **[Web search](how-to/web-search.md)**: `WebResearchAdapter`, fast token-efficient live web access for the orchestrator.
 - **[Live channels](how-to/live-channels.md)**: an opt-in real-time, two-way chat lane over a messaging app.

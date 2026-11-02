@@ -10,6 +10,9 @@ Everything below is now expressible in `qar.toml`, so a lane is:
 ExecStart=/path/to/venv/bin/quest-ai-runner poll --config /path/to/qar.toml
 ```
 
+No systemd, or no root to restart it? `quest-ai-runner lane ensure --config /path/to/qar.toml` runs
+and supervises the same lane from cron: see [Option C](deployment.md#option-c-no-systemd-no-root).
+
 ## The fields that removed the need for Python
 
 | Field | Replaces |

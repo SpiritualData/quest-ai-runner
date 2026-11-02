@@ -1,7 +1,7 @@
 # Deployment
 
 The executor lane is a single process: `quest-ai-runner` (the installed CLI) or your own script
-around `Poller`. It runs in one of three ways: `--check`, `--once`, or loop forever. Run it
+around `Poller`. It runs in one of three ways: `--check`, `--once`, or loop forever, under cron (A), systemd (B) or the built-in supervisor (C). Run it
 wherever your corpus and the model are reachable.
 
 ## Configuration
@@ -76,6 +76,50 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now quest-ai-runner
 journalctl -u quest-ai-runner -f
 ```
+
+## Option C: no systemd, no root
+
+Choose this when you cannot rely on systemd: you deploy as a normal user, and a `systemctl --user`
+manager dies (a reboot is enough) and only root can bring it back, so every lane silently stops.
+Choose Option B instead when you have root and want journald, cgroup limits and hardening.
+
+`quest-ai-runner lane` is a built-in supervisor. A lane is just its config file
+([a lane is a config file](a-lane-is-a-config-file.md)); the supervisor runs
+`quest-ai-runner poll --config <toml>` in its own session and restarts it ten seconds after every
+exit, like systemd `Restart=always RestartSec=10`.
+
+```bash
+quest-ai-runner lane <start|stop|restart|status|ensure> --config <lane.toml> [--env-file PATH] [--if-idle]
+```
+
+| Verb | What it does |
+|---|---|
+| `ensure` | start the lane only if it is not running; safe from cron every minute, and two concurrent calls start exactly one |
+| `start` | the same as `ensure` (idempotent) |
+| `stop` | TERM the whole process group (the lane and every child), KILL after a 15 second grace |
+| `restart` | stop, then start; with `--if-idle` it skips, and says so, while a deep run (a `claude` or `node` process in the lane's process group) is in flight |
+| `status` | prints `running` with the pid, or `DOWN`, and exits 1 when down |
+
+Options: `--env-file PATH` loads `KEY=VALUE` lines (the format a systemd `EnvironmentFile` accepts:
+comments, optional quotes, an optional `export` prefix) into the lane's environment on every
+restart; it is parsed in Python and never run through a shell, so `$VAR` and `$(...)` stay literal.
+`--name` (default `<config parent dir>-<config stem>`), `--state-dir` (default
+`$XDG_STATE_HOME/quest-ai-runner/lanes/<name>`, else `~/.local/state/...`). A lane with no
+`--config` needs `--name` and polls from its own environment (`QAR_CONFIG_FILE` or plain env vars).
+
+Cron, with the lane's own user crontab (`crontab -e`):
+
+```cron
+@reboot   /path/to/venv/bin/quest-ai-runner lane ensure --config /path/to/lane.toml --env-file /path/to/lane.env
+* * * * * /path/to/venv/bin/quest-ai-runner lane ensure --config /path/to/lane.toml --env-file /path/to/lane.env
+# daily, so a code change loads without ever killing a deep run
+30 4 * * * /path/to/venv/bin/quest-ai-runner lane restart --if-idle --config /path/to/lane.toml --env-file /path/to/lane.env
+```
+
+The state directory holds `lane.log` (the supervisor and the lane, appended: `tail -f` it),
+`lane.pid`, and the lock files. Check a lane with `lane status`, which is also a usable health probe
+because of its exit code. Linux only (the idle check reads `/proc`). A lane child that starts its
+own session escapes `stop`; the deep runner does not.
 
 ## Optional read-only context channels: Notion and Google Chat
 
