@@ -134,11 +134,11 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   title named there, or a fetch by id) is a candidate until the finished reply is known; it becomes a record only if the reply draws on it: its
   title stands in the reply, three consecutive words of the card's text do, or the reply shares two distinct long words or numbers with the card's
   text. A reply that says it found nothing in a record it read, or that it has no web search, therefore carries no records. The records step is
-  therefore sent once, when the reply is final (no live "looking through your records" line, because what the reply used is not yet known).
+  therefore sent once, when the reply is final (a live "Looking through records" line shows only if a records step is running; see section 9).
   These are overlap tests of known stored text against the reply, never keyword lists over the reply's wording. The numbers (four, three, two,
   five characters) are parameters, not tuned values. Sites: only a site the reply names (its exact host, with or without `www.`; a parent or sibling host does not count) is listed beside the
-  opened pages; a search that opened and cited nothing ends as a found count with no list, which the screen should say as "searched the web,
-  no page opened" (`counts.read` is 0, `items` is empty). `work_trace_check` enforces both when it is given the reply.
+  opened pages; a search that opened and cited nothing ends as a found count with no list, which the screen says as "Searched the web, found N
+  results" (`counts.read` is 0, `items` is empty; never "no page opened", because a link check can still have run, and never a claim of reading). `work_trace_check` enforces both when it is given the reply.
 - Steps QAR emits (one `step_id` per turn each): `web` (seat `search-backend`, kind `sources`, key `workTrace.web.reading`),
   `papers` (`know-the-world`, `papers`, `workTrace.papers.searching`), `records` (`context-assembler`, `records`,
   `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
@@ -192,7 +192,7 @@ Per solution treatment (all collapsed into the summary, each distinct when expan
 |---|---|---|---|
 | Web (`search-backend`) | sources | Domain chips arrive one by one; the counter ticks "Reading 6 sites". | List of domains with page titles; a site that could not be reached is marked once, in muted text. |
 | Scholarly (`know-the-world`) | papers | Two numbers: "Found 31, checking abstracts of 3". Titles fade in as read. | Citation lines: title, "Author et al., 2021". Papers with an abstract taken first, found-only after. |
-| Your Quest (`context-assembler`, `card-store`) | records | "Looking through your quest records" with a count. | "From your Quest": the person's own quest and reflection titles with a small type icon, shown FIRST because this is Quest's edge. Owner-only titles; counts in shared threads. |
+| Your Quest (`context-assembler`, `card-store`) | records | "Looking through records", no title, no number, for every viewer. | "From your Quest": the person's own quest and reflection titles with a small type icon, shown FIRST because this is Quest's edge. Owner-only titles; counts ("Used N records") in shared threads and wherever the viewer may not see titles. |
 | Link guard (`watch-for-risk` link check, `critique/link_guard`) | check | Appears after the draft, brief: "Checking links". | Only when the answer has links: "Checked 6 links". If it removed one: "Left out 1 link I could not verify". |
 | Failover (`call-a-model`) | notice | Nothing. | Shown only if `affects_user`: "Switched to a backup model, this took a little longer." Never in the summary counts. |
 | Overseer / consent (`watch-for-risk`) | check | Nothing. | Only when it stopped something: "Paused 1 step for your OK" (links to the existing approval card). Otherwise silent. |
@@ -365,6 +365,15 @@ One source of truth for the words: `workTrace.ts` composes the live line, the su
 `expandedGroups`); `WorkTrace.tsx` renders them and `scripts/run-worktrace-view.js` prints the same strings for the judge, through
 the same English pack. Nothing is re-worded in Python or in a parallel script.
 
+- **Records speak for every viewer (2026-11-01, third review).** The earlier rule that a bare "Used 1 record" adds nothing left a turn that
+  used only private records with no line at all, live or settled, so in a group chat there was no visible progress for it. A records
+  step now shows a counts-only, title-free line to every viewer: live "Looking through records" (no number while running; it shows only
+  while a records step is running) and settled "Used 1 record" / "Used {{count}} records". Where the viewer may see titles they are named
+  as before (section 10). A title the viewer may not see never reaches the line, the live text or the rows.
+- **A web search that returned results and opened no page is stated by what the event supports.** The old "Searched the web, no page opened"
+  was untrue when a link check ran. The line is "Searched the web, found {{count}} results" from `counts.found`; "checked" or "read" is never
+  claimed, because `counts.read` is 0.
+
 Three elements still failed after this (a bare team count, a removed link that cannot be seen, and a false positive of the used-record
 rule). Section 10 records what each was changed to.
 
@@ -372,9 +381,8 @@ rule). Section 10 records what each was changed to.
 
 Joshua's rule: fix every instance now; everything shown adds value; never overstate; no keyword gating on model output.
 
-- **Shared thread: name a record only when every human participant can see it.** A bare "Used 1 of your team's records" adds nothing, so a
-  shared thread now names a record when it is visible to EVERY human of the thread and otherwise counts it; a line that would only say a
-  count is dropped. Visibility is decided from structure by the backend (`app/business/conversations/work_trace_visibility.py`), never by
+- **Shared thread: name a record only when every human participant can see it.** A shared thread now names a record when it is visible to EVERY human of the thread and otherwise counts it; a line that
+  only says a count is kept (section 9, third review: "Used 3 records"), since dropping it left a records-only turn silent. Visibility is decided from structure by the backend (`app/business/conversations/work_trace_visibility.py`), never by
   the runner and never from what a record says: a quest card (`quest-<quest id>`) is visible when the quest, loaded by id, passes
   `user_can_access_quest` for every human of the thread; a team-scoped card in a team thread is visible when every human is a member of
   that team; anything else, and anything that cannot be resolved, is private. The backend sets `visible_to_all` on each records item
