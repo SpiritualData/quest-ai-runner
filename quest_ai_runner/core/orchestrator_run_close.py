@@ -392,8 +392,9 @@ class RunCloseMixin:
                     if verdict is not None:
                         # One line per verdict, so a turn that stops without filing an ask can be explained from the log: whether the
                         # verifier said the answer asks the person, what blocker it named, and whether it gave the one question.
-                        log.info("Answer verdict (attempt %d): met=%s asks_person=%s blocker=%s question=%s", _attempt, verdict.get("met"),
-                                 verdict.get("asks_person"), verdict.get("blocker"), bool(str(verdict.get("question") or "").strip()))
+                        log.info("Answer verdict (attempt %d): met=%s asks_person=%s blocker=%s question=%s reason=%s", _attempt, verdict.get("met"),
+                                 verdict.get("asks_person"), verdict.get("blocker"), bool(str(verdict.get("question") or "").strip()),
+                                 str(verdict.get("reason") or "")[:200])
                         rs._last_verdict = verdict
                     # A FINAL THAT NEEDS THE PERSON (the answer asks for a decision, a figure, access or a file only they can give):
                     # the verifier's own structured judgement, ``asks_person`` with the one ``question``, files the ask even when the goal
