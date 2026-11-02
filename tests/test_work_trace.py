@@ -379,6 +379,18 @@ def test_a_vector_hit_is_titled_by_its_own_name_not_by_the_slice_of_its_text():
     assert [i["label"] for i in sink.latest()["records"]["items"]] == ["Run a marathon in April"]
 
 
+def test_link_check_is_sent_running_before_it_finishes_and_closed_when_nothing_was_checked():
+    sink, trace = make()
+    trace.links_checking()
+    assert sink.latest()["links"]["state"] == "running"
+    trace.links_checked([{"url": "https://a.example.org/p", "verdict": "OK"}])
+    assert sink.latest()["links"]["state"] == "done"
+    sink2, trace2 = make()
+    trace2.links_checking()
+    trace2.links_checked([])
+    assert sink2.latest()["links"]["state"] == "done" and sink2.latest()["links"]["items"] == []
+
+
 def test_each_removed_link_is_named_by_its_domain_only_and_a_clean_check_names_none():
     sink, trace = make()
     trace.links_checked([{"url": "https://www.one.example.org/a/b?token=SECRET#frag", "verdict": "DEAD"},

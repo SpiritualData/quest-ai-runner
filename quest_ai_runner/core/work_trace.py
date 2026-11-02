@@ -243,6 +243,7 @@ class TurnTrace:
         self.card_texts: Dict[str, Dict[str, str]] = {}    # id -> {"title", "text"}, kept in process to verify quotes, never sent
         self.final = False
         self.sent_links = False
+        self.links_running = False
 
     # -- web -----------------------------------------------------------------------------------
 
@@ -431,13 +432,29 @@ class TurnTrace:
     # -- the link check ------------------------------------------------------------------------
 
     @safe
+    def links_checking(self) -> None:
+        """The link guard is about to run (it fetches addresses, which takes seconds): send the running step now, so the live line has
+        words for the whole check instead of the step appearing only once it is done. ``links_checked`` closes it."""
+        if self.sent_links or self.links_running:
+            return
+        self.links_running = True
+        self.trace.update(STEP_LINKS, solution_id=SOLUTION_LINKS, kind="check", label_key=LABEL_LINKS, state="running")
+
+    @safe
     def links_checked(self, link_checks: Any) -> None:
         """``link_checks`` are the guard's verdict dicts. Only the DOMAIN of a link that was left out leaves (one item per removed link, so
         the person can tell which link is missing); the path, query string and every link that checked out stay behind."""
         checks = [c for c in (link_checks or []) if isinstance(c, Mapping)]
-        if not checks or self.sent_links:
+        if self.sent_links:
+            return
+        if not checks:
+            if self.links_running:   # nothing turned out to need a check: close the running step quietly (no counts, no items)
+                self.links_running = False
+                self.trace.update(STEP_LINKS, solution_id=SOLUTION_LINKS, kind="check", label_key=LABEL_LINKS, state="done",
+                                  counts={"checked": 0, "failed": 0})
             return
         self.sent_links = True
+        self.links_running = False
         left_out = [c for c in checks if str(c.get("verdict") or "").upper() != "OK"]
         items = [{"ref": domain, "label": domain, "kind": "removed"} for domain in (domain_of(c.get("url")) for c in left_out) if domain]
         self.trace.update(STEP_LINKS, solution_id=SOLUTION_LINKS, kind="check", label_key=LABEL_LINKS, state="done",

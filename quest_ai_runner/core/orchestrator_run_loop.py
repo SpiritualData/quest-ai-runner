@@ -158,6 +158,9 @@ class RunLoopMixin:
                 try:
                     guard = self.resolve_link_guard()
                     if guard is not None:
+                        if rs.trace is not None and any(
+                                "](" in t or "http" in t for t in [str(res.text or "")] + [str(getattr(d, "output", "") or "") for d in res.deep_results]):
+                            rs.trace.links_checking()   # the check fetches addresses (seconds): show it running, not only once done
                         if res.text:
                             # Provenance (policy.require_provenance) judges the reply against what
                             # THIS turn had. A deep worker's output below is exempt: what that

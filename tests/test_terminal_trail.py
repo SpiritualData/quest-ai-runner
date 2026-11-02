@@ -32,6 +32,16 @@ async def test_a_transcript_place_is_rewritten_without_moving_the_rest():
         assert h.lines()[-1] == "back"
 
 
+async def test_the_live_row_says_the_links_are_being_checked_while_that_step_runs():
+    async with Harness() as h:
+        h.begin()
+        h.feed(trace("l", kind="check", counts={"checked": 0}))
+        assert h.app._trail_line.display and "Checking the links" in str(h.app._trail_line.render())
+        h.feed(trace("l", kind="check", state="done", counts={"checked": 2, "failed": 0}))
+        h.finish()
+        assert not h.app._trail_line.display
+
+
 async def test_the_live_row_names_the_newest_page_and_goes_when_the_turn_ends():
     async with Harness() as h:
         h.begin()

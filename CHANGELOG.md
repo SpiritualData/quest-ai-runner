@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- The live Trail now stays on screen during the link check. The `links` step was sent only once finished, so "Searching the web" showed for about 1.3 seconds of an 11 second turn; `WorkTraceCollector.links_checking` now sends it running before the link guard fetches addresses (only when the reply holds a link) and `links_checked` closes it. The live line reads "Checking the links" (frontend `checkingLinks`, terminal string in the hub).
+
 - The reach judge now reads the start and the end of a long request instead of only the start. A consumer that composes a request (instructions, a thread transcript, then the latest message) put the ask last, so the judge never saw it, judged the instructions as "the person's own records", and vetoed the web search: a team-chat question about a public fact got "web search is not enabled" while the same question in a solo chat was searched and cited.
 
 - An ask built by the goal verifier now runs the `found_constraint` judge itself when no answer step ran this turn (the planner read until the cap), so the ask opens with the records' fact; the judge also treats a request that already fits the fact as no conflict.
