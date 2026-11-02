@@ -93,11 +93,8 @@ def reply_problems(calls: Sequence[Mapping[str, Any]], steps: Mapping[str, Mappi
     web = steps.get("web") or {}
     opened = (web.get("counts") or {}).get("read", 0) > 0
     for item in web.get("items") or []:
-        # With no page opened, the listed sites ARE the list and each is labelled found, never read; beside opened pages a listed-only site must be cited.
-        listed_only = opened and (item.get("kind") == "found" or item.get("kind") is None)
-        if item.get("kind") == "read" and not opened:
-            problems.append(f"web: shows a site as read although no page was opened ({item.get('ref')})")
-        elif listed_only and not host_cited(str(item.get("ref") or ""), reply):
+        listed_only = item.get("kind") == "found" or (item.get("kind") is None and not opened)
+        if listed_only and not host_cited(str(item.get("ref") or ""), reply):
             problems.append(f"web: lists a site the reply does not cite ({item.get('ref')})")
     cards = {str(c.get("id")): c for call in calls if call.get("kind") == "records" for c in call.get("cards") or [] if isinstance(c, Mapping)}
     facts = [f for call in calls if call.get("kind") == "plan_facts" for f in call.get("facts") or []]

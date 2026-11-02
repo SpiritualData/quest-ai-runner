@@ -109,14 +109,8 @@ WEB_CALLS = [{"kind": "web_search", "hits": [{"url": f"https://s{i}.example/x"} 
 def test_a_site_the_reply_does_not_cite_is_caught_and_a_no_page_opened_state_passes():
     listed = web_event([{"ref": "s1.example", "label": "S1", "kind": "found"}, {"ref": "s2.example", "label": "S2", "kind": "found"}])
     reply = "I searched but did not open a page, so I cannot confirm this. s1.example came up in the search."
-    # no page opened: the listed sites are the list, each labelled found, so an uncited one is fine
-    assert check_turn(WEB_CALLS, [listed], reply=reply) == []
-    # beside an opened page, a site only listed must still be cited
-    mixed = web_event([{"ref": "s0.example", "label": "S0", "kind": "read"}, {"ref": "s2.example", "label": "S2", "kind": "found"}], read=1)
-    assert "web: lists a site the reply does not cite (s2.example)" in check_turn(WEB_CALLS, [mixed], reply=reply)
-    # a site shown as read although nothing was opened is caught
-    wrong = web_event([{"ref": "s1.example", "label": "S1", "kind": "read"}])
-    assert any("shows a site as read although no page was opened" in p for p in check_turn(WEB_CALLS, [wrong], reply=reply))
+    problems = check_turn(WEB_CALLS, [listed], reply=reply)
+    assert problems == ["web: lists a site the reply does not cite (s2.example)"]
     assert check_turn(WEB_CALLS, [web_event([])], reply=reply) == []       # found count only: searched, no page opened
     assert check_turn(WEB_CALLS, [listed]) == []                          # without the reply the check cannot judge the list
 

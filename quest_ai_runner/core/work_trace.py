@@ -447,7 +447,7 @@ class TurnTrace:
     def finish(self, answer: Any = None) -> None:
         """The turn is ending: a step still marked running is closed with what it has. Given the finished reply, each step settles on what
         the reply used. Web: only sites the reply names are listed (a page that was opened is always a read page); a search that opened
-        no page keeps its found count and the sites it listed (domains, capped by the projector), which the screen says as found, not read. Papers: the works
+        and cited nothing keeps its found count and an empty list, which the screen says as "searched, no page opened". Papers: the works
         the reply cites are read, the rest of the search is only found. Records: the cards the planner took AND the reply draws on."""
         with self.lock:
             w = self.web
@@ -457,8 +457,7 @@ class TurnTrace:
             p = self.papers
             if answer is not None:
                 text = str(answer)
-                # A search that opened no page keeps every site it listed (the projector caps the list): the screen says them as found, never read.
-                if w["found_items"] and w["read_items"]:
+                if w["found_items"]:
                     w["found_items"] = {d: i for d, i in w["found_items"].items() if d in w["read_items"] or host_cited(d, text)}
                 if w["found"] or w["read"] or w["failed"]:
                     self.push_web()

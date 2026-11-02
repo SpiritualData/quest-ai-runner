@@ -304,7 +304,7 @@ def test_a_paper_cited_by_full_title_counts_and_none_cited_leaves_found_only():
     assert step["counts"] == {"found": 3, "read": 0} and step["items"] == []
 
 
-def test_a_search_that_opened_no_page_lists_its_sites_as_found_and_one_that_opened_pages_lists_only_cited_ones():
+def test_a_listed_site_the_reply_never_cites_is_not_shown_but_still_counted_as_found():
     sink, trace = make()
     trace.web_started()
     trace.web_searched(Observation(kind="query", hits=[{"title": "A", "url": "https://a.example/x"}, {"title": "B", "url": "https://b.example/y"},
@@ -312,14 +312,7 @@ def test_a_search_that_opened_no_page_lists_its_sites_as_found_and_one_that_open
     trace.finish("The release is on a.example, per its announcement.")
     step = sink.latest()["web"]
     assert step["counts"] == {"found": 3, "read": 0}
-    assert [(i["ref"], i["kind"]) for i in step["items"]] == [("a.example", "found"), ("b.example", "found"), ("c.example", "found")]
-    sink2, trace2 = make()
-    trace2.web_started()
-    trace2.web_searched(Observation(kind="query", hits=[{"title": "A", "url": "https://a.example/x"}, {"title": "B", "url": "https://b.example/y"}]))
-    trace2.web_started()
-    trace2.web_page_read("https://a.example/x", Observation(kind="page", text="t"))
-    trace2.finish("The release is on c.example.")
-    assert [(i["ref"], i["kind"]) for i in sink2.latest()["web"]["items"]] == [("a.example", "read")]
+    assert [i["ref"] for i in step["items"]] == ["a.example"]
 
 
 def test_a_record_label_is_a_human_title_never_card_text_or_a_conversation_line():
@@ -361,9 +354,7 @@ def test_a_reply_that_says_it_has_no_web_search_carries_no_records_and_no_sites(
     trace.finish("I have no working web search here, so I cannot check the latest Go release. I can tell you what I knew when I was trained.")
     latest = sink.latest()
     assert "records" not in latest
-    # searched, no page opened: the listed sites ride along as found (domains only), never as read
-    assert latest["web"]["counts"] == {"found": 2, "read": 0}
-    assert [(i["ref"], i["kind"]) for i in latest["web"]["items"]] == [("medium.com", "found"), ("blog.example.org", "found")]
+    assert latest["web"]["items"] == [] and latest["web"]["counts"] == {"found": 2, "read": 0}      # searched, no page opened
 
 
 def test_only_the_exact_site_the_reply_names_is_cited():
