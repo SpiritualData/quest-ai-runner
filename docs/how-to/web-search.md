@@ -245,3 +245,12 @@ This replaces the deep run that a not-met verdict would otherwise end in. The de
 field, never a scan of the answer's words; an address already read this turn is not read again, and a not-met verdict
 without the field follows the usual path (rewrite, then the last-resort deep run). The link guard still checks the final
 answer's addresses as before.
+
+### When the page cannot be opened, and the length cap
+
+If the page read fails (the web adapter returns an error observation, which now carries the address), a deep run cannot
+open it either, so the turn ends with the best answer plus one sentence that the page at that domain could not be opened,
+and the verdict is recorded as `evidence_only`. An address the planner's own `web_page` read already failed on is not read
+again. Separately, the reply-standard repair rounds treat any web address in the draft as an item the person may have asked
+for: the repair hint says to keep it even past the length limit, and a repaired draft that drops an address the previous
+draft held is discarded in favour of the longer draft (the two address sets are compared; no prose is read).

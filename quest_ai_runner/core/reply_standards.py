@@ -386,3 +386,10 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
 def steering(hint: str, previous: str) -> str:
     """The text a regeneration is steered with: the reviewer's hint and the answer it concerns."""
     return f"A reviewer flagged this for one correction: {hint}\n\n--- YOUR PREVIOUS ANSWER ---\n{previous}"
+
+
+def keep_addresses_hint(draft: str, held: Any) -> str:
+    """The sentence added to a repair hint when the draft holds web addresses: they must survive the repair (the length cap yields)."""
+    if not held:
+        return ""
+    return " Keep every web address in the answer exactly as written, even if that leaves it longer than the limit."

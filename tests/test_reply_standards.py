@@ -319,3 +319,18 @@ def test_ask_path_leaves_the_question_alone_without_a_conflict():
     meta = {}
     ensure_found_constraint_head(FakeOrch(), meta, request="x", records="y", question="z")
     assert "found_constraint_head" not in meta
+
+
+def test_a_repair_that_drops_an_address_the_draft_held_is_rejected_for_the_longer_draft():
+    longer = "Start here:\n1. Call Dana, see https://dana.example/book\n2. Order parts\nWhen can you call?"
+    provider, res = run_turn([longer, GOOD])
+    assert len(steered(provider)) == 1                      # one repair round was tried, then it stopped
+    assert "Keep every web address" in steered(provider)[0]  # the hint told the writer the address must survive
+    assert "Order parts" in res.text and not res.text.startswith("Call Dana today")
+
+
+def test_a_repair_that_keeps_the_address_is_accepted():
+    longer = "Start here:\n1. Call Dana, see https://dana.example/book\n2. Order parts\nWhen can you call?"
+    short = "Call Dana via https://dana.example/book today."
+    provider, res = run_turn([longer, short])
+    assert res.text.startswith("Call Dana via")

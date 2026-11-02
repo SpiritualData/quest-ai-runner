@@ -81,3 +81,28 @@ def test_an_address_is_read_once_even_if_the_verifier_names_it_again():
     web = FakeWeb()
     run(provider, web)
     assert web.fetched == [URL]
+
+
+class FailingWeb(FakeWeb):
+    def fetch(self, url: str, **kw: Any) -> Observation:
+        self.fetched.append(url)
+        return Observation(kind="error", error="page did not load")
+
+
+def test_a_page_that_cannot_be_opened_ends_with_an_honest_sentence_and_no_deep_run():
+    provider = PageProvider(
+        plan_decisions=[{"action": "answer", "rationale": "x"}],
+        goal_verdicts=[{"met": False, "reason": "link not opened", "unread_pages": [URL]}, {"met": True}],
+        answer_text=FIRST)
+    web = FailingWeb()
+    res, runner = run(provider, web)
+    assert web.fetched == [URL]
+    assert runner.calls == 0
+    assert res.text.startswith(FIRST) and "could not open the page at releases.example" in res.text
+    assert provider.verify_calls == 1
+
+
+def test_failed_reads_are_found_from_the_error_observations_alone():
+    from quest_ai_runner.core.link_provenance_pass import failed_page_reads
+    assert failed_page_reads([{"kind": "error", "rel_path": URL, "error": "x"}, {"kind": "read", "rel_path": "https://ok.example/"}])
+    assert not failed_page_reads([{"kind": "read", "rel_path": URL}, {"kind": "error", "error": "no address"}])

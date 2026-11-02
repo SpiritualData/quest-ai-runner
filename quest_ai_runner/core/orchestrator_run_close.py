@@ -26,6 +26,8 @@ from .orchestrator_turn_messages import adopt_turn_ask, ensure_found_constraint_
 from .reply_standards import turn_holds_records
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
+from .link_provenance_pass import failed_page_reads, unopened_pages_note
+from hubofhubs.critique.link_guard import normalize_url_for_match
 from .planner_prompt import NOT_QUEUED_NOTE
 from .tools_status import fact_is_held
 
@@ -316,6 +318,8 @@ class RunCloseMixin:
         # Set when one of the orchestrator's own escalations resolved to a background-work runner
         # and was not started (see _run_deep's ``self_initiated``): no further escalation this turn.
         rs.own_escalation_settled = False
+        rs.pages_failed = set()   # normalised addresses whose page read came back as an error
+        rs.page_unopenable = False
         rs.pages_read = set()   # addresses the verifier's ``unread_pages`` already had read this turn
 
     def _run_verify_answer(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
@@ -528,22 +532,37 @@ class RunCloseMixin:
                     # AN ADDRESS ONLY SEEN IN SEARCH RESULTS: the verifier's structured ``unread_pages`` names pages the
                     # answer must cite but the turn never opened. One cheap web page read of each (never read twice per
                     # turn), then the answer is rewritten from what was read. Cheaper than a deep run for the same gap.
-                    _pages = [u for u in (verdict.get("unread_pages") or []) if u not in rs.pages_read]
-                    if _pages and getattr(self, "web", None) is not None and not rs.brainstorm_active:
-                        if emit is not None:
+                    _named = [u for u in (verdict.get("unread_pages") or []) if isinstance(u, str)]
+                    _failed_seen = failed_page_reads(gathered) | rs.pages_failed
+                    _pages = [u for u in _named if u not in rs.pages_read and normalize_url_for_match(u) not in _failed_seen]
+                    if _named and getattr(self, "web", None) is not None and not rs.brainstorm_active:
+                        if _pages and emit is not None:
                             emit.status("Opening the page the answer points to…")
                         for _url in _pages:
                             rs.pages_read.add(_url)
                             _page = self._exec_one_read({"web_page": _url}, None, getattr(rs, "card_context", None))
                             if _page is not None:
                                 gathered.append(_page.to_dict())
-                        rs.text = self.keep_landed_work_reported(rs, _gen_answer(
-                            "The answer fell short because these pages were cited but never opened: "
-                            + ", ".join(_pages) + ". They are now read and in the material you were given. "
-                            "Rewrite the answer from what they actually say, citing only addresses you "
-                            "now hold, and say plainly if a page could not be opened. Do not use em dashes."
-                            f"\n\n--- YOUR PREVIOUS ANSWER ---\n{rs.text}"))
-                        continue  # re-verify the rewrite; no attempt consumed, each address is read at most once (rs.pages_read)
+                                if _page.kind == "error":
+                                    rs.pages_failed.add(normalize_url_for_match(_url))
+                        _failed_seen = failed_page_reads(gathered) | rs.pages_failed
+                        _unopened = [u for u in _named if normalize_url_for_match(u) in _failed_seen]
+                        _opened = [u for u in _pages if normalize_url_for_match(u) not in _failed_seen]
+                        if _unopened and not _opened:
+                            # THE PAGE COULD NOT BE OPENED (the structured read result, an error observation for the address):
+                            # a deep run cannot open it either, so the turn ends with the best answer and an honest sentence.
+                            rs.text = (rs.text or "").rstrip() + "\n\n" + unopened_pages_note(_unopened)
+                            rs.page_unopenable = True
+                            rs._last_verdict = dict(verdict, blocker="evidence_only")
+                            break
+                        if _opened:
+                            rs.text = self.keep_landed_work_reported(rs, _gen_answer(
+                                "The answer fell short because these pages were cited but never opened: "
+                                + ", ".join(_opened) + ". They are now read and in the material you were given. "
+                                "Rewrite the answer from what they actually say, citing only addresses you "
+                                "now hold, and say plainly if a page could not be opened. Do not use em dashes."
+                                f"\n\n--- YOUR PREVIOUS ANSWER ---\n{rs.text}"))
+                            continue  # re-verify the rewrite; no attempt consumed, each address is read at most once (rs.pages_read)
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
@@ -639,7 +658,7 @@ class RunCloseMixin:
         if (self.cfg.deep_before_giving_up and not rs.own_escalation_settled
                 and not rs._deferred_handoff_confirmed and not rs._decision_parked
                 and not rs.deferred_unconfirmed
-                and not rs._claim_corrected and not rs.brainstorm_active
+                and not rs._claim_corrected and not rs.brainstorm_active and not rs.page_unopenable
                 and rs._last_verdict is not None and not rs._last_verdict.get("met")
                 and not rs._last_verdict.get("claims_unsupported")
                 and not _ctx_meta.get("deep_attempted")

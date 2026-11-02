@@ -94,3 +94,27 @@ def strip_unseen_links(text: str, evidence: str, trusted_hosts: Sequence[str] = 
         out = re.sub(r"[ \t]{2,}", " ", out)
         out = re.sub(r"[ \t]+([.,;:!?])", r"\1", out)
     return out, removed
+
+
+def failed_page_reads(gathered: Iterable) -> frozenset:
+    """Normalised addresses whose web page read came back as an error observation (structure: kind and rel_path, no text read)."""
+    return frozenset(normalize_url_for_match(trim_address(str(o.get("rel_path"))))
+                     for o in (gathered or []) if isinstance(o, dict) and o.get("kind") == "error"
+                     and str(o.get("rel_path") or "").lower().startswith(("http://", "https://")))
+
+
+def unopened_pages_note(addresses: Sequence[str]) -> str:
+    """One honest sentence naming the sites whose page could not be opened (domains only, so the link guard has nothing to strip)."""
+    hosts = sorted({host_of(a) for a in addresses if host_of(a)})
+    where = ", ".join(hosts) if hosts else "the page you asked for"
+    return f"I could not open the page at {where} from here, so I have not confirmed it myself."
+
+
+def http_addresses(text: str) -> frozenset:
+    """Normalised http(s) addresses in a reply, markdown links and bare ones alike (the shape the link guard judges)."""
+    found = set()
+    for m in MARKDOWN_OR_BARE.finditer(text or ""):
+        address = trim_address(m.group("target") if m.group("target") is not None else m.group("bare"))
+        if address.lower().startswith(("http://", "https://")):
+            found.add(normalize_url_for_match(address))
+    return frozenset(found)

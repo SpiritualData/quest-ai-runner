@@ -100,6 +100,8 @@ class ReadsMixin:
                     page = Observation(kind="error", error=f"web page fetch failed: {e}")
                 if trace is not None:
                     trace.web_page_read(spec["web_page"], page)
+                if getattr(page, "kind", None) == "error" and not getattr(page, "rel_path", None):
+                    page.rel_path = str(spec["web_page"])   # a failed read names the address it was for (structure the verdict loop reads)
                 return page
             except Exception as e:  # noqa: BLE001
                 return Observation(kind="error", error=f"web page fetch failed: {e}")

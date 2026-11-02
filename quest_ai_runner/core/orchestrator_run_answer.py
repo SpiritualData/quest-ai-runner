@@ -26,8 +26,9 @@ from .orchestrator_decisions import (FACTS_ANSWER_HEAD, _clarify_question_text, 
 from .orchestrator_text import _answer_describes_unexecuted_work
 from .orchestrator_types import OrchestratorResult
 from .overseer import OverseerSignal
-from .reply_standards import SHAPE_DEFAULT, constraint_violated, found_constraint_head, found_constraint_hint, measure, repair, standard_for, steering, turn_holds_records
+from .reply_standards import SHAPE_DEFAULT, constraint_violated, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering, turn_holds_records
 from .planner_context import gathered_content
+from .link_provenance_pass import http_addresses
 from .planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX,
     BRAINSTORM_HELD_WORK_ACK_NOTE,
@@ -533,8 +534,17 @@ class RunAnswerMixin:
                 while measured.failed and repair_rounds < cfg.reply_standard_max_repairs:
                     if emit is not None:
                         emit.status("Reply standard: refining the answer…")
-                    rs.text = _gen_answer(steering(measured.hint(), rs.text))
+                    # An address the draft holds is an item the person may have asked for: it outranks a length or list cap.
+                    # The hint names the addresses that must survive, and a repair that loses one is rejected (the
+                    # address sets are compared, no prose is read); the longer draft ships.
+                    held = http_addresses(rs.text)
+                    candidate = _gen_answer(steering(measured.hint() + keep_addresses_hint(rs.text, held), rs.text))
                     repair_rounds += 1
+                    if held - http_addresses(candidate):
+                        log.info("Reply standard %s: repair dropped %d address(es) the draft held; kept the longer draft",
+                                 standard.shape, len(held - http_addresses(candidate)))
+                        break
+                    rs.text = candidate
                     measured = measure(rs.text, standard, standard_evidence)
                 if measured.failed:
                     rs.text = repair(rs.text, standard, measured, standard_evidence)
