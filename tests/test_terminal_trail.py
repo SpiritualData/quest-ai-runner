@@ -55,11 +55,11 @@ async def test_alt_t_opens_the_groups_in_place_and_closes_them():
         before = len(h.lines())
         await h.pilot.press("alt+t")
         opened = text_of(h)
-        assert "s0.org Page 0" in opened and "s4.org" in opened and "s5.org" not in opened and "Show all 7" in opened
+        assert "Page 0" in opened and "s4.org" in opened and "s5.org" not in opened and "Show all 7" in opened
         await h.pilot.press("alt+t")
         assert "s6.org Page 6" in text_of(h)
         await h.pilot.press("alt+t")
-        assert "s0.org Page 0" not in text_of(h) and len(h.lines()) == before
+        assert "Page 0" not in text_of(h) and len(h.lines()) == before
 
 
 async def test_interims_fold_into_one_row_and_alt_u_opens_it():

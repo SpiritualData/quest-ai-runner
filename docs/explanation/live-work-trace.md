@@ -370,9 +370,13 @@ the same English pack. Nothing is re-worded in Python or in a parallel script.
   step now shows a counts-only, title-free line to every viewer: live "Looking through records" (no number while running; it shows only
   while a records step is running) and settled "Used 1 record" / "Used {{count}} records". Where the viewer may see titles they are named
   as before (section 10). A title the viewer may not see never reaches the line, the live text or the rows.
-- **A web search that returned results and opened no page is stated by what the event supports.** The old "Searched the web, no page opened"
-  was untrue when a link check ran. The line is "Searched the web, found {{count}} results" from `counts.found`; "checked" or "read" is never
-  claimed, because `counts.read` is 0.
+- **A settled web search that found results but opened no page, and whose results the reply did not cite, shows NO line (product decision,
+  2026-11-01).** Listing unused sources, collapsed or not, fails the value judge ("unused source, never opened") and the earlier real-turn review
+  found it a value failure; the working dots and the live line already showed the search while it ran. The emitter leaves such a step as a found
+  count with no items; the screen shows a settled line only when the step has items, that is, a page was opened or the reply cited the site
+  ("Searched the web, found {{count}} results" from `counts.found`, never "read": `counts.read` is 0 for a cited-only site). The earlier
+  attempt to list found-but-uncited sites as expandable rows was reverted. Implemented once in `workTrace.ts` `summaryClauses` and mirrored in
+  the hub terminal `trail.py`.
 
 Three elements still failed after this (a bare team count, a removed link that cannot be seen, and a false positive of the used-record
 rule). Section 10 records what each was changed to.

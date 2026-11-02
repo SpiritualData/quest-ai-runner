@@ -11,7 +11,7 @@ else (the default for a missing or unknown audience) keeps records as counts onl
 errors: a trace is decoration around the reply and never breaks a turn.
 
 Honest counts: ``read`` of a page is a page actually fetched (a site a search only listed is shown only when the reply cites it, and a
-search that opened and cited nothing is left as a found count with no list: "searched, no page opened"); of a paper, a work the finished
+search that opened and cited nothing is left as a found count with no list, and the screen draws no settled line for it); of a paper, a work the finished
 answer cites (its DOI or full title appears in the reply, or its first author and year stand together there); of a record, a card the
 answer drew on: the planner took it (a quote of the card's own text in ``facts_read``, its id or title named there, or it was fetched
 by id) AND the finished reply draws on it (its title stands in the reply, a run of three of its words does, every rare word of its title does, or the reply shares three distinct rare words or numbers with the card's text; a word common in general English never counts).
@@ -447,7 +447,7 @@ class TurnTrace:
     def finish(self, answer: Any = None) -> None:
         """The turn is ending: a step still marked running is closed with what it has. Given the finished reply, each step settles on what
         the reply used. Web: only sites the reply names are listed (a page that was opened is always a read page); a search that opened
-        and cited nothing keeps its found count and an empty list, which the screen says as "searched, no page opened". Papers: the works
+        and cited nothing keeps its found count and an empty list, which the screen shows no settled line for. Papers: the works
         the reply cites are read, the rest of the search is only found. Records: the cards the planner took AND the reply draws on."""
         with self.lock:
             w = self.web

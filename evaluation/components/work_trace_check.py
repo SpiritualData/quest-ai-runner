@@ -12,7 +12,7 @@ violations. An esoi metric scores a turn as passing when the list is empty (``pa
    records count or item beyond the used ones is a violation, and an unrelated question that shows any records step is too. The
    same for papers: when the works say which the reply cited (``"cited": bool``), ``papers.read`` is at most the cited ones.
    Given the finished ``reply`` (``check_turn(..., reply=...)``) two more hold. A site is listed only when the reply cites it (a search that opened and
-   cited nothing shows a found count and no list, "searched, no page opened"), and a record is listed only when the reply draws on it
+   cited nothing shows a found count and no list, and the screen draws no settled line for it), and a record is listed only when the reply draws on it
    (its title or a run of its words, or of a planner fact that took it, stands in the reply), so a reply that says it found nothing, or
    that it has no web search, carries no records and no sites it did not use. A record is shown by its human title only: a label
    that is a sentence of card text, a "Topic: ..." line, a conversation turn or the card's own id is a violation. Matching is of known
