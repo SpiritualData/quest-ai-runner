@@ -316,6 +316,7 @@ class RunCloseMixin:
         # Set when one of the orchestrator's own escalations resolved to a background-work runner
         # and was not started (see _run_deep's ``self_initiated``): no further escalation this turn.
         rs.own_escalation_settled = False
+        rs.pages_read = set()   # addresses the verifier's ``unread_pages`` already had read this turn
 
     def _run_verify_answer(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """Hold the answer to the goal: verification, regeneration, the last-resort deep run, and the final result."""
@@ -524,6 +525,25 @@ class RunCloseMixin:
                         rs.text = _gen_answer(steer)
                         _attempt += 1
                         continue
+                    # AN ADDRESS ONLY SEEN IN SEARCH RESULTS: the verifier's structured ``unread_pages`` names pages the
+                    # answer must cite but the turn never opened. One cheap web page read of each (never read twice per
+                    # turn), then the answer is rewritten from what was read. Cheaper than a deep run for the same gap.
+                    _pages = [u for u in (verdict.get("unread_pages") or []) if u not in rs.pages_read]
+                    if _pages and getattr(self, "web", None) is not None and not rs.brainstorm_active:
+                        if emit is not None:
+                            emit.status("Opening the page the answer points to…")
+                        for _url in _pages:
+                            rs.pages_read.add(_url)
+                            _page = self._exec_one_read({"web_page": _url}, None, getattr(rs, "card_context", None))
+                            if _page is not None:
+                                gathered.append(_page.to_dict())
+                        rs.text = self.keep_landed_work_reported(rs, _gen_answer(
+                            "The answer fell short because these pages were cited but never opened: "
+                            + ", ".join(_pages) + ". They are now read and in the material you were given. "
+                            "Rewrite the answer from what they actually say, citing only addresses you "
+                            "now hold, and say plainly if a page could not be opened. Do not use em dashes."
+                            f"\n\n--- YOUR PREVIOUS ANSWER ---\n{rs.text}"))
+                        continue  # re-verify the rewrite; no attempt consumed, each address is read at most once (rs.pages_read)
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.

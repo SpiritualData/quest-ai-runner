@@ -234,3 +234,14 @@ file; each entry names the endpoint, the environment variable that holds the key
 reply and which fields are the title, link, snippet and date (the field list is in `hubofhubs/websearch/apis.py`,
 where Serper, Brave and Tavily are written the same way). Then `QAR_WEB_SEARCH_BACKEND=<name>` selects it, or it joins the
 automatic fallback chain after the built-in ones when its key is set.
+
+## A cited page that was only seen in search results
+
+The answer verifier's verdict has an optional list field, `unread_pages`: addresses the answer must cite that the turn
+only saw in search results and never opened, when opening them is the whole gap. When a not-met verdict carries it (and
+a web adapter is configured), the answer loop reads each address once with the same `{"web_page": url}` read the planner
+uses, adds the page to the turn's material, rewrites the answer from it and verifies again, without spending an attempt.
+This replaces the deep run that a not-met verdict would otherwise end in. The decision is the verifier's structured
+field, never a scan of the answer's words; an address already read this turn is not read again, and a not-met verdict
+without the field follows the usual path (rewrite, then the last-resort deep run). The link guard still checks the final
+answer's addresses as before.

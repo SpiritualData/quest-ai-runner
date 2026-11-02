@@ -81,6 +81,11 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "asks_person": {"type": "boolean",
                             "description": "True when the output asks the person for a decision, figure, file or access only they "
                                            "can give, per the rules above (put the one thing in question)."},
+            "unread_pages": {"type": "array", "items": {"type": "string"},
+                             "description": "Only when met=false: web addresses (full http or https) that the output "
+                                            "cites or must cite as the page the request asked for, and that the run "
+                                            "only saw in search results and never opened, when opening them is the "
+                                            "whole gap. Leave empty otherwise."},
             "claims_unexecuted": {"type": "boolean",
                                   "description": "True if the output claims a completed change the "
                                                  "execution record does not back."},

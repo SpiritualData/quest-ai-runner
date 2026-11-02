@@ -54,6 +54,20 @@ from .orchestrator_constants import log
 
 # The in-app link scheme a policy file gets when it names none (the hub's link guard allows no scheme by default).
 IN_APP_LINK_SCHEMES = ("app-task",)
+
+MAX_UNREAD_PAGES = 3
+
+
+def clean_unread_pages(raw: Any) -> List[str]:
+    """The verdict's structured ``unread_pages`` list, kept to at most three distinct http(s) addresses (shape check on a field, no text scan)."""
+    if not isinstance(raw, list):
+        return []
+    kept: List[str] = []
+    for item in raw:
+        url = str(item or "").strip()
+        if url.lower().startswith(("http://", "https://")) and url not in kept:
+            kept.append(url)
+    return kept[:MAX_UNREAD_PAGES]
 from .orchestrator_capabilities import (
     intent_judge_timeout_seconds,
     mode_release_timeout_seconds,
@@ -341,6 +355,7 @@ class JudgesMixin:
                             "asked_of": ("member" if str(raw.get("asked_of") or "").strip().lower() == "member" else "asker"),
                             "member_ref": str(raw.get("member_ref") or "").strip(),
                             "asks_person": bool(raw.get("asks_person")),
+                            "unread_pages": clean_unread_pages(raw.get("unread_pages")),
                             "claims_unexecuted": bool(raw.get("claims_unexecuted")),
                             "claims_unsupported": bool(
                                 check_support and raw.get("claims_unsupported")
