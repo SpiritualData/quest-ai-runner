@@ -398,6 +398,11 @@ never a public fact, so no web read is owed), and before the first plan the brai
 model call: the judge already runs per turn. An adapter without `own_updates` is never asked; the composite forwards it to
 the first member that has one. A request that names a subject ("the latest version of X") gets false and is unchanged.
 
+A note the planner may ignore is not enough (live, the planner still searched the web). So when `own_updates()` returns an
+`OwnUpdates(text, nothing_new)`, the run loop answers with `text` verbatim and ends the turn before the first plan: no planner call,
+no reads, no web search, no deep run, no reply-standard repair, and the answer is treated as verified. The consumer owns the
+wording (the digest, or its own plain nothing-new sentence). An error, an empty text or a failed read plans as before.
+
 ## Planner prompt design notes (moved from comments in `core/planner_prompt.py`)
 
 ```

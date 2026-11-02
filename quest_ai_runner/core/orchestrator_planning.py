@@ -46,7 +46,8 @@ from .planner_context import (
 )
 from hubofhubs.ports.model import STEP_JUDGE, STEP_PLAN, plan_with_step
 from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from .adapters_values import PlanDecision
+from .adapters_retrieval import OwnUpdates
+from .adapters_values import Observation, PlanDecision
 from .reach_judge import (
     REACH_JUDGE_TOOL,
     judge_prompt,
@@ -402,27 +403,38 @@ class PlanningMixin:
                         type(e).__name__, str(e)[:200])
         return None
 
-    def own_updates_observations(self, user_message: str) -> List[Dict[str, Any]]:
-        """The gathered entries for a request the reach judge says asks for the person's OWN updates.
-
-        Decided only by the judge's structured ``asks_own_updates`` boolean (a real ``True``), never by
-        words. Runs the retrieval adapter's optional ``own_updates`` read once and returns its
-        observation plus a note that it IS the answer, so the planner answers from it instead of
-        recalling older conversations or searching the web. ``[]`` when the judge did not say so, no
-        adapter offers it, or the read failed (the planner then runs exactly as before)."""
+    def read_own_updates(self, user_message: str) -> Any:
+        """Run the optional ``own_updates`` read once when the judge's structured ``asks_own_updates`` is a real
+        ``True`` (never decided by words). Returns what the adapter returned (an ``OwnUpdates`` or an
+        ``Observation``), or None when not asked, not offered, failed or an error observation."""
         verdict = self.reach_verdict(user_message)
         if not verdict or verdict.get("asks_own_updates") is not True:
-            return []
+            return None
         read = getattr(self.retrieval, "own_updates", None) if self.retrieval is not None else None
         if read is None:
-            return []
+            return None
         try:
-            obs = read()
+            result = read()
         except Exception as e:  # noqa: BLE001 - a pre-read must never take the turn down
             log.warning("Own-updates read failed, planning without it: %s: %s", type(e).__name__, str(e)[:200])
+            return None
+        if result is None or getattr(result, "kind", None) == "error":
+            return None
+        if isinstance(result, OwnUpdates) and not (result.text or "").strip():
+            return None
+        return result
+
+    def own_updates_observations(self, user_message: str, result: Any = None) -> List[Dict[str, Any]]:
+        """The gathered entries for a request the reach judge says asks for the person's OWN updates.
+
+        Used when the adapter returned a plain Observation (an ``OwnUpdates`` is answered directly by the
+        run loop instead). Runs the read when ``result`` is not given. Returns the observation plus a note
+        that it IS the answer; ``[]`` when not asked, not offered, or failed (the planner runs as before)."""
+        obs = result if result is not None else self.read_own_updates(user_message)
+        if obs is None:
             return []
-        if obs is None or getattr(obs, "kind", None) == "error":
-            return []
+        if isinstance(obs, OwnUpdates):
+            obs = Observation(kind="query", locator="own_updates", text=obs.text)
         entry = obs.to_dict()
         note = planner_note_observation(
             "The request asks what is new for the person in their own work since they last looked, and "

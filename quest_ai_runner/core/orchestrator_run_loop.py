@@ -26,6 +26,7 @@ from hubofhubs.ports.events import (
 from hubofhubs.ports.deep import ProgressEvent
 from . import shared_thread
 from .orchestrator_turn_messages import turn_outcome
+from .adapters_retrieval import OwnUpdates
 from .adapters_values import PlanDecision
 from .answer_explanation import is_eligible, trace_from_result
 from hubofhubs.recall.card_thread import CardThreadDecision, parse_card_thread
@@ -452,7 +453,20 @@ class RunLoopMixin:
             # planning, so the planner answers from it instead of recalling older chats or searching.
             if step == 0 and message_is_user_turn and rs._forced_plan is None:
                 try:
-                    gathered.extend(self.own_updates_observations(rs.user_message))
+                    updates = self.read_own_updates(rs.user_message)
+                    if isinstance(updates, OwnUpdates):
+                        # The consumer wrote the reply: it IS the answer. No planner, reads, web or deep run,
+                        # no reply-standard repair, and the answer counts as verified.
+                        rs.plan = PlanDecision(action="answer", rationale="the person's own updates, answered directly")
+                        rs.final = "answer"
+                        rs.text = updates.text
+                        if rs.trace is not None:
+                            rs.trace.answered()
+                        return finish(OrchestratorResult(
+                            kind="answer", text=updates.text, rationale=rs.plan.rationale, exit_reason="verified",
+                            goal_verdict={"met": True, "reason": "answered from the person's own updates read"}))
+                    if updates is not None:
+                        gathered.extend(self.own_updates_observations(rs.user_message, updates))
                 except Exception as e:  # noqa: BLE001
                     log.debug(f"Own-updates pre-read failed: {type(e).__name__}: {e}")
 

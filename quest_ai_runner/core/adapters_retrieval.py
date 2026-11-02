@@ -4,9 +4,21 @@ Split out of ``adapters.py`` by definition; that module re-exports every name he
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Protocol, runtime_checkable
 
 from .adapters_values import Observation
+
+
+@dataclass
+class OwnUpdates:
+    """The result of the optional ``own_updates`` read: the reply itself, written by the consumer.
+
+    ``text`` is what the person is told, word for word (the consumer chose the wording and the channel
+    style). ``nothing_new`` is True when it is the plain "nothing new" sentence. The library never
+    writes or rewrites either."""
+    text: str
+    nothing_new: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -70,10 +82,13 @@ class RetrievalAdapter(Protocol):
     # verdict says the request asks for exactly that (``asks_own_updates``), and puts the result in what
     # the planner has gathered. An adapter without it is simply never asked.
 
-    def own_updates(self) -> Observation:
+    def own_updates(self) -> "Observation | OwnUpdates":
         """The person's own updates since they last looked (what needs them, what finished, what
-        failed), as one Observation. Reading it is what marks those updates as given, so the brain
-        calls it at most once per turn. Never raises; return Observation(kind="error", ...) instead."""
+        failed). Reading it is what marks those updates as given, so the brain calls it at most once
+        per turn. Return an ``OwnUpdates`` (the finished reply, ``text``, and ``nothing_new``) and the
+        brain answers with ``text`` as it stands, skipping planning, reads, web search and deep runs.
+        Return a plain Observation instead and it is only handed to the planner as gathered. Never
+        raises; return Observation(kind="error", ...) and the turn plans as if it had not been asked."""
 
     # --- OPTIONAL: PERSISTED REFERENCE RESOLUTION ------------------------------------
     # A context card can LEARN a source hit as a durable, typed REFERENCE that is re-resolved

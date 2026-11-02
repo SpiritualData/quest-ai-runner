@@ -753,3 +753,74 @@ def test_the_composite_asks_only_the_first_member_that_offers_the_update_read():
     assert composite.own_updates().text == "One task needs you."
     assert (first.update_reads, second.update_reads) == (1, 0)
     assert CompositeRetrievalAdapter([StubRetrieval({})]).own_updates().kind == "error"
+
+
+# ---------------------------------------------------------------------------
+# asks_own_updates with an OwnUpdates result: the consumer's text IS the reply, no planning
+# ---------------------------------------------------------------------------
+
+class DirectUpdatesRetrieval(UpdatesRetrieval):
+    def __init__(self, result):
+        super().__init__()
+        self.result = result
+
+    def own_updates(self):
+        self.update_reads += 1
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+class ExplodingWeb:
+    def __getattr__(self, name):
+        raise AssertionError("the web must not be touched on a direct own-updates answer")
+
+
+def build_direct(reach_response, result):
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates  # noqa: F401
+    provider = DispatchingProvider(reach_response=reach_response,
+                                   decide_response={"action": "answer", "rationale": "ok"})
+    retrieval = DirectUpdatesRetrieval(result)
+    orch = Orchestrator(retrieval=retrieval, provider=provider, registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(planner_reach_judge=True, read_reach_summary="Can read local notes."),
+                        web=ExplodingWeb())
+    return orch, retrieval, provider
+
+
+def planner_calls(provider):
+    return [s for s in provider.schemas if s.get("name") != "reach"]
+
+
+def test_judge_true_replies_with_the_digest_text_and_never_plans_reads_or_goes_deep():
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    digest = "One task needs you. Two finished."
+    orch, retrieval, provider = build_direct({"reach": "world", "asks_own_updates": True}, OwnUpdates(text=digest))
+    result = orch.run("what's the latest?")
+    assert result.kind == "answer" and result.text == digest
+    assert result.exit_reason == "verified" and result.goal_verdict["met"] is True
+    assert retrieval.update_reads == 1
+    assert planner_calls(provider) == [] and not result.deep_results
+
+
+def test_nothing_new_replies_with_the_consumers_plain_sentence():
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    orch, _, provider = build_direct({"reach": "inside", "asks_own_updates": True},
+                                     OwnUpdates(text="Nothing new since you last looked.", nothing_new=True))
+    result = orch.run("what's new?")
+    assert result.text == "Nothing new since you last looked." and planner_calls(provider) == []
+
+
+def test_judge_false_is_unchanged_and_does_not_read():
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": False}, OwnUpdates(text="X"))
+    result = orch.run("what's the latest?")
+    assert retrieval.update_reads == 0 and result.text != "X" and planner_calls(provider)
+
+
+def test_a_failed_read_falls_through_to_the_normal_planner_path():
+    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    for bad in (RuntimeError("down"), Observation(kind="error", error="x"), OwnUpdates(text="  ")):
+        orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": True}, bad)
+        result = orch.run("what's the latest?")
+        assert retrieval.update_reads == 1 and planner_calls(provider), bad
+        assert result.text != "  "
