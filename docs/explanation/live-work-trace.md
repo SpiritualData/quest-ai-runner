@@ -346,7 +346,8 @@ The value judge kept failing three elements on the ten saved real turns. Joshua'
 person or covers a plausible unstated need. Each failure was read against the case before anything was changed:
 
 - The live line "Searching the web" was vague. The live line is now the newest concrete thing opened ("Opened blog.rust-lang.org", with chips for the pages opened before it), and
-  before a page is open nothing is shown (the chat's own working indicator already says the AI is working). Sites a search only listed
+  before a page is open a running search says "Searching the web" (changed after a real Claude in Chrome run: a search that opened nothing left only
+  waiting dots for 20 seconds or more, and the step running is a fact the line can state). Sites a search only listed
   and papers retrieved in a result set are not shown live: whether the answer rests on them is not known until it is final.
 - The summary "Read N of your quest records" was a bare count. Records are now named: one or two ("Used your record: Run a half marathon
   by June"), or the first and the rest counted ("Used "Run a half marathon" and 3 more of your records"). Pages and papers follow the same

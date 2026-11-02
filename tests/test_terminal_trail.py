@@ -36,7 +36,7 @@ async def test_the_live_row_names_the_newest_page_and_goes_when_the_turn_ends():
     async with Harness() as h:
         h.begin()
         h.feed(trace("w", items=[]))
-        assert not h.app._trail_line.display
+        assert h.app._trail_line.display and "Searching the web" in str(h.app._trail_line.render())
         h.feed(trace("w", items=[site("a.org"), site("https://www.blog.rust-lang.org/x?q=1")], read=2))
         assert h.app._trail_line.display and "Opened blog.rust-lang.org" in str(h.app._trail_line.render())
         h.feed(trace("w", state="done", items=[site("a.org"), site("blog.rust-lang.org", "Rust blog")], read=2))
