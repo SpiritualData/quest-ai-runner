@@ -52,3 +52,11 @@ class EscalationSinkBase(abc.ABC):
         caller must read as "nothing new found," never as "confirmed none exist."
         """
         return frozenset()
+
+    def open_decisions_for_quest(self, quest_id: str) -> "List[Dict[str, Any]]":
+        """Optional: the open rows themselves (summary, assignee, dedupe key), so the runner can re-file a worker's own ask. Default none."""
+        return []
+
+    def withdraw_decision(self, decision_id: str) -> bool:
+        """Optional: withdraw one open row (kept as history). Default: cannot, False."""
+        return False

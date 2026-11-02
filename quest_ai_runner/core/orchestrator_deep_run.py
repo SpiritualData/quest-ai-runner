@@ -72,7 +72,10 @@ from hubofhubs.act.tool_ledger import (
     describe_failure, repeated_failure, unrecovered_failures)
 from .orchestrator_types import OrchestratorResult
 from .ask_policy import blocks_on_person, stop_reason_of
-from .orchestrator_turn_messages import file_blocked_ask, maybe_send_interim
+from .worker_ask_adoption import adopt_worker_asks
+from types import SimpleNamespace
+
+from .orchestrator_turn_messages import adopt_turn_ask, file_blocked_ask, maybe_send_interim
 
 
 def interim_text(output: str, coverage: Any, next_step: str) -> str:
@@ -877,6 +880,12 @@ class DeepRunMixin:
                                                  "model": res.resolved_model or res.model,
                                                  "run_id": captured_run_id["id"]}}))
                 resume_session = None   # consumed: a continuation is offered per attempt, not sticky
+                # A row the worker filed itself (out of process, its own credentials) is re-filed through the runner's ask path
+                # (core/worker_ask_adoption.py): turn dedupe key, validated assignee, asker told, the worker's row withdrawn.
+                if (getattr(self.cfg, "interim_replies", False) and not getattr(res, "deferred", False) and ctx_meta is not None
+                        and adopt_worker_asks(self.escalation, quest_id=quest_id, before=before_decision_ids, meta=ctx_meta)):
+                    adopt_turn_ask(self, emit, ctx_meta, res, ctx_meta.get("turn_asks") or [])
+                    res.met = False
                 if res.decision_id is None and not getattr(res, "deferred", False):
                     recovered = self.find_new_decision_id(quest_id, before_decision_ids)
                     if recovered:
@@ -1048,6 +1057,21 @@ class DeepRunMixin:
                         emit.status("Could not verify the result (" + reason
                                     + "); marking unverified.")
                     break
+                # THE VERIFIER'S asks_person ON THE DEEP PATH: a worker final that ends by asking the person for something only they can
+                # give files the ask (same structured flag and the same filing as the chat path), met or not. A met final stays met with
+                # its text as written; an unmet one stops, since another attempt cannot answer the question.
+                asked_q = str(verdict.get("question") or "").strip()
+                if (verdict.get("asks_person") and asked_q and getattr(self.cfg, "interim_replies", False) and not res.decision_id):
+                    asked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+                    if file_blocked_ask(self, emit, ctx_meta, asked, dict(verdict, blocker="needs_person"), question=asked_q):
+                        res.decision_id = asked.decision_id
+                        res.needs_person = asked_q
+                        if not verdict.get("met"):
+                            res.met = False
+                            res.verdict_reason = verdict.get("reason") or "the done-standard was not satisfied"
+                            if emit is not None:
+                                emit.status("Stopping here: this needs a person. " + asked_q)
+                            break
                 if verdict.get("met"):
                     res.met = True
                     if emit is not None:

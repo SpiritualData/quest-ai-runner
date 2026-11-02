@@ -286,6 +286,21 @@ class QuestDecisionSink(EscalationSinkBase):
             for d in rows if d.get("decision_id") or d.get("id")
         )
 
+    def open_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
+        """The open rows themselves (the optional ``EscalationSinkBase`` capability behind adopting a worker's own ask); [] on any failure."""
+        try:
+            return list(self._client.list_open_decisions_for_quest(quest_id) or [])
+        except Exception:  # noqa: BLE001
+            return []
+
+    def withdraw_decision(self, decision_id: str) -> bool:
+        """Withdraw an open row through the client; False when Quest refused or could not be reached."""
+        try:
+            self._client.withdraw_decision(decision_id)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
     @staticmethod
     def _same_ask(a: str, b: str) -> bool:
         """Whether two decision summaries are the same ask, ignoring incidental formatting."""

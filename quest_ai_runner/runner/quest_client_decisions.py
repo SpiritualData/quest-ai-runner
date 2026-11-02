@@ -189,6 +189,10 @@ class DecisionsMixin:
         return self._write("POST", f"/api/teams/decisions/{decision_id}/resolve", body=body,
                            label="Resolving the ask")
 
+    def withdraw_decision(self, decision_id: str) -> WriteResult:
+        """POST /api/teams/decisions/{id}/withdraw: take back an OPEN ask (the creator or the assignee may). Kept as history by Quest."""
+        return self._write("POST", f"/api/teams/decisions/{decision_id}/withdraw", label="Withdrawing the ask")
+
     def list_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET every decision (open AND resolved) that references a specific quest.
 

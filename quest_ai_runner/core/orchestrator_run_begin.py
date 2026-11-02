@@ -327,6 +327,7 @@ class RunBeginMixin:
         _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
         rs._ctx_meta = _ctx_meta
         rs.turn_asks = []          # decision-requests a worker raised with its own create_decision call this turn (core/ask_policy.py)
+        _ctx_meta["turn_asks"] = rs.turn_asks   # the deep path's adoption of a worker's own row records into the same ledger
         rs.private_cards = []      # a shared thread: the selected cards the reply must not draw on (core/shared_thread.py)
         if quest_id is not None:
             _ctx_meta.setdefault("quest_id", quest_id)
