@@ -137,8 +137,8 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   therefore sent once, when the reply is final (a live "Looking through records" line shows only if a records step is running; see section 9).
   These are overlap tests of known stored text against the reply, never keyword lists over the reply's wording. The numbers (four, three, two,
   five characters) are parameters, not tuned values. Sites: only a site the reply names (its exact host, with or without `www.`; a parent or sibling host does not count) is listed beside the
-  opened pages; a search that opened and cited nothing ends as a found count with no list, which the screen says as "Searched the web, found N
-  results" (`counts.read` is 0, `items` is empty; never "no page opened", because a link check can still have run, and never a claim of reading). `work_trace_check` enforces both when it is given the reply.
+  opened pages; a search that opened no page ends as a found count with its listed sites as `found` items, which the screen says as "Searched the web, found N
+  results" and, opened, lists as found, not opened (`counts.read` is 0; never "no page opened", because a link check can still have run, and never a claim of reading). `work_trace_check` enforces both when it is given the reply.
 - Steps QAR emits (one `step_id` per turn each): `web` (seat `search-backend`, kind `sources`, key `workTrace.web.reading`),
   `papers` (`know-the-world`, `papers`, `workTrace.papers.searching`), `records` (`context-assembler`, `records`,
   `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
@@ -373,6 +373,14 @@ the same English pack. Nothing is re-worded in Python or in a parallel script.
 - **A web search that returned results and opened no page is stated by what the event supports.** The old "Searched the web, no page opened"
   was untrue when a link check ran. The line is "Searched the web, found {{count}} results" from `counts.found`; "checked" or "read" is never
   claimed, because `counts.read` is 0.
+- **That line earns its place by expanding (2026-11-01, held-out3 WEB-UBUNTU and WEB-POSTGRES).** The judge said a line that names no
+  source does not earn its place. When a search found results and opened no page, the runner now keeps the sites it listed
+  (`finish` filters listed-only sites to cited ones only beside opened pages), emitted as `sources` items of `kind: "found"` (domain and
+  title only; the projector's item cap applies). The line stays "Searched the web, found N results" (truthful); the tap opens a group
+  "Found, not opened" whose rows read "ubuntu.com (found, not opened)" plus the page title. The wording is `found`, never `read`;
+  it lives in `workTrace.ts` (`expandedGroups`, `foundOnlyItems`, `hasExpandableDetail`) and `quests.json` (`group.found`, `foundRow`,
+  `foundLabel`), and the hub terminal (`terminal/trail.py`, `strings.py`) equals it. `work_trace_check` now accepts uncited found sites when
+  no page was opened, and flags a `read` site when none was.
 
 Three elements still failed after this (a bare team count, a removed link that cannot be seen, and a false positive of the used-record
 rule). Section 10 records what each was changed to.
