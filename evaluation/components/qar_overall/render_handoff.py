@@ -51,7 +51,7 @@ PARTS = [
     ("Science", "know-the-world"), ("Critical thinking", "think-critically"), ("World", "claim-reach"),
     ("Body", "act-as-the-body"), ("Higher mind", "hold-the-intents"), ("Overseer", "watch-for-risk"),
     ("Rep selection", "select-a-rep"), ("Proactive guidance", "guide-toward-the-long-term-goal"),
-    ("Hub of hubs", "use-open-source-hubs"), ("End to end", "answer-end-to-end"), ("Prompt audit", "justify-model-calls"),
+    ("Hub of hubs", "keep-it-generic"), ("End to end", "answer-end-to-end"), ("Prompt audit", "justify-model-calls"),
 ]
 STALE_DAYS = 14   # a hub finding older than this is called stale on the page
 

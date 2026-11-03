@@ -112,3 +112,21 @@ file = "../ai-hub-of-hubs-structure/esoi/evidence.csv"
 "bm25s" = "bm25"
 "bge-small-en-v1.5" = "vector_bge_small"
 "Claude Code CLI (claude -p stream-json)" = "stream_json"
+
+# Opt-in rules: S36 network, S37 entry, S38 coherence (floors per intent, at the values measured when the records were last
+# written; raised as compositions are typed, never lowered), S39 ratchet.
+[rules.S36]
+enabled = true
+
+[rules.S37]
+enabled = true
+
+[rules.S38]
+enabled = true
+
+[rules.S38.floors.quest-ai-runner]
+precision = 0.25
+coverage = 0.63
+
+[rules.S39]
+enabled = true

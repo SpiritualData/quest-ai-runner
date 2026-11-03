@@ -1,4 +1,4 @@
-"""The hub-of-hubs function (the metric of ``use-open-source-hubs``). Every solution is ONE function:
+"""The hub-of-hubs function (the metric of ``keep-it-generic``). Every solution is ONE function:
 
     measure(kind: str, args: dict) -> dict
 

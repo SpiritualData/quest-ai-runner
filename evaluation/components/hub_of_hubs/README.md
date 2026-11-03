@@ -1,6 +1,6 @@
 # hub_of_hubs
 
-QAR's binding of the hub scorer: the metric of `use-open-source-hubs` (sub-metric QME9 of `qar_overall`). The registry, the eight
+QAR's binding of the hub scorer: the metric of `keep-it-generic` (sub-metric QME9 of `qar_overall`). The registry, the eight
 checks and the scoring live in the public [ai-hub-of-hubs-structure](https://github.com/SpiritualData/ai-hub-of-hubs-structure)
 repository; this folder only says how QAR meets them.
 

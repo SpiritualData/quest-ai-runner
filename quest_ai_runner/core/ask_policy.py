@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 
-from esoi import implementation
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -45,7 +44,6 @@ def person_fixable(failures: Sequence[Any]) -> bool:
     return bool(rows) and all(failure_status(getattr(f, "signature", "")) in PERSON_FIXABLE_STATUSES for f in rows)
 
 
-@implementation("ask-on-block", "gated")
 def blocks_on_person(blocker: str, question: str, failures: Sequence[Any] = ()) -> bool:
     """Whether the verdict is a block only a person can lift, so an ask is right."""
     if not str(question or "").strip():

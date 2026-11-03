@@ -6,7 +6,6 @@
    "act-as-the-body": "quest_ai_runner",
    "answer-a-turn": "quest_ai_runner",
    "answer-end-to-end": "quest_ai_runner",
-   "ask-on-block": "quest_ai_runner",
    "assemble-a-prompt": "quest_ai_runner",
    "assist-a-terminal-session": "quest_ai_runner",
    "behave-by-esoi": "quest_ai_runner",
@@ -74,10 +73,10 @@
    "spec-selection": "quest_ai_runner",
    "store-feedback": "quest_ai_runner",
    "tag-solutions": "quest_ai_runner",
+   "take-in-the-world": "quest_ai_runner",
    "talk-over-a-channel": "quest_ai_runner",
    "think-critically": "quest_ai_runner",
    "track-usage-and-cost": "quest_ai_runner",
-   "use-open-source-hubs": "quest_ai_runner",
    "verify-offline": "quest_ai_runner",
    "watch-for-risk": "quest_ai_runner",
    "write-files": "quest_ai_runner",
@@ -110,17 +109,6 @@
   },
   "modules": {
    "qar_live": "quest_ai_runner.core.orchestrator"
-  }
- },
- "ask-on-block": {
-  "default": "gated",
-  "evidence": {
-   "detail": "gated is better than every_attempt (two-sided exact McNemar test, Holm-adjusted p=1.91e-06, 21 of 24 cases disagree); gated leads today (today 0.625 against gated 0.875; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.569, today passed 5 of 8, gated 7 of 8)",
-   "p": 2e-06,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "gated": "quest_ai_runner.core.ask_policy"
   }
  },
  "assist-a-terminal-session": {
@@ -758,6 +746,12 @@
   },
   "modules": {
    "tag_list_with_check": "scripts.esoi_tags"
+  }
+ },
+ "take-in-the-world": {
+  "default": "ways_in",
+  "modules": {
+   "ways_in": "quest_ai_runner.core.orchestrator_run_begin"
   }
  },
  "talk-over-a-channel": {
