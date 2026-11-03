@@ -48,6 +48,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from esoi import implementation
+from esoi.requirements import api, env
 from hubofhubs.recall import card_origin
 
 _log = logging.getLogger("quest-ai-runner.quest_api_cards")
@@ -345,6 +346,10 @@ class QuestApiCardRepository:
     cache:
         A ``CardCache`` (default ``NullCardCache``; ``FileCardCache`` is durable).
     """
+
+    REQUIRES = (api("Quest", key=env("QUEST_API_KEY", option="api_key", secret=True)),
+                env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
+                env("QUEST_TEAM_ID", option="team_id", required=False))
 
     def __init__(
         self,

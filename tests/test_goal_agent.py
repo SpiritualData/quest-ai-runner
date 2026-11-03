@@ -5,7 +5,7 @@ from hubofhubs.card import Card
 from hubofhubs.cardstore import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
-from quest_ai_runner.goal_agent import GoalAnswer
+from quest_ai_runner.loop_wiring import GoalAnswer
 from tests.conftest import StubProvider
 
 

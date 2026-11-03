@@ -25,6 +25,12 @@ class GoalAnswer:
     steps: int = 0
 
 
+def goal_answer(result: Any) -> GoalAnswer:
+    """The answer a caller reads, from what ``Orchestrator.run`` returned."""
+    return GoalAnswer(text=result.text or result.question or "", kind=result.kind, exit_reason=result.exit_reason,
+                      ran=tuple(result.goals), question=result.question or "", steps=result.steps)
+
+
 class NoContext:
     """A context assembler that holds nothing: the loop over it reads no cards and writes none, so a part that only needs the loop
     (routing a message, writing the planner's prompt) touches no store."""

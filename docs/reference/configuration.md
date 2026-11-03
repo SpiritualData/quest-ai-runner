@@ -70,7 +70,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS` |  | `cli_config.py` | `docs/how-to/context-updates.md` |
 | `QAR_CONTEXT_UPDATES_STATE_PATH` |  | `cli_config.py` | `docs/how-to/context-updates.md` |
 | `QAR_CONVERSATION_SEARCH` | false/0/off disables searching past conversations as context. | `cli_config.py` | - |
-| `QAR_CORPUS_ROOT` |  | `cli_cards.py`, `cli_chat.py`, `cli_config.py` +2 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
+| `QAR_CORPUS_ROOT` |  | `adapters/files_writer.py`, `cli_cards.py`, `cli_chat.py` +3 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
 | `QAR_DAILY_TOKEN_LIMIT` |  | `usage.py` | `.env.example` |
 | `QAR_DAILY_USAGE_PATH` |  | `interactive_session_status.py`, `usage.py` | `.env.example` |
 | `QAR_DECISION_ASSIGNEE` |  | `cli_config.py`, `config_environment.py` | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/adapters.md` +2 |

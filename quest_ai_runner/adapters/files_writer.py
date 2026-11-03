@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional
 
 from esoi import implementation
+from esoi.requirements import env
 from hubofhubs.ports.deep import FileWriterBase, WriteResult
 from .files_adapter import _BINARY_EXTS, resolve_in_tree
 
@@ -70,6 +71,8 @@ class FilesWriter(FileWriterBase):
             default (creating a file is an ordinary edit); a consumer that wants edits confined to
             files that already exist sets this False.
     """
+
+    REQUIRES = (env("QAR_CORPUS_ROOT", option="root"),)
 
     def __init__(self, root: str, *,
                  backup_dir: Optional[str] = None,

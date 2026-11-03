@@ -13,33 +13,13 @@ from typing import Any
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
-from esoi.requirements import api, env
 from hubofhubs.seats import CardStore, ModelCalling, Remembering
 
 from .area_reason_and_answer import StepReasoning
 from .config import RunnerConfig, build_orchestrator
-from .loop_wiring import GoalAnswer, NoContext, orchestrator_over  # noqa: F401  (re-exported: the names callers import from here)
+from .loop_wiring import GoalAnswer
 from .message_routing import RequestTakingIn
-from .runner.quest_client import QuestClient
-
-
-@solution("access-quest-operations", kind="event", entry="list_quest_goals", example="quest-id")
-@typing.runtime_checkable
-class QuestOperations(typing.Protocol):
-    """The Quest account the runner works in: reads a quest's goals, and carries out the operations a person asked for."""
-
-    def list_quest_goals(self, quest_id: str, **options: Any) -> Any: ...
-
-
-@implementation("access-quest-operations", "quest_client")
-def quest_client(base_url: str, api_key: str, team_id: str = "") -> QuestClient:
-    """The Quest HTTP client for the account named by ``QUEST_BASE_URL`` (or ``QUEST_API_URL``) and ``QUEST_API_KEY``."""
-    return QuestClient(base_url=base_url, api_key=api_key, team_id=team_id or None)
-
-
-quest_client.REQUIRES = (api("Quest", key=env("QUEST_API_KEY", option="api_key", secret=True)),
-                         env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
-                         env("QUEST_TEAM_ID", option="team_id", required=False))
+from .area_act_as_the_body import BodyActing, QuestOperations
 
 
 @solution("do-grounded-work", kind="event", entry="answer", example="What should I work on first this week?")
@@ -53,12 +33,13 @@ class GoalAgent(typing.Protocol):
 @implementation("do-grounded-work", "library")
 class QuestAiRunnerLibrary:
     """The orchestrator of ``core/orchestrator.py`` wired to the seats it is handed; one object answers any number of messages. The
-    ``reasoning`` and ``taking_in`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
+    ``reasoning``, ``taking_in`` and ``body`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
     orchestrator."""
 
     def __init__(self, model: ModelCalling, cards: CardStore, memory: Remembering, quest: QuestOperations,
-                 reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn]) -> None:
+                 reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn], body: Lazy[BodyActing]) -> None:
         self.model, self.cards, self.memory, self.quest, self.reasoning, self.taking_in = model, cards, memory, quest, reasoning, taking_in
+        self.body = body
 
     def config(self) -> RunnerConfig:
         """The runner's configuration over the seats: the model, the cards as the context assembler, the Quest account."""

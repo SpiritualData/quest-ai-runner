@@ -86,7 +86,7 @@
  "access-quest-operations": {
   "default": "quest_client",
   "modules": {
-   "quest_client": "quest_ai_runner.goal_agent"
+   "quest_client": "quest_ai_runner.area_act_as_the_body"
   }
  },
  "act-as-the-body": {
@@ -97,7 +97,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "card_and_reads": "quest_ai_runner.runner.quest_folder_index"
+   "card_and_reads": "quest_ai_runner.area_act_as_the_body"
   }
  },
  "answer-a-turn": {
@@ -197,7 +197,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "coding_agent_prompt_reach": "quest_ai_runner.core.tools",
+   "coding_agent_prompt_reach": "quest_ai_runner.area_act_as_the_body",
    "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
   }
  },
@@ -392,7 +392,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "model_judge": "quest_ai_runner.runner.goal_handoff"
+   "model_judge": "quest_ai_runner.area_act_as_the_body"
   }
  },
  "hold-the-intents": {
@@ -495,6 +495,17 @@
   },
   "modules": {
    "model_beat": "quest_ai_runner.core.orchestrator_turn"
+  }
+ },
+ "operate-a-quest": {
+  "default": "qar_orchestrator",
+  "evidence": {
+   "detail": "beaten by direct_tool_call, orchestrator_pre_route: best guess, not yet significant: direct_tool_call leads qar_orchestrator (direct_tool_call 0.955 against qar_orchestrator 0.864; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.607, direct_tool_call passed 21 of 22, qar_orchestrator 19 of 22); more cases would settle it; best guess, not yet significant: orchestrator_pre_route leads qar_orchestrator (orchestrator_pre_route 1 against qar_orchestrator 0.864; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.465, orchestrator_pre_route passed 22 of 22, qar_orchestrator 19 of 22); more cases would settle it",
+   "p": 0.465116,
+   "verdict": "LOSS"
+  },
+  "modules": {
+   "qar_orchestrator": "quest_ai_runner.area_act_as_the_body"
   }
  },
  "operate-from-a-terminal": {
@@ -677,6 +688,7 @@
    "lane": "quest_ai_runner.runner.lane",
    "personas": "quest_ai_runner.runner.personas",
    "poller": "quest_ai_runner.runner.poller",
+   "qar_runner": "quest_ai_runner.area_act_as_the_body",
    "quest_folder_sync": "quest_ai_runner.runner.quest_folder_sync"
   }
  },
