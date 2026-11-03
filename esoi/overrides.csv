@@ -4,3 +4,4 @@ call-a-model,prob-vendor-outage-halts-work;ideal-right-sized-model;metric-call-a
 choose-a-model-tier,prob-big-model-for-easy-work;ideal-right-sized-model;metric-choose-a-model-tier
 know-the-world,prob-web-answers-unsafe-or-costly;ideal-safe-search;metric-know-the-world
 act-in-the-world,prob-reach-claims-unfounded;ideal-known-reach;metric-act-in-the-world
+think-critically,prob-metric-enforced-on-deep-runs-only;ideal-checked-improvement;metric-think-critically

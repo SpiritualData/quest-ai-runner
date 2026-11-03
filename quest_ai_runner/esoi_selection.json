@@ -1,12 +1,107 @@
 {
+ "@intents": {
+  "intents": {},
+  "scopes": {
+   "QS1": "quest_ai_runner",
+   "access-quest-operations": "quest_ai_runner",
+   "act-as-the-body": "quest_ai_runner",
+   "act-in-the-world": "quest_ai_runner",
+   "admit-to-the-mind": "quest_ai_runner",
+   "answer-a-turn": "quest_ai_runner",
+   "answer-end-to-end": "quest_ai_runner",
+   "ask-on-block": "quest_ai_runner",
+   "assemble-a-prompt": "quest_ai_runner",
+   "assist-a-terminal-session": "quest_ai_runner",
+   "behave-by-esoi": "quest_ai_runner",
+   "bound-card-growth": "quest_ai_runner",
+   "cache-cards": "quest_ai_runner",
+   "call-a-model": "quest_ai_runner",
+   "card-store": "quest_ai_runner",
+   "choose-a-model-tier": "quest_ai_runner",
+   "choose-what-to-index": "quest_ai_runner",
+   "configure-a-lane": "quest_ai_runner",
+   "core-ml-tasks": "quest_ai_runner",
+   "describe-an-attachment": "quest_ai_runner",
+   "detect-a-stalled-run": "quest_ai_runner",
+   "detect-stale-cards": "quest_ai_runner",
+   "draft-a-metric": "quest_ai_runner",
+   "escalate-to-a-human": "quest_ai_runner",
+   "evolve-by-metric": "quest_ai_runner",
+   "explain-an-answer": "quest_ai_runner",
+   "explain-qar": "quest_ai_runner",
+   "expose-the-public-api": "quest_ai_runner",
+   "feed-context-sources": "quest_ai_runner",
+   "gate-an-autopilot-pass": "quest_ai_runner",
+   "gather-evidence": "quest_ai_runner",
+   "ground-in-intent": "quest_ai_runner",
+   "guard-a-reply": "quest_ai_runner",
+   "guide-by-feedback": "quest_ai_runner",
+   "guide-toward-the-long-term-goal": "quest_ai_runner",
+   "hand-off-a-goal": "quest_ai_runner",
+   "hold-the-long-view": "quest_ai_runner",
+   "index-by-meaning": "quest_ai_runner",
+   "iterate-by-spec": "quest_ai_runner",
+   "judge-a-decision": "quest_ai_runner",
+   "judge-esoi-behavior": "quest_ai_runner",
+   "justify-model-calls": "quest_ai_runner",
+   "keep-a-working-stream": "quest_ai_runner",
+   "keep-secrets-out": "quest_ai_runner",
+   "know-the-world": "quest_ai_runner",
+   "label-context-cards": "quest_ai_runner",
+   "learn-by-example": "quest_ai_runner",
+   "narrate-a-turn": "quest_ai_runner",
+   "operate-a-quest": "quest_ai_runner",
+   "operate-from-a-terminal": "quest_ai_runner",
+   "persist-cards": "quest_ai_runner",
+   "persist-predictions": "quest_ai_runner",
+   "recall-recent-context": "quest_ai_runner",
+   "receive-input-mid-run": "quest_ai_runner",
+   "remember-conversations": "quest_ai_runner",
+   "repair-a-card-store": "quest_ai_runner",
+   "replay-known-operations": "quest_ai_runner",
+   "reply-in-steps": "quest_ai_runner",
+   "resolve-references": "quest_ai_runner",
+   "route-a-message": "quest_ai_runner",
+   "run-deep-work": "quest_ai_runner",
+   "run-queued-tasks": "quest_ai_runner",
+   "search-cards-and-specs": "quest_ai_runner",
+   "search-the-web": "quest_ai_runner",
+   "select-a-rep": "quest_ai_runner",
+   "select-an-implementation": "quest_ai_runner",
+   "select-context": "quest_ai_runner",
+   "show-progress": "quest_ai_runner",
+   "show-the-ais-work": "quest_ai_runner",
+   "spec-selection": "quest_ai_runner",
+   "store-feedback": "quest_ai_runner",
+   "tag-solutions": "quest_ai_runner",
+   "talk-over-a-channel": "quest_ai_runner",
+   "think-critically": "quest_ai_runner",
+   "track-usage-and-cost": "quest_ai_runner",
+   "use-open-source-hubs": "quest_ai_runner",
+   "verify-offline": "quest_ai_runner",
+   "watch-a-run": "quest_ai_runner",
+   "write-files": "quest_ai_runner",
+   "write-through-mcp": "quest_ai_runner"
+  }
+ },
  "act-as-the-body": {
   "default": "card_and_reads",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "card_and_reads": "quest_ai_runner.runner.quest_folder_index"
   }
  },
  "act-in-the-world": {
   "default": "coding_agent_prompt_reach",
+  "evidence": {
+   "detail": "scripted_ideal leads rules_only (rules_only 0.833 against scripted_ideal 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 12 cases disagree)",
+   "p": 0.5,
+   "verdict": "WIN"
+  },
   "modules": {
    "coding_agent_prompt_reach": "quest_ai_runner.core.tools",
    "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
@@ -14,24 +109,55 @@
  },
  "admit-to-the-mind": {
   "default": "recency_window",
+  "evidence": {
+   "detail": "recency_window leads admit_nothing (admit_nothing 0.222 against recency_window 0.444; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.625, 4 of 9 cases disagree)",
+   "p": 0.625,
+   "verdict": "WIN"
+  },
   "modules": {
    "recency_window": "quest_ai_runner.core.planner_context"
   }
  },
  "answer-end-to-end": {
   "default": "qar_live",
+  "evidence": {
+   "detail": "qar_live leads rules_only (rules_only 0.58 against qar_live 0.778; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.754, 10 of 10 cases disagree; one of 2 looks, alpha 0.025)",
+   "p": 0.753906,
+   "verdict": "WIN"
+  },
   "modules": {
    "qar_live": "quest_ai_runner.core.orchestrator"
   }
  },
+ "ask-on-block": {
+  "default": "gated",
+  "evidence": {
+   "detail": "gated is better than every_attempt (two-sided exact McNemar test, Holm-adjusted p=1.91e-06, 21 of 24 cases disagree); gated leads today (today 0.625 against gated 0.875; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.569, today passed 5 of 8, gated 7 of 8)",
+   "p": 2e-06,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "gated": "quest_ai_runner.core.ask_policy"
+  }
+ },
  "assist-a-terminal-session": {
   "default": "fast_model_helpers",
+  "evidence": {
+   "detail": "fast_model_helpers is better than rules_only (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0129, 14 of 32 cases disagree)",
+   "p": 0.012939,
+   "verdict": "WIN"
+  },
   "modules": {
    "fast_model_helpers": "quest_ai_runner.cli_config"
   }
  },
  "cache-cards": {
   "default": "file",
+  "evidence": {
+   "detail": "memory_cache is exactly equal to file_cache on the metric (memory_cache 1 against file_cache 1), so file_cache stays; file_cache leads null_cache (null_cache 0.5 against file_cache 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0625, 6 of 12 cases disagree)",
+   "p": 0.0625,
+   "verdict": "TIE"
+  },
   "modules": {
    "file": "quest_ai_runner.adapters.card_cache_file",
    "null": "quest_ai_runner.adapters.quest_api_card_repository"
@@ -39,6 +165,11 @@
  },
  "call-a-model": {
   "default": "multi_provider",
+  "evidence": {
+   "detail": "multi_provider is better than single_provider (two-sided exact McNemar test, Holm-adjusted p=1.82e-12, 40 of 56 cases disagree)",
+   "p": 0.0,
+   "verdict": "WIN"
+  },
   "modules": {
    "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
    "multi_provider": "quest_ai_runner.providers"
@@ -51,7 +182,12 @@
   }
  },
  "choose-a-model-tier": {
-  "default": "qar_selection",
+  "default": "model_registry",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
    "model_registry": "quest_ai_runner.core.model_registry",
@@ -60,6 +196,11 @@
  },
  "configure-a-lane": {
   "default": "qar_config",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "config": "quest_ai_runner.config",
    "config_core_settings": "quest_ai_runner.config_core_settings",
@@ -70,36 +211,66 @@
  },
  "describe-an-attachment": {
   "default": "vision_description",
+  "evidence": {
+   "detail": "beaten by skip_images: best guess, not yet significant: skip_images 0.399 against vision_description 0.331 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "LOSS"
+  },
   "modules": {
    "vision_description": "quest_ai_runner.core.attachments"
   }
  },
  "detect-a-stalled-run": {
   "default": "live_reviewer",
+  "evidence": {
+   "detail": "rule_floor is exactly equal to live_reviewer on the metric (rule_floor 1 against live_reviewer 1), so live_reviewer stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "goal_runner": "quest_ai_runner.core.goal_runner"
   }
  },
  "draft-a-metric": {
   "default": "capped_model_draft",
+  "evidence": {
+   "detail": "capped_model_draft is better than ask_owner (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0217, ask_owner passed 4 of 10, capped_model_draft 10 of 10); capped_model_draft leads capped_model_draft_fast (capped_model_draft_fast 0.9 against capped_model_draft 1; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=1, capped_model_draft_fast passed 9 of 10, capped_model_draft 10 of 10)",
+   "p": 0.021672,
+   "verdict": "WIN"
+  },
   "modules": {
    "capped_model_draft": "quest_ai_runner.runner.metric_draft"
   }
  },
  "escalate-to-a-human": {
   "default": "quest_decision",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "quest_decision": "quest_ai_runner.runner.quest_client"
   }
  },
  "explain-an-answer": {
   "default": "model_explanation",
+  "evidence": {
+   "detail": "best guess, not yet significant: trace_template 0.724 against model_explanation 0.787 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "WIN"
+  },
   "modules": {
    "model_explanation": "quest_ai_runner.core.orchestrator_judges"
   }
  },
  "expose-the-public-api": {
   "default": "live_surface",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "__init__": "quest_ai_runner",
    "async_bridge": "quest_ai_runner.core.async_bridge"
@@ -107,18 +278,33 @@
  },
  "feed-context-sources": {
   "default": "base",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "base": "quest_ai_runner.runner.context_sources_base"
   }
  },
  "gate-an-autopilot-pass": {
   "default": "live_pass",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "autopilot_gates": "quest_ai_runner.runner.autopilot_gates"
   }
  },
  "gather-evidence": {
   "default": "composite",
+  "evidence": {
+   "detail": "composite is better than first_three (two-sided exact McNemar test, Holm-adjusted p=3.81e-06, 19 of 21 cases disagree)",
+   "p": 4e-06,
+   "verdict": "WIN"
+  },
   "modules": {
    "cached_db": "quest_ai_runner.adapters.cached_db_adapter",
    "composite": "quest_ai_runner.adapters.composite_retrieval_adapter",
@@ -133,6 +319,11 @@
  },
  "ground-in-intent": {
   "default": "frame-line",
+  "evidence": {
+   "detail": "frame_line leads none (none 0.5 against frame_line 0.8; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.35, none passed 5 of 10, frame_line 8 of 10)",
+   "p": 0.349845,
+   "verdict": "WIN"
+  },
   "modules": {
    "frame-card-drilldown": "quest_ai_runner.runner.quest_client_intents",
    "frame-lazy-spec": "quest_ai_runner.core.tools_quest_intents",
@@ -142,36 +333,66 @@
  },
  "guide-by-feedback": {
   "default": "universal",
+  "evidence": {
+   "detail": "ledger_guidance leads dump_all (dump_all 0.5 against ledger_guidance 0.75; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.125, 4 of 16 cases disagree); ledger_guidance leads no_memory (no_memory 0.25 against ledger_guidance 0.75; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0771, 12 of 16 cases disagree)",
+   "p": 0.077148,
+   "verdict": "WIN"
+  },
   "modules": {
    "universal": "quest_ai_runner.core.guidance_provider"
   }
  },
  "guide-toward-the-long-term-goal": {
   "default": "guided_v2",
+  "evidence": {
+   "detail": "guided_v2 leads guided (guided 0.667 against guided_v2 0.833; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.318, guided passed 16 of 24, guided_v2 20 of 24); guided_v2 leads no_nudge (no_nudge 0.5 against guided_v2 0.833; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0914, no_nudge passed 12 of 24, guided_v2 20 of 24); guided_v2 is better than proactive_guidance.broken.nudge_every_time:build (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.000476, proactive_guidance.broken.nudge_every_time:build passed 0 of 10, guided_v2 9 of 10; one of 2 looks, alpha 0.025); guided_v2 leads reply_voice (reply_voice 0.5 against guided_v2 0.833; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0914, reply_voice passed 12 of 24, guided_v2 20 of 24)",
+   "p": 0.000476,
+   "verdict": "WIN"
+  },
   "modules": {
    "guided_v2": "quest_ai_runner.core.auxiliary_prompts"
   }
  },
  "hand-off-a-goal": {
   "default": "model_judge",
+  "evidence": {
+   "detail": "model_judge is better than creator_keeps_it (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.00546, creator_keeps_it passed 8 of 18, model_judge 17 of 18); model_judge leads model_judge_fast (model_judge_fast 0.778 against model_judge 0.944; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.338, model_judge_fast passed 14 of 18, model_judge 17 of 18)",
+   "p": 0.005456,
+   "verdict": "WIN"
+  },
   "modules": {
    "model_judge": "quest_ai_runner.runner.goal_handoff"
   }
  },
  "hold-the-long-view": {
   "default": "separate_stores",
+  "evidence": {
+   "detail": "separate_stores is better than no_carry (two-sided exact McNemar test, Holm-adjusted p=0.0391, 9 of 15 cases disagree)",
+   "p": 0.039062,
+   "verdict": "WIN"
+  },
   "modules": {
    "separate_stores": "quest_ai_runner.core.orchestrator_run_begin"
   }
  },
  "index-by-meaning": {
   "default": "qdrant",
+  "evidence": {
+   "detail": "memory_cosine is exactly equal to qdrant_embedded on the metric (memory_cosine 0.941 against qdrant_embedded 0.941), so qdrant_embedded stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "qdrant": "quest_ai_runner.adapters.qdrant_vector_store"
   }
  },
  "iterate-by-spec": {
   "default": "slice-and-writeback",
+  "evidence": {
+   "detail": "beaten by single_attempt: best guess, not yet significant: single_attempt 0.907 against slice_and_writeback 0.826 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "LOSS"
+  },
   "modules": {
    "generic-doctrine": "quest_ai_runner.core.goal_iteration",
    "slice-and-writeback": "quest_ai_runner.core.goal_iteration",
@@ -180,12 +401,22 @@
  },
  "justify-model-calls": {
   "default": "spec_registry",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "spec_registry": "quest_ai_runner.core.prompt_specs"
   }
  },
  "keep-a-working-stream": {
   "default": "rebuilt_per_step",
+  "evidence": {
+   "detail": "beaten by rebuilt_full_context: best guess, not yet significant: rebuilt_full_context leads rebuilt_per_step (rebuilt_full_context 1 against rebuilt_per_step 0.857; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.481, rebuilt_full_context passed 14 of 14, rebuilt_per_step 12 of 14); more cases would settle it",
+   "p": 0.481481,
+   "verdict": "LOSS"
+  },
   "modules": {
    "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
    "rebuilt_per_step": "quest_ai_runner.core.orchestrator_planning"
@@ -193,18 +424,33 @@
  },
  "know-the-world": {
   "default": "web_with_support_check",
+  "evidence": {
+   "detail": "web_with_support_check is better than memory_only (two-sided exact McNemar test, Holm-adjusted p=0.00391, 9 of 9 cases disagree)",
+   "p": 0.003906,
+   "verdict": "WIN"
+  },
   "modules": {
    "web_with_support_check": "quest_ai_runner.adapters.web_research"
   }
  },
  "label-context-cards": {
   "default": "fast_model_labels",
+  "evidence": {
+   "detail": "fast_model_labels_fast is exactly equal to fast_model_labels on the metric (fast_model_labels_fast 0.909 against fast_model_labels 0.909), so fast_model_labels stays; fast_model_labels leads path_rules (path_rules 0.455 against fast_model_labels 0.909; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.127, path_rules passed 5 of 11, fast_model_labels 10 of 11)",
+   "p": 0.126935,
+   "verdict": "TIE"
+  },
   "modules": {
    "fast_model_labels": "quest_ai_runner.adapters.card_metadata_generator"
   }
  },
  "learn-by-example": {
   "default": "live_examples",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "custom_consumer": "examples.custom_consumer",
    "minimal_lane": "examples.minimal_lane"
@@ -212,12 +458,22 @@
  },
  "narrate-a-turn": {
   "default": "model_beat",
+  "evidence": {
+   "detail": "best guess, not yet significant: no_beat 0.408 against model_beat 0.782 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "WIN"
+  },
   "modules": {
    "model_beat": "quest_ai_runner.core.orchestrator_turn"
   }
  },
  "operate-from-a-terminal": {
   "default": "qar_main",
+  "evidence": {
+   "detail": "real_console_script is exactly equal to qar_main on the metric (real_console_script 1 against qar_main 1), so qar_main stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "__main__": "quest_ai_runner.tools.__main__",
    "cli": "quest_ai_runner.cli",
@@ -228,6 +484,11 @@
  },
  "persist-cards": {
   "default": "quest_api",
+  "evidence": {
+   "detail": "filesystem is exactly equal to quest_api on the metric (filesystem 1 against quest_api 1), so quest_api stays; qdrant is exactly equal to quest_api on the metric (qdrant 1 against quest_api 1), so quest_api stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "filesystem": "quest_ai_runner.config_assembler",
    "qdrant": "quest_ai_runner.adapters.qdrant_card_repository",
@@ -236,43 +497,89 @@
  },
  "persist-predictions": {
   "default": "file",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "file": "quest_ai_runner.core.anticipation_store"
   }
  },
  "recall-recent-context": {
   "default": "file",
+  "evidence": {
+   "detail": "file_store_filter leads last_turn (last_turn 0.6 against file_store_filter 0.9; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.375, 5 of 10 cases disagree)",
+   "p": 0.375,
+   "verdict": "WIN"
+  },
   "modules": {
    "file": "quest_ai_runner.core.recent_context"
   }
  },
  "receive-input-mid-run": {
   "default": "in_memory",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "in_memory": "quest_ai_runner.core.inbox"
   }
  },
  "remember-conversations": {
   "default": "session_file",
+  "evidence": {
+   "detail": "session_files leads most_recent (most_recent 0.5 against session_files 0.9; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.125, 4 of 10 cases disagree)",
+   "p": 0.125,
+   "verdict": "WIN"
+  },
   "modules": {
    "session_file": "quest_ai_runner.adapters.session_file_conversation_store"
   }
  },
  "repair-a-card-store": {
   "default": "repository_tidy",
+  "evidence": {
+   "detail": "bootstrap_guards is exactly equal to repository_tidy on the metric (bootstrap_guards 1 against repository_tidy 1), so repository_tidy stays; repository_tidy is better than card_growth.broken.drop_every_import:build (two-sided exact McNemar test, Holm-adjusted p=0.00391, 11 of 12 cases disagree); repository_tidy is better than no_cleanup (two-sided exact McNemar test, Holm-adjusted p=0.00586, 10 of 12 cases disagree); repository_tidy leads quarantine_tool (quarantine_tool 0.833 against repository_tidy 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=1, 2 of 12 cases disagree)",
+   "p": 0.003906,
+   "verdict": "TIE"
+  },
   "modules": {
    "local_folder_tidy": "quest_ai_runner.adapters.context_store_heal",
    "repository_tidy": "quest_ai_runner.adapters.card_store_tidy"
   }
  },
+ "reply-in-steps": {
+  "default": "gated",
+  "evidence": {
+   "detail": "gated is better than every_attempt (two-sided exact McNemar test, Holm-adjusted p=1.91e-06, 21 of 24 cases disagree); gated leads today (today 0.625 against gated 0.875; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.569, today passed 5 of 8, gated 7 of 8)",
+   "p": 2e-06,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "gated": "quest_ai_runner.core.interim_policy"
+  }
+ },
  "resolve-references": {
   "default": "note",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "note": "quest_ai_runner.config_assembler"
   }
  },
  "run-deep-work": {
   "default": "subprocess",
+  "evidence": {
+   "detail": "acp_runner is exactly equal to subprocess_runner on the metric (acp_runner 1 against subprocess_runner 1), so subprocess_runner stays; real_process is exactly equal to subprocess_runner on the metric (real_process 1 against subprocess_runner 1), so subprocess_runner stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "acp": "quest_ai_runner.adapters.acp_deep_runner",
    "fast_edit": "quest_ai_runner.config_resolvers",
@@ -284,6 +591,11 @@
  },
  "run-queued-tasks": {
   "default": "qar_runner",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "executor": "quest_ai_runner.runner.executor",
    "lane": "quest_ai_runner.runner.lane",
@@ -294,6 +606,11 @@
  },
  "search-cards-and-specs": {
   "default": "solutions_and_problems_with_links",
+  "evidence": {
+   "detail": "solutions_and_problems_with_links is better than context_and_specs.broken.keyword_overlap:build (two-sided exact McNemar test, Holm-adjusted p=0.00391, 10 of 17 cases disagree); solutions_and_problems_with_links leads two_pipelines (two_pipelines 0.588 against solutions_and_problems_with_links 0.824; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.219, 6 of 17 cases disagree)",
+   "p": 0.003906,
+   "verdict": "WIN"
+  },
   "modules": {
    "solutions_and_problems_with_links": "quest_ai_runner.core.unified_search",
    "two_pipelines": "quest_ai_runner.core.unified_search"
@@ -301,6 +618,11 @@
  },
  "search-the-web": {
   "default": "web_research",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "brave": "quest_ai_runner.adapters.web_search_backends",
    "gemini": "quest_ai_runner.adapters.web_search_backends",
@@ -314,18 +636,33 @@
  },
  "select-a-rep": {
   "default": "persona_resolver_precedence",
+  "evidence": {
+   "detail": "persona_resolver_precedence is better than first_registered (two-sided exact McNemar test, Holm-adjusted p=0.00635, 12 of 16 cases disagree)",
+   "p": 0.006348,
+   "verdict": "WIN"
+  },
   "modules": {
    "persona_resolver_precedence": "quest_ai_runner.runner.personas"
   }
  },
  "select-an-implementation": {
   "default": "live_resolver",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "resolve": "quest_ai_runner.core.resolve"
   }
  },
  "select-context": {
   "default": "hybrid",
+  "evidence": {
+   "detail": "hybrid_union is better than blind_grep (two-sided exact McNemar test, Holm-adjusted p=4.37e-05, 33 of 63 cases disagree); idf_docstrings is exactly equal to hybrid_union on the metric (idf_docstrings 0.73 against hybrid_union 0.73), so hybrid_union stays; hybrid_union leads solutions_and_problems_with_links (solutions_and_problems_with_links 0.714 against hybrid_union 0.73; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=1, 11 of 63 cases disagree); hybrid_union is better than vector_bge_small (two-sided exact McNemar test, Holm-adjusted p=0.0125, 16 of 63 cases disagree)",
+   "p": 4.4e-05,
+   "verdict": "TIE"
+  },
   "modules": {
    "bm25": "quest_ai_runner.adapters.bm25_content_store",
    "composite": "quest_ai_runner.config_assembler",
@@ -337,13 +674,35 @@
  },
  "show-progress": {
   "default": "stream",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "milestone": "quest_ai_runner.core.adapters_sinks",
    "stream": "quest_ai_runner.core.adapters_sinks"
   }
  },
+ "show-the-ais-work": {
+  "default": "trail",
+  "evidence": {
+   "detail": "trail is better than no_trace (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0406, no_trace passed 2 of 8, trail 7 of 8); trail is better than plain_list (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0202, plain_list passed 1 of 8, trail 7 of 8)",
+   "p": 0.020202,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "terminal_trail": "quest_ai_runner.textual_ui_trail",
+   "trail": "quest_ai_runner.core.work_trace"
+  }
+ },
  "spec-selection": {
   "default": "lexical-vector-gated",
+  "evidence": {
+   "detail": "best guess, not yet significant: lexical_only 0.788 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: lexical_vector 0.816 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: lexical_vector_llm 0.486 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: solutions_and_problems_with_links 0.576 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "WIN"
+  },
   "modules": {
    "lexical-only": "quest_ai_runner.core.spec_selection",
    "lexical-vector-gated": "quest_ai_runner.core.spec_selection",
@@ -352,24 +711,44 @@
  },
  "store-feedback": {
   "default": "ledger",
+  "evidence": {
+   "detail": "ledger_guidance leads dump_all (dump_all 0.5 against ledger_guidance 0.75; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.125, 4 of 16 cases disagree); ledger_guidance leads no_memory (no_memory 0.25 against ledger_guidance 0.75; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0771, 12 of 16 cases disagree)",
+   "p": 0.077148,
+   "verdict": "WIN"
+  },
   "modules": {
    "ledger": "quest_ai_runner.runner.feedback_ledger"
   }
  },
  "tag-solutions": {
   "default": "tag_list_with_check",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "tag_list_with_check": "scripts.esoi_tags"
   }
  },
  "talk-over-a-channel": {
   "default": "openclaw",
+  "evidence": {
+   "detail": "real_gateway is exactly equal to openclaw_bridge on the metric (real_gateway 1 against openclaw_bridge 1), so openclaw_bridge stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "openclaw": "quest_ai_runner.adapters.openclaw_channel"
   }
  },
  "think-critically": {
   "default": "deep_runs_only",
+  "evidence": {
+   "detail": "deep_runs_only leads instruction_only (instruction_only 0.2 against deep_runs_only 0.4; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 10 cases disagree)",
+   "p": 0.5,
+   "verdict": "WIN"
+  },
   "modules": {
    "deep_runs_only": "quest_ai_runner.core.goal_metrics",
    "instruction_only": "quest_ai_runner.core.standing_instructions"
@@ -377,6 +756,11 @@
  },
  "track-usage-and-cost": {
   "default": "qar_usage",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "pricing": "quest_ai_runner.pricing",
    "resources": "quest_ai_runner.resources",
@@ -385,12 +769,22 @@
  },
  "verify-offline": {
   "default": "collect_by_file",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "conftest": "tests.conftest"
   }
  },
  "watch-a-run": {
   "default": "overseer",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "no_overseer": "quest_ai_runner.core.orchestrator_types",
    "overseer": "quest_ai_runner.core.overseer"
@@ -398,12 +792,22 @@
  },
  "write-files": {
   "default": "files",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
   "modules": {
    "files": "quest_ai_runner.adapters.files_writer"
   }
  },
  "write-through-mcp": {
   "default": "mcp",
+  "evidence": {
+   "detail": "real_stdio_server is exactly equal to allowlist_writer on the metric (real_stdio_server 1 against allowlist_writer 1), so allowlist_writer stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
   "modules": {
    "mcp": "quest_ai_runner.adapters.mcp_write_adapter"
   }

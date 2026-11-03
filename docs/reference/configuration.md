@@ -8,12 +8,12 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-228 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+229 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for call-a-model. | `cli_chat.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/deployment.md` +5 |
+| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for call-a-model. | `cli_chat.py`, `textual_ui_helpers.py` | `README.md`, `.env.example`, `docs/how-to/acp-deep-runner.md` +6 |
 | `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `adapters/claude_live_models.py`, `config_core_settings.py` | - |
 | `DEEPSEEK_API_KEY` | DeepSeek API key; declared by the hub for call-a-model. | `config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md` |
 | `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `core/repo_specs.py` | - |
@@ -60,7 +60,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_EFFORT` | Reasoning effort passed to the Claude CLI provider (low, medium, high; empty = CLI default). | `adapters/claude_cli_provider.py` | - |
 | `QAR_CLI_HAIKU_THINKING_TOKENS` | Thinking-token cap for Haiku completions through the CLI provider (unset = CLI default). | `adapters/claude_cli_provider.py` | - |
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_CONFIG_FILE` |  | `adapters/card_store_tidy.py`, `cli_cards.py`, `cli_config.py` +1 | `README.md`, `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md` +1 |
+| `QAR_CONFIG_FILE` |  | `adapters/card_store_tidy.py`, `cli_cards.py`, `cli_config.py` +1 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +1 |
 | `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example`, `docs/explanation/context-assembly.md` |
 | `QAR_CONTEXT_CARDS_DIR` |  | `cli_cards.py`, `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/explanation/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `cli_config.py` | `docs/reference/quest-api-contract.md` |
@@ -73,7 +73,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CORPUS_ROOT` |  | `cli_cards.py`, `cli_chat.py`, `cli_config.py` +2 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
 | `QAR_DAILY_TOKEN_LIMIT` |  | `usage.py` | `.env.example` |
 | `QAR_DAILY_USAGE_PATH` |  | `interactive_session_status.py`, `usage.py` | `.env.example` |
-| `QAR_DECISION_ASSIGNEE` |  | `cli_config.py`, `config_environment.py` | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +3 |
+| `QAR_DECISION_ASSIGNEE` |  | `cli_config.py`, `config_environment.py` | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/adapters.md` +2 |
 | `QAR_DECISION_ASSIGNEES` |  | `cli_config.py`, `config_environment.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DECISION_DEFAULT_DEADLINE_HOURS` |  | `cli_config.py`, `runner/quest_client_support.py` | `docs/how-to/adapters.md`, `docs/reference/quest-api-contract.md` |
 | `QAR_DEEP_AUTO_MODEL` |  | `cli_config.py` | `docs/how-to/writing-a-consumer.md` |
@@ -92,7 +92,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_STRICT_MCP` | 1 adds --strict-mcp-config to the deep worker launch, so only the servers of the lane's mcp config load; unset leaves the launch as it was. CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_TIMEOUT_SECONDS` |  | `config_core_settings.py`, `core/goal_runner_contract.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_WORKING_DIR` |  | `config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
+| `QAR_DEEP_WORKING_DIR` |  | `config.py`, `config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_EMBEDDER_BACKEND` |  | `adapters/qdrant_embedders.py`, `config_assembler.py`, `config_context_index.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `adapters/qdrant_embedders.py` | - |
@@ -122,6 +122,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_GREP_MAX_FILES` | Most files one grep opens (default 20000). | `adapters/files_adapter.py`, `adapters/files_search_worker.py`, `adapters/files_server.py` | - |
 | `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` |  | `config_core_settings.py` | `.env.example`, `docs/how-to/guidance-cards.md` |
 | `QAR_INTENT_JUDGE_TIMEOUT_SECONDS` | Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds. | `config_core_settings.py` | `.env.example` |
+| `QAR_INTERIM_REPLIES` |  | `textual_ui_trail.py` | `docs/how-to/chat.md` |
 | `QAR_LANE_USER_ID` |  | `cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_LINK_GUARD` |  | `cli_config.py` | `docs/explanation/link-guard.md`, `docs/how-to/tools.md` |
 | `QAR_LINK_POLICY_FILE` |  | `cli_config.py`, `config_core_settings.py` | `.env.example`, `docs/explanation/link-guard.md` |
@@ -144,7 +145,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_OPENCLAW_CWD` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_OPENCLAW_TOKEN_FILE` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_ORG_ID` |  | `adapters/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_OVERSEER` |  | `cli_config.py` | `README.md`, `.env.example`, `docs/explanation/overseer.md` |
+| `QAR_OVERSEER` |  | `cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
 | `QAR_OVERSEER_MAX_SIGNALS` |  | `cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
 | `QAR_OVERSEER_TIER` |  | `cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
 | `QAR_PLANNER_MODEL` |  | `cli_config.py` | `docs/explanation/cheap-model-routing.md` |
@@ -196,7 +197,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `core/tools.py` | `docs/how-to/tools.md` |
-| `QAR_STATE_PATH` |  | `cli_poll.py`, `interactive_session_persist.py`, `runner/lane.py` | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` |
+| `QAR_STATE_PATH` |  | `cli_poll.py`, `interactive_session_persist.py`, `runner/lane.py` +1 | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` |
 | `QAR_TASK_DIRECT_DEEP` |  | `cli_config.py` | `docs/explanation/cheap-model-routing.md` |
 | `QAR_TEAM_ID` |  | `adapters/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_TEAM_QUEST_ID` | Quest the bootstrap report is posted to. | `adapters/bootstrap_reporter.py` | - |
@@ -232,7 +233,7 @@ the docs and `.env.example` that describe what it does.
 | `QUEST_BASE_URL` |  | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
 | `QUEST_CLAIM_TEAMS` | Comma-separated team ids an owner-scoped lane may claim tasks from (RunnerConfig.claim_teams). | `cli_config.py` | - |
 | `QUEST_ORG_ID` |  | `cli_config.py` | `.env.example`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
-| `QUEST_TEAM_ID` |  | `bootstrap_email.py`, `cli_config.py`, `cli_quest.py` +3 | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/chat.md` +4 |
+| `QUEST_TEAM_ID` |  | `bootstrap_email.py`, `cli_config.py`, `cli_quest.py` +3 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +5 |
 | `QUEST_TEAM_IDS` |  | `cli_config.py`, `interactive_session_quests.py` | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` +1 |
 | `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `config_assembler.py`, `config_context_index.py` | - |
 | `VOYAGE_MODEL` |  | `adapters/qdrant_embedders.py` | `docs/explanation/vector-context.md` |

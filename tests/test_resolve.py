@@ -176,7 +176,8 @@ def test_every_declaration_has_a_record_and_the_default_is_one_of_them():
 
 
 def test_the_shipped_snapshot_matches_the_records():
-    snapshot = runtime.snapshot(CONFIG)
+    from esoi import entry
+    snapshot = entry.snapshot(CONFIG)   # the defaults and modules, plus the intent map the one-line entry reads
     shipped = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
     assert shipped == snapshot, "run: esoi select --snapshot quest_ai_runner/esoi_selection.json"
 

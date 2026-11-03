@@ -4,6 +4,10 @@ These are ESOI records (evolvable structure that optimizes intent): why this pro
 
 Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.
 
+## How the solutions fit together
+
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and QS1 is that loop. QS1 takes a request in through talk-over-a-channel, operate-from-a-terminal, receive-input-mid-run and run-queued-tasks, hands it to route-a-message, and answers chat turns through answer-a-turn. It grounds the answer in the person's own material through select-context, gather-evidence, remember-conversations, recall-recent-context, resolve-references and cache-cards, with persist-cards and index-by-meaning keeping the cards, and it keeps the prompt in order through assemble-a-prompt and the model choice through call-a-model, choose-a-model-tier and track-usage-and-cost. It does the work through operate-a-quest, write-files, write-through-mcp and run-deep-work, watches it through watch-a-run and detect-a-stalled-run, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, and brings a step only a person may take to that person through escalate-to-a-human. It shows what it is doing through show-progress, learns from corrections through guide-by-feedback and store-feedback, and replays what worked through replay-known-operations. It keeps itself measurable and open through evolve-by-metric, select-an-implementation, configure-a-lane, verify-offline, keep-secrets-out, behave-by-esoi and judge-esoi-behavior, and it is offered to others through expose-the-public-api, learn-by-example and explain-qar. The specification of the loop is spread over named areas. keep-a-working-stream is the mind, one goal-focused stream per request, and admit-to-the-mind is the subconscious that admits the person's own cards into it, with card-store holding them, bound-card-growth and repair-a-card-store keeping the store from inflating, choose-what-to-index choosing what deserves a card, label-context-cards and detect-stale-cards keeping them honest, and search-cards-and-specs searching cards and specifications together. know-the-world answers questions about the world through search-the-web. think-critically holds deep runs to their metric through iterate-by-spec, spec-selection, ground-in-intent, draft-a-metric and gate-an-autopilot-pass, and core-ml-tasks, answer-end-to-end and tag-solutions measure the classifiers, the whole turn and the reach of a change. act-as-the-body does the work and act-in-the-world claims only the reach it has, while use-open-source-hubs prefers a standard hub to a bespoke integration and access-quest-operations reaches Quest's operations. hold-the-long-view keeps the standing view of a representative across turns, select-a-rep picks the representative, hand-off-a-goal decides who owns a new goal, and guide-toward-the-long-term-goal keeps work aimed at the person's end, with persist-predictions saving what was learned. The person is kept informed through reply-in-steps, ask-on-block, narrate-a-turn, show-the-ais-work, explain-an-answer, describe-an-attachment and assist-a-terminal-session, and feed-context-sources adds what changed in a work item, while justify-model-calls accounts for every model call.
+
 ## Problems
 
 - `QP1`: People can attach AI tasks to their goals in Quest and schedule them, but nothing runs them: Quest queues the work and has no worker. The same gap exists for anyone who wants AI to keep working on their goals between conversations.
@@ -79,6 +83,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `prob-evaluation-not-staged-on-real-inputs`: unconfirmed: for Payal to confirm.
 - `prob-science-search-duplicates-research-chat`: unconfirmed: for Payal to confirm.
 - `prob-harness-dear-and-slow-on-the-subscription`: unconfirmed: for Payal to confirm.
+- `prob-unmet-turn-leaves-person-guessing`: A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do.
 
 ## Ideals
 
@@ -159,6 +164,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `ideal-staged-evaluation-on-real-inputs`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
 - `ideal-science-through-one-search`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
 - `ideal-cheap-fast-harness-with-ideal-context`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-never-left-guessing`, Never Left Guessing: The person always knows whether work continues, why, and what only they can do.
 
 ## Solutions
 
@@ -241,6 +247,9 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `use-open-source-hubs` | Open-source hubs before bespoke integrations | registry_scan | Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `access-quest-operations` | unconfirmed: for Payal to confirm. access-quest-operations |  | unconfirmed: for Payal to confirm. |
 | `card-store` | unconfirmed: for Payal to confirm. QAR card repository as the hub card store | qar-card-repository | none yet |
+| `show-the-ais-work` | Show the AI's work and next steps | trail | What is shown of the AI's work is true, the same for everyone, and earns its place |
+| `reply-in-steps` | Reply in steps when the goal is not met yet | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
+| `ask-on-block` | Ask on a block that only a person can lift | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
 
 ## Implementations
 
@@ -505,6 +514,16 @@ Goals keep moving between a person's sessions, because the work they delegated g
 | `assemble-a-prompt:situational` | unconfirmed: for Payal to confirm | evaluation/components/prompt_size/impls/situational.py |  |
 | `card-store:qar-card-repository` | qar-card-repository | quest_ai_runner/adapters/hub_card_store.py |  |
 | `run-deep-work:lean_guarded` | Lean guarded launch of the deep worker | quest_ai_runner/core/deep_launch.py |  |
+| `show-the-ais-work:no_trace` | Nothing shown (the status quo before the Trail) | evaluation/components/work_trace_experience/impls/no_trace.py |  |
+| `show-the-ais-work:plain_list` | A plain list of every step | evaluation/components/work_trace_experience/impls/plain_list.py |  |
+| `show-the-ais-work:trail` | The Trail: live line, one summary line, expandable groups | quest_ai_runner/core/work_trace.py |  |
+| `reply-in-steps:today` | Behaviour before the build: no interim for an unmet attempt | evaluation/components/interim_reply/impls/today.py |  |
+| `reply-in-steps:every_attempt` | An interim on every unmet attempt (spam baseline) | evaluation/components/interim_reply/impls/every_attempt.py |  |
+| `reply-in-steps:gated` | The structural gate of core/interim_policy.py | quest_ai_runner/core/interim_policy.py |  |
+| `ask-on-block:today` | Behaviour before the build: a block ends as text | evaluation/components/interim_reply/impls/today.py |  |
+| `ask-on-block:every_attempt` | An ask whenever a question is present (baseline) | evaluation/components/interim_reply/impls/every_attempt.py |  |
+| `ask-on-block:gated` | Ask only on a person-only block (core/ask_policy.py) | quest_ai_runner/core/ask_policy.py |  |
+| `show-the-ais-work:terminal_trail` | The terminal draws the Trail from the hub's renderers | quest_ai_runner/textual_ui_trail.py |  |
 
 ## Metrics
 
@@ -534,7 +553,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-guide-by-feedback`, Repeat-correction recall and precision over feedback sequences: `esoi run feedback_loop --impl ledger_guidance`
 - `metric-talk-over-a-channel`, Channel transport conformance to the gateway wire contract: `esoi run talk_over_a_channel --impl openclaw_bridge`
 - `metric-replay-known-operations`, Fast-path hit rate and parity with the planner-only path: `esoi run recipe_fast_path --impl recipe_replay_offline`
-- `metric-watch-a-run`, Overseer digest evidence and signal correctness on labelled scenarios: `esoi run overseer_signals --impl digest_probe`
+- `metric-watch-a-run`, Overseer digest evidence and signal correctness on labelled scenarios: `esoi run overseer_signals --impl live_model; esoi run overseer_signals --impl digest_probe`
 - `metric-detect-stale-cards`, Staleness detection precision and recall over mutation cases: `esoi run staleness --impl store_sha256`
 - `metric-assemble-a-prompt`, Prompt size against budget and duplicated-block count: `esoi run prompt_size --impl live`
 - `metric-judge-a-decision`, Judge deterministic-half correctness with a scripted provider: `esoi run judges --impl qar_judges; esoi run judge_live_decisions --impl live_judges`
@@ -585,7 +604,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-hand-off-a-goal`, Hand-offs a person keeps per unit of cost and time: `esoi run hand_off_a_goal --impl model_judge`
 - `metric-draft-a-metric`, Drafted metrics accepted per unit of cost: `esoi run draft_a_metric --impl capped_model_draft`
 - `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `esoi run label_context_cards --impl fast_model_labels`
-- `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers`
+- `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers_live; esoi run assist_a_terminal_session --impl fast_model_helpers`
 - `metric-justified-model-spend`, Justified share of model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
 - `QME8`, Justified model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
 - `metric-answer-end-to-end`, Whole-path turns right on a small mixed set: `esoi run end_to_end --impl qar_live --sample 3 --max-calls 60`
@@ -601,3 +620,6 @@ Goals keep moving between a person's sessions, because the work they delegated g
 - `metric-quest-operations-parity`, unconfirmed: for Payal to confirm.: `none`
 - `metric-metric-earns-its-run`, unconfirmed: for Payal to confirm.: `esoi run evolve_by_metric --impl structure_library`
 - `metric-harness-context-subagents-recursion-ranked`, unconfirmed: for Payal to confirm.: `esoi run deep_runner --impl subprocess_runner`
+- `metric-work-trace-experience`, What is shown of the AI's work is true, the same for everyone, and earns its place: `esoi run work_trace_experience --impl trail`
+- `metric-interim-reply-truthful-and-useful`, Interim messages and asks that are true, not repeated and only where a person is needed: `esoi run interim_reply --impl gated`
+- `metric-terminal-uses-hub-renderers`, The terminal shows the AI's work with the hub's rules and words, and keeps no copy: `python3 -m pytest tests/test_terminal_trail.py tests/test_terminal_uses_hub_renderers.py`
