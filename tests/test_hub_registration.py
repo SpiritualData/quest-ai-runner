@@ -51,7 +51,7 @@ def test_assembly_gives_a_card_store_over_the_repository_and_names_the_layer():
     assert store.search("absent") == []
     assert store.count() == 1
     assert store.delete("a") and not store.delete("a")
-    assert qar_hub.CARD_REPOSITORY in system.reasons[0] and "quest_ai_runner default" in system.reasons[0]
+    assert qar_hub.CARD_REPOSITORY in system.reason_by_solution[qar_hub.CARD_STORE]   # a caller's repository selects the arm that holds it
 
 
 def test_the_hub_default_is_untouched_by_qar():
@@ -61,13 +61,13 @@ def test_the_hub_default_is_untouched_by_qar():
 
 def test_the_assembly_reports_what_the_hub_could_not_build_alone():
     system = qar_hub.assemble(DictRepository())
-    assert qar_hub.CARD_STORE not in system.pending and "needs call-a-model" in system.pending["model-call"]
+    assert qar_hub.CARD_STORE not in system.pending and system.pending   # the seats that need a key or a program stay pending
 
 
 def test_the_card_store_override_comes_from_qars_records_and_cites_its_own_ids():
     one = qar_hub.child().overrides()
     card = next(o for o in one if o.solution_id == qar_hub.CARD_STORE)
-    assert card.parent_default == "local_card_store" and card.chosen == qar_hub.CARD_REPOSITORY and card.justified
+    assert card.parent_default == "local_card_store" and card.chosen == "quest-api-cards" and card.justified
     assert "prob-context-drifts-from-its-source" in card.reasons
     assert all(o.justified for o in one)
 

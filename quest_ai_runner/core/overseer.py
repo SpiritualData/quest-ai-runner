@@ -142,5 +142,5 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
 
 
 OVERSEER_SPEC = declare(
-    "watch-a-run.overseer", solution="watch-a-run", metric="metric-watch-a-run",
+    "watch-a-run.overseer", solution="watch-for-risk", metric="metric-watch-a-run",
     tier="caller", cache_layer="none", template=OVERSEER_PROMPT, output_schema=OVERSEE_TOOL)

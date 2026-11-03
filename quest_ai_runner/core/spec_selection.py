@@ -73,7 +73,7 @@ def run(strategy: str, task: str, index: Dict[str, Any], provider: Any, model: O
                             expand=expand, ranked_kinds=kinds, gate=GATE, line_text=None)
 
 
-@solution("spec-selection")
+@solution("spec-selection", example={"task": "which solution picks the model tier?", "index": {"entries": []}})
 def select_specs(task: str, index: Dict[str, Any], *, provider: Any = None, model: Optional[str] = None,
                  vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                  batch_size: int = 10, max_workers: int = 4, expand: int = 1,

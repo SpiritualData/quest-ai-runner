@@ -9,6 +9,8 @@ import os
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from esoi import implementation
+from hubofhubs import arm_needs as needs
+from hubofhubs.models.claude_cli import ClaudeCliProvider
 from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
 from hubofhubs.models.router import MultiProvider
 
@@ -69,9 +71,15 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
 
 
 @implementation("call-a-model", "multi_provider")
-def routed(primary: Any, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
+def routed(primary: Any = None, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
            fallback_models: Sequence[str] = ()) -> MultiProvider:
     """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, spend tagging by spec,
-    and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``)."""
+    and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``). With no
+    ``primary`` the router is built over the hub's default ``call-a-model`` arm, the Claude Code subscription (``claude``)."""
+    if primary is None:
+        primary = ClaudeCliProvider()
     return MultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES,
                          limit_message=limit_message(usage_tracker), spec_of=active_spec, fallback_models=fallback_models)
+
+
+routed.REQUIRES = (needs.CLAUDE_BINARY,)

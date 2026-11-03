@@ -9,15 +9,15 @@ solutions that play them. The second shows the outside tools, services and data 
 
 ```mermaid
 flowchart TB
-  HM["Higher mind<br/>AI rep, intent hierarchy<br/>hold-the-long-view, select-a-rep<br/>runner/personas.py"]
+  HM["Higher mind<br/>AI rep, intent hierarchy<br/>hold-the-intents, select-a-rep<br/>runner/personas.py"]
   WI["World in<br/>chat, queued tasks<br/>runner/poller.py"]
-  SUB["Subconscious + Intuition<br/>admit-to-the-mind<br/>core/card_filter.py"]
-  MIND["Mind<br/>keep-a-working-stream<br/>core/orchestrator.py"]
+  SUB["Subconscious + Intuition<br/>remember-and-recall<br/>core/card_filter.py"]
+  MIND["Mind<br/>reason-and-answer<br/>core/orchestrator.py"]
   SCI["Science<br/>know-the-world<br/>adapters/web_research.py"]
   CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/goal_metrics.py"]
-  OV["Overseer<br/>risk check<br/>watch-a-run<br/>core/overseer.py"]
+  OV["Overseer<br/>risk check<br/>watch-for-risk<br/>core/overseer.py"]
   BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
-  WO["World out<br/>acts outside Quest<br/>act-in-the-world<br/>adapters/acp_deep_runner.py"]
+  WO["World out<br/>acts outside Quest<br/>claim-reach<br/>adapters/acp_deep_runner.py"]
   WI --> SUB --> MIND --> CT --> OV
   OV --> BODY
   OV --> WO
@@ -82,13 +82,13 @@ The table is generated from `esoi/solutions.csv` and `esoi/metrics.csv` by
 | Part | QAR component | Solution | Metric id | Status |
 |---|---|---|---|---|
 | World (input) | `quest_ai_runner/runner/poller.py` | `run-queued-tasks` | `metric-run-queued-tasks` | arm built, selected: qar_runner |
-| Subconscious, incl. Intuition | `quest_ai_runner/core/card_filter.py` | `admit-to-the-mind` | `metric-admit-to-the-mind` | arm built, selected: recency_window |
-| Mind | `quest_ai_runner/core/orchestrator.py` | `keep-a-working-stream` | `metric-keep-a-working-stream` | arm built, selected: rebuilt_per_step |
+| Subconscious, incl. Intuition | `quest_ai_runner/core/card_filter.py` | `remember-and-recall` | `metric-admit-to-the-mind` | arm built, selected: recency_window |
+| Mind | `quest_ai_runner/core/orchestrator.py` | `reason-and-answer` | `metric-keep-a-working-stream` | arm built, selected: rebuilt_per_step |
 | Science | `quest_ai_runner/adapters/web_research.py` | `know-the-world` | `metric-know-the-world` | arm built, selected: web_with_support_check |
 | Critical thinking | `quest_ai_runner/core/goal_metrics.py` | `think-critically` | `metric-think-critically` | arm built, selected: deep_runs_only |
-| Overseer | `quest_ai_runner/core/overseer.py` | `watch-a-run` | `metric-watch-a-run` | arm built, selected: overseer |
+| Overseer | `quest_ai_runner/core/overseer.py` | `watch-for-risk` | `metric-watch-a-run` | arm built, selected: overseer |
 | Body | `quest_ai_runner/runner/quest_client.py` | `act-as-the-body` | `metric-act-as-the-body` | arm built, selected: card_and_reads |
-| World (act) | `quest_ai_runner/adapters/acp_deep_runner.py` | `act-in-the-world` | `metric-act-in-the-world` | arm built, selected: coding_agent_prompt_reach |
-| Higher mind | `quest_ai_runner/runner/personas.py` | `hold-the-long-view` | `metric-hold-the-long-view` | arm built, selected: separate_stores |
+| World (act) | `quest_ai_runner/adapters/acp_deep_runner.py` | `claim-reach` | `metric-claim-reach` | arm built, selected: coding_agent_prompt_reach |
+| Higher mind | `quest_ai_runner/runner/personas.py` | `hold-the-intents` | `metric-hold-the-long-view` | arm built, selected: separate_stores |
 | Rep selection | `quest_ai_runner/runner/personas.py` | `select-a-rep` | `metric-select-a-rep` | arm built, selected: persona_resolver_precedence |
 <!-- anatomy-table:end -->

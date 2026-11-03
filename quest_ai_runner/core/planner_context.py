@@ -6,8 +6,12 @@ decides what to do with the answer stays in the orchestrator. ``orchestrator`` r
 here, so existing imports keep working.
 """
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
+from esoi import implementation
+from hubofhubs.card import Card
+from hubofhubs.ports.context import AssembledContext
+from hubofhubs.seats import CardStore
 from hubofhubs.critique.link_detect import MAX_LISTED_LINKS, links_in_message
 from .planner_prompt import DECLINED_PROPOSALS_NOTE
 
@@ -503,3 +507,27 @@ def cap_section(text: str, max_chars: int, *, keep: str = "tail") -> str:
 def gathered_content(gathered: List[Any]) -> List[Any]:
     """``gathered`` without ``planner_only`` notes: what the turn actually read."""
     return [o for o in (gathered or []) if not (isinstance(o, dict) and o.get("planner_only"))]
+
+
+@implementation("remember-and-recall", "recency_window")
+class RecencyWindow:
+    """What a request recalls: the cards of the card store that match its words, shown as the planner's context
+    view. ``recall`` answers a query with the matching cards; ``assemble`` renders the same cards as the pre-flight context the
+    loop reads; ``record`` has nothing to write back because the cards live in the store."""
+
+    def __init__(self, cards: CardStore) -> None:
+        self.cards = cards
+
+    def recall(self, query: str, limit: int = 5) -> Sequence[Card]:
+        return list(self.cards.search(query, limit))
+
+    def assemble(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event: Optional[Any] = None) -> AssembledContext:
+        try:
+            found = self.recall(task_text)
+        except Exception:   # an assembler never raises: a store that fails answers with no context
+            return AssembledContext()
+        view = "\n".join(f"- {card.id}: {card.text}" for card in found)
+        return AssembledContext(context_view=view, card_ids=[card.id for card in found])
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        return None

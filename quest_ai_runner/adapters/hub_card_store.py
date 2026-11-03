@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
+from esoi.requirements import api, env
 from hubofhubs.card import Card
 
 
@@ -59,3 +60,16 @@ class CardRepositoryStore:
 
     def count(self) -> int:
         return len(self.repository.load_all())
+
+
+@implementation("card-store", "quest-api-cards", scope="quest_ai_runner")
+class QuestApiCards(CardRepositoryStore):
+    """Keeps hub ``Card`` objects in the Quest backend's card API: the repository every Quest deployment keeps its cards in, reached
+    at ``QUEST_BASE_URL`` (or ``QUEST_API_URL``) with ``QUEST_API_KEY``, so the seat needs nothing passed once those are set."""
+
+    REQUIRES = (api("Quest", key=env("QUEST_API_KEY", option="api_key", secret=True)),
+                env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)))
+
+    def __init__(self, base_url: str, api_key: str) -> None:
+        from .quest_api_card_repository import QuestApiCardRepository
+        super().__init__(QuestApiCardRepository(base_url=base_url, api_key=api_key))

@@ -6,7 +6,7 @@ Goals keep moving between a person's sessions, because the work they delegated g
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and QS1 is that loop. QS1 takes a request in through talk-over-a-channel, operate-from-a-terminal, receive-input-mid-run and run-queued-tasks, hands it to route-a-message, and answers chat turns through answer-a-turn. It grounds the answer in the person's own material through select-context, gather-evidence, remember-conversations, recall-recent-context, resolve-references and cache-cards, with persist-cards and index-by-meaning keeping the cards, and it keeps the prompt in order through assemble-a-prompt and the model choice through call-a-model, choose-a-model-tier and track-usage-and-cost. It does the work through operate-a-quest, write-files, write-through-mcp and run-deep-work, watches it through watch-a-run and detect-a-stalled-run, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, and brings a step only a person may take to that person through escalate-to-a-human. It shows what it is doing through show-progress, learns from corrections through guide-by-feedback and store-feedback, and replays what worked through replay-known-operations. It keeps itself measurable and open through evolve-by-metric, select-an-implementation, configure-a-lane, verify-offline, keep-secrets-out, behave-by-esoi and judge-esoi-behavior, and it is offered to others through expose-the-public-api, learn-by-example and explain-qar. The specification of the loop is spread over named areas. keep-a-working-stream is the mind, one goal-focused stream per request, and admit-to-the-mind is the subconscious that admits the person's own cards into it, with card-store holding them, bound-card-growth and repair-a-card-store keeping the store from inflating, choose-what-to-index choosing what deserves a card, label-context-cards and detect-stale-cards keeping them honest, and search-cards-and-specs searching cards and specifications together. know-the-world answers questions about the world through search-the-web. think-critically holds deep runs to their metric through iterate-by-spec, spec-selection, ground-in-intent, draft-a-metric and gate-an-autopilot-pass, and core-ml-tasks, answer-end-to-end and tag-solutions measure the classifiers, the whole turn and the reach of a change. act-as-the-body does the work and act-in-the-world claims only the reach it has, while use-open-source-hubs prefers a standard hub to a bespoke integration and access-quest-operations reaches Quest's operations. hold-the-long-view keeps the standing view of a representative across turns, select-a-rep picks the representative, hand-off-a-goal decides who owns a new goal, and guide-toward-the-long-term-goal keeps work aimed at the person's end, with persist-predictions saving what was learned. The person is kept informed through reply-in-steps, ask-on-block, narrate-a-turn, show-the-ais-work, explain-an-answer, describe-an-attachment and assist-a-terminal-session, and feed-context-sources adds what changed in a work item, while justify-model-calls accounts for every model call.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop. do-grounded-work takes a request in through talk-over-a-channel, operate-from-a-terminal, receive-input-mid-run and run-queued-tasks, hands it to route-a-message, and answers chat turns through answer-a-turn. It grounds the answer in the person's own material through select-context, gather-evidence, remember-conversations, recall-recent-context, resolve-references and cache-cards, with persist-cards and index-by-meaning keeping the cards, and it keeps the prompt in order through assemble-a-prompt and the model choice through call-a-model, choose-a-model-tier and track-usage-and-cost. It does the work through operate-a-quest, write-files, write-through-mcp and run-deep-work, watches it through watch-for-risk and detect-a-stalled-run, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, and brings a step only a person may take to that person through escalate-to-a-human. It shows what it is doing through show-progress, learns from corrections through guide-by-feedback and store-feedback, and replays what worked through replay-known-operations. It keeps itself measurable and open through keep-it-generic, select-an-implementation, configure-a-lane, verify-offline, keep-secrets-out, behave-by-esoi and judge-esoi-behavior, and it is offered to others through expose-the-public-api, learn-by-example and explain-qar. The specification of the loop is spread over named areas. reason-and-answer is the mind, one goal-focused stream per request, and remember-and-recall is the subconscious that admits the person's own cards into it, with card-store holding them, bound-card-growth and repair-a-card-store keeping the store from inflating, choose-what-to-index choosing what deserves a card, label-context-cards and detect-stale-cards keeping them honest, and search-cards-and-specs searching cards and specifications together. know-the-world answers questions about the world through search-the-web. think-critically holds deep runs to their metric through iterate-by-spec, spec-selection, ground-in-intent, draft-a-metric and gate-an-autopilot-pass, and core-ml-tasks, answer-end-to-end and tag-solutions measure the classifiers, the whole turn and the reach of a change. act-as-the-body does the work and claim-reach claims only the reach it has, while use-open-source-hubs prefers a standard hub to a bespoke integration and access-quest-operations reaches Quest's operations. hold-the-intents keeps the standing view of a representative across turns, select-a-rep picks the representative, hand-off-a-goal decides who owns a new goal, and guide-toward-the-long-term-goal keeps work aimed at the person's end, with persist-predictions saving what was learned. The person is kept informed through reply-in-steps, ask-on-block, narrate-a-turn, show-the-ais-work, explain-an-answer, describe-an-attachment and assist-a-terminal-session, and feed-context-sources adds what changed in a work item, while justify-model-calls accounts for every model call.
 
 ## Problems
 
@@ -170,7 +170,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
-| `QS1` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | QM1 | QAR overall: QS1's sub-metrics weighted by its ideals, with floor and ceiling;Passing chat turns per dollar;Delegated tasks meeting their standard;Exact and consented changes;Data kept in scope;Engine reuse;Measured coverage |
+| `do-grounded-work` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | library | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling;Passing chat turns per dollar;Delegated tasks meeting their standard;Exact and consented changes;Data kept in scope;Engine reuse;Measured coverage |
 | `route-a-message` | Cost-aware message router | evaluation/components/classification/impls/qar_planner.py | Routing correctness over the classification cases |
 | `answer-a-turn` | Grounded chat turn handler | evaluation/components/chat_quality/impls/dev_quest_chat.py | Judge pass rate over the chat quality cases |
 | `operate-a-quest` | Quest change executor | evaluation/components/quest_ops/impls/qar_orchestrator.py | Final quest state against the request over the quest operation cases |
@@ -190,7 +190,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `guide-by-feedback` | Feedback-to-guidance loop | universal | Repeat-correction recall and precision over feedback sequences |
 | `talk-over-a-channel` | Live messaging channel transport | openclaw | Channel transport conformance to the gateway wire contract |
 | `replay-known-operations` | Learned-operation fast path | evaluation/components/recipe_fast_path/impls/recipe_replay.py | Fast-path hit rate and parity with the planner-only path |
-| `watch-a-run` | Overseer: risk management that raises the overall metric | quest_ai_runner/core/overseer.py | Overseer digest evidence and signal correctness on labelled scenarios |
+| `watch-for-risk` | Overseer: risk management that raises the overall metric | quest_ai_runner/core/overseer.py | Overseer digest evidence and signal correctness on labelled scenarios |
 | `detect-stale-cards` | Source-change staleness detector | evaluation/components/staleness/impls/store_sha256.py | Staleness detection precision and recall over mutation cases |
 | `assemble-a-prompt` | Budgeted prompt assembler | evaluation/components/prompt_size/impls/live.py | Prompt size against budget and duplicated-block count |
 | `judge-a-decision` | Guarded model-verdict judge | evaluation/components/judges/impls/qar_judges.py | Judge deterministic-half correctness with a scripted provider |
@@ -216,7 +216,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `explain-qar` | Documentation coverage and voice check | evaluation/components/explain_qar/impls/shipped_docs.py | Documentation coverage and voice conformance |
 | `persist-predictions` | Scoped prediction store | file | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
-| `evolve-by-metric` | Evolve by metric | structure-library | Parts selected by measurement;unconfirmed: for Payal to confirm. |
+| `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement;unconfirmed: for Payal to confirm. |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation | message-route-family | Accuracy of core ML tasks over labelled cases |
@@ -226,12 +226,12 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `search-cards-and-specs` | Unified card and specification search | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
-| `keep-a-working-stream` | Mind: one goal-focused working stream per request | rebuilt_per_step | Step continuity at cost over multi-step requests |
-| `admit-to-the-mind` | Subconscious: the person's own knowledge, admitted to the working stream by the goal | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
+| `reason-and-answer` | Mind: one goal-focused working stream per request | rebuilt_per_step | Step continuity at cost over multi-step requests |
+| `remember-and-recall` | Subconscious: the person's own knowledge, admitted to the working stream by the goal | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
 | `know-the-world` | Science: evidence-weighted knowledge about the world | web_with_support_check | Supported and calibrated answers to world questions |
-| `act-in-the-world` | World: doing things outside the host through the best harness, with declared reach and receipts | coding_agent_prompt_reach | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
+| `claim-reach` | World: doing things outside the host through the best harness, with declared reach and receipts | coding_agent_prompt_reach | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
-| `hold-the-long-view` | Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| `hold-the-intents` | Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
 | `select-a-rep` | Representative selection: which AI representative handles a request, and whose higher mind grounds it | persona_resolver_precedence | Representative choice accuracy and thread consistency |
 | `narrate-a-turn` | First-beat narration | model_beat | Supported first beats within the time and cost the turn allows |
@@ -245,8 +245,8 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm. |
 | `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | guided_v2 | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `use-open-source-hubs` | Open-source hubs before bespoke integrations | registry_scan | Hub of hubs: coverage, integration by configuration, research freshness, code structure |
-| `access-quest-operations` | unconfirmed: for Payal to confirm. access-quest-operations |  | unconfirmed: for Payal to confirm. |
-| `card-store` | unconfirmed: for Payal to confirm. QAR card repository as the hub card store | qar-card-repository | none yet |
+| `access-quest-operations` | unconfirmed: for Payal to confirm. access-quest-operations | quest_client | unconfirmed: for Payal to confirm. |
+| `card-store` | unconfirmed: for Payal to confirm. QAR card repository as the hub card store | quest-api-cards | none yet |
 | `show-the-ais-work` | Show the AI's work and next steps | trail | What is shown of the AI's work is true, the same for everyone, and earns its place |
 | `reply-in-steps` | Reply in steps when the goal is not met yet | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
 | `ask-on-block` | Ask on a block that only a person can lift | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
@@ -255,10 +255,6 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 
 | Implementation | Name | Where | Sub-intent |
 |---|---|---|---|
-| `QS1:QM1` | quest-ai-runner library |  |  |
-| `QS1:QM2` | Per-consumer worker |  |  |
-| `QS1:QM3` | Agent framework with Quest glue |  |  |
-| `QS1:QM4` | Deep runner only |  |  |
 | `route-a-message:qar_planner` | Full planner decision | evaluation/components/classification/impls/qar_planner.py |  |
 | `route-a-message:keyword_rules` | Keyword rules floor | evaluation/components/classification/impls/keyword_rules.py |  |
 | `answer-a-turn:dev_quest_chat` | Live chat on a disposable world | evaluation/components/chat_quality/impls/dev_quest_chat.py |  |
@@ -330,9 +326,9 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `replay-known-operations:planner_only` | Live planner-only baseline | evaluation/components/recipe_fast_path/impls/planner_only.py |  |
 | `replay-known-operations:recipe_replay_offline` | Offline recipe replay arm | evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py |  |
 | `replay-known-operations:planner_only_offline` | Offline planner-only baseline | evaluation/components/recipe_fast_path/impls/planner_only_offline.py |  |
-| `watch-a-run:overseer` | Digest-driven overseer | quest_ai_runner/core/overseer.py |  |
-| `watch-a-run:digest_probe` | No-judgement digest probe | evaluation/components/overseer_signals/impls/digest_probe.py |  |
-| `watch-a-run:live_model` | Live overseer model arm | evaluation/components/overseer_signals/impls/live_model.py |  |
+| `watch-for-risk:overseer` | Digest-driven overseer | quest_ai_runner/core/overseer.py |  |
+| `watch-for-risk:digest_probe` | No-judgement digest probe | evaluation/components/overseer_signals/impls/digest_probe.py |  |
+| `watch-for-risk:live_model` | Live overseer model arm | evaluation/components/overseer_signals/impls/live_model.py |  |
 | `detect-stale-cards:store_sha256` | Content-hash fingerprint check | evaluation/components/staleness/impls/store_sha256.py |  |
 | `detect-stale-cards:mtime_size` | Timestamp-and-size baseline | evaluation/components/staleness/impls/mtime_size.py |  |
 | `assemble-a-prompt:live` | Live assembly-point driver | evaluation/components/prompt_size/impls/live.py |  |
@@ -402,7 +398,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `persist-predictions:memory_store` | In-memory reference store | evaluation/components/persist_predictions/impls/memory_store.py |  |
 | `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | quest_ai_runner/runner/autopilot_gates.py |  |
 | `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py |  |
-| `evolve-by-metric:structure-library` | Apply the evolvable-structure library | and a runtime one because implementations are declared with its decorators; a rule or format change in the library needs a migration here; offline arms only unless a paid arm is run by decision. |  |
+| `keep-it-generic:structure-library` | Apply the evolvable-structure library | quest_ai_runner/hub.py |  |
 | `search-the-web:brave` | Brave search backend | quest_ai_runner/adapters/web_search_backends.py |  |
 | `search-the-web:gemini` | Gemini grounded search backend | quest_ai_runner/adapters/web_search_backends.py |  |
 | `search-the-web:provider` | Provider-native search backend | quest_ai_runner/adapters/web_search_backends.py |  |
@@ -442,37 +438,37 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `repair-a-card-store:repository_tidy` | Repository tidy | quest_ai_runner/adapters/card_store_tidy.py |  |
 | `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | quest_ai_runner/adapters/context_store_heal.py |  |
 | `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
-| `keep-a-working-stream:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | quest_ai_runner/core/orchestrator_planning.py |  |
-| `keep-a-working-stream:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | quest_ai_runner/core/orchestrator_planning.py |  |
-| `keep-a-working-stream:append_only_stream` | Carried message stream per request (proposed) |  |  |
-| `keep-a-working-stream:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
-| `admit-to-the-mind:recency_window` | Start-of-run card filter and a recency window (today) | quest_ai_runner/core/planner_context.py |  |
-| `admit-to-the-mind:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
-| `admit-to-the-mind:score_thresholds` | Score thresholds per source (proposed) |  |  |
-| `admit-to-the-mind:thresholds_then_judge` | Thresholds with a judge on the borderline (proposed) |  |  |
+| `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | quest_ai_runner/core/orchestrator_planning.py |  |
+| `reason-and-answer:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | quest_ai_runner/core/orchestrator_planning.py |  |
+| `reason-and-answer:append_only_stream` | Carried message stream per request (proposed) |  |  |
+| `reason-and-answer:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
+| `remember-and-recall:recency_window` | Start-of-run card filter and a recency window (today) | quest_ai_runner/core/planner_context.py |  |
+| `remember-and-recall:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
+| `remember-and-recall:score_thresholds` | Score thresholds per source (proposed) |  |  |
+| `remember-and-recall:thresholds_then_judge` | Thresholds with a judge on the borderline (proposed) |  |  |
 | `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | quest_ai_runner/adapters/web_research.py |  |
 | `know-the-world:research_sources_first` | Host research sources first, then the web (proposed) |  |  |
 | `know-the-world:evidence_weighted` | Findings weighed by a host's evidence-estimation service (proposed) |  |  |
-| `act-in-the-world:coding_agent_prompt_reach` | Coding agent, reach described in the prompt (today) | quest_ai_runner/core/tools.py |  |
-| `act-in-the-world:coding_agent_reach_judge` | Coding agent with the host reach summary and reach judge (built, off by default) | quest_ai_runner/core/reach_judge.py |  |
-| `act-in-the-world:coding_agent_declared_inventory` | Coding agent with one declared inventory and receipts (proposed) |  |  |
+| `claim-reach:coding_agent_prompt_reach` | Coding agent, reach described in the prompt (today) | quest_ai_runner/core/tools.py |  |
+| `claim-reach:coding_agent_reach_judge` | Coding agent with the host reach summary and reach judge (built, off by default) | quest_ai_runner/core/reach_judge.py |  |
+| `claim-reach:coding_agent_declared_inventory` | Coding agent with one declared inventory and receipts (proposed) |  |  |
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | quest_ai_runner/runner/quest_folder_index.py |  |
 | `act-as-the-body:read_after_write` | Read back what a change touched (proposed) |  |  |
 | `act-as-the-body:live_read_only` | A live read behind every state claim (proposed) |  |  |
-| `hold-the-long-view:separate_stores` | Separate stores read at the start of a request (today) | quest_ai_runner/core/orchestrator_run_begin.py |  |
-| `hold-the-long-view:per_quest_note` | Maintained view per quest only (proposed) |  |  |
-| `hold-the-long-view:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
-| `admit-to-the-mind:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
-| `watch-a-run:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
-| `watch-a-run:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
+| `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | quest_ai_runner/core/orchestrator_run_begin.py |  |
+| `hold-the-intents:per_quest_note` | Maintained view per quest only (proposed) |  |  |
+| `hold-the-intents:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
+| `remember-and-recall:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
+| `watch-for-risk:no_overseer` | No overseer (configuration off) | quest_ai_runner/core/orchestrator_types.py |  |
+| `watch-for-risk:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
 | `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | quest_ai_runner/core/goal_metrics.py |  |
 | `think-critically:instruction_only` | Standing instruction alone (floor) | quest_ai_runner/core/standing_instructions.py |  |
 | `think-critically:every_request_measured` | Every request measured by code (proposed) |  |  |
 | `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
-| `act-in-the-world:best_open_source_harness` | Best open-source agent harness by the combined metric, with declared inventory (proposed) |  |  |
-| `watch-a-run:per_risk_response` | Per-risk response chosen by metric (proposed) |  |  |
-| `hold-the-long-view:per_intent_cascade` | One view per intent, cascading down (proposed) |  |  |
-| `hold-the-long-view:per_rep_assigned_view` | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) |  |  |
+| `claim-reach:best_open_source_harness` | Best open-source agent harness by the combined metric, with declared inventory (proposed) |  |  |
+| `watch-for-risk:per_risk_response` | Per-risk response chosen by metric (proposed) |  |  |
+| `hold-the-intents:per_intent_cascade` | One view per intent, cascading down (proposed) |  |  |
+| `hold-the-intents:per_rep_assigned_view` | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) |  |  |
 | `select-a-rep:persona_resolver_precedence` | Persona resolver precedence for queued tasks (today) | quest_ai_runner/runner/personas.py |  |
 | `select-a-rep:host_assigned_classifier` | Host chat classifier among assigned representatives (today, in the host) |  |  |
 | `select-a-rep:thread_holds_its_rep` | A thread keeps its representative (proposed) |  |  |
@@ -504,13 +500,13 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `guide-toward-the-long-term-goal:no_nudge` | Plain answer only (floor) |  |  |
 | `use-open-source-hubs:registry_scan` | Registry read together with the code (today) | evaluation/components/hub_of_hubs/impls/registry_scan.py |  |
 | `guide-toward-the-long-term-goal:guided_v2` | Long-term guidance section in the reply voice | quest_ai_runner/core/auxiliary_prompts.py |  |
-| `evolve-by-metric:structure_library` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/structure_library.py |  |
-| `evolve-by-metric:keep_current` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/keep_current.py |  |
+| `keep-it-generic:structure_library` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/structure_library.py |  |
+| `keep-it-generic:keep_current` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/keep_current.py |  |
 | `core-ml-tasks:labelled_rows` | unconfirmed: for Payal to confirm | evaluation/components/core_ml_tasks/impls/labelled_rows.py |  |
 | `core-ml-tasks:none_mapped` | unconfirmed: for Payal to confirm | evaluation/components/core_ml_tasks/impls/none_mapped.py |  |
 | `know-the-world:memory_only` | unconfirmed: for Payal to confirm | evaluation/components/know_the_world/impls/memory_only.py |  |
-| `act-in-the-world:scripted_ideal` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
-| `act-in-the-world:rules_only` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/rules_only.py |  |
+| `claim-reach:scripted_ideal` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
+| `claim-reach:rules_only` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/rules_only.py |  |
 | `assemble-a-prompt:situational` | unconfirmed: for Payal to confirm | evaluation/components/prompt_size/impls/situational.py |  |
 | `card-store:qar-card-repository` | qar-card-repository | quest_ai_runner/adapters/hub_card_store.py |  |
 | `run-deep-work:lean_guarded` | Lean guarded launch of the deep worker | quest_ai_runner/core/deep_launch.py |  |
@@ -524,6 +520,12 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `ask-on-block:every_attempt` | An ask whenever a question is present (baseline) | evaluation/components/interim_reply/impls/every_attempt.py |  |
 | `ask-on-block:gated` | Ask only on a person-only block (core/ask_policy.py) | quest_ai_runner/core/ask_policy.py |  |
 | `show-the-ais-work:terminal_trail` | The terminal draws the Trail from the hub's renderers | quest_ai_runner/textual_ui_trail.py |  |
+| `do-grounded-work:library` | quest-ai-runner library | quest_ai_runner/goal_agent.py |  |
+| `do-grounded-work:per-consumer-worker` | Per-consumer worker |  |  |
+| `do-grounded-work:agent-framework-with-quest-glue` | Agent framework with Quest glue |  |  |
+| `do-grounded-work:deep-runner-only` | Deep runner only |  |  |
+| `access-quest-operations:quest_client` | Quest HTTP client from the environment | quest_ai_runner/goal_agent.py |  |
+| `card-store:quest-api-cards` | Quest backend card API from the environment | quest_ai_runner/adapters/hub_card_store.py |  |
 
 ## Metrics
 
@@ -533,7 +535,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 - `QME4`, Data kept in scope: `none`
 - `QME5`, Engine reuse: `none`
 - `QME6`, Measured coverage: `none`
-- `metric-qar-overall`, QAR overall: QS1's sub-metrics weighted by its ideals, with floor and ceiling: `esoi run qar_overall --impl recorded_rows`
+- `metric-qar-overall`, QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling: `esoi run qar_overall --impl recorded_rows`
 - `metric-route-a-message`, Routing correctness over the classification cases: `esoi run classification --impl qar_planner`
 - `metric-answer-a-turn`, Judge pass rate over the chat quality cases: `esoi run chat_quality --impl dev_quest_chat`
 - `metric-operate-a-quest`, Final quest state against the request over the quest operation cases: `esoi run quest_ops --impl qar_orchestrator`
@@ -593,7 +595,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 - `metric-keep-a-working-stream`, Step continuity at cost over multi-step requests: `esoi run keep_a_working_stream --impl rebuilt_per_step --sample 3 --max-calls 40`
 - `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `esoi run admit_to_the_mind --impl recency_window`
 - `metric-know-the-world`, Supported and calibrated answers to world questions: `esoi run know_the_world --impl web_with_support_check`
-- `metric-act-in-the-world`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `esoi run act_in_the_world --impl scripted_ideal`
+- `metric-claim-reach`, Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety: `esoi run act_in_the_world --impl scripted_ideal`
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: `esoi run act_as_the_body --impl card_and_reads`
 - `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `esoi run hold_the_long_view --impl separate_stores`
 - `metric-think-critically`, Requests held to their ESOI metric by code: `esoi run think_critically --impl deep_runs_only`

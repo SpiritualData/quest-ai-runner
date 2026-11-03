@@ -57,7 +57,21 @@ if TYPE_CHECKING:  # pragma: no cover — typing only
 
 __version__ = "0.1.0"
 __all__ = ["core", "adapters", "runner", "config", "resources",
-           "load_config", "load_client", "assembler", "__version__"]
+           "load_config", "load_client", "assembler", "run", "__version__"]
+
+
+WHOLE_RUNNER = {"quest-ai-runner": "do-grounded-work"}   # the package's own name reaches the solution that is the whole runner
+
+
+def run(target, input=None, **overrides):
+    """One line for any solution or intent QAR knows (its own and every hub seat it builds on): ``quest_ai_runner.run(id,
+    input)`` returns what that solution's interface returns (``esoi.entry``). Every seat comes from QAR's selections, then
+    the hub's; keywords override only what differs; ``environ`` defaults to the process environment."""
+    from esoi.entry import run as entry_run
+    return entry_run(WHOLE_RUNNER.get(target, target), input, assembler=_hub.child(), **overrides)
+
+
+run.assembler = None   # bound lazily: _hub.child() builds QAR's Assembler on first use
 
 
 def assembler():

@@ -2339,7 +2339,7 @@
    "intent": "quest-ai-runner",
    "kind": "problem",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI1",
     "prob-deep-work-wanders",
     "prob-claimed-done-not-done",
@@ -2404,7 +2404,7 @@
    "intent": "quest-ai-runner",
    "kind": "problem",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI2",
     "prob-reply-misses-the-account",
     "prob-corrections-repeat",
@@ -2476,7 +2476,7 @@
    "intent": "quest-ai-runner",
    "kind": "problem",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI3",
     "prob-misrouted-message",
     "prob-unrequested-or-partial-changes",
@@ -2530,7 +2530,7 @@
    "intent": "quest-ai-runner",
    "kind": "problem",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI4",
     "prob-public-repo-leaks",
     "prob-integration-is-trial-and-error",
@@ -2591,7 +2591,7 @@
    "intent": "quest-ai-runner",
    "kind": "problem",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "evolve-by-metric",
     "QI5",
     "prob-vendor-outage-halts-work",
@@ -2651,7 +2651,7 @@
    "intent": "quest-ai-runner",
    "kind": "problem",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "evolve-by-metric",
     "QI6",
     "prob-spend-surprises",
@@ -4322,7 +4322,7 @@
     "ideal-dependable-delivery",
     "ideal-permitted-timing",
     "QME2",
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote.",
    "terms": {
@@ -4364,7 +4364,7 @@
     "ideal-purposeful-work",
     "QME1",
     "QME4",
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "Every answer and action rests on the person's own goals, material and preferences, and never on another person's.",
    "terms": {
@@ -4402,7 +4402,7 @@
     "ideal-legible-progress",
     "ideal-informed-consent",
     "QME3",
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.",
    "terms": {
@@ -4438,7 +4438,7 @@
     "ideal-clean-publication",
     "ideal-trustworthy-interface",
     "QME5",
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "One domain-free engine serves every consumer, every lane and both chat and scheduled work, and differs only in configuration.",
    "terms": {
@@ -4475,7 +4475,7 @@
     "ideal-reliable-verdict",
     "QME6",
     "QME7",
-    "QS1",
+    "do-grounded-work",
     "evolve-by-metric"
    ],
    "summary": "Every part of QAR improves as the state of the art moves, with the best implementation chosen by its metric.",
@@ -4517,7 +4517,7 @@
     "QME2",
     "QME6",
     "QME7",
-    "QS1",
+    "do-grounded-work",
     "evolve-by-metric"
    ],
    "summary": "What AI work costs and how good it is are known before they surprise anyone.",
@@ -5520,11 +5520,11 @@
   },
   {
    "digest": "47970fc17c39",
-   "id": "QS1:QM1",
+   "id": "do-grounded-work:library",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "route-a-message",
     "answer-a-turn",
     "operate-a-quest",
@@ -5622,11 +5622,11 @@
   },
   {
    "digest": "9d9caac5a5b4",
-   "id": "QS1:QM2",
+   "id": "do-grounded-work:per-consumer-worker",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "Each product writes its own worker and chat backend around a model vendor's API.",
    "terms": {
@@ -5652,11 +5652,11 @@
   },
   {
    "digest": "a1996b86268c",
-   "id": "QS1:QM3",
+   "id": "do-grounded-work:agent-framework-with-quest-glue",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "Build the engine from a general framework (LangGraph, CrewAI, an agent SDK) and add Quest grounding, escalation and the executor as glue.",
    "terms": {
@@ -5690,11 +5690,11 @@
   },
   {
    "digest": "13702f5a89c7",
-   "id": "QS1:QM4",
+   "id": "do-grounded-work:deep-runner-only",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "QS1"
+    "do-grounded-work"
    ],
    "summary": "Hand every task straight to a coding agent such as Claude Code with the person's material available, with no routing or answering loop in front.",
    "terms": {
@@ -13949,7 +13949,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI2",
     "QI6"
    ],
@@ -13980,7 +13980,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI1",
     "QI6"
    ],
@@ -14008,7 +14008,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI3"
    ],
    "summary": "unrequested writes, missing requested writes, and human-only steps taken without a person",
@@ -14034,7 +14034,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI2"
    ],
    "summary": "items from another user, team or quest reaching a prompt or store",
@@ -14059,7 +14059,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI4"
    ],
    "summary": "glue each consumer writes, and engine code copied into a consumer",
@@ -14081,7 +14081,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "QS1",
+    "do-grounded-work",
     "QI5",
     "QI6"
    ],
@@ -16979,7 +16979,7 @@
   },
   {
    "digest": "0cd0a032ec96",
-   "id": "QS1",
+   "id": "do-grounded-work",
    "intent": "quest-ai-runner",
    "kind": "solution",
    "refs": [
@@ -17001,10 +17001,10 @@
     "QME4",
     "QME5",
     "QME6",
-    "QS1:QM1",
-    "QS1:QM2",
-    "QS1:QM3",
-    "QS1:QM4"
+    "do-grounded-work:library",
+    "do-grounded-work:per-consumer-worker",
+    "do-grounded-work:agent-framework-with-quest-glue",
+    "do-grounded-work:deep-runner-only"
    ],
    "summary": "Use for answering chat turns about a person's or team's goals, carrying out requested changes, running queued and recurring AI tasks to a written standard, doing long autonomous work through a deep runner, and escalating decisions to the right person. Intentionally avoids: being...",
    "terms": {
@@ -17081,7 +17081,7 @@
     "prob-big-model-for-easy-work",
     "ideal-proportionate-routing",
     "metric-route-a-message",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "route-a-message:qar_planner",
     "route-a-message:pre_route_then_planner",
     "route-a-message:single_prompt",
@@ -17165,7 +17165,7 @@
     "ideal-grounded-reply",
     "ideal-exact-change",
     "metric-answer-a-turn",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "answer-a-turn:dev_quest_chat",
     "answer-a-turn:reference_replies"
    ],
@@ -17244,7 +17244,7 @@
     "prob-misrouted-message",
     "ideal-exact-change",
     "metric-operate-a-quest",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "operate-a-quest:qar_orchestrator",
     "operate-a-quest:orchestrator_pre_route",
     "operate-a-quest:direct_tool_call",
@@ -17327,7 +17327,7 @@
     "ideal-grounded-reply",
     "ideal-contained-scope",
     "metric-gather-evidence",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "gather-evidence:files",
     "gather-evidence:cached_db",
     "gather-evidence:composite",
@@ -17413,7 +17413,7 @@
     "prob-vendor-outage-halts-work",
     "ideal-safe-search",
     "metric-search-the-web",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "search-the-web:web_research",
     "search-the-web:provider_web_search",
     "search-the-web:serper",
@@ -17498,7 +17498,7 @@
     "prob-big-model-for-easy-work",
     "ideal-right-sized-model",
     "metric-call-a-model",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "call-a-model:anthropic",
     "call-a-model:gemini",
     "call-a-model:openai",
@@ -17583,7 +17583,7 @@
     "ideal-accountable-autonomy",
     "ideal-verified-completion",
     "metric-run-deep-work",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "run-deep-work:subprocess",
     "run-deep-work:acp",
     "run-deep-work:fast_edit",
@@ -17667,7 +17667,7 @@
     "prob-deep-work-wanders",
     "ideal-accountable-autonomy",
     "metric-detect-a-stalled-run",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "detect-a-stalled-run:goal_runner",
     "detect-a-stalled-run:live_reviewer",
     "detect-a-stalled-run:rule_floor"
@@ -17747,7 +17747,7 @@
     "prob-human-only-steps-slip",
     "ideal-exact-change",
     "metric-write-files",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "write-files:files",
     "write-files:bounded_writer"
    ],
@@ -17825,7 +17825,7 @@
     "prob-unrequested-or-partial-changes",
     "ideal-exact-change",
     "metric-write-through-mcp",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "write-through-mcp:mcp",
     "write-through-mcp:allowlist_writer"
    ],
@@ -17904,7 +17904,7 @@
     "prob-deep-work-wanders",
     "ideal-informed-consent",
     "metric-escalate-to-a-human",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "escalate-to-a-human:quest_decision",
     "escalate-to-a-human:quest_decision_sink"
    ],
@@ -17982,7 +17982,7 @@
     "prob-progress-unreadable",
     "ideal-legible-progress",
     "metric-show-progress",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "show-progress:stream",
     "show-progress:progress_sinks",
     "show-progress:milestone"
@@ -18054,7 +18054,7 @@
     "ideal-unbroken-thread",
     "ideal-contained-scope",
     "metric-remember-conversations",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "remember-conversations:session_file"
    ],
    "summary": "Use for: resolving a short or anaphoric message against the current conversation, and recalling relevant earlier conversations of the same user or team as prompt context. Avoid: searching documents or cards (that is context selection), and returning any other user's conversation...",
@@ -18133,7 +18133,7 @@
     "ideal-findable-knowledge",
     "ideal-bounded-prompt",
     "metric-select-context",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "select-context:idf_docstrings",
     "select-context:idf_paths_only",
     "select-context:blind_grep",
@@ -18228,7 +18228,7 @@
     "ideal-current-knowledge",
     "ideal-contained-scope",
     "metric-persist-cards",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "persist-cards:filesystem",
     "persist-cards:qdrant",
     "persist-cards:quest_api"
@@ -18307,7 +18307,7 @@
     "prob-relevant-card-not-found",
     "ideal-findable-knowledge",
     "metric-index-by-meaning",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "index-by-meaning:qdrant"
    ],
    "summary": "Use for: finding cards or snippets by meaning, including paraphrases, with an index that keeps itself current. Avoid: exact-identifier search (use keyword or content search) and acting as the system of record for cards.",
@@ -18384,7 +18384,7 @@
     "prob-corrections-repeat",
     "ideal-lasting-correction",
     "metric-guide-by-feedback",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "guide-by-feedback:universal",
     "guide-by-feedback:ledger_guidance",
     "guide-by-feedback:no_memory",
@@ -18464,7 +18464,7 @@
     "prob-channel-messages-misdelivered",
     "ideal-dependable-delivery",
     "metric-talk-over-a-channel",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "talk-over-a-channel:openclaw",
     "talk-over-a-channel:openclaw_bridge"
    ],
@@ -18544,7 +18544,7 @@
     "ideal-remembered-work",
     "ideal-predictable-spend",
     "metric-replay-known-operations",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "replay-known-operations:recipe_replay",
     "replay-known-operations:planner_only",
     "replay-known-operations:recipe_replay_offline",
@@ -18625,7 +18625,7 @@
     "prob-progress-unreadable",
     "ideal-accountable-autonomy",
     "metric-watch-a-run",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "watch-a-run:overseer",
     "watch-a-run:digest_probe",
     "watch-a-run:live_model"
@@ -18704,7 +18704,7 @@
     "prob-context-drifts-from-its-source",
     "ideal-current-knowledge",
     "metric-detect-stale-cards",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "detect-stale-cards:store_sha256",
     "detect-stale-cards:mtime_size"
    ],
@@ -18784,7 +18784,7 @@
     "ideal-bounded-prompt",
     "ideal-predictable-spend",
     "metric-assemble-a-prompt",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "assemble-a-prompt:live"
    ],
    "summary": "Use for: composing each prompt from its parts so it fits a budget derived from the model window and cost per call, with no duplicated blocks. Avoid: judging whether the content is the right content (selection and evidence gathering own that) and unbounded concatenation.",
@@ -18863,7 +18863,7 @@
     "ideal-reliable-verdict",
     "ideal-verified-completion",
     "metric-judge-a-decision",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "judge-a-decision:qar_judges"
    ],
    "summary": "Use for: settling one narrow question (reach, quest choice, overseer signal, sufficiency) with a small model call and using the answer only when it is well formed. Avoid: letting a missing, malformed or hallucinated verdict change a turn, and broad open-ended decisions.",
@@ -18942,7 +18942,7 @@
     "ideal-grounded-reply",
     "ideal-remembered-work",
     "metric-guard-a-reply",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "guard-a-reply:qar_guards"
    ],
    "summary": "Use for: stripping unverified links from replies, recognising a repeated operation without confusing a near miss, and offering recurring asks as suggestions when they recur. Avoid: sending any link that has not been proven, writing on a lookalike request, and suggesting patterns...",
@@ -19021,7 +19021,7 @@
     "ideal-unbroken-thread",
     "ideal-contained-scope",
     "metric-feed-context-sources",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "feed-context-sources:base",
     "feed-context-sources:update_engine"
    ],
@@ -19101,7 +19101,7 @@
     "ideal-lasting-correction",
     "ideal-contained-scope",
     "metric-store-feedback",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "store-feedback:ledger",
     "store-feedback:ledger_guidance",
     "store-feedback:no_memory",
@@ -19183,7 +19183,7 @@
     "ideal-unbroken-thread",
     "ideal-contained-scope",
     "metric-recall-recent-context",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "recall-recent-context:file"
    ],
    "summary": "Use for: handing the next turn the cards the last turns of the same conversation or work item already found relevant, so a short follow-up needs no restating and a timed-out assembly still has context. Avoid: full semantic retrieval, ranking by meaning, and any card from another...",
@@ -19261,7 +19261,7 @@
     "prob-deep-work-wanders",
     "ideal-unbroken-thread",
     "metric-receive-input-mid-run",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "receive-input-mid-run:in_memory"
    ],
    "summary": "Use for: letting a person add direction, stop or pause while the assistant works, and having a message reach the next decision of the planner or of the running worker exactly once, for its own run. Avoid: ordering across conversations, and deciding how to respond to the message.",
@@ -19339,7 +19339,7 @@
     "prob-reply-misses-the-account",
     "ideal-current-knowledge",
     "metric-resolve-references",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "resolve-references:note",
     "resolve-references:card_resolvers"
    ],
@@ -19418,7 +19418,7 @@
     "prob-vendor-outage-halts-work",
     "ideal-current-knowledge",
     "metric-cache-cards",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "cache-cards:null",
     "cache-cards:file",
     "cache-cards:null_cache",
@@ -19499,7 +19499,7 @@
     "prob-ai-skips-structure-thinking",
     "ideal-structured-habit",
     "metric-behave-by-esoi",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "behave-by-esoi:insitu_standing_instructions",
     "behave-by-esoi:insitu_plain",
     "behave-by-esoi:standing_instructions",
@@ -19580,7 +19580,7 @@
     "prob-ai-skips-structure-thinking",
     "ideal-honest-grading",
     "metric-judge-esoi-behavior",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "judge-esoi-behavior:model_judge",
     "judge-esoi-behavior:regex_only"
    ],
@@ -19658,7 +19658,7 @@
     "prob-integration-is-trial-and-error",
     "ideal-trustworthy-interface",
     "metric-expose-the-public-api",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "expose-the-public-api:__init__",
     "expose-the-public-api:aider_editblock",
     "expose-the-public-api:async_bridge",
@@ -19738,7 +19738,7 @@
     "prob-integration-is-trial-and-error",
     "ideal-trustworthy-interface",
     "metric-learn-by-example",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "learn-by-example:minimal_lane",
     "learn-by-example:custom_consumer",
     "learn-by-example:live_examples"
@@ -19818,7 +19818,7 @@
     "prob-human-only-steps-slip",
     "ideal-dependable-delivery",
     "metric-run-queued-tasks",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "run-queued-tasks:poller",
     "run-queued-tasks:executor",
     "run-queued-tasks:personas",
@@ -19900,7 +19900,7 @@
     "prob-integration-is-trial-and-error",
     "ideal-trustworthy-interface",
     "metric-configure-a-lane",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "configure-a-lane:config",
     "configure-a-lane:config_file",
     "configure-a-lane:config_environment",
@@ -19983,7 +19983,7 @@
     "prob-deep-work-wanders",
     "ideal-trustworthy-interface",
     "metric-operate-from-a-terminal",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "operate-from-a-terminal:cli",
     "operate-from-a-terminal:cli_parser",
     "operate-from-a-terminal:cli_quest",
@@ -20067,7 +20067,7 @@
     "prob-spend-surprises",
     "ideal-right-sized-model",
     "metric-choose-a-model-tier",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "choose-a-model-tier:deep_model_selection",
     "choose-a-model-tier:model_registry",
     "choose-a-model-tier:model_family",
@@ -20150,7 +20150,7 @@
     "prob-queued-task-falls-through",
     "ideal-predictable-spend",
     "metric-track-usage-and-cost",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "track-usage-and-cost:pricing",
     "track-usage-and-cost:usage",
     "track-usage-and-cost:resources",
@@ -20228,7 +20228,7 @@
    "kind": "solution",
    "refs": [
     "metric-verify-offline",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "verify-offline:conftest",
     "verify-offline:collect_by_file"
    ],
@@ -20248,7 +20248,7 @@
     "prob-public-repo-leaks",
     "ideal-clean-publication",
     "metric-keep-secrets-out",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "keep-secrets-out:live_scanner"
    ],
    "summary": "Use for: finding secrets, real machine paths, object ids and real addresses in working files before they are committed to a public repository. Avoid: scanning git history, and detecting a secret shape the scanner has no pattern for.",
@@ -20323,7 +20323,7 @@
    "kind": "solution",
    "refs": [
     "metric-select-an-implementation",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "select-an-implementation:resolve",
     "select-an-implementation:live_resolver"
    ],
@@ -20343,7 +20343,7 @@
     "prob-integration-is-trial-and-error",
     "ideal-trustworthy-interface",
     "metric-explain-qar",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "explain-qar:README.md",
     "explain-qar:shipped_docs"
    ],
@@ -20423,7 +20423,7 @@
     "ideal-remembered-work",
     "ideal-contained-scope",
     "metric-persist-predictions",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "persist-predictions:file",
     "persist-predictions:memory_store"
    ],
@@ -20502,7 +20502,7 @@
     "prob-spend-surprises",
     "ideal-permitted-timing",
     "metric-gate-an-autopilot-pass",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "gate-an-autopilot-pass:autopilot_gates",
     "gate-an-autopilot-pass:live_pass"
    ],
@@ -20582,7 +20582,7 @@
     "QI5",
     "QI6",
     "QME7",
-    "QS1:QM1",
+    "do-grounded-work:library",
     "evolve-by-metric:structure-library"
    ],
    "summary": "Use for keeping every part of QAR specified as a solution with alternatives, a metric and a selected implementation, so the best one is used as the state of the art moves. It avoids saying what QAR is for: that is the top intent, and the general machinery for checking, measuring...",

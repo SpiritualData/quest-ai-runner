@@ -277,5 +277,5 @@ def parse_judge_text(text: Any) -> Optional[Dict[str, Any]]:
 
 
 REACH_JUDGE_SPEC = declare(
-    "act-in-the-world.reach-judge", solution="act-in-the-world", metric="metric-act-in-the-world",
+    "act-in-the-world.reach-judge", solution="claim-reach", metric="metric-claim-reach",
     tier="caller", cache_layer="none", template=REACH_JUDGE_PROMPT)

@@ -47,9 +47,9 @@ DEFAULT_OUT = "handoff.html"
 
 # Each conceptual part of the anatomy (docs/explanation/anatomy.md) and the solution that specifies it.
 PARTS = [
-    ("Mind", "keep-a-working-stream"), ("Subconscious (includes Intuition)", "admit-to-the-mind"),
-    ("Science", "know-the-world"), ("Critical thinking", "think-critically"), ("World", "act-in-the-world"),
-    ("Body", "act-as-the-body"), ("Higher mind", "hold-the-long-view"), ("Overseer", "watch-a-run"),
+    ("Mind", "reason-and-answer"), ("Subconscious (includes Intuition)", "remember-and-recall"),
+    ("Science", "know-the-world"), ("Critical thinking", "think-critically"), ("World", "claim-reach"),
+    ("Body", "act-as-the-body"), ("Higher mind", "hold-the-intents"), ("Overseer", "watch-for-risk"),
     ("Rep selection", "select-a-rep"), ("Proactive guidance", "guide-toward-the-long-term-goal"),
     ("Hub of hubs", "use-open-source-hubs"), ("End to end", "answer-end-to-end"), ("Prompt audit", "justify-model-calls"),
 ]

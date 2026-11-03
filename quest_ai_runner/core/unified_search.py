@@ -48,7 +48,7 @@ def model_judge(provider: Any, model: Optional[str]) -> Callable[[str, List[str]
     return judge
 
 
-@solution("search-cards-and-specs")
+@solution("search-cards-and-specs", example={"task": "which card says how cards are stored?", "views": []})
 def search_cards_and_specs(task: str, views: Sequence[search_lib.View], *, provider: Any = None, model: Optional[str] = None,
                            vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                            max_ranked: int = 5, expand: int = 3, ranked_kinds: Sequence[str] = RANKED_KINDS,

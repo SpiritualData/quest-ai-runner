@@ -34,7 +34,7 @@ def child() -> Assembler:
     """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
     root = PACKAGE_DIR.parent
     records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler())
+    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent",))
 
 
 def register_with_hub() -> None:
@@ -53,7 +53,7 @@ def assemble(card_repository, *, provided=None, config=None) -> Assembly:
     ``config`` adds a caller's selections, which beat QAR's own."""
     base = config or AssemblyConfig()
     options = {CARD_STORE: {"repository": card_repository}, **dict(base.options)}
-    base = dataclasses.replace(base, options=options)
+    base = dataclasses.replace(base, options=options, selections={CARD_STORE: CARD_REPOSITORY, **dict(base.selections)})
     given = dict(provided or {})
     assembler = child()
     pending = {sid: line for sid, line in assembler.pending_needs(base, given).items() if sid in seats()}
@@ -66,7 +66,8 @@ def assemble(card_repository, *, provided=None, config=None) -> Assembly:
 def card_repository_of(card_repository):
     """The repository QAR's ``card-store`` seat holds, obtained through the hub assembly. The same object comes back for QAR's own
     arm; an arm swapped in that keeps cards elsewhere has no repository, so the one passed in stands."""
-    store = child().assemble(AssemblyConfig(solutions=(CARD_STORE,), options={CARD_STORE: {"repository": card_repository}}))[CARD_STORE]
+    store = child().assemble(AssemblyConfig(solutions=(CARD_STORE,), selections={CARD_STORE: CARD_REPOSITORY},
+                                                options={CARD_STORE: {"repository": card_repository}}))[CARD_STORE]
     return getattr(store, "repository", card_repository)
 
 

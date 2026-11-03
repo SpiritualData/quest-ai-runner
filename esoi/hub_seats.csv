@@ -8,5 +8,5 @@ science_find_evidence,know-the-world,openalex;arxiv;semantic scholar;pubmed,ques
 model_providers,call-a-model,anthropic;openai;gemini;deepseek;claude;gpt,quest_ai_runner/providers.py
 memory,persist-cards,mem0;letta;graphiti;cognee,quest_ai_runner/adapters/file_context_store.py;quest_ai_runner/config_assembler.py
 channels,talk-over-a-channel,openclaw,quest_ai_runner/adapters/openclaw_channel.py
-evals,evolve-by-metric,promptfoo;deepeval;ragas;inspect,evaluation/components;esoi.toml
+evals,keep-it-generic,promptfoo;deepeval;ragas;inspect,evaluation/components;esoi.toml
 voice,,pipecat;livekit;whisper,

@@ -228,9 +228,9 @@ the docs and `.env.example` that describe what it does.
 | `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `adapters/web_search_backends.py` | `docs/how-to/web-search.md` |
 | `QAR_WEB_SEARCH_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
 | `QDRANT_URL` | Plain Qdrant URL, the last fallback after QAR_QDRANT_URL. | `config_assembler.py` | - |
-| `QUEST_API_KEY` |  | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
-| `QUEST_API_URL` |  | `adapters/quest_context_adapter.py`, `config_resolvers.py`, `core/tools.py` +3 | `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/tools.md` |
-| `QUEST_BASE_URL` |  | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
+| `QUEST_API_KEY` | Quest API key; declared by the hub for card-store. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
+| `QUEST_API_URL` | Fills the 'base_url' option of card-store:quest-api-cards; declared by the hub. | `adapters/quest_context_adapter.py`, `config_resolvers.py`, `core/tools.py` +3 | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md` +1 |
+| `QUEST_BASE_URL` | Fills the 'base_url' option of card-store:quest-api-cards; declared by the hub. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
 | `QUEST_CLAIM_TEAMS` | Comma-separated team ids an owner-scoped lane may claim tasks from (RunnerConfig.claim_teams). | `cli_config.py` | - |
 | `QUEST_ORG_ID` |  | `cli_config.py` | `.env.example`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
 | `QUEST_TEAM_ID` |  | `bootstrap_email.py`, `cli_config.py`, `cli_quest.py` +3 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +5 |

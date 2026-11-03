@@ -1121,7 +1121,7 @@ Rules:
 
 # --- prompt specs: each prompt above declared once, with the solution and metric that justify it ---
 VERIFY_GOAL_SPEC = declare(
-    "verify-goal.verdict", solution="QS1", metric="QME2", tier="balanced", cache_layer="tail",
+    "verify-goal.verdict", solution="do-grounded-work", metric="QME2", tier="balanced", cache_layer="tail",
     template=VERIFY_GOAL_PROMPT, output_schema=VERIFY_GOAL_TOOL)
 INTERIM_PROGRESS_SPEC = declare(
     "reply-in-steps.interim-progress", solution="reply-in-steps",
@@ -1160,5 +1160,5 @@ CARD_UPDATE_SPEC = declare(
     metric="metric-feed-context-sources", tier="caller", cache_layer="tail",
     template=CARD_UPDATE_PROMPT)
 PREFLIGHT_PLAN_SPEC = declare(
-    "preflight.plan-sufficiency", solution="QS1", metric="QME2", tier="balanced", cache_layer="tail",
+    "preflight.plan-sufficiency", solution="do-grounded-work", metric="QME2", tier="balanced", cache_layer="tail",
     template=PREFLIGHT_PLAN_PROMPT, output_schema=PREFLIGHT_PLAN_TOOL)

@@ -7,8 +7,8 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 |---|---|---|---|
 | `core-ports` | core | The generic boundary: adapter interfaces, value objects, streaming sinks, event constants | show-progress |
 | `core-orchestrator-loop` | core | The bounded plan, gather, re-plan, answer/deep/confirm loop, split into role mixins | route-a-message, answer-a-turn, act-as-the-body, narrate-a-turn, answer-end-to-end |
-| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, keep-a-working-stream, admit-to-the-mind, hold-the-long-view, justify-model-calls, guide-toward-the-long-term-goal |
-| `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-a-run, judge-a-decision, explain-an-answer, show-the-ais-work, reply-in-steps, ask-on-block |
+| `core-planner-prompts` | core | Prompt text and its rendering, kept out of the loop,  PLANNER_PROFILES holds variants | route-a-message, reason-and-answer, remember-and-recall, hold-the-intents, justify-model-calls, guide-toward-the-long-term-goal |
+| `core-routing-judges` | core | Small judges that rank, route or check a decision (reach, quest selection, overseer, sufficiency, explain) | watch-for-risk, judge-a-decision, explain-an-answer, show-the-ais-work, reply-in-steps, ask-on-block |
 | `core-model-selection` | core | Tier to live model id, family resolution, deep-run starting model, outage and usage-limit memory | choose-a-model-tier |
 | `core-deep-run` | core | The /goal done-standard contract, deep-run budget, attachments, mid-run inbox, per-run control channel (steer, stop, pause), per-turn execution record | run-deep-work, receive-input-mid-run, detect-a-stalled-run, describe-an-attachment |
 | `core-context-selection` | core | Choosing and learning which context cards enter a prompt | select-context, guide-by-feedback, recall-recent-context |
@@ -33,10 +33,10 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | `config` | config | RunnerConfig and build_orchestrator(): the one seam for consumer specifics | configure-a-lane |
 | `cli-and-ui` | cli | Console entry point, attended chat session and Textual UI, card-store maintenance CLI | operate-from-a-terminal, assist-a-terminal-session |
 | `usage-and-resources` | core | Token usage and pricing, overload guard: leaf utilities with no package imports, so the runner may use them | track-usage-and-cost, justify-model-calls |
-| `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api |
+| `package-root` | config | Bootstrap email and the package root that wires core and runner to the config layer | expose-the-public-api, do-grounded-work, access-quest-operations |
 | `tools-cli` | tools | python -m quest_ai_runner.tools: list and call standard tools, send email | operate-from-a-terminal |
 | `prompts` | prompts | Prompt text shipped as data and the scripts that keep each copy equal to its source: standing deep-run instructions (evolvable_structure.md and the public docs/reference/evolvable-structure.md generated from the ESOI skill) and the vendored quest field guidance | assemble-a-prompt, behave-by-esoi, judge-esoi-behavior, iterate-by-spec |
-| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset,  the combined QAR metric (qar_overall) reads their recorded rows,  qar_overall/render_handoff.py renders the handoff page from them | verify-offline, spec-selection, QS1, answer-end-to-end, use-open-source-hubs, evolve-by-metric, core-ml-tasks, know-the-world, act-in-the-world, think-critically |
+| `eval-components` | evaluation | Per-component evaluation harness: one function per component, impls swappable, same dataset,  the combined QAR metric (qar_overall) reads their recorded rows,  qar_overall/render_handoff.py renders the handoff page from them | verify-offline, spec-selection, do-grounded-work, answer-end-to-end, use-open-source-hubs, keep-it-generic, core-ml-tasks, know-the-world, claim-reach, think-critically |
 | `scripts` | scripts | Operator scripts, each the live operator of a solution: web-search bench (search-the-web), card quarantine (repair-a-card-store), restart-if-idle (run-queued-tasks) | search-the-web, repair-a-card-store, run-queued-tasks |
 | `examples` | examples | Runnable reference consumers (env-driven, no real data) | learn-by-example |
 | `tests` | tests | Offline test suite and shared fakes | verify-offline |

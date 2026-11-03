@@ -16,14 +16,14 @@ BEGIN, END = "<!-- anatomy-table:begin -->", "<!-- anatomy-table:end -->"
 # part -> (module, solution id). The module is the entry file; the solution id keys the records.
 PARTS = [
     ("World (input)", "quest_ai_runner/runner/poller.py", "run-queued-tasks"),
-    ("Subconscious, incl. Intuition", "quest_ai_runner/core/card_filter.py", "admit-to-the-mind"),
-    ("Mind", "quest_ai_runner/core/orchestrator.py", "keep-a-working-stream"),
+    ("Subconscious, incl. Intuition", "quest_ai_runner/core/card_filter.py", "remember-and-recall"),
+    ("Mind", "quest_ai_runner/core/orchestrator.py", "reason-and-answer"),
     ("Science", "quest_ai_runner/adapters/web_research.py", "know-the-world"),
     ("Critical thinking", "quest_ai_runner/core/goal_metrics.py", "think-critically"),
-    ("Overseer", "quest_ai_runner/core/overseer.py", "watch-a-run"),
+    ("Overseer", "quest_ai_runner/core/overseer.py", "watch-for-risk"),
     ("Body", "quest_ai_runner/runner/quest_client.py", "act-as-the-body"),
-    ("World (act)", "quest_ai_runner/adapters/acp_deep_runner.py", "act-in-the-world"),
-    ("Higher mind", "quest_ai_runner/runner/personas.py", "hold-the-long-view"),
+    ("World (act)", "quest_ai_runner/adapters/acp_deep_runner.py", "claim-reach"),
+    ("Higher mind", "quest_ai_runner/runner/personas.py", "hold-the-intents"),
     ("Rep selection", "quest_ai_runner/runner/personas.py", "select-a-rep"),
 ]
 

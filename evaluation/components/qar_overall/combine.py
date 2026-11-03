@@ -1,4 +1,4 @@
-"""The combined QAR metric (``metric-qar-overall``, the authoritative metric of QS1), computed from recorded rows only.
+"""The combined QAR metric (``metric-qar-overall``, the authoritative metric of do-grounded-work), computed from recorded rows only.
 
 Nothing here runs an arm. Each sub-metric (QME1 to QME7, one case each in ``cases.json``) names the recorded arms that
 measure it in two tiers:
@@ -18,7 +18,7 @@ counts), and a stale or missing arm is unmeasured. Humility: an
 unmeasured arm is never a pass. Every score is reported three ways, the floor first (unmeasured counted 0) beside the
 measured share of the weight, then the headline (measured weight only, renormalised) and the ceiling (unmeasured counted 1).
 
-Weights: each of QS1's ideals carries a weight in ``esoi.toml`` ``[balance.metric-qar-overall]`` (with a written reason),
+Weights: each of do-grounded-work's ideals carries a weight in ``esoi.toml`` ``[balance.metric-qar-overall]`` (with a written reason),
 split equally over the sub-metrics that serve it (their ``ideal_ids`` in ``esoi/metrics.csv``). An ideal no sub-metric
 serves keeps its weight unmeasured. QME6 and QME7 are read from the structure itself (``structure_*`` rules): the share of
 solutions whose selected arm has a current row that no rival beats.
@@ -39,7 +39,7 @@ from esoi.tables import ids
 
 CONFIG = common.CONFIG
 WEIGHTS_KEY = "metric-qar-overall"   # keyed by the metric, not the component: the harness's accuracy/cost/time balance
-SELF = "QS1"                          # is read by component name, and this table is not that balance
+SELF = "do-grounded-work"                          # is read by component name, and this table is not that balance
 TIERS = ("cheap", "full")
 
 
@@ -309,7 +309,7 @@ def honest_choice(comp, arm_history, tier):
 
 def structure_reading(rule, choose_current=current):
     """QME6 and QME7, read from the records and the results log: per measured solution, its selected arm's latest row is
-    current and no rival beats it. QS1 itself is left out (its own metric would count itself)."""
+    current and no rival beats it. do-grounded-work itself is left out (its own metric would count itself)."""
     reg = load_registry(CONFIG)
     log = history()
     per_case = leaderboard.per_case_rows(CONFIG)
@@ -409,7 +409,7 @@ def report(rows):
         return "no sub-metric could be read"
     weights, serving, unserved = submetric_weights(list(readings))
     cfg = settings()
-    lines = ["", "QAR overall (metric-qar-overall, the authoritative metric of QS1), from recorded rows only; nothing was re-run.",
+    lines = ["", "QAR overall (metric-qar-overall, the authoritative metric of do-grounded-work), from recorded rows only; nothing was re-run.",
              f"Read at commit {head()} on {datetime.date.today().isoformat()}. A row counts only when it is current against "
              "that commit; a stale or missing arm is unmeasured, never a pass."]
     names = {r["id"]: r.get("area", "") for r in rows}
@@ -422,7 +422,7 @@ def report(rows):
         lines.append("    " + left_out(readings, tier, weights, names, unserved))
     if unserved:
         lines.append(f"Weight of ideals no sub-metric serves (always unmeasured): {unserved:.0%}.")
-    lines += ["", "Per sub-metric (weight from QS1's ideals; value 0..1 by the stated rule; arms: tier, value, date, sha, cost of last run):"]
+    lines += ["", "Per sub-metric (weight from do-grounded-work's ideals; value 0..1 by the stated rule; arms: tier, value, date, sha, cost of last run):"]
     not_measured, spend, unknown = [], {t: 0.0 for t in TIERS}, {t: set() for t in TIERS}
     for sid, reading in readings.items():
         name = next((r.get("area") for r in rows if r["id"] == sid), "")

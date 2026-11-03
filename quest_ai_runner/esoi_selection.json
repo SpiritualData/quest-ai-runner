@@ -2,11 +2,8 @@
  "@intents": {
   "intents": {},
   "scopes": {
-   "QS1": "quest_ai_runner",
    "access-quest-operations": "quest_ai_runner",
    "act-as-the-body": "quest_ai_runner",
-   "act-in-the-world": "quest_ai_runner",
-   "admit-to-the-mind": "quest_ai_runner",
    "answer-a-turn": "quest_ai_runner",
    "answer-end-to-end": "quest_ai_runner",
    "ask-on-block": "quest_ai_runner",
@@ -19,14 +16,15 @@
    "card-store": "quest_ai_runner",
    "choose-a-model-tier": "quest_ai_runner",
    "choose-what-to-index": "quest_ai_runner",
+   "claim-reach": "quest_ai_runner",
    "configure-a-lane": "quest_ai_runner",
    "core-ml-tasks": "quest_ai_runner",
    "describe-an-attachment": "quest_ai_runner",
    "detect-a-stalled-run": "quest_ai_runner",
    "detect-stale-cards": "quest_ai_runner",
+   "do-grounded-work": "quest_ai_runner",
    "draft-a-metric": "quest_ai_runner",
    "escalate-to-a-human": "quest_ai_runner",
-   "evolve-by-metric": "quest_ai_runner",
    "explain-an-answer": "quest_ai_runner",
    "explain-qar": "quest_ai_runner",
    "expose-the-public-api": "quest_ai_runner",
@@ -38,13 +36,13 @@
    "guide-by-feedback": "quest_ai_runner",
    "guide-toward-the-long-term-goal": "quest_ai_runner",
    "hand-off-a-goal": "quest_ai_runner",
-   "hold-the-long-view": "quest_ai_runner",
+   "hold-the-intents": "quest_ai_runner",
    "index-by-meaning": "quest_ai_runner",
    "iterate-by-spec": "quest_ai_runner",
    "judge-a-decision": "quest_ai_runner",
    "judge-esoi-behavior": "quest_ai_runner",
    "justify-model-calls": "quest_ai_runner",
-   "keep-a-working-stream": "quest_ai_runner",
+   "keep-it-generic": "quest_ai_runner",
    "keep-secrets-out": "quest_ai_runner",
    "know-the-world": "quest_ai_runner",
    "label-context-cards": "quest_ai_runner",
@@ -54,8 +52,10 @@
    "operate-from-a-terminal": "quest_ai_runner",
    "persist-cards": "quest_ai_runner",
    "persist-predictions": "quest_ai_runner",
+   "reason-and-answer": "quest_ai_runner",
    "recall-recent-context": "quest_ai_runner",
    "receive-input-mid-run": "quest_ai_runner",
+   "remember-and-recall": "quest_ai_runner",
    "remember-conversations": "quest_ai_runner",
    "repair-a-card-store": "quest_ai_runner",
    "replay-known-operations": "quest_ai_runner",
@@ -79,9 +79,15 @@
    "track-usage-and-cost": "quest_ai_runner",
    "use-open-source-hubs": "quest_ai_runner",
    "verify-offline": "quest_ai_runner",
-   "watch-a-run": "quest_ai_runner",
+   "watch-for-risk": "quest_ai_runner",
    "write-files": "quest_ai_runner",
    "write-through-mcp": "quest_ai_runner"
+  }
+ },
+ "access-quest-operations": {
+  "default": "quest_client",
+  "modules": {
+   "quest_client": "quest_ai_runner.goal_agent"
   }
  },
  "act-as-the-body": {
@@ -93,29 +99,6 @@
   },
   "modules": {
    "card_and_reads": "quest_ai_runner.runner.quest_folder_index"
-  }
- },
- "act-in-the-world": {
-  "default": "coding_agent_prompt_reach",
-  "evidence": {
-   "detail": "scripted_ideal leads rules_only (rules_only 0.833 against scripted_ideal 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 12 cases disagree)",
-   "p": 0.5,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "coding_agent_prompt_reach": "quest_ai_runner.core.tools",
-   "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
-  }
- },
- "admit-to-the-mind": {
-  "default": "recency_window",
-  "evidence": {
-   "detail": "recency_window leads admit_nothing (admit_nothing 0.222 against recency_window 0.444; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.625, 4 of 9 cases disagree)",
-   "p": 0.625,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "recency_window": "quest_ai_runner.core.planner_context"
   }
  },
  "answer-end-to-end": {
@@ -176,9 +159,10 @@
   }
  },
  "card-store": {
-  "default": "qar-card-repository",
+  "default": "quest-api-cards",
   "modules": {
-   "qar-card-repository": "quest_ai_runner.adapters.hub_card_store"
+   "qar-card-repository": "quest_ai_runner.adapters.hub_card_store",
+   "quest-api-cards": "quest_ai_runner.adapters.hub_card_store"
   }
  },
  "choose-a-model-tier": {
@@ -192,6 +176,18 @@
    "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
    "model_registry": "quest_ai_runner.core.model_registry",
    "usage_limit": "quest_ai_runner.core.usage_limit"
+  }
+ },
+ "claim-reach": {
+  "default": "coding_agent_prompt_reach",
+  "evidence": {
+   "detail": "scripted_ideal leads rules_only (rules_only 0.833 against scripted_ideal 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 12 cases disagree)",
+   "p": 0.5,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "coding_agent_prompt_reach": "quest_ai_runner.core.tools",
+   "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
   }
  },
  "configure-a-lane": {
@@ -229,6 +225,17 @@
   },
   "modules": {
    "goal_runner": "quest_ai_runner.core.goal_runner"
+  }
+ },
+ "do-grounded-work": {
+  "default": "library",
+  "evidence": {
+   "detail": "qar_overall.broken.latest_row_any_age:build is exactly equal to recorded_rows on the metric (qar_overall.broken.latest_row_any_age:build 0 against recorded_rows 0), so recorded_rows stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "library": "quest_ai_runner.goal_agent"
   }
  },
  "draft-a-metric": {
@@ -364,7 +371,7 @@
    "model_judge": "quest_ai_runner.runner.goal_handoff"
   }
  },
- "hold-the-long-view": {
+ "hold-the-intents": {
   "default": "separate_stores",
   "evidence": {
    "detail": "separate_stores is better than no_carry (two-sided exact McNemar test, Holm-adjusted p=0.0391, 9 of 15 cases disagree)",
@@ -410,16 +417,15 @@
    "spec_registry": "quest_ai_runner.core.prompt_specs"
   }
  },
- "keep-a-working-stream": {
-  "default": "rebuilt_per_step",
+ "keep-it-generic": {
+  "default": "structure-library",
   "evidence": {
-   "detail": "beaten by rebuilt_full_context: best guess, not yet significant: rebuilt_full_context leads rebuilt_per_step (rebuilt_full_context 1 against rebuilt_per_step 0.857; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.481, rebuilt_full_context passed 14 of 14, rebuilt_per_step 12 of 14); more cases would settle it",
-   "p": 0.481481,
-   "verdict": "LOSS"
+   "detail": "structure_library leads keep_current (keep_current 0.588 against structure_library 0.765; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.549, 11 of 17 cases disagree)",
+   "p": 0.548828,
+   "verdict": "WIN"
   },
   "modules": {
-   "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
-   "rebuilt_per_step": "quest_ai_runner.core.orchestrator_planning"
+   "structure-library": "quest_ai_runner.hub"
   }
  },
  "know-the-world": {
@@ -506,6 +512,18 @@
    "file": "quest_ai_runner.core.anticipation_store"
   }
  },
+ "reason-and-answer": {
+  "default": "rebuilt_per_step",
+  "evidence": {
+   "detail": "beaten by rebuilt_full_context: best guess, not yet significant: rebuilt_full_context leads rebuilt_per_step (rebuilt_full_context 1 against rebuilt_per_step 0.857; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.481, rebuilt_full_context passed 14 of 14, rebuilt_per_step 12 of 14); more cases would settle it",
+   "p": 0.481481,
+   "verdict": "LOSS"
+  },
+  "modules": {
+   "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
+   "rebuilt_per_step": "quest_ai_runner.core.orchestrator_planning"
+  }
+ },
  "recall-recent-context": {
   "default": "file",
   "evidence": {
@@ -526,6 +544,17 @@
   },
   "modules": {
    "in_memory": "quest_ai_runner.core.inbox"
+  }
+ },
+ "remember-and-recall": {
+  "default": "recency_window",
+  "evidence": {
+   "detail": "recency_window leads admit_nothing (admit_nothing 0.222 against recency_window 0.444; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.625, 4 of 9 cases disagree)",
+   "p": 0.625,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "recency_window": "quest_ai_runner.core.planner_context"
   }
  },
  "remember-conversations": {
@@ -778,7 +807,7 @@
    "conftest": "tests.conftest"
   }
  },
- "watch-a-run": {
+ "watch-for-risk": {
   "default": "overseer",
   "evidence": {
    "detail": "no rival implementation was measured on the same cases",

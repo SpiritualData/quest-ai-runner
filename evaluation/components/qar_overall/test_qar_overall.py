@@ -93,7 +93,7 @@ def test_weights_follow_the_ideals_and_sum_to_one():
     subs = [c["id"] for c in combine.load_definitions()]
     weights, serving, unserved = combine.submetric_weights(subs)
     assert sum(weights.values()) + unserved == pytest.approx(1.0)
-    assert all(serving[i] for i in combine.settings()["ideals"]), "every ideal of QS1 is served by a sub-metric"
+    assert all(serving[i] for i in combine.settings()["ideals"]), "every ideal of do-grounded-work is served by a sub-metric"
 
 
 def test_definitions_are_valid():
