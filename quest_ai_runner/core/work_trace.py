@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import re
 import threading
+import typing
 import uuid
 from typing import Any, Dict, List, Mapping, Optional
 
-from esoi import implementation
+from esoi import implementation, solution
 from hubofhubs.ports.deep import ProgressEvent  # noqa: F401  (the event the emit callable receives)
 from hubofhubs.ports.trace import WorkTrace, domain_of
 
@@ -229,7 +230,6 @@ def bare_doi(value: Any) -> str:
     return re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", str(value or "").strip(), flags=re.IGNORECASE)
 
 
-@implementation("show-the-ais-work", "trail")
 class TurnTrace:
     """One turn's accumulated steps. Thread-safe: parallel reads update the same step."""
 
@@ -515,3 +515,29 @@ class TurnTrace:
                 self.push_papers()
             elif was_running:
                 self.push_papers()
+
+
+class DiscardedEvents:
+    """An emit target that drops every event: the example's stand-in for the screen a trail is drawn on."""
+
+    def emit(self, event: Any) -> None:
+        return None
+
+
+@solution("show-the-ais-work", kind="event", entry="start",
+          example={"emit": DiscardedEvents(), "context_meta": {"work_trace": {"audience": "owner", "trace_id": "example"}}})
+@typing.runtime_checkable
+class WorkShowing(typing.Protocol):
+    """Opens the trail of one turn's work when the consumer opted in (``context_meta["work_trace"]``); None when it did not."""
+
+    def start(self, emit: Any, context_meta: Optional[Mapping[str, Any]]) -> Optional[TurnTrace]: ...
+
+
+@implementation("show-the-ais-work", "trail")
+class WorkTrail:
+    """The trail arm: ``start`` above, which builds the turn's ``TurnTrace`` (steps for web, papers, records and links, sent as live
+    events). Holds no state of its own."""
+    REQUIRES = ()     # one trace per turn, built by start
+
+    def start(self, emit: Any, context_meta: Optional[Mapping[str, Any]]) -> Optional[TurnTrace]:
+        return start(emit, context_meta)

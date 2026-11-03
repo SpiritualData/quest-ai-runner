@@ -6,13 +6,15 @@ table, usage limit message and spend tagging.
 from __future__ import annotations
 
 import os
+import typing
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from esoi import implementation
+from esoi import implementation, solution
 from hubofhubs import arm_needs as needs
 from hubofhubs.models.claude_cli import ClaudeCliProvider
 from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
 from hubofhubs.models.router import MultiProvider
+from hubofhubs.seats import ModelCalling
 
 from .core.model_registry import DEFAULT_FALLBACK_TOP, configured_providers
 from .usage import active_spec, limit_message
@@ -68,6 +70,14 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
         return []
     return [{"provider": "anthropic", "balance": "", "allowance": str(allowance),
              "credit_value": (env.get("QAR_ANTHROPIC_CREDIT_VALUE") or "").strip(), "currency": "USD", "period": "monthly"}]
+
+
+@solution("call-a-model", kind="event", entry="answer",
+          example={"messages": [{"role": "user", "content": "Reply with the single word: ok"}], "model": "claude-haiku"})
+@typing.runtime_checkable
+class RoutedModelCalling(ModelCalling, typing.Protocol):
+    """The model seat as QAR fills it: the hub's ``call-a-model`` interface (plan, answer, list models) over the router below, which
+    sends each model id to the vendor that serves it. A consumer's own provider satisfies it the same way."""
 
 
 @implementation("call-a-model", "multi_provider")

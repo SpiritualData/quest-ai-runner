@@ -100,15 +100,38 @@
    "card_and_reads": "quest_ai_runner.runner.quest_folder_index"
   }
  },
+ "answer-a-turn": {
+  "default": "orchestrator_turn",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "orchestrator_turn": "quest_ai_runner.area_reason_and_answer"
+  }
+ },
  "answer-end-to-end": {
-  "default": "qar_live",
+  "default": "shipped_path",
   "evidence": {
    "detail": "qar_live leads rules_only (rules_only 0.58 against qar_live 0.778; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.754, 10 of 10 cases disagree; one of 2 looks, alpha 0.025)",
    "p": 0.753906,
    "verdict": "WIN"
   },
   "modules": {
-   "qar_live": "quest_ai_runner.core.orchestrator"
+   "qar_live": "quest_ai_runner.core.orchestrator",
+   "shipped_path": "quest_ai_runner.area_reason_and_answer"
+  }
+ },
+ "assemble-a-prompt": {
+  "default": "planner_prompt",
+  "evidence": {
+   "detail": "situational is exactly equal to live on the metric (situational 0.966 against live 0.966), so live stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "planner_prompt": "quest_ai_runner.area_reason_and_answer"
   }
  },
  "assist-a-terminal-session": {
@@ -191,6 +214,17 @@
    "config_environment": "quest_ai_runner.config_environment",
    "config_file": "quest_ai_runner.config_file",
    "runtime_settings": "quest_ai_runner.core.runtime_settings"
+  }
+ },
+ "core-ml-tasks": {
+  "default": "router_labels",
+  "evidence": {
+   "detail": "none_mapped is exactly equal to labelled_rows on the metric (none_mapped 0.273 against labelled_rows 0.273), so labelled_rows stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "router_labels": "quest_ai_runner.area_reason_and_answer"
   }
  },
  "describe-an-attachment": {
@@ -509,7 +543,7 @@
   },
   "modules": {
    "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
-   "rebuilt_per_step": "quest_ai_runner.core.orchestrator_planning"
+   "rebuilt_per_step": "quest_ai_runner.area_reason_and_answer"
   }
  },
  "recall-recent-context": {
@@ -568,6 +602,17 @@
    "repository_tidy": "quest_ai_runner.adapters.card_store_tidy"
   }
  },
+ "replay-known-operations": {
+  "default": "stored_recipes",
+  "evidence": {
+   "detail": "planner_only_offline is exactly equal to recipe_replay_offline on the metric (planner_only_offline 1 against recipe_replay_offline 1), so recipe_replay_offline stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "stored_recipes": "quest_ai_runner.area_reason_and_answer"
+  }
+ },
  "reply-in-steps": {
   "default": "gated",
   "evidence": {
@@ -588,6 +633,17 @@
   },
   "modules": {
    "note": "quest_ai_runner.config_assembler"
+  }
+ },
+ "route-a-message": {
+  "default": "planner_route",
+  "evidence": {
+   "detail": "beaten by pre_route_then_planner, single_prompt: keyword_rules is exactly equal to qar_planner on the metric (keyword_rules 1 against qar_planner 1), so qar_planner stays; best guess, not yet significant: pre_route_then_planner leads qar_planner (pre_route_then_planner 0.889 against qar_planner 0.87; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=1, pre_route_then_planner passed 48 of 54, qar_planner 47 of 54); more cases would settle it; best guess, not yet significant: single_prompt leads qar_planner (single_prompt 0.963 against qar_planner 0.87; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.483, single_prompt passed 52 of 54, qar_planner 47 of 54); more cases would settle it",
+   "p": 0.483102,
+   "verdict": "LOSS"
+  },
+  "modules": {
+   "planner_route": "quest_ai_runner.message_routing"
   }
  },
  "run-deep-work": {

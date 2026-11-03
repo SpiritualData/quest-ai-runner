@@ -9,26 +9,17 @@ lacks a key or a program raises ``Pending`` naming it, and a caller overrides on
 from __future__ import annotations
 
 import typing
-from dataclasses import dataclass, field
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from esoi import implementation, solution
+from esoi.assemble import Lazy
 from esoi.requirements import api, env
 from hubofhubs.seats import CardStore, ModelCalling, Remembering
 
+from .area_reason_and_answer import StepReasoning
 from .config import RunnerConfig, build_orchestrator
+from .loop_wiring import GoalAnswer, NoContext, orchestrator_over  # noqa: F401  (re-exported: the names callers import from here)
 from .runner.quest_client import QuestClient
-
-
-@dataclass(frozen=True)
-class GoalAnswer:
-    """What a turn of the runner returned: the reply text, how the loop ended and what ran."""
-    text: str
-    kind: str                         # "answer", "deep", "confirm" or "cancelled"
-    exit_reason: str = ""
-    ran: Tuple[str, ...] = field(default_factory=tuple)    # the goals handed to a deep worker, in order
-    question: str = ""                # what the runner asks the person, when kind is "confirm"
-    steps: int = 0
 
 
 @solution("access-quest-operations", kind="event", entry="list_quest_goals", example="quest-id")
@@ -60,10 +51,12 @@ class GoalAgent(typing.Protocol):
 
 @implementation("do-grounded-work", "library")
 class QuestAiRunnerLibrary:
-    """The orchestrator of ``core/orchestrator.py`` wired to the three seats it is handed; one object answers any number of messages."""
+    """The orchestrator of ``core/orchestrator.py`` wired to the seats it is handed; one object answers any number of messages. The
+    ``reasoning`` area is built on first use and not read by ``answer``, which reaches the loop's parts through the orchestrator."""
 
-    def __init__(self, model: ModelCalling, cards: CardStore, memory: Remembering, quest: QuestOperations) -> None:
-        self.model, self.cards, self.memory, self.quest = model, cards, memory, quest
+    def __init__(self, model: ModelCalling, cards: CardStore, memory: Remembering, quest: QuestOperations,
+                 reasoning: Lazy[StepReasoning]) -> None:
+        self.model, self.cards, self.memory, self.quest, self.reasoning = model, cards, memory, quest, reasoning
 
     def config(self) -> RunnerConfig:
         """The runner's configuration over the seats: the model, the cards as the context assembler, the Quest account."""

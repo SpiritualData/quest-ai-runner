@@ -13,10 +13,11 @@ from __future__ import annotations
 import hashlib
 import re
 import threading
+import typing
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from esoi import implementation
+from esoi import implementation, solution
 from hubofhubs.critique.done_evidence import interim_data, parse_coverage, render_coverage_line
 
 DEFAULT_MAX_PER_TURN = 4
@@ -76,7 +77,6 @@ def progress_signature(*, output: str, receipts: Iterable[str], coverage: Any) -
     return (covered, lines, digest)
 
 
-@implementation("reply-in-steps", "gated")
 def decide(state: InterimState) -> InterimDecision:
     """Whether to send an interim message now. Every condition of section 6.2 must hold; the first failing one is the reason."""
     if not state.enabled:
@@ -101,6 +101,28 @@ def decide(state: InterimState) -> InterimDecision:
     if state.last_sent_at is not None and (state.now - state.last_sent_at) < state.min_seconds_between:
         return InterimDecision(False, SKIP_TOO_SOON)
     return InterimDecision(True, SEND)
+
+
+EXAMPLE_STATE = InterimState(enabled=True, met=False, blocker="more_work", loop_runs_again=True, ask_open=False, has_why=True,
+                             has_content=True, sent_count=0, last_sent_at=None, now=0.0, signature=(None, ("saved the outline",), ""),
+                             last_signature=None)
+
+
+@solution("reply-in-steps", kind="event", entry="decide", example=EXAMPLE_STATE)
+@typing.runtime_checkable
+class InterimPolicy(typing.Protocol):
+    """Says whether a turn that is not finished sends an interim message now, and why."""
+
+    def decide(self, state: InterimState) -> InterimDecision: ...
+
+
+@implementation("reply-in-steps", "gated")
+class GatedInterim:
+    """The gated policy: ``decide`` above, offered as an object (the only arm that is built; no state, no model call)."""
+    REQUIRES = ()     # a pure function of the state
+
+    def decide(self, state: InterimState) -> InterimDecision:
+        return decide(state)
 
 
 @dataclass

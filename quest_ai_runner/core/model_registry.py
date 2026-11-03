@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, List, Optional
+import typing
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from esoi import implementation, solution
 from hubofhubs import tiers as hub_tiers
+from hubofhubs.seats import TierSelection
 from hubofhubs.models.family import newest_in_family, split_tokens
 from hubofhubs.ports.model import ModelProvider
 
@@ -422,3 +425,28 @@ class ModelRegistry:
                     tier, ", ".join(TIERS))
             t = "balanced"
         return self.top_models()[t]
+
+
+@solution("choose-a-model-tier", kind="event", entry="choose", example={"available": ["anthropic"]})
+@typing.runtime_checkable
+class RegistryTierSelection(TierSelection, typing.Protocol):
+    """QAR's tier chooser: the hub's ``choose-a-model-tier`` interface with QAR's bars (``TIER_MIN_CASES`` and ``TIER_MIN_PASS_RATE``)
+    as its defaults, so a measured pick has to clear them before it replaces the live model list."""
+
+
+@implementation("choose-a-model-tier", "model_registry")
+class RegistryTiers:
+    """The hub's tier selector asked with QAR's bars. ``choose`` returns ``{hub tier: {arm, reason, scored}}`` for the providers
+    given; ``measured_picks`` is the same answer reduced to QAR's tiers, which ``ModelRegistry.selected`` applies to the live list."""
+    REQUIRES = ()     # the hub's selector reads its registry files and nothing else
+
+    def choose(self, folder: Any = None, available: Optional[Sequence[str]] = None,
+               credits: Optional[Sequence[Mapping[str, str]]] = None, **bars: Any) -> Mapping[str, Any]:
+        return hub_tiers.choose(folder, available, credits, **{"min_cases": TIER_MIN_CASES, "min_pass_rate": TIER_MIN_PASS_RATE, **bars})
+
+    def select(self, tiers: Mapping[str, Sequence[Mapping[str, Any]]], prices: Sequence[Mapping[str, str]],
+               credits: Sequence[Mapping[str, str]] = (), defaults: Any = None, **bars: Any) -> Mapping[str, Any]:
+        return hub_tiers.select(tiers, prices, credits, defaults, **{"min_cases": TIER_MIN_CASES, "min_pass_rate": TIER_MIN_PASS_RATE, **bars})
+
+    def measured_picks(self, available: Sequence[str], credits: Optional[Sequence[Mapping[str, str]]] = None) -> Dict[str, str]:
+        return measured_picks(set(available), credits or [])

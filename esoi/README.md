@@ -8,7 +8,7 @@ Opportunities: Other products that need an AI which works from a person's own go
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop: do-grounded-work asks the model through call-a-model, remembers through remember-and-recall, keeps the cards in card-store and works in the person's Quest account through access-quest-operations. The other areas of the loop are take-in-the-world, reason-and-answer, know-the-world, think-critically, act-as-the-body, watch-for-risk, hold-the-intents and keep-it-generic. take-in-the-world receives a request from talk-over-a-channel, operate-from-a-terminal, assist-a-terminal-session or the package that expose-the-public-api offers. It also lets receive-input-mid-run reach a run that is already working, describes attachments through describe-an-attachment, adds what changed in a work item through feed-context-sources, and hands each request to route-a-message. learn-by-example shows how to use the package through expose-the-public-api. explain-qar documents the package through expose-the-public-api. remember-and-recall recalls the cards that match a request through card-store. select-context ranks stored cards, files and conversations, resolves their references through resolve-references and searches cards and specification records together through search-cards-and-specs. card-store keeps the cards through persist-cards, serves the last known listing through cache-cards while a backend is down, finds them by meaning through index-by-meaning, labels them through label-context-cards, reports stale ones through detect-stale-cards, holds their growth in check through bound-card-growth and shrinks an inflated store through repair-a-card-store. repair-a-card-store rewrites the stored cards through persist-cards and asks choose-what-to-index which sources deserve cards. reason-and-answer rebuilds each step's prompt through assemble-a-prompt, calls call-a-model at the tier choose-a-model-tier picks, answers chat turns through answer-a-turn, reuses requests that worked before through replay-known-operations, classifies inputs through core-ml-tasks, proves a message is handled end to end through answer-end-to-end, and keeps the person informed through reply-in-steps and show-the-ais-work. core-ml-tasks includes the classifier route-a-message runs. call-a-model accounts for every call through justify-model-calls and track-usage-and-cost. reply-in-steps sends the lines of narrate-a-turn and the prose of explain-an-answer, and files the one ask a block only a person can lift needs. show-the-ais-work lays out the steps that show-progress streams. know-the-world answers questions about the world from search-the-web results it checks for support, answering the way answer-a-turn does. think-critically holds deep runs to their metric through iterate-by-spec on the records spec-selection picks, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, ties work to its purpose through ground-in-intent, tells a stuck run from a slow one through detect-a-stalled-run, drafts a missing metric through draft-a-metric, and keeps background work inside its hours and budget through gate-an-autopilot-pass. act-as-the-body does the work and reports it truthfully. It reads the quest through operate-a-quest, gather-evidence and persist-cards, and claims only the reach that claim-reach grants. It writes files through write-files and reaches Quest's operations through access-quest-operations. It runs queued requests through run-queued-tasks and decides who owns a new goal through hand-off-a-goal. claim-reach hands real work to run-deep-work, write-through-mcp, talk-over-a-channel or gather-evidence. watch-for-risk oversees a run and brings a step only a person may take to that person through escalate-to-a-human. hold-the-intents keeps the long view across turns. It carries what was said and found through remember-conversations and recall-recent-context. It keeps and applies a person's corrections through store-feedback and guide-by-feedback. It saves what was learned through persist-predictions and persist-cards. It keeps work aimed at the person's end through guide-toward-the-long-term-goal, and picks the representative a request runs as through select-a-rep. select-a-rep sends the queued work of that representative through run-queued-tasks. keep-it-generic keeps every part specified as a solution with measured alternatives. It picks the arm that runs through select-an-implementation and finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop: do-grounded-work asks the model through call-a-model, remembers through remember-and-recall, keeps the cards in card-store, reasons step by step through reason-and-answer and works in the person's Quest account through access-quest-operations. The other areas of the loop are take-in-the-world, know-the-world, think-critically, act-as-the-body, watch-for-risk, hold-the-intents and keep-it-generic. take-in-the-world receives a request from talk-over-a-channel, operate-from-a-terminal, assist-a-terminal-session or the package that expose-the-public-api offers. It also lets receive-input-mid-run reach a run that is already working, describes attachments through describe-an-attachment, adds what changed in a work item through feed-context-sources, and hands each request to route-a-message. learn-by-example shows how to use the package through expose-the-public-api. explain-qar documents the package through expose-the-public-api. remember-and-recall recalls the cards that match a request through card-store. select-context ranks stored cards, files and conversations, resolves their references through resolve-references and searches cards and specification records together through search-cards-and-specs. card-store keeps the cards through persist-cards, serves the last known listing through cache-cards while a backend is down, finds them by meaning through index-by-meaning, labels them through label-context-cards, reports stale ones through detect-stale-cards, holds their growth in check through bound-card-growth and shrinks an inflated store through repair-a-card-store. repair-a-card-store rewrites the stored cards through persist-cards and asks choose-what-to-index which sources deserve cards. reason-and-answer rebuilds each step's prompt through assemble-a-prompt, calls call-a-model at the tier choose-a-model-tier picks, answers chat turns through answer-a-turn, reuses requests that worked before through replay-known-operations, classifies inputs through core-ml-tasks, proves a message is handled end to end through answer-end-to-end, and keeps the person informed through reply-in-steps and show-the-ais-work. answer-a-turn, answer-end-to-end, core-ml-tasks and route-a-message each ask the model through call-a-model. call-a-model accounts for every call through justify-model-calls and track-usage-and-cost. reply-in-steps sends the lines of narrate-a-turn and the prose of explain-an-answer, and files the one ask a block only a person can lift needs. show-the-ais-work lays out the steps that show-progress streams. know-the-world answers questions about the world from search-the-web results it checks for support, answering the way answer-a-turn does. think-critically holds deep runs to their metric through iterate-by-spec on the records spec-selection picks, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, ties work to its purpose through ground-in-intent, tells a stuck run from a slow one through detect-a-stalled-run, drafts a missing metric through draft-a-metric, and keeps background work inside its hours and budget through gate-an-autopilot-pass. act-as-the-body does the work and reports it truthfully. It reads the quest through operate-a-quest, gather-evidence and persist-cards, and claims only the reach that claim-reach grants. It writes files through write-files and reaches Quest's operations through access-quest-operations. It runs queued requests through run-queued-tasks and decides who owns a new goal through hand-off-a-goal. claim-reach hands real work to run-deep-work, write-through-mcp, talk-over-a-channel or gather-evidence. watch-for-risk oversees a run and brings a step only a person may take to that person through escalate-to-a-human. hold-the-intents keeps the long view across turns. It carries what was said and found through remember-conversations and recall-recent-context. It keeps and applies a person's corrections through store-feedback and guide-by-feedback. It saves what was learned through persist-predictions and persist-cards. It keeps work aimed at the person's end through guide-toward-the-long-term-goal, and picks the representative a request runs as through select-a-rep. select-a-rep sends the queued work of that representative through run-queued-tasks. keep-it-generic keeps every part specified as a solution with measured alternatives. It picks the arm that runs through select-an-implementation and finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
 ## Diagram
 
@@ -107,9 +107,13 @@ flowchart LR
     s4 -->|"Observation values carrying text, a path or source label..."| s60
     s5 -->|"One compact observation of title, link and snippet per hit..."| s58
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s0
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s1
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s2
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s49
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s56
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s59
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s61
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s72
     s7 -->|"A result stating whether the goal was met, the output text..."| s59
     s8 -->|"A verdict of stop or keep running with a one-sentence..."| s62
     s9 -->|"A write result stating success, whether the file was..."| s59
@@ -179,6 +183,7 @@ flowchart LR
     s53 -->|"One assembled context: ranked items, each with its kind..."| s14
     s54 -->|"The solution's tags column; for a planned change, the..."| s46
     s55 -->|"A FolderGate: the set of corpus-relative folders no card..."| s52
+    s56 -->|"Each step's view of the request (a carried message list or..."| s0
     s56 -->|"Each step's view of the request (a carried message list or..."| s60
     s57 -->|"The admitted items with a one-line reason each, and the..."| s0
     s57 -->|"The admitted items with a one-line reason each, and the..."| s56
@@ -210,12 +215,12 @@ flowchart LR
 | Solution | Entry call | Selected implementation | Metric |
 |---|---|---|---|
 | `do-grounded-work` | `quest_ai_runner.run("do-grounded-work", 'What should I work on first this week?')` | `library` | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
-| `route-a-message` | no entry declared | `evaluation/components/classification/impls/qar_planner.py` | Routing correctness over the classification cases |
-| `answer-a-turn` | no entry declared | `evaluation/components/chat_quality/impls/dev_quest_chat.py` | Judge pass rate over the chat quality cases |
+| `route-a-message` | `quest_ai_runner.run("route-a-message", 'Save a note that the launch moves to Friday.')` | `planner_route` | Routing correctness over the classification cases |
+| `answer-a-turn` | `quest_ai_runner.run("answer-a-turn", 'What should I work on first this week?')` | `orchestrator_turn` | Judge pass rate over the chat quality cases |
 | `operate-a-quest` | no entry declared | `evaluation/components/quest_ops/impls/qar_orchestrator.py` | Final quest state against the request over the quest operation cases |
 | `gather-evidence` | no entry declared | `composite` | Retrieval recall of the right document over handbook questions |
 | `search-the-web` | no entry declared | `web_research` | Right-passage rate and search spend over public factual questions |
-| `call-a-model` | no entry declared | `multi_provider` | Provider routing, fallback, retry and cost correctness |
+| `call-a-model` | `quest_ai_runner.run("call-a-model", ...)` | `multi_provider` | Provider routing, fallback, retry and cost correctness |
 | `run-deep-work` | no entry declared | `subprocess` | Outcome reporting correctness across deep runners |
 | `detect-a-stalled-run` | no entry declared | `evaluation/components/deep_review/impls/live_reviewer.py` | Stop-or-continue verdict accuracy with false stops counted apart |
 | `write-files` | no entry declared | `files` | Write boundary and reversibility over the scratch-tree cases |
@@ -228,10 +233,10 @@ flowchart LR
 | `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
 | `guide-by-feedback` | no entry declared | `universal` | Repeat-correction recall and precision over feedback sequences |
 | `talk-over-a-channel` | no entry declared | `openclaw` | Channel transport conformance to the gateway wire contract |
-| `replay-known-operations` | no entry declared | `evaluation/components/recipe_fast_path/impls/recipe_replay.py` | Fast-path hit rate and parity with the planner-only path |
+| `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | `stored_recipes` | Fast-path hit rate and parity with the planner-only path |
 | `watch-for-risk` | no entry declared | `quest_ai_runner/core/overseer.py` | Overseer digest evidence and signal correctness on labelled scenarios |
 | `detect-stale-cards` | no entry declared | `evaluation/components/staleness/impls/store_sha256.py` | Staleness detection precision and recall over mutation cases |
-| `assemble-a-prompt` | no entry declared | `evaluation/components/prompt_size/impls/live.py` | Prompt size against budget and duplicated-block count |
+| `assemble-a-prompt` | `quest_ai_runner.run("assemble-a-prompt", 'What should I work on first this week?')` | `planner_prompt` | Prompt size against budget and duplicated-block count |
 | `judge-a-decision` | no entry declared | `evaluation/components/judges/impls/qar_judges.py` | Judge deterministic-half correctness with a scripted provider |
 | `guard-a-reply` | no entry declared | `evaluation/components/reply_guards/impls/qar_guards.py` | Reply guard correctness over link, recipe and anticipation cases |
 | `feed-context-sources` | no entry declared | `base` | Update-offering correctness over synthetic quest channels |
@@ -247,7 +252,7 @@ flowchart LR
 | `run-queued-tasks` | no entry declared | `evaluation/components/run_queued_tasks/impls/qar_runner.py` | Task lifecycle correctness over offline cases |
 | `configure-a-lane` | no entry declared | `evaluation/components/configure_a_lane/impls/qar_config.py` | Configuration precedence and validation correctness |
 | `operate-from-a-terminal` | no entry declared | `evaluation/components/operate_from_a_terminal/impls/qar_main.py` | Command-line parsing, refusal and output correctness |
-| `choose-a-model-tier` | no entry declared | `model_registry` | Model tier selection and limit-recognition correctness |
+| `choose-a-model-tier` | `quest_ai_runner.run("choose-a-model-tier", {'available': ['anthropic']})` | `model_registry` | Model tier selection and limit-recognition correctness |
 | `track-usage-and-cost` | no entry declared | `evaluation/components/track_usage_and_cost/impls/qar_usage.py` | Cost, budget and resource-guard correctness |
 | `verify-offline` | no entry declared | `evaluation/components/verify_offline/impls/collect_by_file.py` | none yet |
 | `keep-secrets-out` | no entry declared | `evaluation/components/keep_secrets_out/impls/live_scanner.py` | Secret detection and placeholder tolerance |
@@ -258,14 +263,14 @@ flowchart LR
 | `keep-it-generic` | no entry declared | `structure-library` | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `ground-in-intent` | no entry declared | `frame-line` | Intent-grounded pass rate |
 | `iterate-by-spec` | no entry declared | `slice-and-writeback` | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
-| `core-ml-tasks` | no entry declared | `message-route-family` | Accuracy of core ML tasks over labelled cases |
+| `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | `router_labels` | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | no entry declared | `lexical-vector-gated` | Specification selection pass rate |
 | `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
 | `repair-a-card-store` | no entry declared | `repository_tidy` | Cards per source-file group and duplicate share after a repair of an inflated store |
 | `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
 | `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
 | `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
-| `reason-and-answer` | no entry declared | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
+| `reason-and-answer` | `quest_ai_runner.run("reason-and-answer", ...)` | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
 | `remember-and-recall` | no entry declared | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
 | `know-the-world` | no entry declared | `web_with_support_check` | Supported and calibrated answers to world questions |
 | `claim-reach` | no entry declared | `coding_agent_prompt_reach` | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
@@ -281,12 +286,12 @@ flowchart LR
 | `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | no entry declared | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
-| `answer-end-to-end` | no entry declared | `qar_live` | Whole-path turns right on a small mixed set |
+| `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | `shipped_path` | Whole-path turns right on a small mixed set |
 | `guide-toward-the-long-term-goal` | no entry declared | `guided_v2` | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | none yet |
 | `card-store` | no entry declared | `quest-api-cards` | none yet |
-| `show-the-ais-work` | no entry declared | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
-| `reply-in-steps` | no entry declared | `gated` | Interim messages and asks that are true, not repeated and only where a person is needed |
+| `show-the-ais-work` | `quest_ai_runner.run("show-the-ais-work")` | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
+| `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | `gated` | Interim messages and asks that are true, not repeated and only where a person is needed |
 | `take-in-the-world` | no entry declared | `ways_in` | Ways in that pass their own metric |
 
 ## Problems and ideals
@@ -506,8 +511,8 @@ flowchart LR
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
 | `do-grounded-work` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | library | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
-| `route-a-message` | Cost-aware message router | evaluation/components/classification/impls/qar_planner.py | Routing correctness over the classification cases |
-| `answer-a-turn` | Grounded chat turn handler | evaluation/components/chat_quality/impls/dev_quest_chat.py | Judge pass rate over the chat quality cases |
+| `route-a-message` | Cost-aware message router | planner_route | Routing correctness over the classification cases |
+| `answer-a-turn` | Grounded chat turn handler | orchestrator_turn | Judge pass rate over the chat quality cases |
 | `operate-a-quest` | Quest change executor | evaluation/components/quest_ops/impls/qar_orchestrator.py | Final quest state against the request over the quest operation cases |
 | `gather-evidence` | Multi-source evidence retriever | composite | Retrieval recall of the right document over handbook questions |
 | `search-the-web` | Bounded web research | web_research | Right-passage rate and search spend over public factual questions |
@@ -524,10 +529,10 @@ flowchart LR
 | `index-by-meaning` | Semantic vector index | qdrant | Semantic recall and query latency on the synthetic handbook |
 | `guide-by-feedback` | Feedback-to-guidance loop | universal | Repeat-correction recall and precision over feedback sequences |
 | `talk-over-a-channel` | Live messaging channel transport | openclaw | Channel transport conformance to the gateway wire contract |
-| `replay-known-operations` | Learned-operation fast path | evaluation/components/recipe_fast_path/impls/recipe_replay.py | Fast-path hit rate and parity with the planner-only path |
+| `replay-known-operations` | Learned-operation fast path | stored_recipes | Fast-path hit rate and parity with the planner-only path |
 | `watch-for-risk` | Overseer: risk management that raises the overall metric | quest_ai_runner/core/overseer.py | Overseer digest evidence and signal correctness on labelled scenarios |
 | `detect-stale-cards` | Source-change staleness detector | evaluation/components/staleness/impls/store_sha256.py | Staleness detection precision and recall over mutation cases |
-| `assemble-a-prompt` | Budgeted prompt assembler | evaluation/components/prompt_size/impls/live.py | Prompt size against budget and duplicated-block count |
+| `assemble-a-prompt` | Budgeted prompt assembler | planner_prompt | Prompt size against budget and duplicated-block count |
 | `judge-a-decision` | Guarded model-verdict judge | evaluation/components/judges/impls/qar_judges.py | Judge deterministic-half correctness with a scripted provider |
 | `guard-a-reply` | Reply safety and anticipation guards | evaluation/components/reply_guards/impls/qar_guards.py | Reply guard correctness over link, recipe and anticipation cases |
 | `feed-context-sources` | Incremental context-update feed | base | Update-offering correctness over synthetic quest channels |
@@ -554,7 +559,7 @@ flowchart LR
 | `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
-| `core-ml-tasks` | Core ML tasks: quest classification and recommendation | message-route-family | Accuracy of core ML tasks over labelled cases |
+| `core-ml-tasks` | Core ML tasks: quest classification and recommendation | router_labels | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
 | `repair-a-card-store` | Card store repair | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
@@ -577,7 +582,7 @@ flowchart LR
 | `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
-| `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set |
+| `answer-end-to-end` | Whole-path answer check | shipped_path | Whole-path turns right on a small mixed set |
 | `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | guided_v2 | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `access-quest-operations` | access-quest-operations | quest_client | none yet |
 | `card-store` | QAR card repository as the hub card store | quest-api-cards | none yet |
@@ -776,7 +781,7 @@ flowchart LR
 | `repair-a-card-store:repository_tidy` | Repository tidy | quest_ai_runner/adapters/card_store_tidy.py |  |
 | `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | quest_ai_runner/adapters/context_store_heal.py |  |
 | `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | evaluation/components/card_growth/impls/no_cleanup.py |  |
-| `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | quest_ai_runner/core/orchestrator_planning.py |  |
+| `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | quest_ai_runner/area_reason_and_answer.py |  |
 | `reason-and-answer:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | quest_ai_runner/core/orchestrator_planning.py |  |
 | `reason-and-answer:append_only_stream` | Carried message stream per request (proposed) |  |  |
 | `reason-and-answer:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
@@ -858,6 +863,12 @@ flowchart LR
 | `take-in-the-world:ways_in` | Channels, terminal and package as ways in | quest_ai_runner/core/orchestrator_run_begin.py |  |
 | `access-quest-operations:quest_client` | Quest HTTP client from the environment | quest_ai_runner/goal_agent.py |  |
 | `card-store:quest-api-cards` | Quest backend card API from the environment | quest_ai_runner/adapters/hub_card_store.py |  |
+| `assemble-a-prompt:planner_prompt` | The planner prompt written by the real loop | quest_ai_runner/area_reason_and_answer.py |  |
+| `answer-a-turn:orchestrator_turn` | One turn of the orchestrator over the model | quest_ai_runner/area_reason_and_answer.py |  |
+| `answer-end-to-end:shipped_path` | The shipped path as one call | quest_ai_runner/area_reason_and_answer.py |  |
+| `replay-known-operations:stored_recipes` | The recipe store of the loop | quest_ai_runner/area_reason_and_answer.py |  |
+| `core-ml-tasks:router_labels` | The route as the classification label | quest_ai_runner/area_reason_and_answer.py |  |
+| `route-a-message:planner_route` | The loop planner decides the route | quest_ai_runner/message_routing.py |  |
 
 ### Metrics
 
