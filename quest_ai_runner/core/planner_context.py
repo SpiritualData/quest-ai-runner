@@ -6,12 +6,13 @@ decides what to do with the answer stays in the orchestrator. ``orchestrator`` r
 here, so existing imports keep working.
 """
 import re
+import typing
 from typing import Any, Dict, List, Optional, Sequence
 
-from esoi import implementation
+from esoi import implementation, solution
 from hubofhubs.card import Card
 from hubofhubs.ports.context import AssembledContext
-from hubofhubs.seats import CardStore
+from hubofhubs.seats import CardStore, Remembering
 from hubofhubs.critique.link_detect import MAX_LISTED_LINKS, links_in_message
 from .planner_prompt import DECLINED_PROPOSALS_NOTE
 
@@ -507,6 +508,13 @@ def cap_section(text: str, max_chars: int, *, keep: str = "tail") -> str:
 def gathered_content(gathered: List[Any]) -> List[Any]:
     """``gathered`` without ``planner_only`` notes: what the turn actually read."""
     return [o for o in (gathered or []) if not (isinstance(o, dict) and o.get("planner_only"))]
+
+
+@solution("remember-and-recall", kind="event", entry="recall", example="rust release")
+@typing.runtime_checkable
+class CardRecall(Remembering, typing.Protocol):
+    """What a request recalls: the hub's ``remember-and-recall`` interface (``recall``), which the loop also reads as its context
+    assembler (``assemble`` and ``record``)."""
 
 
 @implementation("remember-and-recall", "recency_window")

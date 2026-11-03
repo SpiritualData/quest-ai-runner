@@ -271,7 +271,7 @@ flowchart LR
 | `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
 | `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
 | `reason-and-answer` | `quest_ai_runner.run("reason-and-answer", ...)` | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
-| `remember-and-recall` | no entry declared | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
+| `remember-and-recall` | `quest_ai_runner.run("remember-and-recall", 'rust release')` | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
 | `know-the-world` | no entry declared | `web_with_support_check` | Supported and calibrated answers to world questions |
 | `claim-reach` | no entry declared | `coding_agent_prompt_reach` | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | no entry declared | `card_and_reads` | Account-state consistency across scripted sessions |
@@ -289,7 +289,7 @@ flowchart LR
 | `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | `shipped_path` | Whole-path turns right on a small mixed set |
 | `guide-toward-the-long-term-goal` | no entry declared | `guided_v2` | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | none yet |
-| `card-store` | no entry declared | `quest-api-cards` | none yet |
+| `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | `quest-api-cards` | none yet |
 | `show-the-ais-work` | `quest_ai_runner.run("show-the-ais-work")` | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
 | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | `gated` | Interim messages and asks that are true, not repeated and only where a person is needed |
 | `take-in-the-world` | no entry declared | `ways_in` | Ways in that pass their own metric |
