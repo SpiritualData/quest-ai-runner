@@ -19,7 +19,10 @@ from .area_reason_and_answer import StepReasoning
 from .config import RunnerConfig, build_orchestrator
 from .loop_wiring import GoalAnswer
 from .message_routing import RequestTakingIn
-from .area_act_as_the_body import BodyActing, QuestOperations
+from .area_act_as_the_body import BodyActing
+from .area_think_critically import MetricHolding
+from .area_watch_for_risk import RunWatching
+from .runner.quest_client import QuestOperations
 
 
 @solution("do-grounded-work", kind="event", entry="answer", example="What should I work on first this week?")
@@ -33,13 +36,14 @@ class GoalAgent(typing.Protocol):
 @implementation("do-grounded-work", "library")
 class QuestAiRunnerLibrary:
     """The orchestrator of ``core/orchestrator.py`` wired to the seats it is handed; one object answers any number of messages. The
-    ``reasoning``, ``taking_in`` and ``body`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
+    ``reasoning``, ``taking_in``, ``body``, ``critic`` and ``risk`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
     orchestrator."""
 
     def __init__(self, model: ModelCalling, cards: CardStore, memory: Remembering, quest: QuestOperations,
-                 reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn], body: Lazy[BodyActing]) -> None:
+                 reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn], body: Lazy[BodyActing], critic: Lazy[MetricHolding],
+                 risk: Lazy[RunWatching]) -> None:
         self.model, self.cards, self.memory, self.quest, self.reasoning, self.taking_in = model, cards, memory, quest, reasoning, taking_in
-        self.body = body
+        self.body, self.critic, self.risk = body, critic, risk
 
     def config(self) -> RunnerConfig:
         """The runner's configuration over the seats: the model, the cards as the context assembler, the Quest account."""

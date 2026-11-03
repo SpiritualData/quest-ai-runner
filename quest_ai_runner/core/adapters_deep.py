@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
+from esoi import solution
 from hubofhubs.ports.deep import DeepResult
 
 from .adapters_values import Escalation
 
 
+@solution("escalate-to-a-human", kind="event", entry="escalate", example=Escalation(summary="Approve the launch note before it goes out"))
 @runtime_checkable
 class EscalationSink(Protocol):
     """Raise a human-only confirm/decision and return its id."""

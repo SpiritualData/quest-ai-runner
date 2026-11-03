@@ -64,10 +64,11 @@ from __future__ import annotations
 
 import json
 import os
+import typing
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Sequence
 
-from esoi import implementation
+from esoi import implementation, solution
 from ..core.adapters_values import Escalation
 from ..core.adapters_bases import EscalationSinkBase
 
@@ -197,6 +198,14 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
         return json.dumps(detail) if detail is not None else body
 
 
+@solution("access-quest-operations", kind="event", entry="list_quest_goals", example="quest-id")
+@typing.runtime_checkable
+class QuestOperations(typing.Protocol):
+    """The Quest account the runner works in: reads a quest's goals, and carries out the operations a person asked for."""
+
+    def list_quest_goals(self, quest_id: str, **options: Any) -> Any: ...
+
+
 @implementation("escalate-to-a-human", "quest_decision")
 class QuestDecisionSink(EscalationSinkBase):
     """Adapt a QuestClient into a core EscalationSink.
@@ -206,7 +215,7 @@ class QuestDecisionSink(EscalationSinkBase):
     via ``report_needs_you``).
     """
 
-    def __init__(self, client: QuestClient, *, default_assignee_user_id: Optional[str] = None,
+    def __init__(self, client: QuestOperations, *, default_assignee_user_id: Optional[str] = None,
                 default_deadline_hours: Optional[float] = None):
         self._client = client
         self._default_assignee = default_assignee_user_id

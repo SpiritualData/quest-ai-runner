@@ -27,7 +27,7 @@ from hubofhubs.deep.contract import DEEP_REVIEW_PROMPT, SubprocessConfig, parse_
 from hubofhubs.deep.subprocess_runner import SubprocessGoalRunner
 from hubofhubs.seats import ModelCalling
 
-from .area_act_as_the_body import QuestOperations
+from .runner.quest_client import QuestOperations
 from .core import quest_judge, reach_judge
 from .core.goal_iteration import GoalIteration
 from .core.goal_metrics import GoalMetrics
