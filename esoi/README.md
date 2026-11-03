@@ -1,14 +1,349 @@
-These are ESOI records (evolvable structure that optimizes intent): why this project exists, and its problems, solutions, implementations, ideals and metrics. This page is generated from the CSV files beside it by `esoi check --write-docs`; edit the CSV files, not this page.
-
 # Grounded AI that advances people's goals
 
 Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.
+
+*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+
+Opportunities: Other products that need an AI which works from a person's own goals and material could reuse this engine, so the grounding, the standard for delegated work and the scope fences are built once and shared.
 
 ## How the solutions fit together
 
 quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop: do-grounded-work asks the model through call-a-model, remembers through remember-and-recall, keeps the cards in card-store and works in the person's Quest account through access-quest-operations. The other areas of the loop are take-in-the-world, reason-and-answer, know-the-world, think-critically, act-as-the-body, watch-for-risk, hold-the-intents and keep-it-generic. take-in-the-world receives a request from talk-over-a-channel, operate-from-a-terminal, assist-a-terminal-session or the package that expose-the-public-api offers. It also lets receive-input-mid-run reach a run that is already working, describes attachments through describe-an-attachment, adds what changed in a work item through feed-context-sources, and hands each request to route-a-message. learn-by-example shows how to use the package through expose-the-public-api. explain-qar documents the package through expose-the-public-api. remember-and-recall recalls the cards that match a request through card-store. select-context ranks stored cards, files and conversations, resolves their references through resolve-references and searches cards and specification records together through search-cards-and-specs. card-store keeps the cards through persist-cards, serves the last known listing through cache-cards while a backend is down, finds them by meaning through index-by-meaning, labels them through label-context-cards, reports stale ones through detect-stale-cards, holds their growth in check through bound-card-growth and shrinks an inflated store through repair-a-card-store. repair-a-card-store rewrites the stored cards through persist-cards and asks choose-what-to-index which sources deserve cards. reason-and-answer rebuilds each step's prompt through assemble-a-prompt, calls call-a-model at the tier choose-a-model-tier picks, answers chat turns through answer-a-turn, reuses requests that worked before through replay-known-operations, classifies inputs through core-ml-tasks, proves a message is handled end to end through answer-end-to-end, and keeps the person informed through reply-in-steps and show-the-ais-work. core-ml-tasks includes the classifier route-a-message runs. call-a-model accounts for every call through justify-model-calls and track-usage-and-cost. reply-in-steps sends the lines of narrate-a-turn and the prose of explain-an-answer, and files the one ask a block only a person can lift needs. show-the-ais-work lays out the steps that show-progress streams. know-the-world answers questions about the world from search-the-web results it checks for support, answering the way answer-a-turn does. think-critically holds deep runs to their metric through iterate-by-spec on the records spec-selection picks, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, ties work to its purpose through ground-in-intent, tells a stuck run from a slow one through detect-a-stalled-run, drafts a missing metric through draft-a-metric, and keeps background work inside its hours and budget through gate-an-autopilot-pass. act-as-the-body does the work and reports it truthfully. It reads the quest through operate-a-quest, gather-evidence and persist-cards, and claims only the reach that claim-reach grants. It writes files through write-files and reaches Quest's operations through access-quest-operations. It runs queued requests through run-queued-tasks and decides who owns a new goal through hand-off-a-goal. claim-reach hands real work to run-deep-work, write-through-mcp, talk-over-a-channel or gather-evidence. watch-for-risk oversees a run and brings a step only a person may take to that person through escalate-to-a-human. hold-the-intents keeps the long view across turns. It carries what was said and found through remember-conversations and recall-recent-context. It keeps and applies a person's corrections through store-feedback and guide-by-feedback. It saves what was learned through persist-predictions and persist-cards. It keeps work aimed at the person's end through guide-toward-the-long-term-goal, and picks the representative a request runs as through select-a-rep. select-a-rep sends the queued work of that representative through run-queued-tasks. keep-it-generic keeps every part specified as a solution with measured alternatives. It picks the arm that runs through select-an-implementation and finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
-## Problems
+## Diagram
+
+An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+
+```mermaid
+flowchart LR
+    s0["Grounded goal agent: the engine that...<br/>do-grounded-work"]
+    s1["Cost-aware message router<br/>route-a-message"]
+    s2["Grounded chat turn handler<br/>answer-a-turn"]
+    s3["Quest change executor<br/>operate-a-quest"]
+    s4["Multi-source evidence retriever<br/>gather-evidence"]
+    s5["Bounded web research<br/>search-the-web"]
+    s6["Tiered model provider layer<br/>call-a-model"]
+    s7["Bounded autonomous work runner<br/>run-deep-work"]
+    s8["Run liveness reviewer<br/>detect-a-stalled-run"]
+    s9["Bounded reversible file writer<br/>write-files"]
+    s10["Allowlisted operation writer<br/>write-through-mcp"]
+    s11["Human decision escalation channel<br/>escalate-to-a-human"]
+    s12["Mode-aware progress surfacing<br/>show-progress"]
+    s13["Cross-conversation recall store<br/>remember-conversations"]
+    s14["Context card selector<br/>select-context"]
+    s15["Context card persistence backend<br/>persist-cards"]
+    s16["Semantic vector index<br/>index-by-meaning"]
+    s17["Feedback-to-guidance loop<br/>guide-by-feedback"]
+    s18["Live messaging channel transport<br/>talk-over-a-channel"]
+    s19["Learned-operation fast path<br/>replay-known-operations"]
+    s20["Overseer: risk management that raises...<br/>watch-for-risk"]
+    s21["Source-change staleness detector<br/>detect-stale-cards"]
+    s22["Budgeted prompt assembler<br/>assemble-a-prompt"]
+    s23["Guarded model-verdict judge<br/>judge-a-decision"]
+    s24["Reply safety and anticipation guards<br/>guard-a-reply"]
+    s25["Incremental context-update feed<br/>feed-context-sources"]
+    s26["Verbatim feedback ledger<br/>store-feedback"]
+    s27["Scoped recent-context warm start<br/>recall-recent-context"]
+    s28["Conversation-keyed mid-run input inbox<br/>receive-input-mid-run"]
+    s29["Fail-safe card reference resolver<br/>resolve-references"]
+    s30["Offline card cache and write outbox<br/>cache-cards"]
+    s31["Standing-instruction behaviour layer<br/>behave-by-esoi"]
+    s32["Behaviour-grading judge<br/>judge-esoi-behavior"]
+    s33["Public package surface contract<br/>expose-the-public-api"]
+    s34["Runnable example set<br/>learn-by-example"]
+    s35["Queued-task runner lane<br/>run-queued-tasks"]
+    s36["Layered lane configuration loader<br/>configure-a-lane"]
+    s37["Non-interactive command-line surface<br/>operate-from-a-terminal"]
+    s38["Cost-ordered model tier selector with...<br/>choose-a-model-tier"]
+    s39["Cost estimation, daily budget and host...<br/>track-usage-and-cost"]
+    s40["verify-offline<br/>verify-offline"]
+    s41["Public-repository hygiene scanner<br/>keep-secrets-out"]
+    s42["select-an-implementation<br/>select-an-implementation"]
+    s43["Documentation coverage and voice check<br/>explain-qar"]
+    s44["Scoped prediction store<br/>persist-predictions"]
+    s45["Autopilot run-or-skip gate<br/>gate-an-autopilot-pass"]
+    s46["Evolve by metric<br/>keep-it-generic"]
+    s47["Intent frame for quest-scoped prompts<br/>ground-in-intent"]
+    s48["Specification slice before a task and...<br/>iterate-by-spec"]
+    s49["Core ML tasks: quest classification and...<br/>core-ml-tasks"]
+    s50["Select the intent specifications an...<br/>spec-selection"]
+    s51["Card store growth prevention<br/>bound-card-growth"]
+    s52["Card store repair<br/>repair-a-card-store"]
+    s53["Unified card and specification search<br/>search-cards-and-specs"]
+    s54["Problem-linked tags that identify...<br/>tag-solutions"]
+    s55["Index scope decision: which folders and...<br/>choose-what-to-index"]
+    s56["Mind: one goal-focused working stream...<br/>reason-and-answer"]
+    s57["Subconscious: the person's own...<br/>remember-and-recall"]
+    s58["Science: evidence-weighted knowledge...<br/>know-the-world"]
+    s59["World: doing things outside the host...<br/>claim-reach"]
+    s60["Body: the host's data model as the...<br/>act-as-the-body"]
+    s61["Higher mind: an AI representative's...<br/>hold-the-intents"]
+    s62["Critical thinking: the enforcer of ESOI...<br/>think-critically"]
+    s63["Representative selection: which AI...<br/>select-a-rep"]
+    s64["First-beat narration<br/>narrate-a-turn"]
+    s65["How-I-got-this explanation<br/>explain-an-answer"]
+    s66["Image description for grounding<br/>describe-an-attachment"]
+    s67["Goal assignee and doability judge<br/>hand-off-a-goal"]
+    s68["Metric drafting for a task<br/>draft-a-metric"]
+    s69["Card categories and metadata<br/>label-context-cards"]
+    s70["Terminal helper calls<br/>assist-a-terminal-session"]
+    s71["Justified model calls<br/>justify-model-calls"]
+    s72["Whole-path answer check<br/>answer-end-to-end"]
+    s73["Guidance toward the long-term goal<br/>guide-toward-the-long-term-goal"]
+    s74["access-quest-operations<br/>access-quest-operations"]
+    s75["QAR card repository as the hub card...<br/>card-store"]
+    s76["Show the AI's work and next steps<br/>show-the-ais-work"]
+    s77["Reply in steps when the goal is not met...<br/>reply-in-steps"]
+    s78["take-in-the-world: the ways a request...<br/>take-in-the-world"]
+    s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s49
+    s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s59
+    s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s78
+    s2 -->|"The reply text, the routing taken (inline or delegated)..."| s56
+    s2 -->|"The reply text, the routing taken (inline or delegated)..."| s58
+    s3 -->|"The resulting quest state and a reply that reports what was..."| s60
+    s3 -->|"The resulting quest state and a reply that reports what was..."| s62
+    s4 -->|"Observation values carrying text, a path or source label..."| s58
+    s4 -->|"Observation values carrying text, a path or source label..."| s59
+    s4 -->|"Observation values carrying text, a path or source label..."| s60
+    s5 -->|"One compact observation of title, link and snippet per hit..."| s58
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s0
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s56
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s59
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s61
+    s7 -->|"A result stating whether the goal was met, the output text..."| s59
+    s8 -->|"A verdict of stop or keep running with a one-sentence..."| s62
+    s9 -->|"A write result stating success, whether the file was..."| s59
+    s9 -->|"A write result stating success, whether the file was..."| s60
+    s10 -->|"A write result with success, error and an audit detail of..."| s59
+    s11 -->|"A decision identifier the caller reports back"| s20
+    s11 -->|"A decision identifier the caller reports back"| s59
+    s11 -->|"A decision identifier the caller reports back"| s62
+    s11 -->|"A decision identifier the caller reports back"| s63
+    s12 -->|"None returned; surfaced events reach the consumer's stream..."| s76
+    s13 -->|"A conversation context holding rendered text slices from..."| s61
+    s14 -->|"An assembled context: rendered context view, card ids in..."| s57
+    s14 -->|"An assembled context: rendered context view, card ids in..."| s59
+    s14 -->|"An assembled context: rendered context view, card ids in..."| s61
+    s15 -->|"Load-all returns a mapping of id to card, read returns a..."| s52
+    s15 -->|"Load-all returns a mapping of id to card, read returns a..."| s60
+    s15 -->|"Load-all returns a mapping of id to card, read returns a..."| s61
+    s15 -->|"Load-all returns a mapping of id to card, read returns a..."| s75
+    s16 -->|"Ranked hits with id, score, text and payload for search..."| s75
+    s17 -->|"A list of guidance cards with bodies for the..."| s61
+    s17 -->|"A list of guidance cards with bodies for the..."| s63
+    s18 -->|"An inbound batch (messages with ids, chat references, text..."| s59
+    s18 -->|"An inbound batch (messages with ids, chat references, text..."| s78
+    s19 -->|"The reply text and exit reason of the run, with the tool..."| s56
+    s19 -->|"The reply text and exit reason of the run, with the tool..."| s57
+    s21 -->|"Whether the file is stale, and the stale card list for the..."| s75
+    s22 -->|"The assembled prompt string for each assembly point"| s56
+    s23 -->|"A parsed verdict (signal, reach verdict, quest ranking or..."| s20
+    s23 -->|"A parsed verdict (signal, reach verdict, quest ranking or..."| s57
+    s23 -->|"A parsed verdict (signal, reach verdict, quest ranking or..."| s62
+    s23 -->|"A parsed verdict (signal, reach verdict, quest ranking or..."| s63
+    s24 -->|"Sanitised text with a verdict per link, extracted links and..."| s62
+    s25 -->|"A bundle of context updates, each with an item id, its text..."| s78
+    s26 -->|"Ledger items with status lines, the open and standing sets..."| s61
+    s27 -->|"Recent card records merged across scopes, narrower scope..."| s61
+    s28 -->|"Drain returns and removes the pending messages in arrival..."| s78
+    s29 -->|"Rendered text for the pointer, possibly marked abridged, or..."| s14
+    s30 -->|"The stored listing with its update time, or none, and the..."| s75
+    s31 -->|"A reply, then a pass or fail verdict with a one-line reason..."| s46
+    s31 -->|"A reply, then a pass or fail verdict with a one-line reason..."| s62
+    s32 -->|"A verdict of pass or fail with a one-line reason"| s46
+    s33 -->|"A configured client or runner config, results of bridged..."| s34
+    s33 -->|"A configured client or runner config, results of bridged..."| s43
+    s33 -->|"A configured client or runner config, results of bridged..."| s78
+    s35 -->|"A reported status on each task (with result text or..."| s60
+    s35 -->|"A reported status on each task (with result text or..."| s62
+    s35 -->|"A reported status on each task (with result text or..."| s63
+    s36 -->|"A populated runner configuration object, or a..."| s46
+    s37 -->|"Text on standard output and error and an integer exit code..."| s78
+    s38 -->|"A starting model and ladder, a concrete model id for a tier..."| s20
+    s38 -->|"A starting model and ladder, a concrete model id for a tier..."| s56
+    s39 -->|"A price per million input tokens, a bootstrap cost estimate..."| s6
+    s40 -->|"A report of every test that cannot start or pass offline..."| s46
+    s41 -->|"A list of findings with a pattern name, a location and a..."| s46
+    s42 -->|"The implementation that serves a solution, chosen by name..."| s46
+    s44 -->|"The saved patterns, the unexpired predictions, a..."| s57
+    s44 -->|"The saved patterns, the unexpired predictions, a..."| s61
+    s45 -->|"For each quest, either a skip with a reason or passage..."| s62
+    s47 -->|"Frame text, an anchor (intent, solution, implementation..."| s61
+    s47 -->|"Frame text, an anchor (intent, solution, implementation..."| s62
+    s48 -->|"A slice for the brief; per record served: the last run that..."| s62
+    s49 -->|"A class or a ranked list with a score for each, and the..."| s56
+    s50 -->|"A SpecSelection: ids best first then linked ids, the..."| s61
+    s50 -->|"A SpecSelection: ids best first then linked ids, the..."| s62
+    s51 -->|"Cards written only under an id made of their origin; a..."| s75
+    s52 -->|"A plan (tidy-state/last-plan.json for the startup tidy), a..."| s75
+    s53 -->|"One assembled context: ranked items, each with its kind..."| s14
+    s54 -->|"The solution's tags column; for a planned change, the..."| s46
+    s55 -->|"A FolderGate: the set of corpus-relative folders no card..."| s52
+    s56 -->|"Each step's view of the request (a carried message list or..."| s60
+    s57 -->|"The admitted items with a one-line reason each, and the..."| s0
+    s57 -->|"The admitted items with a one-line reason each, and the..."| s56
+    s59 -->|"A reach verdict for the request (inside, outside, in the..."| s60
+    s61 -->|"For a request the representative handles: its standing view..."| s57
+    s61 -->|"For a request the representative handles: its standing view..."| s63
+    s63 -->|"The chosen representative (or none for the plain..."| s61
+    s64 -->|"The text or verdict the call returns"| s77
+    s65 -->|"The text or verdict the call returns"| s77
+    s66 -->|"The text or verdict the call returns"| s78
+    s67 -->|"The text or verdict the call returns"| s60
+    s68 -->|"The text or verdict the call returns"| s62
+    s69 -->|"The text or verdict the call returns"| s75
+    s70 -->|"The text or verdict the call returns"| s78
+    s71 -->|"A per-prompt table and the share of average model spend..."| s6
+    s72 -->|"The reply, the writes that landed, the web queries made and..."| s56
+    s72 -->|"The reply, the writes that landed, the web queries made and..."| s59
+    s73 -->|"The reply, with or without one short pointer"| s61
+    s74 -->|"The result of one Quest operation"| s0
+    s74 -->|"The result of one Quest operation"| s60
+    s75 -->|"Hub Card objects"| s0
+    s75 -->|"Hub Card objects"| s57
+    s76 -->|"The elements a viewer is shown: a live line, a summary line..."| s56
+    s77 -->|"Send or skip with a reason, and the interim event payload"| s56
+```
+
+## Solutions at a glance
+
+| Solution | Entry call | Selected implementation | Metric |
+|---|---|---|---|
+| `do-grounded-work` | `quest_ai_runner.run("do-grounded-work", 'What should I work on first this week?')` | `library` | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
+| `route-a-message` | no entry declared | `evaluation/components/classification/impls/qar_planner.py` | Routing correctness over the classification cases |
+| `answer-a-turn` | no entry declared | `evaluation/components/chat_quality/impls/dev_quest_chat.py` | Judge pass rate over the chat quality cases |
+| `operate-a-quest` | no entry declared | `evaluation/components/quest_ops/impls/qar_orchestrator.py` | Final quest state against the request over the quest operation cases |
+| `gather-evidence` | no entry declared | `composite` | Retrieval recall of the right document over handbook questions |
+| `search-the-web` | no entry declared | `web_research` | Right-passage rate and search spend over public factual questions |
+| `call-a-model` | no entry declared | `multi_provider` | Provider routing, fallback, retry and cost correctness |
+| `run-deep-work` | no entry declared | `subprocess` | Outcome reporting correctness across deep runners |
+| `detect-a-stalled-run` | no entry declared | `evaluation/components/deep_review/impls/live_reviewer.py` | Stop-or-continue verdict accuracy with false stops counted apart |
+| `write-files` | no entry declared | `files` | Write boundary and reversibility over the scratch-tree cases |
+| `write-through-mcp` | no entry declared | `mcp` | Allowlist enforcement and exactly-once execution |
+| `escalate-to-a-human` | no entry declared | `quest_decision` | Escalation delivery and detail completeness |
+| `show-progress` | no entry declared | `stream` | Surfaced-event policy by mode |
+| `remember-conversations` | no entry declared | `session_file` | Past-conversation recall and isolation over synthetic cases |
+| `select-context` | no entry declared | `hybrid` | Context selection ranking accuracy and card-quality outcome |
+| `persist-cards` | no entry declared | `quest_api` | Card repository conformance across backends |
+| `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
+| `guide-by-feedback` | no entry declared | `universal` | Repeat-correction recall and precision over feedback sequences |
+| `talk-over-a-channel` | no entry declared | `openclaw` | Channel transport conformance to the gateway wire contract |
+| `replay-known-operations` | no entry declared | `evaluation/components/recipe_fast_path/impls/recipe_replay.py` | Fast-path hit rate and parity with the planner-only path |
+| `watch-for-risk` | no entry declared | `quest_ai_runner/core/overseer.py` | Overseer digest evidence and signal correctness on labelled scenarios |
+| `detect-stale-cards` | no entry declared | `evaluation/components/staleness/impls/store_sha256.py` | Staleness detection precision and recall over mutation cases |
+| `assemble-a-prompt` | no entry declared | `evaluation/components/prompt_size/impls/live.py` | Prompt size against budget and duplicated-block count |
+| `judge-a-decision` | no entry declared | `evaluation/components/judges/impls/qar_judges.py` | Judge deterministic-half correctness with a scripted provider |
+| `guard-a-reply` | no entry declared | `evaluation/components/reply_guards/impls/qar_guards.py` | Reply guard correctness over link, recipe and anticipation cases |
+| `feed-context-sources` | no entry declared | `base` | Update-offering correctness over synthetic quest channels |
+| `store-feedback` | no entry declared | `ledger` | Correction carry-through over the feedback-loop cases |
+| `recall-recent-context` | no entry declared | `file` | Warm-start accuracy with no cross-work-item leakage |
+| `receive-input-mid-run` | no entry declared | `in_memory` | Exactly-once mid-run delivery per run, and how fast it is seen |
+| `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
+| `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
+| `behave-by-esoi` | no entry declared | `evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py` | Principle-following pass rate under standing instructions |
+| `judge-esoi-behavior` | no entry declared | `evaluation/components/esoi_judge/impls/model_judge.py` | Judge agreement with labelled reference replies |
+| `expose-the-public-api` | no entry declared | `evaluation/components/expose_the_public_api/impls/live_surface.py` | Public surface conformance on fixture inputs |
+| `learn-by-example` | no entry declared | `evaluation/components/learn_by_example/impls/live_examples.py` | Example runnability on an empty environment |
+| `run-queued-tasks` | no entry declared | `evaluation/components/run_queued_tasks/impls/qar_runner.py` | Task lifecycle correctness over offline cases |
+| `configure-a-lane` | no entry declared | `evaluation/components/configure_a_lane/impls/qar_config.py` | Configuration precedence and validation correctness |
+| `operate-from-a-terminal` | no entry declared | `evaluation/components/operate_from_a_terminal/impls/qar_main.py` | Command-line parsing, refusal and output correctness |
+| `choose-a-model-tier` | no entry declared | `model_registry` | Model tier selection and limit-recognition correctness |
+| `track-usage-and-cost` | no entry declared | `evaluation/components/track_usage_and_cost/impls/qar_usage.py` | Cost, budget and resource-guard correctness |
+| `verify-offline` | no entry declared | `evaluation/components/verify_offline/impls/collect_by_file.py` | none yet |
+| `keep-secrets-out` | no entry declared | `evaluation/components/keep_secrets_out/impls/live_scanner.py` | Secret detection and placeholder tolerance |
+| `select-an-implementation` | no entry declared | `evaluation/components/select_an_implementation/impls/live_resolver.py` | none yet |
+| `explain-qar` | no entry declared | `evaluation/components/explain_qar/impls/shipped_docs.py` | Documentation coverage and voice conformance |
+| `persist-predictions` | no entry declared | `file` | Prediction store contract pass rate |
+| `gate-an-autopilot-pass` | no entry declared | `evaluation/components/gate_an_autopilot_pass/impls/live_pass.py` | Autopilot gate decision correctness |
+| `keep-it-generic` | no entry declared | `structure-library` | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
+| `ground-in-intent` | no entry declared | `frame-line` | Intent-grounded pass rate |
+| `iterate-by-spec` | no entry declared | `slice-and-writeback` | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
+| `core-ml-tasks` | no entry declared | `message-route-family` | Accuracy of core ML tasks over labelled cases |
+| `spec-selection` | no entry declared | `lexical-vector-gated` | Specification selection pass rate |
+| `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| `repair-a-card-store` | no entry declared | `repository_tidy` | Cards per source-file group and duplicate share after a repair of an inflated store |
+| `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
+| `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
+| `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
+| `reason-and-answer` | no entry declared | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
+| `remember-and-recall` | no entry declared | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
+| `know-the-world` | no entry declared | `web_with_support_check` | Supported and calibrated answers to world questions |
+| `claim-reach` | no entry declared | `coding_agent_prompt_reach` | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
+| `act-as-the-body` | no entry declared | `card_and_reads` | Account-state consistency across scripted sessions |
+| `hold-the-intents` | no entry declared | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| `think-critically` | no entry declared | `deep_runs_only` | Requests held to their ESOI metric by code |
+| `select-a-rep` | no entry declared | `persona_resolver_precedence` | Representative choice accuracy and thread consistency |
+| `narrate-a-turn` | no entry declared | `model_beat` | Supported first beats within the time and cost the turn allows |
+| `explain-an-answer` | no entry declared | `model_explanation` | Faithful explanations per unit of cost and time |
+| `describe-an-attachment` | no entry declared | `vision_description` | Answer pass rate gained per image described |
+| `hand-off-a-goal` | no entry declared | `model_judge` | Hand-offs a person keeps per unit of cost and time |
+| `draft-a-metric` | no entry declared | `capped_model_draft` | Drafted metrics accepted per unit of cost |
+| `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
+| `assist-a-terminal-session` | no entry declared | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
+| `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
+| `answer-end-to-end` | no entry declared | `qar_live` | Whole-path turns right on a small mixed set |
+| `guide-toward-the-long-term-goal` | no entry declared | `guided_v2` | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
+| `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | none yet |
+| `card-store` | no entry declared | `quest-api-cards` | none yet |
+| `show-the-ais-work` | no entry declared | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
+| `reply-in-steps` | no entry declared | `gated` | Interim messages and asks that are true, not repeated and only where a person is needed |
+| `take-in-the-world` | no entry declared | `ways_in` | Ways in that pass their own metric |
+
+## Problems and ideals
+
+**Problems**
+
+- `QP1`: People can attach AI tasks to their goals in Quest and schedule them, but nothing runs them: Quest queues the work and has no worker.
+- `QP2`: A general assistant answers from general knowledge.
+- `QP3`: An AI that may act on someone's behalf tends to one of two failures: it asks permission for everything, so nothing moves without a person, or it takes steps that only a person should decide...
+- `QP4`: Grounding, routing, deep work, escalation, a task executor, cost control: each product or team that wants AI help writes these again, privately, and the copies drift apart.
+- `QP5`: Models, prices, tools and techniques change every few months, so a router, a retrieval method or a model choice that was right becomes wrong, and nobody notices until quality drops or cost rises.
+- `QP6`: Operators learn what AI work cost, and whether it was any good, only after the fact: a runaway run, a large model on an easy question, or a quiet drop in answer quality.
+- `prob-misrouted-message`: A short chat message is sometimes handled the wrong way: a plain question starts expensive autonomous work, a request to change something only gets talked about, or a destructive request runs without...
+- `prob-reply-misses-the-account`: Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no...
+- `prob-unrequested-or-partial-changes`: A request to change a quest leads to changes nobody asked for, to only part of what was asked, or to the same change made twice.
+- `prob-corrections-repeat`: People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears.
+- and 64 more: all 74 are in [problems](#problems) of the full record below
+
+**Ideals**
+
+- `QI1`, Self-advancing goals: Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote.
+- `QI2`, Personally grounded help: Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
+- `QI3`, Trusted autonomy: The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
+- `QI4`, One shared engine: One domain-free engine serves every consumer, every lane and both chat and scheduled work, and differs only in configuration.
+- `QI5`, Metric-led evolution: Every part of QAR improves as the state of the art moves, with the best implementation chosen by its metric.
+- `QI6`, Visible value: What AI work costs and how good it is are known before they surprise anyone.
+- `ideal-proportionate-routing`, Proportionate Routing: Each message gets the cheapest handling that still gets the right outcome.
+- `ideal-grounded-reply`, Grounded Reply: A reply says only what the person's own account and its sources support, and says what it found.
+- `ideal-exact-change`, Exact Change: The final state matches the request: everything asked, nothing else, once.
+- `ideal-lasting-correction`, Lasting Correction: A correction given once is kept as said and applied wherever it bears.
+- and 68 more: all 78 are in [ideals](#ideals) of the full record below
+
+## Metrics and their leaders
+
+- `QME1`, Passing chat turns per dollar: leader `reference_replies`, 331 of 331 cases
+- `QME2`, Delegated tasks meeting their standard
+- `QME3`, Exact and consented changes
+- `QME4`, Data kept in scope
+- `QME5`, Engine reuse
+- `QME6`, Measured coverage
+- `metric-qar-overall`, QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling: leader `qar_overall.broken.latest_row_any_age:build`, 0 of 9 cases
+- `metric-route-a-message`, Routing correctness over the classification cases: leader `keyword_rules`, 3 of 3 cases
+- `metric-answer-a-turn`, Judge pass rate over the chat quality cases: leader `reference_replies`, 331 of 331 cases
+- `metric-operate-a-quest`, Final quest state against the request over the quest operation cases: leader `orchestrator_pre_route`, 22 of 22 cases
+- and 88 more: all 98 are in [metrics](#metrics) of the full record below
+
+## Where to go next
+
+- Repository: [top README](../README.md)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Diagram page: [diagram.md](diagram.md)
+
+---
+
+## The full record
+
+### Problems
 
 - `QP1`: People can attach AI tasks to their goals in Quest and schedule them, but nothing runs them: Quest queues the work and has no worker. The same gap exists for anyone who wants AI to keep working on their goals between conversations.
 - `QP2`: A general assistant answers from general knowledge. It does not know the person's quests, plans, documents, past conversations or preferences, so its help is plausible but not theirs, and sometimes states things about their account that are not true.
@@ -72,20 +407,20 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 - `prob-long-view-scope-not-hierarchical`: A representative's high-level view legitimately spans its assigned quests and the intents above them, but the library's fence compares flat tag sets: an item is visible to a turn only when their tags intersect, or everywhere when it has none. Nothing can say visible to this representative's assigned quests and their ancestor intents, never to another representative's quests, a sibling intent or another person; and a representative's learned notes and context preferences carry no scope at all, so what it learned on one quest reaches every other.
 - `prob-wrong-or-inconsistent-rep`: Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. A quest can have several representatives, each with its own higher mind, so a wrong choice also grounds the request in the wrong view.
 - `prob-long-term-goal-goes-quiet`: The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset.
-- `prob-quest-answer-not-tied-to-my-goal`: unconfirmed: for Payal to confirm.
-- `prob-quest-feature-why-unexplained`: unconfirmed: for Payal to confirm.
-- `prob-assistant-not-jarvis-from-the-users-seat`: unconfirmed: for Payal to confirm.
-- `prob-goal-condition-restated-not-evidence`: unconfirmed: for Payal to confirm.
-- `prob-work-not-planned-backwards-from-done`: unconfirmed: for Payal to confirm.
-- `prob-partial-coverage-reported-as-complete`: unconfirmed: for Payal to confirm.
-- `prob-long-run-silent-until-the-end`: unconfirmed: for Payal to confirm.
-- `prob-two-access-points-to-quest-diverge`: unconfirmed: for Payal to confirm.
-- `prob-evaluation-not-staged-on-real-inputs`: unconfirmed: for Payal to confirm.
-- `prob-science-search-duplicates-research-chat`: unconfirmed: for Payal to confirm.
-- `prob-harness-dear-and-slow-on-the-subscription`: unconfirmed: for Payal to confirm.
+- `prob-quest-answer-not-tied-to-my-goal`: 
+- `prob-quest-feature-why-unexplained`: 
+- `prob-assistant-not-jarvis-from-the-users-seat`: 
+- `prob-goal-condition-restated-not-evidence`: 
+- `prob-work-not-planned-backwards-from-done`: 
+- `prob-partial-coverage-reported-as-complete`: 
+- `prob-long-run-silent-until-the-end`: 
+- `prob-two-access-points-to-quest-diverge`: 
+- `prob-evaluation-not-staged-on-real-inputs`: 
+- `prob-science-search-duplicates-research-chat`: 
+- `prob-harness-dear-and-slow-on-the-subscription`: 
 - `prob-unmet-turn-leaves-person-guessing`: A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do.
 
-## Ideals
+### Ideals
 
 - `QI1`, Self-advancing goals: Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote.
 - `QI2`, Personally grounded help: Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
@@ -138,51 +473,51 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 - `ideal-risk-handled-where-it-is`, Risk Handled Where It Is: Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
 - `ideal-hierarchy-contained-scope`, Hierarchy-Contained Scope: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
 - `ideal-right-rep`, Right Representative: Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
-- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: Unconfirmed, from the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
-- `ideal-quest-answer-fits-my-goal`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-quest-feature-why-explained`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-from-the-users-seat`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j01-always-there-and-fast`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j02-knows-my-context`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j03-nudges-at-the-right-moment`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j04-does-things-and-asks-first`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j05-multi-step-with-conditions`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j06-background-work-with-notice`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j07-honest-about-limits-and-actions`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j08-good-questions-when-vague`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j09-same-assistant-across-sessions`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j10-stable-adjustable-personality`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j11-treats-my-team-appropriately`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j12-gets-better-over-time`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j13-cheap-and-reliable-all-day`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-jarvis-j14-accurate-brief-personal-quest-answers`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-done-standard-evidenced`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-plan-from-the-done-standard`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-coverage-met-or-gap-stated`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-incremental-output-while-working`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-one-implementation-two-access-points`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-staged-evaluation-on-real-inputs`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-science-through-one-search`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
-- `ideal-cheap-fast-harness-with-ideal-context`, unconfirmed: for Payal to confirm.: unconfirmed: for Payal to confirm.
+- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
+- `ideal-quest-answer-fits-my-goal`, : 
+- `ideal-quest-feature-why-explained`, : 
+- `ideal-jarvis-from-the-users-seat`, : 
+- `ideal-jarvis-j01-always-there-and-fast`, : 
+- `ideal-jarvis-j02-knows-my-context`, : 
+- `ideal-jarvis-j03-nudges-at-the-right-moment`, : 
+- `ideal-jarvis-j04-does-things-and-asks-first`, : 
+- `ideal-jarvis-j05-multi-step-with-conditions`, : 
+- `ideal-jarvis-j06-background-work-with-notice`, : 
+- `ideal-jarvis-j07-honest-about-limits-and-actions`, : 
+- `ideal-jarvis-j08-good-questions-when-vague`, : 
+- `ideal-jarvis-j09-same-assistant-across-sessions`, : 
+- `ideal-jarvis-j10-stable-adjustable-personality`, : 
+- `ideal-jarvis-j11-treats-my-team-appropriately`, : 
+- `ideal-jarvis-j12-gets-better-over-time`, : 
+- `ideal-jarvis-j13-cheap-and-reliable-all-day`, : 
+- `ideal-jarvis-j14-accurate-brief-personal-quest-answers`, : 
+- `ideal-done-standard-evidenced`, : 
+- `ideal-plan-from-the-done-standard`, : 
+- `ideal-coverage-met-or-gap-stated`, : 
+- `ideal-incremental-output-while-working`, : 
+- `ideal-one-implementation-two-access-points`, : 
+- `ideal-staged-evaluation-on-real-inputs`, : 
+- `ideal-science-through-one-search`, : 
+- `ideal-cheap-fast-harness-with-ideal-context`, : 
 - `ideal-never-left-guessing`, Never Left Guessing: The person always knows whether work continues, why, and what only they can do.
 
-## Solutions
+### Solutions
 
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
-| `do-grounded-work` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | library | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling;Passing chat turns per dollar;Delegated tasks meeting their standard;Exact and consented changes;Data kept in scope;Engine reuse;Measured coverage |
+| `do-grounded-work` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | library | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
 | `route-a-message` | Cost-aware message router | evaluation/components/classification/impls/qar_planner.py | Routing correctness over the classification cases |
 | `answer-a-turn` | Grounded chat turn handler | evaluation/components/chat_quality/impls/dev_quest_chat.py | Judge pass rate over the chat quality cases |
 | `operate-a-quest` | Quest change executor | evaluation/components/quest_ops/impls/qar_orchestrator.py | Final quest state against the request over the quest operation cases |
 | `gather-evidence` | Multi-source evidence retriever | composite | Retrieval recall of the right document over handbook questions |
 | `search-the-web` | Bounded web research | web_research | Right-passage rate and search spend over public factual questions |
 | `call-a-model` | Tiered model provider layer | multi_provider | Provider routing, fallback, retry and cost correctness |
-| `run-deep-work` | Bounded autonomous work runner | subprocess | Outcome reporting correctness across deep runners;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm. |
+| `run-deep-work` | Bounded autonomous work runner | subprocess | Outcome reporting correctness across deep runners |
 | `detect-a-stalled-run` | Run liveness reviewer | evaluation/components/deep_review/impls/live_reviewer.py | Stop-or-continue verdict accuracy with false stops counted apart |
 | `write-files` | Bounded reversible file writer | files | Write boundary and reversibility over the scratch-tree cases |
 | `write-through-mcp` | Allowlisted operation writer | mcp | Allowlist enforcement and exactly-once execution |
 | `escalate-to-a-human` | Human decision escalation channel | quest_decision | Escalation delivery and detail completeness |
-| `show-progress` | Mode-aware progress surfacing | stream | Surfaced-event policy by mode;unconfirmed: for Payal to confirm. |
+| `show-progress` | Mode-aware progress surfacing | stream | Surfaced-event policy by mode |
 | `remember-conversations` | Cross-conversation recall store | session_file | Past-conversation recall and isolation over synthetic cases |
 | `select-context` | Context card selector | hybrid | Context selection ranking accuracy and card-quality outcome |
 | `persist-cards` | Context card persistence backend | quest_api | Card repository conformance across backends |
@@ -216,9 +551,9 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `explain-qar` | Documentation coverage and voice check | evaluation/components/explain_qar/impls/shipped_docs.py | Documentation coverage and voice conformance |
 | `persist-predictions` | Scoped prediction store | file | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
-| `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement;unconfirmed: for Payal to confirm.;Intents whose solutions one paragraph and one diagram explain as the code builds them;Hub of hubs: coverage, integration by configuration, research freshness, code structure |
+| `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
-| `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit;Runs that leave a durable, attributed record of what they changed |
+| `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation | message-route-family | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | Select the intent specifications an input concerns | lexical-vector-gated | Specification selection pass rate |
 | `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
@@ -242,15 +577,15 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
-| `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm.;unconfirmed: for Payal to confirm. |
+| `answer-end-to-end` | Whole-path answer check | qar_live | Whole-path turns right on a small mixed set |
 | `guide-toward-the-long-term-goal` | Guidance toward the long-term goal | guided_v2 | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
-| `access-quest-operations` | unconfirmed: for Payal to confirm. access-quest-operations | quest_client | unconfirmed: for Payal to confirm. |
-| `card-store` | unconfirmed: for Payal to confirm. QAR card repository as the hub card store | quest-api-cards | none yet |
+| `access-quest-operations` | access-quest-operations | quest_client | none yet |
+| `card-store` | QAR card repository as the hub card store | quest-api-cards | none yet |
 | `show-the-ais-work` | Show the AI's work and next steps | trail | What is shown of the AI's work is true, the same for everyone, and earns its place |
 | `reply-in-steps` | Reply in steps when the goal is not met yet | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
 | `take-in-the-world` | take-in-the-world: the ways a request reaches QAR | ways_in | Ways in that pass their own metric |
 
-## Implementations
+### Implementations
 
 | Implementation | Name | Where | Sub-intent |
 |---|---|---|---|
@@ -503,14 +838,14 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `guide-toward-the-long-term-goal:no_nudge` | Plain answer only (floor) |  |  |
 | `keep-it-generic:registry_scan` | Registry read together with the code (today) | evaluation/components/hub_of_hubs/impls/registry_scan.py |  |
 | `guide-toward-the-long-term-goal:guided_v2` | Long-term guidance section in the reply voice | quest_ai_runner/core/auxiliary_prompts.py |  |
-| `keep-it-generic:structure_library` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/structure_library.py |  |
-| `keep-it-generic:keep_current` | unconfirmed: for Payal to confirm | evaluation/components/evolve_by_metric/impls/keep_current.py |  |
-| `core-ml-tasks:labelled_rows` | unconfirmed: for Payal to confirm | evaluation/components/core_ml_tasks/impls/labelled_rows.py |  |
-| `core-ml-tasks:none_mapped` | unconfirmed: for Payal to confirm | evaluation/components/core_ml_tasks/impls/none_mapped.py |  |
-| `know-the-world:memory_only` | unconfirmed: for Payal to confirm | evaluation/components/know_the_world/impls/memory_only.py |  |
-| `claim-reach:scripted_ideal` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
-| `claim-reach:rules_only` | unconfirmed: for Payal to confirm | evaluation/components/act_in_the_world/impls/rules_only.py |  |
-| `assemble-a-prompt:situational` | unconfirmed: for Payal to confirm | evaluation/components/prompt_size/impls/situational.py |  |
+| `keep-it-generic:structure_library` |  | evaluation/components/evolve_by_metric/impls/structure_library.py |  |
+| `keep-it-generic:keep_current` |  | evaluation/components/evolve_by_metric/impls/keep_current.py |  |
+| `core-ml-tasks:labelled_rows` |  | evaluation/components/core_ml_tasks/impls/labelled_rows.py |  |
+| `core-ml-tasks:none_mapped` |  | evaluation/components/core_ml_tasks/impls/none_mapped.py |  |
+| `know-the-world:memory_only` |  | evaluation/components/know_the_world/impls/memory_only.py |  |
+| `claim-reach:scripted_ideal` |  | evaluation/components/act_in_the_world/impls/scripted_ideal.py |  |
+| `claim-reach:rules_only` |  | evaluation/components/act_in_the_world/impls/rules_only.py |  |
+| `assemble-a-prompt:situational` |  | evaluation/components/prompt_size/impls/situational.py |  |
 | `card-store:qar-card-repository` | qar-card-repository | quest_ai_runner/adapters/hub_card_store.py |  |
 | `run-deep-work:lean_guarded` | Lean guarded launch of the deep worker | quest_ai_runner/core/deep_launch.py |  |
 | `show-the-ais-work:no_trace` | Nothing shown (the status quo before the Trail) | evaluation/components/work_trace_experience/impls/no_trace.py |  |
@@ -524,7 +859,7 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 | `access-quest-operations:quest_client` | Quest HTTP client from the environment | quest_ai_runner/goal_agent.py |  |
 | `card-store:quest-api-cards` | Quest backend card API from the environment | quest_ai_runner/adapters/hub_card_store.py |  |
 
-## Metrics
+### Metrics
 
 - `QME1`, Passing chat turns per dollar: `esoi run chat_quality --impl dev_quest_chat --sample 10 --max-calls 300`
 - `QME2`, Delegated tasks meeting their standard: `none`
@@ -610,15 +945,15 @@ quest-ai-runner turns a person's request or queued task into grounded work in on
 - `metric-guide-toward-the-long-term-goal`, Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere: `esoi run proactive_guidance --impl guided_v2`
 - `metric-hub-of-hubs`, Hub of hubs: coverage, integration by configuration, research freshness, code structure: `esoi run hub_of_hubs --impl registry_scan`
 - `QME9`, Hub of hubs: `esoi run hub_of_hubs --impl registry_scan`
-- `metric-quest-answer-tied-to-goal-and-circumstance`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
-- `metric-jarvis-ness`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
-- `metric-jarvis-floor-consent`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
-- `metric-jarvis-floor-honesty`, unconfirmed: for Payal to confirm.: `esoi run end_to_end --impl qar_live`
-- `metric-goal-met-by-evidence-and-coverage`, unconfirmed: for Payal to confirm.: `esoi run deep_run --impl goal_contract`
-- `metric-incremental-output-and-still-working`, unconfirmed: for Payal to confirm.: `esoi run show_progress --impl progress_sinks`
-- `metric-quest-operations-parity`, unconfirmed: for Payal to confirm.: `none`
-- `metric-metric-earns-its-run`, unconfirmed: for Payal to confirm.: `esoi run evolve_by_metric --impl structure_library`
-- `metric-harness-context-subagents-recursion-ranked`, unconfirmed: for Payal to confirm.: `esoi run deep_runner --impl subprocess_runner`
+- `metric-quest-answer-tied-to-goal-and-circumstance`, : `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-ness`, : `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-floor-consent`, : `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-floor-honesty`, : `esoi run end_to_end --impl qar_live`
+- `metric-goal-met-by-evidence-and-coverage`, : `esoi run deep_run --impl goal_contract`
+- `metric-incremental-output-and-still-working`, : `esoi run show_progress --impl progress_sinks`
+- `metric-quest-operations-parity`, : `none`
+- `metric-metric-earns-its-run`, : `esoi run evolve_by_metric --impl structure_library`
+- `metric-harness-context-subagents-recursion-ranked`, : `esoi run deep_runner --impl subprocess_runner`
 - `metric-work-trace-experience`, What is shown of the AI's work is true, the same for everyone, and earns its place: `esoi run work_trace_experience --impl trail`
 - `metric-interim-reply-truthful-and-useful`, Interim messages and asks that are true, not repeated and only where a person is needed: `esoi run interim_reply --impl gated`
 - `metric-terminal-uses-hub-renderers`, The terminal shows the AI's work with the hub's rules and words, and keeps no copy: `python3 -m pytest tests/test_terminal_trail.py tests/test_terminal_uses_hub_renderers.py`

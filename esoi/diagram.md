@@ -82,8 +82,8 @@ flowchart LR
     s71["Justified model calls<br/>justify-model-calls"]
     s72["Whole-path answer check<br/>answer-end-to-end"]
     s73["Guidance toward the long-term goal<br/>guide-toward-the-long-term-goal"]
-    s74["unconfirmed: for Payal to confirm...<br/>access-quest-operations"]
-    s75["unconfirmed: for Payal to confirm. QAR...<br/>card-store"]
+    s74["access-quest-operations<br/>access-quest-operations"]
+    s75["QAR card repository as the hub card...<br/>card-store"]
     s76["Show the AI's work and next steps<br/>show-the-ais-work"]
     s77["Reply in steps when the goal is not met...<br/>reply-in-steps"]
     s78["take-in-the-world: the ways a request...<br/>take-in-the-world"]
@@ -191,8 +191,8 @@ flowchart LR
     s73 -->|"The reply, with or without one short pointer"| s61
     s74 -->|"The result of one Quest operation"| s0
     s74 -->|"The result of one Quest operation"| s60
-    s75 -->|"unconfirmed: for Payal to confirm. Hub Card objects"| s0
-    s75 -->|"unconfirmed: for Payal to confirm. Hub Card objects"| s57
+    s75 -->|"Hub Card objects"| s0
+    s75 -->|"Hub Card objects"| s57
     s76 -->|"The elements a viewer is shown: a live line, a summary line..."| s56
     s77 -->|"Send or skip with a reason, and the interim event payload"| s56
 ```
