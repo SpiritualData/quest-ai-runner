@@ -100,7 +100,7 @@ QI6 = "Cost and quality known before they surprise anyone: spend is a real const
 records = "../ai-hub-of-hubs-structure"
 
 [records]
-template_version = 1
+template_version = 3
 
 # Public evidence: others' measurements, shown beside our own results and never counted as one. The file is the hub's derived
 # export of its registry (the hub keeps the source of truth); aliases map a candidate to the QAR arm it measures, only where the

@@ -72,6 +72,7 @@ def model_free_first_stage(ctx: Context) -> list:
         stages, errors = cascade.parse(metric.get("cascading_conditionals", ""))
         if errors:
             continue   # S32 reports a list that cannot be read
+        stages = [s for s in stages if not s.idea]   # an idea stage needs no implementation, so it never counts as the first stage
         if not stages:
             why = "has no cascading_conditionals"
         elif stages[0].real is not False:
@@ -92,6 +93,7 @@ def single_case_problems(metrics: list, waived) -> tuple:
     for metric in metrics:
         metric_id = metric.get("metric_id", "")
         stages, errors = cascade.parse(metric.get("cascading_conditionals", ""))
+        stages = [s for s in stages if not s.idea]   # an idea stage needs no implementation, so it never counts as a second stage
         if errors or not stages:
             continue
         scanned += 1
