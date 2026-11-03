@@ -37,20 +37,23 @@ class TerminalRun:
 class TerminalOperating(typing.Protocol):
     """Runs one command of ``quest-ai-runner`` as the shell would, and returns what it did."""
 
-    def operate(self, argv: Sequence[str]) -> TerminalRun: ...
+    def operate(self, argv: Sequence[str], entry: str = "qar") -> TerminalRun: ...
 
 
 @implementation("operate-from-a-terminal", "cli_commands")
 class CliCommands:
-    """The command dispatcher of ``cli.main`` called in process, with its output and exit code captured."""
+    """The command dispatchers called in process, with their output and exit code captured: ``qar`` is ``quest-ai-runner`` (``cli.main``)
+    and ``tools`` is ``python -m quest_ai_runner.tools`` (list, show, call)."""
     REQUIRES = ()     # the dispatcher reads its own environment when a command runs
 
-    def operate(self, argv: Sequence[str]) -> TerminalRun:
+    def operate(self, argv: Sequence[str], entry: str = "qar") -> TerminalRun:
         from . import cli
+        from .tools import __main__ as tools_main
+        dispatch = {"qar": cli.main, "tools": tools_main.main}[entry]
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
             try:
-                code = cli.main(list(argv))
+                code = dispatch(list(argv))
             except SystemExit as stop:
                 code = stop.code if isinstance(stop.code, int) else (0 if stop.code is None else 1)
         return TerminalRun(code=int(code or 0), output=buffer.getvalue())
@@ -100,8 +103,8 @@ class WaysIn:
     def prepare(self, attachments: Any) -> Any:
         return self.attachments.prepare(attachments)
 
-    def operate(self, argv: Sequence[str]) -> TerminalRun:
-        return self.terminal.operate(argv)
+    def operate(self, argv: Sequence[str], entry: str = "qar") -> TerminalRun:
+        return self.terminal.operate(argv, entry)
 
     def judge_goal(self, goal: Mapping[str, Any]) -> Any:
         return self.helpers.judge_goal(dict(goal))
