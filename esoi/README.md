@@ -8,7 +8,7 @@ Opportunities: Other products that need an AI which works from a person's own go
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop: do-grounded-work asks the model through call-a-model, remembers through remember-and-recall, keeps the cards in card-store, takes requests in through take-in-the-world, reasons step by step through reason-and-answer, acts through act-as-the-body and works in the person's Quest account through access-quest-operations. The other areas of the loop are know-the-world, think-critically, watch-for-risk, hold-the-intents and keep-it-generic. take-in-the-world receives a request from talk-over-a-channel, operate-from-a-terminal, assist-a-terminal-session or the package that expose-the-public-api offers. It also lets receive-input-mid-run reach a run that is already working, describes attachments through describe-an-attachment, adds what changed in a work item through feed-context-sources, and hands each request to route-a-message. learn-by-example shows how to use the package through expose-the-public-api. explain-qar documents the package through expose-the-public-api. remember-and-recall recalls the cards that match a request through card-store. select-context ranks stored cards, files and conversations, resolves their references through resolve-references and searches cards and specification records together through search-cards-and-specs. card-store keeps the cards through persist-cards, serves the last known listing through cache-cards while a backend is down, finds them by meaning through index-by-meaning, labels them through label-context-cards, reports stale ones through detect-stale-cards, holds their growth in check through bound-card-growth and shrinks an inflated store through repair-a-card-store. repair-a-card-store rewrites the stored cards through persist-cards and asks choose-what-to-index which sources deserve cards. reason-and-answer rebuilds each step's prompt through assemble-a-prompt, calls call-a-model at the tier choose-a-model-tier picks, answers chat turns through answer-a-turn, reuses requests that worked before through replay-known-operations, classifies inputs through core-ml-tasks, proves a message is handled end to end through answer-end-to-end, and keeps the person informed through reply-in-steps and show-the-ais-work. answer-a-turn, answer-end-to-end, core-ml-tasks, route-a-message, describe-an-attachment and assist-a-terminal-session each ask the model through call-a-model. claim-reach, hand-off-a-goal, operate-a-quest and run-queued-tasks each ask the model through call-a-model. operate-a-quest and run-queued-tasks work in the Quest account through access-quest-operations. call-a-model accounts for every call through justify-model-calls and track-usage-and-cost. reply-in-steps sends the lines of narrate-a-turn and the prose of explain-an-answer, and files the one ask a block only a person can lift needs. show-the-ais-work lays out the steps that show-progress streams. know-the-world answers questions about the world from search-the-web results it checks for support, answering the way answer-a-turn does. think-critically holds deep runs to their metric through iterate-by-spec on the records spec-selection picks, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, ties work to its purpose through ground-in-intent, tells a stuck run from a slow one through detect-a-stalled-run, drafts a missing metric through draft-a-metric, and keeps background work inside its hours and budget through gate-an-autopilot-pass. act-as-the-body does the work and reports it truthfully. It reads the quest through operate-a-quest, gather-evidence and persist-cards, and claims only the reach that claim-reach grants. It writes files through write-files and reaches Quest's operations through access-quest-operations. It runs queued requests through run-queued-tasks and decides who owns a new goal through hand-off-a-goal. claim-reach hands real work to run-deep-work, write-through-mcp, talk-over-a-channel or gather-evidence. watch-for-risk oversees a run and brings a step only a person may take to that person through escalate-to-a-human. hold-the-intents keeps the long view across turns. It carries what was said and found through remember-conversations and recall-recent-context. It keeps and applies a person's corrections through store-feedback and guide-by-feedback. It saves what was learned through persist-predictions and persist-cards. It keeps work aimed at the person's end through guide-toward-the-long-term-goal, and picks the representative a request runs as through select-a-rep. select-a-rep sends the queued work of that representative through run-queued-tasks. keep-it-generic keeps every part specified as a solution with measured alternatives. It picks the arm that runs through select-an-implementation and finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop: do-grounded-work asks the model through call-a-model, remembers through remember-and-recall, keeps the cards in card-store, takes requests in through take-in-the-world, reasons step by step through reason-and-answer, acts through act-as-the-body, holds its work to the metric that serves it through think-critically and works in the person's Quest account through access-quest-operations. The other areas of the loop are know-the-world, watch-for-risk, hold-the-intents and keep-it-generic. take-in-the-world receives a request from talk-over-a-channel, operate-from-a-terminal, assist-a-terminal-session or the package that expose-the-public-api offers. It also lets receive-input-mid-run reach a run that is already working, describes attachments through describe-an-attachment, adds what changed in a work item through feed-context-sources, and hands each request to route-a-message. learn-by-example shows how to use the package through expose-the-public-api. explain-qar documents the package through expose-the-public-api. remember-and-recall recalls the cards that match a request through card-store. select-context ranks stored cards, files and conversations, resolves their references through resolve-references and searches cards and specification records together through search-cards-and-specs. card-store keeps the cards through persist-cards, serves the last known listing through cache-cards while a backend is down, finds them by meaning through index-by-meaning, labels them through label-context-cards, reports stale ones through detect-stale-cards, holds their growth in check through bound-card-growth and shrinks an inflated store through repair-a-card-store. repair-a-card-store rewrites the stored cards through persist-cards and asks choose-what-to-index which sources deserve cards. reason-and-answer rebuilds each step's prompt through assemble-a-prompt, calls call-a-model at the tier choose-a-model-tier picks, answers chat turns through answer-a-turn, reuses requests that worked before through replay-known-operations, classifies inputs through core-ml-tasks, proves a message is handled end to end through answer-end-to-end, and keeps the person informed through reply-in-steps and show-the-ais-work. answer-a-turn, answer-end-to-end, core-ml-tasks, route-a-message, describe-an-attachment and assist-a-terminal-session each ask the model through call-a-model. claim-reach, hand-off-a-goal, operate-a-quest and run-queued-tasks each ask the model through call-a-model. operate-a-quest and run-queued-tasks work in the Quest account through access-quest-operations. ground-in-intent reads the frame of an intent through access-quest-operations. gate-an-autopilot-pass reads each quest's settings through access-quest-operations. draft-a-metric reads the metric card through access-quest-operations and asks the model through call-a-model. call-a-model accounts for every call through justify-model-calls and track-usage-and-cost. reply-in-steps sends the lines of narrate-a-turn and the prose of explain-an-answer, and files the one ask a block only a person can lift needs. show-the-ais-work lays out the steps that show-progress streams. know-the-world answers questions about the world from search-the-web results it checks for support, answering the way answer-a-turn does. think-critically holds deep runs to their metric through iterate-by-spec on the records spec-selection picks, settles narrow questions through judge-a-decision, stops unsafe replies through guard-a-reply, ties work to its purpose through ground-in-intent, tells a stuck run from a slow one through detect-a-stalled-run, drafts a missing metric through draft-a-metric, and keeps background work inside its hours and budget through gate-an-autopilot-pass. act-as-the-body does the work and reports it truthfully. It reads the quest through operate-a-quest, gather-evidence and persist-cards, and claims only the reach that claim-reach grants. It writes files through write-files and reaches Quest's operations through access-quest-operations. It runs queued requests through run-queued-tasks and decides who owns a new goal through hand-off-a-goal. claim-reach hands real work to run-deep-work, write-through-mcp, talk-over-a-channel or gather-evidence. watch-for-risk oversees a run and brings a step only a person may take to that person through escalate-to-a-human. hold-the-intents keeps the long view across turns. It carries what was said and found through remember-conversations and recall-recent-context. It keeps and applies a person's corrections through store-feedback and guide-by-feedback. It saves what was learned through persist-predictions and persist-cards. It keeps work aimed at the person's end through guide-toward-the-long-term-goal, and picks the representative a request runs as through select-a-rep. select-a-rep sends the queued work of that representative through run-queued-tasks. keep-it-generic keeps every part specified as a solution with measured alternatives. It picks the arm that runs through select-an-implementation and finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
 ## Diagram
 
@@ -117,6 +117,7 @@ flowchart LR
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s61
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s66
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s67
+    s6 -->|"A raw decision dictionary for planning, answer text for..."| s68
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s70
     s6 -->|"A raw decision dictionary for planning, answer text for..."| s72
     s7 -->|"A result stating whether the goal was met, the output text..."| s59
@@ -196,6 +197,7 @@ flowchart LR
     s60 -->|"A current state view for the request's scope with the time..."| s0
     s61 -->|"For a request the representative handles: its standing view..."| s57
     s61 -->|"For a request the representative handles: its standing view..."| s63
+    s62 -->|"Per request: the metric applied with its reading before and..."| s0
     s63 -->|"The chosen representative (or none for the plain..."| s61
     s64 -->|"The text or verdict the call returns"| s77
     s65 -->|"The text or verdict the call returns"| s77
@@ -211,7 +213,10 @@ flowchart LR
     s74 -->|"The result of one Quest operation"| s0
     s74 -->|"The result of one Quest operation"| s3
     s74 -->|"The result of one Quest operation"| s35
+    s74 -->|"The result of one Quest operation"| s45
+    s74 -->|"The result of one Quest operation"| s47
     s74 -->|"The result of one Quest operation"| s60
+    s74 -->|"The result of one Quest operation"| s68
     s75 -->|"Hub Card objects"| s0
     s75 -->|"Hub Card objects"| s57
     s76 -->|"The elements a viewer is shown: a live line, a summary line..."| s56
@@ -231,7 +236,7 @@ flowchart LR
 | `search-the-web` | no entry declared | `web_research` | Right-passage rate and search spend over public factual questions |
 | `call-a-model` | `quest_ai_runner.run("call-a-model", ...)` | `multi_provider` | Provider routing, fallback, retry and cost correctness |
 | `run-deep-work` | no entry declared | `subprocess` | Outcome reporting correctness across deep runners |
-| `detect-a-stalled-run` | no entry declared | `evaluation/components/deep_review/impls/live_reviewer.py` | Stop-or-continue verdict accuracy with false stops counted apart |
+| `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | `live_reviewer` | Stop-or-continue verdict accuracy with false stops counted apart |
 | `write-files` | `quest_ai_runner.run("write-files", 'NOTES.md')` | `files` | Write boundary and reversibility over the scratch-tree cases |
 | `write-through-mcp` | no entry declared | `mcp` | Allowlist enforcement and exactly-once execution |
 | `escalate-to-a-human` | no entry declared | `quest_decision` | Escalation delivery and detail completeness |
@@ -246,8 +251,8 @@ flowchart LR
 | `watch-for-risk` | no entry declared | `quest_ai_runner/core/overseer.py` | Overseer digest evidence and signal correctness on labelled scenarios |
 | `detect-stale-cards` | no entry declared | `evaluation/components/staleness/impls/store_sha256.py` | Staleness detection precision and recall over mutation cases |
 | `assemble-a-prompt` | `quest_ai_runner.run("assemble-a-prompt", 'What should I work on first this week?')` | `planner_prompt` | Prompt size against budget and duplicated-block count |
-| `judge-a-decision` | no entry declared | `evaluation/components/judges/impls/qar_judges.py` | Judge deterministic-half correctness with a scripted provider |
-| `guard-a-reply` | no entry declared | `evaluation/components/reply_guards/impls/qar_guards.py` | Reply guard correctness over link, recipe and anticipation cases |
+| `judge-a-decision` | `quest_ai_runner.run("judge-a-decision", ...)` | `qar_judges` | Judge deterministic-half correctness with a scripted provider |
+| `guard-a-reply` | `quest_ai_runner.run("guard-a-reply", 'See https://example.org/a for details.')` | `qar_guards` | Reply guard correctness over link, recipe and anticipation cases |
 | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | `quest_channels` | Update-offering correctness over synthetic quest channels |
 | `store-feedback` | no entry declared | `ledger` | Correction carry-through over the feedback-loop cases |
 | `recall-recent-context` | no entry declared | `file` | Warm-start accuracy with no cross-work-item leakage |
@@ -268,10 +273,10 @@ flowchart LR
 | `select-an-implementation` | no entry declared | `evaluation/components/select_an_implementation/impls/live_resolver.py` | none yet |
 | `explain-qar` | no entry declared | `evaluation/components/explain_qar/impls/shipped_docs.py` | Documentation coverage and voice conformance |
 | `persist-predictions` | no entry declared | `file` | Prediction store contract pass rate |
-| `gate-an-autopilot-pass` | no entry declared | `evaluation/components/gate_an_autopilot_pass/impls/live_pass.py` | Autopilot gate decision correctness |
+| `gate-an-autopilot-pass` | `quest_ai_runner.run("gate-an-autopilot-pass", 'quest-id')` | `live_pass` | Autopilot gate decision correctness |
 | `keep-it-generic` | no entry declared | `structure-library` | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
-| `ground-in-intent` | no entry declared | `frame-line` | Intent-grounded pass rate |
-| `iterate-by-spec` | no entry declared | `slice-and-writeback` | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
+| `ground-in-intent` | `quest_ai_runner.run("ground-in-intent", 'quest-id')` | `frame-line` | Intent-grounded pass rate |
+| `iterate-by-spec` | `quest_ai_runner.run("iterate-by-spec", 'Tidy the card store')` | `slice-and-writeback` | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | `router_labels` | Accuracy of core ML tasks over labelled cases |
 | `spec-selection` | `esoi spec index --out FILE` | `lexical-vector-gated` | Specification selection pass rate |
 | `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
@@ -285,13 +290,13 @@ flowchart LR
 | `claim-reach` | `quest_ai_runner.run("claim-reach", 'Send the launch note to the whole team')` | `coding_agent_prompt_reach` | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | `quest_ai_runner.run("act-as-the-body", 'NOTES.md')` | `card_and_reads` | Account-state consistency across scripted sessions |
 | `hold-the-intents` | no entry declared | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
-| `think-critically` | no entry declared | `deep_runs_only` | Requests held to their ESOI metric by code |
+| `think-critically` | `quest_ai_runner.run("think-critically", ...)` | `deep_runs_only` | Requests held to their ESOI metric by code |
 | `select-a-rep` | no entry declared | `persona_resolver_precedence` | Representative choice accuracy and thread consistency |
 | `narrate-a-turn` | no entry declared | `model_beat` | Supported first beats within the time and cost the turn allows |
 | `explain-an-answer` | no entry declared | `model_explanation` | Faithful explanations per unit of cost and time |
 | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | `vision_description` | Answer pass rate gained per image described |
 | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | `model_judge` | Hand-offs a person keeps per unit of cost and time |
-| `draft-a-metric` | no entry declared | `capped_model_draft` | Drafted metrics accepted per unit of cost |
+| `draft-a-metric` | `quest_ai_runner.run("draft-a-metric", ...)` | `capped_model_draft` | Drafted metrics accepted per unit of cost |
 | `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
 | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
@@ -527,7 +532,7 @@ flowchart LR
 | `search-the-web` | Bounded web research | web_research | Right-passage rate and search spend over public factual questions |
 | `call-a-model` | Tiered model provider layer | multi_provider | Provider routing, fallback, retry and cost correctness |
 | `run-deep-work` | Bounded autonomous work runner | subprocess | Outcome reporting correctness across deep runners |
-| `detect-a-stalled-run` | Run liveness reviewer | evaluation/components/deep_review/impls/live_reviewer.py | Stop-or-continue verdict accuracy with false stops counted apart |
+| `detect-a-stalled-run` | Run liveness reviewer | live_reviewer | Stop-or-continue verdict accuracy with false stops counted apart |
 | `write-files` | Bounded reversible file writer | files | Write boundary and reversibility over the scratch-tree cases |
 | `write-through-mcp` | Allowlisted operation writer | mcp | Allowlist enforcement and exactly-once execution |
 | `escalate-to-a-human` | Human decision escalation channel | quest_decision | Escalation delivery and detail completeness |
@@ -542,8 +547,8 @@ flowchart LR
 | `watch-for-risk` | Overseer: risk management that raises the overall metric | quest_ai_runner/core/overseer.py | Overseer digest evidence and signal correctness on labelled scenarios |
 | `detect-stale-cards` | Source-change staleness detector | evaluation/components/staleness/impls/store_sha256.py | Staleness detection precision and recall over mutation cases |
 | `assemble-a-prompt` | Budgeted prompt assembler | planner_prompt | Prompt size against budget and duplicated-block count |
-| `judge-a-decision` | Guarded model-verdict judge | evaluation/components/judges/impls/qar_judges.py | Judge deterministic-half correctness with a scripted provider |
-| `guard-a-reply` | Reply safety and anticipation guards | evaluation/components/reply_guards/impls/qar_guards.py | Reply guard correctness over link, recipe and anticipation cases |
+| `judge-a-decision` | Guarded model-verdict judge | qar_judges | Judge deterministic-half correctness with a scripted provider |
+| `guard-a-reply` | Reply safety and anticipation guards | qar_guards | Reply guard correctness over link, recipe and anticipation cases |
 | `feed-context-sources` | Incremental context-update feed | quest_channels | Update-offering correctness over synthetic quest channels |
 | `store-feedback` | Verbatim feedback ledger | ledger | Correction carry-through over the feedback-loop cases |
 | `recall-recent-context` | Scoped recent-context warm start | file | Warm-start accuracy with no cross-work-item leakage |
@@ -564,7 +569,7 @@ flowchart LR
 | `select-an-implementation` |  | evaluation/components/select_an_implementation/impls/live_resolver.py | none yet |
 | `explain-qar` | Documentation coverage and voice check | evaluation/components/explain_qar/impls/shipped_docs.py | Documentation coverage and voice conformance |
 | `persist-predictions` | Scoped prediction store | file | Prediction store contract pass rate |
-| `gate-an-autopilot-pass` | Autopilot run-or-skip gate | evaluation/components/gate_an_autopilot_pass/impls/live_pass.py | Autopilot gate decision correctness |
+| `gate-an-autopilot-pass` | Autopilot run-or-skip gate | live_pass | Autopilot gate decision correctness |
 | `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `ground-in-intent` | Intent frame for quest-scoped prompts | frame-line | Intent-grounded pass rate |
 | `iterate-by-spec` | Specification slice before a task and write-back after | slice-and-writeback | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
@@ -636,7 +641,7 @@ flowchart LR
 | `run-deep-work:acp_runner` | Agent-protocol runner scenarios | [evaluation/components/deep_runner/impls/acp_runner.py](../evaluation/components/deep_runner/impls/acp_runner.py) |  |
 | `run-deep-work:goal_contract` | Goal contract rules check | [evaluation/components/deep_run/impls/goal_contract.py](../evaluation/components/deep_run/impls/goal_contract.py) |  |
 | `detect-a-stalled-run:goal_runner` | Production liveness review in the goal runner | [quest_ai_runner/core/goal_runner.py](../quest_ai_runner/core/goal_runner.py) |  |
-| `detect-a-stalled-run:live_reviewer` | Live model reviewer arm | [evaluation/components/deep_review/impls/live_reviewer.py](../evaluation/components/deep_review/impls/live_reviewer.py) |  |
+| `detect-a-stalled-run:live_reviewer` | Live model reviewer arm | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
 | `detect-a-stalled-run:rule_floor` | Keyword and threshold rule floor | [evaluation/components/deep_review/impls/rule_floor.py](../evaluation/components/deep_review/impls/rule_floor.py) |  |
 | `write-files:files` | Contained backed-up writer | [quest_ai_runner/adapters/files_writer.py](../quest_ai_runner/adapters/files_writer.py) |  |
 | `write-files:bounded_writer` | Scratch-tree boundary check | [evaluation/components/write_files/impls/bounded_writer.py](../evaluation/components/write_files/impls/bounded_writer.py) |  |
@@ -684,8 +689,8 @@ flowchart LR
 | `detect-stale-cards:store_sha256` | Content-hash fingerprint check | [evaluation/components/staleness/impls/store_sha256.py](../evaluation/components/staleness/impls/store_sha256.py) |  |
 | `detect-stale-cards:mtime_size` | Timestamp-and-size baseline | [evaluation/components/staleness/impls/mtime_size.py](../evaluation/components/staleness/impls/mtime_size.py) |  |
 | `assemble-a-prompt:live` | Live assembly-point driver | [evaluation/components/prompt_size/impls/live.py](../evaluation/components/prompt_size/impls/live.py) |  |
-| `judge-a-decision:qar_judges` | Production judges under a scripted provider | [evaluation/components/judges/impls/qar_judges.py](../evaluation/components/judges/impls/qar_judges.py) |  |
-| `guard-a-reply:qar_guards` | Production guard engines under test | [evaluation/components/reply_guards/impls/qar_guards.py](../evaluation/components/reply_guards/impls/qar_guards.py) |  |
+| `judge-a-decision:qar_judges` | Production judges under a scripted provider | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
+| `guard-a-reply:qar_guards` | Production guard engines under test | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
 | `feed-context-sources:base` | Source interface with shared channel flags | [quest_ai_runner/runner/context_sources_base.py](../quest_ai_runner/runner/context_sources_base.py) |  |
 | `feed-context-sources:update_engine` | Live engine over fake quest channels | [evaluation/components/feed_context_sources/impls/update_engine.py](../evaluation/components/feed_context_sources/impls/update_engine.py) |  |
 | `store-feedback:ledger` | File-backed feedback ledger | [quest_ai_runner/runner/feedback_ledger.py](../quest_ai_runner/runner/feedback_ledger.py) |  |
@@ -749,7 +754,7 @@ flowchart LR
 | `persist-predictions:file` | Atomic file prediction store | [quest_ai_runner/core/anticipation_store.py](../quest_ai_runner/core/anticipation_store.py) |  |
 | `persist-predictions:memory_store` | In-memory reference store | [evaluation/components/persist_predictions/impls/memory_store.py](../evaluation/components/persist_predictions/impls/memory_store.py) |  |
 | `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | [quest_ai_runner/runner/autopilot_gates.py](../quest_ai_runner/runner/autopilot_gates.py) |  |
-| `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | [evaluation/components/gate_an_autopilot_pass/impls/live_pass.py](../evaluation/components/gate_an_autopilot_pass/impls/live_pass.py) |  |
+| `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
 | `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/hub.py](../quest_ai_runner/hub.py) |  |
 | `search-the-web:brave` | Brave search backend | [quest_ai_runner/adapters/web_search_backends.py](../quest_ai_runner/adapters/web_search_backends.py) |  |
 | `search-the-web:gemini` | Gemini grounded search backend | [quest_ai_runner/adapters/web_search_backends.py](../quest_ai_runner/adapters/web_search_backends.py) |  |
@@ -758,7 +763,7 @@ flowchart LR
 | `search-the-web:tavily` | Tavily search backend | [quest_ai_runner/adapters/web_search_backends.py](../quest_ai_runner/adapters/web_search_backends.py) |  |
 | `show-progress:milestone` | Milestone sink | [quest_ai_runner/core/adapters_sinks.py](../quest_ai_runner/core/adapters_sinks.py) |  |
 | `ground-in-intent:none` | Prompts without the intent frame | [quest_ai_runner/runner/autopilot_briefs.py](../quest_ai_runner/runner/autopilot_briefs.py) |  |
-| `ground-in-intent:frame-line` | Computed frame in the prompt | [quest_ai_runner/runner/autopilot_briefs.py](../quest_ai_runner/runner/autopilot_briefs.py) |  |
+| `ground-in-intent:frame-line` | Computed frame in the prompt | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
 | `ground-in-intent:frame-card-drilldown` | Frame plus intent card and record drill-down | [quest_ai_runner/runner/quest_client_intents.py](../quest_ai_runner/runner/quest_client_intents.py) |  |
 | `ground-in-intent:frame-lazy-spec` | Frame plus a lazily generated quest specification | [quest_ai_runner/core/tools_quest_intents.py](../quest_ai_runner/core/tools_quest_intents.py) |  |
 | `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | [quest_ai_runner/core/goal_iteration.py](../quest_ai_runner/core/goal_iteration.py) |  |
@@ -813,7 +818,7 @@ flowchart LR
 | `remember-and-recall:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
 | `watch-for-risk:no_overseer` | No overseer (configuration off) | [quest_ai_runner/core/orchestrator_types.py](../quest_ai_runner/core/orchestrator_types.py) |  |
 | `watch-for-risk:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
-| `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [quest_ai_runner/core/goal_metrics.py](../quest_ai_runner/core/goal_metrics.py) |  |
+| `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
 | `think-critically:instruction_only` | Standing instruction alone (floor) | [quest_ai_runner/core/standing_instructions.py](../quest_ai_runner/core/standing_instructions.py) |  |
 | `think-critically:every_request_measured` | Every request measured by code (proposed) |  |  |
 | `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
@@ -834,7 +839,7 @@ flowchart LR
 | `describe-an-attachment:skip_images` | No description, the image is named only (floor, proposed) |  |  |
 | `hand-off-a-goal:model_judge` | Two small model verdicts when a goal is created (today) | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
 | `hand-off-a-goal:creator_keeps_it` | Creator keeps the goal, no model call (floor, proposed) | [evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py](../evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py) |  |
-| `draft-a-metric:capped_model_draft` | Capped model draft per task (today) | [quest_ai_runner/runner/metric_draft.py](../quest_ai_runner/runner/metric_draft.py) |  |
+| `draft-a-metric:capped_model_draft` | Capped model draft per task (today) | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
 | `draft-a-metric:ask_owner` | Ask the owner to write it (floor, proposed) | [evaluation/components/draft_a_metric/impls/ask_owner.py](../evaluation/components/draft_a_metric/impls/ask_owner.py) |  |
 | `label-context-cards:fast_model_labels` | Fast-tier model writes metadata and categories (today) | [quest_ai_runner/adapters/card_metadata_generator.py](../quest_ai_runner/adapters/card_metadata_generator.py) |  |
 | `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) | [evaluation/components/label_context_cards/impls/path_rules.py](../evaluation/components/label_context_cards/impls/path_rules.py) |  |

@@ -29,20 +29,24 @@ from __future__ import annotations
 
 from typing import Optional, Protocol, Sequence
 
-from esoi import implementation
+from esoi import implementation, solution
 from esoi.metric_meter import MetricMeter, meters_from_names
-from esoi.spec_slice import RepoSliceSource, SliceSource
+from esoi.spec_slice import RepoSliceSource, SliceSource, SpecSlice
 
 from . import repo_specs
 from .runtime_settings import core_settings, process_environment
 
 
+@solution("iterate-by-spec", kind="event", entry="slice_for", example="Tidy the card store")
 class GoalIteration(Protocol):
     """What the code adds around one deep goal: a slice source (None for none) and the meters that read its metric."""
     name: str
     measures: bool
     source: Optional[SliceSource]
     meters: Sequence[MetricMeter]
+
+    def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
+        """The slice of the specification the goal serves, or None when the arm gives the brief none."""
 
 
 @implementation("iterate-by-spec", "generic-doctrine")
@@ -52,6 +56,9 @@ class DoctrineOnly:
     measures = False
     source: Optional[SliceSource] = None
     meters: Sequence[MetricMeter] = ()
+
+    def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
+        return self.source.slice_for(request, working_dir) if self.source is not None else None
 
 
 @implementation("iterate-by-spec", "slice-only")
