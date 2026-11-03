@@ -310,9 +310,9 @@
  "feed-context-sources": {
   "default": "quest_channels",
   "evidence": {
-   "detail": "no rival implementation was measured on the same cases",
-   "p": null,
-   "verdict": "UNMEASURED"
+   "detail": "update_engine is exactly equal to quest_channels on the metric (update_engine 1 against quest_channels 1), so quest_channels stays",
+   "p": 1.0,
+   "verdict": "TIE"
   },
   "modules": {
    "base": "quest_ai_runner.runner.context_sources_base",
@@ -535,7 +535,7 @@
  "operate-from-a-terminal": {
   "default": "cli_commands",
   "evidence": {
-   "detail": "real_console_script is exactly equal to qar_main on the metric (real_console_script 1 against qar_main 1), so qar_main stays",
+   "detail": "qar_main is exactly equal to cli_commands on the metric (qar_main 1 against cli_commands 1), so cli_commands stays; real_console_script is exactly equal to cli_commands on the metric (real_console_script 1 against cli_commands 1), so cli_commands stays",
    "p": 1.0,
    "verdict": "TIE"
   },

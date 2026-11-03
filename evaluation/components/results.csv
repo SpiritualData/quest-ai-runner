@@ -5889,3 +5889,7 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-01,work_trace_experience,no_trace,8,2,0/0,2/8,0,0,0,0.0,0.8,9d7713d,cc5bae86,judge claude-sonnet alias; turns claude-haiku-5-5,"passed 2/8 turns (group 1/1, papers 1/2, records 0/2, web 0/3); truthfulness gate failed on 0; parity broken on 0; work done and nothing shown, or the reverse, on 6; value 0/0 shown elements earn their place on 6 real turns; quest-frontend 0e91ed05",,
 2026-11-01,interim_reply,gated,8,7,0/0,7/8,0,0,0,0.0,1684.7,9d7713d,c9f4ae36,none,real 7/8,,
 2026-11-01,interim_reply,today,8,5,0/0,5/8,0,0,0,0.0,1895.6,9d7713d,c9f4ae36,none,real 5/8,,
+2026-11-03,operate_from_a_terminal,qar_main,42,42,42/42,0/0,0,0,0,0.0,0.2,3bea9a0a,6a3ce401,none,run_cli 42/42,,
+2026-11-03,operate_from_a_terminal,cli_commands,42,42,42/42,0/0,0,0,0,0.0,0.2,3bea9a0a,6a3ce401,none,run_cli 42/42,,
+2026-11-03,feed_context_sources,update_engine,20,20,20/20,0/0,0,0,0,0.0,0.0,3bea9a0a,0d5e6e43,none,"decisions 4/4, goal_updates 4/4, mixed 2/2, notes 10/10",,
+2026-11-03,feed_context_sources,quest_channels,20,20,20/20,0/0,0,0,0,0.0,0.0,3bea9a0a,0d5e6e43,none,"decisions 4/4, goal_updates 4/4, mixed 2/2, notes 10/10",,
