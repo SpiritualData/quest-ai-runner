@@ -1,4 +1,4 @@
-"""``route-a-message``: where a message goes. The orchestrator's planner reads the message and decides (answer, a tool and its
+"""``route-a-message``: where a message goes (and ``take-in-the-world``'s interface, which wraps it). The orchestrator's planner reads the message and decides (answer, a tool and its
 arguments, deep work, a confirm or a clarify); ``route`` returns that decision as plain data and executes nothing.
 
 The interface is declared here because two areas use it: ``take-in-the-world`` routes every request, and ``core-ml-tasks`` reads the
@@ -48,3 +48,11 @@ class PlannerRoute:
 
     def route(self, message: str) -> Mapping[str, Any]:
         return route_message(self.model, message)
+
+
+@solution("take-in-the-world", kind="event", entry="take_in", example="Save a note that the launch moves to Friday.")
+@typing.runtime_checkable
+class RequestTakingIn(typing.Protocol):
+    """Accepts one request and describes it: where it goes and which channels its context is fed from."""
+
+    def take_in(self, message: str) -> Mapping[str, Any]: ...

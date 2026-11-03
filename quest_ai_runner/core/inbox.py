@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import threading
 from typing import Dict, List, Protocol, runtime_checkable
-from esoi import implementation
+from esoi import implementation, solution
 
 
+@solution("receive-input-mid-run", kind="event", entry="peek", example="conversation-1")
 @runtime_checkable
 class InputInbox(Protocol):
     """A conversation-keyed inbox of user messages that arrived mid-run."""

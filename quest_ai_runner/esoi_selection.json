@@ -294,7 +294,7 @@
   }
  },
  "expose-the-public-api": {
-  "default": "live_surface",
+  "default": "package_front_doors",
   "evidence": {
    "detail": "no rival implementation was measured on the same cases",
    "p": null,
@@ -302,18 +302,20 @@
   },
   "modules": {
    "__init__": "quest_ai_runner",
-   "async_bridge": "quest_ai_runner.core.async_bridge"
+   "async_bridge": "quest_ai_runner.core.async_bridge",
+   "package_front_doors": "quest_ai_runner.area_take_in_the_world"
   }
  },
  "feed-context-sources": {
-  "default": "base",
+  "default": "quest_channels",
   "evidence": {
    "detail": "no rival implementation was measured on the same cases",
    "p": null,
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "base": "quest_ai_runner.runner.context_sources_base"
+   "base": "quest_ai_runner.runner.context_sources_base",
+   "quest_channels": "quest_ai_runner.runner.context_updates"
   }
  },
  "gate-an-autopilot-pass": {
@@ -496,7 +498,7 @@
   }
  },
  "operate-from-a-terminal": {
-  "default": "qar_main",
+  "default": "cli_commands",
   "evidence": {
    "detail": "real_console_script is exactly equal to qar_main on the metric (real_console_script 1 against qar_main 1), so qar_main stays",
    "p": 1.0,
@@ -505,6 +507,7 @@
   "modules": {
    "__main__": "quest_ai_runner.tools.__main__",
    "cli": "quest_ai_runner.cli",
+   "cli_commands": "quest_ai_runner.area_take_in_the_world",
    "cli_parser": "quest_ai_runner.cli_parser",
    "cli_quest": "quest_ai_runner.cli_quest",
    "store_cli": "quest_ai_runner.store_cli"
@@ -807,7 +810,7 @@
  "take-in-the-world": {
   "default": "ways_in",
   "modules": {
-   "ways_in": "quest_ai_runner.core.orchestrator_run_begin"
+   "ways_in": "quest_ai_runner.area_take_in_the_world"
   }
  },
  "talk-over-a-channel": {

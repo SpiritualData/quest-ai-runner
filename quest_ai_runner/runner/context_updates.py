@@ -49,9 +49,12 @@ a failure.
 """
 from __future__ import annotations
 
+import typing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
+
+from esoi import implementation, solution
 
 from .context_update_types import (
     CACHE_TTL_SECONDS,
@@ -178,6 +181,16 @@ def consumer_spec_resolver(
         return own + [s for s in extra if str(s.get("source")) not in named]
 
     return _resolve
+
+
+@solution("feed-context-sources", kind="event", entry="collect", example={"quest_id": "quest-id"})
+@typing.runtime_checkable
+class ContextFeeding(typing.Protocol):
+    """What changed on a card since it was last looked at, gathered from every channel the card watches into one bundle."""
+
+    def collect(self, card: Dict[str, Any], *, card_id: str = "", card_kind: str = "quest", since: Optional[datetime] = None,
+                card_label: str = "", sources: Optional[Sequence[str]] = None,
+                options: Optional[Dict[str, Dict[str, Any]]] = None) -> ContextUpdates: ...
 
 
 class UpdateEngine:
@@ -510,6 +523,14 @@ class UpdateEngine:
         for i, update in enumerate(bundle.updates, 1):
             update.ref = f"U{i}"
         return bundle
+
+
+@implementation("feed-context-sources", "quest_channels")
+def quest_channels() -> UpdateEngine:
+    """The update engine over its built-in channels (quest notes, goal updates, decisions, reflections, insights, Drive, mail, Notion,
+    Google Chat), with no Quest client until a caller builds one with ``build_update_engine``: a channel that needs an account reads nothing
+    without one, and the card's own watch list picks which are read."""
+    return UpdateEngine()
 
 
 # ---------------------------------------------------------------------------------------------

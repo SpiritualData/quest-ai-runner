@@ -8,14 +8,19 @@ import json
 import logging
 import os
 import shutil
+import typing
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from .adapters import (
     ClaudeConversationsAdapter,
     CompositeRetrievalAdapter,
     FilesAdapter,
 )
+from esoi import implementation, solution
 from hubofhubs.ports.model import ModelProvider
+from hubofhubs.seats import ModelCalling
+from .core.model_registry import ModelRegistry
 from .core.prompt_specs import PromptSpec, register, render_prompt
 from .adapters.claude_cli_provider import ClaudeCliProvider
 from .hub import make_provider
@@ -167,23 +172,51 @@ def _quest_model():
         return None, None
 
 
+def judge_goal(provider, model, goal):
+    """The model's verdict on whether ``goal`` is work an AI can finish (``{"ai_doable", "confidence", "reason"}``), or None when the
+    model's answer cannot be read."""
+    from .core.card_filter import _extract_json
+    prompt = json.dumps({"goal": goal.get("name", ""), "description": (goal.get("description") or "")[:800],
+                         "criteria": (goal.get("criteria") or "")[:400]}, ensure_ascii=False)
+    try:
+        raw = provider.answer([{"role": "user", "content": prompt}], model=model,
+                              system=render_prompt("assist-a-terminal-session.goal-judge"))
+        return json.loads(_extract_json(raw))
+    except Exception as e:  # noqa: BLE001 -- one bad answer leaves that goal with its owner
+        log.warning("goal %s not judged: %s", goal.get("id"), e)
+        return None
+
+
+@solution("assist-a-terminal-session", kind="event", entry="judge_goal",
+          example={"name": "Draft the launch note", "description": "Write two paragraphs from the quest's notes."})
+@typing.runtime_checkable
+class TerminalHelping(typing.Protocol):
+    """The small judgements the terminal commands lean on: whether a goal is work an AI can finish."""
+
+    def judge_goal(self, goal: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
+
+
+@implementation("assist-a-terminal-session", "fast_model_helpers")
+class FastModelHelpers:
+    """The goal judgement asked of the model the balanced tier resolves to on the model seat; ``judge_goal`` is the same call
+    ``reconcile-plan`` makes through ``_goal_judge``."""
+    REQUIRES = ()     # the model it is handed
+
+    def __init__(self, model: ModelCalling) -> None:
+        self.model = model
+
+    def judge_goal(self, goal: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        return judge_goal(self.model, ModelRegistry(self.model).resolve_tier("balanced"), goal)
+
+
 def _goal_judge(quest_id: str, client):
     """The model that judges whether an assigned goal is AI work, or None without a model."""
-    from .core.card_filter import _extract_json
     provider, model = _quest_model()
     if provider is None:
         return None
 
     def judge(goal):
-        prompt = json.dumps({"goal": goal.get("name", ""), "description": (goal.get("description") or "")[:800],
-                             "criteria": (goal.get("criteria") or "")[:400]}, ensure_ascii=False)
-        try:
-            raw = provider.answer([{"role": "user", "content": prompt}], model=model,
-                                  system=render_prompt("assist-a-terminal-session.goal-judge"))
-            return json.loads(_extract_json(raw))
-        except Exception as e:  # noqa: BLE001 -- one bad answer leaves that goal with its owner
-            log.warning("goal %s not judged: %s", goal.get("id"), e)
-            return None
+        return judge_goal(provider, model, goal)
 
     return judge
 

@@ -36,12 +36,15 @@ import base64
 import json
 import logging
 import mimetypes
+import typing
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from esoi import implementation, solution
 from hubofhubs.ports.model import ModelProvider
-from .model_registry import is_vision_capable
+from hubofhubs.seats import ModelCalling
+from .model_registry import ModelRegistry, is_vision_capable
 from .prompt_specs import PromptSpec, register, render_prompt
 
 log = logging.getLogger("quest-ai-runner.attachments")
@@ -480,3 +483,26 @@ def _provider_sends_native(provider: ModelProvider, model: str) -> bool:
     if isinstance(flag, bool):
         return flag
     return is_vision_capable(model)
+
+
+@solution("describe-an-attachment", kind="event", entry="prepare",
+          example=[{"filename": "notes.txt", "mime_type": "text/plain", "data": b"Call the mentor on Friday."}])
+@typing.runtime_checkable
+class AttachmentPreparing(typing.Protocol):
+    """Turns what a person attached into what the loop can use: an image the answering model sees natively or a description of it,
+    and the text of a file."""
+
+    def prepare(self, attachments: Optional[List[Dict[str, Any]]]) -> PreparedAttachments: ...
+
+
+@implementation("describe-an-attachment", "vision_description")
+class VisionDescription:
+    """``prepare_attachments`` over the model seat: images go native to a vision-capable model, or are described by it, and files are
+    read as text. The model is the one the ``tier`` resolves to on that seat."""
+    REQUIRES = ()     # the model it is handed
+
+    def __init__(self, model: ModelCalling, tier: str = "balanced") -> None:
+        self.model, self.tier = model, tier
+
+    def prepare(self, attachments: Optional[List[Dict[str, Any]]]) -> PreparedAttachments:
+        return prepare_attachments(attachments, model=ModelRegistry(self.model).resolve_tier(self.tier), provider=self.model)

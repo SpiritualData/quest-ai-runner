@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
+from esoi.requirements import binary, env
 from hubofhubs.act.mcp_client import MCPClient, MCPServerSpec, MCPToolResult
 
 from ..core.adapters_channels import ChannelTransportBase, InboundBatch, InboundMessage, OutboundReply, SendResult
@@ -131,7 +132,6 @@ class OpenClawChannelConfig:
     channel: str = "openclaw"
 
 
-@implementation("talk-over-a-channel", "openclaw")
 class OpenClawChannel(ChannelTransportBase):
     """``ChannelTransport`` over OpenClaw's MCP server. Wraps ``MCPClient`` -- never reimplements
     subprocess/stdio handling.
@@ -344,3 +344,26 @@ def _parse_json_list(text: str, *, key_candidates: tuple) -> Optional[List[Any]]
                 return v
         return []  # a well-formed object with no recognizable list key: a valid empty result
     return None
+
+
+@implementation("talk-over-a-channel", "openclaw")
+class OpenClawFromEnvironment:
+    """The OpenClaw channel as the ``talk-over-a-channel`` seat builds it: the Gateway token file named by ``QAR_OPENCLAW_TOKEN_FILE`` and
+    the ``openclaw`` program on the path. ``OpenClawChannel`` above is the transport; this arm hands the three calls of a
+    ``ChannelTransport`` to it, so a caller that already holds a config builds ``OpenClawChannel`` itself."""
+
+    REQUIRES = (env("QAR_OPENCLAW_TOKEN_FILE", option="token_file"),
+                binary("openclaw", "install the OpenClaw command-line program (it runs `openclaw mcp serve`)"))
+
+    def __init__(self, token_file: str, command: str = "openclaw", channel: str = "openclaw") -> None:
+        self.channel = channel
+        self.transport = OpenClawChannel(OpenClawChannelConfig(token_file=token_file, command=command, channel=channel))
+
+    def receive(self, *, timeout: float = 25.0) -> InboundBatch:
+        return self.transport.receive(timeout=timeout)
+
+    def send(self, reply: OutboundReply) -> SendResult:
+        return self.transport.send(reply)
+
+    def close(self) -> None:
+        self.transport.close()

@@ -143,7 +143,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_OPENCLAW_CALL_TIMEOUT` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_OPENCLAW_COMMAND` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_OPENCLAW_CWD` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_OPENCLAW_TOKEN_FILE` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_OPENCLAW_TOKEN_FILE` |  | `adapters/openclaw_channel.py`, `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_ORG_ID` |  | `adapters/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_OVERSEER` |  | `cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
 | `QAR_OVERSEER_MAX_SIGNALS` |  | `cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |

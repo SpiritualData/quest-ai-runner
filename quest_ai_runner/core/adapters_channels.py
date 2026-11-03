@@ -8,6 +8,8 @@ import abc
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from dataclasses import dataclass, field
 
+from esoi import solution
+
 
 # ---------------------------------------------------------------------------
 # ChannelTransport: a LIVE, two-way messaging channel (the sixth adapter role).
@@ -91,6 +93,7 @@ class SendResult:
     error: Optional[str] = None
 
 
+@solution("talk-over-a-channel", kind="event", entry="send", example=OutboundReply(chat_ref="chat-1", text="Hello"))
 @runtime_checkable
 class ChannelTransport(Protocol):
     """A LIVE, two-way messaging channel. NEVER raises — every failure is a returned value."""

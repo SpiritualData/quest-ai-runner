@@ -19,6 +19,7 @@ from hubofhubs.seats import CardStore, ModelCalling, Remembering
 from .area_reason_and_answer import StepReasoning
 from .config import RunnerConfig, build_orchestrator
 from .loop_wiring import GoalAnswer, NoContext, orchestrator_over  # noqa: F401  (re-exported: the names callers import from here)
+from .message_routing import RequestTakingIn
 from .runner.quest_client import QuestClient
 
 
@@ -52,11 +53,12 @@ class GoalAgent(typing.Protocol):
 @implementation("do-grounded-work", "library")
 class QuestAiRunnerLibrary:
     """The orchestrator of ``core/orchestrator.py`` wired to the seats it is handed; one object answers any number of messages. The
-    ``reasoning`` area is built on first use and not read by ``answer``, which reaches the loop's parts through the orchestrator."""
+    ``reasoning`` and ``taking_in`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
+    orchestrator."""
 
     def __init__(self, model: ModelCalling, cards: CardStore, memory: Remembering, quest: QuestOperations,
-                 reasoning: Lazy[StepReasoning]) -> None:
-        self.model, self.cards, self.memory, self.quest, self.reasoning = model, cards, memory, quest, reasoning
+                 reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn]) -> None:
+        self.model, self.cards, self.memory, self.quest, self.reasoning, self.taking_in = model, cards, memory, quest, reasoning, taking_in
 
     def config(self) -> RunnerConfig:
         """The runner's configuration over the seats: the model, the cards as the context assembler, the Quest account."""
