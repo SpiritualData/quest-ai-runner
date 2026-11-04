@@ -518,7 +518,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "structure-library": "quest_ai_runner.area_keep_it_generic"
+   "structure-library": "quest_ai_runner.keep_it_generic.area"
   }
  },
  "know-the-world": {

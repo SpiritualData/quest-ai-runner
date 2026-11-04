@@ -2,7 +2,7 @@
 import quest_ai_runner
 from esoi.entry import targets
 
-from quest_ai_runner.area_keep_it_generic import KeepingGeneric
+from quest_ai_runner.keep_it_generic.area import KeepingGeneric
 
 
 def test_the_id_of_the_area_answers_offline():

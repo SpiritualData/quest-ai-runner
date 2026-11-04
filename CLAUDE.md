@@ -70,7 +70,9 @@ exists, in its own words, with the generated `README.md` that links to every fol
 (measuring arms in `evaluation/`, solutions with no code yet). **The areas of QAR are sub-intents**: `quest_ai_runner/<intent id>/` holds the `intent.csv`,
 records and README of `reason_and_answer`, `remember_and_recall`, `select_context`, `take_in_the_world`, `act_as_the_body`, `think_critically`,
 `watch_for_risk`, `hold_the_intents`, `keep_it_generic` and `know_the_world`, each arising from the composition arm of its area solution (named back in that
-arm's `sub_intent`). To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
+arm's `sub_intent`). **The code only one area uses lives in that area's folder too**: its composition is `area.py` and its exclusive
+modules sit beside it (importers name `quest_ai_runner.<intent id>.<module>`); a module another area, `core` or the
+runner also imports stays in `core/`, `adapters/` or `runner/`, and a file keeps the layer of its component row in `esoi/components.csv`, wherever its folder is. To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
 program reads the records as one tree (`esoi.intents.read_tree(folder, name)` or `esoi.registry.load`), never one CSV file. `esoi.toml` configures esoi for this repo and
 `scripts/esoi_rules.py` adds QAR's own rules: S15 (environment variables are documented), Q1 (solution tags), Q2 (every metric starts model-free) and Q3 (no generic code left in QAR: a module under `quest_ai_runner/` with no Quest-domain word from `QUEST_DOMAIN_WORDS` and no `hubofhubs` binding is generic and belongs in the hub; the `Q3` rows of `esoi/waivers.csv` are the hub-migration backlog, and each check prints the waived count). Nothing lives outside a solution:
 a component that serves none (S19) fails the check, and the code is removed rather than waived; a solution with no

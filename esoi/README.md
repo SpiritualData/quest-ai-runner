@@ -284,7 +284,7 @@ flowchart LR
 | `track-usage-and-cost:pricing` | Static price table lookup | [quest_ai_runner/pricing.py](../quest_ai_runner/pricing.py) |  |
 | `track-usage-and-cost:usage` | Persisted daily token tracker | [quest_ai_runner/usage.py](../quest_ai_runner/usage.py) |  |
 | `track-usage-and-cost:resources` | Hysteresis resource guard | [quest_ai_runner/resources.py](../quest_ai_runner/resources.py) |  |
-| `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/area_keep_it_generic.py](../quest_ai_runner/area_keep_it_generic.py) | [keep_it_generic](keep_it_generic/README.md) |
+| `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/keep_it_generic/area.py](../quest_ai_runner/keep_it_generic/area.py) | [keep_it_generic](keep_it_generic/README.md) |
 | `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | [quest_ai_runner/area_reason_and_answer.py](../quest_ai_runner/area_reason_and_answer.py) | [reason_and_answer](reason_and_answer/README.md) |
 | `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [quest_ai_runner/area_know_the_world.py](../quest_ai_runner/area_know_the_world.py) | [know_the_world](know_the_world/README.md) |
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) | [act_as_the_body](act_as_the_body/README.md) |

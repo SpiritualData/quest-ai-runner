@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Each area's exclusive code moves into its sub-intent folder (`quest_ai_runner/<intent id>/`, composition in `area.py`), so a folder holds the area's records and the code that serves it; importers, including quest-backend's, name the new module paths and no old path remains. `core/`, `adapters/` and `runner/` keep what several areas or the generic core use.
+
 - The ESOI records live beside the code: each solution's records are kept once in the folder that holds its code (`[records] beside_code` in `esoi.toml`), each of those folders has a generated `README.md`, and each area of the loop is a sub-intent, a folder of `quest_ai_runner/` named by its intent id (`reason_and_answer`, `remember_and_recall`, `select_context`, `take_in_the_world`, `act_as_the_body`, `think_critically`, `watch_for_risk`, `hold_the_intents`, `keep_it_generic`, `know_the_world`) with its own intent, solutions, problems and coherence paragraph. `esoi/` keeps the top intent and the files that are not records. A program that read `esoi/*.csv` reads the tree (`esoi.intents.read_tree`); no module moved and no importable name changed.
 
 - New `quest-ai-runner lane <start|stop|restart|status|ensure> --config <lane.toml> [--env-file PATH] [--if-idle]`: a built-in supervisor that keeps a `poll` lane alive with no systemd and no root (restart loop with 10s delay, own process group, pidfile, flock and append log in a per-lane state dir, systemd-format env file parsed in Python, idempotent `ensure` for cron, idle-guarded `restart`). Logic in `runner/lane_supervisor.py` and `runner/lane_env_file.py`; docs: `docs/how-to/deployment.md` Option C. Tests: `tests/test_lane_supervisor.py`.

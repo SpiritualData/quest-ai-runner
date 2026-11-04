@@ -16,7 +16,7 @@ from esoi import implementation, solution
 from hubofhubs import registry, scan
 from hubofhubs.seats import Genericity, HubScoring
 
-PACKAGE_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
 
 @solution("keep-it-generic", kind="event", entry="audit", example=["examplevendor"])
