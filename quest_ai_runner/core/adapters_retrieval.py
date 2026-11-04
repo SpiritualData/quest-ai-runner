@@ -79,20 +79,6 @@ class RetrievalAdapter(Protocol):
         """DISCOVERY (drill-down): the full signature/usage/example for ONE operation named
         by ``list_operations``. Never raises."""
 
-    # --- OPTIONAL: THE PERSON'S OWN UPDATES -------------------------------------------
-    # An adapter whose source knows what is NEW for the person since they last looked may define
-    # ``own_updates``. The brain runs it first, before planning, only when the reach judge's structured
-    # verdict says the request asks for exactly that (``asks_own_updates``), and puts the result in what
-    # the planner has gathered. An adapter without it is simply never asked.
-
-    def own_updates(self) -> "Observation | OwnUpdates":
-        """The person's own updates since they last looked (what needs them, what finished, what
-        failed). Reading it is what marks those updates as given, so the brain calls it at most once
-        per turn. Return an ``OwnUpdates`` (the finished reply, ``text``, and ``nothing_new``) and the
-        brain answers with ``text`` as it stands, skipping planning, reads, web search and deep runs.
-        Return a plain Observation instead and it is only handed to the planner as gathered. Never
-        raises; return Observation(kind="error", ...) and the turn plans as if it had not been asked."""
-
     # --- OPTIONAL: PERSISTED REFERENCE RESOLUTION ------------------------------------
     # A context card can LEARN a source hit as a durable, typed REFERENCE that is re-resolved
     # FRESH every time the card is used (see adapters/reference_resolver.py +
@@ -123,6 +109,22 @@ class RetrievalAdapter(Protocol):
         signature, same contract): return the fresh text, or ``None`` / ``""`` on empty / failure /
         unsupported. NEVER raises — so the bound method can be wired directly as the
         ``ReferenceResolver`` for ``reference_type``. Default (unsupported): ``None``."""
+
+
+@runtime_checkable
+class OwnUpdatesReader(Protocol):
+    """OPTIONAL, separate from ``RetrievalAdapter``: an adapter whose source knows what is NEW for the person since they last looked
+    may define ``own_updates``. The brain runs it first, before planning, only when the reach judge's structured verdict says the
+    request asks for exactly that (``asks_own_updates``), and puts the result in what the planner has gathered. It is looked up with
+    ``hasattr``/``getattr``, never required: an adapter without it is simply never asked, and does not fail to satisfy ``RetrievalAdapter``."""
+
+    def own_updates(self) -> "Observation | OwnUpdates":
+        """The person's own updates since they last looked (what needs them, what finished, what
+        failed). Reading it is what marks those updates as given, so the brain calls it at most once
+        per turn. Return an ``OwnUpdates`` (the finished reply, ``text``, and ``nothing_new``) and the
+        brain answers with ``text`` as it stands, skipping planning, reads, web search and deep runs.
+        Return a plain Observation instead and it is only handed to the planner as gathered. Never
+        raises; return Observation(kind="error", ...) and the turn plans as if it had not been asked."""
 
 
 @runtime_checkable

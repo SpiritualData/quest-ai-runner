@@ -420,51 +420,6 @@
   }
  },
  {
-  "id": "API-029",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.signature_probe.accepted_keywords is public",
-  "args": {
-   "module": "quest_ai_runner.core.signature_probe",
-   "name": "accepted_keywords"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-030",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.signature_probe.accepted_fields is public",
-  "args": {
-   "module": "quest_ai_runner.core.signature_probe",
-   "name": "accepted_fields"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-031",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.signature_probe.filter_keywords is public",
-  "args": {
-   "module": "quest_ai_runner.core.signature_probe",
-   "name": "filter_keywords"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
   "id": "API-032",
   "area": "name",
   "kind": "name",
@@ -1364,20 +1319,6 @@
   "description": "quest_ai_runner.take_in_the_world.async_bridge imports with every socket call refusing",
   "args": {
    "module": "quest_ai_runner.take_in_the_world.async_bridge"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-092",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.core.signature_probe imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.core.signature_probe"
   },
   "expect": {
    "eq": {

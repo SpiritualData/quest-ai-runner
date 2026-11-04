@@ -240,7 +240,7 @@ def test_local_file_mode_is_unchanged(tmp_path):
 
 
 def test_turn_and_conversation_cards_carry_the_origin(tmp_path):
-    from quest_ai_runner.adapters.conversation_card_builder import ConversationCardBuilder
+    from hubofhubs.recall.conversation_card_builder import ConversationCardBuilder
     from quest_ai_runner.core.turn_context_store import TurnContextStore
     turns = tmp_path / "turns"
     TurnContextStore(turns_dir=str(turns), origin="st_o").record("hello there friend", {"response": "hi"})

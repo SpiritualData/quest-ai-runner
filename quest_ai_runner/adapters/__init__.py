@@ -21,7 +21,7 @@ from .google_chat_adapter import GoogleChatAdapter, ChatSpaces, static_token_pro
 from .drive_comments import COMMENT_WRITE_SCOPES, DriveComments, unanswered
 from .inbound_mail import InboundMail, is_bulk_mail, refuses_as_inbound_mailbox
 from .session_file_conversation_store import SessionFileConversationStore
-from .conversation_card_builder import ConversationCardBuilder
+from hubofhubs.recall.conversation_card_builder import ConversationCardBuilder
 from .feedback_processor import FeedbackProcessor
 from hubofhubs.recall.card_repository import (
     CardRepository,

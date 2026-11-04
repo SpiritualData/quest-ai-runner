@@ -15,7 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 import quest_ai_runner
 from quest_ai_runner import bootstrap_email
-from quest_ai_runner.core import scaffolding, signature_probe
+from quest_ai_runner.core import scaffolding
+from hubofhubs.act import signature_probe
 from quest_ai_runner.take_in_the_world import async_bridge
 from hubofhubs.act import editblock as aider_editblock
 
