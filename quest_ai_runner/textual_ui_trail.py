@@ -21,6 +21,7 @@ from hubofhubs.terminal import (
 )
 from hubofhubs.terminal.asks import error_block, is_for_viewer
 
+from . import terminal_words  # noqa: F401  (registers the Quest wording over the hub's generic words)
 from .textual_ui_ask_folds import is_folded, remember_fold
 from .textual_ui_blocks import block_lines
 
