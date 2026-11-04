@@ -1,0 +1,2 @@
+ideal_id,name,principle,state_description,hints_of_measurement,problem_ids,parent_ideal_ids
+ideal-safe-search,Safe Search,"Web answers come from the right passage, fetched safely and paid for once.","No fetch reaches an address it should not, a repeated query is not paid for twice, and the passage returned answers the query.",Blocked-address cases are all refused; the right passage is returned for sampled queries at the lowest spend.,prob-web-answers-unsafe-or-costly,QI2

@@ -1,6 +1,51 @@
 {
  "@intents": {
-  "intents": {},
+  "intents": {
+   "act_as_the_body": {
+    "arm": "card_and_reads",
+    "root": "act-as-the-body"
+   },
+   "hold_the_intents": {
+    "arm": "separate_stores",
+    "root": "hold-the-intents"
+   },
+   "keep_it_generic": {
+    "arm": "structure-library",
+    "root": "keep-it-generic"
+   },
+   "know_the_world": {
+    "arm": "",
+    "root": "search-the-web"
+   },
+   "quest-ai-runner": {
+    "arm": "",
+    "root": "do-grounded-work"
+   },
+   "reason_and_answer": {
+    "arm": "rebuilt_per_step",
+    "root": "reason-and-answer"
+   },
+   "remember_and_recall": {
+    "arm": "",
+    "root": "card-store"
+   },
+   "select_context": {
+    "arm": "",
+    "root": "select-context"
+   },
+   "take_in_the_world": {
+    "arm": "ways_in",
+    "root": "take-in-the-world"
+   },
+   "think_critically": {
+    "arm": "deep_runs_only",
+    "root": "think-critically"
+   },
+   "watch_for_risk": {
+    "arm": "",
+    "root": "escalate-to-a-human"
+   }
+  },
   "scopes": {
    "access-quest-operations": "quest_ai_runner",
    "act-as-the-body": "quest_ai_runner",
