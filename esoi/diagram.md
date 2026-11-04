@@ -189,6 +189,7 @@ flowchart LR
     s57 -->|"The admitted items with a one-line reason each, and the..."| s56
     s59 -->|"A reach verdict for the request (inside, outside, in the..."| s60
     s60 -->|"A current state view for the request's scope with the time..."| s0
+    s61 -->|"For a request the representative handles: its standing view..."| s0
     s61 -->|"For a request the representative handles: its standing view..."| s57
     s61 -->|"For a request the representative handles: its standing view..."| s63
     s62 -->|"Per request: the metric applied with its reading before and..."| s0

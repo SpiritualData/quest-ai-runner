@@ -7,6 +7,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from dataclasses import dataclass, field
 
+from esoi import solution
+
 
 # ---------------------------------------------------------------------------
 # An OPTIONAL adapter role: GuidanceProvider (USE-CASE-SPECIFIC INSTRUCTIONS).
@@ -43,6 +45,7 @@ class GuidanceCard:
     tags: List[str] = field(default_factory=list)
 
 
+@solution("guide-by-feedback", kind="event", entry="select", example="What should I work on first this week?")
 @runtime_checkable
 class GuidanceProvider(Protocol):
     """OPTIONAL USE-CASE-SPECIFIC INSTRUCTIONS. The host app supplies retrievable guidance.

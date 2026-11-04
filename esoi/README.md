@@ -197,6 +197,7 @@ flowchart LR
     s57 -->|"The admitted items with a one-line reason each, and the..."| s56
     s59 -->|"A reach verdict for the request (inside, outside, in the..."| s60
     s60 -->|"A current state view for the request's scope with the time..."| s0
+    s61 -->|"For a request the representative handles: its standing view..."| s0
     s61 -->|"For a request the representative handles: its standing view..."| s57
     s61 -->|"For a request the representative handles: its standing view..."| s63
     s62 -->|"Per request: the metric applied with its reading before and..."| s0
@@ -244,11 +245,11 @@ flowchart LR
 | `write-through-mcp` | no entry declared | `mcp` | Allowlist enforcement and exactly-once execution |
 | `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | `quest_decision` | Escalation delivery and detail completeness |
 | `show-progress` | no entry declared | `stream` | Surfaced-event policy by mode |
-| `remember-conversations` | no entry declared | `session_file` | Past-conversation recall and isolation over synthetic cases |
+| `remember-conversations` | `quest_ai_runner.run("remember-conversations", ...)` | `session_file` | Past-conversation recall and isolation over synthetic cases |
 | `select-context` | no entry declared | `hybrid` | Context selection ranking accuracy and card-quality outcome |
 | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | `quest_api` | Card repository conformance across backends |
 | `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
-| `guide-by-feedback` | no entry declared | `universal` | Repeat-correction recall and precision over feedback sequences |
+| `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | `universal` | Repeat-correction recall and precision over feedback sequences |
 | `talk-over-a-channel` | `quest_ai_runner.run("talk-over-a-channel")` | `openclaw` | Channel transport conformance to the gateway wire contract |
 | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | `stored_recipes` | Fast-path hit rate and parity with the planner-only path |
 | `watch-for-risk` | `quest_ai_runner.run("watch-for-risk", 'delete the old backup folder')` | `overseer` | Overseer digest evidence and signal correctness on labelled scenarios |
@@ -257,8 +258,8 @@ flowchart LR
 | `judge-a-decision` | `quest_ai_runner.run("judge-a-decision", ...)` | `qar_judges` | Judge deterministic-half correctness with a scripted provider |
 | `guard-a-reply` | `quest_ai_runner.run("guard-a-reply", 'See https://example.org/a for details.')` | `qar_guards` | Reply guard correctness over link, recipe and anticipation cases |
 | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | `quest_channels` | Update-offering correctness over synthetic quest channels |
-| `store-feedback` | no entry declared | `ledger` | Correction carry-through over the feedback-loop cases |
-| `recall-recent-context` | no entry declared | `file` | Warm-start accuracy with no cross-work-item leakage |
+| `store-feedback` | `quest_ai_runner.run("store-feedback", 'quest-id')` | `ledger` | Correction carry-through over the feedback-loop cases |
+| `recall-recent-context` | `quest_ai_runner.run("recall-recent-context", 'quest-id')` | `file` | Warm-start accuracy with no cross-work-item leakage |
 | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | `in_memory` | Exactly-once mid-run delivery per run, and how fast it is seen |
 | `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
 | `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
@@ -275,7 +276,7 @@ flowchart LR
 | `keep-secrets-out` | no entry declared | `evaluation/components/keep_secrets_out/impls/live_scanner.py` | Secret detection and placeholder tolerance |
 | `select-an-implementation` | no entry declared | `evaluation/components/select_an_implementation/impls/live_resolver.py` | none yet |
 | `explain-qar` | no entry declared | `evaluation/components/explain_qar/impls/shipped_docs.py` | Documentation coverage and voice conformance |
-| `persist-predictions` | no entry declared | `file` | Prediction store contract pass rate |
+| `persist-predictions` | `quest_ai_runner.run("persist-predictions", 'quest-id')` | `file` | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | `quest_ai_runner.run("gate-an-autopilot-pass", 'quest-id')` | `live_pass` | Autopilot gate decision correctness |
 | `keep-it-generic` | no entry declared | `structure-library` | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `ground-in-intent` | `quest_ai_runner.run("ground-in-intent", 'quest-id')` | `frame-line` | Intent-grounded pass rate |
@@ -292,9 +293,9 @@ flowchart LR
 | `know-the-world` | no entry declared | `web_with_support_check` | Supported and calibrated answers to world questions |
 | `claim-reach` | `quest_ai_runner.run("claim-reach", 'Send the launch note to the whole team')` | `coding_agent_prompt_reach` | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | `quest_ai_runner.run("act-as-the-body", 'NOTES.md')` | `card_and_reads` | Account-state consistency across scripted sessions |
-| `hold-the-intents` | no entry declared | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| `hold-the-intents` | `quest_ai_runner.run("hold-the-intents", ...)` | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | `think-critically` | `quest_ai_runner.run("think-critically", ...)` | `deep_runs_only` | Requests held to their ESOI metric by code |
-| `select-a-rep` | no entry declared | `persona_resolver_precedence` | Representative choice accuracy and thread consistency |
+| `select-a-rep` | `quest_ai_runner.run("select-a-rep", {'assignee_rep_id': 'rep-1'})` | `persona_resolver_precedence` | Representative choice accuracy and thread consistency |
 | `narrate-a-turn` | no entry declared | `model_beat` | Supported first beats within the time and cost the turn allows |
 | `explain-an-answer` | no entry declared | `model_explanation` | Faithful explanations per unit of cost and time |
 | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | `vision_description` | Answer pass rate gained per image described |
@@ -304,7 +305,7 @@ flowchart LR
 | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
 | `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
 | `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | `shipped_path` | Whole-path turns right on a small mixed set |
-| `guide-toward-the-long-term-goal` | no entry declared | `guided_v2` | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
+| `guide-toward-the-long-term-goal` | `quest_ai_runner.run("guide-toward-the-long-term-goal", 'What should I work on first this week?')` | `guided_v2` | Two-sided long-term guidance: grounded nudges at the right level, restraint elsewhere |
 | `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | none yet |
 | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | `quest-api-cards` | none yet |
 | `show-the-ais-work` | `quest_ai_runner.run("show-the-ais-work")` | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
@@ -676,7 +677,7 @@ flowchart LR
 | `persist-cards:qdrant` | Vector database repository | [quest_ai_runner/adapters/qdrant_card_repository.py](../quest_ai_runner/adapters/qdrant_card_repository.py) |  |
 | `persist-cards:quest_api` | Hosted card API repository | [quest_ai_runner/adapters/quest_api_card_repository.py](../quest_ai_runner/adapters/quest_api_card_repository.py) |  |
 | `index-by-meaning:qdrant` | Qdrant-backed vector store | [quest_ai_runner/adapters/qdrant_vector_store.py](../quest_ai_runner/adapters/qdrant_vector_store.py) |  |
-| `guide-by-feedback:universal` | Universal guidance provider | [quest_ai_runner/core/guidance_provider.py](../quest_ai_runner/core/guidance_provider.py) |  |
+| `guide-by-feedback:universal` | Universal guidance provider | [quest_ai_runner/adapters/guidance_card_manager.py](../quest_ai_runner/adapters/guidance_card_manager.py) |  |
 | `guide-by-feedback:ledger_guidance` | Live ledger and provider arm | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
 | `guide-by-feedback:no_memory` | No-feedback floor | [evaluation/components/feedback_loop/impls/no_memory.py](../evaluation/components/feedback_loop/impls/no_memory.py) |  |
 | `guide-by-feedback:dump_all` | Show-everything baseline | [evaluation/components/feedback_loop/impls/dump_all.py](../evaluation/components/feedback_loop/impls/dump_all.py) |  |
@@ -815,7 +816,7 @@ flowchart LR
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
 | `act-as-the-body:read_after_write` | Read back what a change touched (proposed) |  |  |
 | `act-as-the-body:live_read_only` | A live read behind every state claim (proposed) |  |  |
-| `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [quest_ai_runner/core/orchestrator_run_begin.py](../quest_ai_runner/core/orchestrator_run_begin.py) |  |
+| `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [quest_ai_runner/area_hold_the_intents.py](../quest_ai_runner/area_hold_the_intents.py) |  |
 | `hold-the-intents:per_quest_note` | Maintained view per quest only (proposed) |  |  |
 | `hold-the-intents:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
 | `remember-and-recall:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |

@@ -61,7 +61,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import (Any, Callable, Dict, Iterator, List, Optional, Protocol, Sequence,
                     Tuple, runtime_checkable)
-from esoi import implementation
+from esoi import implementation, solution
 
 try:                                  # POSIX: the cross-process lock under a shared ledger file
     import fcntl
@@ -352,6 +352,16 @@ class FeedbackStore(Protocol):
 
 # How many composed briefs' offers the ledger keeps waiting for their runs (``remember_offer``).
 MAX_REMEMBERED_OFFERS = 300
+
+
+@solution("store-feedback", kind="event", entry="open_items", example="quest-id")
+@runtime_checkable
+class FeedbackKeeping(Protocol):
+    """What a person asked for and what became of it: the items on a card that still owe somebody something, and the standing
+    instructions that keep applying after their first use."""
+
+    def open_items(self, card_id: str) -> List["FeedbackItem"]: ...
+    def standing_rules(self, card_id: str) -> List["FeedbackItem"]: ...
 
 
 @implementation("store-feedback", "ledger")

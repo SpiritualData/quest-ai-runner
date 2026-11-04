@@ -264,8 +264,8 @@
  "draft-a-metric": {
   "default": "capped_model_draft",
   "evidence": {
-   "detail": "capped_model_draft is better than ask_owner (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0217, ask_owner passed 4 of 10, capped_model_draft 10 of 10); capped_model_draft leads capped_model_draft_fast (capped_model_draft_fast 0.9 against capped_model_draft 1; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=1, capped_model_draft_fast passed 9 of 10, capped_model_draft 10 of 10)",
-   "p": 0.021672,
+   "detail": "capped_model_draft leads ask_owner (ask_owner 0.4 against capped_model_draft 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0625, 6 of 10 cases disagree); capped_model_draft leads capped_model_draft_fast (capped_model_draft_fast 0.9 against capped_model_draft 1; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=1, capped_model_draft_fast passed 9 of 10, capped_model_draft 10 of 10)",
+   "p": 0.0625,
    "verdict": "WIN"
   },
   "modules": {
@@ -383,7 +383,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "universal": "quest_ai_runner.core.guidance_provider"
+   "universal": "quest_ai_runner.adapters.guidance_card_manager"
   }
  },
  "guide-toward-the-long-term-goal": {
@@ -400,8 +400,8 @@
  "hand-off-a-goal": {
   "default": "model_judge",
   "evidence": {
-   "detail": "model_judge is better than creator_keeps_it (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.00546, creator_keeps_it passed 8 of 18, model_judge 17 of 18); model_judge leads model_judge_fast (model_judge_fast 0.778 against model_judge 0.944; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.338, model_judge_fast passed 14 of 18, model_judge 17 of 18)",
-   "p": 0.005456,
+   "detail": "model_judge is better than creator_keeps_it (two-sided exact McNemar test, Holm-adjusted p=0.00781, 9 of 18 cases disagree); model_judge leads model_judge_fast (model_judge_fast 0.778 against model_judge 0.944; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.338, model_judge_fast passed 14 of 18, model_judge 17 of 18)",
+   "p": 0.007812,
    "verdict": "WIN"
   },
   "modules": {
@@ -416,7 +416,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "separate_stores": "quest_ai_runner.core.orchestrator_run_begin"
+   "separate_stores": "quest_ai_runner.area_hold_the_intents"
   }
  },
  "index-by-meaning": {
@@ -513,8 +513,8 @@
  "narrate-a-turn": {
   "default": "model_beat",
   "evidence": {
-   "detail": "best guess, not yet significant: no_beat 0.408 against model_beat 0.782 on the point estimate; no case counts or per-case rows allow a test",
-   "p": null,
+   "detail": "model_beat is better than no_beat (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0225, 13 of 13 cases disagree)",
+   "p": 0.022461,
    "verdict": "WIN"
   },
   "modules": {
@@ -535,8 +535,8 @@
  "operate-from-a-terminal": {
   "default": "cli_commands",
   "evidence": {
-   "detail": "qar_main is exactly equal to cli_commands on the metric (qar_main 1 against cli_commands 1), so cli_commands stays; real_console_script is exactly equal to cli_commands on the metric (real_console_script 1 against cli_commands 1), so cli_commands stays",
-   "p": 1.0,
+   "detail": "qar_main is exactly equal to cli_commands on the metric (qar_main 1 against cli_commands 1), so cli_commands stays; cli_commands is better than real_console_script (two-sided exact McNemar test, Holm-adjusted p=0.00391, 10 of 42 cases disagree)",
+   "p": 0.003906,
    "verdict": "TIE"
   },
   "modules": {
@@ -654,8 +654,8 @@
  "reply-in-steps": {
   "default": "gated",
   "evidence": {
-   "detail": "gated is better than every_attempt (two-sided exact McNemar test, Holm-adjusted p=1.91e-06, 21 of 24 cases disagree); gated leads today (today 0.625 against gated 0.875; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.569, today passed 5 of 8, gated 7 of 8)",
-   "p": 2e-06,
+   "detail": "gated is better than every_attempt (two-sided exact McNemar test, Holm-adjusted p=9.54e-07, 22 of 24 cases disagree); gated is better than today (two-sided exact McNemar test, Holm-adjusted p=0.00195, 10 of 24 cases disagree)",
+   "p": 1e-06,
    "verdict": "WIN"
   },
   "modules": {
@@ -676,8 +676,8 @@
  "route-a-message": {
   "default": "planner_route",
   "evidence": {
-   "detail": "beaten by pre_route_then_planner, single_prompt: keyword_rules is exactly equal to qar_planner on the metric (keyword_rules 1 against qar_planner 1), so qar_planner stays; best guess, not yet significant: pre_route_then_planner leads qar_planner (pre_route_then_planner 0.889 against qar_planner 0.87; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=1, pre_route_then_planner passed 48 of 54, qar_planner 47 of 54); more cases would settle it; best guess, not yet significant: single_prompt leads qar_planner (single_prompt 0.963 against qar_planner 0.87; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.483, single_prompt passed 52 of 54, qar_planner 47 of 54); more cases would settle it",
-   "p": 0.483102,
+   "detail": "beaten by single_prompt: qar_planner leads keyword_rules (keyword_rules 0.685 against qar_planner 0.889; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0222, 15 of 54 cases disagree; one of 3 looks, alpha 0.0167); pre_route_then_planner is exactly equal to qar_planner on the metric (pre_route_then_planner 0.889 against qar_planner 0.889), so qar_planner stays; best guess, not yet significant: single_prompt leads qar_planner (single_prompt 0.963 against qar_planner 0.889; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.54, single_prompt passed 52 of 54, qar_planner 48 of 54); more cases would settle it",
+   "p": 0.022156,
    "verdict": "LOSS"
   },
   "modules": {
@@ -771,8 +771,8 @@
  "select-context": {
   "default": "hybrid",
   "evidence": {
-   "detail": "hybrid_union is better than blind_grep (two-sided exact McNemar test, Holm-adjusted p=4.37e-05, 33 of 63 cases disagree); idf_docstrings is exactly equal to hybrid_union on the metric (idf_docstrings 0.73 against hybrid_union 0.73), so hybrid_union stays; hybrid_union leads solutions_and_problems_with_links (solutions_and_problems_with_links 0.714 against hybrid_union 0.73; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=1, 11 of 63 cases disagree); hybrid_union is better than vector_bge_small (two-sided exact McNemar test, Holm-adjusted p=0.0125, 16 of 63 cases disagree)",
-   "p": 4.4e-05,
+   "detail": "hybrid_union is better than blind_grep (two-sided exact McNemar test, Holm-adjusted p=1.86e-05, 31 of 63 cases disagree); idf_docstrings is exactly equal to hybrid_union on the metric (idf_docstrings 0.714 against hybrid_union 0.714), so hybrid_union stays; solutions_and_problems_with_links is exactly equal to hybrid_union on the metric (solutions_and_problems_with_links 0.714 against hybrid_union 0.714), so hybrid_union stays; hybrid_union is better than vector_bge_small (two-sided exact McNemar test, Holm-adjusted p=0.0226, 18 of 63 cases disagree)",
+   "p": 1.9e-05,
    "verdict": "TIE"
   },
   "modules": {
@@ -799,8 +799,8 @@
  "show-the-ais-work": {
   "default": "trail",
   "evidence": {
-   "detail": "trail is better than no_trace (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0406, no_trace passed 2 of 8, trail 7 of 8); trail is better than plain_list (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0202, plain_list passed 1 of 8, trail 7 of 8)",
-   "p": 0.020202,
+   "detail": "trail is better than no_trace (two-sided exact McNemar test, Holm-adjusted p=0.000153, 19 of 31 cases disagree); trail is better than plain_list (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0101, plain_list passed 1 of 8, trail 7 of 8)",
+   "p": 0.000153,
    "verdict": "WIN"
   },
   "modules": {
@@ -811,8 +811,8 @@
  "spec-selection": {
   "default": "lexical-vector-gated",
   "evidence": {
-   "detail": "best guess, not yet significant: lexical_only 0.788 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: lexical_vector 0.816 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: lexical_vector_llm 0.486 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: solutions_and_problems_with_links 0.576 against lexical_vector_gated 0.905 on the point estimate; no case counts or per-case rows allow a test",
-   "p": null,
+   "detail": "lexical_vector_gated leads lexical_only (lexical_only 0.788 against lexical_vector_gated 0.903; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.203, 50 of 76 cases disagree); lexical_vector_gated leads lexical_vector (lexical_vector 0.816 against lexical_vector_gated 0.903; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0888, 49 of 76 cases disagree; one of 2 looks, alpha 0.025); best guess, not yet significant: lexical_vector_llm 0.486 against lexical_vector_gated 0.903 on the point estimate; no case counts or per-case rows allow a test; lexical_vector_gated is better than solutions_and_problems_with_links (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.42e-05, 51 of 76 cases disagree)",
+   "p": 4.4e-05,
    "verdict": "WIN"
   },
   "modules": {
@@ -852,9 +852,9 @@
  "talk-over-a-channel": {
   "default": "openclaw",
   "evidence": {
-   "detail": "real_gateway is exactly equal to openclaw_bridge on the metric (real_gateway 1 against openclaw_bridge 1), so openclaw_bridge stays",
-   "p": 1.0,
-   "verdict": "TIE"
+   "detail": "openclaw_bridge is better than real_gateway (two-sided exact McNemar test, Holm-adjusted p=0.000122, 14 of 20 cases disagree)",
+   "p": 0.000122,
+   "verdict": "WIN"
   },
   "modules": {
    "openclaw": "quest_ai_runner.adapters.openclaw_channel"
@@ -922,9 +922,9 @@
  "write-through-mcp": {
   "default": "mcp",
   "evidence": {
-   "detail": "real_stdio_server is exactly equal to allowlist_writer on the metric (real_stdio_server 1 against allowlist_writer 1), so allowlist_writer stays",
-   "p": 1.0,
-   "verdict": "TIE"
+   "detail": "allowlist_writer is better than real_stdio_server (two-sided exact McNemar test, Holm-adjusted p=0.00781, 8 of 15 cases disagree)",
+   "p": 0.007812,
+   "verdict": "WIN"
   },
   "modules": {
    "mcp": "quest_ai_runner.adapters.mcp_write_adapter"

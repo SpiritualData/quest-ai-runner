@@ -17,12 +17,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from quest_ai_runner.core.adapters_guidance import GuidanceCard as CoreGuidanceCard
 from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
-from esoi import implementation
 
 log = logging.getLogger("quest-ai-runner.guidance")
 
 
-@implementation("guide-by-feedback", "universal")
 class UniversalGuidanceProvider(GuidanceProviderBase):
     """Guidance provider supporting both file-based and dynamic sources.
 

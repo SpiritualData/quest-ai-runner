@@ -15,9 +15,9 @@ import tempfile
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from esoi import implementation
+from esoi import implementation, solution
 from .anticipation_learner import (
     CONF_FLOOR,
     Pattern,
@@ -84,6 +84,8 @@ _pattern_from_dict = pattern_from_dict
 _prediction_from_dict = prediction_from_dict
 
 
+@solution("persist-predictions", kind="event", entry="load_predictions", example="quest-id")
+@runtime_checkable
 class PredictionStore(Protocol):
     """The port the anticipation engine persists through: patterns learned per scope, the scope's live
     predictions with their precomputed context views, and an append-only outcome log. A consumer backs it

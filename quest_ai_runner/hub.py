@@ -34,7 +34,7 @@ def child() -> Assembler:
     """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
     root = PACKAGE_DIR.parent
     records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.area_think_critically", "quest_ai_runner.area_watch_for_risk"))
+    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.area_think_critically", "quest_ai_runner.area_watch_for_risk", "quest_ai_runner.area_hold_the_intents", "quest_ai_runner.adapters.guidance_card_manager"))
 
 
 def register_with_hub() -> None:

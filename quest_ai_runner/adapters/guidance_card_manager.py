@@ -31,9 +31,12 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import yaml
+from esoi import implementation
+
+from ..core.guidance_provider import UniversalGuidanceProvider
 
 
 @dataclass
@@ -252,3 +255,16 @@ class GuidanceCardManager:
             return False
         except Exception:  # noqa: BLE001
             return False
+
+
+@implementation("guide-by-feedback", "universal")
+class CardGuidanceProvider(UniversalGuidanceProvider):
+    """The universal guidance provider with its card store injected: guidance cards read from a folder, plus what was learned from
+    corrections when a loader is given. ``core`` cannot import this adapter, so this is where the two meet."""
+    REQUIRES = ()     # no seat: the folder and the loader are configuration
+
+    def __init__(self, cards_dir: Optional[str] = None,
+                 dynamic_guidance_loader: Optional[Callable[[], List[Dict[str, Any]]]] = None,
+                 vector_store: Optional[Any] = None, provider: Optional[Any] = None, model: Optional[str] = None) -> None:
+        super().__init__(cards_dir=cards_dir, dynamic_guidance_loader=dynamic_guidance_loader, vector_store=vector_store,
+                         provider=provider, model=model, manager_factory=GuidanceCardManager)

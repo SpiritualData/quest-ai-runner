@@ -81,7 +81,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
-from esoi import implementation
+from esoi import implementation, solution
 from hubofhubs.recall.date_bounds import parse_date_bound, timestamp_in_range
 from hubofhubs.recall.text_sampling import keywords_from_text
 from hubofhubs.recall.scope_tags import scope_tags_allow
@@ -203,6 +203,7 @@ def ts_in_time_range(ts: str, time_range: Optional[Dict[str, Any]]) -> bool:
         return True
 
 
+@solution("recall-recent-context", kind="event", entry="load", example="quest-id")
 @runtime_checkable
 class RecentContextStore(Protocol):
     """Scoped, per-card-and-item persistence of recently selected context. NEVER raises."""

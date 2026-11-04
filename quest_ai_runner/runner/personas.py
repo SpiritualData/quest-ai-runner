@@ -51,9 +51,12 @@ import json
 import logging
 import threading
 import re
+import typing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+
+from esoi import implementation, solution
 
 from ..core.card_filter import _extract_json
 from ..core.prompt_specs import declare, render_prompt
@@ -697,3 +700,24 @@ def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,
 EXPLICIT_ASK_SPEC = declare(
     "select-a-rep.explicit-ask", solution="select-a-rep", metric="metric-select-a-rep",
     tier="fast", cache_layer="none", template=JUDGE_PROMPT)
+
+
+@solution("select-a-rep", kind="event", entry="resolve", example={"assignee_rep_id": "rep-1"})
+@typing.runtime_checkable
+class RepSelecting(typing.Protocol):
+    """Chooses the one AI representative a task is for: the persona id and its skill folder, or nothing when the task names none."""
+
+    def resolve(self, task: Mapping[str, Any]) -> Optional[Tuple[str, str]]: ...
+
+
+@implementation("select-a-rep", "persona_resolver_precedence")
+class PersonaResolverPrecedence:
+    """The persona resolver of this module, built from its configuration alone: a structured assignment field first, then the opt-in
+    steps the configuration turns on. With no registry it resolves nobody."""
+    REQUIRES = ()     # no seat: the registry and the skills folder are configuration
+
+    def __init__(self, skills_root: str = ".", registry_file: Optional[str] = None) -> None:
+        self.resolver = build_persona_resolver(PersonaResolverConfig(skills_root=skills_root, registry_file=registry_file))
+
+    def resolve(self, task: Mapping[str, Any]) -> Optional[Tuple[str, str]]:
+        return self.resolver(dict(task))
