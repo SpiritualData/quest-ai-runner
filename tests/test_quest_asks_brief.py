@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from quest_ai_runner.core import tools_quest_ops as ops
 from quest_ai_runner.core.tools import ToolContext
 from quest_ai_runner.runner.autopilot import AutopilotPass
-from quest_ai_runner.runner.autopilot_briefs import compose_batch_text
+from quest_ai_runner.think_critically.autopilot_briefs import compose_batch_text
 from quest_ai_runner.runner.quest_asks_brief import asks_brief_section, fetch_asks
 from quest_ai_runner.runner.quest_client import QuestClient
 

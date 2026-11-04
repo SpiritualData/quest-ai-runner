@@ -175,7 +175,7 @@ def test_default_persona_instructions_pick_the_solution_furthest_from_target():
 
 
 def test_explicit_instructions_still_replace_the_defaults_and_the_brief_fits_its_budget():
-    from quest_ai_runner.runner.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
+    from quest_ai_runner.think_critically.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
     from quest_ai_runner.runner.autopilot_defaults import (
         BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS as dp, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as dq)
     from quest_ai_runner.core import prompt_budget
@@ -191,7 +191,7 @@ def test_explicit_instructions_still_replace_the_defaults_and_the_brief_fits_its
 
 
 def test_custom_quest_instructions_still_get_the_before_after_metric_requirement():
-    from quest_ai_runner.runner.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
+    from quest_ai_runner.think_critically.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
     from quest_ai_runner.core import prompt_budget
     written = compose_batch_text("Ship it", "bailey", instructions="Quest rule X.",
                                  persona_instructions="Persona rule Y.")

@@ -12,7 +12,7 @@ import pytest
 from esoi import scaffold
 
 from quest_ai_runner.core import repo_specs
-from quest_ai_runner.core.goal_iteration import SliceAndWriteback, SliceOnly
+from quest_ai_runner.think_critically.goal_iteration import SliceAndWriteback, SliceOnly
 
 GREETING = "make the greeting function greet a person by name in the standard form"
 

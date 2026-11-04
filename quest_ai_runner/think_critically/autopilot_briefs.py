@@ -7,9 +7,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
-from .quest_folder_sync import NextSteps
+from ..runner.quest_folder_sync import NextSteps
 from ..core import prompt_budget
-from .autopilot_defaults import (
+from ..runner.autopilot_defaults import (
     AUTOPILOT_BRIEF_TOKEN_BUDGET,
     AUTOPILOT_PASS_KIND,
     AUTOPILOT_WORK_KIND,
@@ -20,7 +20,7 @@ from .autopilot_defaults import (
     _MD_TITLE_FURNITURE_RE,
     log,
 )
-from .autopilot_periods import _parse_dt
+from ..runner.autopilot_periods import _parse_dt
 
 
 def _summarize_previous(previous: Dict[str, Any]) -> str:

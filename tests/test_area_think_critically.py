@@ -3,7 +3,7 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_think_critically import MetricHolding, hold_case
+from quest_ai_runner.think_critically.area import MetricHolding, hold_case
 
 AREA_IDS = ("think-critically", "iterate-by-spec", "spec-selection", "judge-a-decision", "guard-a-reply", "ground-in-intent",
             "detect-a-stalled-run", "draft-a-metric", "gate-an-autopilot-pass")

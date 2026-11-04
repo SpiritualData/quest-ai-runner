@@ -24,7 +24,7 @@ from esoi.metric_results import NOT_RECORDED_LINE, MetricResult
 from quest_ai_runner.config import build_orchestrator
 from hubofhubs.ports.deep import DeepResult
 from hubofhubs.ports.events import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode
-from quest_ai_runner.core.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
+from quest_ai_runner.think_critically.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision

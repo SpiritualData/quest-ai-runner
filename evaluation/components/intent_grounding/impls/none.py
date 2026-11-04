@@ -3,7 +3,7 @@ prompt carries the quest alone. The gain of the frame is the difference between 
 control (a case with no intent above its quest) composes the same bytes for both arms. Subscription calls like ``frame_line``."""
 PAID = True
 from intent_grounding import arms
-from quest_ai_runner.runner.autopilot_briefs import compose_batch_text
+from quest_ai_runner.think_critically.autopilot_briefs import compose_batch_text
 
 
 def build(meter):

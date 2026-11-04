@@ -24,7 +24,7 @@ from quest_ai_runner.runner.autopilot import (
     current_scope_label,
 )
 from quest_ai_runner.runner.autopilot_defaults import AUTOPILOT_WORK_KIND, LAST_RUN_OUTPUT_MAX_CHARS
-from quest_ai_runner.runner.autopilot_briefs import render_last_run_output, select_last_run_output
+from quest_ai_runner.think_critically.autopilot_briefs import render_last_run_output, select_last_run_output
 
 from .test_autopilot import NOW, FakeAutopilotClient, _goal, _goals_payload, _now
 

@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from .quest_client_support import QuestApiError, QuestNotConfigured, log
+from ..runner.quest_client_support import QuestApiError, QuestNotConfigured, log
 
 
 def refusal_of(error: Exception) -> Dict[str, Any]:

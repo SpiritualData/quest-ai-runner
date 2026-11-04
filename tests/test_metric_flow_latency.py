@@ -15,7 +15,7 @@ import pytest
 from esoi import spec_index
 from esoi import spec_slice
 from hubofhubs.ports.events import Mode
-from quest_ai_runner.core.goal_iteration import SliceAndWriteback
+from quest_ai_runner.think_critically.goal_iteration import SliceAndWriteback
 from quest_ai_runner.core.orchestrator import PlanDecision
 from quest_ai_runner.core.orchestrator_turn import _Emitter
 

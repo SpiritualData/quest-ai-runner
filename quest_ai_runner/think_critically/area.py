@@ -27,13 +27,13 @@ from hubofhubs.deep.contract import DEEP_REVIEW_PROMPT, SubprocessConfig, parse_
 from hubofhubs.deep.subprocess_runner import SubprocessGoalRunner
 from hubofhubs.seats import ModelCalling
 
-from .runner.quest_client import QuestOperations
-from .core import quest_judge, reach_judge
-from .core.goal_iteration import GoalIteration
-from .core.goal_metrics import GoalMetrics
-from .core.spec_selection import select_specs
-from .runner.autopilot import AutopilotPass
-from .runner.metric_draft import MetricDraft
+from ..runner.quest_client import QuestOperations
+from ..core import quest_judge, reach_judge
+from .goal_iteration import GoalIteration
+from ..core.goal_metrics import GoalMetrics
+from ..core.spec_selection import select_specs
+from ..runner.autopilot import AutopilotPass
+from ..runner.metric_draft import MetricDraft
 
 
 SpecSelecting = select_specs.__wrapped__    # the function that declares the spec-selection solution, as the type of its seat

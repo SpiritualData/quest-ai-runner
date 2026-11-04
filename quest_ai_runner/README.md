@@ -54,7 +54,7 @@ Makes sure everything the system does applies the relevant ESOI metric and leave
 - Entry call: `quest_ai_runner.run("think-critically", ...)`
 - Selected implementation: `deep_runs_only`
 - Metric: Requests held to their ESOI metric by code
-- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 899 more
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 900 more
 
 ## access-quest-operations (`access-quest-operations`)
 
@@ -121,7 +121,7 @@ flowchart LR
 | `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [`quest_ai_runner/know_the_world/area.py`](know_the_world/area.py) | selected |
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py) | selected |
 | `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [`quest_ai_runner/area_hold_the_intents.py`](area_hold_the_intents.py) | selected |
-| `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [`quest_ai_runner/area_think_critically.py`](area_think_critically.py) | selected |
+| `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [`quest_ai_runner/think_critically/area.py`](think_critically/area.py) | selected |
 | `take-in-the-world:ways_in` | Channels, terminal and package as ways in | [`quest_ai_runner/area_take_in_the_world.py`](area_take_in_the_world.py) | selected |
 | `access-quest-operations:quest_client` | Quest HTTP client from the environment | [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py) | selected |
 

@@ -260,7 +260,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         # briefs list the same tools with the shell command that calls them. None/empty = the
         # loop is exactly what it was before tools existed.
         self.tools: Optional[ToolRegistry] = tools if tools else None
-        # How much the code adds around a deep goal beyond the standing instructions (``core/goal_iteration.py``,
+        # How much the code adds around a deep goal beyond the standing instructions (``think_critically/goal_iteration.py``,
         # solution iterate-by-spec): the slice of the specification in the brief, and the runner's own readings of
         # the metric before and after. The metric record every deep goal keeps (``core/goal_metrics.py``) runs under
         # every arm; this only says how much of it the code fills in itself. None = the selected arm, the same default

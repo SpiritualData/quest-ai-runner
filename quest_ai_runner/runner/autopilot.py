@@ -108,14 +108,14 @@ from .autopilot_personas import (
     resolve_persona,
     split_held_for_another_day,
 )
-from .autopilot_briefs import (
+from ..think_critically.autopilot_briefs import (
     _batch_title,
     compose_batch_text,
     next_steps_from_pass,
 )
 from .autopilot_esoi import esoi_readiness
 from .autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
-from .autopilot_gates import GatesMixin
+from ..think_critically.autopilot_gates import GatesMixin
 from .autopilot_work import WorkMixin
 from .quest_asks_brief import asks_brief_section, fetch_open_decisions
 from .quest_experiments import (

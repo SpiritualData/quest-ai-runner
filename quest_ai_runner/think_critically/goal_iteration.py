@@ -33,8 +33,8 @@ from esoi import implementation, solution
 from esoi.metric_meter import MetricMeter, meters_from_names
 from esoi.spec_slice import RepoSliceSource, SliceSource, SpecSlice
 
-from . import repo_specs
-from .runtime_settings import core_settings, process_environment
+from ..core import repo_specs
+from ..core.runtime_settings import core_settings, process_environment
 
 
 @solution("iterate-by-spec", kind="event", entry="slice_for", example="Tidy the card store")

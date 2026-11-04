@@ -99,24 +99,24 @@ think-critically holds deep runs to their metric through iterate-by-spec on the 
 | Implementation | Name | Where | Sub-intent |
 |---|---|---|---|
 | `detect-a-stalled-run:goal_runner` | Production liveness review in the goal runner | [quest_ai_runner/core/goal_runner.py](../core/goal_runner.py) |  |
-| `detect-a-stalled-run:live_reviewer` | Live model reviewer arm | [quest_ai_runner/area_think_critically.py](../area_think_critically.py) |  |
+| `detect-a-stalled-run:live_reviewer` | Live model reviewer arm | [quest_ai_runner/think_critically/area.py](area.py) |  |
 | `detect-a-stalled-run:rule_floor` | Keyword and threshold rule floor | [evaluation/components/deep_review/impls/rule_floor.py](../../evaluation/components/deep_review/impls/rule_floor.py) |  |
-| `judge-a-decision:qar_judges` | Production judges under a scripted provider | [quest_ai_runner/area_think_critically.py](../area_think_critically.py) |  |
-| `guard-a-reply:qar_guards` | Production guard engines under test | [quest_ai_runner/area_think_critically.py](../area_think_critically.py) |  |
-| `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | [quest_ai_runner/runner/autopilot_gates.py](../runner/autopilot_gates.py) |  |
-| `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | [quest_ai_runner/area_think_critically.py](../area_think_critically.py) |  |
-| `ground-in-intent:none` | Prompts without the intent frame | [quest_ai_runner/runner/autopilot_briefs.py](../runner/autopilot_briefs.py) |  |
-| `ground-in-intent:frame-line` | Computed frame in the prompt | [quest_ai_runner/area_think_critically.py](../area_think_critically.py) |  |
-| `ground-in-intent:frame-card-drilldown` | Frame plus intent card and record drill-down | [quest_ai_runner/runner/quest_client_intents.py](../runner/quest_client_intents.py) |  |
+| `judge-a-decision:qar_judges` | Production judges under a scripted provider | [quest_ai_runner/think_critically/area.py](area.py) |  |
+| `guard-a-reply:qar_guards` | Production guard engines under test | [quest_ai_runner/think_critically/area.py](area.py) |  |
+| `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | [quest_ai_runner/think_critically/autopilot_gates.py](autopilot_gates.py) |  |
+| `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | [quest_ai_runner/think_critically/area.py](area.py) |  |
+| `ground-in-intent:none` | Prompts without the intent frame | [quest_ai_runner/think_critically/autopilot_briefs.py](autopilot_briefs.py) |  |
+| `ground-in-intent:frame-line` | Computed frame in the prompt | [quest_ai_runner/think_critically/area.py](area.py) |  |
+| `ground-in-intent:frame-card-drilldown` | Frame plus intent card and record drill-down | [quest_ai_runner/think_critically/quest_client_intents.py](quest_client_intents.py) |  |
 | `ground-in-intent:frame-lazy-spec` | Frame plus a lazily generated quest specification | [quest_ai_runner/core/tools_quest_intents.py](../core/tools_quest_intents.py) |  |
-| `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | [quest_ai_runner/core/goal_iteration.py](../core/goal_iteration.py) |  |
-| `iterate-by-spec:slice-only` | Slice of the specification before the task | [quest_ai_runner/core/goal_iteration.py](../core/goal_iteration.py) |  |
-| `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | [quest_ai_runner/core/goal_iteration.py](../core/goal_iteration.py) |  |
+| `iterate-by-spec:generic-doctrine` | Generic method in the standing instructions | [quest_ai_runner/think_critically/goal_iteration.py](goal_iteration.py) |  |
+| `iterate-by-spec:slice-only` | Slice of the specification before the task | [quest_ai_runner/think_critically/goal_iteration.py](goal_iteration.py) |  |
+| `iterate-by-spec:slice-and-writeback` | Slice before and write-back after | [quest_ai_runner/think_critically/goal_iteration.py](goal_iteration.py) |  |
 | `spec-selection:lexical-vector-llm` | Lexical TF-IDF, optional vector search, parallel batched model judging | [quest_ai_runner/core/spec_selection.py](../core/spec_selection.py) |  |
 | `spec-selection:lexical-only` | Lexical top few only | [quest_ai_runner/core/spec_selection.py](../core/spec_selection.py) |  |
 | `spec-selection:lexical-vector-gated` | Lexical vector gated | [quest_ai_runner/core/spec_selection.py](../core/spec_selection.py) |  |
 | `iterate-by-spec:writeback-on-the-record` | Slice before and write-back onto each record (planned) |  |  |
-| `draft-a-metric:capped_model_draft` | Capped model draft per task (today) | [quest_ai_runner/area_think_critically.py](../area_think_critically.py) |  |
+| `draft-a-metric:capped_model_draft` | Capped model draft per task (today) | [quest_ai_runner/think_critically/area.py](area.py) |  |
 | `draft-a-metric:ask_owner` | Ask the owner to write it (floor, proposed) | [evaluation/components/draft_a_metric/impls/ask_owner.py](../../evaluation/components/draft_a_metric/impls/ask_owner.py) |  |
 | `judge-a-decision:no_call_floor` | No-call floor of the quest ranker and reach judge | [evaluation/components/judge_live_decisions/impls/no_call_floor.py](../../evaluation/components/judge_live_decisions/impls/no_call_floor.py) |  |
 | `judge-a-decision:live_judges` | Live quest ranker and reach judge on a small model | [evaluation/components/judge_live_decisions/impls/live_judges.py](../../evaluation/components/judge_live_decisions/impls/live_judges.py) |  |

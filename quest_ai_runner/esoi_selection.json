@@ -292,7 +292,7 @@
   },
   "modules": {
    "goal_runner": "quest_ai_runner.core.goal_runner",
-   "live_reviewer": "quest_ai_runner.area_think_critically"
+   "live_reviewer": "quest_ai_runner.think_critically.area"
   }
  },
  "do-grounded-work": {
@@ -314,7 +314,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "capped_model_draft": "quest_ai_runner.area_think_critically"
+   "capped_model_draft": "quest_ai_runner.think_critically.area"
   }
  },
  "escalate-to-a-human": {
@@ -372,8 +372,8 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "autopilot_gates": "quest_ai_runner.runner.autopilot_gates",
-   "live_pass": "quest_ai_runner.area_think_critically"
+   "autopilot_gates": "quest_ai_runner.think_critically.autopilot_gates",
+   "live_pass": "quest_ai_runner.think_critically.area"
   }
  },
  "gather-evidence": {
@@ -403,10 +403,10 @@
    "verdict": "WIN"
   },
   "modules": {
-   "frame-card-drilldown": "quest_ai_runner.runner.quest_client_intents",
+   "frame-card-drilldown": "quest_ai_runner.think_critically.quest_client_intents",
    "frame-lazy-spec": "quest_ai_runner.core.tools_quest_intents",
-   "frame-line": "quest_ai_runner.area_think_critically",
-   "none": "quest_ai_runner.runner.autopilot_briefs"
+   "frame-line": "quest_ai_runner.think_critically.area",
+   "none": "quest_ai_runner.think_critically.autopilot_briefs"
   }
  },
  "guard-a-reply": {
@@ -417,7 +417,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "qar_guards": "quest_ai_runner.area_think_critically"
+   "qar_guards": "quest_ai_runner.think_critically.area"
   }
  },
  "guide-by-feedback": {
@@ -483,9 +483,9 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "generic-doctrine": "quest_ai_runner.core.goal_iteration",
-   "slice-and-writeback": "quest_ai_runner.core.goal_iteration",
-   "slice-only": "quest_ai_runner.core.goal_iteration"
+   "generic-doctrine": "quest_ai_runner.think_critically.goal_iteration",
+   "slice-and-writeback": "quest_ai_runner.think_critically.goal_iteration",
+   "slice-only": "quest_ai_runner.think_critically.goal_iteration"
   }
  },
  "judge-a-decision": {
@@ -496,7 +496,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "qar_judges": "quest_ai_runner.area_think_critically"
+   "qar_judges": "quest_ai_runner.think_critically.area"
   }
  },
  "justify-model-calls": {
@@ -913,7 +913,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "deep_runs_only": "quest_ai_runner.area_think_critically",
+   "deep_runs_only": "quest_ai_runner.think_critically.area",
    "instruction_only": "quest_ai_runner.core.standing_instructions"
   }
  },

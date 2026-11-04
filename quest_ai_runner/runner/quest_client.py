@@ -89,7 +89,7 @@ from .quest_client_goals import GoalsMixin
 from .quest_client_quests import QuestsMixin
 from .quest_client_context import ContextEntriesMixin
 from .quest_client_reps import RepsMixin
-from .quest_client_intents import IntentsMixin
+from ..think_critically.quest_client_intents import IntentsMixin
 
 
 
