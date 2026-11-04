@@ -170,11 +170,12 @@ coverage = 1.0
 precision = 1.0
 coverage = 1.0
 
-# 1 of 6 checkable edges (the area's one edge to select-an-implementation names no code now that the method added to show it is removed);
-# coverage 0.167: five of the six solutions have no module.
+# No checkable edge: none of the five solutions has a module in the package (their code is the esoi library's records and checks, the
+# files under evaluation/ and the tests), so the area's edges to its host have no code to show and coverage is 0.0. The selector
+# (select-an-implementation) was moved to take_in_the_world, where configure-a-lane imports it, after its edge here named no code.
 [rules.S38.floors.keep_it_generic]
 precision = 0.0
-coverage = 0.166
+coverage = 0.0
 
 [rules.S38.floors.know_the_world]
 precision = 1.0
@@ -198,10 +199,11 @@ coverage = 0.666
 precision = 0.0
 coverage = 1.0
 
-# 6 of 7: feed-context-sources is a part of the area that no typed seat composes.
+# 7 of 8: feed-context-sources is a part of the area that no typed seat composes; configure-a-lane imports the selector it uses
+# (select-an-implementation, moved here from keep_it_generic); coverage 0.667: four edges have an end with no module.
 [rules.S38.floors.take_in_the_world]
-precision = 0.857
-coverage = 0.636
+precision = 0.875
+coverage = 0.667
 
 # 7 of 8: spec-selection is a part of the area that no typed seat composes.
 [rules.S38.floors.think_critically]

@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `keep-it-generic:structure-library`
 
 ## How the solutions fit together
 
-keep-it-generic keeps every part specified as a solution with measured alternatives. It picks the arm that runs through select-an-implementation and finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
+keep-it-generic keeps every part specified as a solution with measured alternatives. It finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
 ## Solutions at a glance
 
@@ -18,7 +18,6 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 | `judge-esoi-behavior` | no entry declared | `model_judge` | Judge agreement with labelled reference replies |
 | `verify-offline` | no entry declared | `collect_by_file` | none yet |
 | `keep-secrets-out` | no entry declared | `live_scanner` | Secret detection and placeholder tolerance |
-| `select-an-implementation` | no entry declared | `live_resolver` | none yet |
 | `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
 
 ## Problems and ideals
@@ -47,7 +46,6 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 - `metric-judge-esoi-behavior`, Judge agreement with labelled reference replies: leader `model_judge`, 29 of 30 cases
 - `metric-verify-offline`, : leader `collect_by_file`, 29 of 29 cases
 - `metric-keep-secrets-out`, Secret detection and placeholder tolerance: leader `live_scanner`, 30 of 35 cases
-- `metric-select-an-implementation`, : leader `live_resolver`, 28 of 36 cases
 - `metric-tag-solutions`, Right solution missed without the tag: leader `tag_list_with_check`, 13 of 13 cases
 
 ## Where to go next
@@ -86,7 +84,6 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 | `judge-esoi-behavior` | Behaviour-grading judge | model_judge | Judge agreement with labelled reference replies |
 | `verify-offline` |  | collect_by_file | none yet |
 | `keep-secrets-out` | Public-repository hygiene scanner | live_scanner | Secret detection and placeholder tolerance |
-| `select-an-implementation` |  | live_resolver | none yet |
 | `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 
 ### Implementations
@@ -102,8 +99,6 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 | `verify-offline:conftest` |  | [tests/conftest.py](../../tests/conftest.py) |  |
 | `verify-offline:collect_by_file` |  | [evaluation/components/verify_offline/impls/collect_by_file.py](../../evaluation/components/verify_offline/impls/collect_by_file.py) |  |
 | `keep-secrets-out:live_scanner` | Planted-secret evaluation arm | [evaluation/components/keep_secrets_out/impls/live_scanner.py](../../evaluation/components/keep_secrets_out/impls/live_scanner.py) |  |
-| `select-an-implementation:resolve` |  | [quest_ai_runner/core/resolve.py](../core/resolve.py) |  |
-| `select-an-implementation:live_resolver` |  | [evaluation/components/select_an_implementation/impls/live_resolver.py](../../evaluation/components/select_an_implementation/impls/live_resolver.py) |  |
 | `tag-solutions:tag_list_with_check` | Problem-linked tag list with a check rule and a lookup | [scripts/esoi_tags.py](../../scripts/esoi_tags.py) |  |
 
 ### Metrics
@@ -112,5 +107,4 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 - `metric-judge-esoi-behavior`, Judge agreement with labelled reference replies: `esoi run esoi_judge --impl model_judge`
 - `metric-verify-offline`, : `esoi run verify_offline --impl collect_by_file`
 - `metric-keep-secrets-out`, Secret detection and placeholder tolerance: `esoi run keep_secrets_out --impl live_scanner`
-- `metric-select-an-implementation`, : `esoi run select_an_implementation --impl live_resolver`
 - `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`

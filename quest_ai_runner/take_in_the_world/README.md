@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `take-in-the-world:ways_in` of its 
 
 ## How the solutions fit together
 
-take-in-the-world lets a person or a program reach the runner from wherever they work and be understood the same way, and ways_in is its arm. route-a-message matches each message to the handling it needs, from a direct answer to a long run. describe-an-attachment turns an image the person attached into text that can ground the answer. feed-context-sources brings what changed in a work item since the last turn. receive-input-mid-run lets a person change direction or stop a run that is already working. operate-from-a-terminal runs the tools from the command line with predictable output and exit codes. assist-a-terminal-session makes the small model calls a terminal session needs. expose-the-public-api gives a program a stable package to import and configure. It hands over load_config, the front door that builds the lane's one configuration through configure-a-lane. explain-qar documents the package through expose-the-public-api so that a newcomer can learn it from complete documents. learn-by-example shows how to use the package through expose-the-public-api in small examples that run on an empty environment. configure-a-lane gives whoever runs a lane one configuration, built from its file and its environment in a fixed order, so every lane is set up the same way.
+take-in-the-world lets a person or a program reach the runner from wherever they work and be understood the same way, and ways_in is its arm. route-a-message matches each message to the handling it needs, from a direct answer to a long run. describe-an-attachment turns an image the person attached into text that can ground the answer. feed-context-sources brings what changed in a work item since the last turn. receive-input-mid-run lets a person change direction or stop a run that is already working. operate-from-a-terminal runs the tools from the command line with predictable output and exit codes. assist-a-terminal-session makes the small model calls a terminal session needs. expose-the-public-api gives a program a stable package to import and configure. It hands over load_config, the front door that builds the lane's one configuration through configure-a-lane. explain-qar documents the package through expose-the-public-api so that a newcomer can learn it from complete documents. learn-by-example shows how to use the package through expose-the-public-api in small examples that run on an empty environment. configure-a-lane gives whoever runs a lane one configuration, built from its file and its environment in a fixed order, so every lane is set up the same way. It turns each selection the file or the environment names into the arm that runs through select-an-implementation.
 
 ## Diagram
 
@@ -20,9 +20,11 @@ flowchart LR
     s1["Runnable example set<br/>learn-by-example"]
     s2["Layered lane configuration loader<br/>configure-a-lane"]
     s3["Documentation coverage and voice check<br/>explain-qar"]
+    s4["select-an-implementation<br/>select-an-implementation"]
     s0 -->|"A configured client or runner config, results of bridged..."| s1
     s0 -->|"A configured client or runner config, results of bridged..."| s3
     s2 -->|"A populated runner configuration object, or a..."| s0
+    s4 -->|"The implementation that serves a solution, chosen by name..."| s2
 ```
 
 ## Solutions at a glance
@@ -39,6 +41,7 @@ flowchart LR
 | `explain-qar` | no entry declared | `shipped_docs` | Documentation coverage and voice conformance |
 | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | `vision_description` | Answer pass rate gained per image described |
 | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
+| `select-an-implementation` | no entry declared | `live_resolver` | none yet |
 
 ## Problems and ideals
 
@@ -66,6 +69,7 @@ flowchart LR
 - `metric-explain-qar`, Documentation coverage and voice conformance: leader `shipped_docs`, 466 of 469 cases
 - `metric-describe-an-attachment`, Answer pass rate gained per image described: leader `skip_images`, 2 of 10 cases
 - `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: leader `fast_model_helpers`, 30 of 32 cases
+- and 1 more: all 11 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -104,6 +108,7 @@ flowchart LR
 | `explain-qar` | Documentation coverage and voice check | shipped_docs | Documentation coverage and voice conformance |
 | `describe-an-attachment` | Image description for grounding | vision_description | Answer pass rate gained per image described |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
+| `select-an-implementation` |  | live_resolver | none yet |
 
 ### Implementations
 
@@ -142,6 +147,8 @@ flowchart LR
 | `feed-context-sources:quest_channels` | The update engine over its built-in channels | [quest_ai_runner/runner/context_updates.py](../runner/context_updates.py) |  |
 | `operate-from-a-terminal:cli_commands` | The command dispatcher run in process | [quest_ai_runner/area_take_in_the_world.py](../area_take_in_the_world.py) |  |
 | `expose-the-public-api:package_front_doors` | The names in the package __all__ | [quest_ai_runner/area_take_in_the_world.py](../area_take_in_the_world.py) |  |
+| `select-an-implementation:resolve` |  | [quest_ai_runner/core/resolve.py](../core/resolve.py) |  |
+| `select-an-implementation:live_resolver` |  | [evaluation/components/select_an_implementation/impls/live_resolver.py](../../evaluation/components/select_an_implementation/impls/live_resolver.py) |  |
 
 ### Metrics
 
@@ -155,3 +162,4 @@ flowchart LR
 - `metric-explain-qar`, Documentation coverage and voice conformance: `esoi run explain_qar --impl shipped_docs`
 - `metric-describe-an-attachment`, Answer pass rate gained per image described: `esoi run describe_an_attachment --impl vision_description`
 - `metric-assist-a-terminal-session`, Correct terminal helper verdicts within the wait a person accepts: `esoi run assist_a_terminal_session --impl fast_model_helpers_live; esoi run assist_a_terminal_session --impl fast_model_helpers`
+- `metric-select-an-implementation`, : `esoi run select_an_implementation --impl live_resolver`
