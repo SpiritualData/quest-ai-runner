@@ -1,15 +1,25 @@
 """Private real inputs as the third case source of the one context-selection metric.
 
 The cases are real requests with a labelled candidate list (notes, goal updates, decisions, cards, conversation turns, quest state fields), kept
-OUTSIDE this repository in the folder named by ``QAR_PRIVATE_CONTEXT_DATASET`` (``cases.jsonl`` and ``manifest.json``). With the variable absent the
-source contributes no case and the metric runs on the file and topic cases alone; nothing fails. Nothing from the data is copied here: a row records
-only how many cases of each source were present, and the digest of the cases records the sha256 of the two private files (or ``private:absent``).
+OUTSIDE this repository in the folders named by ``QAR_PRIVATE_CONTEXT_DATASET`` (one folder, or several separated by ``os.pathsep``; each holds
+``cases.jsonl`` and ``manifest.json``). A folder without ``cases.jsonl`` is skipped, and a case id already loaded from an earlier folder is skipped
+in a later one. With no folder present the source contributes no case and the metric runs on the file and topic cases alone; nothing fails.
+Nothing from the data is copied here: a row records only how many cases of each source were present, and the digest of the cases records the
+sha256 of every present folder's two private files (or ``private:absent``).
+
+Cases of the richer schema carry metadata on each item (source kind, field, author, channel, age, relation to the quest, status, path, need role)
+and on the request (the quest and goal titles). The item card starts with that metadata, so an arm can use source and recency; an item with a
+path is written under that relative path (sanitized) so file-aware arms see a real path; the task an arm receives starts with a
+"Quest: ... Goal: ..." line when the case has those titles. Older cases without these fields work unchanged.
 
 A private case is scored like any other: the arm is a builder, and the fixed selector reads the case's own candidate items as its corpus. Each
 item becomes one file of a throwaway corpus (one card per item: its type, then its text), the arm ranks that corpus for the request, and the first
 ``budget`` items it returns are the selection. Accuracy is the harmonic mean of needed-item recall and (1 - noise), where noise is the share of
 selected items labelled irrelevant (helpful items are neutral); a self-contained case (no needed item) scores 1 only when nothing is selected, and
-falls with each item selected. The case passes at ``PASS_ACCURACY``. The size of what was selected is charged as cost (the share of
+falls with each item selected. The case passes at ``PASS_ACCURACY``. Beside it the row reports ``edit_recall`` (the share of needed items whose need role is
+``edit_target`` that were selected) and ``cross_quest_recall`` (the share of needed items whose ``quest_relation`` is neither ``same_quest`` nor
+``same_goal`` that were selected; a selector that fences items by quest scope scores 0 there, which is what it measures), each only when the case
+has such items; neither changes the accuracy. The size of what was selected is charged as cost (the share of
 ``SIZE_BUDGET_CHARS`` it fills, times the cost budget of ``[balance.context_selection]``), beside the store charge of ``store_cost.py``; time is
 the seconds of the case. The weights of ``[balance.context_selection]`` fold these into the one number.
 
@@ -40,24 +50,31 @@ SIZE_BUDGET_CHARS = 8000       # about 2000 tokens of selected context fills the
 TOP_K = 3
 
 
-def dataset_folder(environ=None):
+def dataset_folders(environ=None):
+    """The folders named by the variable (separated by ``os.pathsep``), in order, whether or not they exist."""
     environ = os.environ if environ is None else environ
-    raw = (environ.get(ENV) or "").strip()
-    if not raw:
-        return None
-    path = Path(raw).expanduser()
-    return path.parent if path.is_file() else path
+    folders = []
+    for raw in (environ.get(ENV) or "").split(os.pathsep):
+        if raw.strip():
+            path = Path(raw.strip()).expanduser()
+            folders.append(path.parent if path.is_file() else path)
+    return folders
+
+
+def present_folders(environ=None):
+    """The named folders that hold a ``cases.jsonl``."""
+    return [f for f in dataset_folders(environ) if (f / "cases.jsonl").is_file()]
 
 
 def digest_parts(environ=None):
-    """The recorded digest part of the private source: ``private:absent`` or ``private:<cases sha>/<manifest sha or none>``."""
-    folder = dataset_folder(environ)
-    cases = folder / "cases.jsonl" if folder else None
-    if not cases or not cases.is_file():
-        return ABSENT
-    manifest = folder / "manifest.json"
-    manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest() if manifest.is_file() else "none"
-    return f"private:{hashlib.sha256(cases.read_bytes()).hexdigest()}/{manifest_sha}"
+    """The recorded digest part of the private source: ``private:absent`` or ``private:<cases sha>/<manifest sha or none>`` for one folder; for
+    several, those parts sorted and joined with ``+`` (so the order the folders are named in does not matter)."""
+    parts = []
+    for folder in present_folders(environ):
+        manifest = folder / "manifest.json"
+        manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest() if manifest.is_file() else "none"
+        parts.append(f"{hashlib.sha256((folder / 'cases.jsonl').read_bytes()).hexdigest()}/{manifest_sha}")
+    return f"private:{'+'.join(sorted(parts))}" if parts else ABSENT
 
 
 def publish_digest(environ=None):
@@ -75,6 +92,14 @@ def kind_of(raw):
     return "none" if not needed else "single" if needed == 1 else "several"
 
 
+def task_text(raw):
+    """The request an arm receives: the input text, led by one "Quest: ... Goal: ..." line when the case names its quest or goal."""
+    request = raw.get("request") if isinstance(raw.get("request"), dict) else {}
+    parts = [f"{label}: {request[key]}." for label, key in (("Quest", "quest_title"), ("Goal", "goal_title")) if request.get(key)]
+    text = raw.get("input_text", "")
+    return f"{' '.join(parts)}\n{text}" if parts else text
+
+
 def parse_cases(text):
     """Cases from jsonl text; a line with no id, no candidate list, a candidate without an id or a label outside LABELS is skipped."""
     cases = []
@@ -86,19 +111,45 @@ def parse_cases(text):
         cands = raw.get("candidates") if isinstance(raw, dict) else None
         if not raw or not raw.get("case_id") or not isinstance(cands, list) or not all(c.get("item_id") and c.get("label") in LABELS for c in cands):
             continue
-        cases.append(dict(id=f"PRIV-{raw['case_id']}", area="real", task=raw.get("input_text", ""), candidates=cands,
+        cases.append(dict(id=f"PRIV-{raw['case_id']}", area="real", task=task_text(raw), candidates=cands,
                           kind=kind_of(raw), heldout=False))
     return cases
 
 
-def kind_shares(folder):
-    manifest = Path(folder) / "manifest.json" if folder else None
-    if manifest and manifest.is_file():
-        try:
-            p = json.loads(manifest.read_text(encoding="utf-8"))["input_kind_mix"]["proportions"]
+def manifest_of(folder):
+    try:
+        return json.loads((Path(folder) / "manifest.json").read_text(encoding="utf-8"))["input_kind_mix"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def shares_of(mix_counts):
+    total = sum(mix_counts.values())
+    return {k: v / total for k, v in mix_counts.items()} if total else None
+
+
+def kind_shares(folders, cases=None):
+    """The shares of the three kinds: the manifests' ``input_kind_mix`` counts summed over every present folder when each has them, else (one
+    folder) its proportions, else the shares of the loaded ``cases``, else ``KIND_MIX``."""
+    folders = [folders] if isinstance(folders, (str, Path)) else list(folders or [])
+    mixes = [manifest_of(f) for f in folders]
+    try:
+        if folders and all(isinstance(m, dict) and isinstance(m.get("counts"), dict) for m in mixes):
+            total = dict(none=0, single=0, several=0)
+            for m in mixes:
+                c = m["counts"]
+                total["none"] += c.get("none", 0)
+                total["single"] += c.get("single", 0)
+                total["several"] += c.get("multi_same_type", 0) + c.get("multi_source", 0) + c.get("several", 0)
+            if shares_of(total):
+                return shares_of(total)
+        if len(folders) == 1 and isinstance(mixes[0], dict):
+            p = mixes[0]["proportions"]
             return dict(none=p["none"], single=p["single"], several=p.get("multi_same_type", 0) + p.get("multi_source", 0))
-        except (ValueError, KeyError, TypeError):
-            pass
+    except (KeyError, TypeError, ValueError):
+        pass
+    if cases:
+        return shares_of({k: sum(1 for c in cases if c["kind"] == k) for k in KIND_MIX})
     return dict(KIND_MIX)
 
 
@@ -113,17 +164,28 @@ def mix(cases, shares, count):
     return sorted(chosen, key=lambda c: c["id"])
 
 
+def load_all(folders):
+    """Every case of every folder, in folder order; a case id already loaded is skipped."""
+    seen, cases = set(), []
+    for folder in folders:
+        for case in parse_cases((folder / "cases.jsonl").read_text(encoding="utf-8")):
+            if case["id"] not in seen:
+                seen.add(case["id"])
+                cases.append(case)
+    return cases
+
+
 def load_cases(other_cases, environ=None):
-    """The private cases for a mix with ``other_cases`` (the file and topic cases): none when the dataset is absent, else as many as make their
-    ``SOURCE_WEIGHTS`` share, in the manifest's kind proportions."""
+    """The private cases for a mix with ``other_cases`` (the file and topic cases): none when no dataset folder is present, else as many as make
+    their ``SOURCE_WEIGHTS`` share, in the manifests' kind proportions."""
     publish_digest(environ)
-    folder = dataset_folder(environ)
-    cases = folder / "cases.jsonl" if folder else None
-    if not cases or not cases.is_file():
+    folders = present_folders(environ)
+    if not folders:
         return []
     others = SOURCE_WEIGHTS["file"] + SOURCE_WEIGHTS["topic"]
     count = round(SOURCE_WEIGHTS["private"] / others * len(other_cases))
-    return mix(parse_cases(cases.read_text(encoding="utf-8")), kind_shares(folder), count)
+    cases = load_all(folders)
+    return mix(cases, kind_shares(folders, cases), count)
 
 
 _SCRATCH = []
@@ -136,20 +198,61 @@ def scratch_root():
     return Path(_SCRATCH[0])
 
 
+def item_metadata(item):
+    """What the item is and where it came from, for the start of its card: ``describe`` when present, else built from the fields that exist
+    ("<source or type>[: field] by <author> via <channel>, <age>, <relation>, <status>"); empty when the item has none of them."""
+    title = item.get("quest_title")
+    described = item.get("describe")
+    if described:
+        return f"{described}, quest {title}" if title and title not in described else str(described)
+    head = item.get("source_kind") or item.get("type") or ""
+    if head and item.get("field"):
+        head += f": {item['field']}"
+    if item.get("author"):
+        head += f"{' ' if head else ''}by {item['author']}"
+    if item.get("channel"):
+        head += f"{' ' if head else ''}via {item['channel']}"
+    relation = item.get("quest_relation")
+    if relation and title:
+        relation = f"{relation} ({title})"
+    return ", ".join(str(p) for p in (head, item.get("age_label"), relation or title, item.get("status")) if p)
+
+
+def safe_rel(path, used):
+    """A relative corpus path from an item's ``path``: no drive, root, ``.`` or ``..`` part, and not one already used; None when nothing is left."""
+    parts = [p for p in str(path or "").replace("\\", "/").split("/") if p not in ("", ".", "..") and not p.endswith(":")]
+    if not parts:
+        return None
+    rel = "/".join(parts)
+    if rel in used or any(u.startswith(rel + "/") or rel.startswith(u + "/") for u in used):
+        return None
+    return rel
+
+
 def item_corpus(case):
-    """The case's candidate items as a corpus: one text file and one card per item (the card says the item type, then starts with its text).
-    Returns ``(corpus, {file path: item id})``."""
+    """The case's candidate items as a corpus: one text file and one card per item (the card starts with the item's metadata, then its text).
+    An item with a ``path`` is written under that path (sanitized, unique), else as ``item_NNN.txt``. Returns ``(corpus, {file path: item id})``."""
     from context_selection.corpus import Corpus
     from hubofhubs.recall.context_card_extraction import SOURCE_FILE_WEIGHT
     root = Path(tempfile.mkdtemp(dir=scratch_root()))
-    corpus, owner = Corpus(root=root), {}
+    corpus, owner, used = Corpus(root=root), {}, set()
     for index, item in enumerate(case["candidates"]):
-        rel, text = f"item_{index:03d}.txt", item.get("text") or ""
-        (root / rel).write_text(text, encoding="utf-8")
+        text = item.get("text") or ""
+        rel = safe_rel(item.get("path"), used) or f"item_{index:03d}.txt"
+        while rel in used:
+            rel = f"item_{index:03d}_{len(used)}.txt"
+        try:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text, encoding="utf-8")
+        except OSError:
+            rel = f"item_{index:03d}.txt"
+            (root / rel).write_text(text, encoding="utf-8")
+        used.add(rel)
         flat = " ".join(text.split())
+        meta = item_metadata(item) or item.get("type") or "item"
         corpus.files.append(rel)
         corpus.cards[f"item-{index:03d}"] = dict(
-            id=f"item-{index:03d}", keywords=[], summary=f"{item.get('type') or 'item'}: {flat[:200]}", description=flat[200:900],
+            id=f"item-{index:03d}", keywords=[], summary=f"{meta}: {flat[:200]}", description=flat[200:900],
             files=[dict(path=rel, symbols=[])], weight=SOURCE_FILE_WEIGHT)
         owner[rel] = item["item_id"]
     return corpus, owner
@@ -169,7 +272,14 @@ def numbers(selected, candidates):
         recall = 1.0 if n == 0 else 0.0
         accuracy = 1.0 if n == 0 else max(0.0, 1 - n / TOP_K) * (1 - noise)
     chars = sum(len(by_id[i].get("text") or "") for i in picked)
-    return dict(recall=round(recall, 4), noise=round(noise, 4), accuracy=round(accuracy, 4), selected=n, size_chars=chars)
+    out = dict(recall=round(recall, 4), noise=round(noise, 4), accuracy=round(accuracy, 4), selected=n, size_chars=chars)
+    edit = {i for i in needed if by_id[i].get("need_role") == "edit_target"}
+    if edit:
+        out["edit_recall"] = round(sum(1 for i in picked if i in edit) / len(edit), 4)
+    cross = {i for i in needed if by_id[i].get("quest_relation") not in (None, "same_quest", "same_goal")}
+    if cross:
+        out["cross_quest_recall"] = round(sum(1 for i in picked if i in cross) / len(cross), 4)
+    return out
 
 
 def score_case(fn, case):
@@ -183,4 +293,5 @@ def score_case(fn, case):
         meter.cost_usd += cost_budget() * min(row["size_chars"] / SIZE_BUDGET_CHARS, 1.0)
     return dict(row, ok=row["accuracy"] >= PASS_ACCURACY, top1=False, top3=False, private=True, kind=case["kind"],
                 got=f"{row['selected']} selected, recall {row['recall']}, noise {row['noise']}",
-                note=f"{case['kind']} input, accuracy {row['accuracy']}")
+                note=f"{case['kind']} input, accuracy {row['accuracy']}"
+                     + "".join(f", {k.replace('_', ' ')} {row[k]}" for k in ("edit_recall", "cross_quest_recall") if k in row))

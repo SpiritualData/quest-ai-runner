@@ -1,5 +1,6 @@
 """The private real inputs as a case source of the one context-selection metric, on a tiny SYNTHETIC dataset built here (invented content)."""
 import hashlib
+import os
 import json
 
 import common  # noqa: F401  (puts the components folder on sys.path)
@@ -80,3 +81,73 @@ def test_the_private_aggregate_names_the_counts_of_each_source():
     rows = [dict(ok=True, top1=True, top3=True, budget=3), dict(ok=True, topic=True, cards_per_file=0.1, gated=False),
             dict(ok=False, private=True, accuracy=0.2)]
     assert score.aggregate(rows).startswith("case sources file 1, topic 1, private 1 |")
+
+
+def test_several_folders_load_dedupe_and_digest_in_a_stable_order(tmp_path):
+    one, two, gone = tmp_path / "one", tmp_path / "two", tmp_path / "gone"
+    one.mkdir(), two.mkdir()
+    write_dataset(one, (("a", 0), ("b", 1)))
+    write_dataset(two, (("b", 2), ("c", 1)))
+    env = {private_cases.ENV: os.pathsep.join([str(one), str(gone), str(two)])}
+    flipped = {private_cases.ENV: os.pathsep.join([str(two), str(one)])}
+    assert [f.name for f in private_cases.present_folders(env)] == ["one", "two"]
+    loaded = private_cases.load_all(private_cases.present_folders(env))
+    assert [c["id"] for c in loaded] == ["PRIV-a", "PRIV-b", "PRIV-c"]
+    assert [c for c in loaded if c["id"] == "PRIV-b"][0]["kind"] == "single"      # the earlier folder wins the clash
+    assert private_cases.digest_parts(env) == private_cases.digest_parts(flipped) and "+" in private_cases.digest_parts(env)
+    assert private_cases.digest_parts({private_cases.ENV: str(gone)}) == private_cases.ABSENT
+
+
+def test_kind_shares_sum_manifest_counts_else_use_the_cases_else_the_fallback(tmp_path):
+    one, two = tmp_path / "one", tmp_path / "two"
+    one.mkdir(), two.mkdir()
+    for folder, counts in ((one, dict(none=1, single=1, multi_same_type=0, multi_source=0)), (two, dict(none=1, single=0, multi_same_type=1, multi_source=1))):
+        (folder / "manifest.json").write_text(json.dumps(dict(input_kind_mix=dict(counts=counts))))
+    assert private_cases.kind_shares([one, two]) == dict(none=0.4, single=0.2, several=0.4)
+    (two / "manifest.json").write_text("{}")
+    cases = private_cases.parse_cases("".join(json.dumps(raw_case(n, k)) + "\n" for n, k in (("p", 0), ("q", 1), ("r", 1), ("s", 1))))
+    assert private_cases.kind_shares([one, two], cases) == dict(none=0.25, single=0.75, several=0.0)
+    assert private_cases.kind_shares([one, two]) == private_cases.KIND_MIX
+
+
+def test_the_card_starts_with_item_metadata_and_a_path_item_gets_a_safe_unique_path():
+    raw = raw_case("m", 0, extra=0, task="Do the thing")
+    raw["request"] = dict(quest_title="Garden", goal_title="Water")
+    raw["candidates"] = [
+        dict(item_id="1", type="note", label="needed", text="pump order", describe="Quest note by Joshua via email, 3 days before"),
+        dict(item_id="2", type="file", label="helpful", text="code", source_kind="repo_file", field="irrigation.py", author="Joshua",
+             channel="file", age_label="2 days before", quest_relation="same_quest", status="active", path="/abs/../src/irrigation.py"),
+        dict(item_id="3", type="file", label="helpful", text="more", path="src/irrigation.py"),
+        dict(item_id="4", type="note", label="irrelevant", text="plain")]
+    case = private_cases.parse_cases(json.dumps(raw))[0]
+    assert case["task"] == "Quest: Garden. Goal: Water.\nDo the thing"
+    corpus, owner = private_cases.item_corpus(case)
+    cards = [corpus.cards[f"item-{i:03d}"]["summary"] for i in range(4)]
+    assert cards[0].startswith("Quest note by Joshua via email, 3 days before: pump order")
+    assert cards[1].startswith("repo_file: irrigation.py by Joshua via file, 2 days before, same_quest, active: code")
+    assert cards[3] == "note: plain"
+    assert sorted(owner) == ["abs/src/irrigation.py", "item_002.txt", "item_003.txt", "src/irrigation.py"] or "src/irrigation.py" in owner
+    assert all(not rel.startswith("/") and ".." not in rel.split("/") for rel in owner) and len(owner) == 4
+    assert (corpus.root / "src" / "irrigation.py").exists() or (corpus.root / "abs" / "src" / "irrigation.py").exists()
+
+
+def test_a_case_without_titles_keeps_its_task_text():
+    assert private_cases.parse_cases(json.dumps(raw_case("v", 1, task="Plain")))[0]["task"] == "Plain"
+    only_goal = dict(raw_case("g", 1, task="T"), request=dict(goal_title="G"))
+    assert private_cases.parse_cases(json.dumps(only_goal))[0]["task"] == "Goal: G.\nT"
+
+
+def test_edit_recall_and_cross_quest_recall_are_reported_only_when_the_case_has_such_items():
+    items = [dict(item_id="e", label="needed", need_role="edit_target", quest_relation="same_quest"),
+             dict(item_id="f", label="needed", need_role="fact_source", quest_relation="other_team"),
+             dict(item_id="g", label="needed", need_role="edit_target", quest_relation="no_quest"),
+             dict(item_id="n", label="irrelevant")]
+    row = private_cases.numbers(["e", "f", "n"], items)
+    assert row["edit_recall"] == 0.5 and row["cross_quest_recall"] == 0.5
+    fenced = private_cases.numbers(["e"], items)
+    assert fenced["cross_quest_recall"] == 0.0 and fenced["accuracy"] == private_cases.numbers(["e"], [dict(i) for i in items])["accuracy"]
+    plain = private_cases.numbers(["z-n0"], raw_case("z", 1)["candidates"])
+    assert "edit_recall" not in plain and "cross_quest_recall" not in plain
+    case = dict(id="PRIV-t", task="x", kind="single", candidates=items)
+    scored = private_cases.score_case(lambda task, corpus: [r for r in corpus.files][:1], case)
+    assert "edit recall" in scored["note"]
