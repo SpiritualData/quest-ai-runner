@@ -26,12 +26,12 @@
     "root": "reason-and-answer"
    },
    "remember_and_recall": {
-    "arm": "",
-    "root": "card-store"
+    "arm": "recency_window",
+    "root": "remember-and-recall"
    },
    "select_context": {
-    "arm": "",
-    "root": "search-cards-and-specs"
+    "arm": "library",
+    "root": "do-grounded-work"
    },
    "take_in_the_world": {
     "arm": "ways_in",
