@@ -35,7 +35,7 @@ from .planner_context import _is_discovery_obs, _render_gathered
 from .orchestrator_decisions import _truncate_goal, apply_quest_data_ladder_guard
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
 from .adapters_deep import StagedPlanRunner
-from .orchestrator_staged_plan import (
+from hubofhubs.orchestrate.staged_plan import (
     count_tasks, is_staged, split_plan, step_allows, tasks_flat, tasks_in,
 )
 from .orchestrator_constants import (
@@ -123,7 +123,7 @@ class DeepRunMixin:
     def _hand_off_staged_plan(self, subtasks: List[Any], plan: PlanDecision, user_message: str,
                               runner_override: Optional[Any], self_initiated: bool,
                               user_ordered: bool) -> Optional[OrchestratorResult]:
-        """Offer a staged plan (core/orchestrator_staged_plan.py) to a runner that can realise it as real stages.
+        """Offer a staged plan (hubofhubs.orchestrate.staged_plan) to a runner that can realise it as real stages.
 
         One plan per top-level SEQUENCE (independent sequences never share a stage), each offered as
         ``run_staged_plan(goal=, stages=)``; the top-level tasks that stand alone go to the same runner
@@ -295,7 +295,7 @@ class DeepRunMixin:
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
                                       deep_results=[], text=NO_DEEP_EXECUTOR_TEXT)
 
-        # A STAGED PLAN (core/orchestrator_staged_plan.py) goes to a runner that can realise it as real stages (a
+        # A STAGED PLAN (hubofhubs.orchestrate.staged_plan) goes to a runner that can realise it as real stages (a
         # consumer's queue runner, say) when one offers ``run_staged_plan``; that runner may hand it
         # back (None) when it cannot take it, and it then runs in process, step by step, below.
         if getattr(self.cfg, "staged_plans", False) and is_staged(subtasks):

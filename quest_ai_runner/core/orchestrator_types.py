@@ -45,7 +45,7 @@ class OrchestratorConfig:
     max_parallel: int = DEFAULT_MAX_PARALLEL
     max_subquestions: int = DEFAULT_MAX_SUBQUESTIONS
     max_deep_subtasks: int = DEFAULT_MAX_DEEP_SUBTASKS
-    # STAGED PLANS (core/orchestrator_staged_plan.py). True lets the planner write ``deep_subtasks`` with nesting,
+    # STAGED PLANS (hubofhubs.orchestrate.staged_plan). True lets the planner write ``deep_subtasks`` with nesting,
     # a list of lists: a list is a sequence, and a step of a sequence may itself be a list of tasks
     # that run together; a task may say ``run_when`` (always, prev_met, prev_not_met). A deep runner
     # that offers ``run_staged_plan`` realises the plan its own way; otherwise it runs in process,

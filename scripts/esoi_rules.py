@@ -7,6 +7,7 @@ It depends on QAR's naming convention (``QAR_*``) and its generated configuratio
 lists it with esoi's own rules. The top intent and its records are native esoi (``esoi/``), so no rule of
 QAR's is needed for them.
 """
+import ast
 import functools
 import re
 from pathlib import Path
@@ -119,7 +120,7 @@ def single_case_second_stage(ctx: Context) -> list:
     return bad
 
 
-# Q3: words that only Quest-specific code uses. A module with none of them, and no binding to hubofhubs, is generic.
+# Q3: words that only Quest-specific code uses. A module with none of them, and no import of hubofhubs that its code uses, is generic.
 # Visible on purpose: add a word here when a Quest-specific module is flagged by mistake.
 QUEST_DOMAIN_WORDS = ("quest", "goal", "habit", "ask", "backend", "questclient", "collection", "decision request",
                       "wisdom", "mentor", "mentorship", "workflow", "autopilot", "milestone", "strategy",
@@ -134,15 +135,34 @@ def words_of(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", " ", re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)).lower()
 
 
+def binds_to_hub(text: str) -> bool:
+    """True when the module imports something from ``hubofhubs`` and uses it in code. A name that appears only in a docstring or a
+    comment, or that is imported and never used (a re-export shim), is not a binding."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return HUB_BINDING in text
+    bound = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").split(".")[0] == HUB_BINDING:
+            bound.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.Import):
+            bound.update((alias.asname or alias.name).split(".")[0] for alias in node.names if alias.name.split(".")[0] == HUB_BINDING)
+    if not bound:
+        return False
+    used = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+    return bool(bound & used)
+
+
 def generic_modules(sources: dict) -> list:
-    """The modules (path -> source text) with no Quest-domain word and no import of the hub: generic code that belongs in
+    """The modules (path -> source text) with no Quest-domain word and no use of the hub in code: generic code that belongs in
     the hub. Empty ``__init__.py`` files are not code."""
     return sorted(path for path, text in sources.items()
-                  if text.strip() and HUB_BINDING not in text and not DOMAIN_WORD_RX.search(words_of(text)))
+                  if text.strip() and not binds_to_hub(text) and not DOMAIN_WORD_RX.search(words_of(text)))
 
 
 def no_generic_code(ctx: Context) -> list:
-    """Q3: every module under the package carries Quest-domain vocabulary or binds to hubofhubs; a module with neither is
+    """Q3: every module under the package carries Quest-domain vocabulary or imports hubofhubs and uses it in code; a module with neither is
     generic and should live in the hub. The waived ones are the hub-migration backlog; their count is printed."""
     root = Path(ctx.root)
     sources = {str(p.relative_to(root)): p.read_text() for p in sorted((root / "quest_ai_runner").rglob("*.py"))}
@@ -153,7 +173,7 @@ def no_generic_code(ctx: Context) -> list:
             waived += 1
         else:
             bad.append(f"Q3 {path}: no Quest-domain word (see QUEST_DOMAIN_WORDS in scripts/esoi_rules.py) and no hubofhubs "
-                       "binding, so it is generic code that belongs in the hub; move it there, or waive it naming why it stays")
+                       "import used in code, so it is generic code that belongs in the hub; move it there, or waive it naming why it stays")
     print(f"Q3: {len(sources)} modules scanned, {len(flagged)} generic, {waived} waived (hub-migration backlog)")
     return bad
 
@@ -172,7 +192,7 @@ RULES = [RuleGroup({"S15": "Every environment variable read in the package is a 
                           "calls no model (the no-model floor, a scripted ideal, a structure check), or a waiver in "
                           "esoi/waivers.csv names the metric and the build it needs."}, model_free_first_stage),
          RuleGroup({"Q3": "No generic code left in QAR: every module under quest_ai_runner/ contains Quest-domain vocabulary "
-                          "(QUEST_DOMAIN_WORDS) or binds to hubofhubs; a module with neither belongs in the hub, or a waiver "
+                          "(QUEST_DOMAIN_WORDS) or imports hubofhubs and uses what it imports; a module with neither belongs in the hub, or a waiver "
                           "in esoi/waivers.csv lists it as hub-migration backlog."}, no_generic_code)]
 
 

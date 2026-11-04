@@ -15,7 +15,7 @@ from .auxiliary_prompts import QUEST_DATA_WRITE_SURFACE_INSTRUCTION
 from .model_registry import TIERS
 from .deep_model_selection import normalize_difficulty
 from .orchestrator_types import OrchestratorConfig
-from .orchestrator_staged_plan import normalize_staged_subtasks
+from hubofhubs.orchestrate.staged_plan import normalize_staged_subtasks
 from .orchestrator_constants import log
 from .reply_standards import REPLY_SHAPES
 from hubofhubs.critique.done_evidence import clean_requirements
@@ -152,7 +152,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
 
     deep_subs: List[Any] = []
     if getattr(cfg, "staged_plans", False):
-        # Nested plans allowed (core/orchestrator_staged_plan.py): caps on top level, steps per sequence, total tasks.
+        # Nested plans allowed (hubofhubs.orchestrate.staged_plan): caps on top level, steps per sequence, total tasks.
         deep_subs = normalize_staged_subtasks(
             raw.get("deep_subtasks"), max_items=cfg.max_deep_subtasks,
             max_stages=cfg.max_plan_stages, max_tasks=cfg.max_plan_tasks)

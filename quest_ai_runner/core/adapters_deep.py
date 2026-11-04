@@ -24,7 +24,7 @@ class EscalationSink(Protocol):
 
 @runtime_checkable
 class StagedPlanRunner(Protocol):
-    """A deep runner that can realise a staged plan (``core/orchestrator_staged_plan.py``) its own way.
+    """A deep runner that can realise a staged plan (``hubofhubs.orchestrate.staged_plan``) its own way.
 
     For example as queued tasks with a real wait between stages. The orchestrator checks it with
     ``isinstance`` (a renamed method is then a failed check, not a silent fall back to the in-process

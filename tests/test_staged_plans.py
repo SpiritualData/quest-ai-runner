@@ -1,4 +1,4 @@
-"""Staged plans: the planner's ``deep_subtasks`` as a list of lists (core/orchestrator_staged_plan.py).
+"""Staged plans: the planner's ``deep_subtasks`` as a list of lists (hubofhubs.orchestrate.staged_plan).
 
 Pinned here, fully offline (scripted provider, recording runners):
 
@@ -32,7 +32,7 @@ from quest_ai_runner.core.orchestrator_decide_tool import (
 from quest_ai_runner.core.orchestrator_decisions import normalize_decision
 from quest_ai_runner.core.orchestrator_turn import _Emitter
 from quest_ai_runner.core.adapters_deep import StagedPlanRunner
-from quest_ai_runner.core.orchestrator_staged_plan import (
+from hubofhubs.orchestrate.staged_plan import (
     count_tasks, is_staged, normalize_staged_subtasks, sequence_stages, split_plan, step_allows, tasks_flat,
 )
 

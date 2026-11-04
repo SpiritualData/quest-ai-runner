@@ -436,7 +436,7 @@ _STAGED_TASK_SCHEMA = {
         "run_when": {"type": "string", "enum": ["always", "prev_met", "prev_not_met"]},
     },
 }
-#: ``deep_subtasks`` when ``OrchestratorConfig.staged_plans`` is on (core/orchestrator_staged_plan.py): an entry is a
+#: ``deep_subtasks`` when ``OrchestratorConfig.staged_plans`` is on (hubofhubs.orchestrate.staged_plan): an entry is a
 #: task, or a SEQUENCE (a list) whose steps are a task or a list of tasks that run together.
 STAGED_DEEP_SUBTASKS_FIELD = {
     "type": "array",
