@@ -448,7 +448,7 @@ def test_quest_api_repository_carries_a_store_identity():
 # --------------------------------------------------------------------------------------------
 
 pytest.importorskip("qdrant_client")
-from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore  # noqa: E402
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 
 VEC = 8
 

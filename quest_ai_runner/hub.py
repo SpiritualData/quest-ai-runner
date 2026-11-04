@@ -21,7 +21,7 @@ from typing import Any, Mapping, Optional
 import hubofhubs
 from esoi.assemble import Assembler, Assembly, AssemblyConfig
 
-from .adapters.hub_card_store import CardRepositoryStore
+from .remember_and_recall.hub_card_store import CardRepositoryStore
 
 SCOPE = "quest_ai_runner"
 CARD_STORE = "card-store"

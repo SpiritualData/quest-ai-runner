@@ -4,7 +4,7 @@ Zero model calls."""
 import tempfile
 
 from cache_cards.driver import run_scenario
-from quest_ai_runner.adapters.card_cache_file import FileCardCache
+from quest_ai_runner.remember_and_recall.card_cache_file import FileCardCache
 
 
 def build(meter):  # noqa: ARG001

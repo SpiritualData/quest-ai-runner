@@ -18,7 +18,7 @@ from tests.test_card_store_mounts import VEC, CountingEmbedder, card, make_owner
 from tests.test_card_store_mounts import reader_store
 
 pytest.importorskip("qdrant_client")
-from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore  # noqa: E402
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 
 EMBEDDER = "test:embedder-a"
 

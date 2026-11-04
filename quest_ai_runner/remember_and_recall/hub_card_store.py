@@ -80,5 +80,5 @@ class QuestApiCards(CardRepositoryStore):
                 env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)))
 
     def __init__(self, base_url: str, api_key: str) -> None:
-        from .quest_api_card_repository import QuestApiCardRepository
+        from ..adapters.quest_api_card_repository import QuestApiCardRepository
         super().__init__(QuestApiCardRepository(base_url=base_url, api_key=api_key))

@@ -121,13 +121,13 @@ flowchart LR
 | Implementation | Name | Where | Sub-intent |
 |---|---|---|---|
 | `persist-cards:filesystem` | Atomic JSON file repository | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
-| `persist-cards:qdrant` | Vector database repository | [quest_ai_runner/adapters/qdrant_card_repository.py](../adapters/qdrant_card_repository.py) |  |
+| `persist-cards:qdrant` | Vector database repository | [quest_ai_runner/remember_and_recall/qdrant_card_repository.py](qdrant_card_repository.py) |  |
 | `persist-cards:quest_api` | Hosted card API repository | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
-| `index-by-meaning:qdrant` | Qdrant-backed vector store | [quest_ai_runner/adapters/qdrant_vector_store.py](../adapters/qdrant_vector_store.py) |  |
+| `index-by-meaning:qdrant` | Qdrant-backed vector store | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](qdrant_vector_store.py) |  |
 | `detect-stale-cards:store_sha256` | Content-hash fingerprint check | [evaluation/components/staleness/impls/store_sha256.py](../../evaluation/components/staleness/impls/store_sha256.py) |  |
 | `detect-stale-cards:mtime_size` | Timestamp-and-size baseline | [evaluation/components/staleness/impls/mtime_size.py](../../evaluation/components/staleness/impls/mtime_size.py) |  |
 | `cache-cards:null` | Card repository with a cache seam and a null cache | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
-| `cache-cards:file` | Durable file cache | [quest_ai_runner/adapters/card_cache_file.py](../adapters/card_cache_file.py) |  |
+| `cache-cards:file` | Durable file cache | [quest_ai_runner/remember_and_recall/card_cache_file.py](card_cache_file.py) |  |
 | `cache-cards:null_cache` | No-op cache (shipped default of the seam) | [evaluation/components/cache_cards/impls/null_cache.py](../../evaluation/components/cache_cards/impls/null_cache.py) |  |
 | `cache-cards:memory_cache` | In-process memory cache | [evaluation/components/cache_cards/impls/memory_cache.py](../../evaluation/components/cache_cards/impls/memory_cache.py) |  |
 | `cache-cards:file_cache` | Durable file cache under outage scenarios | [evaluation/components/cache_cards/impls/file_cache.py](../../evaluation/components/cache_cards/impls/file_cache.py) |  |
@@ -140,10 +140,10 @@ flowchart LR
 | `repair-a-card-store:repository_tidy` | Repository tidy | [quest_ai_runner/adapters/card_store_tidy.py](../adapters/card_store_tidy.py) |  |
 | `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | [quest_ai_runner/adapters/context_store_heal.py](../adapters/context_store_heal.py) |  |
 | `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | [evaluation/components/card_growth/impls/no_cleanup.py](../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
-| `label-context-cards:fast_model_labels` | Fast-tier model writes metadata and categories (today) | [quest_ai_runner/adapters/card_metadata_generator.py](../adapters/card_metadata_generator.py) |  |
+| `label-context-cards:fast_model_labels` | Fast-tier model writes metadata and categories (today) | [quest_ai_runner/remember_and_recall/card_metadata_generator.py](card_metadata_generator.py) |  |
 | `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) | [evaluation/components/label_context_cards/impls/path_rules.py](../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
-| `card-store:qar-card-repository` | qar-card-repository | [quest_ai_runner/adapters/hub_card_store.py](../adapters/hub_card_store.py) |  |
-| `card-store:quest-api-cards` | Quest backend card API from the environment | [quest_ai_runner/adapters/hub_card_store.py](../adapters/hub_card_store.py) |  |
+| `card-store:qar-card-repository` | qar-card-repository | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
+| `card-store:quest-api-cards` | Quest backend card API from the environment | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
 
 ### Metrics
 

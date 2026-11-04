@@ -4,10 +4,11 @@ These satisfy the ports in ``quest_ai_runner.core.adapters_*`` (and ``hubofhubs.
 needs into a ``RunnerConfig``. This package is the import path for the adapters that more than one area, or the generic
 core, uses (``from quest_ai_runner.adapters import FilesAdapter``). An adapter that only one area uses lives in that area's
 folder (``quest_ai_runner/<intent id>/``: ``know_the_world`` for web research, ``select_context`` for the context assemblers,
-``act_as_the_body`` for the retrieval adapters, the writer, the ACP runner and the Quest, Notion and Drive sources) and is imported
+``act_as_the_body`` for the retrieval adapters, the writer, the ACP runner and the Quest, Notion and Drive sources,
+``remember_and_recall`` for the Qdrant stores, the file card cache, the hub card store and the label generator) and is imported
 from there. Each class says what it is in its own module docstring, and ``esoi/COMPONENTS.md`` lists them by role. The fast-edit
-and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). The optional extra ``qdrant`` is
-imported behind a guard, so a name whose extra is missing is ``None``.
+and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). The optional extra ``qdrant`` is needed
+only by the Qdrant stores in ``remember_and_recall``.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
@@ -34,16 +35,3 @@ from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .quest_guidance_loader import QuestGuidanceLoader
 from .quest_api_card_repository import QuestApiCardRepository, QuestApiCardVectorStore
 from hubofhubs.recall.reference_resolver import ReferenceResolver, NoteResolver, build_resolver_registry, collect_reference_resolvers
-
-# Each of these needs an optional extra (qdrant-client + fastembed): a missing extra leaves the
-# name ``None`` instead of breaking ``import quest_ai_runner.adapters``.
-try:
-    from .qdrant_vector_store import QdrantVectorStore, make_voyage_embedder
-except ImportError:
-    QdrantVectorStore = None  # type: ignore[assignment,misc]
-    make_voyage_embedder = None  # type: ignore[assignment]
-try:
-    from .qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore
-except ImportError:
-    QdrantCardRepository = None  # type: ignore[assignment,misc]
-    QdrantCardVectorStore = None  # type: ignore[assignment,misc]

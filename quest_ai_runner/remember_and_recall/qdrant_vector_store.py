@@ -22,7 +22,7 @@ from hubofhubs.recall.qdrant_store import QdrantVectorStore as HubQdrantVectorSt
 from hubofhubs.recall.qdrant_store import SCOPE_KEY, STORE_KEY, point_id, scope_hash  # noqa: F401  (re-exported)
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
-from .qdrant_embedders import (  # noqa: F401  (re-exported: this was their import path)
+from ..adapters.qdrant_embedders import (  # noqa: F401  (re-exported: this was their import path)
     EMBED_BATCH_DEFAULT,
     FASTEMBED_EMBEDDER_ID,
     embed_batch_size,

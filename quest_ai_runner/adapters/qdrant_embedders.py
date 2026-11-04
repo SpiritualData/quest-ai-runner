@@ -5,7 +5,7 @@ hub's (``hubofhubs.recall.embedders``) and read no environment. This module read
 ``QAR_OPENAI_EMBEDDING_MODEL``, ``OPENAI_API_KEY``, ``QAR_EMBEDDER_BACKEND`` and the batch and length knobs
 (``QAR_EMBED_BATCH``, ``QAR_EMBED_MAX_CHARS``) every embedding call honours.
 
-``adapters.qdrant_vector_store`` re-exports every name here.
+``remember_and_recall.qdrant_vector_store`` re-exports every name here.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from hubofhubs.recall.embedders import (  # noqa: F401  (same objects, old impor
     FASTEMBED_EMBEDDER_ID,
 )
 
-logger = logging.getLogger("quest_ai_runner.adapters.qdrant_vector_store")
+logger = logging.getLogger("quest_ai_runner.remember_and_recall.qdrant_vector_store")
 
 
 def voyage_model_from_env() -> str:

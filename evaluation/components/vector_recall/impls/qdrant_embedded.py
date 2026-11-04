@@ -6,7 +6,7 @@ itself (uncached), so a timed search pays for the real embedding."""
 import tempfile
 
 from context_selection.embedder import embedder, uncached_embedder
-from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
 
 from retrieval.world import markdown
 from vector_recall.interface import TOP_K

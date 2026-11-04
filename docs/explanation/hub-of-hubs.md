@@ -38,7 +38,7 @@ long-lived provider tokens: a lane receives a token through the environment vari
 
 - **Import.** `hubofhubs` is a required dependency (`pyproject.toml`). `quest_ai_runner/hub.py` imports it once, at startup, and
   registers the parts QAR owns under names QAR owns, only where the hub has a seat (Protocol) for them: today the card store, as
-  `qar-card-repository` (a hub `CardStore` over QAR's `CardRepository`, `adapters/hub_card_store.py`). The model call and the
+  `qar-card-repository` (a hub `CardStore` over QAR's `CardRepository`, `remember_and_recall/hub_card_store.py`). The model call and the
   web search backend are external seats that QAR passes in `provided`. For dev and tests a sibling checkout beside this
   repository works instead of an install (pytest `pythonpath`; the `hub_of_hubs` component also puts it on the path).
 - **Seats moved.** `search-backend` (web search): `hubofhubs.websearch` holds the backends, cache, limiter, fetch and extraction, and the research adapter; QAR keeps the `search-the-web` rows, the `QAR_*` setting names and the one-call constructor (`know_the_world/web_search_backends.py`, `web_research.py`). Not yet measured after the move: the paid pass owns `metric-search-the-web` and `metric-know-the-world`.

@@ -832,7 +832,7 @@ reaches every arm that reads or writes a card/hit:
 
 - **Recent-context** (`core/recent_context.py`, above): fences at both `record()` and `load()`.
 - **Vector card arm** (`select_context/vector_context_assembler.py`'s `VectorContextAssembler`, backed by
-  `adapters/qdrant_card_repository.py`'s `QdrantCardVectorStore`): a hit's own `scope_tags` payload
+  `remember_and_recall/qdrant_card_repository.py`'s `QdrantCardVectorStore`): a hit's own `scope_tags` payload
   field (passed through from the stored card) is checked against `meta["scope_tags"]` AFTER the
   vector search returns, before ranking/rendering -- a post-filter on the hit, never the store's own
   `scope` payload filter (that stays an exact-match tenant partition, e.g. per-user isolation).

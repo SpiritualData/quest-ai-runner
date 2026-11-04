@@ -307,7 +307,7 @@ def _qar_embedders(backend: str) -> tuple:
     """
     try:
         if backend == "voyage":
-            from .adapters.qdrant_vector_store import make_voyage_embedder
+            from .remember_and_recall.qdrant_vector_store import make_voyage_embedder
             try:
                 vsize = int(os.getenv("VOYAGE_EMBEDDING_SIZE") or 1024)
             except (TypeError, ValueError):
@@ -318,7 +318,7 @@ def _qar_embedders(backend: str) -> tuple:
                 vsize,
             )
         if backend == "openai":
-            from .adapters.qdrant_vector_store import make_openai_embedder
+            from .remember_and_recall.qdrant_vector_store import make_openai_embedder
             emb = make_openai_embedder()
             return (emb, emb, 1536)
         # Local fastembed default (symmetric).
@@ -343,9 +343,7 @@ def _build_qdrant_card_repo_from_env(cards_dir: str) -> tuple:
     a multi-tenant consumer wires its own scoped ``QdrantCardRepository`` per tenant instead.
     """
     try:
-        from .adapters import QdrantCardRepository, QdrantCardVectorStore
-        if QdrantCardRepository is None:  # [qdrant] extra not installed
-            return (None, None)
+        from .remember_and_recall.qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore
         collection = (os.getenv("QAR_CARDS_COLLECTION") or "").strip() or "quest_ai_cards"
         url = (os.getenv("QAR_QDRANT_URL") or os.getenv("QAR_VECTOR_QDRANT_URL") or "").strip() or None
         api_key = (

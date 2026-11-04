@@ -70,7 +70,7 @@ state lives on the local filesystem.  No server is needed; no Docker, no
 cloud account.
 
 ```python
-from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
 
 # Default: state under <cwd>/.quest-context/qdrant
 store = QdrantVectorStore()
@@ -280,7 +280,7 @@ results:
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
 from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
 
 keyword_asm = FileContextStore(".quest-context/cards", repo_root=".")
 vector_asm  = VectorContextAssembler(QdrantVectorStore())
@@ -372,7 +372,7 @@ scores, wire ``QdrantVectorStore`` with **two separate Voyage embedders**, one
 per role:
 
 ```python
-from quest_ai_runner.adapters.qdrant_vector_store import (
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import (
     QdrantVectorStore,
     make_voyage_embedder,
 )

@@ -25,7 +25,7 @@ from quest_ai_runner.adapters import card_store_fence as fence  # noqa: E402
 from quest_ai_runner.adapters import card_store_vectors as vectors  # noqa: E402
 from hubofhubs.recall.card_repository import FilesystemCardRepository  # noqa: E402
 from quest_ai_runner.adapters.file_context_store import FileContextStore  # noqa: E402
-from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore  # noqa: E402
+from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE  # noqa: E402
 from tests.test_card_store_mounts import (  # noqa: E402
     VEC,
