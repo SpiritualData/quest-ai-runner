@@ -47,3 +47,16 @@ def test_every_library_the_hub_imports_is_declared_for_the_all_extra():
     assert not missing, f"not in the all extra: {sorted(missing)}"
     assert "openai" in declared_names(project["optional-dependencies"]["openai"])
     assert "mcp==2.0.0" in project["optional-dependencies"]["mcp"]
+
+
+# The exact strings quest-backend/requirements.txt and conceptai install. One direct URL per package across every consumer:
+# a different ref for the same package cannot be resolved together. Change these and the other files in one release.
+SHARED_ESOI = "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@main#subdirectory=implementations/python"
+SHARED_HUB = "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main"
+
+
+def test_the_two_direct_url_dependencies_are_the_strings_every_consumer_installs():
+    core = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["dependencies"]
+    assert SHARED_ESOI in core
+    assert SHARED_HUB in core
+    assert sum(1 for req in core if req.startswith(("esoi ", "hubofhubs"))) == 2

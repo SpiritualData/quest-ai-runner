@@ -48,14 +48,15 @@ dependencies = [
     "openpyxl>=3.1",
     # Declares each swappable implementation beside its code (`@implementation`) and selects one at run time
     # (core/resolve.py) and runs the one-line entry (esoi.entry). Core, since the adapters import it; no dependencies of its own.
-    # Pinned to the release tag v0.3.0. The backend and conceptai must pin the same string: two different direct-URL
-    # commits of one package cannot be installed together.
-    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.3.0#subdirectory=implementations/python",
+    # The string is identical to quest-backend's and conceptai's (`@main`): two different direct URLs for one package cannot be
+    # installed together (the 2026-10-19 production image build failed that way). Tags and a version range come in the
+    # coordinated release window, changed in every file at once.
+    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@main#subdirectory=implementations/python",
     # The hub of hubs: the registry of AI-intelligence hubs, the seats (Protocols) and the assembly that wires them. QAR is
     # Quest's connector and the production consumer: quest_ai_runner/hub.py imports it at startup and registers QAR's parts.
-    # Required, not an extra, pinned to the release tag v0.2.0. Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the
+    # Required, not an extra, on the same `@main` URL string as quest-backend. Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the
     # sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
-    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.2.0",
+    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
 ]
 
 [project.optional-dependencies]
