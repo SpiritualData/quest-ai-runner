@@ -54,7 +54,7 @@ the `solutions.csv` files of the tree (`esoi/README.md` links to each). The tabl
 | `act_as_the_body/cached_db_adapter.py` | reference `RetrievalAdapter` over a live DB with a short-TTL cache |
 | `providers.py` | builds the hub's provider arms (`hubofhubs.models`: Anthropic, Gemini, OpenAI, DeepSeek) and its router from the environment |
 | `adapters/claude_cli_provider.py` | QAR's binding of the hub's keyless `claude_cli` arm (the local `claude` CLI) |
-| `adapters/*_vector_store.py`, `*_context_*` | optional vector/card context assembly |
+| `remember_and_recall/qdrant_*.py`, `select_context/*_context_assembler.py` | optional vector/card context assembly |
 | `runner/quest_client.py` | the Quest HTTP client (`qsk_` auth) + `QuestDecisionSink` |
 | `runner/poller.py` | event-driven, signature-deduped poll loop; bounded concurrency |
 | `runner/executor.py` | run one claimed task through the brain → report |
