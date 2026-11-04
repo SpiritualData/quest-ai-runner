@@ -1,0 +1,224 @@
+{
+ "alpha-topic.json": {
+  "conventions": [],
+  "description": "What the alpha notes say together",
+  "files": [
+   {
+    "git_sha": "18066011d3639505781f7c5a01fd7bec0cd7e6d2",
+    "mtime": "<v>",
+    "path": "alpha/note2.md",
+    "sha256": "294ebbec0516880992e81f9fa58cc38890bd580b160dba9bf2af5d1113ee3e07",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "alpha",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   },
+   {
+    "git_sha": "f9744fbb45a8b5e6d0a1536d1d792281beca3908",
+    "mtime": "<v>",
+    "path": "alpha/note1.md",
+    "sha256": "f661d99db1cfaca258ca8b50201f24b6851fb78fb8d504a13c532b5a085109d4",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "alpha",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   },
+   {
+    "git_sha": "f908be201c6e46945c68db4f7356357b5aca6ef0",
+    "mtime": "<v>",
+    "path": "alpha/note0.md",
+    "sha256": "260e7d8eb688bd3e327e68e43e4d165c076f2ab1afe64513b2884078568f81ef",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "alpha",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   }
+  ],
+  "id": "alpha-topic",
+  "keywords": [
+   "alpha",
+   "notes"
+  ],
+  "last_outcome": "unknown",
+  "name": "alpha topic",
+  "origin": "<v>",
+  "provenance": {
+   "created_at": "<v>",
+   "created_by_task": "bootstrap",
+   "index_hash": "c9d24772903a896a",
+   "last_verified_at": "<v>",
+   "model": ""
+  },
+  "summary": "What the alpha notes say together",
+  "usage_count": 0
+ },
+ "beta-topic.json": {
+  "conventions": [],
+  "description": "What the beta notes say together",
+  "files": [
+   {
+    "git_sha": "ca62bc92d737ce07edac050beb436f835311aed5",
+    "mtime": "<v>",
+    "path": "beta/note2.md",
+    "sha256": "aed91305e27d802afe79e0fc336a22edbdc13c78fa7686e95e5b256f063ad2a4",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "beta",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   },
+   {
+    "git_sha": "843d4b98b7862927d8e4fb6dcc0a874e36d49e0d",
+    "mtime": "<v>",
+    "path": "beta/note1.md",
+    "sha256": "3af787aac530b5b349138b9484f60958726d6368497ade8ca1053f40a036aa22",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "beta",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   },
+   {
+    "git_sha": "e6697dc93408bf83deda699c39cfd9c1b8bee154",
+    "mtime": "<v>",
+    "path": "beta/note0.md",
+    "sha256": "ba3235bcfadff8e122bb8edf1c9970f3e9d52c0efe28f248a966f6443b95b57a",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "beta",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   }
+  ],
+  "id": "beta-topic",
+  "keywords": [
+   "beta",
+   "notes"
+  ],
+  "last_outcome": "unknown",
+  "name": "beta topic",
+  "origin": "<v>",
+  "provenance": {
+   "created_at": "<v>",
+   "created_by_task": "bootstrap",
+   "index_hash": "94029f1e8bf36c9d",
+   "last_verified_at": "<v>",
+   "model": ""
+  },
+  "summary": "What the beta notes say together",
+  "usage_count": 0
+ },
+ "bootstrap_meta.json": {
+  "card_count": 3,
+  "completed_at": "<v>",
+  "created_at": "<v>",
+  "feature_versions": {
+   "tfdfidf": 1
+  },
+  "root": "TMP/corpus",
+  "store_id": "<v>",
+  "vector_id_scheme": "qualified",
+  "version": 4
+ },
+ "bootstrap_report_state.json": {
+  "first_bootstrap_completed_at": "<v>",
+  "last_card_count": 0,
+  "last_file_count": 0,
+  "last_report_sent_at": null
+ },
+ "gamma-topic.json": {
+  "conventions": [],
+  "description": "What the gamma notes say together",
+  "files": [
+   {
+    "git_sha": "58d1cc605becfc5edfb3e2bbac1b2c06a40cff9f",
+    "mtime": "<v>",
+    "path": "gamma/note2.md",
+    "sha256": "51ee6528bcd15a2eb18241590b9a01b0b11fd62761c2c81bcd477d017610d286",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "gamma",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   },
+   {
+    "git_sha": "89273a1a40419c7eeda804ceabf82512cd66851c",
+    "mtime": "<v>",
+    "path": "gamma/note1.md",
+    "sha256": "c781628a69952d977fd7e6088fbe469962c76f3c33bd3913f8ec5c5e1b8c09a8",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "gamma",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   },
+   {
+    "git_sha": "a331975f3bb8dd3f3cb99c2965dd88ac2d005b41",
+    "mtime": "<v>",
+    "path": "gamma/note0.md",
+    "sha256": "c380d8dfcb2d0f5f89f5a8a0af087ee0a7809ba4197de3bda9e0d9f180a5dd0e",
+    "symbols": [],
+    "tfdfidf_terms": [
+     "gamma",
+     "number",
+     "about",
+     "text"
+    ],
+    "tfdfidf_v": 1,
+    "why": ""
+   }
+  ],
+  "id": "gamma-topic",
+  "keywords": [
+   "gamma",
+   "notes"
+  ],
+  "last_outcome": "unknown",
+  "name": "gamma topic",
+  "origin": "<v>",
+  "provenance": {
+   "created_at": "<v>",
+   "created_by_task": "bootstrap",
+   "index_hash": "86d09736696e81c8",
+   "last_verified_at": "<v>",
+   "model": ""
+  },
+  "summary": "What the gamma notes say together",
+  "usage_count": 0
+ }
+}

@@ -31,7 +31,7 @@ from .card_store_settings import bootstrap_max_cards, bootstrap_max_files, prune
 from .context_risk_gate import FolderGate, folder_gate
 from hubofhubs.recall.context_card_ceilings import folders_for_room
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
-from .context_topic_cards import _llm_topic_cards
+from .context_card_builder import propose_topic_cards
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -443,8 +443,8 @@ class BootstrapWalkMixin:
                           "recently changed folders, %d file(s) wait for room", room, len(analysed), len(waiting_files))
         if uncovered and provider is not None and uncovered_discoverable:
             _log.info("context index: stage 2: analyzing %d new files for topics", len(analysed))
-            topic_cards = _llm_topic_cards(
-                analysed, provider, model=model, existing_cards=own_cards, walk_root=walk_root
+            topic_cards = propose_topic_cards(
+                analysed, provider, model, own_cards, walk_root
             )
             _log.info("context index: identified %d topic card(s) from new files", len(topic_cards))
         discovered_now: List[str] = list(analysed) if (uncovered and topic_cards) else []

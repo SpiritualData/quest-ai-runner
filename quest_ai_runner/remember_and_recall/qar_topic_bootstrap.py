@@ -11,7 +11,7 @@ tags), the card limit, the per-folder ceilings, the folder gate and the upload t
 from __future__ import annotations
 
 import typing
-from typing import Any, List, Mapping, Sequence
+from typing import Any, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
 from hubofhubs.recall.cards_from_files import changed_cards
@@ -33,12 +33,12 @@ class QarTopicBootstrap:
     limits and writes them. With no model nothing can be identified and the answer is an empty list."""
     REQUIRES = ()
 
-    def __init__(self, provider: ModelCalling, model: str = ""):
+    def __init__(self, provider: ModelCalling, model: Optional[str] = None):
         self.provider = provider
         self.model = model
 
     def build(self, root: str, files: Sequence[str], existing: Mapping[str, Mapping[str, Any]]) -> List[dict]:
-        return _llm_topic_cards(list(files), self.provider, model=self.model or None, existing_cards=list(existing.values()), walk_root=root)
+        return _llm_topic_cards(list(files), self.provider, model=self.model, existing_cards=list(existing.values()), walk_root=root)
 
     def changed(self, root: str, cards: Mapping[str, Mapping[str, Any]]) -> List[str]:
         return changed_cards(root, cards)

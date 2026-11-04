@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import inspect
 import os
 from pathlib import Path
 from typing import Any, Mapping, Optional
@@ -21,6 +22,7 @@ from typing import Any, Mapping, Optional
 import hubofhubs
 from esoi.assemble import Assembler, Assembly, AssemblyConfig
 
+from .adapters import context_card_builder
 from .remember_and_recall.hub_card_store import CardRepositoryStore
 
 SCOPE = "quest_ai_runner"
@@ -40,6 +42,7 @@ def child() -> Assembler:
 def register_with_hub() -> None:
     """Make QAR's arms known to its Assembler (importing the adapter declares ``qar-card-repository``). Safe to call twice."""
     child().prepare()
+    context_card_builder.set_cards_from_files_factory(cards_from_files)
 
 
 def seats() -> list:
@@ -69,6 +72,21 @@ def card_repository_of(card_repository):
     store = child().assemble(AssemblyConfig(solutions=(CARD_STORE,), selections={CARD_STORE: CARD_REPOSITORY},
                                                 options={CARD_STORE: {"repository": card_repository}}))[CARD_STORE]
     return getattr(store, "repository", card_repository)
+
+
+CARDS_FROM_FILES = "cards-from-files"
+
+
+def cards_from_files(provider, model=None):
+    """The ``cards-from-files`` arm QAR's records select (else the hub's default), built for ``provider`` and ``model``. The model is
+    the caller's per call (a lane's own provider, which need not be a full hub ``ModelCalling``), so the arm is resolved through the
+    Assembler and given the model it declares a need of, not assembled from a seat."""
+    arm = child().resolve(CARDS_FROM_FILES)
+    parameters = inspect.signature(arm).parameters
+    kwargs = {name: provider for name, solution_id in child().needs_of(arm).items() if solution_id == CALL_A_MODEL}
+    if "model" in parameters:
+        kwargs["model"] = model
+    return arm(**kwargs)
 
 
 CALL_A_MODEL = "call-a-model"
