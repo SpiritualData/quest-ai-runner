@@ -165,7 +165,10 @@ class TurnContextStore:
                 user_overlap = len(card_user_kw[i] & query_terms)
                 # Each user keyword match adds a 0.4 boost (capped at 3 terms → 1.2 max).
                 user_bonus = 0.4 * min(user_overlap, 3)
-                return (1.0 + user_bonus) * self._recency_boost(cards[i].get("created_at", ""))
+                from .scope_tags import card_affinity_factor
+                # affinity mode only (1.0 otherwise): a past turn from the turn's own quest ranks first, others stay reachable
+                return ((1.0 + user_bonus) * self._recency_boost(cards[i].get("created_at", ""))
+                        * card_affinity_factor(cards[i], turn_tags))
 
             selected_indices = set(select_representatives(
                 items=overlapping,

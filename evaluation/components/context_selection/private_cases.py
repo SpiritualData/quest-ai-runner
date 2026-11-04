@@ -23,6 +23,15 @@ has such items; neither changes the accuracy. The size of what was selected is c
 ``SIZE_BUDGET_CHARS`` it fills, times the cost budget of ``[balance.context_selection]``), beside the store charge of ``store_cost.py``; time is
 the seconds of the case. The weights of ``[balance.context_selection]`` fold these into the one number.
 
+SCOPE MODES (flag ``QAR_PRIVATE_SCOPE_MODE``, or a ``scope_mode`` attribute on the arm; default ``none``). The same selector is scored three ways
+over the same cases, which is how the quest scope mode of the product is chosen: ``none`` (no scope, today's scoring), ``fence`` (an item whose
+quest is not the request's is removed from the corpus before ranking, as the hard quest fence does), and ``affinity`` (every item stays; the
+ranking is re-ordered by the hub's soft affinity factor, so an item of the request's quest ranks first and the others stay reachable). Each item card
+carries ``affinity_tags`` from its ``quest_relation`` (``same_quest`` / ``same_goal``: the request's tag ``TURN_TAG``; else a tag from the item's
+``quest_title``, or ``quest:other``), and the request carries ``TURN_TAG``. Compare the three by running the metric with the flag set to each
+value; ``cross_quest_recall`` against noise shows what each mode costs and gains. The weights are ``quest_ai_runner.core.scope_tags``
+``AFFINITY_HOME_BOOST`` / ``AFFINITY_AWAY_FACTOR``.
+
 The mix of case kinds is set here, in ``KIND_MIX`` and ``SOURCE_WEIGHTS``, and nowhere else.
 """
 import atexit
@@ -48,6 +57,10 @@ KIND_MIX = dict(none=0.24, single=0.52, several=0.24)
 PASS_ACCURACY = 0.5            # a case passes at or above this accuracy, the same half the topic cases use
 SIZE_BUDGET_CHARS = 8000       # about 2000 tokens of selected context fills the size budget
 TOP_K = 3
+SCOPE_ENV = "QAR_PRIVATE_SCOPE_MODE"
+SCOPE_MODES = ("none", "fence", "affinity")
+TURN_TAG = "quest:request"       # the tag every request carries in the fence and affinity modes
+HOME_RELATIONS = ("same_quest", "same_goal")
 
 
 def dataset_folders(environ=None):
@@ -229,7 +242,40 @@ def safe_rel(path, used):
     return rel
 
 
-def item_corpus(case):
+def scope_mode_of(fn=None, environ=None):
+    """The scope mode in force: the arm's ``scope_mode`` attribute, else the flag, else ``none`` (an unknown value is ``none``)."""
+    environ = os.environ if environ is None else environ
+    mode = str(getattr(fn, "scope_mode", None) or environ.get(SCOPE_ENV) or "none").strip().lower()
+    return mode if mode in SCOPE_MODES else "none"
+
+
+def item_affinity_tags(item):
+    """The affinity tags of one candidate item: the request's tag when it is of the request's quest or goal, a tag from its quest title when
+    it names another, ``quest:other`` for another quest without a title, and none when the item says nothing about a quest."""
+    relation = item.get("quest_relation")
+    if relation in HOME_RELATIONS:
+        return [TURN_TAG]
+    if not relation and not item.get("quest_title"):
+        return []
+    slug = "-".join(str(item.get("quest_title") or "").lower().split())[:40]
+    return [f"quest:{slug}" if slug else "quest:other"]
+
+
+def reorder_by_affinity(ranked, owner, candidates):
+    """``ranked`` (file paths, best first) re-ordered by position score ``1/(rank+1)`` times the hub's affinity factor for the item's tags against
+    the request's; ties keep the arm's order. Nothing is removed."""
+    from hubofhubs.recall.affinity_tags import affinity_factor
+    from quest_ai_runner.core.scope_tags import AFFINITY_AWAY_FACTOR, AFFINITY_HOME_BOOST
+    by_id = {c["item_id"]: c for c in candidates}
+
+    def score(pair):
+        rank, rel = pair
+        tags = item_affinity_tags(by_id.get(owner.get(rel), {}))
+        return -(affinity_factor(tags, [TURN_TAG], home_boost=AFFINITY_HOME_BOOST, away_factor=AFFINITY_AWAY_FACTOR) / (rank + 1)), rank
+    return [rel for _, rel in sorted(enumerate(ranked), key=score)]
+
+
+def item_corpus(case, scope_mode="none"):
     """The case's candidate items as a corpus: one text file and one card per item (the card starts with the item's metadata, then its text).
     An item with a ``path`` is written under that path (sanitized, unique), else as ``item_NNN.txt``. Returns ``(corpus, {file path: item id})``."""
     from context_selection.corpus import Corpus
@@ -237,6 +283,8 @@ def item_corpus(case):
     root = Path(tempfile.mkdtemp(dir=scratch_root()))
     corpus, owner, used = Corpus(root=root), {}, set()
     for index, item in enumerate(case["candidates"]):
+        if scope_mode == "fence" and item_affinity_tags(item) not in ([], [TURN_TAG]):
+            continue   # another quest's item never reaches the selector
         text = item.get("text") or ""
         rel = safe_rel(item.get("path"), used) or f"item_{index:03d}.txt"
         while rel in used:
@@ -254,6 +302,8 @@ def item_corpus(case):
         corpus.cards[f"item-{index:03d}"] = dict(
             id=f"item-{index:03d}", keywords=[], summary=f"{meta}: {flat[:200]}", description=flat[200:900],
             files=[dict(path=rel, symbols=[])], weight=SOURCE_FILE_WEIGHT)
+        if scope_mode != "none":
+            corpus.cards[f"item-{index:03d}"]["affinity_tags"] = item_affinity_tags(item)
         owner[rel] = item["item_id"]
     return corpus, owner
 
@@ -283,8 +333,11 @@ def numbers(selected, candidates):
 
 
 def score_case(fn, case):
-    corpus, owner = item_corpus(case)
+    mode = scope_mode_of(fn)
+    corpus, owner = item_corpus(case, mode)
     ranked = fn(case["task"], corpus)
+    if mode == "affinity":
+        ranked = reorder_by_affinity(ranked, owner, case["candidates"])
     budget = getattr(fn, "budget", TOP_K)
     row = numbers([owner[r] for r in ranked[:budget] if r in owner], case["candidates"])
     meter = getattr(fn, "meter", None)

@@ -27,7 +27,7 @@ from hubofhubs.recall.card_content_render import (
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.walk import prune_dirnames
 from .walk_settings import effective_skip_dirs
-from ..core.scope_tags import card_visible_to_turn
+from ..core.scope_tags import card_affinity_factor, card_visible_to_turn, other_quest_label
 from hubofhubs.recall.context_card_extraction import (
     LINKED_FOLDER_BOOST,
     RECENCY_BOOST_HALF_LIFE_DAYS,
@@ -473,7 +473,7 @@ class AssemblyMixin:
                 # Gate on the un-boosted relevance score above; rank by a recency/usage-boosted
                 # score so a card the user just relied on wins a near-tie (bounded, never resurrects
                 # an irrelevant card because the gate already passed on relevance alone).
-                rank_score = score * self._recency_boost_factor(card)
+                rank_score = score * self._recency_boost_factor(card) * card_affinity_factor(card, turn_scope_tags)
                 scored.append((-rank_score, -usage, -len(verified_at), verified_at, card))
 
         if not scored and not priority_cards:
@@ -666,6 +666,9 @@ class AssemblyMixin:
                 "\n".join(f"  * {c}" for c in conventions[:10]) if conventions else ""
             )
             part = f"### Card: {card_id}\n{summary}"
+            _from_quest = other_quest_label(card, turn_scope_tags)
+            if _from_quest:
+                part += f"\n(from another quest: {_from_quest})"
             if file_lines or not content_lines:
                 part += f"\n\nFiles:\n{file_block}"
             if content_lines:

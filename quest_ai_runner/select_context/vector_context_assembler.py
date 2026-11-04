@@ -90,7 +90,16 @@ class VectorContextAssembler(hub.VectorContextAssembler):
     """
 
     def __init__(self, vector_store: Any, *, max_seed_items: Optional[int] = None, **settings: Any) -> None:
+        # Quest affinity weights: inert (1.0) unless QAR_QUEST_SCOPE_MODE=affinity, where the quest tags rank instead of fence.
+        from ..core.scope_tags import AFFINITY_AWAY_FACTOR, AFFINITY_HOME_BOOST, affinity_mode
+        if affinity_mode():
+            settings.setdefault("affinity_home_boost", AFFINITY_HOME_BOOST)
+            settings.setdefault("affinity_away_factor", AFFINITY_AWAY_FACTOR)
         super().__init__(
             vector_store,
             max_seed_items=default_max_seed_items() if max_seed_items is None else max_seed_items,
             seed_scope=CARD_SEED_SCOPE, prompts=PROMPTS, seed_thread_name="qar-vector-seed", **settings)
+
+    def assemble(self, task_text: str, *, meta: Optional[dict] = None) -> Any:
+        from ..core.scope_tags import affinity_meta
+        return super().assemble(task_text, meta=affinity_meta(meta) if meta else meta)

@@ -63,6 +63,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `cli_config.py` | `docs/explanation/cheap-model-routing.md` |
 | `QAR_CONFIG_FILE` |  | `adapters/card_store_tidy.py`, `cli_cards.py`, `cli_config.py` +1 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +1 |
 | `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example`, `docs/explanation/context-assembly.md` |
+| `QAR_QUEST_SCOPE_MODE` | `fence` (default): an item learned on another quest is hidden from a turn. `affinity`: it stays visible, ranks below the turn's own quest, and its rendered line says which quest it came from; only audience kinds still fence. CoreSettings `quest_scope_mode`. |
 | `QAR_CONTEXT_CARDS_DIR` |  | `cli_cards.py`, `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/explanation/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `cli_config.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_CONTEXT_PREAMBLE` |  | `cli_config.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |

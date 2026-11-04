@@ -31,8 +31,8 @@ from .anticipation_learner import (
     update_weight,
 )
 from .anticipation_store import FilePredictionStore
-from hubofhubs.recall.scope_tags import scope_tags_allow, union_scope_tags
-from .scope_tags import scope_tags_from_keys
+from hubofhubs.recall.scope_tags import union_scope_tags
+from .scope_tags import affinity_meta, quest_fence_allow, scope_tags_from_keys
 
 log = logging.getLogger("quest-ai-runner.anticipation")
 
@@ -62,7 +62,7 @@ def assemble_with_scope_tags(assembler: Any, text: str, scope_tags: List[str]) -
     """
     if scope_tags:
         try:
-            return assembler.assemble(text, meta={"scope_tags": list(scope_tags)})
+            return assembler.assemble(text, meta=affinity_meta({"scope_tags": list(scope_tags)}))
         except TypeError:
             return assembler.assemble(text)
     return assembler.assemble(text)
@@ -216,7 +216,7 @@ class Anticipator:
                 preds = self.store.load_predictions(key)
                 if not preds:
                     continue
-                allowed = [p for p in preds if scope_tags_allow(p.scope_tags, turn_tags)]
+                allowed = [p for p in preds if quest_fence_allow(p.scope_tags, turn_tags)]
                 if allowed:
                     best, best_score, outcomes = match_actual(allowed, actual_text)
                     # EXACT-ID SERVE: honor the id the client tapped, regardless of keyword score.
@@ -296,7 +296,7 @@ class Anticipator:
                 if not patterns:
                     continue
                 chips = chips_for_now(patterns, now_dt, list(recent_texts or []), k=k)
-                chips = [c for c in chips if scope_tags_allow(c.scope_tags, turn_tags)]
+                chips = [c for c in chips if quest_fence_allow(c.scope_tags, turn_tags)]
                 if chips:
                     out[key] = chips
         except Exception:  # noqa: BLE001 -- a read-time chip failure is just no chips
@@ -484,8 +484,8 @@ class Anticipator:
             for key in keys:
                 patterns = self.store.load_patterns(key)
                 preds = self.store.load_predictions(key)
-                allowed = [p for p in preds if scope_tags_allow(p.scope_tags, turn_tags)]
-                fenced = [p for p in preds if not scope_tags_allow(p.scope_tags, turn_tags)]
+                allowed = [p for p in preds if quest_fence_allow(p.scope_tags, turn_tags)]
+                fenced = [p for p in preds if not quest_fence_allow(p.scope_tags, turn_tags)]
                 scope_state[key] = (patterns, allowed, fenced)
                 for p in allowed:
                     if p.text not in seen:

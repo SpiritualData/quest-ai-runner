@@ -124,6 +124,8 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
         guidance_selection_timeout_seconds=_float_or(
             env.get("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS"), d.guidance_selection_timeout_seconds),
         verify_context_max_chars=verify,
+        quest_scope_mode=(env.get("QAR_QUEST_SCOPE_MODE") or d.quest_scope_mode).strip().lower()
+        if (env.get("QAR_QUEST_SCOPE_MODE") or "").strip().lower() in ("fence", "affinity") else d.quest_scope_mode,
         note_floor_relevance_gated=gated,
         note_floor_fresh_minutes=_float_or(
             env.get("QAR_NOTE_FLOOR_FRESH_MINUTES"), d.note_floor_fresh_minutes, positive=False),

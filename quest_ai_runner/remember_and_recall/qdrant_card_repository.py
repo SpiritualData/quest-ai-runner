@@ -61,7 +61,7 @@ from hubofhubs.ports.context import VectorHit
 from hubofhubs.ports.context import VectorStoreBase
 from hubofhubs.recall import card_origin
 from hubofhubs.recall.card_repository import card_embed_text
-from ..core.scope_tags import card_scope_tags
+from ..core.scope_tags import card_scope_tags, fence_tags, quest_affinity_tags, affinity_mode
 
 logger = logging.getLogger(__name__)
 
@@ -659,7 +659,9 @@ class QdrantCardVectorStore(VectorStoreBase):
                     # so VectorContextAssembler can fence a hit written for one quest out of a
                     # search scoped to a different one. Empty/absent when the card carries none.
                     # A card derived from one quest is fenced by that quest alone (``card_scope_tags``).
-                    "scope_tags": card_scope_tags(payload),
+                    "scope_tags": fence_tags(card_scope_tags(payload)),
+                    # affinity mode: the quest the card is about, ranked (never fenced) by the hub's vector arm
+                    **({"affinity_tags": quest_affinity_tags(card_scope_tags(payload))} if affinity_mode() else {}),
                 }
                 hits.append(VectorHit(id=f"card:{card_id}", score=float(r.score), text=text, payload=hit_payload))
             return hits
