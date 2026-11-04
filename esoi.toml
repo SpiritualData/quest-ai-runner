@@ -180,9 +180,10 @@ coverage = 0.166
 precision = 1.0
 coverage = 1.0
 
-# 8 of 11: narrate-a-turn, explain-an-answer and show-progress are parts of the area, shown only by a module that imports both ends.
+# 10 of 11: show-progress is a part of the area that no typed seat composes (the host edge shows none); narrate-a-turn and explain-an-answer
+# are used by answer-end-to-end, whose orchestrator imports both, so they are recorded under it and no longer roots.
 [rules.S38.floors.reason_and_answer]
-precision = 0.727
+precision = 0.909
 coverage = 1.0
 
 # 1 of 6: the card store's parts (cache-cards, index-by-meaning, label-context-cards, repair-a-card-store) and card-store itself are
