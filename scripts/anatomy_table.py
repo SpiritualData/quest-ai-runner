@@ -5,7 +5,6 @@
 
 tests/test_anatomy_table.py fails when the file is stale, so the table never drifts.
 """
-import csv
 import sys
 from pathlib import Path
 
@@ -29,8 +28,9 @@ PARTS = [
 
 
 def rows(name):
-    with open(ROOT / "esoi" / name, newline="") as handle:
-        return list(csv.DictReader(handle))
+    """The rows of one record file across the whole tree of records (the top intent's folder and the folders beside the code)."""
+    from esoi import intents
+    return intents.read_tree(ROOT / "esoi", name)
 
 
 def table():

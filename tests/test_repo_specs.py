@@ -2,7 +2,6 @@
 import json
 import os
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,14 +14,15 @@ from esoi import spec_index  # noqa: E402
 from quest_ai_runner.core import repo_specs, tools_repo_specs  # noqa: E402
 from quest_ai_runner.core.tools import ToolContext, ToolRegistry, build_tool_registry  # noqa: E402
 
+from .records_copy import copy_records  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(not hasattr(spec_index, "cached"), reason="the installed esoi predates the cached specification index")
 
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    shutil.copytree(REPO / "esoi", tmp_path / "esoi", ignore=shutil.ignore_patterns("tracker"))
-    (tmp_path / "esoi.toml").write_text('package = "x"\nstructure_dir = "esoi"\n', encoding="utf-8")
+    copy_records(tmp_path)
     monkeypatch.setenv("QAR_SPEC_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("QAR_SPEC_ROOT", str(tmp_path))
     return tmp_path
@@ -42,7 +42,7 @@ def test_the_cached_index_is_reused_until_a_record_file_changes(repo):
     cache = next((repo / "cache").glob("*.json"))
     stamp = cache.stat().st_mtime_ns
     assert repo_specs.repo_index(repo)["digest"] == first["digest"] and cache.stat().st_mtime_ns == stamp   # not rebuilt
-    problems = repo / "esoi" / "problems.csv"
+    problems = sorted(repo.rglob("problems.csv"))[0]   # a record file of the tree, wherever the layout keeps it
     problems.write_text(problems.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     repo_specs.repo_index(repo)
     assert cache.stat().st_mtime_ns != stamp                                                                # rebuilt after an edit

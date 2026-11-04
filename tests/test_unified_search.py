@@ -1,6 +1,5 @@
 """One ranking over context cards and ESOI records (search-cards-and-specs) and its rival, the two pipelines side by side, offline."""
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -9,6 +8,8 @@ from esoi import spec_search
 
 from quest_ai_runner.core import unified_search as us
 from quest_ai_runner.core.spec_selection import load_spec_index
+
+from .records_copy import copy_records
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -136,8 +137,7 @@ def test_card_views_come_from_a_card_repository_without_writing(tmp_path):
 @pytest.fixture
 def spec_repo(tmp_path, monkeypatch):
     pytest.importorskip("esoi.spec_index")
-    shutil.copytree(REPO / "esoi", tmp_path / "esoi", ignore=shutil.ignore_patterns("tracker"))
-    (tmp_path / "esoi.toml").write_text('package = "x"\nstructure_dir = "esoi"\n', encoding="utf-8")
+    copy_records(tmp_path)
     monkeypatch.setenv("QAR_SPEC_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("QAR_SPEC_ROOT", str(tmp_path))
     return tmp_path

@@ -13,7 +13,6 @@ The tools ``find_specs``, ``related_specs``, ``intent_specs`` and ``show_spec`` 
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import logging
 import os
@@ -131,12 +130,13 @@ def intent_records(index: Dict[str, Any], intent_id: str = "") -> List[Dict[str,
 def repo_tag_table(root: Path) -> search_lib.TagTable:
     """``esoi/tags.csv`` and the solutions' ``tags`` column, read from the record files (never copied). Empty when absent."""
     from esoi import config as esoi_config
+    from esoi import intents as esoi_intents
     folder = Path(root) / esoi_config.load(Path(root)).structure_dir
 
     def rows(name: str) -> List[Dict[str, str]]:
+        """One record file across the whole tree: the top intent's folder and every folder beside the code."""
         try:
-            with open(folder / name, newline="", encoding="utf-8") as handle:
-                return list(csv.DictReader(handle))
+            return esoi_intents.read_tree(folder, name)
         except OSError:
             return []
 

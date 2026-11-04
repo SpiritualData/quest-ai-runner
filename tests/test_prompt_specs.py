@@ -4,12 +4,12 @@ ESOI solution and one of that solution's metrics. Offline, no model call."""
 from __future__ import annotations
 
 import ast
-import csv
 import importlib
 import pkgutil
 from pathlib import Path
 
 import pytest
+from esoi import intents
 
 import quest_ai_runner
 from quest_ai_runner.core import prompt_specs
@@ -32,8 +32,8 @@ TRANSPORT = {
 
 
 def read_csv(name: str) -> list:
-    with open(REPO / "esoi" / name, newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
+    """One record file across the whole tree of records (the top intent's folder and the folders beside the code)."""
+    return intents.read_tree(REPO / "esoi", name)
 
 
 def is_model_call(call: ast.Call) -> bool:

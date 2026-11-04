@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402,F401  (puts the repository and this folder on the path)
 import hub_of_hubs  # noqa: E402,F401  (puts the hub package on the path when it is not installed)
+from esoi import intents  # noqa: E402
 from hubofhubs import evaluate, registry  # noqa: E402
 from hubofhubs.measure import KINDS, check  # noqa: E402
 
@@ -72,7 +73,7 @@ def test_the_real_gaps_are_the_adopt_or_coexist_areas_with_no_seam():
 # The earlier rule also demanded `world`, `tools_mcp` and `science`; those broad areas were replaced by their sub-areas, which are
 # `integration_aggregators` and `channels`, `mcp_client`, and `science_find_evidence`.
 def test_bindings_cite_real_solutions_and_paths():
-    solutions = {r["solution_id"] for r in registry.read("solutions.csv", REPO / "esoi")}
+    solutions = {r["solution_id"] for r in intents.read_tree(REPO / "esoi", "solutions.csv")}
     areas = {r["area"] for r in registry.read("hubs.csv")}
     bound = [s["area"] for s in binding().seats]
     assert len(set(bound)) == len(bound) and set(bound) <= areas, sorted(set(bound) - areas)

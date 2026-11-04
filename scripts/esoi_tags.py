@@ -121,8 +121,8 @@ def main(argv=None) -> int:
     ap.add_argument("ids", nargs="+")
     args = ap.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
-    with (root / "esoi" / "solutions.csv").open(newline="") as handle:
-        solutions = list(csv.DictReader(handle))
+    from esoi import intents
+    solutions = intents.read_tree(root / "esoi", "solutions.csv")
     by_id = {s.get("solution_id", ""): s for s in solutions}
     wanted = [t for i in args.ids for t in (tags_of(by_id[i]) if i in by_id else [i])]
     for sid in solutions_sharing(wanted, solutions):

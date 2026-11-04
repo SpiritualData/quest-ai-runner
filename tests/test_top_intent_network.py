@@ -1,8 +1,9 @@
-"""The records in esoi/*.csv are the only copy of the top intent: no readable restatement sits beside them to drift, and
+"""The records (the top intent in esoi/ and the folders beside the code) are the only copy of the top intent: no readable restatement sits beside them to drift, and
 every problem of the top intent is elaborated by detailed problems that name it as their parent."""
-import csv
 import re
 from pathlib import Path
+
+from esoi import intents
 
 STRUCTURE = Path(__file__).resolve().parent.parent / "esoi"
 
@@ -10,8 +11,7 @@ RESTATEMENTS = ("qar_solution.md", "structure_network.md", "principles.csv", "ST
 
 
 def records(name, keep=lambda row: True):
-    with open(STRUCTURE / name, newline="") as fh:
-        return [row for row in csv.DictReader(fh) if keep(row)]
+    return [row for row in intents.read_tree(STRUCTURE, name) if keep(row)]
 
 
 def test_no_restatement_of_the_records_or_the_skill_sits_beside_them():

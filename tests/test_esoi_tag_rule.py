@@ -5,6 +5,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from esoi import intents
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 spec = importlib.util.spec_from_file_location("qar_esoi_rules", ROOT / "scripts" / "esoi_rules.py")
@@ -66,10 +68,8 @@ def test_connected_problems_count_as_tags_in_the_lookup_without_being_copied():
 def test_the_repository_list_and_tags_pass():
     with (ROOT / "esoi" / "tags.csv").open(newline="") as handle:
         listed = list(csv.DictReader(handle))
-    with (ROOT / "esoi" / "solutions.csv").open(newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    with (ROOT / "esoi" / "problems.csv").open(newline="") as handle:
-        problems = {row["problem_id"] for row in csv.DictReader(handle)}
+    rows = intents.read_tree(ROOT / "esoi", "solutions.csv")
+    problems = {row["problem_id"] for row in intents.read_tree(ROOT / "esoi", "problems.csv")}
     assert rules.tag_problems(listed, rows, problems) == []
 
 
