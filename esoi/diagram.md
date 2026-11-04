@@ -172,6 +172,7 @@ flowchart LR
     s44 -->|"The saved patterns, the unexpired predictions, a..."| s57
     s44 -->|"The saved patterns, the unexpired predictions, a..."| s61
     s45 -->|"For each quest, either a skip with a reason or passage..."| s62
+    s46 -->|"Checked records, recorded metric results and the selected..."| s0
     s47 -->|"Frame text, an anchor (intent, solution, implementation..."| s61
     s47 -->|"Frame text, an anchor (intent, solution, implementation..."| s62
     s48 -->|"A slice for the brief; per record served: the last run that..."| s62

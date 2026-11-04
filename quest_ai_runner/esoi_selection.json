@@ -473,7 +473,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "structure-library": "quest_ai_runner.hub"
+   "structure-library": "quest_ai_runner.area_keep_it_generic"
   }
  },
  "know-the-world": {

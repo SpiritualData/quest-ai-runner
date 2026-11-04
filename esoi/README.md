@@ -180,6 +180,7 @@ flowchart LR
     s44 -->|"The saved patterns, the unexpired predictions, a..."| s57
     s44 -->|"The saved patterns, the unexpired predictions, a..."| s61
     s45 -->|"For each quest, either a skip with a reason or passage..."| s62
+    s46 -->|"Checked records, recorded metric results and the selected..."| s0
     s47 -->|"Frame text, an anchor (intent, solution, implementation..."| s61
     s47 -->|"Frame text, an anchor (intent, solution, implementation..."| s62
     s48 -->|"A slice for the brief; per record served: the last run that..."| s62
@@ -278,7 +279,7 @@ flowchart LR
 | `explain-qar` | no entry declared | `evaluation/components/explain_qar/impls/shipped_docs.py` | Documentation coverage and voice conformance |
 | `persist-predictions` | `quest_ai_runner.run("persist-predictions", 'quest-id')` | `file` | Prediction store contract pass rate |
 | `gate-an-autopilot-pass` | `quest_ai_runner.run("gate-an-autopilot-pass", 'quest-id')` | `live_pass` | Autopilot gate decision correctness |
-| `keep-it-generic` | no entry declared | `structure-library` | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
+| `keep-it-generic` | `quest_ai_runner.run("keep-it-generic", ['examplevendor'])` | `structure-library` | Parts selected by measurement, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `ground-in-intent` | `quest_ai_runner.run("ground-in-intent", 'quest-id')` | `frame-line` | Intent-grounded pass rate |
 | `iterate-by-spec` | `quest_ai_runner.run("iterate-by-spec", 'Tidy the card store')` | `slice-and-writeback` | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
 | `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | `router_labels` | Accuracy of core ML tasks over labelled cases |
@@ -759,7 +760,7 @@ flowchart LR
 | `persist-predictions:memory_store` | In-memory reference store | [evaluation/components/persist_predictions/impls/memory_store.py](../evaluation/components/persist_predictions/impls/memory_store.py) |  |
 | `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | [quest_ai_runner/runner/autopilot_gates.py](../quest_ai_runner/runner/autopilot_gates.py) |  |
 | `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) |  |
-| `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/hub.py](../quest_ai_runner/hub.py) |  |
+| `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/area_keep_it_generic.py](../quest_ai_runner/area_keep_it_generic.py) |  |
 | `search-the-web:brave` | Brave search backend | [quest_ai_runner/adapters/web_search_backends.py](../quest_ai_runner/adapters/web_search_backends.py) |  |
 | `search-the-web:gemini` | Gemini grounded search backend | [quest_ai_runner/adapters/web_search_backends.py](../quest_ai_runner/adapters/web_search_backends.py) |  |
 | `search-the-web:provider` | Provider-native search backend | [quest_ai_runner/adapters/web_search_backends.py](../quest_ai_runner/adapters/web_search_backends.py) |  |
