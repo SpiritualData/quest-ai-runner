@@ -20,7 +20,7 @@ from .config import RunnerConfig, build_orchestrator
 from .loop_wiring import GoalAnswer
 from .message_routing import RequestTakingIn
 from .area_act_as_the_body import BodyActing
-from .area_hold_the_intents import IntentHolding
+from .hold_the_intents.area import IntentHolding
 from .keep_it_generic.area import KeepingGeneric
 from .know_the_world.area import KnowingTheWorld
 from .think_critically.area import MetricHolding

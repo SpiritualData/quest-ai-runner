@@ -243,7 +243,7 @@ class CollectRequest:
     # ``SourceReport``, so an empty channel can say whether it was empty or merely quiet.
     considered: int = 0
     explanation: str = ""
-    # The record of what became of past items (``runner.feedback_ledger``), when the deployment
+    # The record of what became of past items (``hold_the_intents.feedback_ledger``), when the deployment
     # keeps one. A source consults it so that STATUS decides whether something is still owed,
     # rather than the circumstantial evidence it had to use before (a reply appearing under a
     # comment, a run finishing later the same day).

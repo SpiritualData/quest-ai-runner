@@ -5,8 +5,8 @@ uses it and registered here under a stable id. A spec carries what a prompt used
 implicit in its call site:
 
   id            stable name; the only identity a prompt has (Python constant names collide).
-  solution      the ESOI solution whose job this prompt does (``esoi/solutions.csv``).
-  metric        the metric that justifies the prompt's cost, time and value (``esoi/metrics.csv``);
+  solution      the ESOI solution whose job this prompt does (its ``solutions.csv``, in the folder beside its code).
+  metric        the metric that justifies the prompt's cost, time and value (its ``metrics.csv``, in the same tree of records);
                 it must be one of that solution's metrics. A prompt without a measured reason to
                 exist has no business costing a model call.
   tier          the model tier the call is made at (``model_registry.TIERS``), or ``caller`` when a

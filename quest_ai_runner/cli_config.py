@@ -504,7 +504,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     if os.getenv("QAR_QUEST_FOLDER_SYNC_DIRECTION"):
         cfg.quest_folder_sync_direction = os.environ["QAR_QUEST_FOLDER_SYNC_DIRECTION"].strip().lower()
 
-    # --- the feedback ledger (on by default; see runner/feedback_ledger.py) ---------------------
+    # --- the feedback ledger (on by default; see hold_the_intents/feedback_ledger.py) ---------------------
     if os.getenv("QAR_FEEDBACK_LEDGER"):
         cfg.feedback_ledger = os.environ["QAR_FEEDBACK_LEDGER"].strip().lower() not in (
             "0", "false", "no", "off")

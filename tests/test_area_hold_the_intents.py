@@ -3,7 +3,7 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_hold_the_intents import IntentHolding
+from quest_ai_runner.hold_the_intents.area import IntentHolding
 
 AREA_IDS = ("hold-the-intents", "remember-conversations", "recall-recent-context", "guide-by-feedback", "store-feedback",
             "persist-predictions", "select-a-rep", "guide-toward-the-long-term-goal")

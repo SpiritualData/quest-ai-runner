@@ -1,6 +1,6 @@
 """What a person asked for, and how far anybody actually got with it.
 
-The ask that produced ``runner/feedback_ledger.py``: replying is not doing. Every channel could
+The ask that produced ``hold_the_intents/feedback_ledger.py``: replying is not doing. Every channel could
 say what had arrived and none could say what became of it, so "handled" was inferred from
 circumstance (a reply under a comment, a run finishing later the same afternoon) and a standing
 instruction was closed the first day it was honoured.
@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 from quest_ai_runner.runner.context_updates import UpdateEngine, parse_dispositions
 from quest_ai_runner.runner.context_update_receipts import split_disposition, usage_receipt_gate
-from quest_ai_runner.runner.feedback_ledger import (
+from quest_ai_runner.hold_the_intents.feedback_ledger import (
     DONE,
     IN_FORCE,
     IN_PROGRESS,

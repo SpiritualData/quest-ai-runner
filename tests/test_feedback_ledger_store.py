@@ -11,7 +11,7 @@ Offline; the store here is an in-memory dict standing in for a real database.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.feedback_ledger import (
+from quest_ai_runner.hold_the_intents.feedback_ledger import (
     ACCEPTED,
     AWAITING_ACCEPTANCE,
     DONE,

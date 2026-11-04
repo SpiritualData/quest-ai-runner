@@ -440,7 +440,7 @@ class ReportingMixin:
             card_id, offered = remembered
         try:
             from .context_updates import parse_dispositions
-            from .feedback_ledger import record_run_account
+            from ..hold_the_intents.feedback_ledger import record_run_account
             moved = record_run_account(
                 ledger, card_id=card_id, offered=offered,
                 dispositions=parse_dispositions(account),
@@ -461,7 +461,7 @@ class ReportingMixin:
         manager = getattr(self, "_guidance_manager", None)
         if manager is None:
             return None
-        from .feedback_ledger import guidance_writer_for
+        from ..hold_the_intents.feedback_ledger import guidance_writer_for
         return guidance_writer_for(manager)
 
     def _compose_done_report(self, request_text: Optional[str], raw_summary: str,

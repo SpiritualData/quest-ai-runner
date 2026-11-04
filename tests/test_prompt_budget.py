@@ -394,7 +394,7 @@ def test_an_autopilot_runs_receipt_closes_what_it_accounts_for(tmp_path):
     """The pass composes the brief; the executor runs it later holding only the task. The run's
     receipt used to be dropped (no bundle on the executor), so every item it finished came back
     "still owed" on every later pass: 18 of 20 refs in the incident's block."""
-    from quest_ai_runner.runner.feedback_ledger import FeedbackLedger
+    from quest_ai_runner.hold_the_intents.feedback_ledger import FeedbackLedger
 
     ledger = FeedbackLedger(str(tmp_path / "feedback.json"))
     ledger.observe(card_id="quest_a", source="quest_notes", item_id="n1",

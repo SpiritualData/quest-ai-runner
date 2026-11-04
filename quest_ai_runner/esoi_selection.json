@@ -461,7 +461,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "separate_stores": "quest_ai_runner.area_hold_the_intents"
+   "separate_stores": "quest_ai_runner.hold_the_intents.area"
   }
  },
  "index-by-meaning": {
@@ -874,7 +874,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "ledger": "quest_ai_runner.runner.feedback_ledger"
+   "ledger": "quest_ai_runner.hold_the_intents.feedback_ledger"
   }
  },
  "tag-solutions": {

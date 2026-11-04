@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from .autopilot_periods import _parse_dt
-from .feedback_ledger import (AWAITING_ACCEPTANCE, AWAITING_ANSWER, BLOCKED, IN_FORCE,
+from ..hold_the_intents.feedback_ledger import (AWAITING_ACCEPTANCE, AWAITING_ANSWER, BLOCKED, IN_FORCE,
                               IN_PROGRESS, KIND_STANDING, KIND_UNKNOWN, OPEN_STATES)
 
 log = logging.getLogger("quest-ai-runner.quest_asks_brief")

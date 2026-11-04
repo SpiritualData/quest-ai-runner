@@ -37,7 +37,7 @@ _OFFER_PREAMBLE = (
 # thing to write on the day you comply with one, and it is how a rule stops being followed: the
 # record says finished, nothing raises it again, and the third report quietly drops it.
 def _disposition_rules() -> str:
-    from .feedback_ledger import disposition_vocabulary
+    from ..hold_the_intents.feedback_ledger import disposition_vocabulary
     return (
         "Each line starts with a DISPOSITION, then a colon, then what you actually did. The "
         "disposition is recorded and carried forward, so use one of these exactly:\n\n"
@@ -146,7 +146,7 @@ def split_disposition(note: str) -> List[Tuple[str, str]]:
     which is the safe failure: an unrecorded answer costs one repeated question, a misrecorded one
     costs the request itself.
     """
-    from .feedback_ledger import normalize_disposition
+    from ..hold_the_intents.feedback_ledger import normalize_disposition
     out: List[Tuple[str, str]] = []
     for part in str(note or "").split(";"):
         head, sep, tail = part.partition(":")

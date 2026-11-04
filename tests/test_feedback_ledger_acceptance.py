@@ -8,7 +8,7 @@ import json
 import multiprocessing as mp
 from pathlib import Path
 
-from quest_ai_runner.runner.feedback_ledger import (
+from quest_ai_runner.hold_the_intents.feedback_ledger import (
     ACCEPTED, AWAITING_ACCEPTANCE, AWAITING_ANSWER, BLOCKED, DONE, IN_FORCE, KIND_QUESTION,
     KIND_REQUEST, KIND_STANDING, KIND_UNKNOWN, OPEN, OPEN_STATES, FeedbackLedger,
     build_ledger, record_run_account,

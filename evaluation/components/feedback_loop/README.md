@@ -1,7 +1,7 @@
 # feedback_loop: does a correction stop being needed twice
 
 One component, two solution ids (many-to-one, on purpose). `store-feedback` (the `FeedbackStore` port:
-`runner/feedback_ledger.py` records what a person said and how far it got, and turns a standing rule into a
+`hold_the_intents/feedback_ledger.py` records what a person said and how far it got, and turns a standing rule into a
 guidance card) and `guide-by-feedback` (the `GuidanceProvider` port: `core/guidance_provider.py` puts the
 relevant cards in front of the next turn) are two halves of one loop, and neither is worth anything alone, so
 the metric is the whole loop: after a correction is stored, does the guidance shown to the next relevant turn

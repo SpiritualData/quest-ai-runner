@@ -9,7 +9,7 @@ import tempfile
 import scripted_brain
 from quest_ai_runner.adapters.guidance_card_manager import GuidanceCardManager
 from quest_ai_runner.core.guidance_provider import UniversalGuidanceProvider
-from quest_ai_runner.runner.feedback_ledger import FeedbackLedger, guidance_writer_for, record_run_account
+from quest_ai_runner.hold_the_intents.feedback_ledger import FeedbackLedger, guidance_writer_for, record_run_account
 
 MARKER = "--- APPLICABLE GUIDANCE ---"
 

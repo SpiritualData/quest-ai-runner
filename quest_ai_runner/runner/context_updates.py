@@ -577,7 +577,7 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
     path = watermark_path_for(getattr(cfg, "context_updates_state_path", None), state_path)
     relay_path = relay_log_path_for(
         getattr(cfg, "context_updates_relay_log_path", None), state_path)
-    from .feedback_ledger import build_ledger
+    from ..hold_the_intents.feedback_ledger import build_ledger
     return UpdateEngine(
         client,
         watermarks=Watermarks(path, read_only=read_only),

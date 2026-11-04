@@ -2,7 +2,7 @@
 
 ``hubofhubs`` (the ``hubofhubs`` package of the ai-hub-of-hubs-structure repository) is a required dependency. QAR is a *child*
 of the hub: ``child()`` is an ``esoi`` Assembler for scope ``quest_ai_runner`` whose parent is the hub's own. The layers, highest
-first: what the caller passes, QAR's own ``selected`` arms (``esoi/solutions.csv`` in a checkout, ``esoi_selection.json`` in an
+first: what the caller passes, QAR's own ``selected`` arms (the ``solutions.csv`` files of the records tree in a checkout, ``esoi_selection.json`` in an
 installed copy), then the hub's defaults. QAR states only what differs from the hub, and each difference carries the ids of QAR's
 own problems, ideals or metrics in ``esoi/overrides.csv`` (rule S35). The differences are the ``card-store`` seat and the
 ``call-a-model`` seat, whose selected arm is QAR's router (``providers.routed``: the hub's MultiProvider with QAR's prefix table,
@@ -34,7 +34,7 @@ def child() -> Assembler:
     """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
     root = PACKAGE_DIR.parent
     records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.think_critically.area", "quest_ai_runner.watch_for_risk.area", "quest_ai_runner.area_hold_the_intents", "quest_ai_runner.adapters.guidance_card_manager", "quest_ai_runner.keep_it_generic.area", "quest_ai_runner.know_the_world.area"))
+    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.think_critically.area", "quest_ai_runner.watch_for_risk.area", "quest_ai_runner.hold_the_intents.area", "quest_ai_runner.adapters.guidance_card_manager", "quest_ai_runner.keep_it_generic.area", "quest_ai_runner.know_the_world.area"))
 
 
 def register_with_hub() -> None:

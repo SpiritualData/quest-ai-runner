@@ -300,7 +300,7 @@ class RunnerConfig:
     # LLM review) when model_provider is set. Leave None for keyword-only (zero-dependency).
     vector_store: Any = None
     # WHICH IMPLEMENTATION fills a swappable slot, as data: ``{solution_id: implementation name}``
-    # (ids from esoi/solutions.csv, names from the @implementation declarations), e.g.
+    # (ids from the solutions.csv files of the records tree, names from the @implementation declarations), e.g.
     # ``{"run-deep-work": "acp", "index-by-meaning": "qdrant"}``. A slot not named here takes the table
     # default. Read by ``core.resolve.resolve`` at the selection sites; settable from a config file's
     # ``[selections]`` table, so switching an implementation is a config change, not code.
@@ -615,7 +615,7 @@ class RunnerConfig:
     # deployment is blocked on a schema change in another service. Live case: quest-backend's
     # autopilot settings reject an unknown key outright (422 extra_forbidden), so a quest could
     # not name a folder to watch at all. Same escape hatch ``quest_folder_map`` already is.
-    # The record of what became of each thing a person asked for (``runner/feedback_ledger.py``).
+    # The record of what became of each thing a person asked for (``hold_the_intents/feedback_ledger.py``).
     # On by default: without it, "handled" can only ever be inferred from timestamps, and a reply
     # that arrives after a request is not the same as the request being done.
     feedback_ledger: bool = True

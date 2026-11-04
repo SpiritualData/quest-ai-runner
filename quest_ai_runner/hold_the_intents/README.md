@@ -103,7 +103,7 @@ flowchart LR
 | `guide-by-feedback:ledger_guidance` | Live ledger and provider arm | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
 | `guide-by-feedback:no_memory` | No-feedback floor | [evaluation/components/feedback_loop/impls/no_memory.py](../../evaluation/components/feedback_loop/impls/no_memory.py) |  |
 | `guide-by-feedback:dump_all` | Show-everything baseline | [evaluation/components/feedback_loop/impls/dump_all.py](../../evaluation/components/feedback_loop/impls/dump_all.py) |  |
-| `store-feedback:ledger` | File-backed feedback ledger | [quest_ai_runner/runner/feedback_ledger.py](../runner/feedback_ledger.py) |  |
+| `store-feedback:ledger` | File-backed feedback ledger | [quest_ai_runner/hold_the_intents/feedback_ledger.py](feedback_ledger.py) |  |
 | `store-feedback:ledger_guidance` | Ledger plus guidance bridge, end to end | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
 | `store-feedback:no_memory` | No-memory floor | [evaluation/components/feedback_loop/impls/no_memory.py](../../evaluation/components/feedback_loop/impls/no_memory.py) |  |
 | `store-feedback:dump_all` | Remember-everything baseline | [evaluation/components/feedback_loop/impls/dump_all.py](../../evaluation/components/feedback_loop/impls/dump_all.py) |  |

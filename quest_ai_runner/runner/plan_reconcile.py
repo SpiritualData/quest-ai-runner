@@ -24,7 +24,7 @@ Quest or the model. Dry run is the default; ``write=True`` applies the plan.
 import datetime as dt
 from typing import Any, Callable, Dict, List, Optional
 
-# The feedback ledger states for a request nobody has finished (see runner/feedback_ledger.py).
+# The feedback ledger states for a request nobody has finished (see hold_the_intents/feedback_ledger.py).
 OPEN_ASK_STATES = {"open", "in progress"}
 ASK_KINDS = {"request"}
 UNCLASSIFIED_KINDS = {"", "unknown"}

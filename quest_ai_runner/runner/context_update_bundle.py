@@ -38,7 +38,7 @@ class ContextUpdates:
     collected_at: datetime = field(default_factory=_utcnow)
     # Set by the engine so ``mark_seen`` can advance exactly what was delivered.
     _watermarks: Optional["Watermarks"] = None
-    # The record of what became of things (``runner.feedback_ledger``), when one is kept. Written
+    # The record of what became of things (``hold_the_intents.feedback_ledger``), when one is kept. Written
     # at the same moment as the watermarks and for the same reason: delivery is the only honest
     # moment to say an item reached a run.
     _ledger: Any = None

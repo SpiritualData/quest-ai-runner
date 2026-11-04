@@ -16,13 +16,13 @@ from typing import Any, Mapping, Optional, Tuple
 from esoi import implementation, solution
 from esoi.assemble import Lazy
 
-from .adapters.session_file_conversation_store import ConversationRemembering
-from .core.adapters_guidance import GuidanceProvider
-from .core.anticipation_store import PredictionStore
-from .core.auxiliary_prompts import LongTermGuiding
-from .core.recent_context import RecentContextStore
-from .runner.feedback_ledger import FeedbackKeeping
-from .runner.personas import RepSelecting
+from ..adapters.session_file_conversation_store import ConversationRemembering
+from ..core.adapters_guidance import GuidanceProvider
+from ..core.anticipation_store import PredictionStore
+from ..core.auxiliary_prompts import LongTermGuiding
+from ..core.recent_context import RecentContextStore
+from .feedback_ledger import FeedbackKeeping
+from ..runner.personas import RepSelecting
 
 
 @solution("hold-the-intents", kind="event", entry="hold", example={"quest_id": "quest-id", "message": "What should I work on first this week?"})

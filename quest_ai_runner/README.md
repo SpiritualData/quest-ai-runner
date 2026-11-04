@@ -45,7 +45,7 @@ Gives each AI representative a broad, high-level context across the quests it is
 - Entry call: `quest_ai_runner.run("hold-the-intents", ...)`
 - Selected implementation: `separate_stores`
 - Metric: Representative long-view carry-through across assigned quests, with nothing outside its branch
-- Implemented by: [`quest_ai_runner/area_hold_the_intents.py`](area_hold_the_intents.py), [`quest_ai_runner/core/auxiliary_prompts.py`](core/auxiliary_prompts.py), [`quest_ai_runner/core/context_doctrine.py`](core/context_doctrine.py), [`quest_ai_runner/core/planner_cascade.py`](core/planner_cascade.py), [`quest_ai_runner/core/planner_context.py`](core/planner_context.py), [`quest_ai_runner/core/planner_doctrine.py`](core/planner_doctrine.py), [`quest_ai_runner/core/planner_prompt.py`](core/planner_prompt.py), [`quest_ai_runner/core/prompt_layers.py`](core/prompt_layers.py) and 5 more
+- Implemented by: [`quest_ai_runner/core/auxiliary_prompts.py`](core/auxiliary_prompts.py), [`quest_ai_runner/core/context_doctrine.py`](core/context_doctrine.py), [`quest_ai_runner/core/planner_cascade.py`](core/planner_cascade.py), [`quest_ai_runner/core/planner_context.py`](core/planner_context.py), [`quest_ai_runner/core/planner_doctrine.py`](core/planner_doctrine.py), [`quest_ai_runner/core/planner_prompt.py`](core/planner_prompt.py), [`quest_ai_runner/core/prompt_layers.py`](core/prompt_layers.py), [`quest_ai_runner/core/prompt_specs.py`](core/prompt_specs.py) and 6 more
 
 ## Critical thinking: the enforcer of ESOI metrics on every request (`think-critically`)
 
@@ -120,7 +120,7 @@ flowchart LR
 | `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | [`quest_ai_runner/area_reason_and_answer.py`](area_reason_and_answer.py) | selected |
 | `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [`quest_ai_runner/know_the_world/area.py`](know_the_world/area.py) | selected |
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py) | selected |
-| `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [`quest_ai_runner/area_hold_the_intents.py`](area_hold_the_intents.py) | selected |
+| `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [`quest_ai_runner/hold_the_intents/area.py`](hold_the_intents/area.py) | selected |
 | `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [`quest_ai_runner/think_critically/area.py`](think_critically/area.py) | selected |
 | `take-in-the-world:ways_in` | Channels, terminal and package as ways in | [`quest_ai_runner/area_take_in_the_world.py`](area_take_in_the_world.py) | selected |
 | `access-quest-operations:quest_client` | Quest HTTP client from the environment | [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py) | selected |

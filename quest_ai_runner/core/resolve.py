@@ -5,13 +5,13 @@
     cls = resolve("search-the-web")                            # the project default
 
 Every implementation is declared beside its code with ``@implementation("<solution id>", "<name>")`` (``esoi``), and
-``esoi/implementations.csv`` lists the same implementations with the file of each, so there is no table to keep in step.
+the ``implementations.csv`` of the folder that holds the code lists the same implementations with the file of each, so there is no table to keep in step.
 This module is the library's thin entry point over ``esoi.runtime`` under the scope ``quest_ai_runner``: a consumer that
 also uses esoi for its own solutions (the same ids can appear in two projects) never meets ours.
 
 Which implementation runs is one cascade, innermost first: the explicit ``name`` or ``overrides[solution_id]``, an
 ``esoi.override(...)`` block, ``ESOI_SELECT_QUEST_AI_RUNNER_<SOLUTION_ID>`` (or the plain ``ESOI_SELECT_<SOLUTION_ID>``),
-``[selection]`` in ``esoi.toml``, and the project default: the solution's ``selected`` in ``esoi/solutions.csv``, written
+``[selection]`` in ``esoi.toml``, and the project default: the solution's ``selected`` in the ``solutions.csv`` of the records tree, written
 once (an installed copy, which ships without those records, reads ``esoi_selection.json``, written by
 ``esoi select --snapshot quest_ai_runner/esoi_selection.json``). An unknown solution or name raises ``ValueError`` listing
 the choices, so a typo in config fails loudly instead of falling through an ``else``. Implementations are imported lazily,
