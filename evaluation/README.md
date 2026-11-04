@@ -106,7 +106,7 @@ reading the actual source files in this repo. Files covered:
 | prepare_attachments | `quest_ai_runner/core/attachments.py` |
 | FilesAdapter read_section / grep | `quest_ai_runner/adapters/files_adapter.py` |
 | FileContextStore IDF bootstrap | `quest_ai_runner/adapters/file_context_store.py` |
-| AnthropicProvider SDK wrapper | `quest_ai_runner/adapters/anthropic_provider.py` |
+| AnthropicProvider SDK wrapper | `hubofhubs/models/anthropic.py` (the hub's) |
 | claude CLI headless provider | `quest_ai_runner/adapters/claude_cli_provider.py` |
 | poller discovers due tasks | `quest_ai_runner/runner/poller.py` |
 | executor runs one task | `quest_ai_runner/runner/executor.py` |

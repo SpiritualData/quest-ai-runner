@@ -66,7 +66,7 @@ flowchart LR
 | `call-a-model` | `quest_ai_runner.run("call-a-model", ...)` | `multi_provider` | Provider routing, fallback, retry and cost correctness |
 | `talk-over-a-channel` | `quest_ai_runner.run("talk-over-a-channel")` | `openclaw` | Channel transport conformance to the gateway wire contract |
 | `watch-for-risk` | `quest_ai_runner.run("watch-for-risk", 'delete the old backup folder')` | `overseer` | Overseer digest evidence and signal correctness on labelled scenarios |
-| `track-usage-and-cost` | no entry declared | `evaluation/components/track_usage_and_cost/impls/qar_usage.py` | Cost, budget and resource-guard correctness |
+| `track-usage-and-cost` | no entry declared | `qar_usage` | Cost, budget and resource-guard correctness |
 | `keep-it-generic` | `quest_ai_runner.run("keep-it-generic", ['examplevendor'])` | `structure-library` | Parts selected by measurement, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `know-the-world` | `quest_ai_runner.run("know-the-world", 'meditation and attention')` | `web_with_support_check` | Supported and calibrated answers to world questions |
 | `do-grounded-work` | `quest_ai_runner.run("do-grounded-work", 'What should I work on first this week?')` | `library` | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
@@ -228,7 +228,7 @@ flowchart LR
 | `call-a-model` | Tiered model provider layer | multi_provider | Provider routing, fallback, retry and cost correctness |
 | `talk-over-a-channel` | Live messaging channel transport | openclaw | Channel transport conformance to the gateway wire contract |
 | `watch-for-risk` | Overseer: risk management that raises the overall metric | overseer | Overseer digest evidence and signal correctness on labelled scenarios |
-| `track-usage-and-cost` | Cost estimation, daily budget and host load guard | evaluation/components/track_usage_and_cost/impls/qar_usage.py | Cost, budget and resource-guard correctness |
+| `track-usage-and-cost` | Cost estimation, daily budget and host load guard | qar_usage | Cost, budget and resource-guard correctness |
 | `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
 | `know-the-world` | Science: evidence-weighted knowledge about the world | web_with_support_check | Supported and calibrated answers to world questions |
 | `do-grounded-work` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | library | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
@@ -257,7 +257,7 @@ flowchart LR
 | `reason-and-answer:append_only_stream` | Carried message stream per request (proposed) |  |  |
 | `reason-and-answer:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
 | `remember-and-recall:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
-| `remember-and-recall:score_thresholds` | Score thresholds per source (proposed) |  | [select_context](select_context/README.md) |
+| `remember-and-recall:score_thresholds` | Score thresholds per source (proposed) |  |  |
 | `remember-and-recall:thresholds_then_judge` | Thresholds with a judge on the borderline (proposed) |  |  |
 | `know-the-world:research_sources_first` | Host research sources first, then the web (proposed) |  |  |
 | `know-the-world:evidence_weighted` | Findings weighed by a host's evidence-estimation service (proposed) |  |  |
@@ -277,7 +277,7 @@ flowchart LR
 | `keep-it-generic:structure_library` | Evolvable-structure library decides (live) | [evaluation/components/evolve_by_metric/impls/structure_library.py](../evaluation/components/evolve_by_metric/impls/structure_library.py) |  |
 | `keep-it-generic:keep_current` | Keep the selection as written (floor) | [evaluation/components/evolve_by_metric/impls/keep_current.py](../evaluation/components/evolve_by_metric/impls/keep_current.py) |  |
 | `know-the-world:memory_only` | Memory only, no research (floor) | [evaluation/components/know_the_world/impls/memory_only.py](../evaluation/components/know_the_world/impls/memory_only.py) |  |
-| `do-grounded-work:library` | quest-ai-runner library | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) |  |
+| `do-grounded-work:library` | quest-ai-runner library | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) | [select_context](select_context/README.md) |
 | `call-a-model:multi_provider` | Prefix-routing multi-provider | [quest_ai_runner/providers.py](../quest_ai_runner/providers.py) |  |
 | `watch-for-risk:overseer` | Digest-driven overseer | [quest_ai_runner/watch_for_risk/area.py](../quest_ai_runner/watch_for_risk/area.py) | [watch_for_risk](watch_for_risk/README.md) |
 | `run-queued-tasks:qar_runner` | Offline lifecycle harness | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |

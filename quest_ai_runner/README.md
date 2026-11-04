@@ -36,7 +36,7 @@ Lets a person trust what the AI says about their own account and about what it c
 - Entry call: `quest_ai_runner.run("act-as-the-body", 'NOTES.md')`
 - Selected implementation: `card_and_reads`
 - Metric: Account-state consistency across scripted sessions
-- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/core/orchestrator.py`](core/orchestrator.py), [`quest_ai_runner/core/orchestrator_answering.py`](core/orchestrator_answering.py), [`quest_ai_runner/core/orchestrator_capabilities.py`](core/orchestrator_capabilities.py), [`quest_ai_runner/core/orchestrator_cards.py`](core/orchestrator_cards.py), [`quest_ai_runner/core/orchestrator_constants.py`](core/orchestrator_constants.py), [`quest_ai_runner/core/orchestrator_decide_tool.py`](core/orchestrator_decide_tool.py) and 23 more
+- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/core/orchestrator.py`](core/orchestrator.py), [`quest_ai_runner/core/orchestrator_answering.py`](core/orchestrator_answering.py), [`quest_ai_runner/core/orchestrator_capabilities.py`](core/orchestrator_capabilities.py), [`quest_ai_runner/core/orchestrator_cards.py`](core/orchestrator_cards.py), [`quest_ai_runner/core/orchestrator_constants.py`](core/orchestrator_constants.py), [`quest_ai_runner/core/orchestrator_decide_tool.py`](core/orchestrator_decide_tool.py) and 22 more
 
 ## Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy (`hold-the-intents`)
 

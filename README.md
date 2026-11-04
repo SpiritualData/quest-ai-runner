@@ -57,9 +57,13 @@ corpus and personas.
    +--------+----------------------+---------------------+-------+
             |                      |                     |
      adapters/ (reference)    runner/ (executor)    cli and Textual UI
-     files, DB cache, MCP,    Quest client, poller,  chat, poll, doctor,
-     Notion, Google, web,     executor, autopilot,   quest, bootstrap
-     vectors, deep runners    personas, lane
+     files, card stores,      Quest client, poller,  chat, poll, doctor,
+     the model providers      executor, autopilot,   quest, bootstrap
+     (what several areas      personas, lane
+     use); each area's own
+     code is in its folder
+            (act_as_the_body: DB cache, MCP, Notion, Google, deep runners;
+             know_the_world: web; remember_and_recall: vectors)
             |
      hubofhubs seats: models, recall, critique, deep, websearch, science, risk
 ```

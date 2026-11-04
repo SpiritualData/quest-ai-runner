@@ -185,7 +185,7 @@ port to agree on; ship the Protocol shape inside QAR first, move it to the hub w
 - **Problem:** proposed `prob-pause-loses-the-thread`: after a pause the AI repeats work, pays twice, loses its place or
   pretends to remember, and the person must type to restart. Related: `prob-long-run-silent-until-the-end`.
 - **Seat:** new hub seat `keep-working-state` (store, run log, resume); first consumers `run-deep-work`, `show-progress`,
-  `answer-a-turn`. Implementations: `inprocess-lru-state`, `db-backed-state`, `run-log-replay`. Unconfirmed: owner to confirm.
+  `answer-a-turn`. Implementations: `inprocess-lru-state`, `db-backed-state`, `run-log-replay`.
 - **Arms:** A0 today (session resume for deep runs, recent-context cards, nothing else); A1 Run Log plus cold rebuild, no
   cache; A2 A1 plus in-process LRU and tool-result cache; A3 A2 plus database tier; A4 A2 without byte budget and fairness
   cap (shows what the bounds cost). Replay arms: R0 none; R1 user-facing; R2 user-facing plus engine-side.

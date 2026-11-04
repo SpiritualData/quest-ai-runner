@@ -14,11 +14,11 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 
 | Solution | Entry call | Selected implementation | Metric |
 |---|---|---|---|
-| `behave-by-esoi` | no entry declared | `evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py` | Principle-following pass rate under standing instructions |
-| `judge-esoi-behavior` | no entry declared | `evaluation/components/esoi_judge/impls/model_judge.py` | Judge agreement with labelled reference replies |
-| `verify-offline` | no entry declared | `evaluation/components/verify_offline/impls/collect_by_file.py` | none yet |
-| `keep-secrets-out` | no entry declared | `evaluation/components/keep_secrets_out/impls/live_scanner.py` | Secret detection and placeholder tolerance |
-| `select-an-implementation` | no entry declared | `evaluation/components/select_an_implementation/impls/live_resolver.py` | none yet |
+| `behave-by-esoi` | no entry declared | `insitu_standing_instructions` | Principle-following pass rate under standing instructions |
+| `judge-esoi-behavior` | no entry declared | `model_judge` | Judge agreement with labelled reference replies |
+| `verify-offline` | no entry declared | `collect_by_file` | none yet |
+| `keep-secrets-out` | no entry declared | `live_scanner` | Secret detection and placeholder tolerance |
+| `select-an-implementation` | no entry declared | `live_resolver` | none yet |
 | `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
 
 ## Problems and ideals
@@ -82,11 +82,11 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
-| `behave-by-esoi` | Standing-instruction behaviour layer | evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py | Principle-following pass rate under standing instructions |
-| `judge-esoi-behavior` | Behaviour-grading judge | evaluation/components/esoi_judge/impls/model_judge.py | Judge agreement with labelled reference replies |
-| `verify-offline` |  | evaluation/components/verify_offline/impls/collect_by_file.py | none yet |
-| `keep-secrets-out` | Public-repository hygiene scanner | evaluation/components/keep_secrets_out/impls/live_scanner.py | Secret detection and placeholder tolerance |
-| `select-an-implementation` |  | evaluation/components/select_an_implementation/impls/live_resolver.py | none yet |
+| `behave-by-esoi` | Standing-instruction behaviour layer | insitu_standing_instructions | Principle-following pass rate under standing instructions |
+| `judge-esoi-behavior` | Behaviour-grading judge | model_judge | Judge agreement with labelled reference replies |
+| `verify-offline` |  | collect_by_file | none yet |
+| `keep-secrets-out` | Public-repository hygiene scanner | live_scanner | Secret detection and placeholder tolerance |
+| `select-an-implementation` |  | live_resolver | none yet |
 | `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
 
 ### Implementations

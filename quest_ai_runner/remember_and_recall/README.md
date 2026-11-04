@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `remember-and-recall:recency_window
 
 ## How the solutions fit together
 
-remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, serves the last known listing through cache-cards while a backend is down, finds them by meaning through index-by-meaning, labels them through label-context-cards, reports stale ones through detect-stale-cards, holds their growth in check through bound-card-growth and shrinks an inflated store through repair-a-card-store. repair-a-card-store rewrites the stored cards through persist-cards and asks choose-what-to-index which sources deserve cards.
+remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, reports stale ones through detect-stale-cards and holds their growth in check through bound-card-growth. The area serves the last known listing while a backend is down with cache-cards. Cards are found by meaning with index-by-meaning. Each card gets its labels from label-context-cards. An inflated store is shrunk with repair-a-card-store. repair-a-card-store decides which sources deserve a card by asking choose-what-to-index before it rewrites anything.
 
 ## Diagram
 
@@ -17,23 +17,15 @@ An arrow runs from the solution that provides to the solution that builds on it;
 ```mermaid
 flowchart LR
     s0["Context card persistence backend<br/>persist-cards"]
-    s1["Semantic vector index<br/>index-by-meaning"]
-    s2["Source-change staleness detector<br/>detect-stale-cards"]
-    s3["Offline card cache and write outbox<br/>cache-cards"]
-    s4["Card store growth prevention<br/>bound-card-growth"]
-    s5["Card store repair<br/>repair-a-card-store"]
-    s6["Index scope decision: which folders and...<br/>choose-what-to-index"]
-    s7["Card categories and metadata<br/>label-context-cards"]
-    s8["QAR card repository as the hub card...<br/>card-store"]
+    s1["Source-change staleness detector<br/>detect-stale-cards"]
+    s2["Card store growth prevention<br/>bound-card-growth"]
+    s3["Card store repair<br/>repair-a-card-store"]
+    s4["Index scope decision: which folders and...<br/>choose-what-to-index"]
+    s5["QAR card repository as the hub card...<br/>card-store"]
     s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s5
-    s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s8
-    s1 -->|"Ranked hits with id, score, text and payload for search..."| s8
-    s2 -->|"Whether the file is stale, and the stale card list for the..."| s8
-    s3 -->|"The stored listing with its update time, or none, and the..."| s8
-    s4 -->|"Cards written only under an id made of their origin; a..."| s8
-    s5 -->|"A plan (tidy-state/last-plan.json for the startup tidy), a..."| s8
-    s6 -->|"A FolderGate: the set of corpus-relative folders no card..."| s5
-    s7 -->|"The text or verdict the call returns"| s8
+    s1 -->|"Whether the file is stale, and the stale card list for the..."| s5
+    s2 -->|"Cards written only under an id made of their origin; a..."| s5
+    s4 -->|"A FolderGate: the set of corpus-relative folders no card..."| s3
 ```
 
 ## Solutions at a glance
@@ -42,7 +34,7 @@ flowchart LR
 |---|---|---|---|
 | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | `quest_api` | Card repository conformance across backends |
 | `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
-| `detect-stale-cards` | no entry declared | `evaluation/components/staleness/impls/store_sha256.py` | Staleness detection precision and recall over mutation cases |
+| `detect-stale-cards` | no entry declared | `store_sha256` | Staleness detection precision and recall over mutation cases |
 | `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
 | `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
 | `repair-a-card-store` | no entry declared | `repository_tidy` | Cards per source-file group and duplicate share after a repair of an inflated store |
@@ -108,7 +100,7 @@ flowchart LR
 |---|---|---|---|
 | `persist-cards` | Context card persistence backend | quest_api | Card repository conformance across backends |
 | `index-by-meaning` | Semantic vector index | qdrant | Semantic recall and query latency on the synthetic handbook |
-| `detect-stale-cards` | Source-change staleness detector | evaluation/components/staleness/impls/store_sha256.py | Staleness detection precision and recall over mutation cases |
+| `detect-stale-cards` | Source-change staleness detector | store_sha256 | Staleness detection precision and recall over mutation cases |
 | `cache-cards` | Offline card cache and write outbox | file | Outage resilience of the card repository |
 | `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
 | `repair-a-card-store` | Card store repair | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |

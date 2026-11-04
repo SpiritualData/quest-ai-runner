@@ -4,24 +4,11 @@ The material a planner reads before it plans, whether a card, a file, a conversa
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `remember-and-recall:score_thresholds` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Which material a planner reads is a retrieval problem with its own alternatives and its own public evidence, which the parent solution does not weigh: lexical, vector and hybrid rankers over a person's cards, files and conversations, a ranker per representative, references that must resolve to current text without failing a turn, and one ranking that holds the cards and the specification records of a repository together so a run also sees when no solution covers its request. Public benchmarks of similar rankers are shown beside the measurements made here.
+This sub-intent arises as the implementation `do-grounded-work:library` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Which material a planner reads is a retrieval problem with its own alternatives and its own public evidence, which the parent solution does not weigh: lexical, vector and hybrid rankers over a person's cards, files and conversations, a ranker per representative, references that must resolve to current text without failing a turn, and one ranking that holds the cards and the specification records of a repository together so a run also sees when no solution covers its request. Public benchmarks of similar rankers are shown beside the measurements made here.
 
 ## How the solutions fit together
 
-select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. It follows the pointer of a card to the person's current notes and files through resolve-references. search-cards-and-specs ranks the cards of a run together with the specification records of a repository in one list, taking the cards from select-context.
-
-## Diagram
-
-An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
-
-```mermaid
-flowchart LR
-    s0["Context card selector<br/>select-context"]
-    s1["Fail-safe card reference resolver<br/>resolve-references"]
-    s2["Unified card and specification search<br/>search-cards-and-specs"]
-    s0 -->|"An assembled context: rendered context view, card ids in..."| s2
-    s1 -->|"Rendered text for the pointer, possibly marked abridged, or..."| s0
-```
+select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. This area arises from the library implementation that wires every area through one configuration (do-grounded-work:library, the top intent's implementation), because no built implementation of one solution of the parent composes the assemblers: the lane's configuration chooses them. resolve-references follows the pointer of a card to the person's current notes and files. search-cards-and-specs ranks the cards of a run together with the specification records of a repository in one list.
 
 ## Solutions at a glance
 
@@ -54,7 +41,6 @@ flowchart LR
 - Parent intent: [Grounded AI that advances people's goals](../../esoi/README.md)
 - Repository: [top README](../../README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
-- Diagram page: [diagram.md](diagram.md)
 
 ---
 

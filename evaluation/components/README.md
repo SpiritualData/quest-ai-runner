@@ -279,7 +279,7 @@ parametrises and that no test vanished; whether a test passes is shown by runnin
 
 ## Invariant solutions and `broken/`
 
-A solution whose `metric_kind` in `esoi/solutions.csv` is `invariant` is a rule that holds or does not (a write stays
+A component with an `invariant.txt` (the reason its implementations are complementary, not alternatives) is a rule that holds or does not (a write stays
 inside its root, a message is delivered once, a name resolves to one class). Its case suite and recorded run stay, because
 they pin the behaviour, but "best" cannot vary, so `leaderboard.py` lists it apart under "Invariant solutions" and never
 ranks it, and the tracker labels it `invariant`, not `decided-by-metric`. The floor a first draft would write (naive open

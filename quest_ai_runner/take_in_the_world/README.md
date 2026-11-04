@@ -33,10 +33,10 @@ flowchart LR
 | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | `quest_channels` | Update-offering correctness over synthetic quest channels |
 | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | `in_memory` | Exactly-once mid-run delivery per run, and how fast it is seen |
 | `expose-the-public-api` | `quest_ai_runner.run("expose-the-public-api", 'run')` | `package_front_doors` | Public surface conformance on fixture inputs |
-| `learn-by-example` | no entry declared | `evaluation/components/learn_by_example/impls/live_examples.py` | Example runnability on an empty environment |
-| `configure-a-lane` | no entry declared | `evaluation/components/configure_a_lane/impls/qar_config.py` | Configuration precedence and validation correctness |
+| `learn-by-example` | no entry declared | `live_examples` | Example runnability on an empty environment |
+| `configure-a-lane` | no entry declared | `qar_config` | Configuration precedence and validation correctness |
 | `operate-from-a-terminal` | `quest_ai_runner.run("operate-from-a-terminal", ['--help'])` | `cli_commands` | Command-line parsing, refusal and output correctness |
-| `explain-qar` | no entry declared | `evaluation/components/explain_qar/impls/shipped_docs.py` | Documentation coverage and voice conformance |
+| `explain-qar` | no entry declared | `shipped_docs` | Documentation coverage and voice conformance |
 | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | `vision_description` | Answer pass rate gained per image described |
 | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
 
@@ -98,10 +98,10 @@ flowchart LR
 | `feed-context-sources` | Incremental context-update feed | quest_channels | Update-offering correctness over synthetic quest channels |
 | `receive-input-mid-run` | Conversation-keyed mid-run input inbox | in_memory | Exactly-once mid-run delivery per run, and how fast it is seen |
 | `expose-the-public-api` | Public package surface contract | package_front_doors | Public surface conformance on fixture inputs |
-| `learn-by-example` | Runnable example set | evaluation/components/learn_by_example/impls/live_examples.py | Example runnability on an empty environment |
-| `configure-a-lane` | Layered lane configuration loader | evaluation/components/configure_a_lane/impls/qar_config.py | Configuration precedence and validation correctness |
+| `learn-by-example` | Runnable example set | live_examples | Example runnability on an empty environment |
+| `configure-a-lane` | Layered lane configuration loader | qar_config | Configuration precedence and validation correctness |
 | `operate-from-a-terminal` | Non-interactive command-line surface | cli_commands | Command-line parsing, refusal and output correctness |
-| `explain-qar` | Documentation coverage and voice check | evaluation/components/explain_qar/impls/shipped_docs.py | Documentation coverage and voice conformance |
+| `explain-qar` | Documentation coverage and voice check | shipped_docs | Documentation coverage and voice conformance |
 | `describe-an-attachment` | Image description for grounding | vision_description | Answer pass rate gained per image described |
 | `assist-a-terminal-session` | Terminal helper calls | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
 
