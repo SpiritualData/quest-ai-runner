@@ -10,7 +10,7 @@ items inside each case (for example candidate context items). Credentials and th
 
 The sheet is created as the `--subject` user (domain-wide delegation) so it is owned by that user and shared with nobody.
 Several cases files go into one sheet; a case id that appears in two files is an error at export. The Summary tab lists each file
-(its basename, or parent folder and basename when two basenames clash) with its sha256.
+(the shortest trailing part of its path that tells it apart from the other files) with its sha256.
 
 Import never touches a source file: for each one it checks the sha256 against the sheet (`--allow-sha-mismatch` overrides) and writes
 a new `reviewed_labels_<timestamp>.jsonl` plus a `.meta.json` with provenance NEXT TO that file, holding only that file's cases
@@ -132,9 +132,13 @@ def merge_cases(per_file: list[tuple[Path, list[dict]]], case_id: str) -> list[d
 
 
 def file_labels(paths: list[Path]) -> list[str]:
-    """Basename per file; parent folder and basename when two basenames clash."""
-    names = [p.name for p in paths]
-    return [f"{p.resolve().parent.name}/{p.name}" if names.count(p.name) > 1 else p.name for p in paths]
+    """The shortest trailing part of each path that tells the files apart: the basename, else as many parent folders as needed."""
+    parts = [p.resolve().parts for p in paths]
+    for depth in range(1, max(len(x) for x in parts) + 1):
+        labels = ["/".join(x[-depth:]) for x in parts]
+        if len(set(labels)) == len(labels):
+            return labels
+    return ["/".join(x) for x in parts]
 
 
 def build_rows(cases: list[dict], args) -> tuple[list[list[str]], list[list[str]]]:
@@ -301,7 +305,7 @@ def export(args) -> None:
     summary, table_row = summary_rows(args, labels, need_roles, scope_needs, ihead, chead, n_items, n_cases, files)
     formula_col = chead.index("Items reviewed")
     formula_letter = col_letter(formula_col)
-    plain_case_rows = [[("" if i == formula_col else v) for i, v in enumerate(row)] for row in case_rows]
+    plain_case_rows = [case_rows[0]] + [[("" if i == formula_col else v) for i, v in enumerate(row)] for row in case_rows[1:]]
     sheets.spreadsheets().values().batchUpdate(spreadsheetId=sheet_id, body={"valueInputOption": "RAW", "data": [
         {"range": "Items!A1", "values": item_rows},
         {"range": "Cases!A1", "values": plain_case_rows}]}).execute()

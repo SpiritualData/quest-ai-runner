@@ -71,6 +71,11 @@ def test_file_labels_use_basenames_unless_they_clash(tmp_path):
     assert ds.file_labels([tmp_path / "one" / "cases.jsonl", tmp_path / "two" / "cases.jsonl"]) == ["one/cases.jsonl", "two/cases.jsonl"]
 
 
+def test_file_labels_go_up_until_same_named_folders_differ(tmp_path):
+    first, second = tmp_path / "x" / "data" / "cases.jsonl", tmp_path / "y" / "data" / "cases.jsonl"
+    assert ds.file_labels([first, second]) == ["x/data/cases.jsonl", "y/data/cases.jsonl"]
+
+
 def test_requests_use_computed_columns():
     args = make_args(item_columns=["author"])
     ihead, chead = ds.item_head(args), ds.case_head(args)
