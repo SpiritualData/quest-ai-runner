@@ -83,7 +83,8 @@ class RoutedModelCalling(ModelCalling, typing.Protocol):
 @implementation("call-a-model", "multi_provider")
 def routed(primary: Any = None, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
            fallback_models: Sequence[str] = ()) -> MultiProvider:
-    """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, spend tagging by spec,
+    """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, spend tagging by the registered
+    prompt spec each call was rendered from (``justify-model-calls``: ``PromptSpec.render`` tags the call, ``spec_of`` reads the tag),
     and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``). With no
     ``primary`` the router is built over the hub's default ``call-a-model`` arm, the Claude Code subscription (``claude``)."""
     if primary is None:

@@ -23,6 +23,7 @@ from .core.adapters_retrieval import RetrievalAdapter
 from .runner.quest_client import QuestClient, QuestOperations
 from .loop_wiring import GoalAnswer, NoContext, goal_answer, orchestrator_over
 from .message_routing import route_message
+from .providers import RoutedModelCalling
 from .runner.goal_handoff import choose_assignee, make_judge
 from .runner.poller import Poller
 
@@ -113,7 +114,7 @@ class QarRunner:
     """The poller over the runner's configuration: one scan claims what is queued, runs it and reports it back to Quest."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, model: ModelCalling, quest: QuestOperations) -> None:
+    def __init__(self, model: RoutedModelCalling, quest: QuestOperations) -> None:
         self.model, self.quest = model, quest
 
     def scan(self, team_id: str = "") -> List[str]:

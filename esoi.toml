@@ -133,9 +133,16 @@ enabled = true
 
 [rules.S38]
 enabled = true
+# The limit on how many solutions one implementation uses is raised from 9 to 11, for one reason: the top intent's one implementation,
+# do-grounded-work:library, takes the model, the Quest account and eight areas as typed seats (goal_agent.py), and the code composes no
+# grouping of them (the areas are siblings, none builds on another), so grouping them in the records would state a layer the code does
+# not have. No other intent uses more than seven. The limit is one value for the repository, not one per intent, so the sentence limit
+# (which defaults to the fan-out limit plus one) is pinned at its old value.
+max_fan_out = 11
+max_names_per_sentence = 10
 
 [rules.S38.floors.quest-ai-runner]
-precision = 0.85
+precision = 1.0
 coverage = 1.0
 
 # The floors of each area (a sub-intent), at the values measured when its records were written; raised as its composition is typed in code.

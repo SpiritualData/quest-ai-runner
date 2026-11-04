@@ -13,11 +13,12 @@ from typing import Any
 from esoi import implementation, solution
 from esoi.assemble import Lazy
 from hubofhubs.risk import OverseerSignal
-from hubofhubs.seats import ModelCalling, RiskWatching
+from hubofhubs.seats import RiskWatching
 
 from ..core import overseer
 from ..core.adapters_deep import EscalationSink
 from ..core.adapters_values import Escalation
+from ..providers import RoutedModelCalling
 
 
 @solution("watch-for-risk", kind="event", entry="watch", example="delete the old backup folder")
@@ -32,7 +33,7 @@ class Overseer:
     passed in; a failure is a degraded ``proceed``. ``escalate`` hands a step only a person may take to the member that files it."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, model: ModelCalling, escalations: Lazy[EscalationSink]) -> None:
+    def __init__(self, model: RoutedModelCalling, escalations: Lazy[EscalationSink]) -> None:
         self.model, self.escalations = model, escalations
 
     def digest(self, **fields: Any) -> str:
