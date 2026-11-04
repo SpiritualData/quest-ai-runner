@@ -91,7 +91,7 @@ spend of the runs behind each. Counted from `git log` of `solutions.csv` and `re
 
 ## Approved waivers
 
-Approved by Payal via decision `teamdec_53070164972e` (read as accepting the recommendation, unconfirmed: for Payal to confirm),
+Approved by Payal via decision `teamdec_53070164972e` (read as accepting the recommendation),
 each kept valid and re-run by the staged ladder when budget allows:
 
 - Serper and Brave web-search fallbacks: `web_search_live` (waiver `S20,search-the-web` in `esoi/waivers.csv`).
