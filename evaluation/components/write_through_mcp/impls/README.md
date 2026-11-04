@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/write_through_mcp/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `write-through-mcp:allowlist_writer` | Fake-client allowlist check | [`evaluation/components/write_through_mcp/impls/allowlist_writer.py`](allowlist_writer.py) |  |
+| Fake-client allowlist check | `write-through-mcp:allowlist_writer` | [`evaluation/components/write_through_mcp/impls/allowlist_writer.py`](allowlist_writer.py) |  |
 
 ## Where to go next
 

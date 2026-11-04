@@ -8,13 +8,13 @@ This sub-intent arises as the implementation `know-the-world:web_with_support_ch
 
 ## How the solutions fit together
 
-know-the-world gives a request the facts it needs from outside the person's own material, from the results of search-the-web, which it checks for support and returns with their source.
+Science gives a request the facts it needs from outside the person's own material, from the results of Bounded web research, which it checks for support and returns with their source.
 
 ## Solutions at a glance
 
-| Solution | Entry call | Selected implementation | Metric |
-|---|---|---|---|
-| `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | `web_research` | Right-passage rate and search spend over public factual questions |
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Bounded web research | `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | `web_research` | Right-passage rate and search spend over public factual questions |
 
 ## Problems and ideals
 
@@ -24,11 +24,11 @@ know-the-world gives a request the facts it needs from outside the person's own 
 
 **Ideals**
 
-- `ideal-safe-search`, Safe Search: Web answers come from the right passage, fetched safely and paid for once.
+- Safe Search (`ideal-safe-search`): Web answers come from the right passage, fetched safely and paid for once.
 
 ## Metrics and their leaders
 
-- `metric-search-the-web`, Right-passage rate and search spend over public factual questions: leader `web_research`, 10 of 10 cases
+- Right-passage rate and search spend over public factual questions (`metric-search-the-web`): leader `web_research`, 10 of 10 cases
 
 ## Where to go next
 
@@ -46,27 +46,27 @@ know-the-world gives a request the facts it needs from outside the person's own 
 
 ### Ideals
 
-- `ideal-safe-search`, Safe Search: Web answers come from the right passage, fetched safely and paid for once.
+- Safe Search (`ideal-safe-search`): Web answers come from the right passage, fetched safely and paid for once.
 
 ### Solutions
 
-| Solution | Name | Selected | Metric |
+| Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| `search-the-web` | Bounded web research | web_research | Right-passage rate and search spend over public factual questions |
+| Bounded web research | `search-the-web` | web_research | Right-passage rate and search spend over public factual questions |
 
 ### Implementations
 
-| Implementation | Name | Where | Sub-intent |
+| Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| `search-the-web:web_research` | Snippet-first research with page extraction | [quest_ai_runner/know_the_world/web_research.py](web_research.py) |  |
-| `search-the-web:provider_web_search` | Model-native search | [quest_ai_runner/know_the_world/provider_web_search_adapter.py](provider_web_search_adapter.py) |  |
-| `search-the-web:serper` | Pluggable search backends with fallback | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
-| `search-the-web:brave` | Brave search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
-| `search-the-web:gemini` | Gemini grounded search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
-| `search-the-web:provider` | Provider-native search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
-| `search-the-web:searxng` | SearXNG search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
-| `search-the-web:tavily` | Tavily search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| Snippet-first research with page extraction | `search-the-web:web_research` | [quest_ai_runner/know_the_world/web_research.py](web_research.py) |  |
+| Model-native search | `search-the-web:provider_web_search` | [quest_ai_runner/know_the_world/provider_web_search_adapter.py](provider_web_search_adapter.py) |  |
+| Pluggable search backends with fallback | `search-the-web:serper` | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| Brave search backend | `search-the-web:brave` | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| Gemini grounded search backend | `search-the-web:gemini` | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| Provider-native search backend | `search-the-web:provider` | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| SearXNG search backend | `search-the-web:searxng` | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| Tavily search backend | `search-the-web:tavily` | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
 
 ### Metrics
 
-- `metric-search-the-web`, Right-passage rate and search spend over public factual questions: `esoi run web_search_live --impl web_research; esoi run web_search --impl fallback_chain`
+- Right-passage rate and search spend over public factual questions (`metric-search-the-web`): `esoi run web_search_live --impl web_research; esoi run web_search --impl fallback_chain`

@@ -2,7 +2,7 @@
 
 *ESOI records kept beside the code in `quest_ai_runner/core`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
 
-## Subconscious: the person's own knowledge, admitted to the working stream by the goal (`remember-and-recall`)
+## Subconscious (`remember-and-recall`)
 
 Keeps each request's working stream holding the part of the person's own knowledge its goal needs, so a fast model is neither misled by near misses nor buried in noise.
 
@@ -22,19 +22,19 @@ Gives an operator a known value, cost and time for every model call, so spend an
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `reason-and-answer:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | [`quest_ai_runner/core/orchestrator_planning.py`](orchestrator_planning.py) |  |
-| `remember-and-recall:recency_window` | Start-of-run card filter and a recency window (today) | [`quest_ai_runner/core/planner_context.py`](planner_context.py) | selected |
-| `watch-for-risk:no_overseer` | No overseer (configuration off) | [`quest_ai_runner/core/orchestrator_types.py`](orchestrator_types.py) |  |
-| `think-critically:instruction_only` | Standing instruction alone (floor) | [`quest_ai_runner/core/standing_instructions.py`](standing_instructions.py) |  |
-| `justify-model-calls:spec_registry` | Registered prompt specs with an enforcement test (today) | [`quest_ai_runner/core/prompt_specs.py`](prompt_specs.py) | selected |
+| Rebuilt prompt per step with the context re-sent from cache | `reason-and-answer:rebuilt_full_context` | [`quest_ai_runner/core/orchestrator_planning.py`](orchestrator_planning.py) |  |
+| Start-of-run card filter and a recency window (today) | `remember-and-recall:recency_window` | [`quest_ai_runner/core/planner_context.py`](planner_context.py) | selected |
+| No overseer (configuration off) | `watch-for-risk:no_overseer` | [`quest_ai_runner/core/orchestrator_types.py`](orchestrator_types.py) |  |
+| Standing instruction alone (floor) | `think-critically:instruction_only` | [`quest_ai_runner/core/standing_instructions.py`](standing_instructions.py) |  |
+| Registered prompt specs with an enforcement test (today) | `justify-model-calls:spec_registry` | [`quest_ai_runner/core/prompt_specs.py`](prompt_specs.py) | selected |
 
 ## Metrics
 
-- `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: leader `recency_window`, 4 of 9 cases
-- `metric-justified-model-spend`, Justified share of model spend: leader `spec_registry`, 15 of 15 cases
-- `QME8`, Justified model spend: leader `spec_registry`, 15 of 15 cases
+- Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): leader `recency_window`, 4 of 9 cases
+- Justified share of model spend (`metric-justified-model-spend`): leader `spec_registry`, 15 of 15 cases
+- Justified model spend (`QME8`): leader `spec_registry`, 15 of 15 cases
 
 ## Problems
 
@@ -42,7 +42,7 @@ Gives an operator a known value, cost and time for every model call, so spend an
 
 ## Ideals
 
-- `ideal-goal-relevant-attention`: Only what bears on the request's goal enters the working stream, and nothing from outside the request's scope ever does.
+- Goal-Relevant Attention (`ideal-goal-relevant-attention`): Only what bears on the request's goal enters the working stream, and nothing from outside the request's scope ever does.
 
 ## Where to go next
 

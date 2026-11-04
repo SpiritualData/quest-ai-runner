@@ -8,17 +8,17 @@ This sub-intent arises as the implementation `keep-it-generic:structure-library`
 
 ## How the solutions fit together
 
-keep-it-generic keeps every part specified as a solution with measured alternatives. It finds what a change touches through tag-solutions. It measures whether the assistant acts by ESOI through behave-by-esoi and judge-esoi-behavior. It wires the selected arms per lane through configure-a-lane. It keeps the test suite and the public code trustworthy through verify-offline and keep-secrets-out, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
+Evolve by metric keeps every part specified as a solution with measured alternatives. It finds what a change touches through Problem-linked tags that identify solutions. It measures whether the assistant acts by ESOI through Standing-instruction behaviour layer and Behaviour-grading judge. It wires the selected arms per lane through Layered lane configuration loader. It keeps the test suite and the public code trustworthy through Offline test collection and Public-repository hygiene scanner, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
 ## Solutions at a glance
 
-| Solution | Entry call | Selected implementation | Metric |
-|---|---|---|---|
-| `behave-by-esoi` | no entry declared | `insitu_standing_instructions` | Principle-following pass rate under standing instructions |
-| `judge-esoi-behavior` | no entry declared | `model_judge` | Judge agreement with labelled reference replies |
-| `verify-offline` | no entry declared | `collect_by_file` | none yet |
-| `keep-secrets-out` | no entry declared | `live_scanner` | Secret detection and placeholder tolerance |
-| `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Standing-instruction behaviour layer | `behave-by-esoi` | no entry declared | `insitu_standing_instructions` | Principle-following pass rate under standing instructions |
+| Behaviour-grading judge | `judge-esoi-behavior` | no entry declared | `model_judge` | Judge agreement with labelled reference replies |
+| Offline test collection | `verify-offline` | no entry declared | `collect_by_file` | Offline test collection |
+| Public-repository hygiene scanner | `keep-secrets-out` | no entry declared | `live_scanner` | Secret detection and placeholder tolerance |
+| Problem-linked tags that identify solutions | `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
 
 ## Problems and ideals
 
@@ -35,18 +35,18 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 
 **Ideals**
 
-- `ideal-clean-publication`, Clean Publication: Nothing secret or consumer specific is ever published.
-- `ideal-structured-habit`, Structured Habit: An AI that works here names the problem, the ideal and the metric, reuses what exists, and adds only structure that earns its cost.
-- `ideal-honest-grading`, Honest Grading: A grade means the reply did what the principle asks, whatever words it used.
-- `ideal-risks-identified-by-tag`, Constraining Solutions Identified: Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
+- Clean Publication (`ideal-clean-publication`): Nothing secret or consumer specific is ever published.
+- Structured Habit (`ideal-structured-habit`): An AI that works here names the problem, the ideal and the metric, reuses what exists, and adds only structure that earns its cost.
+- Honest Grading (`ideal-honest-grading`): A grade means the reply did what the principle asks, whatever words it used.
+- Constraining Solutions Identified (`ideal-risks-identified-by-tag`): Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
 
 ## Metrics and their leaders
 
-- `metric-behave-by-esoi`, Principle-following pass rate under standing instructions: leader `standing_instructions`, 30 of 60 cases
-- `metric-judge-esoi-behavior`, Judge agreement with labelled reference replies: leader `model_judge`, 29 of 30 cases
-- `metric-verify-offline`, : leader `collect_by_file`, 29 of 29 cases
-- `metric-keep-secrets-out`, Secret detection and placeholder tolerance: leader `live_scanner`, 30 of 35 cases
-- `metric-tag-solutions`, Right solution missed without the tag: leader `tag_list_with_check`, 13 of 13 cases
+- Principle-following pass rate under standing instructions (`metric-behave-by-esoi`): leader `standing_instructions`, 30 of 60 cases
+- Judge agreement with labelled reference replies (`metric-judge-esoi-behavior`): leader `model_judge`, 29 of 30 cases
+- Offline test collection (`metric-verify-offline`): leader `collect_by_file`, 29 of 29 cases
+- Secret detection and placeholder tolerance (`metric-keep-secrets-out`): leader `live_scanner`, 30 of 35 cases
+- Right solution missed without the tag (`metric-tag-solutions`): leader `tag_list_with_check`, 13 of 13 cases
 
 ## Where to go next
 
@@ -71,40 +71,40 @@ keep-it-generic keeps every part specified as a solution with measured alternati
 
 ### Ideals
 
-- `ideal-clean-publication`, Clean Publication: Nothing secret or consumer specific is ever published.
-- `ideal-structured-habit`, Structured Habit: An AI that works here names the problem, the ideal and the metric, reuses what exists, and adds only structure that earns its cost.
-- `ideal-honest-grading`, Honest Grading: A grade means the reply did what the principle asks, whatever words it used.
-- `ideal-risks-identified-by-tag`, Constraining Solutions Identified: Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
+- Clean Publication (`ideal-clean-publication`): Nothing secret or consumer specific is ever published.
+- Structured Habit (`ideal-structured-habit`): An AI that works here names the problem, the ideal and the metric, reuses what exists, and adds only structure that earns its cost.
+- Honest Grading (`ideal-honest-grading`): A grade means the reply did what the principle asks, whatever words it used.
+- Constraining Solutions Identified (`ideal-risks-identified-by-tag`): Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
 
 ### Solutions
 
-| Solution | Name | Selected | Metric |
+| Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| `behave-by-esoi` | Standing-instruction behaviour layer | insitu_standing_instructions | Principle-following pass rate under standing instructions |
-| `judge-esoi-behavior` | Behaviour-grading judge | model_judge | Judge agreement with labelled reference replies |
-| `verify-offline` |  | collect_by_file | none yet |
-| `keep-secrets-out` | Public-repository hygiene scanner | live_scanner | Secret detection and placeholder tolerance |
-| `tag-solutions` | Problem-linked tags that identify solutions | tag_list_with_check | Right solution missed without the tag |
+| Standing-instruction behaviour layer | `behave-by-esoi` | insitu_standing_instructions | Principle-following pass rate under standing instructions |
+| Behaviour-grading judge | `judge-esoi-behavior` | model_judge | Judge agreement with labelled reference replies |
+| Offline test collection | `verify-offline` | collect_by_file | Offline test collection |
+| Public-repository hygiene scanner | `keep-secrets-out` | live_scanner | Secret detection and placeholder tolerance |
+| Problem-linked tags that identify solutions | `tag-solutions` | tag_list_with_check | Right solution missed without the tag |
 
 ### Implementations
 
-| Implementation | Name | Where | Sub-intent |
+| Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| `behave-by-esoi:insitu_standing_instructions` | Shipped deep-run prompt with standing instructions | [evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py](../../evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py) |  |
-| `behave-by-esoi:insitu_plain` | In-situ prompt without the instruction layer | [evaluation/components/esoi_behavior/impls/insitu_plain.py](../../evaluation/components/esoi_behavior/impls/insitu_plain.py) |  |
-| `behave-by-esoi:standing_instructions` | Chat-completion ablation with instructions | [evaluation/components/esoi_behavior/impls/standing_instructions.py](../../evaluation/components/esoi_behavior/impls/standing_instructions.py) |  |
-| `behave-by-esoi:plain` | Chat-completion baseline without instructions | [evaluation/components/esoi_behavior/impls/plain.py](../../evaluation/components/esoi_behavior/impls/plain.py) |  |
-| `judge-esoi-behavior:model_judge` | Rubric-based model judge | [evaluation/components/esoi_judge/impls/model_judge.py](../../evaluation/components/esoi_judge/impls/model_judge.py) |  |
-| `judge-esoi-behavior:regex_only` | Regex-check floor | [evaluation/components/esoi_judge/impls/regex_only.py](../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
-| `verify-offline:conftest` |  | [tests/conftest.py](../../tests/conftest.py) |  |
-| `verify-offline:collect_by_file` |  | [evaluation/components/verify_offline/impls/collect_by_file.py](../../evaluation/components/verify_offline/impls/collect_by_file.py) |  |
-| `keep-secrets-out:live_scanner` | Planted-secret evaluation arm | [evaluation/components/keep_secrets_out/impls/live_scanner.py](../../evaluation/components/keep_secrets_out/impls/live_scanner.py) |  |
-| `tag-solutions:tag_list_with_check` | Problem-linked tag list with a check rule and a lookup | [scripts/esoi_tags.py](../../scripts/esoi_tags.py) |  |
+| Shipped deep-run prompt with standing instructions | `behave-by-esoi:insitu_standing_instructions` | [evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py](../../evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py) |  |
+| In-situ prompt without the instruction layer | `behave-by-esoi:insitu_plain` | [evaluation/components/esoi_behavior/impls/insitu_plain.py](../../evaluation/components/esoi_behavior/impls/insitu_plain.py) |  |
+| Chat-completion ablation with instructions | `behave-by-esoi:standing_instructions` | [evaluation/components/esoi_behavior/impls/standing_instructions.py](../../evaluation/components/esoi_behavior/impls/standing_instructions.py) |  |
+| Chat-completion baseline without instructions | `behave-by-esoi:plain` | [evaluation/components/esoi_behavior/impls/plain.py](../../evaluation/components/esoi_behavior/impls/plain.py) |  |
+| Rubric-based model judge | `judge-esoi-behavior:model_judge` | [evaluation/components/esoi_judge/impls/model_judge.py](../../evaluation/components/esoi_judge/impls/model_judge.py) |  |
+| Regex-check floor | `judge-esoi-behavior:regex_only` | [evaluation/components/esoi_judge/impls/regex_only.py](../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
+| Offline suite configuration | `verify-offline:conftest` | [tests/conftest.py](../../tests/conftest.py) |  |
+| Collection check by test file | `verify-offline:collect_by_file` | [evaluation/components/verify_offline/impls/collect_by_file.py](../../evaluation/components/verify_offline/impls/collect_by_file.py) |  |
+| Planted-secret evaluation arm | `keep-secrets-out:live_scanner` | [evaluation/components/keep_secrets_out/impls/live_scanner.py](../../evaluation/components/keep_secrets_out/impls/live_scanner.py) |  |
+| Problem-linked tag list with a check rule and a lookup | `tag-solutions:tag_list_with_check` | [scripts/esoi_tags.py](../../scripts/esoi_tags.py) |  |
 
 ### Metrics
 
-- `metric-behave-by-esoi`, Principle-following pass rate under standing instructions: `esoi run esoi_behavior --impl insitu_standing_instructions`
-- `metric-judge-esoi-behavior`, Judge agreement with labelled reference replies: `esoi run esoi_judge --impl model_judge`
-- `metric-verify-offline`, : `esoi run verify_offline --impl collect_by_file`
-- `metric-keep-secrets-out`, Secret detection and placeholder tolerance: `esoi run keep_secrets_out --impl live_scanner`
-- `metric-tag-solutions`, Right solution missed without the tag: `esoi run tag_solutions --impl tag_list_with_check`
+- Principle-following pass rate under standing instructions (`metric-behave-by-esoi`): `esoi run esoi_behavior --impl insitu_standing_instructions`
+- Judge agreement with labelled reference replies (`metric-judge-esoi-behavior`): `esoi run esoi_judge --impl model_judge`
+- Offline test collection (`metric-verify-offline`): `esoi run verify_offline --impl collect_by_file`
+- Secret detection and placeholder tolerance (`metric-keep-secrets-out`): `esoi run keep_secrets_out --impl live_scanner`
+- Right solution missed without the tag (`metric-tag-solutions`): `esoi run tag_solutions --impl tag_list_with_check`

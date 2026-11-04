@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `quest_ai_runner/tools`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `operate-from-a-terminal:__main__` | Tool catalog shell entry | [`quest_ai_runner/tools/__main__.py`](__main__.py) |  |
+| Tool catalog shell entry | `operate-from-a-terminal:__main__` | [`quest_ai_runner/tools/__main__.py`](__main__.py) |  |
 
 ## Where to go next
 

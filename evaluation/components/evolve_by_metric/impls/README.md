@@ -4,10 +4,10 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `keep-it-generic:structure_library` | Evolvable-structure library decides (live) | [`evaluation/components/evolve_by_metric/impls/structure_library.py`](structure_library.py) |  |
-| `keep-it-generic:keep_current` | Keep the selection as written (floor) | [`evaluation/components/evolve_by_metric/impls/keep_current.py`](keep_current.py) |  |
+| Evolvable-structure library decides (live) | `keep-it-generic:structure_library` | [`evaluation/components/evolve_by_metric/impls/structure_library.py`](structure_library.py) |  |
+| Keep the selection as written (floor) | `keep-it-generic:keep_current` | [`evaluation/components/evolve_by_metric/impls/keep_current.py`](keep_current.py) |  |
 
 ## Where to go next
 

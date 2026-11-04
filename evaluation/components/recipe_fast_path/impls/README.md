@@ -2,12 +2,12 @@
 
 *ESOI arms kept in `evaluation/components/recipe_fast_path/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `replay-known-operations:planner_only` | Live planner-only baseline | [`evaluation/components/recipe_fast_path/impls/planner_only.py`](planner_only.py) |  |
-| `replay-known-operations:planner_only_offline` | Offline planner-only baseline | [`evaluation/components/recipe_fast_path/impls/planner_only_offline.py`](planner_only_offline.py) |  |
-| `replay-known-operations:recipe_replay` | Live recipe replay arm | [`evaluation/components/recipe_fast_path/impls/recipe_replay.py`](recipe_replay.py) |  |
-| `replay-known-operations:recipe_replay_offline` | Offline recipe replay arm | [`evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py`](recipe_replay_offline.py) |  |
+| Live planner-only baseline | `replay-known-operations:planner_only` | [`evaluation/components/recipe_fast_path/impls/planner_only.py`](planner_only.py) |  |
+| Offline planner-only baseline | `replay-known-operations:planner_only_offline` | [`evaluation/components/recipe_fast_path/impls/planner_only_offline.py`](planner_only_offline.py) |  |
+| Live recipe replay arm | `replay-known-operations:recipe_replay` | [`evaluation/components/recipe_fast_path/impls/recipe_replay.py`](recipe_replay.py) |  |
+| Offline recipe replay arm | `replay-known-operations:recipe_replay_offline` | [`evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py`](recipe_replay_offline.py) |  |
 
 ## Where to go next
 

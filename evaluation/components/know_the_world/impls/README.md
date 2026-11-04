@@ -4,9 +4,9 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `know-the-world:memory_only` | Memory only, no research (floor) | [`evaluation/components/know_the_world/impls/memory_only.py`](memory_only.py) |  |
+| Memory only, no research (floor) | `know-the-world:memory_only` | [`evaluation/components/know_the_world/impls/memory_only.py`](memory_only.py) |  |
 
 ## Where to go next
 

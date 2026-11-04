@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/choose_a_model_tier/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `choose-a-model-tier:qar_selection` | Live selection evaluation arm | [`evaluation/components/choose_a_model_tier/impls/qar_selection.py`](qar_selection.py) |  |
+| Live selection evaluation arm | `choose-a-model-tier:qar_selection` | [`evaluation/components/choose_a_model_tier/impls/qar_selection.py`](qar_selection.py) |  |
 
 ## Where to go next
 

@@ -2,10 +2,10 @@
 
 *ESOI arms kept in `evaluation/components/interim_reply/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `reply-in-steps:every_attempt` | An interim on every unmet attempt (spam baseline) | [`evaluation/components/interim_reply/impls/every_attempt.py`](every_attempt.py) |  |
-| `reply-in-steps:today` | Behaviour before the build: no interim for an unmet attempt | [`evaluation/components/interim_reply/impls/today.py`](today.py) |  |
+| An interim on every unmet attempt (spam baseline) | `reply-in-steps:every_attempt` | [`evaluation/components/interim_reply/impls/every_attempt.py`](every_attempt.py) |  |
+| Behaviour before the build (no interim for an unmet attempt) | `reply-in-steps:today` | [`evaluation/components/interim_reply/impls/today.py`](today.py) |  |
 
 ## Where to go next
 

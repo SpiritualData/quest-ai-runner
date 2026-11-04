@@ -4,9 +4,9 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `keep-it-generic:registry_scan` | Registry read together with the code (today) | [`evaluation/components/hub_of_hubs/impls/registry_scan.py`](registry_scan.py) |  |
+| Registry read together with the code (today) | `keep-it-generic:registry_scan` | [`evaluation/components/hub_of_hubs/impls/registry_scan.py`](registry_scan.py) |  |
 
 ## Where to go next
 

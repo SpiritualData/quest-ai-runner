@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/quest_ops/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `operate-a-quest:direct_tool_call` | Direct tool-call ablation | [`evaluation/components/quest_ops/impls/direct_tool_call.py`](direct_tool_call.py) |  |
+| Direct tool-call ablation | `operate-a-quest:direct_tool_call` | [`evaluation/components/quest_ops/impls/direct_tool_call.py`](direct_tool_call.py) |  |
 
 ## Where to go next
 

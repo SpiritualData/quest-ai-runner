@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/configure_a_lane/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `configure-a-lane:qar_config` | Layered configuration evaluation arm | [`evaluation/components/configure_a_lane/impls/qar_config.py`](qar_config.py) | selected |
+| Layered configuration evaluation arm | `configure-a-lane:qar_config` | [`evaluation/components/configure_a_lane/impls/qar_config.py`](qar_config.py) | selected |
 
 ## Where to go next
 

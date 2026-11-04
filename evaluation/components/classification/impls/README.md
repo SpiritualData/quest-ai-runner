@@ -2,10 +2,10 @@
 
 *ESOI arms kept in `evaluation/components/classification/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `route-a-message:keyword_rules` | Keyword rules floor | [`evaluation/components/classification/impls/keyword_rules.py`](keyword_rules.py) |  |
-| `route-a-message:qar_planner` | Full planner decision | [`evaluation/components/classification/impls/qar_planner.py`](qar_planner.py) |  |
+| Keyword rules floor | `route-a-message:keyword_rules` | [`evaluation/components/classification/impls/keyword_rules.py`](keyword_rules.py) |  |
+| Full planner decision | `route-a-message:qar_planner` | [`evaluation/components/classification/impls/qar_planner.py`](qar_planner.py) |  |
 
 ## Where to go next
 

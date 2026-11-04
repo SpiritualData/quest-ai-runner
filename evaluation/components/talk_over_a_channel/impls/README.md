@@ -4,9 +4,9 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `talk-over-a-channel:openclaw_bridge` | Fake-gateway conformance arm | [`evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py`](openclaw_bridge.py) |  |
+| Fake-gateway conformance arm | `talk-over-a-channel:openclaw_bridge` | [`evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py`](openclaw_bridge.py) |  |
 
 ## Where to go next
 

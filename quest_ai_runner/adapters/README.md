@@ -4,10 +4,10 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `call-a-model:claude_cli` | Keyless command-line provider | [`quest_ai_runner/adapters/claude_cli_provider.py`](claude_cli_provider.py) |  |
-| `talk-over-a-channel:openclaw` | MCP gateway bridge transport | [`quest_ai_runner/adapters/openclaw_channel.py`](openclaw_channel.py) | selected |
+| Keyless command-line provider | `call-a-model:claude_cli` | [`quest_ai_runner/adapters/claude_cli_provider.py`](claude_cli_provider.py) |  |
+| MCP gateway bridge transport | `talk-over-a-channel:openclaw` | [`quest_ai_runner/adapters/openclaw_channel.py`](openclaw_channel.py) | selected |
 
 ## Where to go next
 

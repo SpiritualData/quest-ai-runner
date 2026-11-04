@@ -8,13 +8,13 @@ This sub-intent arises as the implementation `watch-for-risk:overseer` of its pa
 
 ## How the solutions fit together
 
-watch-for-risk asks the model through call-a-model to oversee a run and brings a step only a person may take to that person through escalate-to-a-human. escalate-to-a-human files each decision in the Quest account through access-quest-operations.
+Overseer asks the model through Tiered model provider layer to oversee a run and brings a step only a person may take to that person through Human decision escalation channel. Human decision escalation channel files each decision in the Quest account through Quest account access.
 
 ## Solutions at a glance
 
-| Solution | Entry call | Selected implementation | Metric |
-|---|---|---|---|
-| `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | `quest_decision` | Escalation delivery and detail completeness |
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Human decision escalation channel | `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | `quest_decision` | Escalation delivery and detail completeness |
 
 ## Problems and ideals
 
@@ -24,7 +24,7 @@ watch-for-risk asks the model through call-a-model to oversee a run and brings a
 
 ## Metrics and their leaders
 
-- `metric-escalate-to-a-human`, Escalation delivery and detail completeness: leader `quest_decision_sink`, 15 of 15 cases
+- Escalation delivery and detail completeness (`metric-escalate-to-a-human`): leader `quest_decision_sink`, 15 of 15 cases
 
 ## Where to go next
 
@@ -42,17 +42,17 @@ watch-for-risk asks the model through call-a-model to oversee a run and brings a
 
 ### Solutions
 
-| Solution | Name | Selected | Metric |
+| Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| `escalate-to-a-human` | Human decision escalation channel | quest_decision | Escalation delivery and detail completeness |
+| Human decision escalation channel | `escalate-to-a-human` | quest_decision | Escalation delivery and detail completeness |
 
 ### Implementations
 
-| Implementation | Name | Where | Sub-intent |
+| Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| `escalate-to-a-human:quest_decision` | Decision-request sink | [quest_ai_runner/runner/quest_client.py](../runner/quest_client.py) |  |
-| `escalate-to-a-human:quest_decision_sink` | Fake-backend delivery check | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
+| Decision-request sink | `escalate-to-a-human:quest_decision` | [quest_ai_runner/runner/quest_client.py](../runner/quest_client.py) |  |
+| Fake-backend delivery check | `escalate-to-a-human:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
 
 ### Metrics
 
-- `metric-escalate-to-a-human`, Escalation delivery and detail completeness: `esoi run escalate_to_a_human --impl quest_decision_sink`
+- Escalation delivery and detail completeness (`metric-escalate-to-a-human`): `esoi run escalate_to_a_human --impl quest_decision_sink`

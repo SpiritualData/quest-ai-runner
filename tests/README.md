@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `tests`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `verify-offline:conftest` |  | [`tests/conftest.py`](conftest.py) |  |
+| Offline suite configuration | `verify-offline:conftest` | [`tests/conftest.py`](conftest.py) |  |
 
 ## Where to go next
 

@@ -2,11 +2,11 @@
 
 *ESOI arms kept in `evaluation/components/claude_code_ab/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `select-context:cold_claude` | Agent without hint | [`evaluation/components/claude_code_ab/impls/cold_claude.py`](cold_claude.py) |  |
-| `select-context:idf_hint` | Offline warm-hint builder | [`evaluation/components/claude_code_ab/impls/idf_hint.py`](idf_hint.py) |  |
-| `select-context:warm_claude` | Agent with hint | [`evaluation/components/claude_code_ab/impls/warm_claude.py`](warm_claude.py) |  |
+| Agent without hint | `select-context:cold_claude` | [`evaluation/components/claude_code_ab/impls/cold_claude.py`](cold_claude.py) |  |
+| Offline warm-hint builder | `select-context:idf_hint` | [`evaluation/components/claude_code_ab/impls/idf_hint.py`](idf_hint.py) |  |
+| Agent with hint | `select-context:warm_claude` | [`evaluation/components/claude_code_ab/impls/warm_claude.py`](warm_claude.py) |  |
 
 ## Where to go next
 

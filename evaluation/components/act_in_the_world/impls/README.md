@@ -2,10 +2,10 @@
 
 *ESOI arms kept in `evaluation/components/act_in_the_world/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `claim-reach:rules_only` | Rules only, no model (floor) | [`evaluation/components/act_in_the_world/impls/rules_only.py`](rules_only.py) |  |
-| `claim-reach:scripted_ideal` | Scripted ideal decisions, no model call (offline) | [`evaluation/components/act_in_the_world/impls/scripted_ideal.py`](scripted_ideal.py) |  |
+| Rules only, no model (floor) | `claim-reach:rules_only` | [`evaluation/components/act_in_the_world/impls/rules_only.py`](rules_only.py) |  |
+| Scripted ideal decisions, no model call (offline) | `claim-reach:scripted_ideal` | [`evaluation/components/act_in_the_world/impls/scripted_ideal.py`](scripted_ideal.py) |  |
 
 ## Where to go next
 

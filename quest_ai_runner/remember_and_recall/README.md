@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `remember-and-recall:recency_window
 
 ## How the solutions fit together
 
-remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, and persist-cards serves the last known listing while a backend is down with cache-cards. repair-a-card-store decides which sources deserve a card by asking choose-what-to-index before it rewrites anything. The remaining parts of the area do not use one another in code, so they are grouped here by purpose, the care of a card store that stays current, proportionate and findable. detect-stale-cards reports the cards that have drifted from their source file. bound-card-growth keeps a store proportionate to its sources. label-context-cards gives each card its labels. cards-from-files proposes the topic cards a lane indexes.
+Subconscious recalls the cards that match a request through Hub card store. Hub card store keeps the cards through Context card persistence backend, and Context card persistence backend serves the last known listing while a backend is down with Offline card cache and write outbox. Card store repair decides which sources deserve a card by asking Index scope decision before it rewrites anything. The remaining parts of the area do not use one another in code, so they are grouped here by purpose, the care of a card store that stays current, proportionate and findable. Source-change staleness detector reports the cards that have drifted from their source file. Card store growth prevention keeps a store proportionate to its sources. Card categories and metadata gives each card its labels. QAR topic cards for a folder proposes the topic cards a lane indexes.
 
 ## Diagram
 
@@ -16,11 +16,11 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Context card persistence backend<br/>persist-cards"]
-    s1["Offline card cache and write outbox<br/>cache-cards"]
-    s2["Card store repair<br/>repair-a-card-store"]
-    s3["Index scope decision: which folders and...<br/>choose-what-to-index"]
-    s4["QAR card repository as the hub card...<br/>card-store"]
+    s0["Context card persistence backend<br/><i>persist-cards</i>"]
+    s1["Offline card cache and write outbox<br/><i>cache-cards</i>"]
+    s2["Card store repair<br/><i>repair-a-card-store</i>"]
+    s3["Index scope decision<br/><i>choose-what-to-index</i>"]
+    s4["Hub card store<br/><i>card-store</i>"]
     s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s4
     s1 -->|"The stored listing with its update time, or none, and the..."| s0
     s3 -->|"A FolderGate: the set of corpus-relative folders no card..."| s2
@@ -28,17 +28,17 @@ flowchart LR
 
 ## Solutions at a glance
 
-| Solution | Entry call | Selected implementation | Metric |
-|---|---|---|---|
-| `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | `quest_api` | Card repository conformance across backends |
-| `detect-stale-cards` | no entry declared | `store_sha256` | Staleness detection precision and recall over mutation cases |
-| `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
-| `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
-| `repair-a-card-store` | no entry declared | `repository_tidy` | Cards per source-file group and duplicate share after a repair of an inflated store |
-| `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
-| `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
-| `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | `quest-api-cards` | none yet |
-| `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | `qar_topic_bootstrap` | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Context card persistence backend | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | `quest_api` | Card repository conformance across backends |
+| Source-change staleness detector | `detect-stale-cards` | no entry declared | `store_sha256` | Staleness detection precision and recall over mutation cases |
+| Offline card cache and write outbox | `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
+| Card store growth prevention | `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Card store repair | `repair-a-card-store` | no entry declared | `repository_tidy` | Cards per source-file group and duplicate share after a repair of an inflated store |
+| Index scope decision | `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
+| Card categories and metadata | `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
+| Hub card store | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | `quest-api-cards` | none yet |
+| QAR topic cards for a folder | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | `qar_topic_bootstrap` | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
 ## Problems and ideals
 
@@ -51,20 +51,20 @@ flowchart LR
 
 **Ideals**
 
-- `ideal-current-knowledge`, Current Knowledge: What the AI reads still matches the source it came from, and outages are loud but harmless.
-- `ideal-findable-knowledge`, Findable Knowledge: The knowledge that bears on a question is found whatever words it uses.
-- `ideal-proportionate-store`, Proportionate Card Store: A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
-- `ideal-proportionate-index-scope`, Proportionate Index Scope: The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the...
+- Current Knowledge (`ideal-current-knowledge`): What the AI reads still matches the source it came from, and outages are loud but harmless.
+- Findable Knowledge (`ideal-findable-knowledge`): The knowledge that bears on a question is found whatever words it uses.
+- Proportionate Card Store (`ideal-proportionate-store`): A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
+- Proportionate Index Scope (`ideal-proportionate-index-scope`): The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the...
 
 ## Metrics and their leaders
 
-- `metric-persist-cards`, Card repository conformance across backends: leader `filesystem`, 14 of 14 cases
-- `metric-detect-stale-cards`, Staleness detection precision and recall over mutation cases: leader `store_sha256`, 5 of 6 cases
-- `metric-cache-cards`, Outage resilience of the card repository: leader `file_cache`, 12 of 12 cases
-- `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: leader `bootstrap_guards`, 12 of 12 cases
-- `metric-repair-a-card-store`, Cards per source-file group and duplicate share after a repair of an inflated store: leader `bootstrap_guards`, 12 of 12 cases
-- `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: leader `risk_gate`, 16 of 16 cases
-- `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: leader `fast_model_labels_fast`, 10 of 11 cases
+- Card repository conformance across backends (`metric-persist-cards`): leader `filesystem`, 14 of 14 cases
+- Staleness detection precision and recall over mutation cases (`metric-detect-stale-cards`): leader `store_sha256`, 5 of 6 cases
+- Outage resilience of the card repository (`metric-cache-cards`): leader `file_cache`, 12 of 12 cases
+- Cards per source-file group after repeated passes, for the guards that prevent growth (`metric-bound-card-growth`): leader `bootstrap_guards`, 12 of 12 cases
+- Cards per source-file group and duplicate share after a repair of an inflated store (`metric-repair-a-card-store`): leader `bootstrap_guards`, 12 of 12 cases
+- Copies kept out with real material kept in, by review availability (`metric-choose-what-to-index`): leader `risk_gate`, 16 of 16 cases
+- Retrieval hits and category precision per unit of cost (`metric-label-context-cards`): leader `fast_model_labels_fast`, 10 of 11 cases
 
 ## Where to go next
 
@@ -86,60 +86,60 @@ flowchart LR
 
 ### Ideals
 
-- `ideal-current-knowledge`, Current Knowledge: What the AI reads still matches the source it came from, and outages are loud but harmless.
-- `ideal-findable-knowledge`, Findable Knowledge: The knowledge that bears on a question is found whatever words it uses.
-- `ideal-proportionate-store`, Proportionate Card Store: A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
-- `ideal-proportionate-index-scope`, Proportionate Index Scope: The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
+- Current Knowledge (`ideal-current-knowledge`): What the AI reads still matches the source it came from, and outages are loud but harmless.
+- Findable Knowledge (`ideal-findable-knowledge`): The knowledge that bears on a question is found whatever words it uses.
+- Proportionate Card Store (`ideal-proportionate-store`): A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
+- Proportionate Index Scope (`ideal-proportionate-index-scope`): The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
 
 ### Solutions
 
-| Solution | Name | Selected | Metric |
+| Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| `persist-cards` | Context card persistence backend | quest_api | Card repository conformance across backends |
-| `detect-stale-cards` | Source-change staleness detector | store_sha256 | Staleness detection precision and recall over mutation cases |
-| `cache-cards` | Offline card cache and write outbox | file | Outage resilience of the card repository |
-| `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
-| `repair-a-card-store` | Card store repair | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
-| `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
-| `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
-| `card-store` | QAR card repository as the hub card store | quest-api-cards | none yet |
-| `cards-from-files` | QAR topic cards for a folder | qar_topic_bootstrap | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Context card persistence backend | `persist-cards` | quest_api | Card repository conformance across backends |
+| Source-change staleness detector | `detect-stale-cards` | store_sha256 | Staleness detection precision and recall over mutation cases |
+| Offline card cache and write outbox | `cache-cards` | file | Outage resilience of the card repository |
+| Card store growth prevention | `bound-card-growth` | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Card store repair | `repair-a-card-store` | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
+| Index scope decision | `choose-what-to-index` | risk_gate | Copies kept out with real material kept in, by review availability |
+| Card categories and metadata | `label-context-cards` | fast_model_labels | Retrieval hits and category precision per unit of cost |
+| Hub card store | `card-store` | quest-api-cards | none yet |
+| QAR topic cards for a folder | `cards-from-files` | qar_topic_bootstrap | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
 ### Implementations
 
-| Implementation | Name | Where | Sub-intent |
+| Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| `persist-cards:filesystem` | Atomic JSON file repository | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
-| `persist-cards:qdrant` | Vector database repository | [quest_ai_runner/remember_and_recall/qdrant_card_repository.py](qdrant_card_repository.py) |  |
-| `persist-cards:quest_api` | Hosted card API repository | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
-| `detect-stale-cards:store_sha256` | Content-hash fingerprint check | [evaluation/components/staleness/impls/store_sha256.py](../../evaluation/components/staleness/impls/store_sha256.py) |  |
-| `detect-stale-cards:mtime_size` | Timestamp-and-size baseline | [evaluation/components/staleness/impls/mtime_size.py](../../evaluation/components/staleness/impls/mtime_size.py) |  |
-| `cache-cards:null` | Card repository with a cache seam and a null cache | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
-| `cache-cards:file` | Durable file cache | [quest_ai_runner/remember_and_recall/card_cache_file.py](card_cache_file.py) |  |
-| `cache-cards:null_cache` | No-op cache (shipped default of the seam) | [evaluation/components/cache_cards/impls/null_cache.py](../../evaluation/components/cache_cards/impls/null_cache.py) |  |
-| `cache-cards:memory_cache` | In-process memory cache | [evaluation/components/cache_cards/impls/memory_cache.py](../../evaluation/components/cache_cards/impls/memory_cache.py) |  |
-| `cache-cards:file_cache` | Durable file cache under outage scenarios | [evaluation/components/cache_cards/impls/file_cache.py](../../evaluation/components/cache_cards/impls/file_cache.py) |  |
-| `repair-a-card-store:quarantine_tool` | Card quarantine tool | [evaluation/components/card_growth/impls/quarantine_tool.py](../../evaluation/components/card_growth/impls/quarantine_tool.py) |  |
-| `bound-card-growth:no_cleanup` | Copy mode with no guard | [evaluation/components/card_growth/impls/no_cleanup.py](../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
-| `bound-card-growth:bootstrap_guards` | Bootstrap guards against re-import | [evaluation/components/card_growth/impls/bootstrap_guards.py](../../evaluation/components/card_growth/impls/bootstrap_guards.py) |  |
-| `choose-what-to-index:risk_gate` | Risk-gated folder review | [evaluation/components/choose_what_to_index/impls/risk_gate.py](../../evaluation/components/choose_what_to_index/impls/risk_gate.py) |  |
-| `choose-what-to-index:review_only` | Model-judged folder review before the gate | [evaluation/components/choose_what_to_index/impls/review_only.py](../../evaluation/components/choose_what_to_index/impls/review_only.py) |  |
-| `choose-what-to-index:index_everything` | Index everything (broken baseline) | [evaluation/components/choose_what_to_index/broken/index_everything.py](../../evaluation/components/choose_what_to_index/broken/index_everything.py) |  |
-| `repair-a-card-store:repository_tidy` | Repository tidy | [quest_ai_runner/adapters/card_store_tidy.py](../adapters/card_store_tidy.py) |  |
-| `repair-a-card-store:local_folder_tidy` | Tidy at open of a local folder | [quest_ai_runner/adapters/context_store_heal.py](../adapters/context_store_heal.py) |  |
-| `repair-a-card-store:no_cleanup` | Store as copy mode leaves it | [evaluation/components/card_growth/impls/no_cleanup.py](../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
-| `label-context-cards:fast_model_labels` | Fast-tier model writes metadata and categories (today) | [quest_ai_runner/remember_and_recall/card_metadata_generator.py](card_metadata_generator.py) |  |
-| `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) | [evaluation/components/label_context_cards/impls/path_rules.py](../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
-| `card-store:qar-card-repository` | qar-card-repository | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
-| `card-store:quest-api-cards` | Quest backend card API from the environment | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
-| `cards-from-files:qar_topic_bootstrap` | QAR topic bootstrap | [quest_ai_runner/remember_and_recall/qar_topic_bootstrap.py](qar_topic_bootstrap.py) |  |
+| Atomic JSON file repository | `persist-cards:filesystem` | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
+| Vector database repository | `persist-cards:qdrant` | [quest_ai_runner/remember_and_recall/qdrant_card_repository.py](qdrant_card_repository.py) |  |
+| Hosted card API repository | `persist-cards:quest_api` | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
+| Content-hash fingerprint check | `detect-stale-cards:store_sha256` | [evaluation/components/staleness/impls/store_sha256.py](../../evaluation/components/staleness/impls/store_sha256.py) |  |
+| Timestamp-and-size baseline | `detect-stale-cards:mtime_size` | [evaluation/components/staleness/impls/mtime_size.py](../../evaluation/components/staleness/impls/mtime_size.py) |  |
+| Card repository with a cache seam and a null cache | `cache-cards:null` | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
+| Durable file cache | `cache-cards:file` | [quest_ai_runner/remember_and_recall/card_cache_file.py](card_cache_file.py) |  |
+| No-op cache (shipped default of the seam) | `cache-cards:null_cache` | [evaluation/components/cache_cards/impls/null_cache.py](../../evaluation/components/cache_cards/impls/null_cache.py) |  |
+| In-process memory cache | `cache-cards:memory_cache` | [evaluation/components/cache_cards/impls/memory_cache.py](../../evaluation/components/cache_cards/impls/memory_cache.py) |  |
+| Durable file cache under outage scenarios | `cache-cards:file_cache` | [evaluation/components/cache_cards/impls/file_cache.py](../../evaluation/components/cache_cards/impls/file_cache.py) |  |
+| Card quarantine tool | `repair-a-card-store:quarantine_tool` | [evaluation/components/card_growth/impls/quarantine_tool.py](../../evaluation/components/card_growth/impls/quarantine_tool.py) |  |
+| Copy mode with no guard | `bound-card-growth:no_cleanup` | [evaluation/components/card_growth/impls/no_cleanup.py](../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
+| Bootstrap guards against re-import | `bound-card-growth:bootstrap_guards` | [evaluation/components/card_growth/impls/bootstrap_guards.py](../../evaluation/components/card_growth/impls/bootstrap_guards.py) |  |
+| Risk-gated folder review | `choose-what-to-index:risk_gate` | [evaluation/components/choose_what_to_index/impls/risk_gate.py](../../evaluation/components/choose_what_to_index/impls/risk_gate.py) |  |
+| Model-judged folder review before the gate | `choose-what-to-index:review_only` | [evaluation/components/choose_what_to_index/impls/review_only.py](../../evaluation/components/choose_what_to_index/impls/review_only.py) |  |
+| Index everything (broken baseline) | `choose-what-to-index:index_everything` | [evaluation/components/choose_what_to_index/broken/index_everything.py](../../evaluation/components/choose_what_to_index/broken/index_everything.py) |  |
+| Repository tidy | `repair-a-card-store:repository_tidy` | [quest_ai_runner/adapters/card_store_tidy.py](../adapters/card_store_tidy.py) |  |
+| Tidy at open of a local folder | `repair-a-card-store:local_folder_tidy` | [quest_ai_runner/adapters/context_store_heal.py](../adapters/context_store_heal.py) |  |
+| Store as copy mode leaves it | `repair-a-card-store:no_cleanup` | [evaluation/components/card_growth/impls/no_cleanup.py](../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
+| Fast-tier model writes metadata and categories (today) | `label-context-cards:fast_model_labels` | [quest_ai_runner/remember_and_recall/card_metadata_generator.py](card_metadata_generator.py) |  |
+| Path and title rules, no model call (floor, proposed) | `label-context-cards:path_rules` | [evaluation/components/label_context_cards/impls/path_rules.py](../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
+| QAR card repository | `card-store:qar-card-repository` | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
+| Quest backend card API from the environment | `card-store:quest-api-cards` | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
+| QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/remember_and_recall/qar_topic_bootstrap.py](qar_topic_bootstrap.py) |  |
 
 ### Metrics
 
-- `metric-persist-cards`, Card repository conformance across backends: `esoi run persist_cards --impl quest_api`
-- `metric-detect-stale-cards`, Staleness detection precision and recall over mutation cases: `esoi run staleness --impl store_sha256`
-- `metric-cache-cards`, Outage resilience of the card repository: `esoi run cache_cards --impl file_cache`
-- `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
-- `metric-repair-a-card-store`, Cards per source-file group and duplicate share after a repair of an inflated store: `esoi run card_growth --impl repository_tidy; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
-- `metric-choose-what-to-index`, Copies kept out with real material kept in, by review availability: `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
-- `metric-label-context-cards`, Retrieval hits and category precision per unit of cost: `esoi run label_context_cards --impl fast_model_labels`
+- Card repository conformance across backends (`metric-persist-cards`): `esoi run persist_cards --impl quest_api`
+- Staleness detection precision and recall over mutation cases (`metric-detect-stale-cards`): `esoi run staleness --impl store_sha256`
+- Outage resilience of the card repository (`metric-cache-cards`): `esoi run cache_cards --impl file_cache`
+- Cards per source-file group after repeated passes, for the guards that prevent growth (`metric-bound-card-growth`): `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
+- Cards per source-file group and duplicate share after a repair of an inflated store (`metric-repair-a-card-store`): `esoi run card_growth --impl repository_tidy; esoi run card_growth --impl quarantine_tool; esoi run card_growth --impl no_cleanup`
+- Copies kept out with real material kept in, by review availability (`metric-choose-what-to-index`): `esoi run choose_what_to_index --impl risk_gate; esoi run choose_what_to_index --impl review_only`
+- Retrieval hits and category precision per unit of cost (`metric-label-context-cards`): `esoi run label_context_cards --impl fast_model_labels`

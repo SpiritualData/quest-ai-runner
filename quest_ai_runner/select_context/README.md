@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `do-grounded-work:library` of its p
 
 ## How the solutions fit together
 
-select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. This area arises from the library implementation that wires every area through one configuration (do-grounded-work:library, the top intent's implementation), because no built implementation of one solution of the parent composes the assemblers: the lane's configuration chooses them. select-context finds a card by what it means, not by its words, through index-by-meaning. resolve-references follows the pointer of a card to the person's current notes and files. search-cards-and-specs ranks the cards of a run together with the specification records of a repository in one list.
+Context card selector chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. This area arises from the library implementation that wires every area through one configuration (do-grounded-work:library, the top intent's implementation), because no built implementation of one solution of the parent composes the assemblers: the lane's configuration chooses them. The Semantic vector index finds a card by what it means, not by its words. Fail-safe card reference resolver follows the pointer of a card to the person's current notes and files. Unified card and specification search ranks the cards of a run together with the specification records of a repository in one list.
 
 ## Diagram
 
@@ -44,7 +44,7 @@ flowchart LR
 
 ## Metrics and their leaders
 
-- Context selection ranking accuracy and card-quality outcome (`metric-select-context`): leader `blind_grep`, 86 of 185 cases
+- Context selection ranking accuracy and card-quality outcome (`metric-select-context`): leader `hub_feature_rerank`, 115 of 185 cases
 - Pointer-resolution safety over offline cases (`metric-resolve-references`): leader `card_resolvers`, 16 of 16 cases
 - Mixed card and specification selection, with both existing selection metrics held (`metric-search-cards-and-specs`): leader `solutions_and_problems_with_links`, 14 of 17 cases
 - Semantic recall and query latency on the synthetic handbook (`metric-index-by-meaning`): leader `memory_cosine`, 16 of 17 cases
@@ -108,17 +108,17 @@ flowchart LR
 | The hub's per-file card arm | `select-context:hub_per_file_symbols` | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
 | One card per folder, from the hub's card helpers | `select-context:hub_folder_cards` | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
 | Qdrant-backed vector store | `index-by-meaning:qdrant` | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](../remember_and_recall/qdrant_vector_store.py) |  |
-| Hub arm: BM25 over unit bodies | `select-context:hub_bm25_body` | [evaluation/components/context_selection/impls/hub_bm25_body.py](../../evaluation/components/context_selection/impls/hub_bm25_body.py) |  |
-| Hub arm: Fielded BM25 over title, path and body | `select-context:hub_bm25_fielded` | [evaluation/components/context_selection/impls/hub_bm25_fielded.py](../../evaluation/components/context_selection/impls/hub_bm25_fielded.py) |  |
-| Hub arm: BM25 over whole files | `select-context:hub_bm25_whole_files` | [evaluation/components/context_selection/impls/hub_bm25_whole_files.py](../../evaluation/components/context_selection/impls/hub_bm25_whole_files.py) |  |
-| Hub arm: Dense retrieval with the local bge-small embedder | `select-context:hub_dense_bge_small` | [evaluation/components/context_selection/impls/hub_dense_bge_small.py](../../evaluation/components/context_selection/impls/hub_dense_bge_small.py) |  |
-| Hub arm: Latent semantic indexing | `select-context:hub_lsi` | [evaluation/components/context_selection/impls/hub_lsi.py](../../evaluation/components/context_selection/impls/hub_lsi.py) |  |
-| Hub arm: BM25 and dense fused by reciprocal rank | `select-context:hub_hybrid_rrf` | [evaluation/components/context_selection/impls/hub_hybrid_rrf.py](../../evaluation/components/context_selection/impls/hub_hybrid_rrf.py) |  |
-| Hub arm: Hybrid reranked by weighted features and priors | `select-context:hub_feature_rerank` | [evaluation/components/context_selection/impls/hub_feature_rerank.py](../../evaluation/components/context_selection/impls/hub_feature_rerank.py) |  |
-| Hub arm: Feature rerank without link and co-change priors | `select-context:hub_feature_rerank_no_priors` | [evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py](../../evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py) |  |
-| Hub arm: Hybrid that returns nothing when the corpus does not answer | `select-context:hub_abstaining_hybrid` | [evaluation/components/context_selection/impls/hub_abstaining_hybrid.py](../../evaluation/components/context_selection/impls/hub_abstaining_hybrid.py) |  |
-| Hub arm: Hybrid reranked by a model trained on past commits (repository) or on earlier private cases | `select-context:hub_learned_rerank` | [evaluation/components/context_selection/impls/hub_learned_rerank.py](../../evaluation/components/context_selection/impls/hub_learned_rerank.py) |  |
-| Hub arm: Learned reranker that returns nothing when the corpus does not answer | `select-context:hub_abstaining_learned` | [evaluation/components/context_selection/impls/hub_abstaining_learned.py](../../evaluation/components/context_selection/impls/hub_abstaining_learned.py) |  |
+| BM25 over unit bodies (hub) | `select-context:hub_bm25_body` | [evaluation/components/context_selection/impls/hub_bm25_body.py](../../evaluation/components/context_selection/impls/hub_bm25_body.py) |  |
+| Fielded BM25 over title, path and body (hub) | `select-context:hub_bm25_fielded` | [evaluation/components/context_selection/impls/hub_bm25_fielded.py](../../evaluation/components/context_selection/impls/hub_bm25_fielded.py) |  |
+| BM25 over whole files (hub) | `select-context:hub_bm25_whole_files` | [evaluation/components/context_selection/impls/hub_bm25_whole_files.py](../../evaluation/components/context_selection/impls/hub_bm25_whole_files.py) |  |
+| Dense retrieval with the local bge-small embedder (hub) | `select-context:hub_dense_bge_small` | [evaluation/components/context_selection/impls/hub_dense_bge_small.py](../../evaluation/components/context_selection/impls/hub_dense_bge_small.py) |  |
+| Latent semantic indexing (hub) | `select-context:hub_lsi` | [evaluation/components/context_selection/impls/hub_lsi.py](../../evaluation/components/context_selection/impls/hub_lsi.py) |  |
+| BM25 and dense fused by reciprocal rank (hub) | `select-context:hub_hybrid_rrf` | [evaluation/components/context_selection/impls/hub_hybrid_rrf.py](../../evaluation/components/context_selection/impls/hub_hybrid_rrf.py) |  |
+| Hybrid reranked by weighted features and priors (hub) | `select-context:hub_feature_rerank` | [evaluation/components/context_selection/impls/hub_feature_rerank.py](../../evaluation/components/context_selection/impls/hub_feature_rerank.py) |  |
+| Feature rerank without link and co-change priors (hub) | `select-context:hub_feature_rerank_no_priors` | [evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py](../../evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py) |  |
+| Hybrid that returns nothing when the corpus does not answer (hub) | `select-context:hub_abstaining_hybrid` | [evaluation/components/context_selection/impls/hub_abstaining_hybrid.py](../../evaluation/components/context_selection/impls/hub_abstaining_hybrid.py) |  |
+| Hybrid reranked by a model trained on past commits (repository) or on earlier private cases (hub) | `select-context:hub_learned_rerank` | [evaluation/components/context_selection/impls/hub_learned_rerank.py](../../evaluation/components/context_selection/impls/hub_learned_rerank.py) |  |
+| Learned reranker that returns nothing when the corpus does not answer (hub) | `select-context:hub_abstaining_learned` | [evaluation/components/context_selection/impls/hub_abstaining_learned.py](../../evaluation/components/context_selection/impls/hub_abstaining_learned.py) |  |
 
 ### Metrics
 

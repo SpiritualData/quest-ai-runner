@@ -4,9 +4,9 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `track-usage-and-cost:qar_usage` | Live usage evaluation arm | [`evaluation/components/track_usage_and_cost/impls/qar_usage.py`](qar_usage.py) | selected |
+| Live usage evaluation arm | `track-usage-and-cost:qar_usage` | [`evaluation/components/track_usage_and_cost/impls/qar_usage.py`](qar_usage.py) | selected |
 
 ## Where to go next
 

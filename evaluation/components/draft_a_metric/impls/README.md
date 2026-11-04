@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/draft_a_metric/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `draft-a-metric:ask_owner` | Ask the owner to write it (floor, proposed) | [`evaluation/components/draft_a_metric/impls/ask_owner.py`](ask_owner.py) |  |
+| Ask the owner to write it (floor, proposed) | `draft-a-metric:ask_owner` | [`evaluation/components/draft_a_metric/impls/ask_owner.py`](ask_owner.py) |  |
 
 ## Where to go next
 

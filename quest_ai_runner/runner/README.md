@@ -4,13 +4,13 @@
 
 ## Implementations
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `run-queued-tasks:poller` | Task poller and claimer | [`quest_ai_runner/runner/poller.py`](poller.py) |  |
-| `run-queued-tasks:executor` | Single-task executor | [`quest_ai_runner/runner/executor.py`](executor.py) |  |
-| `run-queued-tasks:personas` | Configured persona resolver | [`quest_ai_runner/runner/personas.py`](personas.py) |  |
-| `run-queued-tasks:quest_folder_sync` | Work-folder sync | [`quest_ai_runner/runner/quest_folder_sync.py`](quest_folder_sync.py) |  |
-| `run-queued-tasks:lane` | Shared lane entry point | [`quest_ai_runner/runner/lane.py`](lane.py) |  |
+| Task poller and claimer | `run-queued-tasks:poller` | [`quest_ai_runner/runner/poller.py`](poller.py) |  |
+| Single-task executor | `run-queued-tasks:executor` | [`quest_ai_runner/runner/executor.py`](executor.py) |  |
+| Configured persona resolver | `run-queued-tasks:personas` | [`quest_ai_runner/runner/personas.py`](personas.py) |  |
+| Work-folder sync | `run-queued-tasks:quest_folder_sync` | [`quest_ai_runner/runner/quest_folder_sync.py`](quest_folder_sync.py) |  |
+| Shared lane entry point | `run-queued-tasks:lane` | [`quest_ai_runner/runner/lane.py`](lane.py) |  |
 
 ## Where to go next
 

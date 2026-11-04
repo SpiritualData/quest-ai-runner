@@ -8,7 +8,7 @@ Opportunities: Other products that need an AI which works from a person's own go
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop. It asks the model through call-a-model, works in the person's Quest account through access-quest-operations and takes in requests through take-in-the-world. It reasons step by step through reason-and-answer, recalls what a request needs through remember-and-recall and acts on the account through act-as-the-body. It holds its work to the metric that serves it through think-critically, has every run watched through watch-for-risk and keeps the long view across turns through hold-the-intents. It stays comparable by metric through keep-it-generic and answers questions about the world through know-the-world. remember-and-recall recalls the cards that match a request through card-store. call-a-model accounts for every call through track-usage-and-cost. reason-and-answer sends the prompt of each step to the model through call-a-model. watch-for-risk has the model oversee a run through call-a-model. run-queued-tasks claims, runs and reports a queued task, asking the model through call-a-model and working in the account through access-quest-operations. It writes each prompt as a registered spec with an owner and a metric through justify-model-calls. act-as-the-body reads and changes the quest through persist-cards, access-quest-operations and run-queued-tasks. hold-the-intents saves what it learned through persist-cards. take-in-the-world hears from a live channel through talk-over-a-channel.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and the Grounded goal agent is that loop. It asks the model through the Tiered model provider layer, works in the person's Quest account through Quest account access and takes in requests through Request intake. It reasons step by step through Mind, recalls what a request needs through Subconscious and acts on the account through Body. It holds its work to the metric that serves it through Critical thinking, has every run watched through Overseer and keeps the long view across turns through Higher mind. It stays comparable by metric through Evolve by metric and answers questions beyond the person's own material through Science. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind sends the prompt of each step to the model through Tiered model provider layer. Overseer has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport.
 
 ## Diagram
 
@@ -16,22 +16,22 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Tiered model provider layer<br/>call-a-model"]
-    s1["Live messaging channel transport<br/>talk-over-a-channel"]
-    s2["Overseer: risk management that raises...<br/>watch-for-risk"]
-    s3["Cost estimation, daily budget and host...<br/>track-usage-and-cost"]
-    s4["Evolve by metric<br/>keep-it-generic"]
-    s5["Science: evidence-weighted knowledge...<br/>know-the-world"]
-    s6["Grounded goal agent: the engine that...<br/>do-grounded-work"]
-    s7["Queued-task runner lane<br/>run-queued-tasks"]
-    s8["Mind: one goal-focused working stream...<br/>reason-and-answer"]
-    s9["Body: the host's data model as the...<br/>act-as-the-body"]
-    s10["Higher mind: an AI representative's...<br/>hold-the-intents"]
-    s11["Critical thinking: the enforcer of ESOI...<br/>think-critically"]
-    s12["access-quest-operations<br/>access-quest-operations"]
-    s13["take-in-the-world: the ways a request...<br/>take-in-the-world"]
-    s14["Subconscious: the person's own...<br/>remember-and-recall"]
-    s15["Justified model calls<br/>justify-model-calls"]
+    s0["Tiered model provider layer<br/><i>call-a-model</i>"]
+    s1["Live messaging channel transport<br/><i>talk-over-a-channel</i>"]
+    s2["Overseer<br/><i>watch-for-risk</i>"]
+    s3["Cost estimation, daily budget and host...<br/><i>track-usage-and-cost</i>"]
+    s4["Evolve by metric<br/><i>keep-it-generic</i>"]
+    s5["Science<br/><i>know-the-world</i>"]
+    s6["Grounded goal agent<br/><i>do-grounded-work</i>"]
+    s7["Queued-task runner<br/><i>run-queued-tasks</i>"]
+    s8["Mind<br/><i>reason-and-answer</i>"]
+    s9["Body<br/><i>act-as-the-body</i>"]
+    s10["Higher mind<br/><i>hold-the-intents</i>"]
+    s11["Critical thinking<br/><i>think-critically</i>"]
+    s12["Quest account access<br/><i>access-quest-operations</i>"]
+    s13["Request intake<br/><i>take-in-the-world</i>"]
+    s14["Subconscious<br/><i>remember-and-recall</i>"]
+    s15["Justified model calls<br/><i>justify-model-calls</i>"]
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s2
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s6
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s7
@@ -61,24 +61,24 @@ flowchart LR
 
 ## Solutions at a glance
 
-| Solution | Entry call | Selected implementation | Metric |
-|---|---|---|---|
-| `call-a-model` | `quest_ai_runner.run("call-a-model", ...)` | `multi_provider` | Provider routing, fallback, retry and cost correctness |
-| `talk-over-a-channel` | `quest_ai_runner.run("talk-over-a-channel")` | `openclaw` | Channel transport conformance to the gateway wire contract |
-| `watch-for-risk` | `quest_ai_runner.run("watch-for-risk", 'delete the old backup folder')` | `overseer` | Overseer digest evidence and signal correctness on labelled scenarios |
-| `track-usage-and-cost` | no entry declared | `qar_usage` | Cost, budget and resource-guard correctness |
-| `keep-it-generic` | `quest_ai_runner.run("keep-it-generic", ['examplevendor'])` | `structure-library` | Parts selected by measurement, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
-| `know-the-world` | `quest_ai_runner.run("know-the-world", 'meditation and attention')` | `web_with_support_check` | Supported and calibrated answers to world questions |
-| `do-grounded-work` | `quest_ai_runner.run("do-grounded-work", 'What should I work on first this week?')` | `library` | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
-| `run-queued-tasks` | `quest_ai_runner.run("run-queued-tasks", 'team-1')` | `qar_runner` | Task lifecycle correctness over offline cases |
-| `reason-and-answer` | `quest_ai_runner.run("reason-and-answer", ...)` | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
-| `act-as-the-body` | `quest_ai_runner.run("act-as-the-body", 'NOTES.md')` | `card_and_reads` | Account-state consistency across scripted sessions |
-| `hold-the-intents` | `quest_ai_runner.run("hold-the-intents", ...)` | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
-| `think-critically` | `quest_ai_runner.run("think-critically", ...)` | `deep_runs_only` | Requests held to their ESOI metric by code |
-| `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | Parity of Quest operations across access points |
-| `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | `ways_in` | Ways in that pass their own metric |
-| `remember-and-recall` | `quest_ai_runner.run("remember-and-recall", 'rust release')` | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
-| `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Tiered model provider layer | `call-a-model` | `quest_ai_runner.run("call-a-model", ...)` | `multi_provider` | Provider routing, fallback, retry and cost correctness |
+| Live messaging channel transport | `talk-over-a-channel` | `quest_ai_runner.run("talk-over-a-channel")` | `openclaw` | Channel transport conformance to the gateway wire contract |
+| Overseer | `watch-for-risk` | `quest_ai_runner.run("watch-for-risk", 'delete the old backup folder')` | `overseer` | Overseer digest evidence and signal correctness on labelled scenarios |
+| Cost estimation, daily budget and host load guard | `track-usage-and-cost` | no entry declared | `qar_usage` | Cost, budget and resource-guard correctness |
+| Evolve by metric | `keep-it-generic` | `quest_ai_runner.run("keep-it-generic", ['examplevendor'])` | `structure-library` | Parts selected by measurement, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs |
+| Science | `know-the-world` | `quest_ai_runner.run("know-the-world", 'meditation and attention')` | `web_with_support_check` | Supported and calibrated answers to world questions |
+| Grounded goal agent | `do-grounded-work` | `quest_ai_runner.run("do-grounded-work", 'What should I work on first this week?')` | `library` | QAR overall score, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
+| Queued-task runner | `run-queued-tasks` | `quest_ai_runner.run("run-queued-tasks", 'team-1')` | `qar_runner` | Task lifecycle correctness over offline cases |
+| Mind | `reason-and-answer` | `quest_ai_runner.run("reason-and-answer", ...)` | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
+| Body | `act-as-the-body` | `quest_ai_runner.run("act-as-the-body", 'NOTES.md')` | `card_and_reads` | Account-state consistency across scripted sessions |
+| Higher mind | `hold-the-intents` | `quest_ai_runner.run("hold-the-intents", ...)` | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| Critical thinking | `think-critically` | `quest_ai_runner.run("think-critically", ...)` | `deep_runs_only` | Requests held to their ESOI metric by code |
+| Quest account access | `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | Parity of Quest operations across access points |
+| Request intake | `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | `ways_in` | Ways in that pass their own metric |
+| Subconscious | `remember-and-recall` | `quest_ai_runner.run("remember-and-recall", 'rust release')` | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
+| Justified model calls | `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
 
 ## Problems and ideals
 
@@ -98,30 +98,30 @@ flowchart LR
 
 **Ideals**
 
-- `QI5`, Metric-led evolution: Every part of QAR improves as the state of the art moves, with the best implementation chosen by its metric.
-- `QI6`, Visible value: What AI work costs and how good it is are known before they surprise anyone.
-- `ideal-proportionate-routing`, Proportionate Routing: Each message gets the cheapest handling that still gets the right outcome.
-- `ideal-exact-change`, Exact Change: The final state matches the request: everything asked, nothing else, once.
-- `ideal-verified-completion`, Verified Completion: A report of done is true.
-- `ideal-informed-consent`, Informed Consent: A human-only step reaches a person with enough detail to decide, and the AI stops until they do.
-- `ideal-predictable-spend`, Predictable Spend: Cost is known before it is spent and bounded while it is spent.
-- `ideal-right-sized-model`, Right-Sized Model: The cheapest model that can do the task does it, and waiting beats failing.
-- `ideal-dependable-delivery`, Dependable Delivery: What is handed to the system arrives once, in order, and is accounted for.
-- `ideal-weighed-knowledge`, Weighed World Knowledge: A claim about the world comes with where it came from and how strong its evidence is, and the best evidence source available is consulted before the cheapest.
+- Metric-led evolution (`QI5`): Every part of QAR improves as the state of the art moves, with the best implementation chosen by its metric.
+- Visible value (`QI6`): What AI work costs and how good it is are known before they surprise anyone.
+- Proportionate Routing (`ideal-proportionate-routing`): Each message gets the cheapest handling that still gets the right outcome.
+- Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+- Verified Completion (`ideal-verified-completion`): A report of done is true.
+- Informed Consent (`ideal-informed-consent`): A human-only step reaches a person with enough detail to decide, and the AI stops until they do.
+- Predictable Spend (`ideal-predictable-spend`): Cost is known before it is spent and bounded while it is spent.
+- Right-Sized Model (`ideal-right-sized-model`): The cheapest model that can do the task does it, and waiting beats failing.
+- Dependable Delivery (`ideal-dependable-delivery`): What is handed to the system arrives once, in order, and is accounted for.
+- Weighed World Knowledge (`ideal-weighed-knowledge`): A claim about the world comes with where it came from and how strong its evidence is, and the best evidence source available is consulted before the cheapest.
 - and 27 more: all 37 are in [ideals](#ideals) of the full record below
 
 ## Metrics and their leaders
 
-- `metric-call-a-model`, Provider routing, fallback, retry and cost correctness: leader `multi_provider`, 56 of 56 cases
-- `metric-talk-over-a-channel`, Channel transport conformance to the gateway wire contract: leader `openclaw_bridge`, 20 of 20 cases
-- `metric-watch-a-run`, Overseer digest evidence and signal correctness on labelled scenarios: leader `digest_probe`, 16 of 16 cases
-- `metric-track-usage-and-cost`, Cost, budget and resource-guard correctness: leader `qar_usage`, 38 of 39 cases
-- `QME7`, Parts selected by measurement: leader `structure_library`, 13 of 17 cases
-- `metric-know-the-world`, Supported and calibrated answers to world questions: leader `web_with_support_check`, 9 of 9 cases
-- `metric-hub-of-hubs`, Hub of hubs: coverage, integration by configuration, research freshness, code structure: leader `registry_scan`, 244 of 271 cases
-- `QME9`, Hub of hubs: leader `registry_scan`, 244 of 271 cases
-- `metric-metric-earns-its-run`, Correct selection decisions over the evolve-by-metric cases: leader `structure_library`, 13 of 17 cases
-- `metric-solution-coherence`, Intents whose solutions one paragraph and one diagram explain as the code builds them
+- Provider routing, fallback, retry and cost correctness (`metric-call-a-model`): leader `multi_provider`, 56 of 56 cases
+- Channel transport conformance to the gateway wire contract (`metric-talk-over-a-channel`): leader `openclaw_bridge`, 20 of 20 cases
+- Overseer digest evidence and signal correctness on labelled scenarios (`metric-watch-a-run`): leader `digest_probe`, 16 of 16 cases
+- Cost, budget and resource-guard correctness (`metric-track-usage-and-cost`): leader `qar_usage`, 38 of 39 cases
+- Parts selected by measurement (`QME7`): leader `structure_library`, 13 of 17 cases
+- Supported and calibrated answers to world questions (`metric-know-the-world`): leader `web_with_support_check`, 9 of 9 cases
+- Hub of hubs (`metric-hub-of-hubs`): leader `registry_scan`, 244 of 271 cases
+- Hub of hubs (`QME9`): leader `registry_scan`, 244 of 271 cases
+- Correct selection decisions over the evolve-by-metric cases (`metric-metric-earns-its-run`): leader `structure_library`, 13 of 17 cases
+- Intents whose solutions one paragraph and one diagram explain as the code builds them (`metric-solution-coherence`)
 - and 17 more: all 27 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
@@ -183,154 +183,154 @@ flowchart LR
 
 ### Ideals
 
-- `QI5`, Metric-led evolution: Every part of QAR improves as the state of the art moves, with the best implementation chosen by its metric.
-- `QI6`, Visible value: What AI work costs and how good it is are known before they surprise anyone.
-- `ideal-proportionate-routing`, Proportionate Routing: Each message gets the cheapest handling that still gets the right outcome.
-- `ideal-exact-change`, Exact Change: The final state matches the request: everything asked, nothing else, once.
-- `ideal-verified-completion`, Verified Completion: A report of done is true.
-- `ideal-informed-consent`, Informed Consent: A human-only step reaches a person with enough detail to decide, and the AI stops until they do.
-- `ideal-predictable-spend`, Predictable Spend: Cost is known before it is spent and bounded while it is spent.
-- `ideal-right-sized-model`, Right-Sized Model: The cheapest model that can do the task does it, and waiting beats failing.
-- `ideal-dependable-delivery`, Dependable Delivery: What is handed to the system arrives once, in order, and is accounted for.
-- `ideal-weighed-knowledge`, Weighed World Knowledge: A claim about the world comes with where it came from and how strong its evidence is, and the best evidence source available is consulted before the cheapest.
-- `ideal-risk-handled-where-it-is`, Risk Handled Where It Is: Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
-- `ideal-staged-evaluation-on-real-inputs`, Staged Real-Input Evaluation: Evaluation starts free and offline, then moves to small samples of real inputs, and a larger paid run happens only when a decision still depends on it.
-- `ideal-science-through-one-search`, One Science Search: A science question is answered through one search path shared by the chat and the research interface, so evidence is gathered and weighed once.
-- `QI1`, Self-advancing goals: Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote.
-- `QI2`, Personally grounded help: Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
-- `QI3`, Trusted autonomy: The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
-- `QI4`, One shared engine: One domain-free engine serves every consumer, every lane and both chat and scheduled work, and differs only in configuration.
-- `ideal-grounded-reply`, Grounded Reply: A reply says only what the person's own account and its sources support, and says what it found.
-- `ideal-remembered-work`, Remembered Work: Work already worked out once is not worked out again, and what was learned is kept.
-- `ideal-reliable-verdict`, Reliable Verdict: A narrow judgment changes a turn only when it is usable.
-- `ideal-checked-improvement`, Checked Improvement per Run: Every run leaves, on the record it served, what it measured, what it moved and what it changed in the record and why, so improvement is checked per run instead of hoped for.
-- `ideal-continuous-mind`, Continuous Mind: Every step of a request acts with everything the request has established so far: what the person said, refused and corrected, what the request was resolved to mean, and what earlier steps found.
-- `ideal-known-reach`, Known Reach: The AI says it can do only what it can, says it cannot only after checking, and claims an outside act only with the receipt of the act.
-- `ideal-consistent-account-state`, Consistent Account State: What the AI says about the person's own account is true of the account when it says it, every time in a session.
-- `ideal-standing-perspective`, Standing Perspective: Each quest carries one view across requests of what was decided, declined, learned and where it is heading, and every request on it starts from that view.
-- `ideal-asks-only-what-is-theirs`, Questions Only Where Theirs: The person is asked only what is theirs to decide, and a question they waved off is not asked again.
-- `ideal-self-explaining-app`, Self-Explaining App: Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
-- `ideal-most-likely-path`, Most-Likely Path: Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
-- `ideal-hierarchy-contained-scope`, Hierarchy-Contained Scope: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
-- `ideal-right-rep`, Right Representative: Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
-- `ideal-quest-feature-why-explained`, Explained Feature Purpose: When a person asks why a Quest feature works as it does, the answer gives the reason the feature exists and how it serves their goal, not only what it is.
-- `ideal-done-standard-evidenced`, Evidenced Completion: Work is reported as done only when evidence shows its written done-standard was met, and the evidence is not a restatement of the standard.
-- `ideal-coverage-met-or-gap-stated`, Stated Coverage: When a goal covers a set (every entry, all records), either the whole set was processed or the report states exactly how much was and what remains.
-- `ideal-incremental-output-while-working`, Visible Progress: While work is running, the person can see that it is still working and what it has done so far, at a level they choose.
-- `ideal-one-implementation-two-access-points`, Shared Quest Operations: Quest's operations are implemented once, and each way of reaching them (in the same process as Quest, or over its HTTP API) gives the same results.
-- `ideal-cheap-fast-harness-with-ideal-context`, Lean Context Harness: The harness that runs Quest AI's steps is as capable as a coding agent but costs and takes about what the fast tier does, because every step sees exactly the context its goal needs.
-- `ideal-goal-relevant-attention`, Goal-Relevant Attention: Only what bears on the request's goal enters the working stream, and nothing from outside the request's scope ever does.
+- Metric-led evolution (`QI5`): Every part of QAR improves as the state of the art moves, with the best implementation chosen by its metric.
+- Visible value (`QI6`): What AI work costs and how good it is are known before they surprise anyone.
+- Proportionate Routing (`ideal-proportionate-routing`): Each message gets the cheapest handling that still gets the right outcome.
+- Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+- Verified Completion (`ideal-verified-completion`): A report of done is true.
+- Informed Consent (`ideal-informed-consent`): A human-only step reaches a person with enough detail to decide, and the AI stops until they do.
+- Predictable Spend (`ideal-predictable-spend`): Cost is known before it is spent and bounded while it is spent.
+- Right-Sized Model (`ideal-right-sized-model`): The cheapest model that can do the task does it, and waiting beats failing.
+- Dependable Delivery (`ideal-dependable-delivery`): What is handed to the system arrives once, in order, and is accounted for.
+- Weighed World Knowledge (`ideal-weighed-knowledge`): A claim about the world comes with where it came from and how strong its evidence is, and the best evidence source available is consulted before the cheapest.
+- Risk Handled Where It Is (`ideal-risk-handled-where-it-is`): Each high-risk case gets the response proven best for its kind of risk, and a low-risk case pays nothing for review.
+- Staged Real-Input Evaluation (`ideal-staged-evaluation-on-real-inputs`): Evaluation starts free and offline, then moves to small samples of real inputs, and a larger paid run happens only when a decision still depends on it.
+- One Science Search (`ideal-science-through-one-search`): A science question is answered through one search path shared by the chat and the research interface, so evidence is gathered and weighed once.
+- Self-advancing goals (`QI1`): Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote.
+- Personally grounded help (`QI2`): Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
+- Trusted autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
+- One shared engine (`QI4`): One domain-free engine serves every consumer, every lane and both chat and scheduled work, and differs only in configuration.
+- Grounded Reply (`ideal-grounded-reply`): A reply says only what the person's own account and its sources support, and says what it found.
+- Remembered Work (`ideal-remembered-work`): Work already worked out once is not worked out again, and what was learned is kept.
+- Reliable Verdict (`ideal-reliable-verdict`): A narrow judgment changes a turn only when it is usable.
+- Checked Improvement per Run (`ideal-checked-improvement`): Every run leaves, on the record it served, what it measured, what it moved and what it changed in the record and why, so improvement is checked per run instead of hoped for.
+- Continuous Mind (`ideal-continuous-mind`): Every step of a request acts with everything the request has established so far: what the person said, refused and corrected, what the request was resolved to mean, and what earlier steps found.
+- Known Reach (`ideal-known-reach`): The AI says it can do only what it can, says it cannot only after checking, and claims an outside act only with the receipt of the act.
+- Consistent Account State (`ideal-consistent-account-state`): What the AI says about the person's own account is true of the account when it says it, every time in a session.
+- Standing Perspective (`ideal-standing-perspective`): Each quest carries one view across requests of what was decided, declined, learned and where it is heading, and every request on it starts from that view.
+- Questions Only Where Theirs (`ideal-asks-only-what-is-theirs`): The person is asked only what is theirs to decide, and a question they waved off is not asked again.
+- Self-Explaining App (`ideal-self-explaining-app`): Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
+- Most-Likely Path (`ideal-most-likely-path`): Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
+- Hierarchy-Contained Scope (`ideal-hierarchy-contained-scope`): What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
+- Right Representative (`ideal-right-rep`): Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
+- Explained Feature Purpose (`ideal-quest-feature-why-explained`): When a person asks why a Quest feature works as it does, the answer gives the reason the feature exists and how it serves their goal, not only what it is.
+- Evidenced Completion (`ideal-done-standard-evidenced`): Work is reported as done only when evidence shows its written done-standard was met, and the evidence is not a restatement of the standard.
+- Stated Coverage (`ideal-coverage-met-or-gap-stated`): When a goal covers a set (every entry, all records), either the whole set was processed or the report states exactly how much was and what remains.
+- Visible Progress (`ideal-incremental-output-while-working`): While work is running, the person can see that it is still working and what it has done so far, at a level they choose.
+- Shared Quest Operations (`ideal-one-implementation-two-access-points`): Quest's operations are implemented once, and each way of reaching them (in the same process as Quest, or over its HTTP API) gives the same results.
+- Lean Context Harness (`ideal-cheap-fast-harness-with-ideal-context`): The harness that runs Quest AI's steps is as capable as a coding agent but costs and takes about what the fast tier does, because every step sees exactly the context its goal needs.
+- Goal-Relevant Attention (`ideal-goal-relevant-attention`): Only what bears on the request's goal enters the working stream, and nothing from outside the request's scope ever does.
 
 ### Solutions
 
-| Solution | Name | Selected | Metric |
+| Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| `call-a-model` | Tiered model provider layer | multi_provider | Provider routing, fallback, retry and cost correctness |
-| `talk-over-a-channel` | Live messaging channel transport | openclaw | Channel transport conformance to the gateway wire contract |
-| `watch-for-risk` | Overseer: risk management that raises the overall metric | overseer | Overseer digest evidence and signal correctness on labelled scenarios |
-| `track-usage-and-cost` | Cost estimation, daily budget and host load guard | qar_usage | Cost, budget and resource-guard correctness |
-| `keep-it-generic` | Evolve by metric | structure-library | Parts selected by measurement, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs: coverage, integration by configuration, research freshness, code structure |
-| `know-the-world` | Science: evidence-weighted knowledge about the world | web_with_support_check | Supported and calibrated answers to world questions |
-| `do-grounded-work` | Grounded goal agent: the engine that answers and works on a person's goals from their own material, and the executor that runs their queued AI tasks | library | QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
-| `run-queued-tasks` | Queued-task runner lane | qar_runner | Task lifecycle correctness over offline cases |
-| `reason-and-answer` | Mind: one goal-focused working stream per request | rebuilt_per_step | Step continuity at cost over multi-step requests |
-| `act-as-the-body` | Body: the host's data model as the agent's own consistent state | card_and_reads | Account-state consistency across scripted sessions |
-| `hold-the-intents` | Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
-| `think-critically` | Critical thinking: the enforcer of ESOI metrics on every request | deep_runs_only | Requests held to their ESOI metric by code |
-| `access-quest-operations` | access-quest-operations | quest_client | Parity of Quest operations across access points |
-| `take-in-the-world` | take-in-the-world: the ways a request reaches QAR | ways_in | Ways in that pass their own metric |
-| `remember-and-recall` | Subconscious: the person's own knowledge, admitted to the working stream by the goal | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
-| `justify-model-calls` | Justified model calls | spec_registry | Justified share of model spend |
+| Tiered model provider layer | `call-a-model` | multi_provider | Provider routing, fallback, retry and cost correctness |
+| Live messaging channel transport | `talk-over-a-channel` | openclaw | Channel transport conformance to the gateway wire contract |
+| Overseer | `watch-for-risk` | overseer | Overseer digest evidence and signal correctness on labelled scenarios |
+| Cost estimation, daily budget and host load guard | `track-usage-and-cost` | qar_usage | Cost, budget and resource-guard correctness |
+| Evolve by metric | `keep-it-generic` | structure-library | Parts selected by measurement, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Hub of hubs |
+| Science | `know-the-world` | web_with_support_check | Supported and calibrated answers to world questions |
+| Grounded goal agent | `do-grounded-work` | library | QAR overall score, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage |
+| Queued-task runner | `run-queued-tasks` | qar_runner | Task lifecycle correctness over offline cases |
+| Mind | `reason-and-answer` | rebuilt_per_step | Step continuity at cost over multi-step requests |
+| Body | `act-as-the-body` | card_and_reads | Account-state consistency across scripted sessions |
+| Higher mind | `hold-the-intents` | separate_stores | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| Critical thinking | `think-critically` | deep_runs_only | Requests held to their ESOI metric by code |
+| Quest account access | `access-quest-operations` | quest_client | Parity of Quest operations across access points |
+| Request intake | `take-in-the-world` | ways_in | Ways in that pass their own metric |
+| Subconscious | `remember-and-recall` | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
+| Justified model calls | `justify-model-calls` | spec_registry | Justified share of model spend |
 
 ### Implementations
 
-| Implementation | Name | Where | Sub-intent |
+| Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| `do-grounded-work:per-consumer-worker` | Per-consumer worker |  |  |
-| `do-grounded-work:agent-framework-with-quest-glue` | Agent framework with Quest glue |  |  |
-| `do-grounded-work:deep-runner-only` | Deep runner only |  |  |
-| `reason-and-answer:append_only_stream` | Carried message stream per request (proposed) |  |  |
-| `reason-and-answer:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
-| `remember-and-recall:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
-| `remember-and-recall:score_thresholds` | Score thresholds per source (proposed) |  |  |
-| `remember-and-recall:thresholds_then_judge` | Thresholds with a judge on the borderline (proposed) |  |  |
-| `know-the-world:research_sources_first` | Host research sources first, then the web (proposed) |  |  |
-| `know-the-world:evidence_weighted` | Findings weighed by a host's evidence-estimation service (proposed) |  |  |
-| `act-as-the-body:read_after_write` | Read back what a change touched (proposed) |  |  |
-| `act-as-the-body:live_read_only` | A live read behind every state claim (proposed) |  |  |
-| `hold-the-intents:per_quest_note` | Maintained view per quest only (proposed) |  |  |
-| `hold-the-intents:periodic_reflection` | Periodic reflection on the best tier (proposed) |  |  |
-| `remember-and-recall:outcome_precedents` | Intuition: outcome precedents surfaced at admission (proposed) |  |  |
-| `watch-for-risk:fact_questions` | Overseer that asks questions of fact (proposed) |  |  |
-| `think-critically:every_request_measured` | Every request measured by code (proposed) |  |  |
-| `think-critically:measured_proposed_and_answered` | Measured, proposed and answered (proposed) |  |  |
-| `watch-for-risk:per_risk_response` | Per-risk response chosen by metric (proposed) |  |  |
-| `hold-the-intents:per_intent_cascade` | One view per intent, cascading down (proposed) |  |  |
-| `hold-the-intents:per_rep_assigned_view` | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) |  |  |
-| `justify-model-calls:spec_registry_ablation` | Registry plus per-call ablation against the owner metric (proposed) |  |  |
-| `do-grounded-work:library` | quest-ai-runner library | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) | [select_context](select_context/README.md) |
-| `call-a-model:multi_provider` | Prefix-routing multi-provider | [quest_ai_runner/providers.py](../quest_ai_runner/providers.py) |  |
-| `watch-for-risk:overseer` | Digest-driven overseer | [quest_ai_runner/watch_for_risk/area.py](../quest_ai_runner/watch_for_risk/area.py) | [watch_for_risk](watch_for_risk/README.md) |
-| `run-queued-tasks:qar_runner` | Offline lifecycle harness | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
-| `track-usage-and-cost:pricing` | Static price table lookup | [quest_ai_runner/pricing.py](../quest_ai_runner/pricing.py) |  |
-| `track-usage-and-cost:usage` | Persisted daily token tracker | [quest_ai_runner/usage.py](../quest_ai_runner/usage.py) |  |
-| `track-usage-and-cost:resources` | Hysteresis resource guard | [quest_ai_runner/resources.py](../quest_ai_runner/resources.py) |  |
-| `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/keep_it_generic/area.py](../quest_ai_runner/keep_it_generic/area.py) | [keep_it_generic](keep_it_generic/README.md) |
-| `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | [quest_ai_runner/area_reason_and_answer.py](../quest_ai_runner/area_reason_and_answer.py) | [reason_and_answer](reason_and_answer/README.md) |
-| `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [quest_ai_runner/know_the_world/area.py](../quest_ai_runner/know_the_world/area.py) | [know_the_world](know_the_world/README.md) |
-| `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) | [act_as_the_body](act_as_the_body/README.md) |
-| `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [quest_ai_runner/hold_the_intents/area.py](../quest_ai_runner/hold_the_intents/area.py) | [hold_the_intents](hold_the_intents/README.md) |
-| `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [quest_ai_runner/think_critically/area.py](../quest_ai_runner/think_critically/area.py) | [think_critically](think_critically/README.md) |
-| `take-in-the-world:ways_in` | Channels, terminal and package as ways in | [quest_ai_runner/area_take_in_the_world.py](../quest_ai_runner/area_take_in_the_world.py) | [take_in_the_world](take_in_the_world/README.md) |
-| `access-quest-operations:quest_client` | Quest HTTP client from the environment | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
-| `call-a-model:claude_cli` | Keyless command-line provider | [quest_ai_runner/adapters/claude_cli_provider.py](../quest_ai_runner/adapters/claude_cli_provider.py) |  |
-| `talk-over-a-channel:openclaw` | MCP gateway bridge transport | [quest_ai_runner/adapters/openclaw_channel.py](../quest_ai_runner/adapters/openclaw_channel.py) |  |
-| `reason-and-answer:rebuilt_full_context` | Rebuilt prompt per step with the context re-sent from cache | [quest_ai_runner/core/orchestrator_planning.py](../quest_ai_runner/core/orchestrator_planning.py) |  |
-| `remember-and-recall:recency_window` | Start-of-run card filter and a recency window (today) | [quest_ai_runner/core/planner_context.py](../quest_ai_runner/core/planner_context.py) | [remember_and_recall](remember_and_recall/README.md) |
-| `watch-for-risk:no_overseer` | No overseer (configuration off) | [quest_ai_runner/core/orchestrator_types.py](../quest_ai_runner/core/orchestrator_types.py) |  |
-| `think-critically:instruction_only` | Standing instruction alone (floor) | [quest_ai_runner/core/standing_instructions.py](../quest_ai_runner/core/standing_instructions.py) |  |
-| `justify-model-calls:spec_registry` | Registered prompt specs with an enforcement test (today) | [quest_ai_runner/core/prompt_specs.py](../quest_ai_runner/core/prompt_specs.py) |  |
-| `run-queued-tasks:poller` | Task poller and claimer | [quest_ai_runner/runner/poller.py](../quest_ai_runner/runner/poller.py) |  |
-| `run-queued-tasks:executor` | Single-task executor | [quest_ai_runner/runner/executor.py](../quest_ai_runner/runner/executor.py) |  |
-| `run-queued-tasks:personas` | Configured persona resolver | [quest_ai_runner/runner/personas.py](../quest_ai_runner/runner/personas.py) |  |
-| `run-queued-tasks:quest_folder_sync` | Work-folder sync | [quest_ai_runner/runner/quest_folder_sync.py](../quest_ai_runner/runner/quest_folder_sync.py) |  |
-| `run-queued-tasks:lane` | Shared lane entry point | [quest_ai_runner/runner/lane.py](../quest_ai_runner/runner/lane.py) |  |
-| `keep-it-generic:structure_library` | Evolvable-structure library decides (live) | [evaluation/components/evolve_by_metric/impls/structure_library.py](../evaluation/components/evolve_by_metric/impls/structure_library.py) |  |
-| `keep-it-generic:keep_current` | Keep the selection as written (floor) | [evaluation/components/evolve_by_metric/impls/keep_current.py](../evaluation/components/evolve_by_metric/impls/keep_current.py) |  |
-| `keep-it-generic:registry_scan` | Registry read together with the code (today) | [evaluation/components/hub_of_hubs/impls/registry_scan.py](../evaluation/components/hub_of_hubs/impls/registry_scan.py) |  |
-| `know-the-world:memory_only` | Memory only, no research (floor) | [evaluation/components/know_the_world/impls/memory_only.py](../evaluation/components/know_the_world/impls/memory_only.py) |  |
-| `call-a-model:single_provider` | Single flat provider floor | [evaluation/components/model_providers/impls/single_provider.py](../evaluation/components/model_providers/impls/single_provider.py) |  |
-| `watch-for-risk:digest_probe` | No-judgement digest probe | [evaluation/components/overseer_signals/impls/digest_probe.py](../evaluation/components/overseer_signals/impls/digest_probe.py) |  |
-| `watch-for-risk:live_model` | Live overseer model arm | [evaluation/components/overseer_signals/impls/live_model.py](../evaluation/components/overseer_signals/impls/live_model.py) |  |
-| `talk-over-a-channel:openclaw_bridge` | Fake-gateway conformance arm | [evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py](../evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py) |  |
-| `track-usage-and-cost:qar_usage` | Live usage evaluation arm | [evaluation/components/track_usage_and_cost/impls/qar_usage.py](../evaluation/components/track_usage_and_cost/impls/qar_usage.py) |  |
+| Per-consumer worker | `do-grounded-work:per-consumer-worker` |  |  |
+| Agent framework with Quest glue | `do-grounded-work:agent-framework-with-quest-glue` |  |  |
+| Deep runner only | `do-grounded-work:deep-runner-only` |  |  |
+| Carried message stream per request (proposed) | `reason-and-answer:append_only_stream` |  |  |
+| Carried stream with compaction (proposed) | `reason-and-answer:stream_with_compaction` |  |  |
+| Small-model judge of every candidate (proposed) | `remember-and-recall:goal_judge` |  |  |
+| Score thresholds per source (proposed) | `remember-and-recall:score_thresholds` |  |  |
+| Thresholds with a judge on the borderline (proposed) | `remember-and-recall:thresholds_then_judge` |  |  |
+| Host research sources first, then the web (proposed) | `know-the-world:research_sources_first` |  |  |
+| Findings weighed by a host's evidence-estimation service (proposed) | `know-the-world:evidence_weighted` |  |  |
+| Read back what a change touched (proposed) | `act-as-the-body:read_after_write` |  |  |
+| A live read behind every state claim (proposed) | `act-as-the-body:live_read_only` |  |  |
+| Maintained view per quest only (proposed) | `hold-the-intents:per_quest_note` |  |  |
+| Periodic reflection on the best tier (proposed) | `hold-the-intents:periodic_reflection` |  |  |
+| Outcome precedents surfaced at admission (proposed) | `remember-and-recall:outcome_precedents` |  |  |
+| Overseer that asks questions of fact (proposed) | `watch-for-risk:fact_questions` |  |  |
+| Every request measured by code (proposed) | `think-critically:every_request_measured` |  |  |
+| Measured, proposed and answered (proposed) | `think-critically:measured_proposed_and_answered` |  |  |
+| Per-risk response chosen by metric (proposed) | `watch-for-risk:per_risk_response` |  |  |
+| One view per intent, cascading down (proposed) | `hold-the-intents:per_intent_cascade` |  |  |
+| One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) | `hold-the-intents:per_rep_assigned_view` |  |  |
+| Registry plus per-call ablation against the owner metric (proposed) | `justify-model-calls:spec_registry_ablation` |  |  |
+| quest-ai-runner library | `do-grounded-work:library` | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) | [select_context](select_context/README.md) |
+| Prefix-routing multi-provider | `call-a-model:multi_provider` | [quest_ai_runner/providers.py](../quest_ai_runner/providers.py) |  |
+| Digest-driven overseer | `watch-for-risk:overseer` | [quest_ai_runner/watch_for_risk/area.py](../quest_ai_runner/watch_for_risk/area.py) | [watch_for_risk](watch_for_risk/README.md) |
+| Offline lifecycle harness | `run-queued-tasks:qar_runner` | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
+| Static price table lookup | `track-usage-and-cost:pricing` | [quest_ai_runner/pricing.py](../quest_ai_runner/pricing.py) |  |
+| Persisted daily token tracker | `track-usage-and-cost:usage` | [quest_ai_runner/usage.py](../quest_ai_runner/usage.py) |  |
+| Hysteresis resource guard | `track-usage-and-cost:resources` | [quest_ai_runner/resources.py](../quest_ai_runner/resources.py) |  |
+| Apply the evolvable-structure library | `keep-it-generic:structure-library` | [quest_ai_runner/keep_it_generic/area.py](../quest_ai_runner/keep_it_generic/area.py) | [keep_it_generic](keep_it_generic/README.md) |
+| Rebuilt prompt per step with a referenced context (today) | `reason-and-answer:rebuilt_per_step` | [quest_ai_runner/area_reason_and_answer.py](../quest_ai_runner/area_reason_and_answer.py) | [reason_and_answer](reason_and_answer/README.md) |
+| Web research with the answer's support check (today) | `know-the-world:web_with_support_check` | [quest_ai_runner/know_the_world/area.py](../quest_ai_runner/know_the_world/area.py) | [know_the_world](know_the_world/README.md) |
+| Managed quest card plus optional live reads (today) | `act-as-the-body:card_and_reads` | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) | [act_as_the_body](act_as_the_body/README.md) |
+| Separate stores read at the start of a request (today) | `hold-the-intents:separate_stores` | [quest_ai_runner/hold_the_intents/area.py](../quest_ai_runner/hold_the_intents/area.py) | [hold_the_intents](hold_the_intents/README.md) |
+| Code-enforced before and after on deep runs only (today) | `think-critically:deep_runs_only` | [quest_ai_runner/think_critically/area.py](../quest_ai_runner/think_critically/area.py) | [think_critically](think_critically/README.md) |
+| Channels, terminal and package as ways in | `take-in-the-world:ways_in` | [quest_ai_runner/area_take_in_the_world.py](../quest_ai_runner/area_take_in_the_world.py) | [take_in_the_world](take_in_the_world/README.md) |
+| Quest HTTP client from the environment | `access-quest-operations:quest_client` | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
+| Keyless command-line provider | `call-a-model:claude_cli` | [quest_ai_runner/adapters/claude_cli_provider.py](../quest_ai_runner/adapters/claude_cli_provider.py) |  |
+| MCP gateway bridge transport | `talk-over-a-channel:openclaw` | [quest_ai_runner/adapters/openclaw_channel.py](../quest_ai_runner/adapters/openclaw_channel.py) |  |
+| Rebuilt prompt per step with the context re-sent from cache | `reason-and-answer:rebuilt_full_context` | [quest_ai_runner/core/orchestrator_planning.py](../quest_ai_runner/core/orchestrator_planning.py) |  |
+| Start-of-run card filter and a recency window (today) | `remember-and-recall:recency_window` | [quest_ai_runner/core/planner_context.py](../quest_ai_runner/core/planner_context.py) | [remember_and_recall](remember_and_recall/README.md) |
+| No overseer (configuration off) | `watch-for-risk:no_overseer` | [quest_ai_runner/core/orchestrator_types.py](../quest_ai_runner/core/orchestrator_types.py) |  |
+| Standing instruction alone (floor) | `think-critically:instruction_only` | [quest_ai_runner/core/standing_instructions.py](../quest_ai_runner/core/standing_instructions.py) |  |
+| Registered prompt specs with an enforcement test (today) | `justify-model-calls:spec_registry` | [quest_ai_runner/core/prompt_specs.py](../quest_ai_runner/core/prompt_specs.py) |  |
+| Task poller and claimer | `run-queued-tasks:poller` | [quest_ai_runner/runner/poller.py](../quest_ai_runner/runner/poller.py) |  |
+| Single-task executor | `run-queued-tasks:executor` | [quest_ai_runner/runner/executor.py](../quest_ai_runner/runner/executor.py) |  |
+| Configured persona resolver | `run-queued-tasks:personas` | [quest_ai_runner/runner/personas.py](../quest_ai_runner/runner/personas.py) |  |
+| Work-folder sync | `run-queued-tasks:quest_folder_sync` | [quest_ai_runner/runner/quest_folder_sync.py](../quest_ai_runner/runner/quest_folder_sync.py) |  |
+| Shared lane entry point | `run-queued-tasks:lane` | [quest_ai_runner/runner/lane.py](../quest_ai_runner/runner/lane.py) |  |
+| Evolvable-structure library decides (live) | `keep-it-generic:structure_library` | [evaluation/components/evolve_by_metric/impls/structure_library.py](../evaluation/components/evolve_by_metric/impls/structure_library.py) |  |
+| Keep the selection as written (floor) | `keep-it-generic:keep_current` | [evaluation/components/evolve_by_metric/impls/keep_current.py](../evaluation/components/evolve_by_metric/impls/keep_current.py) |  |
+| Registry read together with the code (today) | `keep-it-generic:registry_scan` | [evaluation/components/hub_of_hubs/impls/registry_scan.py](../evaluation/components/hub_of_hubs/impls/registry_scan.py) |  |
+| Memory only, no research (floor) | `know-the-world:memory_only` | [evaluation/components/know_the_world/impls/memory_only.py](../evaluation/components/know_the_world/impls/memory_only.py) |  |
+| Single flat provider floor | `call-a-model:single_provider` | [evaluation/components/model_providers/impls/single_provider.py](../evaluation/components/model_providers/impls/single_provider.py) |  |
+| No-judgement digest probe | `watch-for-risk:digest_probe` | [evaluation/components/overseer_signals/impls/digest_probe.py](../evaluation/components/overseer_signals/impls/digest_probe.py) |  |
+| Live overseer model arm | `watch-for-risk:live_model` | [evaluation/components/overseer_signals/impls/live_model.py](../evaluation/components/overseer_signals/impls/live_model.py) |  |
+| Fake-gateway conformance arm | `talk-over-a-channel:openclaw_bridge` | [evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py](../evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py) |  |
+| Live usage evaluation arm | `track-usage-and-cost:qar_usage` | [evaluation/components/track_usage_and_cost/impls/qar_usage.py](../evaluation/components/track_usage_and_cost/impls/qar_usage.py) |  |
 
 ### Metrics
 
-- `metric-call-a-model`, Provider routing, fallback, retry and cost correctness: `esoi run model_providers --impl multi_provider`
-- `metric-talk-over-a-channel`, Channel transport conformance to the gateway wire contract: `esoi run talk_over_a_channel --impl openclaw_bridge`
-- `metric-watch-a-run`, Overseer digest evidence and signal correctness on labelled scenarios: `esoi run overseer_signals --impl live_model; esoi run overseer_signals --impl digest_probe`
-- `metric-track-usage-and-cost`, Cost, budget and resource-guard correctness: `esoi run track_usage_and_cost --impl qar_usage`
-- `QME7`, Parts selected by measurement: `esoi run evolve_by_metric --impl structure_library`
-- `metric-know-the-world`, Supported and calibrated answers to world questions: `esoi run know_the_world --impl web_with_support_check`
-- `metric-hub-of-hubs`, Hub of hubs: coverage, integration by configuration, research freshness, code structure: `esoi run hub_of_hubs --impl registry_scan`
-- `QME9`, Hub of hubs: `esoi run hub_of_hubs --impl registry_scan`
-- `metric-metric-earns-its-run`, Correct selection decisions over the evolve-by-metric cases: `esoi run evolve_by_metric --impl structure_library`
-- `metric-solution-coherence`, Intents whose solutions one paragraph and one diagram explain as the code builds them: `python3 -m esoi.coherence --gate`
-- `QME1`, Passing chat turns per dollar: `esoi run chat_quality --impl dev_quest_chat --sample 10 --max-calls 300`
-- `QME2`, Delegated tasks meeting their standard: `none`
-- `QME3`, Exact and consented changes: `none`
-- `QME4`, Data kept in scope: `none`
-- `QME5`, Engine reuse: `none`
-- `QME6`, Measured coverage: `none`
-- `metric-qar-overall`, QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling: `esoi run qar_overall --impl recorded_rows`
-- `metric-run-queued-tasks`, Task lifecycle correctness over offline cases: `esoi run run_queued_tasks --impl qar_runner`
-- `metric-keep-a-working-stream`, Step continuity at cost over multi-step requests: `esoi run keep_a_working_stream --impl rebuilt_per_step --sample 3 --max-calls 40`
-- `metric-act-as-the-body`, Account-state consistency across scripted sessions: `esoi run act_as_the_body --impl card_and_reads`
-- `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: `esoi run hold_the_long_view --impl separate_stores`
-- `metric-think-critically`, Requests held to their ESOI metric by code: `esoi run think_critically --impl deep_runs_only`
-- `metric-quest-operations-parity`, Parity of Quest operations across access points: `none`
-- `metric-take-in-the-world`, Ways in that pass their own metric: `none`
-- `metric-admit-to-the-mind`, Goal-relevant admission at a precision floor with nothing out of scope: `esoi run admit_to_the_mind --impl recency_window`
-- `metric-justified-model-spend`, Justified share of model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
-- `QME8`, Justified model spend: `esoi run justified_model_spend --impl spec_registry_ablation`
+- Provider routing, fallback, retry and cost correctness (`metric-call-a-model`): `esoi run model_providers --impl multi_provider`
+- Channel transport conformance to the gateway wire contract (`metric-talk-over-a-channel`): `esoi run talk_over_a_channel --impl openclaw_bridge`
+- Overseer digest evidence and signal correctness on labelled scenarios (`metric-watch-a-run`): `esoi run overseer_signals --impl live_model; esoi run overseer_signals --impl digest_probe`
+- Cost, budget and resource-guard correctness (`metric-track-usage-and-cost`): `esoi run track_usage_and_cost --impl qar_usage`
+- Parts selected by measurement (`QME7`): `esoi run evolve_by_metric --impl structure_library`
+- Supported and calibrated answers to world questions (`metric-know-the-world`): `esoi run know_the_world --impl web_with_support_check`
+- Hub of hubs (`metric-hub-of-hubs`): `esoi run hub_of_hubs --impl registry_scan`
+- Hub of hubs (`QME9`): `esoi run hub_of_hubs --impl registry_scan`
+- Correct selection decisions over the evolve-by-metric cases (`metric-metric-earns-its-run`): `esoi run evolve_by_metric --impl structure_library`
+- Intents whose solutions one paragraph and one diagram explain as the code builds them (`metric-solution-coherence`): `python3 -m esoi.coherence --gate`
+- Passing chat turns per dollar (`QME1`): `esoi run chat_quality --impl dev_quest_chat --sample 10 --max-calls 300`
+- Delegated tasks meeting their standard (`QME2`): `none`
+- Exact and consented changes (`QME3`): `none`
+- Data kept in scope (`QME4`): `none`
+- Engine reuse (`QME5`): `none`
+- Measured coverage (`QME6`): `none`
+- QAR overall score (`metric-qar-overall`): `esoi run qar_overall --impl recorded_rows`
+- Task lifecycle correctness over offline cases (`metric-run-queued-tasks`): `esoi run run_queued_tasks --impl qar_runner`
+- Step continuity at cost over multi-step requests (`metric-keep-a-working-stream`): `esoi run keep_a_working_stream --impl rebuilt_per_step --sample 3 --max-calls 40`
+- Account-state consistency across scripted sessions (`metric-act-as-the-body`): `esoi run act_as_the_body --impl card_and_reads`
+- Representative long-view carry-through across assigned quests, with nothing outside its branch (`metric-hold-the-long-view`): `esoi run hold_the_long_view --impl separate_stores`
+- Requests held to their ESOI metric by code (`metric-think-critically`): `esoi run think_critically --impl deep_runs_only`
+- Parity of Quest operations across access points (`metric-quest-operations-parity`): `none`
+- Ways in that pass their own metric (`metric-take-in-the-world`): `none`
+- Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): `esoi run admit_to_the_mind --impl recency_window`
+- Justified share of model spend (`metric-justified-model-spend`): `esoi run justified_model_spend --impl spec_registry_ablation`
+- Justified model spend (`QME8`): `esoi run justified_model_spend --impl spec_registry_ablation`

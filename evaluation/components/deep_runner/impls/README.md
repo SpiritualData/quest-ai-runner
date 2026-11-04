@@ -2,10 +2,10 @@
 
 *ESOI arms kept in `evaluation/components/deep_runner/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `run-deep-work:acp_runner` | Agent-protocol runner scenarios | [`evaluation/components/deep_runner/impls/acp_runner.py`](acp_runner.py) |  |
-| `run-deep-work:subprocess_runner` | Subprocess runner scenarios | [`evaluation/components/deep_runner/impls/subprocess_runner.py`](subprocess_runner.py) |  |
+| Agent-protocol runner scenarios | `run-deep-work:acp_runner` | [`evaluation/components/deep_runner/impls/acp_runner.py`](acp_runner.py) |  |
+| Subprocess runner scenarios | `run-deep-work:subprocess_runner` | [`evaluation/components/deep_runner/impls/subprocess_runner.py`](subprocess_runner.py) |  |
 
 ## Where to go next
 

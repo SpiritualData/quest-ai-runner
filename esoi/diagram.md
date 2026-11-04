@@ -2,28 +2,28 @@ These are ESOI records rendered as a diagram (evolvable structure that optimizes
 
 # Solution diagram: Grounded AI that advances people's goals
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and do-grounded-work is that loop. It asks the model through call-a-model, works in the person's Quest account through access-quest-operations and takes in requests through take-in-the-world. It reasons step by step through reason-and-answer, recalls what a request needs through remember-and-recall and acts on the account through act-as-the-body. It holds its work to the metric that serves it through think-critically, has every run watched through watch-for-risk and keeps the long view across turns through hold-the-intents. It stays comparable by metric through keep-it-generic and answers questions about the world through know-the-world. remember-and-recall recalls the cards that match a request through card-store. call-a-model accounts for every call through track-usage-and-cost. reason-and-answer sends the prompt of each step to the model through call-a-model. watch-for-risk has the model oversee a run through call-a-model. run-queued-tasks claims, runs and reports a queued task, asking the model through call-a-model and working in the account through access-quest-operations. It writes each prompt as a registered spec with an owner and a metric through justify-model-calls. act-as-the-body reads and changes the quest through persist-cards, access-quest-operations and run-queued-tasks. hold-the-intents saves what it learned through persist-cards. take-in-the-world hears from a live channel through talk-over-a-channel.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and the Grounded goal agent is that loop. It asks the model through the Tiered model provider layer, works in the person's Quest account through Quest account access and takes in requests through Request intake. It reasons step by step through Mind, recalls what a request needs through Subconscious and acts on the account through Body. It holds its work to the metric that serves it through Critical thinking, has every run watched through Overseer and keeps the long view across turns through Higher mind. It stays comparable by metric through Evolve by metric and answers questions beyond the person's own material through Science. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind sends the prompt of each step to the model through Tiered model provider layer. Overseer has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport.
 
 An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
 
 ```mermaid
 flowchart LR
-    s0["Tiered model provider layer<br/>call-a-model"]
-    s1["Live messaging channel transport<br/>talk-over-a-channel"]
-    s2["Overseer: risk management that raises...<br/>watch-for-risk"]
-    s3["Cost estimation, daily budget and host...<br/>track-usage-and-cost"]
-    s4["Evolve by metric<br/>keep-it-generic"]
-    s5["Science: evidence-weighted knowledge...<br/>know-the-world"]
-    s6["Grounded goal agent: the engine that...<br/>do-grounded-work"]
-    s7["Queued-task runner lane<br/>run-queued-tasks"]
-    s8["Mind: one goal-focused working stream...<br/>reason-and-answer"]
-    s9["Body: the host's data model as the...<br/>act-as-the-body"]
-    s10["Higher mind: an AI representative's...<br/>hold-the-intents"]
-    s11["Critical thinking: the enforcer of ESOI...<br/>think-critically"]
-    s12["access-quest-operations<br/>access-quest-operations"]
-    s13["take-in-the-world: the ways a request...<br/>take-in-the-world"]
-    s14["Subconscious: the person's own...<br/>remember-and-recall"]
-    s15["Justified model calls<br/>justify-model-calls"]
+    s0["Tiered model provider layer<br/><i>call-a-model</i>"]
+    s1["Live messaging channel transport<br/><i>talk-over-a-channel</i>"]
+    s2["Overseer<br/><i>watch-for-risk</i>"]
+    s3["Cost estimation, daily budget and host...<br/><i>track-usage-and-cost</i>"]
+    s4["Evolve by metric<br/><i>keep-it-generic</i>"]
+    s5["Science<br/><i>know-the-world</i>"]
+    s6["Grounded goal agent<br/><i>do-grounded-work</i>"]
+    s7["Queued-task runner<br/><i>run-queued-tasks</i>"]
+    s8["Mind<br/><i>reason-and-answer</i>"]
+    s9["Body<br/><i>act-as-the-body</i>"]
+    s10["Higher mind<br/><i>hold-the-intents</i>"]
+    s11["Critical thinking<br/><i>think-critically</i>"]
+    s12["Quest account access<br/><i>access-quest-operations</i>"]
+    s13["Request intake<br/><i>take-in-the-world</i>"]
+    s14["Subconscious<br/><i>remember-and-recall</i>"]
+    s15["Justified model calls<br/><i>justify-model-calls</i>"]
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s2
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s6
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s7

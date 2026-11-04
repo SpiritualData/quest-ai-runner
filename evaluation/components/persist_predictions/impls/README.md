@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/persist_predictions/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `persist-predictions:memory_store` | In-memory reference store | [`evaluation/components/persist_predictions/impls/memory_store.py`](memory_store.py) |  |
+| In-memory reference store | `persist-predictions:memory_store` | [`evaluation/components/persist_predictions/impls/memory_store.py`](memory_store.py) |  |
 
 ## Where to go next
 

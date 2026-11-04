@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/hand_off_a_goal/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `hand-off-a-goal:creator_keeps_it` | Creator keeps the goal, no model call (floor, proposed) | [`evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py`](creator_keeps_it.py) |  |
+| Creator keeps the goal, no model call (floor, proposed) | `hand-off-a-goal:creator_keeps_it` | [`evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py`](creator_keeps_it.py) |  |
 
 ## Where to go next
 

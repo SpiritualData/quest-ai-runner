@@ -2,9 +2,9 @@
 
 *ESOI arms kept in `evaluation/components/label_context_cards/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
 
-| Implementation | Name | Code | Selected |
+| Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) | [`evaluation/components/label_context_cards/impls/path_rules.py`](path_rules.py) |  |
+| Path and title rules, no model call (floor, proposed) | `label-context-cards:path_rules` | [`evaluation/components/label_context_cards/impls/path_rules.py`](path_rules.py) |  |
 
 ## Where to go next
 
