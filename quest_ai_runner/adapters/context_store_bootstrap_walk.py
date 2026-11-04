@@ -32,6 +32,8 @@ from .context_risk_gate import FolderGate, folder_gate
 from hubofhubs.recall.context_card_ceilings import folders_for_room
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_card_builder import propose_topic_cards
+from .card_shape_guard import refusal as card_shape_refusal
+from hubofhubs.recall import card_limit as limit_mod
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -531,6 +533,14 @@ class BootstrapWalkMixin:
             self.limit_guard.end_pass()
             if kept_copies and not self._dry_run:
                 self.reconcile_copies()
+            return 0
+
+        # A pass that would write a card per file writes nothing: said in the log and in the next task's feed, never truncated to fit.
+        shape_lines = card_shape_refusal(topic_cards)
+        if shape_lines:
+            _log.warning("context index: %s. %s", *shape_lines)
+            limit_mod.hold_task_note(f"{self._cards_dir}#shape", "About the context store, not this task: " + ". ".join(shape_lines))
+            self.limit_guard.end_pass()
             return 0
 
         self._cards_dir.mkdir(parents=True, exist_ok=True)

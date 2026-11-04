@@ -30,6 +30,7 @@ from hubofhubs.recall import card_origin
 from hubofhubs.recall import card_store_identity as ident
 from hubofhubs.recall.card_repository import FilesystemCardRepository
 from hubofhubs.recall.card_store_merge import item_id
+from .card_shape_guard import refusal as card_shape_refusal
 from .quest_api_card_repository import BULK_MAX_CARDS, runner_env_id, strip_server_owned
 
 REASON_IMPORTED = "namespaced copy-import: the source store uploads them"
@@ -130,6 +131,11 @@ def plan_upload(
         body[ident.ORIGIN_FIELD] = origin
         plan.uploads.append((str(card_id), body))
 
+    shape_lines = card_shape_refusal(body for _, body in plan.uploads)
+    if shape_lines:
+        plan.problems.extend(shape_lines)
+        return plan
+
     if vector_store is None:
         plan.vector_note = "no local vector store given (--qdrant-url/--qdrant-path): the backend will embed"
         return plan
@@ -160,7 +166,10 @@ def plan_upload(
 
 
 def apply_upload(plan: UploadPlan, repository: Any, *, on_batch: Any = None) -> Dict[str, Any]:
-    """Send the plan through ``repository.bulk_write`` (a ``QuestApiCardRepository``)."""
+    """Send the plan through ``repository.bulk_write`` (a ``QuestApiCardRepository``). A plan with problems sends nothing."""
+    if plan.problems:
+        return {"batches": 0, "counts": {"written": 0, "failed": len(plan.uploads)}, "failed": [cid for cid, _ in plan.uploads],
+                "errors": list(plan.problems)}
     return repository.bulk_write(
         plan.uploads,
         plan.vectors or None,

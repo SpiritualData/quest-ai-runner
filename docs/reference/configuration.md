@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-229 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+232 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -45,6 +45,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `config_context_index.py` | - |
 | `QAR_CARDS_SCOPE` |  | `adapters/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_CARD_MOUNT` |  | `adapters/card_store_settings.py` | `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
+| `QAR_CARD_SHAPE_MIN_FILES` | A batch naming fewer distinct files than this is not judged by the two card-shape limits (default 50). | `adapters/card_store_settings.py` | - |
 | `QAR_CHANNEL_ACK_AFTER_SECONDS` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHANNEL_ALLOWED_SENDERS` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHANNEL_NAME` |  | `cli_config.py` | `docs/how-to/live-channels.md` |
@@ -127,9 +128,11 @@ the docs and `.env.example` that describe what it does.
 | `QAR_LINK_GUARD` |  | `cli_config.py` | `docs/explanation/link-guard.md`, `docs/how-to/tools.md` |
 | `QAR_LINK_POLICY_FILE` |  | `cli_config.py`, `config_core_settings.py` | `.env.example`, `docs/explanation/link-guard.md` |
 | `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `adapters/card_store_settings.py` | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
+| `QAR_MAX_CARDS_PER_FILE` | The most cards a batch to write or upload may hold per distinct file it names (default 0.25; 0 = no rule). A batch over it is refused whole, with a notice. | `adapters/card_store_settings.py` | - |
 | `QAR_MAX_LOAD_PER_CORE` |  | `resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `adapters/card_store_settings.py`, `cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md` |
+| `QAR_MAX_SINGLE_FILE_CARD_SHARE` | The largest share of a batch's cards that may pin a single file (default 0.6; 0 = no rule). A batch over it is refused whole, with a notice. | `adapters/card_store_settings.py` | - |
 | `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest one reading of a metric may take before and after a deep goal (default 15); an offline arm is stopped at that limit, and a reading that has not finished gives no value, with a note on the row. | `config_core_settings.py` | `docs/explanation/metric-results.md` |
 | `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `core/tools_metric_results.py` | `docs/explanation/metric-results.md` |
 | `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `config_core_settings.py` | `docs/explanation/metric-results.md` |

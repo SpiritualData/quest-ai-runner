@@ -13,6 +13,7 @@ QAR_BOOTSTRAP_MAX_FILES,Stop the bootstrap walk after this many files (unset = n
 QAR_BOOTSTRAP_TIER,Model tier used for bootstrap topic extraction (default balanced).
 QAR_BOOTSTRAP_WORKERS,Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only.
 QAR_CARDS_COLLECTION,Qdrant collection the cards live in (default quest_ai_cards).
+QAR_CARD_SHAPE_MIN_FILES,A batch naming fewer distinct files than this is not judged by the two card-shape limits (default 50).
 QAR_CLAUDE_LIVE_MODELS,"0 turns off the lookup of live Claude model ids (tests, air-gapped hosts)."
 QAR_CLAUDE_SESSIONS_DIR,Directory of Claude Code session files indexed as conversation context.
 QAR_CLI_EFFORT,"Reasoning effort passed to the Claude CLI provider (low, medium, high; empty = CLI default)."
@@ -35,6 +36,8 @@ QAR_GREP_BUDGET_SECONDS,Wall-clock budget for one corpus grep (default 20).
 QAR_GREP_MAX_FILES,Most files one grep opens (default 20000).
 QAR_INTENT_JUDGE_TIMEOUT_SECONDS,Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds.
 QAR_MAX_CARDS,"Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead."
+QAR_MAX_CARDS_PER_FILE,"The most cards a batch to write or upload may hold per distinct file it names (default 0.25; 0 = no rule). A batch over it is refused whole, with a notice."
+QAR_MAX_SINGLE_FILE_CARD_SHARE,"The largest share of a batch's cards that may pin a single file (default 0.6; 0 = no rule). A batch over it is refused whole, with a notice."
 QAR_MODE_RELEASE_TIMEOUT_SECONDS,Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds.
 QAR_NOTE_FLOOR_FRESH_MINUTES,A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes.
 QAR_NOTE_FLOOR_RELEVANCE_GATED,0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated.

@@ -50,6 +50,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tupl
 from esoi import implementation
 from esoi.requirements import api, env
 from hubofhubs.recall import card_origin
+from .card_shape_guard import refusal as card_shape_refusal
 
 _log = logging.getLogger("quest-ai-runner.quest_api_cards")
 
@@ -791,6 +792,10 @@ class QuestApiCardRepository:
         pairs = [(str(cid), strip_server_owned(c)) for cid, c in cards if str(cid) not in refused]
         totals = {"written": 0, "embedded": 0, "vectors_accepted": 0, "vectors_rejected": 0,
                   "failed": len(refused)}
+        shape_lines = card_shape_refusal(card for _, card in pairs)
+        if shape_lines:     # a card per file never reaches the backend: the whole batch is refused, with the breakdown
+            totals["failed"] += len(pairs)
+            return {"batches": 0, "counts": totals, "failed": refused + [cid for cid, _ in pairs], "errors": shape_lines}
         failed: List[str] = list(refused)
         errors: List[str] = []
         batches = 0

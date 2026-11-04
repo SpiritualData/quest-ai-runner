@@ -40,7 +40,8 @@ def credentials(monkeypatch, backend):
 
 
 def build_store(tmp_path, n=3, with_import=True):
-    cards = [card(f"topic-{i}", [f"src/f{i}.py"]) for i in range(n)]
+    # topic cards of five files each: a store of one card per file is refused by the upload (card_shape_guard)
+    cards = [card(f"topic-{i}", [f"src/f{i}_{j}.py" for j in range(5)]) for i in range(n)]
     if with_import:
         imported = card("other-store-topic", ["src/x.py"])
         imported["provenance"] = {"imported_from": "../org"}

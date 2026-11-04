@@ -19,7 +19,7 @@ from hubofhubs.recall.context_card_ceilings import MAX_CARDS_PER_FOLDER_DEFAULT,
 from .walk_settings import STORE_DIR_NAME, skip_dirs_from_env
 
 __all__ = [
-    "ENV_MAX_CARDS", "STORE_DIR_NAME", "bootstrap_max_cards", "card_mount_mode", "bootstrap_max_files", "bootstrap_workers", "folder_review_enabled",
+    "ENV_MAX_CARDS", "STORE_DIR_NAME", "max_cards_per_file", "max_single_file_card_share", "card_shape_min_files", "bootstrap_max_cards", "card_mount_mode", "bootstrap_max_files", "bootstrap_workers", "folder_review_enabled",
     "max_cards_from_env", "max_cards_per_folder", "prune_dead_cards", "skip_dirs_from_env", "skip_nested_repos",
 ]
 
@@ -73,3 +73,28 @@ def prune_dead_cards() -> bool:
 
     Set it to ``0`` for a deployment that would rather keep a stale index than lose a card."""
     return flag_enabled(os.getenv("QAR_PRUNE_DEAD_CARDS"))
+
+
+def positive_float(name: str, default: float) -> float:
+    """A non-negative number from the environment variable ``name``, else ``default``; ``0`` is kept (it turns the rule off)."""
+    raw = (os.getenv(name) or "").strip()
+    try:
+        value = float(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+def max_cards_per_file() -> float:
+    """``QAR_MAX_CARDS_PER_FILE``: the most cards a batch to write or upload may hold per distinct file it names (default 0.25, ``0`` = no rule)."""
+    return positive_float("QAR_MAX_CARDS_PER_FILE", 0.25)
+
+
+def max_single_file_card_share() -> float:
+    """``QAR_MAX_SINGLE_FILE_CARD_SHARE``: the largest share of a batch's cards that may pin one file only (default 0.6, ``0`` = no rule)."""
+    return positive_float("QAR_MAX_SINGLE_FILE_CARD_SHARE", 0.6)
+
+
+def card_shape_min_files() -> int:
+    """``QAR_CARD_SHAPE_MIN_FILES``: a batch naming fewer distinct files than this is not judged by the two rules above (default 50)."""
+    return int(positive_float("QAR_CARD_SHAPE_MIN_FILES", 50))
