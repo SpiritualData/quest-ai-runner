@@ -89,6 +89,7 @@ flowchart LR
     s6["access-quest-operations<br/>access-quest-operations"]
     s7["take-in-the-world: the ways a request...<br/>take-in-the-world"]
     s8["Subconscious: the person's own...<br/>remember-and-recall"]
+    s9["Justified model calls<br/>justify-model-calls"]
     s1 -->|"A reported status on each task (with result text or..."| s3
     s1 -->|"A reported status on each task (with result text or..."| s5
     s2 -->|"Each step's view of the request (a carried message list or..."| s0
@@ -103,6 +104,7 @@ flowchart LR
     s7 -->|"One routed turn with its context sources"| s0
     s8 -->|"The admitted items with a one-line reason each, and the..."| s0
     s8 -->|"The admitted items with a one-line reason each, and the..."| s2
+    s9 -->|"A per-prompt table and the share of average model spend..."| s1
 ```
 
 ## Implementations

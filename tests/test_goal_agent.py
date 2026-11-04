@@ -57,3 +57,24 @@ def test_the_runner_answers_over_the_seats_it_is_given():
     assert isinstance(answer, GoalAnswer) and answer.kind == "answer"
     assert "Start with the outline." in answer.text
     assert provider.answer_calls >= 1
+
+
+def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_solutions():
+    """The edges do-grounded-work -> call-a-model and -> remember-and-recall are typed needs on the composition: the model seat is
+    call-a-model's own interface (a subtype of the hub's, so a plain hub provider still fills it) and the recall seat is
+    remember-and-recall's own."""
+    import typing
+    from hubofhubs.seats import ModelCalling, Remembering
+    from quest_ai_runner.core.planner_context import CardRecall
+    from quest_ai_runner.goal_agent import QuestAiRunnerLibrary
+    from quest_ai_runner.providers import RoutedModelCalling
+    hints = typing.get_type_hints(QuestAiRunnerLibrary.__init__)
+    assert hints["model"] is RoutedModelCalling and issubclass(RoutedModelCalling, ModelCalling)
+    assert hints["memory"] is CardRecall and issubclass(CardRecall, Remembering)
+
+
+def test_the_step_reasoning_arm_takes_its_model_by_call_a_models_own_interface():
+    import typing
+    from quest_ai_runner.area_reason_and_answer import RebuiltPerStep
+    from quest_ai_runner.providers import RoutedModelCalling
+    assert typing.get_type_hints(RebuiltPerStep.__init__)["model"] is RoutedModelCalling

@@ -13,9 +13,10 @@ from typing import Any
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
-from hubofhubs.seats import CardStore, ModelCalling, Remembering
+from hubofhubs.seats import CardStore
 
 from .area_reason_and_answer import StepReasoning
+from .core.planner_context import CardRecall
 from .config import RunnerConfig, build_orchestrator
 from .loop_wiring import GoalAnswer
 from .message_routing import RequestTakingIn
@@ -25,6 +26,7 @@ from .keep_it_generic.area import KeepingGeneric
 from .know_the_world.area import KnowingTheWorld
 from .think_critically.area import MetricHolding
 from .watch_for_risk.area import RunWatching
+from .providers import RoutedModelCalling
 from .runner.quest_client import QuestOperations
 
 
@@ -42,7 +44,7 @@ class QuestAiRunnerLibrary:
     ``reasoning``, ``taking_in``, ``body``, ``critic``, ``risk``, ``intents``, ``generic`` and ``world`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
     orchestrator."""
 
-    def __init__(self, model: ModelCalling, cards: CardStore, memory: Remembering, quest: QuestOperations,
+    def __init__(self, model: RoutedModelCalling, cards: CardStore, memory: CardRecall, quest: QuestOperations,
                  reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn], body: Lazy[BodyActing], critic: Lazy[MetricHolding],
                  risk: Lazy[RunWatching], intents: Lazy[IntentHolding],
                  generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld]) -> None:

@@ -22,6 +22,7 @@ from .core.recipes import Recipe, RecipeStore
 from .core.work_trace import WorkShowing
 from .loop_wiring import GoalAnswer, orchestrator_over
 from .message_routing import route_message
+from .providers import RoutedModelCalling
 
 
 class PromptCapture:
@@ -165,7 +166,7 @@ class RebuiltPerStep:
     methods hand a message to the member that owns that part of a step."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, model: ModelCalling, tiers: RegistryTierSelection, prompts: Lazy[PromptAssembling], turns: Lazy[TurnAnswering],
+    def __init__(self, model: RoutedModelCalling, tiers: RegistryTierSelection, prompts: Lazy[PromptAssembling], turns: Lazy[TurnAnswering],
                  replays: Lazy[OperationReplaying], labels: Lazy[MlTasks], whole: Lazy[EndToEnd], steps: Lazy[InterimPolicy],
                  work: Lazy[WorkShowing]) -> None:
         self.model, self.tiers, self.prompts, self.turns = model, tiers, prompts, turns

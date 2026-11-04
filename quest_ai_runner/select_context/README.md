@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `remember-and-recall:score_threshol
 
 ## How the solutions fit together
 
-select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. It follows the pointer of a card to the person's current notes and files through resolve-references, and it searches the cards and the specification records of a repository in one ranking through search-cards-and-specs.
+select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. It follows the pointer of a card to the person's current notes and files through resolve-references. search-cards-and-specs ranks the cards of a run together with the specification records of a repository in one list, taking the cards from select-context.
 
 ## Diagram
 
@@ -19,8 +19,8 @@ flowchart LR
     s0["Context card selector<br/>select-context"]
     s1["Fail-safe card reference resolver<br/>resolve-references"]
     s2["Unified card and specification search<br/>search-cards-and-specs"]
+    s0 -->|"An assembled context: rendered context view, card ids in..."| s2
     s1 -->|"Rendered text for the pointer, possibly marked abridged, or..."| s0
-    s2 -->|"One assembled context: ranked items, each with its kind..."| s0
 ```
 
 ## Solutions at a glance
