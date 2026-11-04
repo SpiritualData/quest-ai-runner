@@ -12,8 +12,8 @@ import tempfile
 from context_and_specs.world import CARD_PREFIX, world
 from context_selection.impls.hybrid_union import _MemoryVectorStore
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
 from quest_ai_runner.core.unified_search import two_pipelines
 
 ARM_CARDS = 3

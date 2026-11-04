@@ -250,7 +250,7 @@ def test_a_warning_is_cut_to_the_terminal_width_on_a_clause_or_a_word(tmp_path):
         "Context assembly timed out after 30.0s with no partial result; turn-start context was dropped "
         "and this turn proceeds without it (QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust)"))
     handler.handle(make_record(
-        "quest_ai_runner.adapters.vector_context_assembler",
+        "quest_ai_runner.select_context.vector_context_assembler",
         "Card store has 142781 cards; only the first 1000 are searched by meaning "
         "(prune it with quarantine_cards.py)."))
     handler.close()

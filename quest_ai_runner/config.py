@@ -572,7 +572,7 @@ class RunnerConfig:
     # everything is delivered exactly as before.
     context_updates_judge_relevance: bool = True
     # Wrap whatever context assembler is configured with the per-rep one
-    # (``adapters.rep_context_assembler.RepContextAssembler``): prepend the running rep's learned
+    # (``select_context.rep_context_assembler.RepContextAssembler``): prepend the running rep's learned
     # ``context_prefs`` to the context view, and push one back when a run consults a real source.
     # Needs a persona policy, since it is the persona resolver that says which rep a run is for.
     rep_context_prefs: bool = False

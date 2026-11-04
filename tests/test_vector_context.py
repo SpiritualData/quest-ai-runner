@@ -20,9 +20,9 @@ import pytest
 from hubofhubs.ports.context import AssembledContext, ContextAssembler, VectorHit, VectorStore
 from hubofhubs.ports.context import VectorStoreBase
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
-from quest_ai_runner.adapters import vector_context_assembler as vca
-from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
-from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.select_context import vector_context_assembler as vca
+from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
 
 
 # ---------------------------------------------------------------------------
@@ -1322,7 +1322,7 @@ class TestCapacityBound:
         coll = list(store._data.values())[0]
         remaining_ids = list(coll.keys())
         # The association for "oldest task alpha" should have been evicted.
-        from quest_ai_runner.adapters.vector_context_assembler import task_slug
+        from quest_ai_runner.select_context.vector_context_assembler import task_slug
         oldest_id = f"assoc:{task_slug('oldest task alpha')}"
         assert oldest_id not in remaining_ids, (
             f"oldest association should have been evicted; remaining: {remaining_ids}"
@@ -1716,7 +1716,7 @@ class TestResolveContextAssemblerSeedSourceWiring:
     def test_hybrid_vector_arm_has_seed_source_wired(self, tmp_path):
         """When vector_store is set, the resolved vector arm has seed_source wired."""
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler, _AUTO_CONTEXT
-        from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
+        from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
 
         # Build a minimal config with a vector store but no model_provider.
         vec_store = FakeVectorStore()

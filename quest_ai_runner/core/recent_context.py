@@ -656,7 +656,7 @@ def build_item_usage_hint(
     records: List[Dict[str, Any]], query_text: str, *, max_items_per_card: int = _MAX_HINT_ITEMS_PER_CARD,
 ) -> Dict[str, List[str]]:
     """Build the compact ``{card_id: [item_id, ...]}`` hint threaded into a fresh assembler's
-    ``meta["recent_item_usage"]`` (see ``adapters.hybrid_context_assembler``'s consolidation pass).
+    ``meta["recent_item_usage"]`` (see ``select_context.hybrid_context_assembler``'s consolidation pass).
 
     For each record carrying stored ``items``, ranks them by relevance to ``query_text`` (overlap
     with each item's ``input_keywords``) plus recency, and lists their ids in that order. This

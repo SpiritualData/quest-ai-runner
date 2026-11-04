@@ -31,7 +31,7 @@ from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
 
 from .conftest import StubProvider, StubRetrieval
 

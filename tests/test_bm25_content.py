@@ -86,7 +86,7 @@ def _make_temp_corpus(tmp_path: Path) -> Path:
 def _make_store(repo: Path, **kwargs):
     """Construct a BM25ContentStore (skips if bm25s absent)."""
     bm25s = pytest.importorskip("bm25s")  # noqa: F841 -- ensures bm25s is available
-    from quest_ai_runner.adapters.bm25_content_store import BM25ContentStore
+    from quest_ai_runner.select_context.bm25_content_store import BM25ContentStore
     return BM25ContentStore(root=str(repo), **kwargs)
 
 
@@ -112,10 +112,10 @@ class TestImportGuard:
         """
         import sys
         monkeypatch.setitem(sys.modules, "bm25s", None)
-        monkeypatch.delitem(sys.modules, "quest_ai_runner.adapters.bm25_content_store",
+        monkeypatch.delitem(sys.modules, "quest_ai_runner.select_context.bm25_content_store",
                             raising=False)
 
-        from quest_ai_runner.adapters.bm25_content_store import BM25ContentStore
+        from quest_ai_runner.select_context.bm25_content_store import BM25ContentStore
         with pytest.raises(ImportError, match="quest-ai-runner\\[bm25\\]"):
             BM25ContentStore(root=str(tmp_path))
 
@@ -370,7 +370,7 @@ class TestNeverRaise:
     def test_assemble_never_raises_on_nonexistent_root(self, tmp_path):
         """A non-existent root must not raise."""
         bm25s = pytest.importorskip("bm25s")  # noqa: F841
-        from quest_ai_runner.adapters.bm25_content_store import BM25ContentStore
+        from quest_ai_runner.select_context.bm25_content_store import BM25ContentStore
 
         store = BM25ContentStore(root=str(tmp_path / "does_not_exist"))
         ac = store.assemble("anything")

@@ -88,10 +88,10 @@ flowchart LR
 | `select-context:vector_bge_small` | Plain cosine semantic baseline | [evaluation/components/context_selection/impls/vector_bge_small.py](../../evaluation/components/context_selection/impls/vector_bge_small.py) |  |
 | `select-context:hybrid_union` | Keyword plus vector fusion (measured live class) | [evaluation/components/context_selection/impls/hybrid_union.py](../../evaluation/components/context_selection/impls/hybrid_union.py) |  |
 | `select-context:file` | Card-file keyword store | [quest_ai_runner/adapters/file_context_store.py](../adapters/file_context_store.py) |  |
-| `select-context:vector` | Semantic card retrieval | [quest_ai_runner/adapters/vector_context_assembler.py](../adapters/vector_context_assembler.py) |  |
-| `select-context:hybrid` | Parallel keyword and vector fusion | [quest_ai_runner/adapters/hybrid_context_assembler.py](../adapters/hybrid_context_assembler.py) |  |
-| `select-context:bm25` | Exact-content BM25 arm | [quest_ai_runner/adapters/bm25_content_store.py](../adapters/bm25_content_store.py) |  |
-| `select-context:rep` | Per-agent preference wrapper | [quest_ai_runner/adapters/rep_context_assembler.py](../adapters/rep_context_assembler.py) |  |
+| `select-context:vector` | Semantic card retrieval | [quest_ai_runner/select_context/vector_context_assembler.py](vector_context_assembler.py) |  |
+| `select-context:hybrid` | Parallel keyword and vector fusion | [quest_ai_runner/select_context/hybrid_context_assembler.py](hybrid_context_assembler.py) |  |
+| `select-context:bm25` | Exact-content BM25 arm | [quest_ai_runner/select_context/bm25_content_store.py](bm25_content_store.py) |  |
+| `select-context:rep` | Per-agent preference wrapper | [quest_ai_runner/select_context/rep_context_assembler.py](rep_context_assembler.py) |  |
 | `select-context:composite` | Ordered assembler composition | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
 | `select-context:seeded_keyword_store` | Seeded keyword card-quality arm | [evaluation/components/card_quality/impls/seeded_keyword_store.py](../../evaluation/components/card_quality/impls/seeded_keyword_store.py) |  |
 | `select-context:seeded_keyword_open` | Open-gate ablation of the card-quality arm | [evaluation/components/card_quality/impls/seeded_keyword_open.py](../../evaluation/components/card_quality/impls/seeded_keyword_open.py) |  |

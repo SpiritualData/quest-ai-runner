@@ -22,7 +22,7 @@ from .interactive_session_render import _Console
 _BACKGROUND_BOOTSTRAP_LOGGER_NAMES = (
     "quest-ai-runner.context",                       # config.py, adapters/file_context_store.py
     "hubofhubs.recall",                              # the card store's folder review, ceilings, mounts and bootstrap, moved to the hub
-    "quest_ai_runner.adapters.bm25_content_store",    # adapters/bm25_content_store.py
+    "quest_ai_runner.select_context.bm25_content_store",    # select_context/bm25_content_store.py
 )
 
 

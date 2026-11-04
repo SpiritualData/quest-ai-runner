@@ -419,7 +419,8 @@ def _resolve_context_assembler_base(
             _prewarm_thread.start()
 
         if vector_store is not None:
-            from .adapters import HybridContextAssembler, VectorContextAssembler
+            from .select_context.hybrid_context_assembler import HybridContextAssembler
+            from .select_context.vector_context_assembler import VectorContextAssembler
             # Wire seed_source so the vector arm is seeded from the keyword store's
             # docstring cards on the first assemble() call (cold-start fix). Because
             # sync() is fingerprint-based, subsequent calls only re-embed changed

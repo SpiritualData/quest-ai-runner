@@ -20,7 +20,7 @@ from hubofhubs.recall import bm25_store as hub
 from hubofhubs.recall.bm25_store import BOOTSTRAP_MAX_BYTES, SOURCE_EXTS  # noqa: F401  (same objects, old import path)
 
 from ..core.prompt_specs import declare, render_prompt
-from .walk_settings import effective_skip_dirs
+from ..adapters.walk_settings import effective_skip_dirs
 
 QUERY_SPEC = declare(
     "select-context.bm25-queries", solution="select-context", metric="metric-select-context",

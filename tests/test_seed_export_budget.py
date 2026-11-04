@@ -24,7 +24,7 @@ from quest_ai_runner.adapters.context_store_cards import (
     cards_in_seed_order,
 )
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.vector_context_assembler import (
+from quest_ai_runner.select_context.vector_context_assembler import (
     VectorContextAssembler,
     seed_source_takes_limit,
 )

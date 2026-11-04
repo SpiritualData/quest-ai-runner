@@ -759,7 +759,7 @@ times out, or raises still gets recent context instead of none at all.
 
 ### Threading the hint into fresh assembly (the consolidator)
 
-`adapters/hybrid_context_assembler.py`'s `HybridContextAssembler` runs ONE consolidating LLM pass
+`select_context/hybrid_context_assembler.py`'s `HybridContextAssembler` runs ONE consolidating LLM pass
 (`core/card_filter.py`'s `consolidate_context`) over the merged card set from both retrieval arms.
 When the caller's `meta["recent_item_usage"]` names item ids on a candidate card, the consolidation
 prompt gets an extra per-card line ("recently useful for a similar input: ..."), and the rules tell
@@ -831,7 +831,7 @@ q in quest_ids])` derives them automatically. From there `_ctx_meta` (or its per
 reaches every arm that reads or writes a card/hit:
 
 - **Recent-context** (`core/recent_context.py`, above): fences at both `record()` and `load()`.
-- **Vector card arm** (`adapters/vector_context_assembler.py`'s `VectorContextAssembler`, backed by
+- **Vector card arm** (`select_context/vector_context_assembler.py`'s `VectorContextAssembler`, backed by
   `adapters/qdrant_card_repository.py`'s `QdrantCardVectorStore`): a hit's own `scope_tags` payload
   field (passed through from the stored card) is checked against `meta["scope_tags"]` AFTER the
   vector search returns, before ranking/rendering -- a post-filter on the hit, never the store's own

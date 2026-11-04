@@ -181,7 +181,7 @@ def resolve_context_assembler_stack(base_or_cfg: Any, cfg: Optional[RunnerConfig
         quest_client = quest_client or _quest_client_for(cfg)
     if cfg.rep_context_prefs and quest_client is not None:
         try:
-            from .adapters.rep_context_assembler import RepContextAssembler
+            from .select_context.rep_context_assembler import RepContextAssembler
             base = RepContextAssembler(base, client=quest_client, team_id=cfg.team_id)
             _log.info("context: per-rep context_prefs layer ON")
         except Exception as e:  # noqa: BLE001 -- an optional layer never blocks a lane
@@ -297,7 +297,8 @@ def _fuse_vector_arm(cfg: RunnerConfig, keyword: Any) -> Any:
     """
     spec = cfg.vector_store or {}
     try:
-        from .adapters import HybridContextAssembler, VectorContextAssembler
+        from .select_context.hybrid_context_assembler import HybridContextAssembler
+        from .select_context.vector_context_assembler import VectorContextAssembler
         from .adapters.qdrant_vector_store import QdrantVectorStore, make_voyage_embedder
 
         store = QdrantVectorStore(

@@ -215,7 +215,7 @@ def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
             return out
         return embed
     monkeypatch.setattr(hybrid_union, "embedder", fake_embedder)
-    import quest_ai_runner.adapters.hybrid_context_assembler as live
+    import quest_ai_runner.select_context.hybrid_context_assembler as live
     calls = []
     original = live.HybridContextAssembler.assemble
     monkeypatch.setattr(live.HybridContextAssembler, "assemble",

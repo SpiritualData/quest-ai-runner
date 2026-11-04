@@ -19,8 +19,9 @@ def build(meter):
     if not os.environ.get("VOYAGE_API_KEY"):
         raise SystemExit("live_updater_hybrid needs VOYAGE_API_KEY (and a model backend); use --impl seeded_keyword_store offline")
     from qdrant_client import QdrantClient
-    from quest_ai_runner.adapters import (
-        HybridContextAssembler, QdrantCardRepository, QdrantCardVectorStore, VectorContextAssembler)
+    from quest_ai_runner.adapters import QdrantCardRepository, QdrantCardVectorStore
+    from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
+    from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
     from quest_ai_runner.adapters.file_context_store import FileContextStore
     from quest_ai_runner.adapters.qdrant_vector_store import make_voyage_embedder
 

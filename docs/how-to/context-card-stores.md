@@ -74,7 +74,7 @@ a per-hit confidence floor (`_hit_min_score`).
 
 **Per-rep context.** `Poller._rep_context_dirs` (`runner/poller.py:953`) puts a rep's notes and turns
 under `<cards_dir>/reps/<user id>/`; the rep's learned `context_prefs` live on the rep's Quest
-profile (`adapters/rep_context_assembler.py`, keyed by `personas.current_rep`). These are per rep.
+profile (`select_context/rep_context_assembler.py`, keyed by `personas.current_rep`). These are per rep.
 The cards themselves are not.
 
 **Repositories.**

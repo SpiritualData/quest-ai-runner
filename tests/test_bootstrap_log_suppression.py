@@ -39,7 +39,7 @@ def test_default_call_also_raises_bm25_content_store_logger():
     _reset_loggers()
     try:
         _suppress_background_bootstrap_logs(verbose=False)
-        log = logging.getLogger("quest_ai_runner.adapters.bm25_content_store")
+        log = logging.getLogger("quest_ai_runner.select_context.bm25_content_store")
         assert not log.isEnabledFor(logging.INFO)
     finally:
         _reset_loggers()

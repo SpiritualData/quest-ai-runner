@@ -5,10 +5,10 @@ needs into a ``RunnerConfig``. This package is the public import path for them
 (``from quest_ai_runner.adapters import FilesAdapter, CompositeRetrievalAdapter``). Each class says what it is in its own
 module docstring, and ``esoi/COMPONENTS.md`` lists them by role: retrieval (files, remote files, cached DB, Claude
 sessions, Google Chat and Drive, Notion, Quest, MCP), model providers (Anthropic, Gemini, OpenAI, DeepSeek,
-Claude CLI), context assemblers and card stores (file, BM25, vector, hybrid, Qdrant, Quest API), the ACP deep runner
-and the file writer. The fast-edit and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). Optional extras (``bm25``, ``qdrant``) are
+Claude CLI), card stores (file, Qdrant, Quest API), the ACP deep runner
+and the file writer. The fast-edit and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). The optional extra ``qdrant`` is
 imported behind a guard, so a name whose extra is missing is ``None``. An adapter that only one area uses lives in that area's
-folder (``quest_ai_runner/<intent id>/``, for example ``know_the_world`` for web research) and is imported from there.
+folder (``quest_ai_runner/<intent id>/``, for example ``know_the_world`` for web research and ``select_context`` for the context assemblers) and is imported from there.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
@@ -40,19 +40,13 @@ from .remote_files_adapter import RemoteFilesAdapter
 from .private_link_web import PrivateLinkWebResearch
 from .files_writer import FilesWriter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
-from .hybrid_context_assembler import HybridContextAssembler
 from .quest_guidance_loader import QuestGuidanceLoader
 from .quest_retrieval_adapter import QuestRetrievalAdapter
 from .quest_api_card_repository import QuestApiCardRepository, QuestApiCardVectorStore
 from hubofhubs.recall.reference_resolver import ReferenceResolver, NoteResolver, build_resolver_registry, collect_reference_resolvers
-from .vector_context_assembler import VectorContextAssembler
 
-# Each of these needs an optional extra (bm25s, qdrant-client + fastembed): a missing extra leaves the
+# Each of these needs an optional extra (qdrant-client + fastembed): a missing extra leaves the
 # name ``None`` instead of breaking ``import quest_ai_runner.adapters``.
-try:
-    from .bm25_content_store import BM25ContentStore
-except ImportError:
-    BM25ContentStore = None  # type: ignore[assignment,misc]
 try:
     from .qdrant_vector_store import QdrantVectorStore, make_voyage_embedder
 except ImportError:

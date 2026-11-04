@@ -821,12 +821,12 @@
    "verdict": "TIE"
   },
   "modules": {
-   "bm25": "quest_ai_runner.adapters.bm25_content_store",
+   "bm25": "quest_ai_runner.select_context.bm25_content_store",
    "composite": "quest_ai_runner.config_assembler",
    "file": "quest_ai_runner.adapters.file_context_store",
-   "hybrid": "quest_ai_runner.adapters.hybrid_context_assembler",
-   "rep": "quest_ai_runner.adapters.rep_context_assembler",
-   "vector": "quest_ai_runner.adapters.vector_context_assembler"
+   "hybrid": "quest_ai_runner.select_context.hybrid_context_assembler",
+   "rep": "quest_ai_runner.select_context.rep_context_assembler",
+   "vector": "quest_ai_runner.select_context.vector_context_assembler"
   }
  },
  "show-progress": {

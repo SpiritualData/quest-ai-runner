@@ -208,7 +208,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_TOOL_TASK_ID` |  | `core/tools.py`, `tools/__main__.py` | `docs/how-to/tools.md` |
 | `QAR_USER_ID` |  | `adapters/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_VECTOR_BACKEND` |  | `config_assembler.py`, `runner/lane.py` | `docs/explanation/vector-context.md` |
-| `QAR_VECTOR_MAX_SEED_ITEMS` | Cards one vector seed pass may embed (0 lifts the bound). | `adapters/vector_context_assembler.py` | - |
+| `QAR_VECTOR_MAX_SEED_ITEMS` | Cards one vector seed pass may embed (0 lifts the bound). | `select_context/vector_context_assembler.py` | - |
 | `QAR_VECTOR_QDRANT_API_KEY` | Older name for QAR_QDRANT_API_KEY. | `config_context_index.py` | - |
 | `QAR_VECTOR_QDRANT_URL` | Older name for QAR_QDRANT_URL. | `config_assembler.py`, `config_context_index.py` | - |
 | `QAR_VECTOR_SPACE` |  | `config_assembler.py` | `docs/how-to/context-card-stores.md` |
