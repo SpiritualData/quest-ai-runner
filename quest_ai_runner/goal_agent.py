@@ -24,6 +24,7 @@ from .area_act_as_the_body import BodyActing
 from .hold_the_intents.area import IntentHolding
 from .keep_it_generic.area import KeepingGeneric
 from .know_the_world.area import KnowingTheWorld
+from .select_context.area import ContextChoosing
 from .think_critically.area import MetricHolding
 from .watch_for_risk.area import RunWatching
 from .providers import RoutedModelCalling
@@ -41,15 +42,16 @@ class GoalAgent(typing.Protocol):
 @implementation("do-grounded-work", "library")
 class QuestAiRunnerLibrary:
     """The orchestrator of ``core/orchestrator.py`` wired to the seats it is handed; one object answers any number of messages. The
-    ``reasoning``, ``taking_in``, ``body``, ``critic``, ``risk``, ``intents``, ``generic`` and ``world`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
+    ``reasoning``, ``taking_in``, ``body``, ``critic``, ``risk``, ``intents``, ``generic``, ``world`` and ``context`` areas are built on first use and not read by ``answer``, which reaches the loop's parts through the
     orchestrator."""
 
     def __init__(self, model: RoutedModelCalling, cards: CardStore, memory: CardRecall, quest: QuestOperations,
                  reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn], body: Lazy[BodyActing], critic: Lazy[MetricHolding],
                  risk: Lazy[RunWatching], intents: Lazy[IntentHolding],
-                 generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld]) -> None:
+                 generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld], context: Lazy[ContextChoosing]) -> None:
         self.model, self.cards, self.memory, self.quest, self.reasoning, self.taking_in = model, cards, memory, quest, reasoning, taking_in
         self.body, self.critic, self.risk, self.intents, self.generic, self.world = body, critic, risk, intents, generic, world
+        self.context = context
 
     def config(self) -> RunnerConfig:
         """The runner's configuration over the seats: the model, the cards as the context assembler, the Quest account."""

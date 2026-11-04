@@ -1,0 +1,6 @@
+[
+ {"id": "CC-01", "area": "all_four_lines", "task": "What should I work on first this week?", "context": "Finish the book outline by Friday",
+  "locator": {"kind": "note", "path": "plan.md"}, "resolved": "Outline due Friday", "query": "book outline", "hits": ["card-1", "card-2"], "searched": []},
+ {"id": "CC-02", "area": "nothing_found", "task": "Anything new?", "context": "", "locator": {"kind": "note", "path": "gone.md"}, "resolved": "",
+  "query": "nothing", "hits": [], "searched": []}
+]

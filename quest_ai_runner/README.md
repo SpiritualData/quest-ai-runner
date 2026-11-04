@@ -9,7 +9,7 @@ Keeps a person's or team's goals moving by answering from their own material, ca
 - Entry call: `quest_ai_runner.run("do-grounded-work", 'What should I work on first this week?')`
 - Selected implementation: `library`
 - Metric: QAR overall score, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage
-- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 928 more
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 936 more
 
 ## Queued-task runner (`run-queued-tasks`)
 
@@ -54,7 +54,7 @@ Makes sure everything the system does applies the relevant ESOI metric and leave
 - Entry call: `quest_ai_runner.run("think-critically", ...)`
 - Selected implementation: `deep_runs_only`
 - Metric: Requests held to their ESOI metric by code
-- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 921 more
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 929 more
 
 ## Quest account access (`access-quest-operations`)
 
@@ -74,6 +74,15 @@ Let a person or a program reach the runner from wherever they work and be unders
 - Metric: Ways in that pass their own metric
 - Implemented by: [`quest_ai_runner/area_take_in_the_world.py`](area_take_in_the_world.py), [`quest_ai_runner/take_in_the_world/__init__.py`](take_in_the_world/__init__.py)
 
+## Context choice (`choose-the-context`)
+
+Gives the planner the right material at little cost, so a run starts grounded in the person's own knowledge without re-discovering it.
+
+- Entry call: `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')`
+- Selected implementation: `per_lane_assembly`
+- Metric: Context handed to the planner
+- Implemented by: [`quest_ai_runner/select_context/area.py`](select_context/area.py)
+
 ## Diagram
 
 An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
@@ -88,23 +97,25 @@ flowchart LR
     s5["Critical thinking<br/><i>think-critically</i>"]
     s6["Quest account access<br/><i>access-quest-operations</i>"]
     s7["Request intake<br/><i>take-in-the-world</i>"]
-    s8["Subconscious<br/><i>remember-and-recall</i>"]
-    s9["Justified model calls<br/><i>justify-model-calls</i>"]
+    s8["Context choice<br/><i>choose-the-context</i>"]
+    s9["Subconscious<br/><i>remember-and-recall</i>"]
+    s10["Justified model calls<br/><i>justify-model-calls</i>"]
     s1 -->|"A reported status on each task (with result text or..."| s3
     s1 -->|"A reported status on each task (with result text or..."| s5
     s2 -->|"Each step's view of the request (a carried message list or..."| s0
     s2 -->|"Each step's view of the request (a carried message list or..."| s3
     s3 -->|"A current state view for the request's scope with the time..."| s0
     s4 -->|"For a request the representative handles: its standing view..."| s0
-    s4 -->|"For a request the representative handles: its standing view..."| s8
+    s4 -->|"For a request the representative handles: its standing view..."| s9
     s5 -->|"Per request: the metric applied with its reading before and..."| s0
     s6 -->|"The result of one Quest operation"| s0
     s6 -->|"The result of one Quest operation"| s1
     s6 -->|"The result of one Quest operation"| s3
     s7 -->|"One routed turn with its context sources"| s0
-    s8 -->|"The admitted items with a one-line reason each, and the..."| s0
-    s8 -->|"The admitted items with a one-line reason each, and the..."| s2
-    s9 -->|"A per-prompt table and the share of average model spend..."| s1
+    s8 -->|"The assembled context, the ids of the cards it drew on, a..."| s0
+    s9 -->|"The admitted items with a one-line reason each, and the..."| s0
+    s9 -->|"The admitted items with a one-line reason each, and the..."| s2
+    s10 -->|"A per-prompt table and the share of average model spend..."| s1
 ```
 
 ## Implementations
@@ -126,6 +137,7 @@ flowchart LR
 | Code-enforced before and after on deep runs only (today) | `think-critically:deep_runs_only` | [`quest_ai_runner/think_critically/area.py`](think_critically/area.py) | selected |
 | Channels, terminal and package as ways in | `take-in-the-world:ways_in` | [`quest_ai_runner/area_take_in_the_world.py`](area_take_in_the_world.py) | selected |
 | Quest HTTP client from the environment | `access-quest-operations:quest_client` | [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py) | selected |
+| Per-lane assembly of the context members (today) | `choose-the-context:per_lane_assembly` | [`quest_ai_runner/select_context/area.py`](select_context/area.py) | selected |
 
 ## Metrics
 
@@ -143,6 +155,7 @@ flowchart LR
 - Requests held to their ESOI metric by code (`metric-think-critically`): leader `deep_runs_only`, 4 of 10 cases
 - Parity of Quest operations across access points (`metric-quest-operations-parity`)
 - Ways in that pass their own metric (`metric-take-in-the-world`)
+- Context handed to the planner (`metric-choose-the-context`): leader `per_lane_assembly`, 2 of 2 cases
 
 ## Problems
 

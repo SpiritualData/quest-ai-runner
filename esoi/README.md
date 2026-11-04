@@ -8,7 +8,7 @@ Opportunities: Other products that need an AI which works from a person's own go
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and the Grounded goal agent is that loop. It asks the model through the Tiered model provider layer, works in the person's Quest account through Quest account access and takes in requests through Request intake. It reasons step by step through Mind, recalls what a request needs through Subconscious and acts on the account through Body. It holds its work to the metric that serves it through Critical thinking, has every run watched through Overseer and keeps the long view across turns through Higher mind. It stays comparable by metric through Evolve by metric and answers questions beyond the person's own material through Science. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind sends the prompt of each step to the model through Tiered model provider layer. Overseer has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and the Grounded goal agent is that loop. It asks the model through the Tiered model provider layer, works in the person's Quest account through Quest account access and takes in requests through Request intake. It reasons step by step through Mind, recalls what a request needs through Subconscious and acts on the account through Body. It holds its work to the metric that serves it through Critical thinking, has every run watched through Overseer and keeps the long view across turns through Higher mind. It stays comparable by metric through Evolve by metric, answers questions beyond the person's own material through Science and chooses what a planner reads through Context choice. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind sends the prompt of each step to the model through Tiered model provider layer. Overseer has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport.
 
 ## Diagram
 
@@ -30,8 +30,9 @@ flowchart LR
     s11["Critical thinking<br/><i>think-critically</i>"]
     s12["Quest account access<br/><i>access-quest-operations</i>"]
     s13["Request intake<br/><i>take-in-the-world</i>"]
-    s14["Subconscious<br/><i>remember-and-recall</i>"]
-    s15["Justified model calls<br/><i>justify-model-calls</i>"]
+    s14["Context choice<br/><i>choose-the-context</i>"]
+    s15["Subconscious<br/><i>remember-and-recall</i>"]
+    s16["Justified model calls<br/><i>justify-model-calls</i>"]
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s2
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s6
     s0 -->|"A raw decision dictionary for planning, answer text for..."| s7
@@ -48,15 +49,16 @@ flowchart LR
     s8 -->|"Each step's view of the request (a carried message list or..."| s9
     s9 -->|"A current state view for the request's scope with the time..."| s6
     s10 -->|"For a request the representative handles: its standing view..."| s6
-    s10 -->|"For a request the representative handles: its standing view..."| s14
+    s10 -->|"For a request the representative handles: its standing view..."| s15
     s11 -->|"Per request: the metric applied with its reading before and..."| s6
     s12 -->|"The result of one Quest operation"| s6
     s12 -->|"The result of one Quest operation"| s7
     s12 -->|"The result of one Quest operation"| s9
     s13 -->|"One routed turn with its context sources"| s6
-    s14 -->|"The admitted items with a one-line reason each, and the..."| s6
-    s14 -->|"The admitted items with a one-line reason each, and the..."| s8
-    s15 -->|"A per-prompt table and the share of average model spend..."| s7
+    s14 -->|"The assembled context, the ids of the cards it drew on, a..."| s6
+    s15 -->|"The admitted items with a one-line reason each, and the..."| s6
+    s15 -->|"The admitted items with a one-line reason each, and the..."| s8
+    s16 -->|"A per-prompt table and the share of average model spend..."| s7
 ```
 
 ## Solutions at a glance
@@ -77,6 +79,7 @@ flowchart LR
 | Critical thinking | `think-critically` | `quest_ai_runner.run("think-critically", ...)` | `deep_runs_only` | Requests held to their ESOI metric by code |
 | Quest account access | `access-quest-operations` | `quest_ai_runner.run("access-quest-operations", 'quest-id')` | `quest_client` | Parity of Quest operations across access points |
 | Request intake | `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | `ways_in` | Ways in that pass their own metric |
+| Context choice | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | `per_lane_assembly` | Context handed to the planner |
 | Subconscious | `remember-and-recall` | `quest_ai_runner.run("remember-and-recall", 'rust release')` | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
 | Justified model calls | `justify-model-calls` | no entry declared | `spec_registry` | Justified share of model spend |
 
@@ -122,7 +125,7 @@ flowchart LR
 - Hub of hubs (`QME9`): leader `registry_scan`, 244 of 271 cases
 - Correct selection decisions over the evolve-by-metric cases (`metric-metric-earns-its-run`): leader `structure_library`, 13 of 17 cases
 - Intents whose solutions one paragraph and one diagram explain as the code builds them (`metric-solution-coherence`)
-- and 17 more: all 27 are in [metrics](#metrics) of the full record below
+- and 18 more: all 28 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -239,6 +242,7 @@ flowchart LR
 | Critical thinking | `think-critically` | deep_runs_only | Requests held to their ESOI metric by code |
 | Quest account access | `access-quest-operations` | quest_client | Parity of Quest operations across access points |
 | Request intake | `take-in-the-world` | ways_in | Ways in that pass their own metric |
+| Context choice | `choose-the-context` | per_lane_assembly | Context handed to the planner |
 | Subconscious | `remember-and-recall` | recency_window | Goal-relevant admission at a precision floor with nothing out of scope |
 | Justified model calls | `justify-model-calls` | spec_registry | Justified share of model spend |
 
@@ -268,7 +272,7 @@ flowchart LR
 | One view per intent, cascading down (proposed) | `hold-the-intents:per_intent_cascade` |  |  |
 | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) | `hold-the-intents:per_rep_assigned_view` |  |  |
 | Registry plus per-call ablation against the owner metric (proposed) | `justify-model-calls:spec_registry_ablation` |  |  |
-| quest-ai-runner library | `do-grounded-work:library` | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) | [select_context](select_context/README.md) |
+| quest-ai-runner library | `do-grounded-work:library` | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) |  |
 | Prefix-routing multi-provider | `call-a-model:multi_provider` | [quest_ai_runner/providers.py](../quest_ai_runner/providers.py) |  |
 | Digest-driven overseer | `watch-for-risk:overseer` | [quest_ai_runner/watch_for_risk/area.py](../quest_ai_runner/watch_for_risk/area.py) | [watch_for_risk](watch_for_risk/README.md) |
 | Offline lifecycle harness | `run-queued-tasks:qar_runner` | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
@@ -283,6 +287,7 @@ flowchart LR
 | Code-enforced before and after on deep runs only (today) | `think-critically:deep_runs_only` | [quest_ai_runner/think_critically/area.py](../quest_ai_runner/think_critically/area.py) | [think_critically](think_critically/README.md) |
 | Channels, terminal and package as ways in | `take-in-the-world:ways_in` | [quest_ai_runner/area_take_in_the_world.py](../quest_ai_runner/area_take_in_the_world.py) | [take_in_the_world](take_in_the_world/README.md) |
 | Quest HTTP client from the environment | `access-quest-operations:quest_client` | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
+| Per-lane assembly of the context members (today) | `choose-the-context:per_lane_assembly` | [quest_ai_runner/select_context/area.py](../quest_ai_runner/select_context/area.py) | [select_context](select_context/README.md) |
 | Keyless command-line provider | `call-a-model:claude_cli` | [quest_ai_runner/adapters/claude_cli_provider.py](../quest_ai_runner/adapters/claude_cli_provider.py) |  |
 | MCP gateway bridge transport | `talk-over-a-channel:openclaw` | [quest_ai_runner/adapters/openclaw_channel.py](../quest_ai_runner/adapters/openclaw_channel.py) |  |
 | Rebuilt prompt per step with the context re-sent from cache | `reason-and-answer:rebuilt_full_context` | [quest_ai_runner/core/orchestrator_planning.py](../quest_ai_runner/core/orchestrator_planning.py) |  |
@@ -331,6 +336,7 @@ flowchart LR
 - Requests held to their ESOI metric by code (`metric-think-critically`): `esoi run think_critically --impl deep_runs_only`
 - Parity of Quest operations across access points (`metric-quest-operations-parity`): `none`
 - Ways in that pass their own metric (`metric-take-in-the-world`): `none`
+- Context handed to the planner (`metric-choose-the-context`): `esoi run context_choice --impl per_lane_assembly`
 - Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): `esoi run admit_to_the_mind --impl recency_window`
 - Justified share of model spend (`metric-justified-model-spend`): `esoi run justified_model_spend --impl spec_registry_ablation`
 - Justified model spend (`QME8`): `esoi run justified_model_spend --impl spec_registry_ablation`

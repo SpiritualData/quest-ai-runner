@@ -177,13 +177,13 @@ enabled = true
 
 [rules.S38]
 enabled = true
-# The limit on how many solutions one implementation uses is raised from 9 to 11, for one reason: the top intent's one implementation,
-# do-grounded-work:library, takes the model, the Quest account and eight areas as typed seats (goal_agent.py), and the code composes no
+# The limit on how many solutions one implementation uses is raised from 9 to 12, for one reason: the top intent's one implementation,
+# do-grounded-work:library, takes the model, the Quest account and nine areas as typed seats (goal_agent.py), and the code composes no
 # grouping of them (the areas are siblings, none builds on another), so grouping them in the records would state a layer the code does
 # not have. No other intent uses more than three. The esoi library reads max_fan_out as one value for the repository (there is no per-intent
-# key in `[rules.S38.floors.<intent>]`), so the limit is this one value, to be lowered to 9 with the library change that allows it per intent.
+# key in `[rules.S38.floors.<intent>]`), so the limit is this one value, to be lowered with the library change that allows it per intent.
 # The sentence limit (which defaults to the fan-out limit plus one) is pinned at its old value.
-max_fan_out = 11
+max_fan_out = 12
 max_names_per_sentence = 10
 
 # The top intent: every edge between its solutions is imported code or executable names.
@@ -227,11 +227,10 @@ coverage = 1.0
 precision = 0.333
 coverage = 0.667
 
-# 1 of 4: select-context uses index-by-meaning (the vector assembler and the composite assembler name it, moved here from remember_and_recall
-# for that reason). The area arises from do-grounded-work:library, whose code reaches the assemblers through the lane's configuration
-# (config.py), so two of the three host edges are only imported through another module and one shows nothing.
+# 4 of 4: the area arises from choose-the-context:per_lane_assembly (select_context/area.py), which takes the assembler, the reference
+# resolver, the meaning index and names the mixed search in code, so every host edge shows imported code or an executable name.
 [rules.S38.floors.select_context]
-precision = 0.25
+precision = 1.0
 coverage = 1.0
 
 # 7 of 8: feed-context-sources is a part of the area that no typed seat composes; configure-a-lane imports the selector it uses
