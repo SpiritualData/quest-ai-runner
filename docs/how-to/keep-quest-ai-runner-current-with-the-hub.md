@@ -71,9 +71,14 @@ refuse a batch of one card per file (`adapters/card_shape_guard.py`, `QAR_MAX_CA
 is selected: the guard is a safety net in the write path, not part of the ranking.
 
 **One number decides.** The hub's candidate arms are scored on QAR's own metric, `metric-select-context`
-(`evaluation/components/context_selection`), as one balanced score per arm: accuracy over every case (the 63 file-finding cases and the
-60 topic cases from QAR's git history), cost (model dollars plus a store charge that grows with the share of the 1,000-card limit the arm's
-store fills) and time, with the weights and budgets in `[balance.context_selection]` of `esoi.toml`, fixed before an arm is scored. The
+(`evaluation/components/context_selection`), as one balanced score per arm: accuracy over every case (the 63 file-finding cases, the 60 topic
+cases from QAR's git history, and the private real inputs when `QAR_PRIVATE_CONTEXT_DATASET` is set), cost (model dollars plus a store charge
+that grows with the share of the 1,000-card limit the arm's store fills, plus for a real input the size of the context it selects) and time,
+with the weights and budgets in `[balance.context_selection]` of `esoi.toml`, fixed before an arm is scored. The three case sources are mixed
+with equal weight, and the kinds of real input (self-contained, one needed item, several) in the proportions of the dataset's manifest
+(`evaluation/components/context_selection/private_cases.py` holds both). With the variable absent the real inputs add no case, which is the
+state the committed rows are recorded in; a row says in its details how many cases of each source were present, and its `cases_sha` covers
+the private files' sha256 (or `private:absent`), so a different mix is never compared silently. The
 hub's `per_file_symbols` and a one-card-per-folder baseline are arms of that metric beside QAR's own; both are free and run offline with
 `esoi run context_selection --impl <arm> --record`.
 

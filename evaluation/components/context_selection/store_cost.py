@@ -24,4 +24,5 @@ def store_charged(select, meter, cards=lambda corpus: len(corpus.cards)):
         meter.cost_usd += cost_budget() * min(size / DEFAULT_MAX_CARDS, 1.0)
         return found
     charged.cards_per_file = None
+    charged.meter = meter    # the private cases add the cost of the context they select to the same meter
     return charged

@@ -15,7 +15,8 @@ from pathlib import Path
 import common
 
 HERE = Path(__file__).resolve().parent
-CASES_FILE, PIN_FILE = HERE / "topic_cases.json", HERE / "topic_cases_pin.json"
+DATASETS = HERE / "datasets"    # the folder the harness hashes into the cases digest
+CASES_FILE, PIN_FILE = DATASETS / "topic_cases.json", DATASETS / "topic_cases_pin.json"
 PACKAGE = "quest_ai_runner/"
 MIN_CHANGED, MAX_CHANGED, MIN_SUBJECT, MIN_NEEDED, SAMPLE_SIZE = 2, 8, 30, 2, 60
 
