@@ -150,7 +150,7 @@
   "id": "CTX-025",
   "area": "symptom",
   "task": "The daily budget for autopilot passes was exceeded, where are eligibility and backpressure decided?",
-  "target": "quest_ai_runner/runner/autopilot_gates.py"
+  "target": "quest_ai_runner/think_critically/autopilot_gates.py"
  },
  {
   "id": "CTX-026",

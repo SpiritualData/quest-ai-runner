@@ -103,7 +103,7 @@ think-critically holds deep runs to their metric through iterate-by-spec on the 
 | `detect-a-stalled-run:rule_floor` | Keyword and threshold rule floor | [evaluation/components/deep_review/impls/rule_floor.py](../../evaluation/components/deep_review/impls/rule_floor.py) |  |
 | `judge-a-decision:qar_judges` | Production judges under a scripted provider | [quest_ai_runner/think_critically/area.py](area.py) |  |
 | `guard-a-reply:qar_guards` | Production guard engines under test | [quest_ai_runner/think_critically/area.py](area.py) |  |
-| `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | [quest_ai_runner/runner/autopilot_gates.py](../runner/autopilot_gates.py) |  |
+| `gate-an-autopilot-pass:autopilot_gates` | Eligibility gate mixin | [quest_ai_runner/think_critically/autopilot_gates.py](autopilot_gates.py) |  |
 | `gate-an-autopilot-pass:live_pass` | Scripted-client gate evaluation arm | [quest_ai_runner/think_critically/area.py](area.py) |  |
 | `ground-in-intent:none` | Prompts without the intent frame | [quest_ai_runner/think_critically/autopilot_briefs.py](autopilot_briefs.py) |  |
 | `ground-in-intent:frame-line` | Computed frame in the prompt | [quest_ai_runner/think_critically/area.py](area.py) |  |

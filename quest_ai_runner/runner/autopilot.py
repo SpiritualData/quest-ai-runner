@@ -115,7 +115,7 @@ from ..think_critically.autopilot_briefs import (
 )
 from .autopilot_esoi import esoi_readiness
 from .autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
-from .autopilot_gates import GatesMixin
+from ..think_critically.autopilot_gates import GatesMixin
 from .autopilot_work import WorkMixin
 from .quest_asks_brief import asks_brief_section, fetch_open_decisions
 from .quest_experiments import (
