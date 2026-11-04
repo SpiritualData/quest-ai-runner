@@ -62,7 +62,7 @@ access-quest-operations
 
 - Entry call: `quest_ai_runner.run("access-quest-operations", 'quest-id')`
 - Selected implementation: `quest_client`
-- Metric: none yet
+- Metric: Parity of Quest operations across access points
 - Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py)
 
 ## take-in-the-world: the ways a request reaches QAR (`take-in-the-world`)
@@ -139,7 +139,7 @@ flowchart LR
 - `metric-act-as-the-body`, Account-state consistency across scripted sessions: leader `card_and_reads`, 8 of 9 cases
 - `metric-hold-the-long-view`, Representative long-view carry-through across assigned quests, with nothing outside its branch: leader `separate_stores`, 13 of 15 cases
 - `metric-think-critically`, Requests held to their ESOI metric by code: leader `deep_runs_only`, 4 of 10 cases
-- `metric-quest-operations-parity`, 
+- `metric-quest-operations-parity`, Parity of Quest operations across access points
 - `metric-take-in-the-world`, Ways in that pass their own metric
 
 ## Problems
@@ -156,12 +156,12 @@ flowchart LR
 - `prob-experiments-not-proposed`: Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose or find an...
 - `prob-metric-enforced-on-deep-runs-only`: The before-and-after reading of the relevant ESOI metric is enforced by code only on deep runs.
 - `prob-long-view-scope-not-hierarchical`: A representative's high-level view legitimately spans its assigned quests and the intents above them, but the library's fence compares flat tag sets: an item is visible to a turn only when their tags...
-- `prob-quest-feature-why-unexplained`
-- `prob-goal-condition-restated-not-evidence`
-- `prob-partial-coverage-reported-as-complete`
-- `prob-long-run-silent-until-the-end`
-- `prob-two-access-points-to-quest-diverge`
-- `prob-harness-dear-and-slow-on-the-subscription`
+- `prob-quest-feature-why-unexplained`: People ask Quest AI why a Quest feature works as it does (why creating a quest asks many questions, what a daily reflection is for) and get a description of the feature, or a generic answer, instead...
+- `prob-goal-condition-restated-not-evidence`: A run can be judged against its goal condition by a reply that restates the condition as if it were met, so the done-standard is satisfied in words and no evidence shows the work was done.
+- `prob-partial-coverage-reported-as-complete`: A goal that covers a set (every entry, all records) can be reported as done after only part of the set was processed, because the reply reads well and does not admit the gap.
+- `prob-long-run-silent-until-the-end`: A long run shows nothing of itself until it ends, so the person cannot tell whether it is working, stuck or finished, and cannot steer it.
+- `prob-two-access-points-to-quest-diverge`: Quest's operations can be reached in the same process as Quest and over its HTTP API, and two access points to the same operations can drift apart, so the same request may behave or return...
+- `prob-harness-dear-and-slow-on-the-subscription`: Running a coding-agent harness on the Claude Code subscription for each step of a request is costly in tokens and slow to start, while a cheap fast model alone lacks the context discipline and...
 
 ## Ideals
 
@@ -182,12 +182,12 @@ flowchart LR
 - `ideal-most-likely-path`: Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
 - `ideal-hierarchy-contained-scope`: What a representative learns reaches its own assigned quests and the intents above them, and never another representative's quests, a sibling intent or another person.
 - `ideal-right-rep`: Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
-- `ideal-quest-feature-why-explained`
-- `ideal-done-standard-evidenced`
-- `ideal-coverage-met-or-gap-stated`
-- `ideal-incremental-output-while-working`
-- `ideal-one-implementation-two-access-points`
-- `ideal-cheap-fast-harness-with-ideal-context`
+- `ideal-quest-feature-why-explained`: When a person asks why a Quest feature works as it does, the answer gives the reason the feature exists and how it serves their goal, not only what it is.
+- `ideal-done-standard-evidenced`: Work is reported as done only when evidence shows its written done-standard was met, and the evidence is not a restatement of the standard.
+- `ideal-coverage-met-or-gap-stated`: When a goal covers a set (every entry, all records), either the whole set was processed or the report states exactly how much was and what remains.
+- `ideal-incremental-output-while-working`: While work is running, the person can see that it is still working and what it has done so far, at a level they choose.
+- `ideal-one-implementation-two-access-points`: Quest's operations are implemented once, and each way of reaching them (in the same process as Quest, or over its HTTP API) gives the same results.
+- `ideal-cheap-fast-harness-with-ideal-context`: The harness that runs Quest AI's steps is as capable as a coding agent but costs and takes about what the fast tier does, because every step sees exactly the context its goal needs.
 
 ## Where to go next
 

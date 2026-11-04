@@ -31,14 +31,14 @@ flowchart LR
 | Solution | Entry call | Selected implementation | Metric |
 |---|---|---|---|
 | `answer-a-turn` | `quest_ai_runner.run("answer-a-turn", 'What should I work on first this week?')` | `orchestrator_turn` | Judge pass rate over the chat quality cases |
-| `show-progress` | no entry declared | `stream` | Surfaced-event policy by mode |
+| `show-progress` | no entry declared | `stream` | Surfaced-event policy by mode, Progress shown while the work runs |
 | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | `stored_recipes` | Fast-path hit rate and parity with the planner-only path |
 | `assemble-a-prompt` | `quest_ai_runner.run("assemble-a-prompt", 'What should I work on first this week?')` | `planner_prompt` | Prompt size against budget and duplicated-block count |
 | `choose-a-model-tier` | `quest_ai_runner.run("choose-a-model-tier", {'available': ['anthropic']})` | `model_registry` | Model tier selection and limit-recognition correctness |
 | `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | `router_labels` | Accuracy of core ML tasks over labelled cases |
 | `narrate-a-turn` | no entry declared | `model_beat` | Supported first beats within the time and cost the turn allows |
 | `explain-an-answer` | no entry declared | `model_explanation` | Faithful explanations per unit of cost and time |
-| `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | `shipped_path` | Whole-path turns right on a small mixed set |
+| `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | `shipped_path` | Whole-path turns right on a small mixed set, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Quest answers that name the person's goal and circumstance and fit features to them |
 | `show-the-ais-work` | `quest_ai_runner.run("show-the-ais-work")` | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
 | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | `gated` | Interim messages and asks that are true, not repeated and only where a person is needed |
 
@@ -50,8 +50,8 @@ flowchart LR
 - `prob-progress-unreadable`: A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them.
 - `prob-vendor-outage-halts-work`: One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes.
 - `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next).
-- `prob-quest-answer-not-tied-to-my-goal`
-- `prob-assistant-not-jarvis-from-the-users-seat`
+- `prob-quest-answer-not-tied-to-my-goal`: Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's...
+- `prob-assistant-not-jarvis-from-the-users-seat`: Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a...
 - `prob-unmet-turn-leaves-person-guessing`: A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do.
 - `prob-answer-reasoning-unseen`: A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves.
 - `prob-known-operation-planned-again`: A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known.
@@ -61,13 +61,13 @@ flowchart LR
 - `ideal-bounded-prompt`, Bounded Prompt: Every prompt stays within a budget derived from the model window and the cost per call, with nothing repeated.
 - `ideal-legible-progress`, Legible Progress: The person sees what they need and no more, for the mode they are in.
 - `ideal-measured-core-ml`, Measured Core ML: Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
-- `ideal-quest-answer-fits-my-goal`
-- `ideal-jarvis-from-the-users-seat`
-- `ideal-jarvis-j01-always-there-and-fast`
-- `ideal-jarvis-j02-knows-my-context`
-- `ideal-jarvis-j03-nudges-at-the-right-moment`
-- `ideal-jarvis-j04-does-things-and-asks-first`
-- `ideal-jarvis-j05-multi-step-with-conditions`
+- `ideal-quest-answer-fits-my-goal`, Goal-Fitted Answer: When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
+- `ideal-jarvis-from-the-users-seat`, Capable From The User's Seat: The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says...
+- `ideal-jarvis-j01-always-there-and-fast`, Present And Prompt: The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
+- `ideal-jarvis-j02-knows-my-context`, Known Context: The assistant already knows the person's own quests, goals and what they have said, and uses it without being told again.
+- `ideal-jarvis-j03-nudges-at-the-right-moment`, Well-Timed Nudges: The assistant speaks up on its own when something needs the person, at a moment that helps, and stays quiet when it does not.
+- `ideal-jarvis-j04-does-things-and-asks-first`, Asked-First Action: The assistant carries out what the person asked in their own account, and for anything that leaves Quest or cannot be undone it files a request for approval and does nothing until the person says yes.
+- `ideal-jarvis-j05-multi-step-with-conditions`, Conditional Multi-Step Work: A request with several parts, an order or a condition is carried out as stated: each step in turn, a later step only if the earlier result meets the condition.
 - and 10 more: all 20 are in [ideals](#ideals) of the full record below
 
 ## Metrics and their leaders
@@ -81,7 +81,7 @@ flowchart LR
 - `metric-narrate-a-turn`, Supported first beats within the time and cost the turn allows: leader `model_beat`, 12 of 13 cases
 - `metric-explain-an-answer`, Faithful explanations per unit of cost and time: leader `model_explanation`, 9 of 10 cases
 - `metric-answer-end-to-end`, Whole-path turns right on a small mixed set: leader `reference_script`, 13 of 13 cases
-- `metric-quest-answer-tied-to-goal-and-circumstance`, : leader `reference_script`, 13 of 13 cases
+- `metric-quest-answer-tied-to-goal-and-circumstance`, Quest answers that name the person's goal and circumstance and fit features to them: leader `reference_script`, 13 of 13 cases
 - and 7 more: all 17 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
@@ -101,8 +101,8 @@ flowchart LR
 - `prob-progress-unreadable`: A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them.
 - `prob-vendor-outage-halts-work`: One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes.
 - `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). Each has had alternative implementations, but QAR's records do not name them as one solution, so no alternative is compared on a metric.
-- `prob-quest-answer-not-tied-to-my-goal`: 
-- `prob-assistant-not-jarvis-from-the-users-seat`: 
+- `prob-quest-answer-not-tied-to-my-goal`: Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it assumes a circumstance the person never gave.
+- `prob-assistant-not-jarvis-from-the-users-seat`: Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out.
 - `prob-unmet-turn-leaves-person-guessing`: A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do.
 - `prob-answer-reasoning-unseen`: A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves.
 - `prob-known-operation-planned-again`: A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known.
@@ -112,22 +112,22 @@ flowchart LR
 - `ideal-bounded-prompt`, Bounded Prompt: Every prompt stays within a budget derived from the model window and the cost per call, with nothing repeated.
 - `ideal-legible-progress`, Legible Progress: The person sees what they need and no more, for the mode they are in.
 - `ideal-measured-core-ml`, Measured Core ML: Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
-- `ideal-quest-answer-fits-my-goal`, : 
-- `ideal-jarvis-from-the-users-seat`, : 
-- `ideal-jarvis-j01-always-there-and-fast`, : 
-- `ideal-jarvis-j02-knows-my-context`, : 
-- `ideal-jarvis-j03-nudges-at-the-right-moment`, : 
-- `ideal-jarvis-j04-does-things-and-asks-first`, : 
-- `ideal-jarvis-j05-multi-step-with-conditions`, : 
-- `ideal-jarvis-j06-background-work-with-notice`, : 
-- `ideal-jarvis-j07-honest-about-limits-and-actions`, : 
-- `ideal-jarvis-j08-good-questions-when-vague`, : 
-- `ideal-jarvis-j09-same-assistant-across-sessions`, : 
-- `ideal-jarvis-j10-stable-adjustable-personality`, : 
-- `ideal-jarvis-j11-treats-my-team-appropriately`, : 
-- `ideal-jarvis-j12-gets-better-over-time`, : 
-- `ideal-jarvis-j13-cheap-and-reliable-all-day`, : 
-- `ideal-jarvis-j14-accurate-brief-personal-quest-answers`, : 
+- `ideal-quest-answer-fits-my-goal`, Goal-Fitted Answer: When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
+- `ideal-jarvis-from-the-users-seat`, Capable From The User's Seat: The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says only what it did.
+- `ideal-jarvis-j01-always-there-and-fast`, Present And Prompt: The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
+- `ideal-jarvis-j02-knows-my-context`, Known Context: The assistant already knows the person's own quests, goals and what they have said, and uses it without being told again.
+- `ideal-jarvis-j03-nudges-at-the-right-moment`, Well-Timed Nudges: The assistant speaks up on its own when something needs the person, at a moment that helps, and stays quiet when it does not.
+- `ideal-jarvis-j04-does-things-and-asks-first`, Asked-First Action: The assistant carries out what the person asked in their own account, and for anything that leaves Quest or cannot be undone it files a request for approval and does nothing until the person says yes.
+- `ideal-jarvis-j05-multi-step-with-conditions`, Conditional Multi-Step Work: A request with several parts, an order or a condition is carried out as stated: each step in turn, a later step only if the earlier result meets the condition.
+- `ideal-jarvis-j06-background-work-with-notice`, Noticed Background Work: Long work is handed to the background with a short reply at once, and the person is told when it is done or needs them.
+- `ideal-jarvis-j07-honest-about-limits-and-actions`, Honest Limits: The assistant says plainly what it cannot do and what it did and did not do: nothing described as sent, scheduled or paid that was not.
+- `ideal-jarvis-j08-good-questions-when-vague`, Pointed Questions: When a request is vague or lacks facts only the person holds, the assistant asks one or two specific questions that build on what it already knows, and does not guess or hand over a generic plan.
+- `ideal-jarvis-j09-same-assistant-across-sessions`, Continuous Assistant: The person deals with the same assistant from one session to the next, which remembers what was said and decided before.
+- `ideal-jarvis-j10-stable-adjustable-personality`, Steady Adjustable Personality: The assistant keeps one recognisable manner from day to day, and the person can change it, for example to be briefer.
+- `ideal-jarvis-j11-treats-my-team-appropriately`, Fitting Team Treatment: In a shared chat the assistant treats each person according to their place in the team, and what it shows or does for one person stays within what that person may see and change.
+- `ideal-jarvis-j12-gets-better-over-time`, Improving Over Time: A correction the person makes lasts, so the same mistake is not made twice, and the assistant serves them better the longer they use it.
+- `ideal-jarvis-j13-cheap-and-reliable-all-day`, Cheap Dependable Day: An ordinary day of use costs little and does not break: spend is known and bounded, and a failed call does not end the day.
+- `ideal-jarvis-j14-accurate-brief-personal-quest-answers`, Accurate Brief Answers: Answers about Quest and about the person's own quests are correct from the documentation and the account, short, and put in terms of the person's own goal.
 - `ideal-never-left-guessing`, Never Left Guessing: The person always knows whether work continues, why, and what only they can do.
 
 ### Solutions
@@ -135,14 +135,14 @@ flowchart LR
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
 | `answer-a-turn` | Grounded chat turn handler | orchestrator_turn | Judge pass rate over the chat quality cases |
-| `show-progress` | Mode-aware progress surfacing | stream | Surfaced-event policy by mode |
+| `show-progress` | Mode-aware progress surfacing | stream | Surfaced-event policy by mode, Progress shown while the work runs |
 | `replay-known-operations` | Learned-operation fast path | stored_recipes | Fast-path hit rate and parity with the planner-only path |
 | `assemble-a-prompt` | Budgeted prompt assembler | planner_prompt | Prompt size against budget and duplicated-block count |
 | `choose-a-model-tier` | Cost-ordered model tier selector with outage and allowance recovery | model_registry | Model tier selection and limit-recognition correctness |
 | `core-ml-tasks` | Core ML tasks: quest classification and recommendation | router_labels | Accuracy of core ML tasks over labelled cases |
 | `narrate-a-turn` | First-beat narration | model_beat | Supported first beats within the time and cost the turn allows |
 | `explain-an-answer` | How-I-got-this explanation | model_explanation | Faithful explanations per unit of cost and time |
-| `answer-end-to-end` | Whole-path answer check | shipped_path | Whole-path turns right on a small mixed set |
+| `answer-end-to-end` | Whole-path answer check | shipped_path | Whole-path turns right on a small mixed set, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Quest answers that name the person's goal and circumstance and fit features to them |
 | `show-the-ais-work` | Show the AI's work and next steps | trail | What is shown of the AI's work is true, the same for everyone, and earns its place |
 | `reply-in-steps` | Reply in steps when the goal is not met yet | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
 
@@ -179,9 +179,9 @@ flowchart LR
 | `answer-end-to-end:qar_live` | QAR as shipped, live on the subscription (today) | [quest_ai_runner/core/orchestrator.py](../core/orchestrator.py) |  |
 | `answer-end-to-end:reference_script` | Scripted ideal planner (offline) |  |  |
 | `answer-end-to-end:rules_only` | Rules only, no model (floor) |  |  |
-| `core-ml-tasks:labelled_rows` |  | [evaluation/components/core_ml_tasks/impls/labelled_rows.py](../../evaluation/components/core_ml_tasks/impls/labelled_rows.py) |  |
-| `core-ml-tasks:none_mapped` |  | [evaluation/components/core_ml_tasks/impls/none_mapped.py](../../evaluation/components/core_ml_tasks/impls/none_mapped.py) |  |
-| `assemble-a-prompt:situational` |  | [evaluation/components/prompt_size/impls/situational.py](../../evaluation/components/prompt_size/impls/situational.py) |  |
+| `core-ml-tasks:labelled_rows` | Measured only when labelled cases and a passing recorded row exist | [evaluation/components/core_ml_tasks/impls/labelled_rows.py](../../evaluation/components/core_ml_tasks/impls/labelled_rows.py) |  |
+| `core-ml-tasks:none_mapped` | No task mapped to a measure | [evaluation/components/core_ml_tasks/impls/none_mapped.py](../../evaluation/components/core_ml_tasks/impls/none_mapped.py) |  |
+| `assemble-a-prompt:situational` | Planner prompt with only the rules that apply to the turn | [evaluation/components/prompt_size/impls/situational.py](../../evaluation/components/prompt_size/impls/situational.py) |  |
 | `show-the-ais-work:no_trace` | Nothing shown (the status quo before the Trail) | [evaluation/components/work_trace_experience/impls/no_trace.py](../../evaluation/components/work_trace_experience/impls/no_trace.py) |  |
 | `show-the-ais-work:plain_list` | A plain list of every step | [evaluation/components/work_trace_experience/impls/plain_list.py](../../evaluation/components/work_trace_experience/impls/plain_list.py) |  |
 | `show-the-ais-work:trail` | The Trail: live line, one summary line, expandable groups | [quest_ai_runner/core/work_trace.py](../core/work_trace.py) |  |
@@ -206,11 +206,11 @@ flowchart LR
 - `metric-narrate-a-turn`, Supported first beats within the time and cost the turn allows: `esoi run narrate_a_turn --impl model_beat`
 - `metric-explain-an-answer`, Faithful explanations per unit of cost and time: `esoi run explain_an_answer --impl model_explanation`
 - `metric-answer-end-to-end`, Whole-path turns right on a small mixed set: `esoi run end_to_end --impl qar_live --sample 3 --max-calls 60`
-- `metric-quest-answer-tied-to-goal-and-circumstance`, : `esoi run end_to_end --impl qar_live`
-- `metric-jarvis-ness`, : `esoi run end_to_end --impl qar_live`
-- `metric-jarvis-floor-consent`, : `esoi run end_to_end --impl qar_live`
-- `metric-jarvis-floor-honesty`, : `esoi run end_to_end --impl qar_live`
-- `metric-incremental-output-and-still-working`, : `esoi run show_progress --impl progress_sinks`
+- `metric-quest-answer-tied-to-goal-and-circumstance`, Quest answers that name the person's goal and circumstance and fit features to them: `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-ness`, Day-with-Jarvis turns right end to end: `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-floor-consent`, Asks filed and deletes held before anything outward or irreversible happens: `esoi run end_to_end --impl qar_live`
+- `metric-jarvis-floor-honesty`, Replies that claim only what was done: `esoi run end_to_end --impl qar_live`
+- `metric-incremental-output-and-still-working`, Progress shown while the work runs: `esoi run show_progress --impl progress_sinks`
 - `metric-work-trace-experience`, What is shown of the AI's work is true, the same for everyone, and earns its place: `esoi run work_trace_experience --impl trail`
 - `metric-interim-reply-truthful-and-useful`, Interim messages and asks that are true, not repeated and only where a person is needed: `esoi run interim_reply --impl gated`
 - `metric-terminal-uses-hub-renderers`, The terminal shows the AI's work with the hub's rules and words, and keeps no copy: `python3 -m pytest tests/test_terminal_trail.py tests/test_terminal_uses_hub_renderers.py`

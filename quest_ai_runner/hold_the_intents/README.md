@@ -46,7 +46,7 @@ flowchart LR
 
 - `ideal-lasting-correction`, Lasting Correction: A correction given once is kept as said and applied wherever it bears.
 - `ideal-contained-scope`, Contained Scope: Data stays inside the user, team and quest it belongs to, on every read and write path.
-- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
+- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: From the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
 
 ## Metrics and their leaders
 
@@ -80,7 +80,7 @@ flowchart LR
 
 - `ideal-lasting-correction`, Lasting Correction: A correction given once is kept as said and applied wherever it bears.
 - `ideal-contained-scope`, Contained Scope: Data stays inside the user, team and quest it belongs to, on every read and write path.
-- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
+- `ideal-moves-me-forward`, Moves Me Forward Without Nagging: From the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
 
 ### Solutions
 
