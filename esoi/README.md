@@ -350,7 +350,7 @@ flowchart LR
 - `QME5`, Engine reuse
 - `QME6`, Measured coverage
 - `metric-qar-overall`, QAR overall: do-grounded-work's sub-metrics weighted by its ideals, with floor and ceiling: leader `qar_overall.broken.latest_row_any_age:build`, 0 of 9 cases
-- `metric-route-a-message`, Routing correctness over the classification cases: leader `keyword_rules`, 3 of 3 cases
+- `metric-route-a-message`, Routing correctness over the classification cases: leader `single_prompt`, 52 of 54 cases
 - `metric-answer-a-turn`, Judge pass rate over the chat quality cases: leader `reference_replies`, 331 of 331 cases
 - `metric-operate-a-quest`, Final quest state against the request over the quest operation cases: leader `orchestrator_pre_route`, 22 of 22 cases
 - and 88 more: all 98 are in [metrics](#metrics) of the full record below
