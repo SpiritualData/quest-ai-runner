@@ -7,19 +7,19 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-from ..runner.local_time import now_in_zone
-from ..runner.autopilot_personas import persona_entries_on_duty
-from ..runner.autopilot_defaults import (
+from .local_time import now_in_zone
+from .autopilot_personas import persona_entries_on_duty
+from .autopilot_defaults import (
     AUTOPILOT_LEGACY_SOURCE,
     AUTOPILOT_WORK_KIND,
     OPEN_TASK_STATUSES,
     TASK_STATUSES_FOR_COUNT,
     log,
 )
-from ..runner.autopilot_periods import _parse_dt, has_new_ask_since, run_requested
-from ..runner.autopilot_pending import PendingWork, pass_due, pending_work_for
-from ..runner.autopilot_result import AutopilotResult
-from ..runner.quest_asks_brief import fetch_asks
+from .autopilot_periods import _parse_dt, has_new_ask_since, run_requested
+from .autopilot_pending import PendingWork, pass_due, pending_work_for
+from .autopilot_result import AutopilotResult
+from .quest_asks_brief import fetch_asks
 
 
 class GatesMixin:
