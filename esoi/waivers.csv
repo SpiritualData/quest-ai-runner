@@ -25,14 +25,14 @@ Q2,QME3,"Rollup of other metrics with no command of its own. Build needed: an of
 Q2,QME4,"No command and no component. Build needed: an offline scope-leak check (items from another user, team or quest reaching a prompt or store) over the scripted fixtures, registered as this metric's command."
 Q2,QME5,"Read from the consumer check, which is not a harness arm. Build needed: an evaluation component whose offline arm runs the consumer check and records its result, registered as this metric's command."
 Q2,QME6,"Read from the structure check, which is not a harness arm. Build needed: an evaluation component whose offline arm reads the structure check and leaderboard and records the share of solutions with a current measured result."
-Q2,metric-operate-a-quest,Both quest_ops arms call a model. Build needed: a no-model floor arm (a scripted ideal tool-call plan) so the cases and scorer validate offline first.
+Q2,metric-operate-a-quest,Both quest_ops arms call a model. Build needed: a no-model arm (a scripted ideal tool-call plan) so the cases and scorer validate offline first.
 Q2,metric-ground-in-intent,Both intent_grounding arms generate through a model. Build needed: a scripted-ideal-reply arm that scores the framed prompt without a model.
 Q2,metric-iterate-by-spec,"Both task_replay arms are real deep runs. Build needed: an offline replay arm that applies a recorded task result to the slice and write-back, with no model."
 Q2,metric-track-runs-on-records,"The command names record_tracking, which has no evaluation component folder. Build needed: the component with an offline arm that checks a run leaves a durable attributed record."
 Q2,metric-keep-a-working-stream,Both keep_a_working_stream arms drive a model. Build needed: a scripted-continuity arm that replays a recorded stream through each rebuild strategy with no model.
-Q2,metric-explain-an-answer,The trace_template floor makes no answer call but its cases are graded by a model. Build needed: a deterministic structure check of the explanation payload as an offline arm.
-Q2,metric-describe-an-attachment,"The skip_images floor is graded by a model. Build needed: a deterministic check that attachment preparation names an undescribed image, as an offline arm."
-Q2,metric-guide-toward-the-long-term-goal,"The no_nudge floor is graded by a model. Build needed: a deterministic check that a reply carries or omits the long-term-goal nudge, as an offline arm."
+Q2,metric-explain-an-answer,The trace_template arm makes no answer call but its cases are graded by a model. Build needed: a deterministic structure check of the explanation payload as an offline arm.
+Q2,metric-describe-an-attachment,"The skip_images arm is graded by a model. Build needed: a deterministic check that attachment preparation names an undescribed image, as an offline arm."
+Q2,metric-guide-toward-the-long-term-goal,"The no_nudge arm is graded by a model. Build needed: a deterministic check that a reply carries or omits the long-term-goal nudge, as an offline arm."
 Q2,metric-quest-operations-parity,"A placeholder record with no command or component. Build needed: define the metric, then give it a command and an offline arm."
 S33,run-deep-work,"The arms tie or nearly tie on the cases, and the cascade breaks the tie on speed or cost while the selection follows the product's use. Pending decision for the owner."
 S33,persist-cards,"The arms tie or nearly tie on the cases, and the cascade breaks the tie on speed or cost while the selection follows the product's use. The selected quest_api arm is the production store; pending decision for the owner."
