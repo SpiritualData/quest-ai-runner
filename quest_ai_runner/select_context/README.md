@@ -16,19 +16,19 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Context card selector<br/>select-context"]
-    s1["Semantic vector index<br/>index-by-meaning"]
+    s0["Context card selector<br/><i>select-context</i>"]
+    s1["Semantic vector index<br/><i>index-by-meaning</i>"]
     s1 -->|"Ranked hits with id, score, text and payload for search..."| s0
 ```
 
 ## Solutions at a glance
 
-| Solution | Entry call | Selected implementation | Metric |
-|---|---|---|---|
-| `select-context` | no entry declared | `blind_grep` | Context selection ranking accuracy and card-quality outcome |
-| `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
-| `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
-| `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Context card selector | `select-context` | no entry declared | `blind_grep` | Context selection ranking accuracy and card-quality outcome |
+| Fail-safe card reference resolver | `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
+| Unified card and specification search | `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
+| Semantic vector index | `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
 
 ## Problems and ideals
 
@@ -39,15 +39,15 @@ flowchart LR
 
 **Ideals**
 
-- `ideal-compounding-context`, Compounding Context: What one run found is kept as a card that later runs reuse, so every run starts grounded in the person's material at little cost, reads only what is current, and can name where each piece came from.
-- `ideal-one-ranked-context`, One Ranked Context: A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
+- Compounding Context (`ideal-compounding-context`): What one run found is kept as a card that later runs reuse, so every run starts grounded in the person's material at little cost, reads only what is current, and can name where each piece came from.
+- One Ranked Context (`ideal-one-ranked-context`): A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
 
 ## Metrics and their leaders
 
-- `metric-select-context`, Context selection ranking accuracy and card-quality outcome: leader `blind_grep`, 86 of 185 cases
-- `metric-resolve-references`, Pointer-resolution safety over offline cases: leader `card_resolvers`, 16 of 16 cases
-- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: leader `solutions_and_problems_with_links`, 14 of 17 cases
-- `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: leader `memory_cosine`, 16 of 17 cases
+- Context selection ranking accuracy and card-quality outcome (`metric-select-context`): leader `blind_grep`, 86 of 185 cases
+- Pointer-resolution safety over offline cases (`metric-resolve-references`): leader `card_resolvers`, 16 of 16 cases
+- Mixed card and specification selection, with both existing selection metrics held (`metric-search-cards-and-specs`): leader `solutions_and_problems_with_links`, 14 of 17 cases
+- Semantic recall and query latency on the synthetic handbook (`metric-index-by-meaning`): leader `memory_cosine`, 16 of 17 cases
 
 ## Where to go next
 
@@ -67,51 +67,62 @@ flowchart LR
 
 ### Ideals
 
-- `ideal-compounding-context`, Compounding Context: What one run found is kept as a card that later runs reuse, so every run starts grounded in the person's material at little cost, reads only what is current, and can name where each piece came from.
-- `ideal-one-ranked-context`, One Ranked Context: A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
+- Compounding Context (`ideal-compounding-context`): What one run found is kept as a card that later runs reuse, so every run starts grounded in the person's material at little cost, reads only what is current, and can name where each piece came from.
+- One Ranked Context (`ideal-one-ranked-context`): A run's context comes from one search over everything it may be grounded in, with one ranking and one budget, and every result says what kind of thing it is and where it lives.
 
 ### Solutions
 
-| Solution | Name | Selected | Metric |
+| Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| `select-context` | Context card selector | blind_grep | Context selection ranking accuracy and card-quality outcome |
-| `resolve-references` | Fail-safe card reference resolver | note | Pointer-resolution safety over offline cases |
-| `search-cards-and-specs` | Unified card and specification search | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
-| `index-by-meaning` | Semantic vector index | qdrant | Semantic recall and query latency on the synthetic handbook |
+| Context card selector | `select-context` | blind_grep | Context selection ranking accuracy and card-quality outcome |
+| Fail-safe card reference resolver | `resolve-references` | note | Pointer-resolution safety over offline cases |
+| Unified card and specification search | `search-cards-and-specs` | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
+| Semantic vector index | `index-by-meaning` | qdrant | Semantic recall and query latency on the synthetic handbook |
 
 ### Implementations
 
-| Implementation | Name | Where | Sub-intent |
+| Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| `select-context:idf_docstrings` | Field-weighted keyword arm | [evaluation/components/context_selection/impls/idf_docstrings.py](../../evaluation/components/context_selection/impls/idf_docstrings.py) |  |
-| `select-context:idf_paths_only` | Docstring ablation of the keyword arm | [evaluation/components/context_selection/impls/idf_paths_only.py](../../evaluation/components/context_selection/impls/idf_paths_only.py) |  |
-| `select-context:blind_grep` | Blind text search | [evaluation/components/context_selection/impls/blind_grep.py](../../evaluation/components/context_selection/impls/blind_grep.py) |  |
-| `select-context:vector_bge_small` | Plain cosine semantic baseline | [evaluation/components/context_selection/impls/vector_bge_small.py](../../evaluation/components/context_selection/impls/vector_bge_small.py) |  |
-| `select-context:hybrid_union` | Keyword plus vector fusion (measured live class) | [evaluation/components/context_selection/impls/hybrid_union.py](../../evaluation/components/context_selection/impls/hybrid_union.py) |  |
-| `select-context:file` | Card-file keyword store | [quest_ai_runner/adapters/file_context_store.py](../adapters/file_context_store.py) |  |
-| `select-context:vector` | Semantic card retrieval | [quest_ai_runner/select_context/vector_context_assembler.py](vector_context_assembler.py) |  |
-| `select-context:hybrid` | Parallel keyword and vector fusion | [quest_ai_runner/select_context/hybrid_context_assembler.py](hybrid_context_assembler.py) |  |
-| `select-context:bm25` | Exact-content BM25 arm | [quest_ai_runner/select_context/bm25_content_store.py](bm25_content_store.py) |  |
-| `select-context:rep` | Per-agent preference wrapper | [quest_ai_runner/select_context/rep_context_assembler.py](rep_context_assembler.py) |  |
-| `select-context:composite` | Ordered assembler composition | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
-| `select-context:seeded_keyword_store` | Seeded keyword card-quality arm | [evaluation/components/card_quality/impls/seeded_keyword_store.py](../../evaluation/components/card_quality/impls/seeded_keyword_store.py) |  |
-| `select-context:seeded_keyword_open` | Open-gate ablation of the card-quality arm | [evaluation/components/card_quality/impls/seeded_keyword_open.py](../../evaluation/components/card_quality/impls/seeded_keyword_open.py) |  |
-| `select-context:live_updater_hybrid` | Live learner plus hybrid store arm | [evaluation/components/card_quality/impls/live_updater_hybrid.py](../../evaluation/components/card_quality/impls/live_updater_hybrid.py) |  |
-| `select-context:idf_hint` | Offline warm-hint builder | [evaluation/components/claude_code_ab/impls/idf_hint.py](../../evaluation/components/claude_code_ab/impls/idf_hint.py) |  |
-| `select-context:cold_claude` | Agent without hint | [evaluation/components/claude_code_ab/impls/cold_claude.py](../../evaluation/components/claude_code_ab/impls/cold_claude.py) |  |
-| `select-context:warm_claude` | Agent with hint | [evaluation/components/claude_code_ab/impls/warm_claude.py](../../evaluation/components/claude_code_ab/impls/warm_claude.py) |  |
-| `resolve-references:note` | Registry of built-in and host resolvers | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
-| `resolve-references:card_resolvers` | Production registry under scripted host resolvers | [evaluation/components/resolve_references/impls/card_resolvers.py](../../evaluation/components/resolve_references/impls/card_resolvers.py) |  |
-| `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
-| `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
-| `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
-| `select-context:hub_per_file_symbols` | The hub's per-file card arm | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
-| `select-context:hub_folder_cards` | One card per folder, from the hub's card helpers | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
-| `index-by-meaning:qdrant` | Qdrant-backed vector store | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](../remember_and_recall/qdrant_vector_store.py) |  |
+| Field-weighted keyword arm | `select-context:idf_docstrings` | [evaluation/components/context_selection/impls/idf_docstrings.py](../../evaluation/components/context_selection/impls/idf_docstrings.py) |  |
+| Docstring ablation of the keyword arm | `select-context:idf_paths_only` | [evaluation/components/context_selection/impls/idf_paths_only.py](../../evaluation/components/context_selection/impls/idf_paths_only.py) |  |
+| Blind text search | `select-context:blind_grep` | [evaluation/components/context_selection/impls/blind_grep.py](../../evaluation/components/context_selection/impls/blind_grep.py) |  |
+| Plain cosine semantic baseline | `select-context:vector_bge_small` | [evaluation/components/context_selection/impls/vector_bge_small.py](../../evaluation/components/context_selection/impls/vector_bge_small.py) |  |
+| Keyword plus vector fusion (measured live class) | `select-context:hybrid_union` | [evaluation/components/context_selection/impls/hybrid_union.py](../../evaluation/components/context_selection/impls/hybrid_union.py) |  |
+| Card-file keyword store | `select-context:file` | [quest_ai_runner/adapters/file_context_store.py](../adapters/file_context_store.py) |  |
+| Semantic card retrieval | `select-context:vector` | [quest_ai_runner/select_context/vector_context_assembler.py](vector_context_assembler.py) |  |
+| Parallel keyword and vector fusion | `select-context:hybrid` | [quest_ai_runner/select_context/hybrid_context_assembler.py](hybrid_context_assembler.py) |  |
+| Exact-content BM25 arm | `select-context:bm25` | [quest_ai_runner/select_context/bm25_content_store.py](bm25_content_store.py) |  |
+| Per-agent preference wrapper | `select-context:rep` | [quest_ai_runner/select_context/rep_context_assembler.py](rep_context_assembler.py) |  |
+| Ordered assembler composition | `select-context:composite` | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
+| Seeded keyword card-quality arm | `select-context:seeded_keyword_store` | [evaluation/components/card_quality/impls/seeded_keyword_store.py](../../evaluation/components/card_quality/impls/seeded_keyword_store.py) |  |
+| Open-gate ablation of the card-quality arm | `select-context:seeded_keyword_open` | [evaluation/components/card_quality/impls/seeded_keyword_open.py](../../evaluation/components/card_quality/impls/seeded_keyword_open.py) |  |
+| Live learner plus hybrid store arm | `select-context:live_updater_hybrid` | [evaluation/components/card_quality/impls/live_updater_hybrid.py](../../evaluation/components/card_quality/impls/live_updater_hybrid.py) |  |
+| Offline warm-hint builder | `select-context:idf_hint` | [evaluation/components/claude_code_ab/impls/idf_hint.py](../../evaluation/components/claude_code_ab/impls/idf_hint.py) |  |
+| Agent without hint | `select-context:cold_claude` | [evaluation/components/claude_code_ab/impls/cold_claude.py](../../evaluation/components/claude_code_ab/impls/cold_claude.py) |  |
+| Agent with hint | `select-context:warm_claude` | [evaluation/components/claude_code_ab/impls/warm_claude.py](../../evaluation/components/claude_code_ab/impls/warm_claude.py) |  |
+| Registry of built-in and host resolvers | `resolve-references:note` | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
+| Production registry under scripted host resolvers | `resolve-references:card_resolvers` | [evaluation/components/resolve_references/impls/card_resolvers.py](../../evaluation/components/resolve_references/impls/card_resolvers.py) |  |
+| Two pipelines side by side (today) | `search-cards-and-specs:two_pipelines` | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
+| Every record kind ranked beside cards (planned) | `search-cards-and-specs:every_record_a_view` |  |  |
+| Cards, solutions and problems ranked; intents, ideals and metrics reached through links | `search-cards-and-specs:solutions_and_problems_with_links` | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
+| The hub's per-file card arm | `select-context:hub_per_file_symbols` | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
+| One card per folder, from the hub's card helpers | `select-context:hub_folder_cards` | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
+| Qdrant-backed vector store | `index-by-meaning:qdrant` | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](../remember_and_recall/qdrant_vector_store.py) |  |
+| Hub arm: BM25 over unit bodies | `select-context:hub_bm25_body` | [evaluation/components/context_selection/impls/hub_bm25_body.py](../../evaluation/components/context_selection/impls/hub_bm25_body.py) |  |
+| Hub arm: Fielded BM25 over title, path and body | `select-context:hub_bm25_fielded` | [evaluation/components/context_selection/impls/hub_bm25_fielded.py](../../evaluation/components/context_selection/impls/hub_bm25_fielded.py) |  |
+| Hub arm: BM25 over whole files | `select-context:hub_bm25_whole_files` | [evaluation/components/context_selection/impls/hub_bm25_whole_files.py](../../evaluation/components/context_selection/impls/hub_bm25_whole_files.py) |  |
+| Hub arm: Dense retrieval with the local bge-small embedder | `select-context:hub_dense_bge_small` | [evaluation/components/context_selection/impls/hub_dense_bge_small.py](../../evaluation/components/context_selection/impls/hub_dense_bge_small.py) |  |
+| Hub arm: Latent semantic indexing | `select-context:hub_lsi` | [evaluation/components/context_selection/impls/hub_lsi.py](../../evaluation/components/context_selection/impls/hub_lsi.py) |  |
+| Hub arm: BM25 and dense fused by reciprocal rank | `select-context:hub_hybrid_rrf` | [evaluation/components/context_selection/impls/hub_hybrid_rrf.py](../../evaluation/components/context_selection/impls/hub_hybrid_rrf.py) |  |
+| Hub arm: Hybrid reranked by weighted features and priors | `select-context:hub_feature_rerank` | [evaluation/components/context_selection/impls/hub_feature_rerank.py](../../evaluation/components/context_selection/impls/hub_feature_rerank.py) |  |
+| Hub arm: Feature rerank without link and co-change priors | `select-context:hub_feature_rerank_no_priors` | [evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py](../../evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py) |  |
+| Hub arm: Hybrid that returns nothing when the corpus does not answer | `select-context:hub_abstaining_hybrid` | [evaluation/components/context_selection/impls/hub_abstaining_hybrid.py](../../evaluation/components/context_selection/impls/hub_abstaining_hybrid.py) |  |
+| Hub arm: Hybrid reranked by a model trained on past commits (repository) or on earlier private cases | `select-context:hub_learned_rerank` | [evaluation/components/context_selection/impls/hub_learned_rerank.py](../../evaluation/components/context_selection/impls/hub_learned_rerank.py) |  |
+| Hub arm: Learned reranker that returns nothing when the corpus does not answer | `select-context:hub_abstaining_learned` | [evaluation/components/context_selection/impls/hub_abstaining_learned.py](../../evaluation/components/context_selection/impls/hub_abstaining_learned.py) |  |
 
 ### Metrics
 
-- `metric-select-context`, Context selection ranking accuracy and card-quality outcome: `esoi run context_selection --impl hybrid_union; esoi run card_quality --impl seeded_keyword_store; esoi run claude_code_ab --impl idf_hint`
-- `metric-resolve-references`, Pointer-resolution safety over offline cases: `esoi run resolve_references --impl card_resolvers`
-- `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl solutions_and_problems_with_links; esoi run spec_selection --impl solutions_and_problems_with_links; esoi run context_selection --impl solutions_and_problems_with_links`
-- `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: `esoi run vector_recall --impl qdrant_embedded`
+- Context selection ranking accuracy and card-quality outcome (`metric-select-context`): `esoi run context_selection --impl hybrid_union; esoi run card_quality --impl seeded_keyword_store; esoi run claude_code_ab --impl idf_hint`
+- Pointer-resolution safety over offline cases (`metric-resolve-references`): `esoi run resolve_references --impl card_resolvers`
+- Mixed card and specification selection, with both existing selection metrics held (`metric-search-cards-and-specs`): `esoi run context_and_specs --impl solutions_and_problems_with_links; esoi run spec_selection --impl solutions_and_problems_with_links; esoi run context_selection --impl solutions_and_problems_with_links`
+- Semantic recall and query latency on the synthetic handbook (`metric-index-by-meaning`): `esoi run vector_recall --impl qdrant_embedded`
