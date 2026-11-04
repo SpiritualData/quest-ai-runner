@@ -22,13 +22,16 @@ approved.
 ## The solution: when QAR's metrics are run (`when-qar-metrics-are-run`)
 
 - **Purpose:** governs every Metric of `evaluation/components/`. Does not govern the product's own tests.
-- **Goals:** offline arms current on every change; live arms run only for a decision; every recorded row current under
-  `esoi check --strict`.
+- **Goals:** a selected arm has a row that is current when a decision or release depends on it; a changed file only
+  informs, so no arm is re-run just because code changed; live arms run only for a decision.
 - **Parameters (triggers and stages):**
   - Offline arms (deterministic, zero model calls: for example `staleness`, `context_selection` hybrid and floor arms, the
     reference_good and reference_bad arms of `esoi_behavior`, the fixtures of `check_the_structure` and
-    `measure_implementations`, `feedback_loop`, `receive_input_mid_run`): run for the component you changed on every change, and
-    with `evaluation/components/test_*.py` before committing. Never the whole `tests/` suite unless a human asks (standing rule).
+    `measure_implementations`, `feedback_loop`, `receive_input_mid_run`): run when the improvement is complete and a decision
+    depends on the result (`esoi run --stale --for-decision`, or `--include COMPONENT/IMPL`), after a single failing case is
+    fixed rerun only that case, and use `evaluation/components/test_*.py` before committing. A change to a file elsewhere in
+    the repository never triggers a re-run by itself (esoi marks each row stale by the files the arm imports and says why).
+    Never the whole `tests/` suite unless a human asks (standing rule).
   - Live arms (model calls: `classification`, `quest_ops`, `recipe_fast_path` real-model arms, `esoi_behavior` chat arm with the
     model judge, `esoi_judge`, `answer-a-turn` dev arm, `chat_quality`): run only when a decision depends on them: a new
     alternative, a selection change, or a suspected regression. Staged: 3 cases, then 10, then 30, by `--sample N` (a stratified
@@ -68,7 +71,7 @@ approved.
 
 | Alternative | Used for |
 |---|---|
-| On every change | offline arms |
+| On a decision or a changed case | offline arms (a changed file informs and is never a trigger by itself) |
 | On a decision | live arms (staged, budgeted) |
 | On drift | model or price changes: re-measure the selected arm and its rival |
 | On a schedule | considered for a periodic re-measure of the live selections; not adopted until a model change slips through |
@@ -82,7 +85,7 @@ spend of the runs behind each. Counted from `git log` of `solutions.csv` and `re
 
 | metric_id | arm | trigger | stages | call_budget | cost_estimate | approver | stale_when |
 |---|---|---|---|---|---|---|---|
-| each offline component's metric | offline | every change to the component or its cases | whole set | none | none | none | cases changed, code changed since commit, dirty |
+| each offline component's metric | offline | a decision depends on it, or its cases changed | whole set | none | none | none | cases changed (a run), the code the arm imports changed since commit (informs), dirty |
 | classification, quest_ops, recipe_fast_path, esoi_behavior (chat arm), esoi_judge, chat_quality | live | a decision | 3, 10, 30 | set per run in the task before the first stage, inside the $5 per rolling 24 hours cap across Spiritual Data | calls x price, written first | AI for dev 3 and 10-case stages within the cap, Joshua beyond | as above, and a model or price change |
 | answer-a-turn (dev arm) | live | a decision | 3, 10 | set per run | calls x price | AI for dev, Joshua beyond | as above, and any change to the dev world |
 
