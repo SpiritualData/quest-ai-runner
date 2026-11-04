@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-232 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+233 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -63,7 +63,6 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `cli_config.py` | `docs/explanation/cheap-model-routing.md` |
 | `QAR_CONFIG_FILE` |  | `adapters/card_store_tidy.py`, `cli_cards.py`, `cli_config.py` +1 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +1 |
 | `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `config_core_settings.py`, `runner/lane.py` | `.env.example`, `docs/explanation/context-assembly.md` |
-| `QAR_QUEST_SCOPE_MODE` | `fence` (default): an item learned on another quest is hidden from a turn. `affinity`: it stays visible, ranks below the turn's own quest, and its rendered line says which quest it came from; only audience kinds still fence. CoreSettings `quest_scope_mode`. |
 | `QAR_CONTEXT_CARDS_DIR` |  | `cli_cards.py`, `cli_chat.py`, `cli_context.py` | `.env.example`, `docs/explanation/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `cli_config.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_CONTEXT_PREAMBLE` |  | `cli_config.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
@@ -170,6 +169,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_QUEST_READ_DEADLINE_SECONDS` | Longest one Quest GET may take in total across its attempts and pauses (default 45, under the 60 second tool timeout). No retry starts past it, and each attempt's timeout is cut to what is left. | `runner/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_QUEST_READ_RETRIES` | Retries the Quest client makes for a GET after a transport error, 429 or 5xx, with exponential backoff and jitter (default 2, at most 5, 0 turns retry off). A 4xx other than 429 is never retried. | `runner/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_QUEST_RETRY_MAX_DELAY_SECONDS` | Longest the Quest client waits between retries (default 30). A Retry-After longer than this is reported to the caller instead of waited out. | `runner/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_QUEST_SCOPE_MODE` | `fence` (default): an item learned on another quest is hidden from a turn. `affinity`: it stays visible, ranks below the turn's own quest, and its rendered line says which quest it came from; only audience kinds still fence. CoreSettings `quest_scope_mode`. | `config_core_settings.py` | - |
 | `QAR_QUEST_TIMEOUT_SECONDS` | Socket timeout in seconds for one Quest API request (default 30). The long-poll wait channel keeps its own longer timeout. | `runner/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_QUEST_WRITE_RETRY` | Whether the Quest client retries a write that carries an Idempotency-Key: auto (the default) retries only if the backend lists idempotency-key under capabilities on GET /api/health, on forces it, off forbids it. Without server support a retried write could create a duplicate, so a write is attempted once. | `runner/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_READ_OP_TIMEOUT_SECONDS` | Per-operation budget for one mid-loop read (default 60). CoreSettings.read_op_timeout_seconds. | `config_core_settings.py` | `.env.example` |
