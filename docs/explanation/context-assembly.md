@@ -263,7 +263,7 @@ runner opens it, and the card limit). What holds it, in the order a card meets t
 
 Growth paths still open (two reviews, 2026-10-22) are listed in the `bootstrap_guards` implementation of
 `bound-card-growth`, and the repair's open weaknesses in the `repository_tidy` implementation of
-`repair-a-card-store`, both in `esoi/implementations.csv`, where the next fix is chosen from.
+`repair-a-card-store`, both in the `implementations.csv` records (`quest_ai_runner/remember_and_recall/`), where the next fix is chosen from.
 
 ### ESOI records as cards (planned)
 

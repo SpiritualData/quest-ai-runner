@@ -8,45 +8,45 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Grounded goal agent: the engine that...<br/>do-grounded-work"]
-    s1["Tiered model provider layer<br/>call-a-model"]
-    s2["Live messaging channel transport<br/>talk-over-a-channel"]
-    s3["Overseer: risk management that raises...<br/>watch-for-risk"]
-    s4["Queued-task runner lane<br/>run-queued-tasks"]
-    s5["Cost estimation, daily budget and host...<br/>track-usage-and-cost"]
-    s6["Evolve by metric<br/>keep-it-generic"]
-    s7["Mind: one goal-focused working stream...<br/>reason-and-answer"]
-    s8["Subconscious: the person's own...<br/>remember-and-recall"]
-    s9["Science: evidence-weighted knowledge...<br/>know-the-world"]
-    s10["Body: the host's data model as the...<br/>act-as-the-body"]
-    s11["Higher mind: an AI representative's...<br/>hold-the-intents"]
-    s12["Critical thinking: the enforcer of ESOI...<br/>think-critically"]
-    s13["Justified model calls<br/>justify-model-calls"]
-    s14["access-quest-operations<br/>access-quest-operations"]
-    s15["take-in-the-world: the ways a request...<br/>take-in-the-world"]
-    s1 -->|"A raw decision dictionary for planning, answer text for..."| s0
-    s1 -->|"A raw decision dictionary for planning, answer text for..."| s3
-    s1 -->|"A raw decision dictionary for planning, answer text for..."| s4
-    s1 -->|"A raw decision dictionary for planning, answer text for..."| s7
-    s1 -->|"A raw decision dictionary for planning, answer text for..."| s11
-    s2 -->|"An inbound batch (messages with ids, chat references, text..."| s15
-    s3 -->|"For a flagged case: the risk category, the response applied..."| s0
-    s4 -->|"A reported status on each task (with result text or..."| s10
-    s4 -->|"A reported status on each task (with result text or..."| s12
-    s5 -->|"A price per million input tokens, a bootstrap cost estimate..."| s1
-    s6 -->|"Checked records, recorded metric results and the selected..."| s0
-    s7 -->|"Each step's view of the request (a carried message list or..."| s0
-    s7 -->|"Each step's view of the request (a carried message list or..."| s10
-    s8 -->|"The admitted items with a one-line reason each, and the..."| s0
-    s8 -->|"The admitted items with a one-line reason each, and the..."| s7
-    s9 -->|"Findings, each with its source, an evidence-strength label..."| s0
-    s10 -->|"A current state view for the request's scope with the time..."| s0
-    s11 -->|"For a request the representative handles: its standing view..."| s0
-    s11 -->|"For a request the representative handles: its standing view..."| s8
-    s12 -->|"Per request: the metric applied with its reading before and..."| s0
-    s13 -->|"A per-prompt table and the share of average model spend..."| s1
-    s14 -->|"The result of one Quest operation"| s0
-    s14 -->|"The result of one Quest operation"| s4
-    s14 -->|"The result of one Quest operation"| s10
-    s15 -->|"One routed turn with its context sources"| s0
+    s0["Tiered model provider layer<br/>call-a-model"]
+    s1["Live messaging channel transport<br/>talk-over-a-channel"]
+    s2["Overseer: risk management that raises...<br/>watch-for-risk"]
+    s3["Cost estimation, daily budget and host...<br/>track-usage-and-cost"]
+    s4["Evolve by metric<br/>keep-it-generic"]
+    s5["Science: evidence-weighted knowledge...<br/>know-the-world"]
+    s6["Grounded goal agent: the engine that...<br/>do-grounded-work"]
+    s7["Queued-task runner lane<br/>run-queued-tasks"]
+    s8["Mind: one goal-focused working stream...<br/>reason-and-answer"]
+    s9["Body: the host's data model as the...<br/>act-as-the-body"]
+    s10["Higher mind: an AI representative's...<br/>hold-the-intents"]
+    s11["Critical thinking: the enforcer of ESOI...<br/>think-critically"]
+    s12["access-quest-operations<br/>access-quest-operations"]
+    s13["take-in-the-world: the ways a request...<br/>take-in-the-world"]
+    s14["Subconscious: the person's own...<br/>remember-and-recall"]
+    s15["Justified model calls<br/>justify-model-calls"]
+    s0 -->|"A raw decision dictionary for planning, answer text for..."| s2
+    s0 -->|"A raw decision dictionary for planning, answer text for..."| s6
+    s0 -->|"A raw decision dictionary for planning, answer text for..."| s7
+    s0 -->|"A raw decision dictionary for planning, answer text for..."| s8
+    s0 -->|"A raw decision dictionary for planning, answer text for..."| s10
+    s1 -->|"An inbound batch (messages with ids, chat references, text..."| s13
+    s2 -->|"For a flagged case: the risk category, the response applied..."| s6
+    s3 -->|"A price per million input tokens, a bootstrap cost estimate..."| s0
+    s4 -->|"Checked records, recorded metric results and the selected..."| s6
+    s5 -->|"Findings, each with its source, an evidence-strength label..."| s6
+    s7 -->|"A reported status on each task (with result text or..."| s9
+    s7 -->|"A reported status on each task (with result text or..."| s11
+    s8 -->|"Each step's view of the request (a carried message list or..."| s6
+    s8 -->|"Each step's view of the request (a carried message list or..."| s9
+    s9 -->|"A current state view for the request's scope with the time..."| s6
+    s10 -->|"For a request the representative handles: its standing view..."| s6
+    s10 -->|"For a request the representative handles: its standing view..."| s14
+    s11 -->|"Per request: the metric applied with its reading before and..."| s6
+    s12 -->|"The result of one Quest operation"| s6
+    s12 -->|"The result of one Quest operation"| s7
+    s12 -->|"The result of one Quest operation"| s9
+    s13 -->|"One routed turn with its context sources"| s6
+    s14 -->|"The admitted items with a one-line reason each, and the..."| s6
+    s14 -->|"The admitted items with a one-line reason each, and the..."| s8
+    s15 -->|"A per-prompt table and the share of average model spend..."| s0
 ```

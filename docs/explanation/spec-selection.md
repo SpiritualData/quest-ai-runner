@@ -59,7 +59,7 @@ not named in a brief at all when no root is found (`ToolSpec.needs_spec_root`): 
 It is the slice source that `iterate-by-spec` and `ground-in-intent` were waiting for. `iterate-by-spec` calls it, lexical only
 and for deep goals only (`esoi.spec_slice`, wired by `core/goal_iteration.py`); `ground-in-intent` does not. A record is otherwise not part of the context a run
 is assembled with: it reaches a run only through the tools above. Searching cards and records in one pipeline, with a record as
-a read-only view of its row, is the solution `search-cards-and-specs` (`esoi/solutions.csv`), decided by its own metric; its
+a read-only view of its row, is the solution `search-cards-and-specs` (in `quest_ai_runner/select_context/`), decided by its own metric; its
 first implementation is below.
 
 ## Cards and records in one ranking (`core/unified_search.py`, built, not selected)
@@ -104,7 +104,7 @@ would lift that source in the fusion). The gate thresholds are the ones tuned on
 
 ## Solution tags
 
-A solution may carry tags (the `tags` column of `esoi/solutions.csv`, ids separated by semicolons), a field of the
+A solution may carry tags (the `tags` column of the `solutions.csv` files of the tree, ids separated by semicolons), a field of the
 evolvable-structure template: "What classifications may be necessary to avoid risk?" The list of tags is
 `esoi/tags.csv`, the one source of truth: each row is a `tag`, its `meaning` (one sentence a solution can be judged
 against, yes or no) and its `problem_ids`, the problems it mitigates. The solution that owns the list is

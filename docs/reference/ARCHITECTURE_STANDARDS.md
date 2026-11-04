@@ -36,7 +36,7 @@ justified exceptions are in `esoi/waivers.csv`.
 
 The authoritative, checked inventory is `esoi/components.csv` (rendered in
 `esoi/COMPONENTS.md`), and the swappable solutions with their metrics are in
-`esoi/solutions.csv`. The table below is the short orientation.
+the `solutions.csv` files of the tree (`esoi/README.md` links to each). The table below is the short orientation.
 
 | Module | Role |
 |---|---|

@@ -13,7 +13,7 @@ brain (`core/`) stays free of Quest; the Quest-specific parts are the adapters, 
 are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR keeps what knows Quest.
 - `core/`: the brain, a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
   nothing about Quest, any database, any org, or any user. Depends only on the adapter
-  *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; `esoi/solutions.csv` lists them all.
+  *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; the solutions' records list them all (`esoi/README.md` links to every folder that holds records).
   Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
   notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
   those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
@@ -62,14 +62,21 @@ depends on; "runner" is the executor; "adapters" are the swappable implementatio
 The repo's structure is data, not folklore, and the checking, running and measuring of it is Joshua's `esoi` package
 (a dependency pinned in `pyproject.toml`, a runtime one because implementations are declared with its decorators; `esoi rules`
 lists its rules, so they are not restated here, and the steps and the philosophy are the library's docs and the
-evolvable-structure skill, not copied here). `esoi/`
-holds `components.csv` (placement only), `intent.csv` (the top intent: why this project exists, in its own words) beside the five intent record files,
-`waivers.csv` and `metric-run-policy.md`; `esoi.toml` configures esoi for this repo and
+evolvable-structure skill, not copied here). **The records live beside the code** (`[records] beside_code` in `esoi.toml`; the standard is
+`evolvable-structure/docs/reference/records-beside-code.md`): each record is kept once, in the folder that holds the code it describes, and a generated
+`README.md` in each of those folders shows its solutions, implementations, metrics and diagram. `esoi/` keeps the top intent (`intent.csv`, why this project
+exists, in its own words, with the generated `README.md` that links to every folder), `components.csv` (placement only), `waivers.csv`, `overrides.csv`,
+`tags.csv`, `hub_seats.csv`, `env_descriptions.csv` and `metric-run-policy.md`, which are not records, and the records that follow no code of the package
+(measuring arms in `evaluation/`, solutions with no code yet). **The areas of QAR are sub-intents**: `quest_ai_runner/<intent id>/` holds the `intent.csv`,
+records and README of `reason_and_answer`, `remember_and_recall`, `select_context`, `take_in_the_world`, `act_as_the_body`, `think_critically`,
+`watch_for_risk`, `hold_the_intents`, `keep_it_generic` and `know_the_world`, each arising from the composition arm of its area solution (named back in that
+arm's `sub_intent`). To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
+program reads the records as one tree (`esoi.intents.read_tree(folder, name)` or `esoi.registry.load`), never one CSV file. `esoi.toml` configures esoi for this repo and
 `scripts/esoi_rules.py` adds QAR's own rules: S15 (environment variables are documented), Q1 (solution tags), Q2 (every metric starts model-free) and Q3 (no generic code left in QAR: a module under `quest_ai_runner/` with no Quest-domain word from `QUEST_DOMAIN_WORDS` and no `hubofhubs` binding is generic and belongs in the hub; the `Q3` rows of `esoi/waivers.csv` are the hub-migration backlog, and each check prints the waived count). Nothing lives outside a solution:
 a component that serves none (S19) fails the check, and the code is removed rather than waived; a solution with no
 recorded run, or a row whose measured code changed (S20), is advice that never fails the check.
 **Swappable parts are declared once, beside their code.** An implementation of a port is a class with
-`@implementation("<solution id>", "<name>")` (from `esoi`), and `esoi/implementations.csv` lists the same implementation
+`@implementation("<solution id>", "<name>")` (from `esoi`), and the `implementations.csv` of its folder lists the same implementation
 with the file it lives in (`esoi records sync` writes a missing row; `esoi check` rule S30 fails a declaration with no
 record). There is no table to keep in step: `core/resolve.py` is a thin entry point over `esoi.runtime` under the scope
 `quest_ai_runner`, imports each implementation lazily from the file its record names, and takes the default from the

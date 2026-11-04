@@ -3,7 +3,7 @@
 QAR is described by two pictures. The first maps the parts of a mind to the code and
 solutions that play them. The second shows the outside tools, services and data QAR builds on
 (its hubs) and which part of the mind uses each. The part definitions live in the ESOI records
-(`esoi/solutions.csv`); this page only draws them.
+(the `solutions.csv` files of the records tree); this page only draws them.
 
 ## A. QAR as a mind
 
@@ -75,7 +75,7 @@ other is in [hub-of-hubs.md](hub-of-hubs.md).
 
 ## The parts, from the records
 
-The table is generated from `esoi/solutions.csv` and `esoi/metrics.csv` by
+The table is generated from the `solutions.csv` and `metrics.csv` files of the records tree by
 `scripts/anatomy_table.py --write`, and `tests/test_anatomy_table.py` fails when it is stale.
 
 <!-- anatomy-table:begin -->

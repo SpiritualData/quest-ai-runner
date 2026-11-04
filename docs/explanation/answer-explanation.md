@@ -209,4 +209,4 @@ Decision `teamdec_96793b0729b9`, approved by Payal as recommended (no per-option
 records the template at 0.809 and the model call at 0.802 with no case counts, so no test is possible and the difference is a best guess,
 not a shown gain; the metric stays as it is. Unconfirmed: for Payal to confirm that
 reading of her bare "approve". The template is not yet a registered implementation with code behind it, so `selected` in
-`esoi/solutions.csv` still names `model_explanation` and no runtime behaviour changed.
+the `solutions.csv` record of `explain-an-answer` still names `model_explanation` and no runtime behaviour changed.

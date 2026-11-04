@@ -90,7 +90,7 @@ paths. The hub's scorer reads it, and `esoi run hub_of_hubs --impl registry_scan
 connection.
 
 **Defaults come from a selection snapshot.** Every solution has a `selected` implementation in
-`esoi/solutions.csv`. A lane resolves an implementation by name in this order: a per-solution
+its `solutions.csv` (kept beside its code; `esoi/README.md` links to every folder of records). A lane resolves an implementation by name in this order: a per-solution
 override in the lane configuration, an `ESOI_SELECT_` environment variable, a `[selection]` table in
 `esoi.toml`, then the project default. An installed copy ships without the records, so it reads
 `quest_ai_runner/esoi_selection.json`, which `esoi select --snapshot` writes.

@@ -243,10 +243,10 @@ Leave `guidance_provider` unset for exactly today's behavior (no guidance). `Orc
 ## Choosing which implementation fills a slot
 
 Which class fills a swappable slot (a model provider, a search backend, the vector store, the deep runner,
-and every other port in `esoi/solutions.csv`) is data, not an `if`/`elif` at the call site.
+and every other port in the solutions' records) is data, not an `if`/`elif` at the call site.
 each implementation is declared beside its code with `@implementation("<solution id>", "<name>")` (from `esoi`), and
-`esoi/implementations.csv` lists the same implementations with their file, so that CSV is the only list; the slot's default
-is the solution's `selected` in `esoi/solutions.csv`;
+the `implementations.csv` of the folder that holds their code lists the same implementations with their file, so those records are the only list; the slot's default
+is the solution's `selected` in its `solutions.csv`;
 `quest_ai_runner.core.resolve.resolve(solution_id, name=None, overrides=None)` returns the class:
 
 ```python
@@ -258,7 +258,7 @@ register("search-the-web", "mine", "my_pkg.search:MyBackend")   # your own imple
 ```
 
 In a lane's config file: `[selections]` then `"run-deep-work" = "acp"`. An unknown name raises with the list of
-choices. A new built-in implementation is a class with the decorator, a row in `esoi/implementations.csv`
+choices. A new built-in implementation is a class with the decorator, a row in the `implementations.csv` of its folder
 (`esoi records sync` writes it) and its file in the solution's `implementations` column; `esoi check` (S30) fails a
 declaration with no record. The name is chosen by the config layer (environment variables such as `QAR_MODEL_BACKEND` are
 read there), never inside `core`. Below those, `esoi` adds three layers a deployment can use without code: an
