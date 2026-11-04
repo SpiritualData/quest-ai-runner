@@ -2,23 +2,18 @@ These are ESOI records rendered as a diagram (evolvable structure that optimizes
 
 # Solution diagram: Remembering and recalling the person's own knowledge
 
-remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, reports stale ones through detect-stale-cards and holds their growth in check through bound-card-growth. The area serves the last known listing while a backend is down with cache-cards. Cards are found by meaning with index-by-meaning. Each card gets its labels from label-context-cards. An inflated store is shrunk with repair-a-card-store. repair-a-card-store decides which sources deserve a card by asking choose-what-to-index before it rewrites anything. The cards a lane indexes are proposed through cards-from-files, whose selected arm writes topic cards; bound-card-growth keeps them proportionate.
+remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, and persist-cards serves the last known listing while a backend is down with cache-cards. repair-a-card-store decides which sources deserve a card by asking choose-what-to-index before it rewrites anything. The remaining parts of the area do not use one another in code, so they are grouped here by purpose, the care of a card store that stays current, proportionate and findable. detect-stale-cards reports the cards that have drifted from their source file. bound-card-growth keeps a store proportionate to its sources. label-context-cards gives each card its labels. cards-from-files proposes the topic cards a lane indexes.
 
 An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
 
 ```mermaid
 flowchart LR
     s0["Context card persistence backend<br/>persist-cards"]
-    s1["Source-change staleness detector<br/>detect-stale-cards"]
-    s2["Card store growth prevention<br/>bound-card-growth"]
-    s3["Card store repair<br/>repair-a-card-store"]
-    s4["Index scope decision: which folders and...<br/>choose-what-to-index"]
-    s5["QAR card repository as the hub card...<br/>card-store"]
-    s6["QAR topic cards for a folder<br/>cards-from-files"]
-    s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s5
-    s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s6
-    s1 -->|"Whether the file is stale, and the stale card list for the..."| s5
-    s2 -->|"Cards written only under an id made of their origin; a..."| s5
-    s2 -->|"Cards written only under an id made of their origin; a..."| s6
-    s4 -->|"A FolderGate: the set of corpus-relative folders no card..."| s3
+    s1["Offline card cache and write outbox<br/>cache-cards"]
+    s2["Card store repair<br/>repair-a-card-store"]
+    s3["Index scope decision: which folders and...<br/>choose-what-to-index"]
+    s4["QAR card repository as the hub card...<br/>card-store"]
+    s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s4
+    s1 -->|"The stored listing with its update time, or none, and the..."| s0
+    s3 -->|"A FolderGate: the set of corpus-relative folders no card..."| s2
 ```

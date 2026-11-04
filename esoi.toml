@@ -187,11 +187,13 @@ coverage = 1.0
 precision = 0.909
 coverage = 1.0
 
-# 1 of 6: the card store's parts (cache-cards, index-by-meaning, label-context-cards, repair-a-card-store) and card-store itself are
-# parts of the area that no typed seat composes; coverage 0.667: three edges have an end with no module.
+# 2 of 6: card-store imports persist-cards and persist-cards takes the cache-cards seat. The recency window takes only the card store
+# (a hub seat), so its edges to label-context-cards, repair-a-card-store, cards-from-files, detect-stale-cards and bound-card-growth show no
+# code: those five solutions use no other solution in code and are listed as the window's roots only because the hierarchy rule asks the
+# host to use every root. Coverage 0.667: detect-stale-cards, bound-card-growth and choose-what-to-index have no module in the package.
 [rules.S38.floors.remember_and_recall]
-precision = 0.166
-coverage = 0.666
+precision = 0.333
+coverage = 0.667
 
 # 1 of 4: select-context uses index-by-meaning (the vector assembler and the composite assembler name it, moved here from remember_and_recall
 # for that reason). The area arises from do-grounded-work:library, whose code reaches the assemblers through the lane's configuration
