@@ -34,7 +34,7 @@ def child() -> Assembler:
     """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
     root = PACKAGE_DIR.parent
     records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.think_critically.area", "quest_ai_runner.watch_for_risk.area", "quest_ai_runner.hold_the_intents.area", "quest_ai_runner.adapters.guidance_card_manager", "quest_ai_runner.keep_it_generic.area", "quest_ai_runner.know_the_world.area"))
+    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.think_critically.area", "quest_ai_runner.watch_for_risk.area", "quest_ai_runner.hold_the_intents.area", "quest_ai_runner.adapters.guidance_card_manager", "quest_ai_runner.keep_it_generic.area", "quest_ai_runner.know_the_world.area", "quest_ai_runner.remember_and_recall.qar_topic_bootstrap"))
 
 
 def register_with_hub() -> None:

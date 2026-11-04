@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `remember-and-recall:recency_window
 
 ## How the solutions fit together
 
-remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, reports stale ones through detect-stale-cards and holds their growth in check through bound-card-growth. The area serves the last known listing while a backend is down with cache-cards. Cards are found by meaning with index-by-meaning. Each card gets its labels from label-context-cards. An inflated store is shrunk with repair-a-card-store. repair-a-card-store decides which sources deserve a card by asking choose-what-to-index before it rewrites anything.
+remember-and-recall recalls the cards that match a request through card-store. card-store keeps the cards through persist-cards, reports stale ones through detect-stale-cards and holds their growth in check through bound-card-growth. The area serves the last known listing while a backend is down with cache-cards. Cards are found by meaning with index-by-meaning. Each card gets its labels from label-context-cards. An inflated store is shrunk with repair-a-card-store. repair-a-card-store decides which sources deserve a card by asking choose-what-to-index before it rewrites anything. The cards a lane indexes are proposed through cards-from-files, whose selected arm writes topic cards; bound-card-growth keeps them proportionate.
 
 ## Diagram
 
@@ -22,9 +22,12 @@ flowchart LR
     s3["Card store repair<br/>repair-a-card-store"]
     s4["Index scope decision: which folders and...<br/>choose-what-to-index"]
     s5["QAR card repository as the hub card...<br/>card-store"]
+    s6["QAR topic cards for a folder<br/>cards-from-files"]
     s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s5
+    s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s6
     s1 -->|"Whether the file is stale, and the stale card list for the..."| s5
     s2 -->|"Cards written only under an id made of their origin; a..."| s5
+    s2 -->|"Cards written only under an id made of their origin; a..."| s6
     s4 -->|"A FolderGate: the set of corpus-relative folders no card..."| s3
 ```
 
@@ -41,6 +44,7 @@ flowchart LR
 | `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
 | `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
 | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | `quest-api-cards` | none yet |
+| `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | `qar_topic_bootstrap` | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
 ## Problems and ideals
 
@@ -107,6 +111,7 @@ flowchart LR
 | `choose-what-to-index` | Index scope decision: which folders and card stores a corpus may read | risk_gate | Copies kept out with real material kept in, by review availability |
 | `label-context-cards` | Card categories and metadata | fast_model_labels | Retrieval hits and category precision per unit of cost |
 | `card-store` | QAR card repository as the hub card store | quest-api-cards | none yet |
+| `cards-from-files` | QAR topic cards for a folder | qar_topic_bootstrap | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
 ### Implementations
 
@@ -136,6 +141,7 @@ flowchart LR
 | `label-context-cards:path_rules` | Path and title rules, no model call (floor, proposed) | [evaluation/components/label_context_cards/impls/path_rules.py](../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
 | `card-store:qar-card-repository` | qar-card-repository | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
 | `card-store:quest-api-cards` | Quest backend card API from the environment | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
+| `cards-from-files:qar_topic_bootstrap` | QAR topic bootstrap | [quest_ai_runner/remember_and_recall/qar_topic_bootstrap.py](qar_topic_bootstrap.py) |  |
 
 ### Metrics
 

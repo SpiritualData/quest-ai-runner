@@ -10,3 +10,4 @@ take-in-the-world,prob-misrouted-message;ideal-proportionate-routing;metric-take
 keep-it-generic,QP5;QI5;QME7
 watch-for-risk,prob-risk-handled-uniformly;ideal-risk-handled-where-it-is;metric-watch-a-run
 think-critically,prob-metric-enforced-on-deep-runs-only;ideal-checked-improvement;metric-think-critically
+cards-from-files,prob-card-store-inflates;ideal-proportionate-store;metric-bound-card-growth

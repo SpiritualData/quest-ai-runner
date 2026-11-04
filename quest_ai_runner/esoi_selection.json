@@ -58,6 +58,7 @@
    "cache-cards": "quest_ai_runner",
    "call-a-model": "quest_ai_runner",
    "card-store": "quest_ai_runner",
+   "cards-from-files": "quest_ai_runner",
    "choose-a-model-tier": "quest_ai_runner",
    "choose-what-to-index": "quest_ai_runner",
    "claim-reach": "quest_ai_runner",
@@ -219,6 +220,17 @@
   "modules": {
    "qar-card-repository": "quest_ai_runner.remember_and_recall.hub_card_store",
    "quest-api-cards": "quest_ai_runner.remember_and_recall.hub_card_store"
+  }
+ },
+ "cards-from-files": {
+  "default": "qar_topic_bootstrap",
+  "evidence": {
+   "detail": "bootstrap_guards is better than card_growth.broken.drop_every_import:build (two-sided exact McNemar test, Holm-adjusted p=0.00391, 11 of 12 cases disagree); bootstrap_guards is better than no_cleanup (two-sided exact McNemar test, Holm-adjusted p=0.00586, 10 of 12 cases disagree); bootstrap_guards leads quarantine_tool (quarantine_tool 0.833 against bootstrap_guards 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=1, 2 of 12 cases disagree); repository_tidy is exactly equal to bootstrap_guards on the metric (repository_tidy 1 against bootstrap_guards 1), so bootstrap_guards stays",
+   "p": 0.003906,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "qar_topic_bootstrap": "quest_ai_runner.remember_and_recall.qar_topic_bootstrap"
   }
  },
  "choose-a-model-tier": {
