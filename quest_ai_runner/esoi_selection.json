@@ -529,7 +529,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "web_with_support_check": "quest_ai_runner.area_know_the_world"
+   "web_with_support_check": "quest_ai_runner.know_the_world.area"
   }
  },
  "label-context-cards": {
@@ -781,14 +781,14 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "brave": "quest_ai_runner.adapters.web_search_backends",
-   "gemini": "quest_ai_runner.adapters.web_search_backends",
-   "provider": "quest_ai_runner.adapters.web_search_backends",
-   "provider_web_search": "quest_ai_runner.adapters.provider_web_search_adapter",
-   "searxng": "quest_ai_runner.adapters.web_search_backends",
-   "serper": "quest_ai_runner.adapters.web_search_backends",
-   "tavily": "quest_ai_runner.adapters.web_search_backends",
-   "web_research": "quest_ai_runner.adapters.web_research"
+   "brave": "quest_ai_runner.know_the_world.web_search_backends",
+   "gemini": "quest_ai_runner.know_the_world.web_search_backends",
+   "provider": "quest_ai_runner.know_the_world.web_search_backends",
+   "provider_web_search": "quest_ai_runner.know_the_world.provider_web_search_adapter",
+   "searxng": "quest_ai_runner.know_the_world.web_search_backends",
+   "serper": "quest_ai_runner.know_the_world.web_search_backends",
+   "tavily": "quest_ai_runner.know_the_world.web_search_backends",
+   "web_research": "quest_ai_runner.know_the_world.web_research"
   }
  },
  "select-a-rep": {

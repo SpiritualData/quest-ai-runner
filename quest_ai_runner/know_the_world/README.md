@@ -58,14 +58,14 @@ know-the-world gives a request the facts it needs from outside the person's own 
 
 | Implementation | Name | Where | Sub-intent |
 |---|---|---|---|
-| `search-the-web:web_research` | Snippet-first research with page extraction | [quest_ai_runner/adapters/web_research.py](../adapters/web_research.py) |  |
-| `search-the-web:provider_web_search` | Model-native search | [quest_ai_runner/adapters/provider_web_search_adapter.py](../adapters/provider_web_search_adapter.py) |  |
-| `search-the-web:serper` | Pluggable search backends with fallback | [quest_ai_runner/adapters/web_search_backends.py](../adapters/web_search_backends.py) |  |
-| `search-the-web:brave` | Brave search backend | [quest_ai_runner/adapters/web_search_backends.py](../adapters/web_search_backends.py) |  |
-| `search-the-web:gemini` | Gemini grounded search backend | [quest_ai_runner/adapters/web_search_backends.py](../adapters/web_search_backends.py) |  |
-| `search-the-web:provider` | Provider-native search backend | [quest_ai_runner/adapters/web_search_backends.py](../adapters/web_search_backends.py) |  |
-| `search-the-web:searxng` | SearXNG search backend | [quest_ai_runner/adapters/web_search_backends.py](../adapters/web_search_backends.py) |  |
-| `search-the-web:tavily` | Tavily search backend | [quest_ai_runner/adapters/web_search_backends.py](../adapters/web_search_backends.py) |  |
+| `search-the-web:web_research` | Snippet-first research with page extraction | [quest_ai_runner/know_the_world/web_research.py](web_research.py) |  |
+| `search-the-web:provider_web_search` | Model-native search | [quest_ai_runner/know_the_world/provider_web_search_adapter.py](provider_web_search_adapter.py) |  |
+| `search-the-web:serper` | Pluggable search backends with fallback | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| `search-the-web:brave` | Brave search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| `search-the-web:gemini` | Gemini grounded search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| `search-the-web:provider` | Provider-native search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| `search-the-web:searxng` | SearXNG search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
+| `search-the-web:tavily` | Tavily search backend | [quest_ai_runner/know_the_world/web_search_backends.py](web_search_backends.py) |  |
 
 ### Metrics
 

@@ -208,7 +208,7 @@ class RunnerConfig:
     # ``retrieval``/``CompositeRetrievalAdapter``, because that composite broadcasts every
     # grep/query to every member adapter, which would fire a paid, slow web search on an ordinary
     # corpus grep. Leave unset (the default) and ``build_orchestrator`` auto-builds one from env
-    # via ``adapters.web_research.build_web_research_from_env`` (unless ``WEB_SEARCH_ENABLED=false``
+    # via ``know_the_world.web_research.build_web_research_from_env`` (unless ``WEB_SEARCH_ENABLED=false``
     # or no backend is configured, both of which leave this ``None``). Set it explicitly to supply
     # a custom ``WebResearch`` (or a test fake); ``build_orchestrator`` never overwrites an
     # already-set value.

@@ -286,7 +286,7 @@ flowchart LR
 | `track-usage-and-cost:resources` | Hysteresis resource guard | [quest_ai_runner/resources.py](../quest_ai_runner/resources.py) |  |
 | `keep-it-generic:structure-library` | Apply the evolvable-structure library | [quest_ai_runner/keep_it_generic/area.py](../quest_ai_runner/keep_it_generic/area.py) | [keep_it_generic](keep_it_generic/README.md) |
 | `reason-and-answer:rebuilt_per_step` | Rebuilt prompt per step with a referenced context (today) | [quest_ai_runner/area_reason_and_answer.py](../quest_ai_runner/area_reason_and_answer.py) | [reason_and_answer](reason_and_answer/README.md) |
-| `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [quest_ai_runner/area_know_the_world.py](../quest_ai_runner/area_know_the_world.py) | [know_the_world](know_the_world/README.md) |
+| `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [quest_ai_runner/know_the_world/area.py](../quest_ai_runner/know_the_world/area.py) | [know_the_world](know_the_world/README.md) |
 | `act-as-the-body:card_and_reads` | Managed quest card plus optional live reads (today) | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) | [act_as_the_body](act_as_the_body/README.md) |
 | `hold-the-intents:separate_stores` | Separate stores read at the start of a request (today) | [quest_ai_runner/area_hold_the_intents.py](../quest_ai_runner/area_hold_the_intents.py) | [hold_the_intents](hold_the_intents/README.md) |
 | `think-critically:deep_runs_only` | Code-enforced before and after on deep runs only (today) | [quest_ai_runner/area_think_critically.py](../quest_ai_runner/area_think_critically.py) | [think_critically](think_critically/README.md) |

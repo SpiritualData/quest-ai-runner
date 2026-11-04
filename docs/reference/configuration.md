@@ -217,16 +217,16 @@ the docs and `.env.example` that describe what it does.
 | `QAR_VERIFY_TIER` |  | `cli_config.py` | `.env.example` |
 | `QAR_WAIT_CHANNEL` |  | `cli_config.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_WAIT_TIMEOUT_SECONDS` | Seconds each long-poll GET asks the backend to wait (sets RunnerConfig.wait_timeout_seconds). | `cli_config.py` | - |
-| `QAR_WEB_CACHE_DIR` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `adapters/web_search_backends.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_BACKEND` |  | `adapters/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_MODEL` |  | `adapters/web_research.py`, `adapters/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `adapters/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_TTL_SECONDS` |  | `adapters/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_CACHE_DIR` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_TTL_SECONDS` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `know_the_world/web_search_backends.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_BACKEND` |  | `know_the_world/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_MODEL` |  | `know_the_world/web_research.py`, `know_the_world/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `know_the_world/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_TTL_SECONDS` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
 | `QDRANT_URL` | Plain Qdrant URL, the last fallback after QAR_QDRANT_URL. | `config_assembler.py` | - |
 | `QUEST_API_KEY` | Quest API key; declared by the hub for card-store. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
 | `QUEST_API_URL` | Fills the 'base_url' option of card-store:quest-api-cards; declared by the hub. | `adapters/quest_context_adapter.py`, `config_resolvers.py`, `core/tools.py` +3 | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md` +1 |

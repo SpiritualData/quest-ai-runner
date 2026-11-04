@@ -18,7 +18,7 @@ from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversa
 from quest_ai_runner.adapters.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.adapters.files_adapter import FilesAdapter
 from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter
-from quest_ai_runner.adapters.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
 from hubofhubs.recall.reference_resolver import collect_reference_resolvers
 
 

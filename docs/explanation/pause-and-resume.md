@@ -227,7 +227,7 @@ hub `ports/working_state.py`, `orchestrate/working_state_lru.py`; QAR `core/work
 pause; cold brief builder. Files: QAR `runner/executor_pauses.py`, `runner/executor.py`, `core/orchestrator_deep_run.py`,
 new `core/resume.py`; backend lease field and the resume endpoint.
 **Phase 3:** tool-result cache (byte budget, user namespace, by-id replay) under the hub web and paper tools; check 3. Files:
-hub `websearch/cache.py`; QAR `adapters/web_search_backends.py`.
+hub `websearch/cache.py`; QAR `know_the_world/web_search_backends.py`.
 **Phase 4:** chat answer turns and terminal checkpoint and resume; frontend Resume and Replay controls, Paused Trail state,
 the cold line (all locales). Files: quest-frontend Trail components and chat adapter, backend stream endpoint, QAR
 `interactive_session_persist.py`, `interactive_session_tracker.py`.

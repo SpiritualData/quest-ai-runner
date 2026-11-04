@@ -4,10 +4,11 @@ These satisfy the ports in ``quest_ai_runner.core.adapters_*`` (and ``hubofhubs.
 needs into a ``RunnerConfig``. This package is the public import path for them
 (``from quest_ai_runner.adapters import FilesAdapter, CompositeRetrievalAdapter``). Each class says what it is in its own
 module docstring, and ``esoi/COMPONENTS.md`` lists them by role: retrieval (files, remote files, cached DB, Claude
-sessions, Google Chat and Drive, Notion, Quest, MCP, web research), model providers (Anthropic, Gemini, OpenAI, DeepSeek,
+sessions, Google Chat and Drive, Notion, Quest, MCP), model providers (Anthropic, Gemini, OpenAI, DeepSeek,
 Claude CLI), context assemblers and card stores (file, BM25, vector, hybrid, Qdrant, Quest API), the ACP deep runner
 and the file writer. The fast-edit and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). Optional extras (``bm25``, ``qdrant``) are
-imported behind a guard, so a name whose extra is missing is ``None``.
+imported behind a guard, so a name whose extra is missing is ``None``. An adapter that only one area uses lives in that area's
+folder (``quest_ai_runner/<intent id>/``, for example ``know_the_world`` for web research) and is imported from there.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
@@ -15,11 +16,8 @@ reference (the Quest team decision-request) lives in runner.quest_client.
 from .acp_deep_runner import AcpConfig, AcpDeepRunner
 from .mcp_retrieval_adapter import MCPRetrievalAdapter
 from .cached_db_adapter import CachedDbAdapter
-from .provider_web_search_adapter import ProviderWebSearchAdapter
 from hubofhubs.websearch.cache import WebCache, normalize_query
 from hubofhubs.websearch.page_extract import check_url_is_safe, extract_main_text
-from .web_search_backends import FallbackSearchBackend, SearchBackend, SearchBackendError, SearchHit, SearchResponse, select_search_backend
-from .web_research import WebResearchAdapter, build_web_research_from_env
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
 from .google_chat_adapter import GoogleChatAdapter, ChatSpaces, static_token_provider, service_account_token_provider

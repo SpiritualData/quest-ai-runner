@@ -1,6 +1,9 @@
 # esoi configuration for quest-ai-runner (one adopter's setup; copy it to the repository root as esoi.toml).
 package = "quest_ai_runner"
-layers = ["core", "adapters", "runner", "config", ["cli", "tools"]]
+# An area folder (quest_ai_runner/<intent id>/, listed here once it holds code) sits above core and adapters, at the rank of runner: core and
+# adapters never import an area folder, so the brain stays free of Quest; an area folder's modules import core, adapters and runner, and are
+# imported by the runner and the configuration. A file in an area folder is checked as that area, whatever layer its component row names.
+layers = ["core", "adapters", ["runner", "keep_it_generic", "know_the_world"], "config", ["cli", "tools"]]
 other_layers = ["prompts", "docs", "evaluation", "examples", "scripts", "tests"]
 max_lines = 1500
 # Where the maintainers keep the skill that defines the intent template; absent elsewhere, then S27 is skipped

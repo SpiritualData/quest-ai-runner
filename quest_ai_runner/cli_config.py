@@ -326,7 +326,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
 
     # Live web search is NOT folded in here: broadcasting it through CompositeRetrievalAdapter
     # would fire a paid, slow web search on every ordinary corpus grep/query. ``build_orchestrator``
-    # wires ``cfg.web_research`` separately (see ``adapters/web_research.build_web_research_from_env``),
+    # wires ``cfg.web_research`` separately (see ``know_the_world/web_research.build_web_research_from_env``),
     # reached only by the planner's own {"web": ...}/{"web_page": ...} read keys.
 
     # Add conversation search unless explicitly disabled. Two separate adapters:

@@ -88,7 +88,7 @@ def test_a_config_class_comes_with_runners_that_take_one():
 
 
 def test_register_adds_an_implementation_of_the_consumers_own():
-    register("search-the-web", "mine", "quest_ai_runner.adapters.web_search_backends:BraveBackend")
+    register("search-the-web", "mine", "quest_ai_runner.know_the_world.web_search_backends:BraveBackend")
     assert "mine" in names("search-the-web")
     assert resolve("search-the-web", "mine").__name__ == "BraveBackend"
     assert default_name("search-the-web") == "web_research"
@@ -99,7 +99,7 @@ def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_librar
     entry = runtime.entry_for("write-files", None, resolve_mod.SCOPE)
     saved = dict(entry.implementations)
     try:
-        register("write-files", "files", "quest_ai_runner.adapters.web_search_backends:BraveBackend")
+        register("write-files", "files", "quest_ai_runner.know_the_world.web_search_backends:BraveBackend")
         assert resolve("write-files", "files").__name__ == "BraveBackend"
         import quest_ai_runner.adapters.files_writer  # noqa: F401  (the library's own declaration steps aside)
         assert resolve("write-files", "files").__name__ == "BraveBackend"
@@ -128,7 +128,7 @@ def test_model_provider_follows_the_declarations(monkeypatch):
 
 
 def test_search_backend_class_comes_from_the_declarations():
-    from quest_ai_runner.adapters.web_search_backends import BraveBackend, SerperBackend, select_search_backend
+    from quest_ai_runner.know_the_world.web_search_backends import BraveBackend, SerperBackend, select_search_backend
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper", "SERPER_API_KEY": "k"}), SerperBackend)
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "brave", "BRAVE_API_KEY": "k"}), BraveBackend)
     assert select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper"}) is None      # key missing

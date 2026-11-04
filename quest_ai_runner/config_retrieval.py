@@ -86,7 +86,7 @@ def _retrieval_has_web_search(retrieval) -> bool:
     if retrieval is None:
         return False
     try:
-        from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
+        from .know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
         from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
     except Exception:  # noqa: BLE001
         return False
@@ -154,7 +154,7 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
     # a provider-native ProviderWebSearchAdapter.
     if not web and retrieval is not None:
         try:
-            from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
+            from .know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
             from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
 
             def _is_web(a) -> bool:

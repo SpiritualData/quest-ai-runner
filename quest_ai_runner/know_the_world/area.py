@@ -3,7 +3,7 @@
 The area arm ``web_with_support_check`` takes the web member (``search-the-web``) as a typed seat and offers the hub's lines for the
 area, ``describe``, ``search(queries)`` and ``fetch(url)``: one compact observation of title, link and snippet per hit, and the passages
 of one page that bear on a focus. Neither raises; a failure comes back as an observation of kind ``error``. The research is the hub's
-snippet-first adapter under QAR's tuning (``adapters/web_research.py``), unchanged.
+snippet-first adapter under QAR's tuning (``know_the_world/web_research.py``), unchanged.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any, List, Optional, Union
 from esoi import implementation, solution
 from hubofhubs.seats import WorldKnowing
 
-from .adapters.web_research import WebSearching
+from .web_research import WebSearching
 
 
 @solution("know-the-world", kind="event", entry="search", example="meditation and attention")

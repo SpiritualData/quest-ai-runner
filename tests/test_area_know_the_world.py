@@ -3,7 +3,7 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_know_the_world import KnowingTheWorld
+from quest_ai_runner.know_the_world.area import KnowingTheWorld
 
 
 def strict_outcome(solution_id):

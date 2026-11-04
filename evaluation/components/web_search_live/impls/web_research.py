@@ -6,7 +6,7 @@ configured and ``QAR_EVAL_LIVE_SEARCH`` is set."""
 import os
 
 import common  # noqa: F401  (sets sys.path for the repo)
-from quest_ai_runner.adapters.web_research import build_web_research_from_env
+from quest_ai_runner.know_the_world.web_research import build_web_research_from_env
 from web_search import bench
 from web_search_live.pricing import PER_1K_USD
 

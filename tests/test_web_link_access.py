@@ -25,7 +25,7 @@ from hubofhubs.websearch.fetch import (
     UnsupportedContentTypeError,
     default_page_fetcher,
 )
-from quest_ai_runner.adapters.web_research import WebResearchAdapter
+from quest_ai_runner.know_the_world.web_research import WebResearchAdapter
 from quest_ai_runner.core import orchestrator as orch
 
 ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"

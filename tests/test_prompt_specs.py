@@ -26,8 +26,8 @@ SPEC_REFERENCES = {"render_prompt", "get_spec", "ask_judge"}
 # Provider transport and tool-use plumbing: they carry a caller's prompt, they do not own one.
 TRANSPORT = {
     "adapters/claude_cli_provider.py",
-    "adapters/web_search_backends.py", "adapters/provider_web_search_adapter.py",
-    "adapters/web_research.py",
+    "know_the_world/web_search_backends.py", "know_the_world/provider_web_search_adapter.py",
+    "know_the_world/web_research.py",
 }
 
 

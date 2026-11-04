@@ -17,7 +17,7 @@ PARTS = [
     ("World (input)", "quest_ai_runner/runner/poller.py", "run-queued-tasks"),
     ("Subconscious, incl. Intuition", "quest_ai_runner/core/card_filter.py", "remember-and-recall"),
     ("Mind", "quest_ai_runner/core/orchestrator.py", "reason-and-answer"),
-    ("Science", "quest_ai_runner/adapters/web_research.py", "know-the-world"),
+    ("Science", "quest_ai_runner/know_the_world/web_research.py", "know-the-world"),
     ("Critical thinking", "quest_ai_runner/core/goal_metrics.py", "think-critically"),
     ("Overseer", "quest_ai_runner/core/overseer.py", "watch-for-risk"),
     ("Body", "quest_ai_runner/runner/quest_client.py", "act-as-the-body"),

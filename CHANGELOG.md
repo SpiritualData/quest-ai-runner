@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-- Each area's exclusive code moves into its sub-intent folder (`quest_ai_runner/<intent id>/`, composition in `area.py`), so a folder holds the area's records and the code that serves it; importers, including quest-backend's, name the new module paths and no old path remains. `core/`, `adapters/` and `runner/` keep what several areas or the generic core use.
+- Each area's exclusive code moves into its sub-intent folder (`quest_ai_runner/<intent id>/`, composition in `area.py`), so a folder holds the area's records and the code that serves it; importers, including quest-backend's, name the new module paths and no old path remains. `core/`, `adapters/` and `runner/` keep what several areas or the generic core use, and each area folder is a layer above `core` and `adapters` (never imported by them).
 
 - The ESOI records live beside the code: each solution's records are kept once in the folder that holds its code (`[records] beside_code` in `esoi.toml`), each of those folders has a generated `README.md`, and each area of the loop is a sub-intent, a folder of `quest_ai_runner/` named by its intent id (`reason_and_answer`, `remember_and_recall`, `select_context`, `take_in_the_world`, `act_as_the_body`, `think_critically`, `watch_for_risk`, `hold_the_intents`, `keep_it_generic`, `know_the_world`) with its own intent, solutions, problems and coherence paragraph. `esoi/` keeps the top intent and the files that are not records. A program that read `esoi/*.csv` reads the tree (`esoi.intents.read_tree`); no module moved and no importable name changed.
 

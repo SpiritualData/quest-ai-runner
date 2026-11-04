@@ -22,7 +22,7 @@ from .message_routing import RequestTakingIn
 from .area_act_as_the_body import BodyActing
 from .area_hold_the_intents import IntentHolding
 from .keep_it_generic.area import KeepingGeneric
-from .area_know_the_world import KnowingTheWorld
+from .know_the_world.area import KnowingTheWorld
 from .area_think_critically import MetricHolding
 from .area_watch_for_risk import RunWatching
 from .runner.quest_client import QuestOperations

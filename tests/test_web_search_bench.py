@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from hubofhubs.websearch.cache import WebCache
-from quest_ai_runner.adapters.web_research import WebResearchAdapter
-from quest_ai_runner.adapters.web_search_backends import SearchHit, SearchResponse
+from quest_ai_runner.know_the_world.web_research import WebResearchAdapter
+from quest_ai_runner.know_the_world.web_search_backends import SearchHit, SearchResponse
 
 MODULE_PATH = Path(__file__).resolve().parent.parent / "scripts" / "web_search_bench.py"
 
@@ -185,7 +185,7 @@ def test_main_end_to_end_against_fake_backend(monkeypatch, capsys):
     backend = FakeBackend()
     adapter = WebResearchAdapter(backend, cache=WebCache())
 
-    import quest_ai_runner.adapters.web_research as web_research_module
+    import quest_ai_runner.know_the_world.web_research as web_research_module
 
     monkeypatch.setattr(web_research_module, "build_web_research_from_env", lambda *a, **k: adapter)
 
@@ -203,7 +203,7 @@ def test_main_json_output(monkeypatch, capsys):
     backend = FakeBackend()
     adapter = WebResearchAdapter(backend, cache=WebCache())
 
-    import quest_ai_runner.adapters.web_research as web_research_module
+    import quest_ai_runner.know_the_world.web_research as web_research_module
 
     monkeypatch.setattr(web_research_module, "build_web_research_from_env", lambda *a, **k: adapter)
 
@@ -217,7 +217,7 @@ def test_main_json_output(monkeypatch, capsys):
 
 
 def test_main_no_backend_configured_returns_error(monkeypatch, capsys):
-    import quest_ai_runner.adapters.web_research as web_research_module
+    import quest_ai_runner.know_the_world.web_research as web_research_module
 
     monkeypatch.setattr(web_research_module, "build_web_research_from_env", lambda *a, **k: None)
 

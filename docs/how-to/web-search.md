@@ -1,6 +1,6 @@
 # Web search
 
-`WebResearchAdapter` (`quest_ai_runner/adapters/web_research.py`) gives the orchestrator fast,
+`WebResearchAdapter` (`quest_ai_runner/know_the_world/web_research.py`) gives the orchestrator fast,
 token-efficient access to the live web, the same way ChatGPT/Perplexity-style assistants stay
 cheap: **snippet-first search, full-page reads only on request, everything cached.**
 
@@ -77,7 +77,7 @@ to the cache).
 
 ## Backends
 
-Set via env (see `select_search_backend` in `adapters/web_search_backends.py` for the exact
+Set via env (see `select_search_backend` in `know_the_world/web_search_backends.py` for the exact
 selection order/logic):
 
 | Backend | Env var(s) for the key/endpoint | Notes |

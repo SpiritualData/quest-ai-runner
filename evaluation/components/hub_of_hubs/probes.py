@@ -23,7 +23,7 @@ def registered(solution_id, name, target):
 
 
 def web_search():
-    from quest_ai_runner.adapters.web_search_backends import select_search_backend
+    from quest_ai_runner.know_the_world.web_search_backends import select_search_backend
     with registered("search-the-web", "fakehub", "hub_of_hubs.fake_hub:FakeSearch"):
         got = select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "fakehub", "FAKEHUB_URL": "http://hub.invalid"})
     return got is not None and type(got).__name__ == "FakeSearch", "selected by QAR_WEB_SEARCH_BACKEND"

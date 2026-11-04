@@ -85,7 +85,7 @@ def tool_catalog_is_empty_unless_a_test_says_otherwise(monkeypatch, hermetic_qar
 
 
 #: Every env var ``select_search_backend``/``build_web_research_from_env``
-#: (``adapters/web_research.py``) reads to decide a live-web backend is available.
+#: (``know_the_world/web_research.py``) reads to decide a live-web backend is available.
 _WEB_BACKEND_ENV_VARS = (
     "QAR_WEB_SEARCH_BACKEND", "QAR_WEB_SEARCH_PROVIDER_MODEL", "QAR_WEB_SEARCH_MODEL",
     "SERPER_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY",

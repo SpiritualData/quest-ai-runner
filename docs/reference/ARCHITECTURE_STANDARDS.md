@@ -32,6 +32,10 @@ under `adapters/`, and wire it via `RunnerConfig`; if it needs a helper that liv
 inward and let the outer module re-export it. `esoi check` enforces this (rule S6); the
 justified exceptions are in `esoi/waivers.csv`.
 
+An area folder (`quest_ai_runner/<intent id>/`, listed in `layers` in `esoi.toml`) holds the code only that area uses. It sits above `core/` and
+`adapters/` at the rank of `runner/`: `core/` and `adapters/` never import it, so the brain stays free of Quest, while the runner and the configuration
+may, and its modules may import `core/`, `adapters/` and `runner/`. A module that `core/` or another area imports stays where it is.
+
 ## Module map
 
 The authoritative, checked inventory is `esoi/components.csv` (rendered in

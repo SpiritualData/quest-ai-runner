@@ -13,7 +13,7 @@ flowchart TB
   WI["World in<br/>chat, queued tasks<br/>runner/poller.py"]
   SUB["Subconscious + Intuition<br/>remember-and-recall<br/>core/card_filter.py"]
   MIND["Mind<br/>reason-and-answer<br/>core/orchestrator.py"]
-  SCI["Science<br/>know-the-world<br/>adapters/web_research.py"]
+  SCI["Science<br/>know-the-world<br/>know_the_world/web_research.py"]
   CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/goal_metrics.py"]
   OV["Overseer<br/>risk check<br/>watch-for-risk<br/>core/overseer.py"]
   BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
@@ -84,7 +84,7 @@ The table is generated from the `solutions.csv` and `metrics.csv` files of the r
 | World (input) | `quest_ai_runner/runner/poller.py` | `run-queued-tasks` | `metric-run-queued-tasks` | arm built, selected: qar_runner |
 | Subconscious, incl. Intuition | `quest_ai_runner/core/card_filter.py` | `remember-and-recall` | `metric-admit-to-the-mind` | arm built, selected: recency_window |
 | Mind | `quest_ai_runner/core/orchestrator.py` | `reason-and-answer` | `metric-keep-a-working-stream` | arm built, selected: rebuilt_per_step |
-| Science | `quest_ai_runner/adapters/web_research.py` | `know-the-world` | `metric-know-the-world` | arm built, selected: web_with_support_check |
+| Science | `quest_ai_runner/know_the_world/web_research.py` | `know-the-world` | `metric-know-the-world` | arm built, selected: web_with_support_check |
 | Critical thinking | `quest_ai_runner/core/goal_metrics.py` | `think-critically` | `metric-think-critically` | arm built, selected: deep_runs_only |
 | Overseer | `quest_ai_runner/core/overseer.py` | `watch-for-risk` | `metric-watch-a-run` | arm built, selected: overseer |
 | Body | `quest_ai_runner/runner/quest_client.py` | `act-as-the-body` | `metric-act-as-the-body` | arm built, selected: card_and_reads |
