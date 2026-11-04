@@ -140,7 +140,7 @@ coverage = 1.0
 
 # The floors of each area (a sub-intent), at the values measured when its records were written; raised as its composition is typed in code.
 [rules.S38.floors.reason_and_answer]
-precision = 0.727
+precision = 1.0
 coverage = 1.0
 
 [rules.S38.floors.remember_and_recall]
