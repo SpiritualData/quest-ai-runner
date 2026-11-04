@@ -172,7 +172,7 @@ precision = 1.0
 coverage = 1.0
 
 [rules.S38.floors.keep_it_generic]
-precision = 0.0
+precision = 1.0
 coverage = 0.166
 
 [rules.S38.floors.know_the_world]
