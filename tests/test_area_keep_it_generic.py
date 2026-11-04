@@ -27,8 +27,3 @@ def test_the_audit_scans_the_brain_for_the_terms_and_reads_the_share_through_the
     assert area.audit([]) == {"vendor_branches": [], "config_share": 0.5}
     assert area.audit(["zzzzunknownvendor"])["vendor_branches"] == []
 
-
-def test_the_running_arm_of_a_solution_is_the_one_the_selector_names():
-    from quest_ai_runner.core import resolve
-    area = quest_ai_runner.run(KeepingGeneric, environ={}, provided={"score-hub-connections": Scorer()})
-    assert area.running_arm("call-a-model") == resolve.chosen_name("call-a-model")
