@@ -193,10 +193,11 @@ coverage = 1.0
 precision = 0.166
 coverage = 0.666
 
-# 0 of 3: the area arises from do-grounded-work:library, whose code reaches the assemblers through the lane's configuration (config.py),
-# so two of the three host edges are only imported through another module and one shows nothing.
+# 1 of 4: select-context uses index-by-meaning (the vector assembler and the composite assembler name it, moved here from remember_and_recall
+# for that reason). The area arises from do-grounded-work:library, whose code reaches the assemblers through the lane's configuration
+# (config.py), so two of the three host edges are only imported through another module and one shows nothing.
 [rules.S38.floors.select_context]
-precision = 0.0
+precision = 0.25
 coverage = 1.0
 
 # 7 of 8: feed-context-sources is a part of the area that no typed seat composes; configure-a-lane imports the selector it uses

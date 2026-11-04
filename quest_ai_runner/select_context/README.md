@@ -8,7 +8,18 @@ This sub-intent arises as the implementation `do-grounded-work:library` of its p
 
 ## How the solutions fit together
 
-select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. This area arises from the library implementation that wires every area through one configuration (do-grounded-work:library, the top intent's implementation), because no built implementation of one solution of the parent composes the assemblers: the lane's configuration chooses them. resolve-references follows the pointer of a card to the person's current notes and files. search-cards-and-specs ranks the cards of a run together with the specification records of a repository in one list.
+select-context chooses the cards, files and conversations a planner reads before it plans, so the right material is found however a request is worded. This area arises from the library implementation that wires every area through one configuration (do-grounded-work:library, the top intent's implementation), because no built implementation of one solution of the parent composes the assemblers: the lane's configuration chooses them. select-context finds a card by what it means, not by its words, through index-by-meaning. resolve-references follows the pointer of a card to the person's current notes and files. search-cards-and-specs ranks the cards of a run together with the specification records of a repository in one list.
+
+## Diagram
+
+An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+
+```mermaid
+flowchart LR
+    s0["Context card selector<br/>select-context"]
+    s1["Semantic vector index<br/>index-by-meaning"]
+    s1 -->|"Ranked hits with id, score, text and payload for search..."| s0
+```
 
 ## Solutions at a glance
 
@@ -17,6 +28,7 @@ select-context chooses the cards, files and conversations a planner reads before
 | `select-context` | no entry declared | `hybrid` | Context selection ranking accuracy and card-quality outcome |
 | `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
 | `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
+| `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
 
 ## Problems and ideals
 
@@ -35,12 +47,14 @@ select-context chooses the cards, files and conversations a planner reads before
 - `metric-select-context`, Context selection ranking accuracy and card-quality outcome: leader `blind_grep`, 60 of 123 cases
 - `metric-resolve-references`, Pointer-resolution safety over offline cases: leader `card_resolvers`, 16 of 16 cases
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: leader `solutions_and_problems_with_links`, 14 of 17 cases
+- `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: leader `memory_cosine`, 16 of 17 cases
 
 ## Where to go next
 
 - Parent intent: [Grounded AI that advances people's goals](../../esoi/README.md)
 - Repository: [top README](../../README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Diagram page: [diagram.md](diagram.md)
 
 ---
 
@@ -63,6 +77,7 @@ select-context chooses the cards, files and conversations a planner reads before
 | `select-context` | Context card selector | hybrid | Context selection ranking accuracy and card-quality outcome |
 | `resolve-references` | Fail-safe card reference resolver | note | Pointer-resolution safety over offline cases |
 | `search-cards-and-specs` | Unified card and specification search | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
+| `index-by-meaning` | Semantic vector index | qdrant | Semantic recall and query latency on the synthetic handbook |
 
 ### Implementations
 
@@ -92,9 +107,11 @@ select-context chooses the cards, files and conversations a planner reads before
 | `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
 | `select-context:hub_per_file_symbols` | The hub's per-file card arm | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
 | `select-context:hub_folder_cards` | One card per folder, from the hub's card helpers | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
+| `index-by-meaning:qdrant` | Qdrant-backed vector store | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](../remember_and_recall/qdrant_vector_store.py) |  |
 
 ### Metrics
 
 - `metric-select-context`, Context selection ranking accuracy and card-quality outcome: `esoi run context_selection --impl hybrid_union; esoi run card_quality --impl seeded_keyword_store; esoi run claude_code_ab --impl idf_hint`
 - `metric-resolve-references`, Pointer-resolution safety over offline cases: `esoi run resolve_references --impl card_resolvers`
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: `esoi run context_and_specs --impl solutions_and_problems_with_links; esoi run spec_selection --impl solutions_and_problems_with_links; esoi run context_selection --impl solutions_and_problems_with_links`
+- `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: `esoi run vector_recall --impl qdrant_embedded`

@@ -36,7 +36,6 @@ flowchart LR
 | Solution | Entry call | Selected implementation | Metric |
 |---|---|---|---|
 | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | `quest_api` | Card repository conformance across backends |
-| `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
 | `detect-stale-cards` | no entry declared | `store_sha256` | Staleness detection precision and recall over mutation cases |
 | `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
 | `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
@@ -65,7 +64,6 @@ flowchart LR
 ## Metrics and their leaders
 
 - `metric-persist-cards`, Card repository conformance across backends: leader `filesystem`, 14 of 14 cases
-- `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: leader `memory_cosine`, 16 of 17 cases
 - `metric-detect-stale-cards`, Staleness detection precision and recall over mutation cases: leader `store_sha256`, 5 of 6 cases
 - `metric-cache-cards`, Outage resilience of the card repository: leader `file_cache`, 12 of 12 cases
 - `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: leader `bootstrap_guards`, 12 of 12 cases
@@ -103,7 +101,6 @@ flowchart LR
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
 | `persist-cards` | Context card persistence backend | quest_api | Card repository conformance across backends |
-| `index-by-meaning` | Semantic vector index | qdrant | Semantic recall and query latency on the synthetic handbook |
 | `detect-stale-cards` | Source-change staleness detector | store_sha256 | Staleness detection precision and recall over mutation cases |
 | `cache-cards` | Offline card cache and write outbox | file | Outage resilience of the card repository |
 | `bound-card-growth` | Card store growth prevention | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
@@ -120,7 +117,6 @@ flowchart LR
 | `persist-cards:filesystem` | Atomic JSON file repository | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
 | `persist-cards:qdrant` | Vector database repository | [quest_ai_runner/remember_and_recall/qdrant_card_repository.py](qdrant_card_repository.py) |  |
 | `persist-cards:quest_api` | Hosted card API repository | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
-| `index-by-meaning:qdrant` | Qdrant-backed vector store | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](qdrant_vector_store.py) |  |
 | `detect-stale-cards:store_sha256` | Content-hash fingerprint check | [evaluation/components/staleness/impls/store_sha256.py](../../evaluation/components/staleness/impls/store_sha256.py) |  |
 | `detect-stale-cards:mtime_size` | Timestamp-and-size baseline | [evaluation/components/staleness/impls/mtime_size.py](../../evaluation/components/staleness/impls/mtime_size.py) |  |
 | `cache-cards:null` | Card repository with a cache seam and a null cache | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
@@ -146,7 +142,6 @@ flowchart LR
 ### Metrics
 
 - `metric-persist-cards`, Card repository conformance across backends: `esoi run persist_cards --impl quest_api`
-- `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: `esoi run vector_recall --impl qdrant_embedded`
 - `metric-detect-stale-cards`, Staleness detection precision and recall over mutation cases: `esoi run staleness --impl store_sha256`
 - `metric-cache-cards`, Outage resilience of the card repository: `esoi run cache_cards --impl file_cache`
 - `metric-bound-card-growth`, Cards per source-file group after repeated passes, for the guards that prevent growth: `esoi run card_growth --impl bootstrap_guards; esoi run card_store_growth --impl live_store; esoi run card_growth --impl no_cleanup`
