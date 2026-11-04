@@ -144,11 +144,11 @@ precision = 1.0
 coverage = 1.0
 
 [rules.S38.floors.remember_and_recall]
-precision = 0.285
+precision = 1.0
 coverage = 0.7
 
 [rules.S38.floors.select_context]
-precision = 0.333
+precision = 0.667
 coverage = 1.0
 
 [rules.S38.floors.take_in_the_world]

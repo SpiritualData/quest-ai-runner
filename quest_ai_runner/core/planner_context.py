@@ -12,9 +12,10 @@ from typing import Any, Dict, List, Optional, Sequence
 from esoi import implementation, solution
 from hubofhubs.card import Card
 from hubofhubs.ports.context import AssembledContext
-from hubofhubs.seats import CardStore, Remembering
+from hubofhubs.seats import Remembering
 from hubofhubs.critique.link_detect import MAX_LISTED_LINKS, links_in_message
 from .planner_prompt import DECLINED_PROPOSALS_NOTE
+from ..remember_and_recall.hub_card_store import CardKeeping
 
 
 # Discovery specs return a CAPABILITY/SOURCE MENU (what the assistant CAN call or look in), not
@@ -514,7 +515,7 @@ def gathered_content(gathered: List[Any]) -> List[Any]:
 @typing.runtime_checkable
 class CardRecall(Remembering, typing.Protocol):
     """What a request recalls: the hub's ``remember-and-recall`` interface (``recall``), which the loop also reads as its context
-    assembler (``assemble`` and ``record``)."""
+    assembler (``assemble`` and ``record``, the ``ContextAssembler`` contract of ``select-context``, which chooses what a planner reads)."""
 
 
 @implementation("remember-and-recall", "recency_window")
@@ -523,7 +524,7 @@ class RecencyWindow:
     view. ``recall`` answers a query with the matching cards; ``assemble`` renders the same cards as the pre-flight context the
     loop reads; ``record`` has nothing to write back because the cards live in the store."""
 
-    def __init__(self, cards: CardStore) -> None:
+    def __init__(self, cards: CardKeeping) -> None:
         self.cards = cards
 
     def recall(self, query: str, limit: int = 5) -> Sequence[Card]:

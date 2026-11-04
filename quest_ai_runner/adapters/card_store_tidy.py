@@ -1,6 +1,6 @@
 """QAR's words for the hub's repository tidy: the ``quest-ai-runner cards tidy`` commands and messages, and the declared implementation.
 
-The tidy itself (plan, export, apply, undo through the ``CardRepository`` port) is the hub's, ``hubofhubs.recall.card_store_tidy``.
+The tidy itself (plan, export, apply, undo through the ``CardRepository`` port, the repository ``persist-cards`` names) is the hub's, ``hubofhubs.recall.card_store_tidy``.
 What names QAR stays here: the command lines a person is told to run, the lane's config file, the ``card_tidy`` setting and the
 messages built from them. ``repository_tidy`` is the ``repair-a-card-store`` implementation QAR declares over the hub's class.
 """
@@ -15,7 +15,7 @@ from hubofhubs.recall.card_store_tidy import RepositoryTidy, StorePlan, TidyRun,
 
 @implementation("repair-a-card-store", "repository_tidy")
 def repository_tidy(repo: Any, cards_dir: Any, **options: Any) -> RepositoryTidy:
-    """QAR's ``repair-a-card-store`` implementation: the hub's repository tidy, carried out through the ``CardRepository`` port."""
+    """QAR's ``repair-a-card-store`` implementation: the hub's repository tidy, carried out through the ``CardRepository`` port that ``persist-cards`` fills."""
     return RepositoryTidy(repo, cards_dir, **options)
 
 
