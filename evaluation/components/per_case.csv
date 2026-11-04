@@ -5386,3 +5386,6 @@ context_selection,solutions_and_problems_with_links,48de2ca7,,,TOP-aaefd22d,yes,
 end_to_end,qar_live,2605b08c,,sample:3,E2E-GOAL-01,,1,8,72011,3768,46.2,,0.7345
 end_to_end,qar_live,2605b08c,,sample:3,E2E-HAND-01,,1,3,25741,894,13.3,,0.897773
 end_to_end,qar_live,2605b08c,,sample:3,E2E-IMPL-02,,1,7,42622,1505,35.8,,0.796223
+end_to_end,rules_only,2605b08c,,sample:3,E2E-GOAL-01,,1,0,0,0,0.0,,1.0
+end_to_end,rules_only,2605b08c,,sample:3,E2E-HAND-01,,0,0,0,0,0.0,,0.3
+end_to_end,rules_only,2605b08c,,sample:3,E2E-IMPL-02,,0,0,0,0,0.0,,0.3
