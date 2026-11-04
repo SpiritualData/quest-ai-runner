@@ -5,14 +5,26 @@ Generic: no data, names or credentials live here. A dataset is a JSONL file with
 items inside each case (for example candidate context items). Credentials and the user to act as are passed in by the caller.
 
   export:  dataset_sheet.py export --cases a.jsonl [b.jsonl ...] --service-account KEY.json --subject USER@DOMAIN [--title T]
+           [--sheet SHEET_ID]
   import:  dataset_sheet.py import --sheet SHEET_ID --cases a.jsonl [b.jsonl ...] --service-account KEY.json
            --subject USER@DOMAIN --reviewer NAME [--out-dir DIR]
+
+One stable sheet: the first export (no --sheet) creates the spreadsheet and prints a line telling you to pass its id with --sheet from
+then on. `export --sheet ID` rewrites that same spreadsheet in place (same id and URL), so every version of a dataset lands in one sheet.
+Before rewriting it reads the old Items and Cases tabs and carries every reviewer-entered value (Items: Reviewed, Corrected label,
+Corrected need role, Notes, Reviewer; Cases: Reviewed, Exclude case, Corrected scope need, Missing context (reviewer), Notes, Reviewer)
+onto the rows whose key still exists (Items by case_id + item_id, Cases by case id), reading columns BY HEADER NAME so an older layout
+still carries over. A reviewed row whose key is gone goes to the "Orphaned reviews" tab (keys, old item text, reviewer columns; it
+accumulates over exports, and a key that comes back gets its review again). The counts carried / orphaned are printed. The rewrite is
+clean: a temporary sheet is added, Summary, Cases, Items (and the old orphan tab) are deleted and recreated with the same names and
+sheetIds, then the temporary sheet is deleted, so formats, validations, filters and protected ranges never pile up. The Summary files
+table holds the new shas (import's sha check matches the new files); an "Export history" list under it keeps each export's timestamp and shas.
 
 The sheet is created as the `--subject` user (domain-wide delegation) so it is owned by that user and shared with nobody.
 Several cases files go into one sheet; a case id that appears in two files is an error at export. The Summary tab lists each file
 (the shortest trailing part of its path that tells it apart from the other files) with its sha256.
 
-Import never touches a source file: for each one it checks the sha256 against the sheet (`--allow-sha-mismatch` overrides) and writes
+Import ignores the Orphaned reviews tab. Import never touches a source file: for each one it checks the sha256 against the sheet (`--allow-sha-mismatch` overrides) and writes
 a new `reviewed_labels_<timestamp>.jsonl` plus a `.meta.json` with provenance NEXT TO that file, holding only that file's cases
 (with `--out-dir` they all go there instead, numbered when there are several). The effective label of an item is the corrected
 label when one was entered, else the original label; the same holds for the need role. Per case the reviewer's free text about
@@ -242,7 +254,7 @@ def requests_for(sheet_ids: dict, item_count: int, case_count: int, labels: list
 
 
 def summary_rows(args, labels: list[str], need_roles: list[str], scope_needs: list[str], ihead: list[str], chead: list[str], n_items: int, n_cases: int,
-                 files: list[tuple[str, str]]) -> tuple[list[list], int]:
+                 files: list[tuple[str, str]], history: list[list] | None = None, stamp: str | None = None) -> tuple[list[list], int]:
     """Summary tab values and the 0-based row of the files table header."""
     rev, cor = col_letter(ihead.index("Reviewed")), col_letter(ihead.index("Corrected label"))
     nrole = col_letter(ihead.index("Corrected need role"))
@@ -280,8 +292,78 @@ def summary_rows(args, labels: list[str], need_roles: list[str], scope_needs: li
     table_row = len(rows)
     rows.append([FILES_HEADER, "sha256"])
     rows.extend([name, sha] for name, sha in files)
-    rows.append(["Exported at (UTC)", datetime.now(timezone.utc).isoformat(timespec="seconds")])
+    rows.append(["Exported at (UTC)", stamp or datetime.now(timezone.utc).isoformat(timespec="seconds")])
+    if history:
+        rows.extend([[], [HISTORY_HEADER, "files (sha256)"], *history])
     return rows, table_row
+
+
+ORPHAN_TAB = "Orphaned reviews"
+ORPHAN_HEAD = ["Kind", "case_id", "item_id", "Item text", "Reviewed", "Corrected label", "Corrected need role", "Corrected scope need",
+               "Exclude case", "Missing context (reviewer)", "Notes", "Reviewer"]
+ITEM_REVIEW_COLS = ITEMS_EDIT_TAIL
+CASE_REVIEW_COLS = [c for c in CASES_EDIT_TAIL if c != "Items reviewed"]
+HISTORY_HEADER = "Export history (UTC)"
+TEMP_SHEET_ID = 987654
+
+
+def has_review(row: dict, columns: list[str]) -> bool:
+    """True when the reviewer entered anything in this old row (a ticked Reviewed, an exclude, or any text)."""
+    for name in columns:
+        value = row.get(name, "")
+        if name == "Reviewed":
+            if truthy(value):
+                return True
+        elif name == "Exclude case":
+            if str(value).strip() not in ("", "keep"):
+                return True
+        elif str(value).strip():
+            return True
+    return False
+
+
+def carry_over(old_rows: list[dict], new_rows: list[list], key_names: tuple[str, ...], review_cols: list[str]) -> tuple[int, list[dict]]:
+    """Copy reviewer-entered values from old rows (dicts by header name) onto new_rows (header first) whose key still exists.
+
+    Columns are matched by header name, so an older layout carries over. Returns (rows carried, old reviewed rows whose key is gone).
+    """
+    old_by_key = {}
+    for row in old_rows:
+        old_by_key.setdefault(tuple(str(row.get(name, "")) for name in key_names), row)
+    head = new_rows[0]
+    carried = 0
+    for new in new_rows[1:]:
+        key = tuple(str(new[head.index(name)]) for name in key_names)
+        old = old_by_key.pop(key, None)
+        if old is None or not has_review(old, review_cols):
+            continue
+        carried += 1
+        for name in review_cols:
+            if name not in head or name not in old or str(old[name]) == "":
+                continue
+            new[head.index(name)] = truthy(old[name]) if name == "Reviewed" else old[name]
+    return carried, [row for row in old_by_key.values() if has_review(row, review_cols)]
+
+
+def orphan_row(kind: str, row: dict, case_id_name: str) -> list:
+    values = {"Kind": kind, "case_id": row.get(case_id_name, row.get("case_id", "")), "item_id": row.get("item_id", ""),
+              "Item text": clip(row.get("Item text", ""))}
+    values.update({name: row.get(name, "") for name in ORPHAN_HEAD[4:]})
+    if values["Reviewed"] != "":
+        values["Reviewed"] = truthy(values["Reviewed"])
+    return [values[name] for name in ORPHAN_HEAD]
+
+
+def read_tab_if_present(sheets, sheet_id: str, existing: set, tab: str) -> list[dict]:
+    return read_tab(sheets, sheet_id, tab) if tab in existing else []
+
+
+def history_from_summary(summary_values: list[list]) -> list[list]:
+    rows = iter(summary_values)
+    for row in rows:
+        if row and str(row[0]).startswith(HISTORY_HEADER):
+            return [[str(c) for c in r[:2]] for r in rows if len(r) >= 2 and r[0]]
+    return []
 
 
 def export(args) -> None:
@@ -295,42 +377,93 @@ def export(args) -> None:
     ihead, chead = item_head(args), case_head(args)
     item_rows, case_rows = build_rows(cases, args)
     sheets, drive = services(args.service_account, args.subject)
-    title = args.title or f"Dataset review {datetime.now(timezone.utc):%Y-%m-%d}"
-    created = sheets.spreadsheets().create(body={"properties": {"title": title}, "sheets": [
-        {"properties": {"title": "Summary", "sheetId": 1}},
-        {"properties": {"title": "Cases", "sheetId": 2}},
-        {"properties": {"title": "Items", "sheetId": 3}}]}).execute()
-    sheet_id = created["spreadsheetId"]
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    history: list[list] = []
+    carried_items = carried_cases = 0
+    orphans: list[list] = []
+    if args.sheet:
+        sheet_id = args.sheet
+        meta = sheets.spreadsheets().get(spreadsheetId=sheet_id, fields="sheets.properties(sheetId,title)").execute()
+        existing = {s["properties"]["title"]: s["properties"]["sheetId"] for s in meta.get("sheets", [])}
+        old_items = read_tab_if_present(sheets, sheet_id, set(existing), "Items")
+        old_cases = read_tab_if_present(sheets, sheet_id, set(existing), "Cases")
+        old_orphans = read_tab_if_present(sheets, sheet_id, set(existing), ORPHAN_TAB)
+        history = history_from_summary(sheets.spreadsheets().values().get(spreadsheetId=sheet_id, range="Summary").execute().get("values", [])
+                                       if "Summary" in existing else [])
+        # earlier orphans take part after the live rows, so a key that came back gets its review again
+        old_items += [r for r in old_orphans if r.get("Kind") == "Item"]
+        old_cases += [{**r, args.case_id: r.get("case_id", "")} for r in old_orphans if r.get("Kind") == "Case"]
+        carried_items, gone_items = carry_over(old_items, item_rows, ("case_id", "item_id"), ITEM_REVIEW_COLS)
+        carried_cases, gone_cases = carry_over(old_cases, case_rows, (args.case_id,), CASE_REVIEW_COLS)
+        orphans = [orphan_row("Item", r, args.case_id) for r in gone_items] + [orphan_row("Case", r, args.case_id) for r in gone_cases]
+        # clean rewrite: a temporary sheet keeps the file valid while the three sheets (and their formats, validations, filters and
+        # protected ranges) are deleted and recreated with the same names and ids
+        reqs = [{"addSheet": {"properties": {"sheetId": TEMP_SHEET_ID, "title": "Temporary rewrite"}}}]
+        reqs += [{"deleteSheet": {"sheetId": sid}} for sid in existing.values()]
+        if args.title:
+            reqs.append({"updateSpreadsheetProperties": {"properties": {"title": args.title}, "fields": "title"}})
+        sheets.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests": reqs}).execute()
+        fresh = [{"addSheet": {"properties": {"title": "Summary", "sheetId": 1}}},
+                 {"addSheet": {"properties": {"title": "Cases", "sheetId": 2}}},
+                 {"addSheet": {"properties": {"title": "Items", "sheetId": 3}}}]
+        if orphans:
+            fresh.append({"addSheet": {"properties": {"title": ORPHAN_TAB, "sheetId": 4}}})
+        fresh.append({"deleteSheet": {"sheetId": TEMP_SHEET_ID}})
+        sheets.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests": fresh}).execute()
+    else:
+        title = args.title or f"Dataset review {datetime.now(timezone.utc):%Y-%m-%d}"
+        created = sheets.spreadsheets().create(body={"properties": {"title": title}, "sheets": [
+            {"properties": {"title": "Summary", "sheetId": 1}},
+            {"properties": {"title": "Cases", "sheetId": 2}},
+            {"properties": {"title": "Items", "sheetId": 3}}]}).execute()
+        sheet_id = created["spreadsheetId"]
+    history.append([stamp, "; ".join(f"{name}={sha}" for name, sha in files)])
     n_items, n_cases = len(item_rows) - 1, len(case_rows) - 1
-    summary, table_row = summary_rows(args, labels, need_roles, scope_needs, ihead, chead, n_items, n_cases, files)
+    summary, table_row = summary_rows(args, labels, need_roles, scope_needs, ihead, chead, n_items, n_cases, files, history, stamp)
     formula_col = chead.index("Items reviewed")
     formula_letter = col_letter(formula_col)
     plain_case_rows = [case_rows[0]] + [[("" if i == formula_col else v) for i, v in enumerate(row)] for row in case_rows[1:]]
-    sheets.spreadsheets().values().batchUpdate(spreadsheetId=sheet_id, body={"valueInputOption": "RAW", "data": [
-        {"range": "Items!A1", "values": item_rows},
-        {"range": "Cases!A1", "values": plain_case_rows}]}).execute()
-    # formulas need USER_ENTERED (the Cases formula column and the Summary), then the file table is rewritten raw
+    data = [{"range": "Items!A1", "values": item_rows}, {"range": "Cases!A1", "values": plain_case_rows}]
+    if orphans:
+        data.append({"range": f"{ORPHAN_TAB}!A1", "values": [ORPHAN_HEAD] + orphans})
+    sheets.spreadsheets().values().batchUpdate(spreadsheetId=sheet_id, body={"valueInputOption": "RAW", "data": data}).execute()
+    # formulas need USER_ENTERED (the Cases formula column and the Summary), then the file table and history are rewritten raw
     sheets.spreadsheets().values().batchUpdate(spreadsheetId=sheet_id, body={"valueInputOption": "USER_ENTERED", "data": [
         {"range": f"Cases!{formula_letter}2:{formula_letter}{n_cases + 1}",
          "values": [[row[formula_col]] for row in case_rows[1:]]},
         {"range": "Summary!A1", "values": summary}]}).execute()
     sheets.spreadsheets().values().update(spreadsheetId=sheet_id, range=f"Summary!A{table_row + 1}", valueInputOption="RAW",
-                                          body={"values": summary[table_row:table_row + 1 + len(files)]}).execute()
+                                          body={"values": summary[table_row:]}).execute()
     reqs = requests_for({"Items": 3, "Cases": 2}, n_items, n_cases, labels, ihead, chead, need_roles, scope_needs)
     reqs.append({"repeatCell": {"range": {"sheetId": 1, "startRowIndex": 0, "endRowIndex": 1},
                                 "cell": {"userEnteredFormat": {"textFormat": {"bold": True, "fontSize": 14}}},
                                 "fields": "userEnteredFormat.textFormat"}})
     reqs.append({"updateDimensionProperties": {"range": {"sheetId": 1, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1},
                                                 "properties": {"pixelSize": 300}, "fields": "pixelSize"}})
+    if orphans:
+        reqs.append({"repeatCell": {"range": {"sheetId": 4, "startRowIndex": 0, "endRowIndex": 1},
+                                    "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                                    "fields": "userEnteredFormat.textFormat"}})
+        reqs.append({"updateSheetProperties": {"properties": {"sheetId": 4, "gridProperties": {"frozenRowCount": 1}},
+                                                "fields": "gridProperties.frozenRowCount"}})
+        reqs.extend(width_requests(4, ORPHAN_HEAD))
     sheets.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests": reqs}).execute()
     perms = drive.permissions().list(fileId=sheet_id, fields="permissions(emailAddress,role,type)").execute()["permissions"]
-    print(json.dumps({"spreadsheetId": sheet_id, "url": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit",
-                      "files": len(files), "items": n_items, "cases": n_cases, "permissions": perms}, indent=1))
+    report = {"spreadsheetId": sheet_id, "url": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit",
+              "files": len(files), "items": n_items, "cases": n_cases, "permissions": perms}
+    if args.sheet:
+        report["reviews_carried"] = {"items": carried_items, "cases": carried_cases}
+        report["reviews_orphaned"] = len(orphans)
+    print(json.dumps(report, indent=1))
+    if not args.sheet:
+        print(f"Pass --sheet {sheet_id} on every later export so all versions go to this same sheet and URL.")
 
 
 def read_tab(sheets, sheet_id: str, tab: str) -> list[dict]:
     values = sheets.spreadsheets().values().get(spreadsheetId=sheet_id, range=tab, valueRenderOption="UNFORMATTED_VALUE").execute()
     rows = values.get("values", [])
+    if not rows:
+        return []
     head = rows[0]
     return [dict(zip(head, row + [""] * (len(head) - len(row)))) for row in rows[1:]]
 
@@ -451,7 +584,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--service-account", required=True)
     parser.add_argument("--subject", required=True, help="user to act as; the sheet is owned by and private to them")
     parser.add_argument("--title")
-    parser.add_argument("--sheet", help="spreadsheet id (import)")
+    parser.add_argument("--sheet", help="spreadsheet id: import reads it; export rewrites it in place (same URL) and keeps the reviews")
     parser.add_argument("--reviewer", default="unknown", help="who runs the import (provenance)")
     parser.add_argument("--out-dir", help="write every reviewed file here instead of next to its source file")
     parser.add_argument("--allow-sha-mismatch", action="store_true")

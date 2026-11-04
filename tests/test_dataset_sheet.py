@@ -122,3 +122,110 @@ def test_review_records_carry_need_role_scope_and_missing_context():
     assert counts["need_roles_corrected"] == 1 and counts["scope_needs_corrected"] == 1
     with pytest.raises(SystemExit):
         ds.review_records([c], args, {("c1", "c1-1"): {"Corrected need role": "bogus"}}, {}, {"needed"}, {"a"}, set())
+
+
+OLD_ITEMS = [["item_id", "case_id", "Item text", "Notes", "Reviewed", "Corrected label", "Reviewer", "Legacy column"],
+             ["c1-1", "c1", "alpha", "kept note", True, "helpful", "R", "x"],
+             ["c1-2", "c1", "beta", "", False, "", "", ""],
+             ["gone-1", "gone", "old text", "orphan note", True, "needed", "R", ""]]
+OLD_CASES = [["case_id", "Notes", "Exclude case", "Reviewed"], ["c1", "case note", "exclude", True], ["gone", "n", "keep", False],
+             ["gone2", "", "keep", True]]
+
+
+def test_carry_over_maps_by_header_name_from_an_old_layout():
+    args = make_args()
+    item_rows, case_rows = ds.build_rows([case("c1")], args)
+    old_items = ds.read_tab(FakeSheets({"Items": OLD_ITEMS}), "id", "Items")
+    carried, gone = ds.carry_over(old_items, item_rows, ("case_id", "item_id"), ds.ITEM_REVIEW_COLS)
+    first = dict(zip(item_rows[0], item_rows[1]))
+    assert carried == 1 and first["Notes"] == "kept note" and first["Reviewed"] is True and first["Corrected label"] == "helpful"
+    assert first["Reviewer"] == "R" and first["Corrected need role"] == ""
+    assert dict(zip(item_rows[0], item_rows[2]))["Reviewed"] is False
+    old_cases = ds.read_tab(FakeSheets({"Cases": OLD_CASES}), "id", "Cases")
+    carried, gone_cases = ds.carry_over(old_cases, case_rows, ("case_id",), ds.CASE_REVIEW_COLS)
+    row = dict(zip(case_rows[0], case_rows[1]))
+    assert carried == 1 and row["Exclude case"] == "exclude" and row["Notes"] == "case note" and row["Reviewed"] is True
+
+
+def test_orphans_are_reviewed_rows_whose_key_is_gone():
+    args = make_args()
+    item_rows, case_rows = ds.build_rows([case("c1")], args)
+    _, gone = ds.carry_over(ds.read_tab(FakeSheets({"Items": OLD_ITEMS}), "id", "Items"), item_rows, ("case_id", "item_id"),
+                            ds.ITEM_REVIEW_COLS)
+    assert [r["item_id"] for r in gone] == ["gone-1"]
+    _, gone_cases = ds.carry_over(ds.read_tab(FakeSheets({"Cases": OLD_CASES}), "id", "Cases"), case_rows, ("case_id",),
+                                  ds.CASE_REVIEW_COLS)
+    assert [r["case_id"] for r in gone_cases] == ["gone", "gone2"]
+    out = dict(zip(ds.ORPHAN_HEAD, ds.orphan_row("Item", gone[0], "case_id")))
+    assert out["Item text"] == "old text" and out["Notes"] == "orphan note" and out["Reviewed"] is True
+
+
+class Run:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def execute(self):
+        return self.payload
+
+
+class FakeSheets:
+    """Records calls; serves tabs from a dict. Plays the sheets and the drive service."""
+
+    def __init__(self, tabs=None):
+        self.tabs, self.calls = tabs or {}, []
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    def permissions(self):
+        return self
+
+    def list(self, **kw):
+        return Run({"permissions": []})
+
+    def create(self, **kw):
+        self.calls.append(("create", kw))
+        return Run({"spreadsheetId": "new-id"})
+
+    def get(self, **kw):
+        if "range" in kw:
+            return Run({"values": self.tabs.get(kw["range"].split("!")[0], [])})
+        self.calls.append(("get", kw))
+        return Run({"sheets": [{"properties": {"sheetId": i, "title": t}} for i, t in enumerate(self.tabs, start=10)]})
+
+    def batchUpdate(self, **kw):
+        self.calls.append(("batchUpdate", kw))
+        return Run({})
+
+    def update(self, **kw):
+        self.calls.append(("update", kw))
+        return Run({})
+
+
+def run_export(monkeypatch, tmp_path, sheet, tabs):
+    cases_file = tmp_path / "cases.jsonl"
+    cases_file.write_text(json.dumps(case("c1")) + "\n")
+    fake = FakeSheets(tabs)
+    monkeypatch.setattr(ds, "services", lambda *a: (fake, fake))
+    ds.export(make_args(cases=[str(cases_file)], sheet=sheet))
+    return fake
+
+
+def test_export_with_sheet_rewrites_in_place_and_never_creates(monkeypatch, tmp_path, capsys):
+    fake = run_export(monkeypatch, tmp_path, "existing-id", {"Summary": [["x"]], "Cases": OLD_CASES, "Items": OLD_ITEMS})
+    assert not any(name == "create" for name, _ in fake.calls)
+    batches = [kw["body"]["requests"] for name, kw in fake.calls if name == "batchUpdate" and "requests" in kw["body"]]
+    assert "addSheet" in batches[0][0] and sum("deleteSheet" in r for r in batches[0]) == 3
+    assert [r["addSheet"]["properties"]["sheetId"] for r in batches[1] if "addSheet" in r] == [1, 2, 3, 4]  # orphan tab included
+    assert all(kw["spreadsheetId"] == "existing-id" for _, kw in fake.calls)
+    report = json.loads(capsys.readouterr().out)
+    assert report["reviews_carried"] == {"items": 1, "cases": 1} and report["reviews_orphaned"] == 3
+
+
+def test_export_without_sheet_creates_once_and_tells_you_to_pass_the_id(monkeypatch, tmp_path, capsys):
+    fake = run_export(monkeypatch, tmp_path, None, {})
+    assert [name for name, _ in fake.calls].count("create") == 1
+    assert "--sheet new-id" in capsys.readouterr().out
