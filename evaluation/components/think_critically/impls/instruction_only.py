@@ -1,4 +1,4 @@
-"""FLOOR: the standing instruction alone. The AI is asked to say what the metric was before and after; no code reads, records or
+"""ALTERNATIVE: the standing instruction alone. The AI is asked to say what the metric was before and after; no code reads, records or
 checks it, so nothing is on record for any request. Zero model calls."""
 
 

@@ -1,4 +1,4 @@
-"""BASELINE in-situ arm: the same deep-run prompt and headless, tool-less path as ``insitu_standing_instructions``
+"""ALTERNATIVE in-situ arm: the same deep-run prompt and headless, tool-less path as ``insitu_standing_instructions``
 with the standing-instructions layer emptied, so the difference between the two arms is the layer alone."""
 import os
 

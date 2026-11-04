@@ -140,7 +140,7 @@ flowchart LR
 | `explain-qar:README.md` | Documentation index | [docs/README.md](../../docs/README.md) |  |
 | `explain-qar:shipped_docs` | Shipped-documents evaluation arm | [evaluation/components/explain_qar/impls/shipped_docs.py](../../evaluation/components/explain_qar/impls/shipped_docs.py) |  |
 | `describe-an-attachment:vision_description` | One vision-model call per image (today) | [quest_ai_runner/core/attachments.py](../core/attachments.py) |  |
-| `describe-an-attachment:skip_images` | No description, the image is named only (floor, proposed) |  |  |
+| `describe-an-attachment:skip_images` | No description, the image is named only (proposed) |  |  |
 | `assist-a-terminal-session:fast_model_helpers` | Fast-tier model calls in the terminal (today) | [quest_ai_runner/cli_config.py](../cli_config.py) |  |
 | `assist-a-terminal-session:rules_only` | Rules only, no model call (floor, proposed) |  |  |
 | `route-a-message:planner_route` | The loop planner decides the route | [quest_ai_runner/message_routing.py](../message_routing.py) |  |

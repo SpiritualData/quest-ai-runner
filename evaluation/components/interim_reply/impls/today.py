@@ -1,4 +1,4 @@
-"""BASELINE (``reply-in-steps:today`` and ``ask-on-block:today``): the behaviour before the incremental-replies build. No interim message
+"""ALTERNATIVE (``reply-in-steps:today`` and ``ask-on-block:today``): the behaviour before the incremental-replies build. No interim message
 is sent for an unmet attempt (the only interim needed done evidence), and a block on a person ends as text, not a filed ask. Zero model
 calls offline. A reconstruction of the earlier behaviour for comparison, not code that runs today. Its REAL cases (kind ``real``, run only with
 QAR_EVAL_LIVE_TURNS=1) run the real orchestrator with the interim switch off, the behaviour that ships today."""

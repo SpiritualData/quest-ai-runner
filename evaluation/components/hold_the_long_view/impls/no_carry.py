@@ -1,4 +1,4 @@
-"""BASELINE: the floor. The run is given no earlier proposals at all, so nothing earlier can reach the planner."""
+"""ALTERNATIVE: the floor. The run is given no earlier proposals at all, so nothing earlier can reach the planner."""
 import common  # noqa: F401
 import scripted_brain
 from scripted_brain import ScriptedProvider

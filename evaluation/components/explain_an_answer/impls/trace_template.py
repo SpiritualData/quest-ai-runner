@@ -1,4 +1,4 @@
-"""FLOOR (``explain-an-answer:trace_template``): no model call. The explanation is the trace-only payload the library already builds
+"""ALTERNATIVE (``explain-an-answer:trace_template``): no model call. The explanation is the trace-only payload the library already builds
 when the generation call fails (``build_payload(trace, None)``): the recorded reads, actions, sources, verdict and metric facts, with
 no prose. The grader reads it against the same cases as the call's output."""
 import claude_judge

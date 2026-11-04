@@ -1,4 +1,4 @@
-"""FLOOR (``hand-off-a-goal:creator_keeps_it``): no model call. A new goal stays with the person who created it (the quest owner when
+"""ALTERNATIVE (``hand-off-a-goal:creator_keeps_it``): no model call. A new goal stays with the person who created it (the quest owner when
 an AI created it), and no goal is ever handed to an AI representative. The real ``choose_assignee`` and ``run_goal_handoff`` run with
 no judge, which is what they do today when no model is configured, except that the assignee is the creator the case names."""
 from hand_off_a_goal import arms

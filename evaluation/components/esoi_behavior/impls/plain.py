@@ -1,4 +1,4 @@
-"""BASELINE chat arm: the same model with no ESOI instructions, so the gain from the standing instructions is
+"""ALTERNATIVE chat arm: the same model with no ESOI instructions, so the gain from the standing instructions is
 a number. One model call per case plus the judge call; costs real money."""
 import os
 

@@ -1,4 +1,4 @@
-"""BASELINE: one provider, no routing, no fallback, no retry, one flat price. Every model name goes to the
+"""ALTERNATIVE: one provider, no routing, no fallback, no retry, one flat price. Every model name goes to the
 primary provider, a quota error is final, a transient error is not retried, the dry run counts input only
 and every model costs the same $3 per million input tokens. The floor the multi-provider stack must beat.
 Zero model calls."""

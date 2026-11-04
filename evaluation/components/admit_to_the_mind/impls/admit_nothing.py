@@ -1,4 +1,4 @@
-"""BASELINE: the floor. Nothing is admitted to the next step's view."""
+"""ALTERNATIVE: the floor. Nothing is admitted to the next step's view."""
 
 
 def build(meter):  # noqa: ARG001

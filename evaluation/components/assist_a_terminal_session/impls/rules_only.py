@@ -1,4 +1,4 @@
-"""FLOOR: no model call. The acknowledgement is the fixed Queued line (the library's own fallback, reached by having no
+"""ALTERNATIVE: no model call. The acknowledgement is the fixed Queued line (the library's own fallback, reached by having no
 provider), an ask is classified by its shape (a standing rule opens with always or never, a question ends in a question
 mark, a request opens with an action verb), and a goal is judged only when its name opens with a drafting verb. Anything
 else is left unclassified or unjudged, which is what the terminal does today when no model is configured."""

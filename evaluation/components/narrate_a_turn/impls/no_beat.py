@@ -1,4 +1,4 @@
-"""FLOOR (``narrate-a-turn:no_beat``): no model call. The first beat is a fixed line chosen from the turn's mode and first event (a
+"""ALTERNATIVE (``narrate-a-turn:no_beat``): no model call. The first beat is a fixed line chosen from the turn's mode and first event (a
 new message that is a question or one that is not), relayed through the same Narrator. The grader still reads the line against the
 same cases, so the floor is scored exactly as the call is."""
 import claude_judge

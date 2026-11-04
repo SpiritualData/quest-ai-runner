@@ -1,4 +1,4 @@
-"""FLOOR: ignores scope, fence and relevance and returns the cards of the most recent turn. What "always carry
+"""ALTERNATIVE: ignores scope, fence and relevance and returns the cards of the most recent turn. What "always carry
 the last turn forward" scores; the real gate must beat it on staleness and quest leaks."""
 ALTERNATIVE = True
 

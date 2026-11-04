@@ -1,4 +1,4 @@
-"""FLOOR: ignores the query and returns the user's three most recently updated conversations. What
+"""ALTERNATIVE: ignores the query and returns the user's three most recently updated conversations. What
 "just give it the latest" scores; real recall must beat it."""
 ALTERNATIVE = True
 

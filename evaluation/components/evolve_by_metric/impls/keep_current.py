@@ -1,4 +1,4 @@
-"""FLOOR: never switches and never looks at the snapshot. The selection stays whatever someone last wrote, however the metric
+"""ALTERNATIVE: never switches and never looks at the snapshot. The selection stays whatever someone last wrote, however the metric
 reads, which is what evolving by taste looks like. Zero model calls."""
 
 

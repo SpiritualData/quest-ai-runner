@@ -1,4 +1,4 @@
-"""BASELINE: the lexical top few, no vector search and no model (``core.spec_selection.lexical_only``). Zero model calls."""
+"""ALTERNATIVE: the lexical top few, no vector search and no model (``core.spec_selection.lexical_only``). Zero model calls."""
 from quest_ai_runner.core import spec_selection
 from spec_selection import arms
 

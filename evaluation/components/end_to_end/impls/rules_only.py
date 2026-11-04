@@ -1,4 +1,4 @@
-"""FLOOR: no model call and no orchestrator. A question is answered "I do not have that in front of me", a request to add a goal
+"""ALTERNATIVE: no model call and no orchestrator. A question is answered "I do not have that in front of me", a request to add a goal
 or a note is written as one, a request for a queued task is queued, and the terminal prints the library's fixed Queued line. What
 a person asks beyond those shapes gets the same non-answer. It is the least a first draft does without a model."""
 import re

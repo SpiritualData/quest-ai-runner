@@ -1,4 +1,4 @@
-"""BASELINE: compare (mtime, size) per file, the cheap check without hashing. The floor sha256 must beat:
+"""ALTERNATIVE: compare (mtime, size) per file, the cheap check without hashing. The floor sha256 must beat:
 it misses an edit that keeps the size and restores the mtime, and flags a file that was merely touched."""
 from pathlib import Path
 

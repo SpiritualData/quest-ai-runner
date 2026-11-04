@@ -1,4 +1,4 @@
-"""BASELINE: the floor. Always the first representative in the registry, whatever the task says."""
+"""ALTERNATIVE: the floor. Always the first representative in the registry, whatever the task says."""
 
 
 def build(meter):  # noqa: ARG001

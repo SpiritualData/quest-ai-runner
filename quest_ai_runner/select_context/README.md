@@ -25,7 +25,7 @@ flowchart LR
 
 | Solution | Entry call | Selected implementation | Metric |
 |---|---|---|---|
-| `select-context` | no entry declared | `hybrid` | Context selection ranking accuracy and card-quality outcome |
+| `select-context` | no entry declared | `blind_grep` | Context selection ranking accuracy and card-quality outcome |
 | `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
 | `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
 | `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
@@ -74,7 +74,7 @@ flowchart LR
 
 | Solution | Name | Selected | Metric |
 |---|---|---|---|
-| `select-context` | Context card selector | hybrid | Context selection ranking accuracy and card-quality outcome |
+| `select-context` | Context card selector | blind_grep | Context selection ranking accuracy and card-quality outcome |
 | `resolve-references` | Fail-safe card reference resolver | note | Pointer-resolution safety over offline cases |
 | `search-cards-and-specs` | Unified card and specification search | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
 | `index-by-meaning` | Semantic vector index | qdrant | Semantic recall and query latency on the synthetic handbook |

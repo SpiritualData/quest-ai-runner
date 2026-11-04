@@ -1,4 +1,4 @@
-"""BASELINE: QAR's normal path with no recipe store (plan, search context, tool call, reply). The arm every
+"""ALTERNATIVE: QAR's normal path with no recipe store (plan, search context, tool call, reply). The arm every
 recipe solution must match on correctness and beat on cost. One orchestrator for the whole run."""
 import os
 

@@ -1,4 +1,4 @@
-"""BASELINE: the same bge-small embeddings scored by plain numpy cosine in memory, with no vector database. What
+"""ALTERNATIVE: the same bge-small embeddings scored by plain numpy cosine in memory, with no vector database. What
 the store must at least match; a gap would be the vector database losing recall or time. Like the store arm, the
 documents use the text-hash cache and every query after indexing is embedded by the model (uncached)."""
 import numpy as np

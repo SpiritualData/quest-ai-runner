@@ -1,4 +1,4 @@
-"""BASELINE (offline): decide from thresholds and keywords alone. Stop when the tail names a usage or credit
+"""ALTERNATIVE (offline): decide from thresholds and keywords alone. Stop when the tail names a usage or credit
 limit, when the log is empty or idle for over 5 minutes with no sign of a machine at work (a build, test,
 download, poll or a task that says to wait), when the worker says it is blocked on a person, or when the same
 command line repeats three times. Everything else keeps running. Zero model calls. It was written with the 39

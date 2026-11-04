@@ -1,4 +1,4 @@
-"""FLOOR: no task is mapped to a measure, as before this solution existed. Every task is reported as not measured. Zero model calls."""
+"""ALTERNATIVE: no task is mapped to a measure, as before this solution existed. Every task is reported as not measured. Zero model calls."""
 
 
 def build(meter):  # noqa: ARG001

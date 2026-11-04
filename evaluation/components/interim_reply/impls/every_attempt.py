@@ -1,4 +1,4 @@
-"""BASELINE (``reply-in-steps:every_attempt``): the shortcut a first draft would write. Every attempt that did not meet the goal sends an
+"""ALTERNATIVE (``reply-in-steps:every_attempt``): the shortcut a first draft would write. Every attempt that did not meet the goal sends an
 interim, and any verdict that carries a question files an ask. Zero model calls; the delta, spacing, cap and ask-iff-blocked cases reject it."""
 
 

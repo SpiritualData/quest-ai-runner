@@ -1,4 +1,4 @@
-"""HUB BASELINE: one card per folder, grouped and described with the hub's own card helpers (``file_card``, ``group_card``) that the hub's
+"""ALTERNATIVE (the hub's own cards): one card per folder, grouped and described with the hub's own card helpers (``file_card``, ``group_card``) that the hub's
 cards-from-files arms are made of, then ranked by the same fixed IDF store. Zero model calls. A card per folder is a store far under the
 topic cap, so this is the free arm the topic cases can pass; its file-finding is poor because a card lists all of a folder's files."""
 import posixpath

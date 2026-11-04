@@ -1,4 +1,4 @@
-"""BASELINE: zero-model-call keyword rules. The floor any model-based solution must beat to justify its cost."""
+"""ALTERNATIVE: zero-model-call keyword rules. The floor any model-based solution must beat to justify its cost."""
 import re
 
 DEEP = re.compile(r"\b(refactor|repo|script|python|deploy|server|logs|readme|test suite|literature review|"

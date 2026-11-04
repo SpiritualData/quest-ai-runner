@@ -1,4 +1,4 @@
-"""FLOOR: no research. The answer is stated from what the model remembers, with no source, whether or not any page supports it.
+"""ALTERNATIVE: no research. The answer is stated from what the model remembers, with no source, whether or not any page supports it.
 It is the claim the case labels, stated flat. Zero model calls."""
 
 
