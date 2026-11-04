@@ -181,10 +181,10 @@ coverage = 0.0
 precision = 1.0
 coverage = 1.0
 
-# 10 of 11: show-progress is a part of the area that no typed seat composes (the host edge shows none); narrate-a-turn and explain-an-answer
-# are used by answer-end-to-end, whose orchestrator imports both, so they are recorded under it and no longer roots.
+# 11 of 11: narrate-a-turn and explain-an-answer are used by answer-end-to-end, whose orchestrator imports both, so they are recorded
+# under it and are no longer roots; show-progress is shown by the component that owns its module (the library's E4 evidence).
 [rules.S38.floors.reason_and_answer]
-precision = 0.909
+precision = 1.0
 coverage = 1.0
 
 # 2 of 6: card-store imports persist-cards and persist-cards takes the cache-cards seat. The recency window takes only the card store
