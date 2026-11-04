@@ -152,7 +152,7 @@ precision = 0.667
 coverage = 1.0
 
 [rules.S38.floors.take_in_the_world]
-precision = 0.857
+precision = 1.0
 coverage = 0.636
 
 [rules.S38.floors.act_as_the_body]

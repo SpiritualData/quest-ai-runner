@@ -4,7 +4,7 @@ The area arm ``ways_in`` takes the ways in as typed seats and offers the area's 
 takes and the channels its context is fed from. The members are the message router (``route-a-message``), the live channel
 (``talk-over-a-channel``), input that arrives while a run works (``receive-input-mid-run``), the sources that feed a card's context
 (``feed-context-sources``), attachments (``describe-an-attachment``), the terminal (``operate-from-a-terminal``,
-``assist-a-terminal-session``) and the package itself (``expose-the-public-api``). Members the line does not need are built on first use.
+``assist-a-terminal-session``) and the package itself (``expose-the-public-api``), whose front door ``load_config`` builds the lane's one configuration (``configure-a-lane``). Members the line does not need are built on first use.
 """
 from __future__ import annotations
 
