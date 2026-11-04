@@ -14,24 +14,24 @@ Evolve by metric keeps every part specified as a solution with measured alternat
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Standing-instruction behaviour layer | `behave-by-esoi` | no entry declared | `insitu_standing_instructions` | Principle-following pass rate under standing instructions |
-| Behaviour-grading judge | `judge-esoi-behavior` | no entry declared | `model_judge` | Judge agreement with labelled reference replies |
-| Offline test collection | `verify-offline` | no entry declared | `collect_by_file` | Offline test collection |
-| Public-repository hygiene scanner | `keep-secrets-out` | no entry declared | `live_scanner` | Secret detection and placeholder tolerance |
-| Problem-linked tags that identify solutions | `tag-solutions` | no entry declared | `tag_list_with_check` | Right solution missed without the tag |
+| Standing-instruction behaviour layer | `behave-by-esoi` | no entry declared | Shipped deep-run prompt with standing instructions (`insitu_standing_instructions`) | Principle-following pass rate under standing instructions |
+| Behaviour-grading judge | `judge-esoi-behavior` | no entry declared | Rubric-based model judge (`model_judge`) | Judge agreement with labelled reference replies |
+| Offline test collection | `verify-offline` | no entry declared | Collection check by test file (`collect_by_file`) | Offline test collection |
+| Public-repository hygiene scanner | `keep-secrets-out` | no entry declared | Planted-secret evaluation arm (`live_scanner`) | Secret detection and placeholder tolerance |
+| Problem-linked tags that identify solutions | `tag-solutions` | no entry declared | Problem-linked tag list with a check rule and a lookup (`tag_list_with_check`) | Right solution missed without the tag |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-public-repo-leaks`: A public repository grown from private code can leak keys, real machine paths, real ids or real addresses, and nobody notices until it is published.
-- `prob-ai-skips-structure-thinking`: AI collaborators produce changes without naming the problem, the ideal or a metric, duplicate what already exists, or add structure whose cost outweighs its benefit.
-- `prob-grader-fooled-by-vocabulary`: A grader for AI replies rewards the right words without the right behaviour, or was calibrated only against its own author's labels, so passing scores mean less than they appear to.
-- `prob-solution-not-identified`: A person or a run about to build or change something does not identify the solutions that already cover it or constrain it.
-- `esoi-r1-duplicate-solution`: R1: Adding a new solution that duplicates an existing one.
-- `esoi-r2-overlap-not-leveraged`: R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose.
-- `esoi-r3-co-change-missed`: R3: Not being aware of solutions that need to change definition or implementation due to something else changing.
-- `esoi-r4-solution-misused`: R4: Using a solution when it should not be for the particular use case.
+- A public repository grown from private code can leak keys, real machine paths, real ids or real addresses, and nobody notices until it is published. (`prob-public-repo-leaks`)
+- AI collaborators produce changes without naming the problem, the ideal or a metric, duplicate what already exists, or add structure whose cost outweighs its benefit. (`prob-ai-skips-structure-thinking`)
+- A grader for AI replies rewards the right words without the right behaviour, or was calibrated only against its own author's labels, so passing scores mean less than they appear to. (`prob-grader-fooled-by-vocabulary`)
+- A person or a run about to build or change something does not identify the solutions that already cover it or constrain it. (`prob-solution-not-identified`)
+- R1: Adding a new solution that duplicates an existing one. (`esoi-r1-duplicate-solution`)
+- R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose. (`esoi-r2-overlap-not-leveraged`)
+- R3: Not being aware of solutions that need to change definition or implementation due to something else changing. (`esoi-r3-co-change-missed`)
+- R4: Using a solution when it should not be for the particular use case. (`esoi-r4-solution-misused`)
 
 **Ideals**
 
@@ -60,14 +60,14 @@ Evolve by metric keeps every part specified as a solution with measured alternat
 
 ### Problems
 
-- `prob-public-repo-leaks`: A public repository grown from private code can leak keys, real machine paths, real ids or real addresses, and nobody notices until it is published.
-- `prob-ai-skips-structure-thinking`: AI collaborators produce changes without naming the problem, the ideal or a metric, duplicate what already exists, or add structure whose cost outweighs its benefit.
-- `prob-grader-fooled-by-vocabulary`: A grader for AI replies rewards the right words without the right behaviour, or was calibrated only against its own author's labels, so passing scores mean less than they appear to.
-- `prob-solution-not-identified`: A person or a run about to build or change something does not identify the solutions that already cover it or constrain it. The evolvable-structure skill names four structural risks of this kind, recorded here as its sub-problems R1 to R4: a solution that duplicates an existing one (esoi-r1-duplicate-solution), an existing solution's benefits not leveraged (esoi-r2-overlap-not-leveraged), solutions that must change with something else not noticed (esoi-r3-co-change-missed), and a solution used where it should not be (esoi-r4-solution-misused). The former area column grouped solutions under numbered names that closed none of these risks.
-- `esoi-r1-duplicate-solution`: R1: Adding a new solution that duplicates an existing one.
-- `esoi-r2-overlap-not-leveraged`: R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose.
-- `esoi-r3-co-change-missed`: R3: Not being aware of solutions that need to change definition or implementation due to something else changing.
-- `esoi-r4-solution-misused`: R4: Using a solution when it should not be for the particular use case.
+- A public repository grown from private code can leak keys, real machine paths, real ids or real addresses, and nobody notices until it is published. (`prob-public-repo-leaks`)
+- AI collaborators produce changes without naming the problem, the ideal or a metric, duplicate what already exists, or add structure whose cost outweighs its benefit. (`prob-ai-skips-structure-thinking`)
+- A grader for AI replies rewards the right words without the right behaviour, or was calibrated only against its own author's labels, so passing scores mean less than they appear to. (`prob-grader-fooled-by-vocabulary`)
+- A person or a run about to build or change something does not identify the solutions that already cover it or constrain it. (`prob-solution-not-identified`)
+- R1: Adding a new solution that duplicates an existing one. (`esoi-r1-duplicate-solution`)
+- R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose. (`esoi-r2-overlap-not-leveraged`)
+- R3: Not being aware of solutions that need to change definition or implementation due to something else changing. (`esoi-r3-co-change-missed`)
+- R4: Using a solution when it should not be for the particular use case. (`esoi-r4-solution-misused`)
 
 ### Ideals
 
@@ -80,11 +80,11 @@ Evolve by metric keeps every part specified as a solution with measured alternat
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Standing-instruction behaviour layer | `behave-by-esoi` | insitu_standing_instructions | Principle-following pass rate under standing instructions |
-| Behaviour-grading judge | `judge-esoi-behavior` | model_judge | Judge agreement with labelled reference replies |
-| Offline test collection | `verify-offline` | collect_by_file | Offline test collection |
-| Public-repository hygiene scanner | `keep-secrets-out` | live_scanner | Secret detection and placeholder tolerance |
-| Problem-linked tags that identify solutions | `tag-solutions` | tag_list_with_check | Right solution missed without the tag |
+| Standing-instruction behaviour layer | `behave-by-esoi` | Shipped deep-run prompt with standing instructions (`insitu_standing_instructions`) | Principle-following pass rate under standing instructions |
+| Behaviour-grading judge | `judge-esoi-behavior` | Rubric-based model judge (`model_judge`) | Judge agreement with labelled reference replies |
+| Offline test collection | `verify-offline` | Collection check by test file (`collect_by_file`) | Offline test collection |
+| Public-repository hygiene scanner | `keep-secrets-out` | Planted-secret evaluation arm (`live_scanner`) | Secret detection and placeholder tolerance |
+| Problem-linked tags that identify solutions | `tag-solutions` | Problem-linked tag list with a check rule and a lookup (`tag_list_with_check`) | Right solution missed without the tag |
 
 ### Implementations
 

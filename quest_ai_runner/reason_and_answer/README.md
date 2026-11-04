@@ -27,31 +27,31 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Grounded chat turn handler | `answer-a-turn` | `quest_ai_runner.run("answer-a-turn", 'What should I work on first this week?')` | `orchestrator_turn` | Judge pass rate over the chat quality cases |
-| Mode-aware progress surfacing | `show-progress` | no entry declared | `stream` | Surfaced-event policy by mode, Progress shown while the work runs |
-| Learned-operation fast path | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | `stored_recipes` | Fast-path hit rate and parity with the planner-only path |
-| Budgeted prompt assembler | `assemble-a-prompt` | `quest_ai_runner.run("assemble-a-prompt", 'What should I work on first this week?')` | `planner_prompt` | Prompt size against budget and duplicated-block count |
-| Cost-ordered model tier selector with outage and allowance recovery | `choose-a-model-tier` | `quest_ai_runner.run("choose-a-model-tier", {'available': ['anthropic']})` | `model_registry` | Model tier selection and limit-recognition correctness |
-| Core ML tasks | `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | `router_labels` | Accuracy of core ML tasks over labelled cases |
-| First-beat narration | `narrate-a-turn` | no entry declared | `model_beat` | Supported first beats within the time and cost the turn allows |
-| How-I-got-this explanation | `explain-an-answer` | no entry declared | `model_explanation` | Faithful explanations per unit of cost and time |
-| Whole-path answer check | `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | `shipped_path` | Whole-path turns right on a small mixed set, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Quest answers that name the person's goal and circumstance and fit features to them |
-| Show the AI's work and next steps | `show-the-ais-work` | `quest_ai_runner.run("show-the-ais-work")` | `trail` | What is shown of the AI's work is true, the same for everyone, and earns its place |
-| Reply in steps when the goal is not met yet | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | `gated` | Interim messages and asks that are true, not repeated and only where a person is needed |
+| Grounded chat turn handler | `answer-a-turn` | `quest_ai_runner.run("answer-a-turn", 'What should I work on first this week?')` | One turn of the orchestrator over the model (`orchestrator_turn`) | Judge pass rate over the chat quality cases |
+| Mode-aware progress surfacing | `show-progress` | no entry declared | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
+| Learned-operation fast path | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
+| Budgeted prompt assembler | `assemble-a-prompt` | `quest_ai_runner.run("assemble-a-prompt", 'What should I work on first this week?')` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
+| Cost-ordered model tier selector with outage and allowance recovery | `choose-a-model-tier` | `quest_ai_runner.run("choose-a-model-tier", {'available': ['anthropic']})` | Live tier registry (`model_registry`) | Model tier selection and limit-recognition correctness |
+| Core ML tasks | `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | The route as the classification label (`router_labels`) | Accuracy of core ML tasks over labelled cases |
+| First-beat narration | `narrate-a-turn` | no entry declared | One cheap model call per turn writes the beat (today) (`model_beat`) | Supported first beats within the time and cost the turn allows |
+| How-I-got-this explanation | `explain-an-answer` | no entry declared | One model call writes the explanation from the trace (today) (`model_explanation`) | Faithful explanations per unit of cost and time |
+| Whole-path answer check | `answer-end-to-end` | `quest_ai_runner.run("answer-end-to-end", 'What should I work on first this week?')` | The shipped path as one call (`shipped_path`) | Whole-path turns right on a small mixed set, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Quest answers that name the person's goal and circumstance and fit features to them |
+| Show the AI's work and next steps | `show-the-ais-work` | `quest_ai_runner.run("show-the-ais-work")` | The Trail (live line, one summary line, expandable groups) (`trail`) | What is shown of the AI's work is true, the same for everyone, and earns its place |
+| Reply in steps when the goal is not met yet | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-prompt-overflow-and-duplication`: Prompts grow past what the model window or the budget allows, or repeat the same block, so calls fail, cost more than expected, or bury the relevant part under noise.
-- `prob-progress-unreadable`: A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them.
-- `prob-vendor-outage-halts-work`: One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes.
-- `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next).
-- `prob-quest-answer-not-tied-to-my-goal`: Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's...
-- `prob-assistant-not-jarvis-from-the-users-seat`: Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a...
-- `prob-unmet-turn-leaves-person-guessing`: A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do.
-- `prob-answer-reasoning-unseen`: A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves.
-- `prob-known-operation-planned-again`: A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known.
+- Prompts grow past what the model window or the budget allows, or repeat the same block, so calls fail, cost more than expected, or bury the relevant part under noise. (`prob-prompt-overflow-and-duplication`)
+- A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them. (`prob-progress-unreadable`)
+- One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes. (`prob-vendor-outage-halts-work`)
+- Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). (`prob-core-ml-tasks-unspecified`)
+- Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's... (`prob-quest-answer-not-tied-to-my-goal`)
+- Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a... (`prob-assistant-not-jarvis-from-the-users-seat`)
+- A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do. (`prob-unmet-turn-leaves-person-guessing`)
+- A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves. (`prob-answer-reasoning-unseen`)
+- A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known. (`prob-known-operation-planned-again`)
 
 **Ideals**
 
@@ -94,15 +94,15 @@ flowchart LR
 
 ### Problems
 
-- `prob-prompt-overflow-and-duplication`: Prompts grow past what the model window or the budget allows, or repeat the same block, so calls fail, cost more than expected, or bury the relevant part under noise.
-- `prob-progress-unreadable`: A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them.
-- `prob-vendor-outage-halts-work`: One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes.
-- `prob-core-ml-tasks-unspecified`: Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). Each has had alternative implementations, but QAR's records do not name them as one solution, so no alternative is compared on a metric.
-- `prob-quest-answer-not-tied-to-my-goal`: Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it assumes a circumstance the person never gave.
-- `prob-assistant-not-jarvis-from-the-users-seat`: Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out.
-- `prob-unmet-turn-leaves-person-guessing`: A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do.
-- `prob-answer-reasoning-unseen`: A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves.
-- `prob-known-operation-planned-again`: A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known.
+- Prompts grow past what the model window or the budget allows, or repeat the same block, so calls fail, cost more than expected, or bury the relevant part under noise. (`prob-prompt-overflow-and-duplication`)
+- A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them. (`prob-progress-unreadable`)
+- One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes. (`prob-vendor-outage-halts-work`)
+- Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). (`prob-core-ml-tasks-unspecified`)
+- Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it assumes a circumstance the person never gave. (`prob-quest-answer-not-tied-to-my-goal`)
+- Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out. (`prob-assistant-not-jarvis-from-the-users-seat`)
+- A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do. (`prob-unmet-turn-leaves-person-guessing`)
+- A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves. (`prob-answer-reasoning-unseen`)
+- A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known. (`prob-known-operation-planned-again`)
 
 ### Ideals
 
@@ -131,17 +131,17 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Grounded chat turn handler | `answer-a-turn` | orchestrator_turn | Judge pass rate over the chat quality cases |
-| Mode-aware progress surfacing | `show-progress` | stream | Surfaced-event policy by mode, Progress shown while the work runs |
-| Learned-operation fast path | `replay-known-operations` | stored_recipes | Fast-path hit rate and parity with the planner-only path |
-| Budgeted prompt assembler | `assemble-a-prompt` | planner_prompt | Prompt size against budget and duplicated-block count |
-| Cost-ordered model tier selector with outage and allowance recovery | `choose-a-model-tier` | model_registry | Model tier selection and limit-recognition correctness |
-| Core ML tasks | `core-ml-tasks` | router_labels | Accuracy of core ML tasks over labelled cases |
-| First-beat narration | `narrate-a-turn` | model_beat | Supported first beats within the time and cost the turn allows |
-| How-I-got-this explanation | `explain-an-answer` | model_explanation | Faithful explanations per unit of cost and time |
-| Whole-path answer check | `answer-end-to-end` | shipped_path | Whole-path turns right on a small mixed set, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Quest answers that name the person's goal and circumstance and fit features to them |
-| Show the AI's work and next steps | `show-the-ais-work` | trail | What is shown of the AI's work is true, the same for everyone, and earns its place |
-| Reply in steps when the goal is not met yet | `reply-in-steps` | gated | Interim messages and asks that are true, not repeated and only where a person is needed |
+| Grounded chat turn handler | `answer-a-turn` | One turn of the orchestrator over the model (`orchestrator_turn`) | Judge pass rate over the chat quality cases |
+| Mode-aware progress surfacing | `show-progress` | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
+| Learned-operation fast path | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
+| Budgeted prompt assembler | `assemble-a-prompt` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
+| Cost-ordered model tier selector with outage and allowance recovery | `choose-a-model-tier` | Live tier registry (`model_registry`) | Model tier selection and limit-recognition correctness |
+| Core ML tasks | `core-ml-tasks` | The route as the classification label (`router_labels`) | Accuracy of core ML tasks over labelled cases |
+| First-beat narration | `narrate-a-turn` | One cheap model call per turn writes the beat (today) (`model_beat`) | Supported first beats within the time and cost the turn allows |
+| How-I-got-this explanation | `explain-an-answer` | One model call writes the explanation from the trace (today) (`model_explanation`) | Faithful explanations per unit of cost and time |
+| Whole-path answer check | `answer-end-to-end` | The shipped path as one call (`shipped_path`) | Whole-path turns right on a small mixed set, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Quest answers that name the person's goal and circumstance and fit features to them |
+| Show the AI's work and next steps | `show-the-ais-work` | The Trail (live line, one summary line, expandable groups) (`trail`) | What is shown of the AI's work is true, the same for everyone, and earns its place |
+| Reply in steps when the goal is not met yet | `reply-in-steps` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
 
 ### Implementations
 

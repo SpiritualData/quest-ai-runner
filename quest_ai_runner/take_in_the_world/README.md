@@ -31,26 +31,26 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Cost-aware message router | `route-a-message` | `quest_ai_runner.run("route-a-message", 'Save a note that the launch moves to Friday.')` | `planner_route` | Routing correctness over the classification cases |
-| Incremental context-update feed | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | `quest_channels` | Update-offering correctness over synthetic quest channels |
-| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | `in_memory` | Exactly-once mid-run delivery per run, and how fast it is seen |
-| Public package surface contract | `expose-the-public-api` | `quest_ai_runner.run("expose-the-public-api", 'run')` | `package_front_doors` | Public surface conformance on fixture inputs |
-| Runnable example set | `learn-by-example` | no entry declared | `live_examples` | Example runnability on an empty environment |
-| Layered lane configuration loader | `configure-a-lane` | no entry declared | `qar_config` | Configuration precedence and validation correctness |
-| Non-interactive command-line surface | `operate-from-a-terminal` | `quest_ai_runner.run("operate-from-a-terminal", ['--help'])` | `cli_commands` | Command-line parsing, refusal and output correctness |
-| Documentation coverage and voice check | `explain-qar` | no entry declared | `shipped_docs` | Documentation coverage and voice conformance |
-| Image description for grounding | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | `vision_description` | Answer pass rate gained per image described |
-| Terminal helper calls | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | `fast_model_helpers` | Correct terminal helper verdicts within the wait a person accepts |
-| Implementation selection | `select-an-implementation` | no entry declared | `live_resolver` | Implementation selection |
+| Cost-aware message router | `route-a-message` | `quest_ai_runner.run("route-a-message", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases |
+| Incremental context-update feed | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | The update engine over its built-in channels (`quest_channels`) | Update-offering correctness over synthetic quest channels |
+| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
+| Public package surface contract | `expose-the-public-api` | `quest_ai_runner.run("expose-the-public-api", 'run')` | The names in the package __all__ (`package_front_doors`) | Public surface conformance on fixture inputs |
+| Runnable example set | `learn-by-example` | no entry declared | Example check harness (`live_examples`) | Example runnability on an empty environment |
+| Layered lane configuration loader | `configure-a-lane` | no entry declared | Layered configuration evaluation arm (`qar_config`) | Configuration precedence and validation correctness |
+| Non-interactive command-line surface | `operate-from-a-terminal` | `quest_ai_runner.run("operate-from-a-terminal", ['--help'])` | The command dispatcher run in process (`cli_commands`) | Command-line parsing, refusal and output correctness |
+| Documentation coverage and voice check | `explain-qar` | no entry declared | Shipped-documents evaluation arm (`shipped_docs`) | Documentation coverage and voice conformance |
+| Image description for grounding | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
+| Terminal helper calls | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | Fast-tier model calls in the terminal (today) (`fast_model_helpers`) | Correct terminal helper verdicts within the wait a person accepts |
+| Implementation selection | `select-an-implementation` | no entry declared | Live resolver driver (`live_resolver`) | Implementation selection |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-reply-misses-the-account`: Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no...
-- `prob-follow-up-loses-thread`: A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said.
-- `prob-integration-is-trial-and-error`: A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error.
-- `prob-harness-weaker-than-a-coding-agent`: The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the...
+- Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no... (`prob-reply-misses-the-account`)
+- A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said. (`prob-follow-up-loses-thread`)
+- A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error. (`prob-integration-is-trial-and-error`)
+- The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the... (`prob-harness-weaker-than-a-coding-agent`)
 
 **Ideals**
 
@@ -84,10 +84,10 @@ flowchart LR
 
 ### Problems
 
-- `prob-reply-misses-the-account`: Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no source supports.
-- `prob-follow-up-loses-thread`: A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said.
-- `prob-integration-is-trial-and-error`: A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error.
-- `prob-harness-weaker-than-a-coding-agent`: The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the coding agent completes the work, while sending every request to the coding agent pays its slow, token-heavy context search each time.
+- Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no source supports. (`prob-reply-misses-the-account`)
+- A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said. (`prob-follow-up-loses-thread`)
+- A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error. (`prob-integration-is-trial-and-error`)
+- The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the coding agent completes the work, while sending every request to the coding agent pays its slow, token-heavy context search each time. (`prob-harness-weaker-than-a-coding-agent`)
 
 ### Ideals
 
@@ -98,17 +98,17 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Cost-aware message router | `route-a-message` | planner_route | Routing correctness over the classification cases |
-| Incremental context-update feed | `feed-context-sources` | quest_channels | Update-offering correctness over synthetic quest channels |
-| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | in_memory | Exactly-once mid-run delivery per run, and how fast it is seen |
-| Public package surface contract | `expose-the-public-api` | package_front_doors | Public surface conformance on fixture inputs |
-| Runnable example set | `learn-by-example` | live_examples | Example runnability on an empty environment |
-| Layered lane configuration loader | `configure-a-lane` | qar_config | Configuration precedence and validation correctness |
-| Non-interactive command-line surface | `operate-from-a-terminal` | cli_commands | Command-line parsing, refusal and output correctness |
-| Documentation coverage and voice check | `explain-qar` | shipped_docs | Documentation coverage and voice conformance |
-| Image description for grounding | `describe-an-attachment` | vision_description | Answer pass rate gained per image described |
-| Terminal helper calls | `assist-a-terminal-session` | fast_model_helpers | Correct terminal helper verdicts within the wait a person accepts |
-| Implementation selection | `select-an-implementation` | live_resolver | Implementation selection |
+| Cost-aware message router | `route-a-message` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases |
+| Incremental context-update feed | `feed-context-sources` | The update engine over its built-in channels (`quest_channels`) | Update-offering correctness over synthetic quest channels |
+| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
+| Public package surface contract | `expose-the-public-api` | The names in the package __all__ (`package_front_doors`) | Public surface conformance on fixture inputs |
+| Runnable example set | `learn-by-example` | Example check harness (`live_examples`) | Example runnability on an empty environment |
+| Layered lane configuration loader | `configure-a-lane` | Layered configuration evaluation arm (`qar_config`) | Configuration precedence and validation correctness |
+| Non-interactive command-line surface | `operate-from-a-terminal` | The command dispatcher run in process (`cli_commands`) | Command-line parsing, refusal and output correctness |
+| Documentation coverage and voice check | `explain-qar` | Shipped-documents evaluation arm (`shipped_docs`) | Documentation coverage and voice conformance |
+| Image description for grounding | `describe-an-attachment` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
+| Terminal helper calls | `assist-a-terminal-session` | Fast-tier model calls in the terminal (today) (`fast_model_helpers`) | Correct terminal helper verdicts within the wait a person accepts |
+| Implementation selection | `select-an-implementation` | Live resolver driver (`live_resolver`) | Implementation selection |
 
 ### Implementations
 

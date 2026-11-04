@@ -25,17 +25,17 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Context card selector | `select-context` | no entry declared | `blind_grep` | Context selection ranking accuracy and card-quality outcome |
-| Fail-safe card reference resolver | `resolve-references` | no entry declared | `note` | Pointer-resolution safety over offline cases |
-| Unified card and specification search | `search-cards-and-specs` | no entry declared | `solutions_and_problems_with_links` | Mixed card and specification selection, with both existing selection metrics held |
-| Semantic vector index | `index-by-meaning` | no entry declared | `qdrant` | Semantic recall and query latency on the synthetic handbook |
+| Context card selector | `select-context` | no entry declared | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Fail-safe card reference resolver | `resolve-references` | no entry declared | Registry of built-in and host resolvers (`note`) | Pointer-resolution safety over offline cases |
+| Unified card and specification search | `search-cards-and-specs` | no entry declared | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
+| Semantic vector index | `index-by-meaning` | no entry declared | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-context-rediscovered-each-run`: An agent asked to answer or work from a person's own material has to find the relevant part of it first.
-- `prob-two-searches-for-one-context`: A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model...
+- An agent asked to answer or work from a person's own material has to find the relevant part of it first. (`prob-context-rediscovered-each-run`)
+- A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model... (`prob-two-searches-for-one-context`)
 
 **Ideals**
 
@@ -62,8 +62,8 @@ flowchart LR
 
 ### Problems
 
-- `prob-context-rediscovered-each-run`: An agent asked to answer or work from a person's own material has to find the relevant part of it first. With nothing kept between runs it re-discovers the same files and facts on every run (the planner asks what to read, retrieval searches, the loop re-plans), which costs tokens and latency, can miss what an earlier run already found, and leaves no record of where an answer came from.
-- `prob-two-searches-for-one-context`: A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model filter and consolidation) and ESOI record selection (field-weighted TF-IDF, an optional vector search, reciprocal-rank fusion, then a gated cheap-model choice). They keep separate indexes, budgets and output shapes, and only the card result is put into a run's context: ESOI records reach a run only through tools it has to think to call, or as a lexical-only slice for a deep goal, so the problem, ideal and metric a run serves are often not in view.
+- An agent asked to answer or work from a person's own material has to find the relevant part of it first. (`prob-context-rediscovered-each-run`)
+- A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model filter and consolidation) and ESOI record selection (field-weighted TF-IDF, an optional vector search, reciprocal-rank fusion, then a gated cheap-model choice). (`prob-two-searches-for-one-context`)
 
 ### Ideals
 
@@ -74,10 +74,10 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Context card selector | `select-context` | blind_grep | Context selection ranking accuracy and card-quality outcome |
-| Fail-safe card reference resolver | `resolve-references` | note | Pointer-resolution safety over offline cases |
-| Unified card and specification search | `search-cards-and-specs` | solutions_and_problems_with_links | Mixed card and specification selection, with both existing selection metrics held |
-| Semantic vector index | `index-by-meaning` | qdrant | Semantic recall and query latency on the synthetic handbook |
+| Context card selector | `select-context` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Fail-safe card reference resolver | `resolve-references` | Registry of built-in and host resolvers (`note`) | Pointer-resolution safety over offline cases |
+| Unified card and specification search | `search-cards-and-specs` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
+| Semantic vector index | `index-by-meaning` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
 
 ### Implementations
 
@@ -85,7 +85,7 @@ flowchart LR
 |---|---|---|---|
 | Field-weighted keyword arm | `select-context:idf_docstrings` | [evaluation/components/context_selection/impls/idf_docstrings.py](../../evaluation/components/context_selection/impls/idf_docstrings.py) |  |
 | Docstring ablation of the keyword arm | `select-context:idf_paths_only` | [evaluation/components/context_selection/impls/idf_paths_only.py](../../evaluation/components/context_selection/impls/idf_paths_only.py) |  |
-| Blind text search | `select-context:blind_grep` | [evaluation/components/context_selection/impls/blind_grep.py](../../evaluation/components/context_selection/impls/blind_grep.py) |  |
+| Blind text search | `select-context:blind_grep` | [quest_ai_runner/select_context/retrieval_assembler.py](retrieval_assembler.py) |  |
 | Plain cosine semantic baseline | `select-context:vector_bge_small` | [evaluation/components/context_selection/impls/vector_bge_small.py](../../evaluation/components/context_selection/impls/vector_bge_small.py) |  |
 | Keyword plus vector fusion (measured live class) | `select-context:hybrid_union` | [evaluation/components/context_selection/impls/hybrid_union.py](../../evaluation/components/context_selection/impls/hybrid_union.py) |  |
 | Card-file keyword store | `select-context:file` | [quest_ai_runner/adapters/file_context_store.py](../adapters/file_context_store.py) |  |
@@ -114,7 +114,7 @@ flowchart LR
 | Dense retrieval with the local bge-small embedder (hub) | `select-context:hub_dense_bge_small` | [evaluation/components/context_selection/impls/hub_dense_bge_small.py](../../evaluation/components/context_selection/impls/hub_dense_bge_small.py) |  |
 | Latent semantic indexing (hub) | `select-context:hub_lsi` | [evaluation/components/context_selection/impls/hub_lsi.py](../../evaluation/components/context_selection/impls/hub_lsi.py) |  |
 | BM25 and dense fused by reciprocal rank (hub) | `select-context:hub_hybrid_rrf` | [evaluation/components/context_selection/impls/hub_hybrid_rrf.py](../../evaluation/components/context_selection/impls/hub_hybrid_rrf.py) |  |
-| Hybrid reranked by weighted features and priors (hub) | `select-context:hub_feature_rerank` | [evaluation/components/context_selection/impls/hub_feature_rerank.py](../../evaluation/components/context_selection/impls/hub_feature_rerank.py) |  |
+| Hybrid reranked by weighted features and priors (hub) | `select-context:hub_feature_rerank` | [quest_ai_runner/select_context/retrieval_assembler.py](retrieval_assembler.py) |  |
 | Feature rerank without link and co-change priors (hub) | `select-context:hub_feature_rerank_no_priors` | [evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py](../../evaluation/components/context_selection/impls/hub_feature_rerank_no_priors.py) |  |
 | Hybrid that returns nothing when the corpus does not answer (hub) | `select-context:hub_abstaining_hybrid` | [evaluation/components/context_selection/impls/hub_abstaining_hybrid.py](../../evaluation/components/context_selection/impls/hub_abstaining_hybrid.py) |  |
 | Hybrid reranked by a model trained on past commits (repository) or on earlier private cases (hub) | `select-context:hub_learned_rerank` | [evaluation/components/context_selection/impls/hub_learned_rerank.py](../../evaluation/components/context_selection/impls/hub_learned_rerank.py) |  |

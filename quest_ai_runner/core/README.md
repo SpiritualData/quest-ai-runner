@@ -7,7 +7,7 @@
 Keeps each request's working stream holding the part of the person's own knowledge its goal needs, so a fast model is neither misled by near misses nor buried in noise.
 
 - Entry call: `quest_ai_runner.run("remember-and-recall", 'rust release')`
-- Selected implementation: `recency_window`
+- Selected implementation: Start-of-run card filter and a recency window (today) (`recency_window`)
 - Metric: Goal-relevant admission at a precision floor with nothing out of scope
 - Implemented by: [`quest_ai_runner/core/auxiliary_prompts.py`](auxiliary_prompts.py), [`quest_ai_runner/core/context_doctrine.py`](context_doctrine.py), [`quest_ai_runner/core/planner_cascade.py`](planner_cascade.py), [`quest_ai_runner/core/planner_context.py`](planner_context.py), [`quest_ai_runner/core/planner_doctrine.py`](planner_doctrine.py), [`quest_ai_runner/core/planner_prompt.py`](planner_prompt.py), [`quest_ai_runner/core/prompt_layers.py`](prompt_layers.py), [`quest_ai_runner/core/prompt_specs.py`](prompt_specs.py) and 4 more
 
@@ -16,7 +16,7 @@ Keeps each request's working stream holding the part of the person's own knowled
 Gives an operator a known value, cost and time for every model call, so spend and latency go only to prompts that earn them and a cheaper or faster option is not missed.
 
 - Entry call: no entry declared
-- Selected implementation: `spec_registry`
+- Selected implementation: Registered prompt specs with an enforcement test (today) (`spec_registry`)
 - Metric: Justified share of model spend
 - Implemented by: [`quest_ai_runner/core/auxiliary_prompts.py`](auxiliary_prompts.py), [`quest_ai_runner/core/context_doctrine.py`](context_doctrine.py), [`quest_ai_runner/core/planner_cascade.py`](planner_cascade.py), [`quest_ai_runner/core/planner_context.py`](planner_context.py), [`quest_ai_runner/core/planner_doctrine.py`](planner_doctrine.py), [`quest_ai_runner/core/planner_prompt.py`](planner_prompt.py), [`quest_ai_runner/core/prompt_layers.py`](prompt_layers.py), [`quest_ai_runner/core/prompt_specs.py`](prompt_specs.py) and 7 more
 
@@ -38,7 +38,7 @@ Gives an operator a known value, cost and time for every model call, so spend an
 
 ## Problems
 
-- `prob-admission-by-recency-not-relevance`: What of the person's own material enters a step's view is decided by position and size, not by what the request needs: cards are chosen once from the request text at the start, the newest few...
+- What of the person's own material enters a step's view is decided by position and size, not by what the request needs: cards are chosen once from the request text at the start, the newest few... (`prob-admission-by-recency-not-relevance`)
 
 ## Ideals
 

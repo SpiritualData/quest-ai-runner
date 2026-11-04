@@ -14,13 +14,13 @@ Science gives a request the facts it needs from outside the person's own materia
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Bounded web research | `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | `web_research` | Right-passage rate and search spend over public factual questions |
+| Bounded web research | `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-web-answers-unsafe-or-costly`: Answering from the live web risks fetching addresses that should never be fetched, paying again for the same search, or returning the wrong passage from the right page.
+- Answering from the live web risks fetching addresses that should never be fetched, paying again for the same search, or returning the wrong passage from the right page. (`prob-web-answers-unsafe-or-costly`)
 
 **Ideals**
 
@@ -42,7 +42,7 @@ Science gives a request the facts it needs from outside the person's own materia
 
 ### Problems
 
-- `prob-web-answers-unsafe-or-costly`: Answering from the live web risks fetching addresses that should never be fetched, paying again for the same search, or returning the wrong passage from the right page.
+- Answering from the live web risks fetching addresses that should never be fetched, paying again for the same search, or returning the wrong passage from the right page. (`prob-web-answers-unsafe-or-costly`)
 
 ### Ideals
 
@@ -52,7 +52,7 @@ Science gives a request the facts it needs from outside the person's own materia
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Bounded web research | `search-the-web` | web_research | Right-passage rate and search spend over public factual questions |
+| Bounded web research | `search-the-web` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
 
 ### Implementations
 

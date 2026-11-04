@@ -29,23 +29,23 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Quest change executor | `operate-a-quest` | `quest_ai_runner.run("operate-a-quest", 'Add a goal to ship the launch note by Friday')` | `qar_orchestrator` | Final quest state against the request over the quest operation cases |
-| Multi-source evidence retriever | `gather-evidence` | `quest_ai_runner.run("gather-evidence", 'NOTES.md')` | `composite` | Retrieval recall of the right document over handbook questions |
-| Bounded autonomous work runner | `run-deep-work` | no entry declared | `subprocess` | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
-| Bounded reversible file writer | `write-files` | `quest_ai_runner.run("write-files", 'NOTES.md')` | `files` | Write boundary and reversibility over the scratch-tree cases |
-| Allowlisted operation writer | `write-through-mcp` | no entry declared | `mcp` | Allowlist enforcement and exactly-once execution |
-| World | `claim-reach` | `quest_ai_runner.run("claim-reach", 'Send the launch note to the whole team')` | `coding_agent_prompt_reach` | Combined world score |
-| Goal assignee and doability judge | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | `model_judge` | Hand-offs a person keeps per unit of cost and time |
+| Quest change executor | `operate-a-quest` | `quest_ai_runner.run("operate-a-quest", 'Add a goal to ship the launch note by Friday')` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
+| Multi-source evidence retriever | `gather-evidence` | `quest_ai_runner.run("gather-evidence", 'NOTES.md')` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions |
+| Bounded autonomous work runner | `run-deep-work` | no entry declared | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
+| Bounded reversible file writer | `write-files` | `quest_ai_runner.run("write-files", 'NOTES.md')` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
+| Allowlisted operation writer | `write-through-mcp` | no entry declared | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
+| World | `claim-reach` | `quest_ai_runner.run("claim-reach", 'Send the launch note to the whole team')` | Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`) | Combined world score |
+| Goal assignee and doability judge | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-unrequested-or-partial-changes`: A request to change a quest leads to changes nobody asked for, to only part of what was asked, or to the same change made twice.
-- `prob-reach-claims-unfounded`: The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was...
-- `prob-work-not-planned-backwards-from-done`: Deep work can start from a task description with no written, checkable condition for finishing, so the run plans forward from its first step and has nothing to be checked against when it stops.
-- `prob-new-goal-lands-on-the-wrong-owner`: A new goal is given to the wrong owner, or to an AI representative that cannot do it, so it sits undone or is done badly while the person believes it is handled.
-- `prob-evidence-spread-across-sources`: A planner decides or answers without the material that sits in the sources a person's work lives in, because each source is read its own way and one that fails stops the rest.
+- A request to change a quest leads to changes nobody asked for, to only part of what was asked, or to the same change made twice. (`prob-unrequested-or-partial-changes`)
+- The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was... (`prob-reach-claims-unfounded`)
+- Deep work can start from a task description with no written, checkable condition for finishing, so the run plans forward from its first step and has nothing to be checked against when it stops. (`prob-work-not-planned-backwards-from-done`)
+- A new goal is given to the wrong owner, or to an AI representative that cannot do it, so it sits undone or is done badly while the person believes it is handled. (`prob-new-goal-lands-on-the-wrong-owner`)
+- A planner decides or answers without the material that sits in the sources a person's work lives in, because each source is read its own way and one that fails stops the rest. (`prob-evidence-spread-across-sources`)
 
 **Ideals**
 
@@ -76,11 +76,11 @@ flowchart LR
 
 ### Problems
 
-- `prob-unrequested-or-partial-changes`: A request to change a quest leads to changes nobody asked for, to only part of what was asked, or to the same change made twice.
-- `prob-reach-claims-unfounded`: The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was never read, or says outside work has started when nothing ran. It also says it cannot do something it can.
-- `prob-work-not-planned-backwards-from-done`: Deep work can start from a task description with no written, checkable condition for finishing, so the run plans forward from its first step and has nothing to be checked against when it stops.
-- `prob-new-goal-lands-on-the-wrong-owner`: A new goal is given to the wrong owner, or to an AI representative that cannot do it, so it sits undone or is done badly while the person believes it is handled.
-- `prob-evidence-spread-across-sources`: A planner decides or answers without the material that sits in the sources a person's work lives in, because each source is read its own way and one that fails stops the rest.
+- A request to change a quest leads to changes nobody asked for, to only part of what was asked, or to the same change made twice. (`prob-unrequested-or-partial-changes`)
+- The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was never read, or says outside work has started when nothing ran. (`prob-reach-claims-unfounded`)
+- Deep work can start from a task description with no written, checkable condition for finishing, so the run plans forward from its first step and has nothing to be checked against when it stops. (`prob-work-not-planned-backwards-from-done`)
+- A new goal is given to the wrong owner, or to an AI representative that cannot do it, so it sits undone or is done badly while the person believes it is handled. (`prob-new-goal-lands-on-the-wrong-owner`)
+- A planner decides or answers without the material that sits in the sources a person's work lives in, because each source is read its own way and one that fails stops the rest. (`prob-evidence-spread-across-sources`)
 
 ### Ideals
 
@@ -90,13 +90,13 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Quest change executor | `operate-a-quest` | qar_orchestrator | Final quest state against the request over the quest operation cases |
-| Multi-source evidence retriever | `gather-evidence` | composite | Retrieval recall of the right document over handbook questions |
-| Bounded autonomous work runner | `run-deep-work` | subprocess | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
-| Bounded reversible file writer | `write-files` | files | Write boundary and reversibility over the scratch-tree cases |
-| Allowlisted operation writer | `write-through-mcp` | mcp | Allowlist enforcement and exactly-once execution |
-| World | `claim-reach` | coding_agent_prompt_reach | Combined world score |
-| Goal assignee and doability judge | `hand-off-a-goal` | model_judge | Hand-offs a person keeps per unit of cost and time |
+| Quest change executor | `operate-a-quest` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
+| Multi-source evidence retriever | `gather-evidence` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions |
+| Bounded autonomous work runner | `run-deep-work` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
+| Bounded reversible file writer | `write-files` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
+| Allowlisted operation writer | `write-through-mcp` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
+| World | `claim-reach` | Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`) | Combined world score |
+| Goal assignee and doability judge | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 
 ### Implementations
 

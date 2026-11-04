@@ -14,13 +14,13 @@ Overseer asks the model through Tiered model provider layer to oversee a run and
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Human decision escalation channel | `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | `quest_decision` | Escalation delivery and detail completeness |
+| Human decision escalation channel | `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-asks-what-is-not-theirs`: The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking.
+- The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking. (`prob-asks-what-is-not-theirs`)
 
 ## Metrics and their leaders
 
@@ -38,13 +38,13 @@ Overseer asks the model through Tiered model provider layer to oversee a run and
 
 ### Problems
 
-- `prob-asks-what-is-not-theirs`: The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking.
+- The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking. (`prob-asks-what-is-not-theirs`)
 
 ### Solutions
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Human decision escalation channel | `escalate-to-a-human` | quest_decision | Escalation delivery and detail completeness |
+| Human decision escalation channel | `escalate-to-a-human` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 
 ### Implementations
 

@@ -25,22 +25,22 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Cross-conversation recall store | `remember-conversations` | `quest_ai_runner.run("remember-conversations", ...)` | `session_file` | Past-conversation recall and isolation over synthetic cases |
-| Feedback-to-guidance loop | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | `universal` | Repeat-correction recall and precision over feedback sequences |
-| Verbatim feedback ledger | `store-feedback` | `quest_ai_runner.run("store-feedback", 'quest-id')` | `ledger` | Correction carry-through over the feedback-loop cases |
-| Scoped recent-context warm start | `recall-recent-context` | `quest_ai_runner.run("recall-recent-context", 'quest-id')` | `file` | Warm-start accuracy with no cross-work-item leakage |
-| Scoped prediction store | `persist-predictions` | `quest_ai_runner.run("persist-predictions", 'quest-id')` | `file` | Prediction store contract pass rate |
-| Representative selection | `select-a-rep` | `quest_ai_runner.run("select-a-rep", {'assignee_rep_id': 'rep-1'})` | `persona_resolver_precedence` | Representative choice accuracy and thread consistency |
-| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | `quest_ai_runner.run("guide-toward-the-long-term-goal", 'What should I work on first this week?')` | `guided_v2` | Two-sided long-term guidance |
+| Cross-conversation recall store | `remember-conversations` | `quest_ai_runner.run("remember-conversations", ...)` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases |
+| Feedback-to-guidance loop | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Verbatim feedback ledger | `store-feedback` | `quest_ai_runner.run("store-feedback", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
+| Scoped recent-context warm start | `recall-recent-context` | `quest_ai_runner.run("recall-recent-context", 'quest-id')` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
+| Scoped prediction store | `persist-predictions` | `quest_ai_runner.run("persist-predictions", 'quest-id')` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
+| Representative selection | `select-a-rep` | `quest_ai_runner.run("select-a-rep", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
+| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | `quest_ai_runner.run("guide-toward-the-long-term-goal", 'What should I work on first this week?')` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-corrections-repeat`: People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears.
-- `prob-private-data-crosses-scope`: Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI.
-- `prob-wrong-or-inconsistent-rep`: Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task...
-- `prob-long-term-goal-goes-quiet`: The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply...
+- People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears. (`prob-corrections-repeat`)
+- Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI. (`prob-private-data-crosses-scope`)
+- Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task... (`prob-wrong-or-inconsistent-rep`)
+- The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply... (`prob-long-term-goal-goes-quiet`)
 
 **Ideals**
 
@@ -71,10 +71,10 @@ flowchart LR
 
 ### Problems
 
-- `prob-corrections-repeat`: People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears.
-- `prob-private-data-crosses-scope`: Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI.
-- `prob-wrong-or-inconsistent-rep`: Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. A quest can have several representatives, each with its own higher mind, so a wrong choice also grounds the request in the wrong view.
-- `prob-long-term-goal-goes-quiet`: The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset.
+- People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears. (`prob-corrections-repeat`)
+- Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI. (`prob-private-data-crosses-scope`)
+- Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is... (`prob-wrong-or-inconsistent-rep`)
+- The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset. (`prob-long-term-goal-goes-quiet`)
 
 ### Ideals
 
@@ -86,13 +86,13 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Cross-conversation recall store | `remember-conversations` | session_file | Past-conversation recall and isolation over synthetic cases |
-| Feedback-to-guidance loop | `guide-by-feedback` | universal | Repeat-correction recall and precision over feedback sequences |
-| Verbatim feedback ledger | `store-feedback` | ledger | Correction carry-through over the feedback-loop cases |
-| Scoped recent-context warm start | `recall-recent-context` | file | Warm-start accuracy with no cross-work-item leakage |
-| Scoped prediction store | `persist-predictions` | file | Prediction store contract pass rate |
-| Representative selection | `select-a-rep` | persona_resolver_precedence | Representative choice accuracy and thread consistency |
-| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | guided_v2 | Two-sided long-term guidance |
+| Cross-conversation recall store | `remember-conversations` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases |
+| Feedback-to-guidance loop | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Verbatim feedback ledger | `store-feedback` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
+| Scoped recent-context warm start | `recall-recent-context` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
+| Scoped prediction store | `persist-predictions` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
+| Representative selection | `select-a-rep` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
+| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
 
 ### Implementations
 

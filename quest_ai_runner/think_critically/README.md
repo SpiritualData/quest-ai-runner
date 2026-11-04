@@ -14,26 +14,26 @@ Critical thinking holds deep runs to their metric through Specification slice an
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Run liveness reviewer | `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | `live_reviewer` | Stop-or-continue verdict accuracy with false stops counted apart |
-| Guarded model-verdict judge | `judge-a-decision` | `quest_ai_runner.run("judge-a-decision", ...)` | `qar_judges` | Judge deterministic-half correctness with a scripted provider |
-| Reply safety and anticipation guards | `guard-a-reply` | `quest_ai_runner.run("guard-a-reply", 'See https://example.org/a for details.')` | `qar_guards` | Reply guard correctness over link, recipe and anticipation cases |
-| Autopilot run-or-skip gate | `gate-an-autopilot-pass` | `quest_ai_runner.run("gate-an-autopilot-pass", 'quest-id')` | `live_pass` | Autopilot gate decision correctness |
-| Intent frame for quest-scoped prompts | `ground-in-intent` | `quest_ai_runner.run("ground-in-intent", 'quest-id')` | `frame-line` | Intent-grounded pass rate |
-| Specification slice and write-back | `iterate-by-spec` | `quest_ai_runner.run("iterate-by-spec", 'Tidy the card store')` | `slice-and-writeback` | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
-| Intent specification selection | `spec-selection` | `esoi spec index --out FILE` | `lexical-vector-gated` | Specification selection pass rate |
-| Metric drafting for a task | `draft-a-metric` | `quest_ai_runner.run("draft-a-metric", ...)` | `capped_model_draft` | Drafted metrics accepted per unit of cost |
+| Run liveness reviewer | `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
+| Guarded model-verdict judge | `judge-a-decision` | `quest_ai_runner.run("judge-a-decision", ...)` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
+| Reply safety and anticipation guards | `guard-a-reply` | `quest_ai_runner.run("guard-a-reply", 'See https://example.org/a for details.')` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases |
+| Autopilot run-or-skip gate | `gate-an-autopilot-pass` | `quest_ai_runner.run("gate-an-autopilot-pass", 'quest-id')` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
+| Intent frame for quest-scoped prompts | `ground-in-intent` | `quest_ai_runner.run("ground-in-intent", 'quest-id')` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
+| Specification slice and write-back | `iterate-by-spec` | `quest_ai_runner.run("iterate-by-spec", 'Tidy the card store')` | Slice before and write-back after (`slice-and-writeback`) | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
+| Intent specification selection | `spec-selection` | `esoi spec index --out FILE` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Metric drafting for a task | `draft-a-metric` | `quest_ai_runner.run("draft-a-metric", ...)` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-deep-work-wanders`: Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still...
-- `prob-autopilot-works-when-unwanted`: Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due.
-- `prob-same-ask-repeats-cost`: People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between...
-- `prob-narrow-verdicts-unreliable`: A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes...
-- `prob-work-misses-its-why`: Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and...
-- `prob-intent-specs-not-found-for-input`: A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads...
-- `prob-run-improvement-unchecked`: Whether a run improved anything is recorded only in part and only for a while.
+- Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still... (`prob-deep-work-wanders`)
+- Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due. (`prob-autopilot-works-when-unwanted`)
+- People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between... (`prob-same-ask-repeats-cost`)
+- A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes... (`prob-narrow-verdicts-unreliable`)
+- Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and... (`prob-work-misses-its-why`)
+- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads... (`prob-intent-specs-not-found-for-input`)
+- Whether a run improved anything is recorded only in part and only for a while. (`prob-run-improvement-unchecked`)
 
 **Ideals**
 
@@ -66,13 +66,13 @@ Critical thinking holds deep runs to their metric through Specification slice an
 
 ### Problems
 
-- `prob-deep-work-wanders`: Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still making progress.
-- `prob-autopilot-works-when-unwanted`: Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due.
-- `prob-same-ask-repeats-cost`: People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between people.
-- `prob-narrow-verdicts-unreliable`: A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn.
-- `prob-work-misses-its-why`: Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed.
-- `prob-intent-specs-not-found-for-input`: A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention.
-- `prob-run-improvement-unchecked`: Whether a run improved anything is recorded only in part and only for a while. A deep run records a metric reading before and after (the record_metric_result tool and GoalMetrics) into a per-run file of readings in a temporary folder that is cleared after two days, and the task report carries it to Quest; but nothing says what the run moved, the reading never reaches the record it concerns, a card's last_outcome comes from the kind of turn rather than from any metric, and when the work shows a record is wrong or missing nothing makes the run fix it. Improvement is hoped for rather than checked per run.
+- Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still making progress. (`prob-deep-work-wanders`)
+- Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due. (`prob-autopilot-works-when-unwanted`)
+- People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between people. (`prob-same-ask-repeats-cost`)
+- A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn. (`prob-narrow-verdicts-unreliable`)
+- Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed. (`prob-work-misses-its-why`)
+- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention. (`prob-intent-specs-not-found-for-input`)
+- Whether a run improved anything is recorded only in part and only for a while. (`prob-run-improvement-unchecked`)
 
 ### Ideals
 
@@ -85,14 +85,14 @@ Critical thinking holds deep runs to their metric through Specification slice an
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Run liveness reviewer | `detect-a-stalled-run` | live_reviewer | Stop-or-continue verdict accuracy with false stops counted apart |
-| Guarded model-verdict judge | `judge-a-decision` | qar_judges | Judge deterministic-half correctness with a scripted provider |
-| Reply safety and anticipation guards | `guard-a-reply` | qar_guards | Reply guard correctness over link, recipe and anticipation cases |
-| Autopilot run-or-skip gate | `gate-an-autopilot-pass` | live_pass | Autopilot gate decision correctness |
-| Intent frame for quest-scoped prompts | `ground-in-intent` | frame-line | Intent-grounded pass rate |
-| Specification slice and write-back | `iterate-by-spec` | slice-and-writeback | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
-| Intent specification selection | `spec-selection` | lexical-vector-gated | Specification selection pass rate |
-| Metric drafting for a task | `draft-a-metric` | capped_model_draft | Drafted metrics accepted per unit of cost |
+| Run liveness reviewer | `detect-a-stalled-run` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
+| Guarded model-verdict judge | `judge-a-decision` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
+| Reply safety and anticipation guards | `guard-a-reply` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases |
+| Autopilot run-or-skip gate | `gate-an-autopilot-pass` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
+| Intent frame for quest-scoped prompts | `ground-in-intent` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
+| Specification slice and write-back | `iterate-by-spec` | Slice before and write-back after (`slice-and-writeback`) | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
+| Intent specification selection | `spec-selection` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Metric drafting for a task | `draft-a-metric` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
 
 ### Implementations
 

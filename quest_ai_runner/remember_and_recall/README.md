@@ -30,24 +30,24 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Context card persistence backend | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | `quest_api` | Card repository conformance across backends |
-| Source-change staleness detector | `detect-stale-cards` | no entry declared | `store_sha256` | Staleness detection precision and recall over mutation cases |
-| Offline card cache and write outbox | `cache-cards` | no entry declared | `file` | Outage resilience of the card repository |
-| Card store growth prevention | `bound-card-growth` | no entry declared | `bootstrap_guards` | Cards per source-file group after repeated passes, for the guards that prevent growth |
-| Card store repair | `repair-a-card-store` | no entry declared | `repository_tidy` | Cards per source-file group and duplicate share after a repair of an inflated store |
-| Index scope decision | `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
-| Card categories and metadata | `label-context-cards` | no entry declared | `fast_model_labels` | Retrieval hits and category precision per unit of cost |
-| Hub card store | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | `quest-api-cards` | none yet |
-| QAR topic cards for a folder | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | `qar_topic_bootstrap` | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Context card persistence backend | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | Hosted card API repository (`quest_api`) | Card repository conformance across backends |
+| Source-change staleness detector | `detect-stale-cards` | no entry declared | Content-hash fingerprint check (`store_sha256`) | Staleness detection precision and recall over mutation cases |
+| Offline card cache and write outbox | `cache-cards` | no entry declared | Durable file cache (`file`) | Outage resilience of the card repository |
+| Card store growth prevention | `bound-card-growth` | no entry declared | Bootstrap guards against re-import (`bootstrap_guards`) | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Card store repair | `repair-a-card-store` | no entry declared | Repository tidy (`repository_tidy`) | Cards per source-file group and duplicate share after a repair of an inflated store |
+| Index scope decision | `choose-what-to-index` | no entry declared | Risk-gated folder review (`risk_gate`) | Copies kept out with real material kept in, by review availability |
+| Card categories and metadata | `label-context-cards` | no entry declared | Fast-tier model writes metadata and categories (today) (`fast_model_labels`) | Retrieval hits and category precision per unit of cost |
+| Hub card store | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | Quest backend card API from the environment (`quest-api-cards`) | none yet |
+| QAR topic cards for a folder | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
 ## Problems and ideals
 
 **Problems**
 
-- `prob-context-drifts-from-its-source`: Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops...
-- `prob-relevant-card-not-found`: The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it.
-- `prob-card-store-inflates`: A card store grows far past the distinct content of its corpus.
-- `prob-index-walks-into-copies`: A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count.
+- Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops... (`prob-context-drifts-from-its-source`)
+- The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it. (`prob-relevant-card-not-found`)
+- A card store grows far past the distinct content of its corpus. (`prob-card-store-inflates`)
+- A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. (`prob-index-walks-into-copies`)
 
 **Ideals**
 
@@ -79,10 +79,10 @@ flowchart LR
 
 ### Problems
 
-- `prob-context-drifts-from-its-source`: Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops writes.
-- `prob-relevant-card-not-found`: The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it.
-- `prob-card-store-inflates`: A card store grows far past the distinct content of its corpus. In copy mode a store nested in another store's corpus copied that store's cards under a namespaced id on every bootstrap pass, copies of copies were kept, and each pass stacked another namespace, so two real stores reached 8,557 and 32,070 cards on 2026-10-05 for corpora that need hundreds, and a search over them took minutes. A terminal chat log of 2026-10-21 reported a vector seed of 142,781 items, a figure not yet explained: the same evening both live stores held about 4.4k cards (the chat log's line 'Card store has 4380 cards').
-- `prob-index-walks-into-copies`: A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. A machine's daily backup snapshots, one dated folder per day and each a copy of the whole tree, each carried the card store the tree had that day: one backups folder held 155 stores with 760,608 cards, and any corpus rooted above it would have walked, imported and mounted every one of them. Earlier, on one real corpus of 81,465 indexable files, most of the files were a single vendored tree present twice and generated data. Before the risk gate, the folder review that decides this ran only above a 2,000-file floor and failed open: with no model, the review switched off or a failed call, every folder was read.
+- Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops writes. (`prob-context-drifts-from-its-source`)
+- The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it. (`prob-relevant-card-not-found`)
+- A card store grows far past the distinct content of its corpus. (`prob-card-store-inflates`)
+- A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. (`prob-index-walks-into-copies`)
 
 ### Ideals
 
@@ -95,15 +95,15 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Context card persistence backend | `persist-cards` | quest_api | Card repository conformance across backends |
-| Source-change staleness detector | `detect-stale-cards` | store_sha256 | Staleness detection precision and recall over mutation cases |
-| Offline card cache and write outbox | `cache-cards` | file | Outage resilience of the card repository |
-| Card store growth prevention | `bound-card-growth` | bootstrap_guards | Cards per source-file group after repeated passes, for the guards that prevent growth |
-| Card store repair | `repair-a-card-store` | repository_tidy | Cards per source-file group and duplicate share after a repair of an inflated store |
-| Index scope decision | `choose-what-to-index` | risk_gate | Copies kept out with real material kept in, by review availability |
-| Card categories and metadata | `label-context-cards` | fast_model_labels | Retrieval hits and category precision per unit of cost |
-| Hub card store | `card-store` | quest-api-cards | none yet |
-| QAR topic cards for a folder | `cards-from-files` | qar_topic_bootstrap | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Context card persistence backend | `persist-cards` | Hosted card API repository (`quest_api`) | Card repository conformance across backends |
+| Source-change staleness detector | `detect-stale-cards` | Content-hash fingerprint check (`store_sha256`) | Staleness detection precision and recall over mutation cases |
+| Offline card cache and write outbox | `cache-cards` | Durable file cache (`file`) | Outage resilience of the card repository |
+| Card store growth prevention | `bound-card-growth` | Bootstrap guards against re-import (`bootstrap_guards`) | Cards per source-file group after repeated passes, for the guards that prevent growth |
+| Card store repair | `repair-a-card-store` | Repository tidy (`repository_tidy`) | Cards per source-file group and duplicate share after a repair of an inflated store |
+| Index scope decision | `choose-what-to-index` | Risk-gated folder review (`risk_gate`) | Copies kept out with real material kept in, by review availability |
+| Card categories and metadata | `label-context-cards` | Fast-tier model writes metadata and categories (today) (`fast_model_labels`) | Retrieval hits and category precision per unit of cost |
+| Hub card store | `card-store` | Quest backend card API from the environment (`quest-api-cards`) | none yet |
+| QAR topic cards for a folder | `cards-from-files` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
 ### Implementations
 
