@@ -2,6 +2,7 @@
 import hashlib
 import os
 import json
+from pathlib import Path
 
 import common  # noqa: F401  (puts the components folder on sys.path)
 from context_selection import private_cases, score
@@ -27,11 +28,10 @@ def write_dataset(folder, counts=(("a", 0), ("b", 1), ("c", 1), ("d", 2))):
 
 
 def test_absent_dataset_contributes_nothing_and_records_an_absent_digest(tmp_path):
-    assert private_cases.load_cases([{}] * 10, {}) == []
+    assert private_cases.load_cases({}) == []
     assert private_cases.digest_parts({}) == private_cases.ABSENT
     assert private_cases.digest_parts({private_cases.ENV: str(tmp_path / "nowhere")}) == private_cases.ABSENT
-    rows = [dict(ok=True, top1=True, top3=True, budget=3)]
-    assert "private 0 (dataset absent)" in score.aggregate(rows)
+    assert "private 0 (dataset absent)" in score.aggregate([])
 
 
 def test_the_digest_part_holds_the_hashes_of_both_private_files(tmp_path):
@@ -43,12 +43,11 @@ def test_the_digest_part_holds_the_hashes_of_both_private_files(tmp_path):
     assert private_cases.digest_parts(env) != f"private:{cases_sha}/{manifest_sha}"
 
 
-def test_the_mix_takes_the_weighted_count_in_the_manifest_kind_proportions(tmp_path):
+def test_the_mix_takes_every_case_in_the_manifest_kind_proportions(tmp_path):
     env = write_dataset(tmp_path, tuple((f"k{i}", n) for i, n in enumerate([0] * 5 + [1] * 10 + [2] * 5)))
-    other = [{}] * 20          # equal weights: as many private cases as the two other sources together over two = 10
     cases = private_cases.mix(private_cases.parse_cases((tmp_path / "cases.jsonl").read_text()), private_cases.kind_shares(tmp_path), 10)
     assert len(cases) == 10 and [c["kind"] for c in cases].count("none") == 2 and [c["kind"] for c in cases].count("several") == 3
-    assert private_cases.load_cases(other, env) and all(c["id"].startswith("PRIV-") for c in private_cases.load_cases(other, env))
+    assert private_cases.load_cases(env) and all(c["id"].startswith("PRIV-") for c in private_cases.load_cases(env))
     assert set(private_cases.kind_shares(tmp_path)) == {"none", "single", "several"}
 
 
@@ -77,10 +76,14 @@ def test_an_arm_scores_a_private_case_as_a_builder_over_the_items_and_pays_for_t
     assert "label" not in labels_seen and len(owner) == 4
 
 
-def test_the_private_aggregate_names_the_counts_of_each_source():
-    rows = [dict(ok=True, top1=True, top3=True, budget=3), dict(ok=True, topic=True, cards_per_file=0.1, gated=False),
-            dict(ok=False, private=True, accuracy=0.2)]
-    assert score.aggregate(rows).startswith("case sources file 1, topic 1, private 1 |")
+def test_the_private_aggregate_names_the_count_and_the_accuracy_of_the_private_source():
+    rows = [dict(ok=False, private=True, accuracy=0.2), dict(ok=True, private=True, accuracy=0.8)]
+    assert score.aggregate(rows).startswith("case sources private 2 | real inputs 1/2 (50%), mean accuracy 0.500")
+
+
+def test_the_scorer_keeps_no_copy_of_the_hub_cases(tmp_path):
+    assert score.load_cases() == private_cases.load_cases()
+    assert not (Path(score.__file__).parent / "cases.json").exists() and not hasattr(score, "score_topic")
 
 
 def test_several_folders_load_dedupe_and_digest_in_a_stable_order(tmp_path):

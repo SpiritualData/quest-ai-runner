@@ -71,6 +71,17 @@ def build_corpus(root, extra_roots=()):
             raise ValueError(f"extra root {base} would collide with an existing path prefix")
         corpus.extra_roots[base.name] = base
         corpus.files.extend(walk_py(base, base.name))
+    return index_cards(corpus)
+
+
+def corpus_of(root, files):
+    """A corpus over exactly ``files`` (paths relative to ``root``): the files another repository's metric pinned, indexed the way this one indexes
+    its own tree, so an arm answers a foundation case on the foundation's corpus with the cards it would build here."""
+    return index_cards(Corpus(root=Path(root).resolve(), files=list(files)))
+
+
+def index_cards(corpus):
+    """One deterministic card per file of ``corpus.files`` (symbols, docstring summary, test-file weight)."""
     for rel in corpus.files:
         path = corpus.path_of(rel)
         syms = extract_symbols(path)

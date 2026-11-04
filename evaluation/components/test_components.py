@@ -97,24 +97,6 @@ def _toy_corpus(tmp_path):
     return build_corpus(tmp_path)
 
 
-def test_context_selection_scorer_top1_top3_and_budget(tmp_path, monkeypatch):
-    from context_selection.score import aggregate, score_case
-    monkeypatch.setenv("QAR_EVAL_CORPUS_ROOT", str(tmp_path))
-    _toy_corpus(tmp_path)
-    case = {"task": "t", "target": "pkg/b.py"}
-    first = score_case(lambda t, c: ["pkg/b.py", "pkg/a.py"], case)
-    assert first["ok"] and first["top1"] and first["top3"]
-    third = score_case(lambda t, c: ["x", "y", "pkg/b.py"], case)
-    assert third["ok"] and not third["top1"] and third["top3"]
-    fourth = lambda t, c: ["x", "y", "z", "pkg/b.py"]  # noqa: E731
-    assert not score_case(fourth, case)["ok"]
-    fourth.budget = 6                                  # a union solution declares a wider budget
-    wide = score_case(fourth, case)
-    assert wide["ok"] and not wide["top3"]
-    assert not score_case(lambda t, c: [], case)["ok"]
-    assert "top-1 1/2" in aggregate([first, score_case(lambda t, c: [], case)])
-
-
 def test_context_selection_offline_impls_rank_a_toy_corpus(tmp_path):
     from context_selection.impls import blind_grep, idf_docstrings
     corpus = _toy_corpus(tmp_path)
@@ -142,15 +124,6 @@ def test_context_selection_extra_root_is_prefixed_and_default_is_unchanged(tmp_p
     assert "sibpkg/scorer.py" not in blind_grep.build(common.CallMeter())(task, alone)
     with pytest.raises(ValueError):
         build_corpus(primary, [primary / "pkg"])
-
-
-def test_context_selection_cases_point_at_real_files():
-    import json
-    cases = json.loads((Path(__file__).parent / "context_selection" / "cases.json").read_text())
-    assert len(cases) >= 60 and len({c["id"] for c in cases}) == len(cases)
-    hub = common.REPO.parent / "ai-hub-of-hubs-structure"
-    assert all((common.REPO / c["target"]).is_file() or c["target"].startswith("hubofhubs/") and (hub / c["target"]).is_file()
-               for c in cases)
 
 
 def test_staleness_scorer_separates_sha256_from_mtime_size():

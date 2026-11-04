@@ -63,10 +63,12 @@ arm because it represents actual production behavior with no context pre-loading
    docstring first lines, path, test-file weight. The production `bootstrap()` needs a model to build
    topic cards (it is a no-op without a provider), so a zero-call evaluation builds these per-file
    cards itself. Reports: file cards, symbols, build time.
-2. Runs the 15-item routing dataset (`context_selection/cases.json`) through each solution and reports
-   top-1 / top-3: IDF over those cards (`FileContextStore.assemble`, confidence gate off), the same
-   without docstring text, a blind-grep baseline, the local `bge-small-en-v1.5` vector arm, and the
-   hybrid union of IDF and vector.
+2. Scores each solution with ONE balanced number that builds on the hub's metrics (`esoi.toml` `[builds_on.context_selection.*]`): the hub's
+   `context_retrieval` cases (file, topic, orientation and no-context requests) are the hub's, reused from its recorded results for the arms named
+   `hub_<x>` and run through the hub's own scorer (`context_selection/foundation_adapter.py`) for the others, and QAR adds its private real
+   requests when `QAR_PRIVATE_CONTEXT_DATASET` is set. The arms: IDF over the cards (`FileContextStore.assemble`, confidence gate off), the same
+   without docstring text, a blind-grep baseline, the local `bge-small-en-v1.5` vector arm, the hybrid union of IDF and vector, and the hub's
+   own retrieval arms.
 3. `staleness/` builds small synthetic trees and mutates them (edit, no-op, touch only, same-size edit
    with the mtime restored, deletion), then reports precision / recall of `stale_cards_for` against a
    plain (mtime, size) baseline.

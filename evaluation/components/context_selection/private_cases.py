@@ -32,7 +32,7 @@ carries ``affinity_tags`` from its ``quest_relation`` (``same_quest`` / ``same_g
 value; ``cross_quest_recall`` against noise shows what each mode costs and gains. The weights are ``quest_ai_runner.core.scope_tags``
 ``AFFINITY_HOME_BOOST`` / ``AFFINITY_AWAY_FACTOR``.
 
-The mix of case kinds is set here, in ``KIND_MIX`` and ``SOURCE_WEIGHTS``, and nowhere else.
+The mix of private input kinds is set here, in ``KIND_MIX``, and nowhere else; the share of this source in the one number is in ``esoi.toml``.
 """
 import atexit
 import hashlib
@@ -48,9 +48,7 @@ HERE = Path(__file__).resolve().parent
 SOURCES_FILE = HERE / "datasets" / "case_sources.json"
 ABSENT = "private:absent"
 
-# The three case sources are mixed with equal weight (file finding, topics, real inputs), fixed before any arm was scored. The private cases are
-# taken in the number that gives them their weight beside the file and topic cases already present.
-SOURCE_WEIGHTS = dict(file=1.0, topic=1.0, private=1.0)
+# The weight of this source in the one number is not set here: it is the share the hub's retrieval metric leaves (esoi.toml [builds_on.context_selection.*]).
 # The kinds of private input, as shares of the private cases. These are the committed fallback; when the dataset's manifest states its own
 # input-kind proportions they replace these, so the mix follows how real inputs occur (self-contained 24%, one needed item 52%, several 24%).
 KIND_MIX = dict(none=0.24, single=0.52, several=0.24)
@@ -188,17 +186,15 @@ def load_all(folders):
     return cases
 
 
-def load_cases(other_cases, environ=None):
-    """The private cases for a mix with ``other_cases`` (the file and topic cases): none when no dataset folder is present, else as many as make
-    their ``SOURCE_WEIGHTS`` share, in the manifests' kind proportions."""
+def load_cases(environ=None):
+    """The private cases: none when no dataset folder is present, else every case, taken in the manifests' kind proportions. Their weight beside
+    the hub's cases is the share ``esoi.toml`` gives them, not their number."""
     publish_digest(environ)
     folders = present_folders(environ)
     if not folders:
         return []
-    others = SOURCE_WEIGHTS["file"] + SOURCE_WEIGHTS["topic"]
-    count = round(SOURCE_WEIGHTS["private"] / others * len(other_cases))
     cases = load_all(folders)
-    return mix(cases, kind_shares(folders, cases), count)
+    return mix(cases, kind_shares(folders, cases), len(cases))
 
 
 _SCRATCH = []
@@ -341,6 +337,8 @@ def score_case(fn, case):
     budget = getattr(fn, "budget", TOP_K)
     row = numbers([owner[r] for r in ranked[:budget] if r in owner], case["candidates"])
     meter = getattr(fn, "meter", None)
+    if meter is not None:   # reading the case's candidate items is a source read (priced and bounded by [balance.context_selection.source_access])
+        meter.read(records=len(case["candidates"]), bytes=sum(len(c.get("text") or "") for c in case["candidates"]), calls=1, scope="quest")
     if meter is not None:   # the size of what was selected is the cost of the context
         from context_selection.store_cost import cost_budget
         meter.cost_usd += cost_budget() * min(row["size_chars"] / SIZE_BUDGET_CHARS, 1.0)
