@@ -484,7 +484,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "web_with_support_check": "quest_ai_runner.adapters.web_research"
+   "web_with_support_check": "quest_ai_runner.area_know_the_world"
   }
  },
  "label-context-cards": {

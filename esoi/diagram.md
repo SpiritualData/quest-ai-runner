@@ -91,7 +91,6 @@ flowchart LR
     s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s59
     s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s78
     s2 -->|"The reply text, the routing taken (inline or delegated)..."| s56
-    s2 -->|"The reply text, the routing taken (inline or delegated)..."| s58
     s3 -->|"The resulting quest state and a reply that reports what was..."| s60
     s3 -->|"The resulting quest state and a reply that reports what was..."| s62
     s4 -->|"Observation values carrying text, a path or source label..."| s58
@@ -188,6 +187,7 @@ flowchart LR
     s56 -->|"Each step's view of the request (a carried message list or..."| s60
     s57 -->|"The admitted items with a one-line reason each, and the..."| s0
     s57 -->|"The admitted items with a one-line reason each, and the..."| s56
+    s58 -->|"Findings, each with its source, an evidence-strength label..."| s0
     s59 -->|"A reach verdict for the request (inside, outside, in the..."| s60
     s60 -->|"A current state view for the request's scope with the time..."| s0
     s61 -->|"For a request the representative handles: its standing view..."| s0

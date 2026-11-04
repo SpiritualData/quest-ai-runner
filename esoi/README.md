@@ -99,7 +99,6 @@ flowchart LR
     s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s59
     s1 -->|"A routing decision: one of answer, tool, deep, confirm or..."| s78
     s2 -->|"The reply text, the routing taken (inline or delegated)..."| s56
-    s2 -->|"The reply text, the routing taken (inline or delegated)..."| s58
     s3 -->|"The resulting quest state and a reply that reports what was..."| s60
     s3 -->|"The resulting quest state and a reply that reports what was..."| s62
     s4 -->|"Observation values carrying text, a path or source label..."| s58
@@ -196,6 +195,7 @@ flowchart LR
     s56 -->|"Each step's view of the request (a carried message list or..."| s60
     s57 -->|"The admitted items with a one-line reason each, and the..."| s0
     s57 -->|"The admitted items with a one-line reason each, and the..."| s56
+    s58 -->|"Findings, each with its source, an evidence-strength label..."| s0
     s59 -->|"A reach verdict for the request (inside, outside, in the..."| s60
     s60 -->|"A current state view for the request's scope with the time..."| s0
     s61 -->|"For a request the representative handles: its standing view..."| s0
@@ -238,7 +238,7 @@ flowchart LR
 | `answer-a-turn` | `quest_ai_runner.run("answer-a-turn", 'What should I work on first this week?')` | `orchestrator_turn` | Judge pass rate over the chat quality cases |
 | `operate-a-quest` | `quest_ai_runner.run("operate-a-quest", 'Add a goal to ship the launch note by Friday')` | `qar_orchestrator` | Final quest state against the request over the quest operation cases |
 | `gather-evidence` | `quest_ai_runner.run("gather-evidence", 'NOTES.md')` | `composite` | Retrieval recall of the right document over handbook questions |
-| `search-the-web` | no entry declared | `web_research` | Right-passage rate and search spend over public factual questions |
+| `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | `web_research` | Right-passage rate and search spend over public factual questions |
 | `call-a-model` | `quest_ai_runner.run("call-a-model", ...)` | `multi_provider` | Provider routing, fallback, retry and cost correctness |
 | `run-deep-work` | no entry declared | `subprocess` | Outcome reporting correctness across deep runners |
 | `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | `live_reviewer` | Stop-or-continue verdict accuracy with false stops counted apart |
@@ -291,7 +291,7 @@ flowchart LR
 | `choose-what-to-index` | no entry declared | `risk_gate` | Copies kept out with real material kept in, by review availability |
 | `reason-and-answer` | `quest_ai_runner.run("reason-and-answer", ...)` | `rebuilt_per_step` | Step continuity at cost over multi-step requests |
 | `remember-and-recall` | `quest_ai_runner.run("remember-and-recall", 'rust release')` | `recency_window` | Goal-relevant admission at a precision floor with nothing out of scope |
-| `know-the-world` | no entry declared | `web_with_support_check` | Supported and calibrated answers to world questions |
+| `know-the-world` | `quest_ai_runner.run("know-the-world", 'meditation and attention')` | `web_with_support_check` | Supported and calibrated answers to world questions |
 | `claim-reach` | `quest_ai_runner.run("claim-reach", 'Send the launch note to the whole team')` | `coding_agent_prompt_reach` | Combined world score: goals met, honest reach and receipts, cost, time, context efficiency and safety |
 | `act-as-the-body` | `quest_ai_runner.run("act-as-the-body", 'NOTES.md')` | `card_and_reads` | Account-state consistency across scripted sessions |
 | `hold-the-intents` | `quest_ai_runner.run("hold-the-intents", ...)` | `separate_stores` | Representative long-view carry-through across assigned quests, with nothing outside its branch |
@@ -808,7 +808,7 @@ flowchart LR
 | `remember-and-recall:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
 | `remember-and-recall:score_thresholds` | Score thresholds per source (proposed) |  |  |
 | `remember-and-recall:thresholds_then_judge` | Thresholds with a judge on the borderline (proposed) |  |  |
-| `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [quest_ai_runner/adapters/web_research.py](../quest_ai_runner/adapters/web_research.py) |  |
+| `know-the-world:web_with_support_check` | Web research with the answer's support check (today) | [quest_ai_runner/area_know_the_world.py](../quest_ai_runner/area_know_the_world.py) |  |
 | `know-the-world:research_sources_first` | Host research sources first, then the web (proposed) |  |  |
 | `know-the-world:evidence_weighted` | Findings weighed by a host's evidence-estimation service (proposed) |  |  |
 | `claim-reach:coding_agent_prompt_reach` | Coding agent, reach described in the prompt (today) | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |

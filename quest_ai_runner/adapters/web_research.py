@@ -9,17 +9,25 @@ from __future__ import annotations
 
 import logging
 import os
+import typing
 from typing import Any, Callable, Mapping, Optional
 
-from esoi import implementation
+from esoi import implementation, solution
+from hubofhubs.seats import WorldKnowing
 from hubofhubs.websearch import research as hub_research
 from .web_search_backends import gemini_api_key_from_env, select_search_backend
 
 logger = logging.getLogger("quest-ai-runner.web-research")
 
 
+@solution("search-the-web", kind="event", entry="search", example="latest Rust release")
+@typing.runtime_checkable
+class WebSearching(WorldKnowing, typing.Protocol):
+    """The hub's ``know-the-world`` lines (``describe``, ``search``, ``fetch``) over the live web: snippet-first search through a
+    search backend and a focused read of one page."""
+
+
 @implementation("search-the-web", "web_research")
-@implementation("know-the-world", "web_with_support_check")
 class WebResearchAdapter(hub_research.WebResearchAdapter):
     """The hub's snippet-first search and focused page fetch, declared under QAR's solutions."""
 
