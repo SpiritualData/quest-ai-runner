@@ -3,6 +3,7 @@ cosine over one vector per file card. It re-implements the ranking rather than w
 ``VectorContextAssembler``, so it is a baseline for the semantic arm, not a measurement of the live class
 (``hybrid_union`` wraps that). Uses the same card embed text the production vector arm uses."""
 from context_selection.embedder import embedder
+from context_selection.store_cost import store_charged
 
 ALTERNATIVE = True
 
@@ -23,4 +24,4 @@ def build(meter):  # noqa: ARG001
         q = embed([task])[0]
         sims = mat @ q / (np.linalg.norm(mat, axis=1) * np.linalg.norm(q) + 1e-9)
         return [paths[i] for i in np.argsort(-sims, kind="stable")[:10]]
-    return select
+    return store_charged(select, meter)

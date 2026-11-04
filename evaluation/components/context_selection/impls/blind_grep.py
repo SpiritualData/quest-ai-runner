@@ -2,6 +2,7 @@
 way the store does) appear in its text. No cards, no docstrings, no index: the floor any context layer
 must beat to justify its existence."""
 from quest_ai_runner.adapters.file_context_store import tokenize
+from context_selection.store_cost import store_charged
 
 
 def build(meter):  # noqa: ARG001
@@ -16,4 +17,4 @@ def build(meter):  # noqa: ARG001
         scores = {rel: sum(1 for t in tokens if t in text) for rel, text in texts[key].items()}
         # Ties broken by path so the ranking is deterministic.
         return [rel for rel, s in sorted(scores.items(), key=lambda kv: (-kv[1], kv[0])) if s > 0][:10]
-    return select
+    return store_charged(select, meter, cards=lambda corpus: 0)

@@ -9,6 +9,7 @@ from context_selection.embedder import uncached_embedder
 from hubofhubs.recall.card_repository import card_embed_text
 from esoi import spec_search
 from quest_ai_runner.core.unified_search import solutions_and_problems_with_links
+from context_selection.store_cost import store_charged
 
 
 def build(meter):  # noqa: ARG001
@@ -40,4 +41,4 @@ def build(meter):  # noqa: ARG001
                 if f["path"] not in paths:
                     paths.append(f["path"])
         return paths
-    return select
+    return store_charged(select, meter)

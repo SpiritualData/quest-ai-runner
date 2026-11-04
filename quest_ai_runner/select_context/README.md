@@ -32,7 +32,7 @@ select-context chooses the cards, files and conversations a planner reads before
 
 ## Metrics and their leaders
 
-- `metric-select-context`, Context selection ranking accuracy and card-quality outcome: leader `hybrid_union`, 45 of 63 cases
+- `metric-select-context`, Context selection ranking accuracy and card-quality outcome: leader `blind_grep`, 60 of 123 cases
 - `metric-resolve-references`, Pointer-resolution safety over offline cases: leader `card_resolvers`, 16 of 16 cases
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: leader `solutions_and_problems_with_links`, 14 of 17 cases
 
@@ -90,6 +90,8 @@ select-context chooses the cards, files and conversations a planner reads before
 | `search-cards-and-specs:two_pipelines` | Two pipelines side by side (today) | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
 | `search-cards-and-specs:every_record_a_view` | Every record kind ranked beside cards (planned) |  |  |
 | `search-cards-and-specs:solutions_and_problems_with_links` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
+| `select-context:hub_per_file_symbols` | The hub's per-file card arm | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
+| `select-context:hub_folder_cards` | One card per folder, from the hub's card helpers | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
 
 ### Metrics
 

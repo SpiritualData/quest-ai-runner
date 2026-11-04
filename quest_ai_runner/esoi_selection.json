@@ -828,9 +828,9 @@
  "select-context": {
   "default": "hybrid",
   "evidence": {
-   "detail": "hybrid_union is better than blind_grep (two-sided exact McNemar test, Holm-adjusted p=1.86e-05, 31 of 63 cases disagree); idf_docstrings is exactly equal to hybrid_union on the metric (idf_docstrings 0.714 against hybrid_union 0.714), so hybrid_union stays; solutions_and_problems_with_links is exactly equal to hybrid_union on the metric (solutions_and_problems_with_links 0.714 against hybrid_union 0.714), so hybrid_union stays; hybrid_union is better than vector_bge_small (two-sided exact McNemar test, Holm-adjusted p=0.0226, 18 of 63 cases disagree)",
-   "p": 1.9e-05,
-   "verdict": "TIE"
+   "detail": "beaten by blind_grep: blind_grep is better than hybrid_union (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=3.05e-09, 123 of 123 cases disagree); hybrid_union is better than hub_folder_cards (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.00746, 123 of 123 cases disagree); hybrid_union is better than hub_per_file_symbols (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.55e-14, 55 of 123 cases disagree); hybrid_union is better than idf_docstrings (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.36e-10, 45 of 123 cases disagree); hybrid_union leads solutions_and_problems_with_links (solutions_and_problems_with_links 0.424 against hybrid_union 0.438; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1, 17 of 123 cases disagree); hybrid_union is better than vector_bge_small (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.65e-17, 80 of 123 cases disagree)",
+   "p": 0.0,
+   "verdict": "LOSS"
   },
   "modules": {
    "bm25": "quest_ai_runner.select_context.bm25_content_store",

@@ -4,6 +4,7 @@ always returns a ranking. Zero model calls."""
 import tempfile
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
+from context_selection.store_cost import store_charged
 
 
 def build(meter):  # noqa: ARG001
@@ -22,4 +23,4 @@ def build(meter):  # noqa: ARG001
         ctx = stores[key].assemble(task)
         cards = stores[key]._load_all()
         return [fe["path"] for cid in ctx.card_ids for fe in cards.get(cid, {}).get("files", [])]
-    return select
+    return store_charged(select, meter)
