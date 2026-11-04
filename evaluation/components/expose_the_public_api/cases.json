@@ -393,9 +393,9 @@
   "id": "API-027",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.async_bridge.run_coro_sync is public",
+  "description": "quest_ai_runner.take_in_the_world.async_bridge.run_coro_sync is public",
   "args": {
-   "module": "quest_ai_runner.core.async_bridge",
+   "module": "quest_ai_runner.take_in_the_world.async_bridge",
    "name": "run_coro_sync"
   },
   "expect": {
@@ -408,9 +408,9 @@
   "id": "API-028",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.async_bridge.run_detached is public",
+  "description": "quest_ai_runner.take_in_the_world.async_bridge.run_detached is public",
   "args": {
-   "module": "quest_ai_runner.core.async_bridge",
+   "module": "quest_ai_runner.take_in_the_world.async_bridge",
    "name": "run_detached"
   },
   "expect": {
@@ -1361,9 +1361,9 @@
   "id": "API-091",
   "area": "offline_import",
   "kind": "offline_import",
-  "description": "quest_ai_runner.core.async_bridge imports with every socket call refusing",
+  "description": "quest_ai_runner.take_in_the_world.async_bridge imports with every socket call refusing",
   "args": {
-   "module": "quest_ai_runner.core.async_bridge"
+   "module": "quest_ai_runner.take_in_the_world.async_bridge"
   },
   "expect": {
    "eq": {

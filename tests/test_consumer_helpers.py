@@ -2,7 +2,7 @@
 import threading
 import time
 
-from quest_ai_runner.core.async_bridge import run_coro_sync, run_detached
+from quest_ai_runner.take_in_the_world.async_bridge import run_coro_sync, run_detached
 
 
 def test_run_coro_sync_uses_one_persistent_loop():

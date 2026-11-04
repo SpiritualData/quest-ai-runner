@@ -348,7 +348,7 @@
   },
   "modules": {
    "__init__": "quest_ai_runner",
-   "async_bridge": "quest_ai_runner.core.async_bridge",
+   "async_bridge": "quest_ai_runner.take_in_the_world.async_bridge",
    "package_front_doors": "quest_ai_runner.area_take_in_the_world"
   }
  },

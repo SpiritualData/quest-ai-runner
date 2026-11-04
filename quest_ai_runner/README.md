@@ -72,7 +72,7 @@ Let a person or a program reach the runner from wherever they work and be unders
 - Entry call: `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')`
 - Selected implementation: `ways_in`
 - Metric: Ways in that pass their own metric
-- Implemented by: [`quest_ai_runner/area_take_in_the_world.py`](area_take_in_the_world.py)
+- Implemented by: [`quest_ai_runner/area_take_in_the_world.py`](area_take_in_the_world.py), [`quest_ai_runner/take_in_the_world/__init__.py`](take_in_the_world/__init__.py)
 
 ## Diagram
 

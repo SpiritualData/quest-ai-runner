@@ -113,7 +113,7 @@ flowchart LR
 | `feed-context-sources:update_engine` | Live engine over fake quest channels | [evaluation/components/feed_context_sources/impls/update_engine.py](../../evaluation/components/feed_context_sources/impls/update_engine.py) |  |
 | `receive-input-mid-run:in_memory` | In-memory thread-safe inbox | [quest_ai_runner/core/inbox.py](../core/inbox.py) |  |
 | `expose-the-public-api:__init__` | Package root with front doors | [quest_ai_runner/__init__.py](../__init__.py) |  |
-| `expose-the-public-api:async_bridge` | Long-lived background loop bridge | [quest_ai_runner/core/async_bridge.py](../core/async_bridge.py) |  |
+| `expose-the-public-api:async_bridge` | Long-lived background loop bridge | [quest_ai_runner/take_in_the_world/async_bridge.py](async_bridge.py) |  |
 | `expose-the-public-api:live_surface` | Live package-surface driver | [evaluation/components/expose_the_public_api/impls/live_surface.py](../../evaluation/components/expose_the_public_api/impls/live_surface.py) |  |
 | `learn-by-example:minimal_lane` | Minimal lane example | [examples/minimal_lane.py](../../examples/minimal_lane.py) |  |
 | `learn-by-example:custom_consumer` | Custom consumer configuration example | [examples/custom_consumer.py](../../examples/custom_consumer.py) |  |

@@ -52,6 +52,6 @@ that lives outside the library.
 ## 3. Do not copy library plumbing
 
 Shared helpers belong in the library. Two a consumer would otherwise copy:
-`quest_ai_runner.core.async_bridge` (`run_coro_sync`, `run_detached`: one persistent background loop for
+`quest_ai_runner.take_in_the_world.async_bridge` (`run_coro_sync`, `run_detached`: one persistent background loop for
 sync adapter code calling async I/O) and `quest_ai_runner.core.signature_probe` (`accepted_keywords`,
 `accepted_fields`, `filter_keywords`: drop keywords an older installed library lacks).
