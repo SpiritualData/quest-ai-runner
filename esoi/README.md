@@ -137,7 +137,7 @@ flowchart LR
 - Sub-intent: [Thinking critically by metric](../quest_ai_runner/think_critically/README.md) (Everything the AI does for a person's goals is held to the metric that serves it, and what it says is held to what is known.)
 - Sub-intent: [Watching every run for risk](../quest_ai_runner/watch_for_risk/README.md) (Every run is watched through cheap checks, and a step only a person may take reaches that person with enough detail to decide.)
 - Repository: [top README](../README.md)
-- Records beside the code: [quest_ai_runner](../quest_ai_runner/README.md), [quest_ai_runner/adapters](../quest_ai_runner/adapters/README.md), [quest_ai_runner/core](../quest_ai_runner/core/README.md), [quest_ai_runner/runner](../quest_ai_runner/runner/README.md)
+- Records beside the code: [quest_ai_runner](../quest_ai_runner/README.md), [quest_ai_runner/adapters](../quest_ai_runner/adapters/README.md), [quest_ai_runner/core](../quest_ai_runner/core/README.md), [quest_ai_runner/runner](../quest_ai_runner/runner/README.md), [evaluation/components/evolve_by_metric/impls](../evaluation/components/evolve_by_metric/impls/README.md), [evaluation/components/hub_of_hubs/impls](../evaluation/components/hub_of_hubs/impls/README.md), [evaluation/components/know_the_world/impls](../evaluation/components/know_the_world/impls/README.md), [evaluation/components/model_providers/impls](../evaluation/components/model_providers/impls/README.md), [evaluation/components/overseer_signals/impls](../evaluation/components/overseer_signals/impls/README.md), [evaluation/components/talk_over_a_channel/impls](../evaluation/components/talk_over_a_channel/impls/README.md), [evaluation/components/track_usage_and_cost/impls](../evaluation/components/track_usage_and_cost/impls/README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
@@ -249,11 +249,6 @@ flowchart LR
 | `do-grounded-work:per-consumer-worker` | Per-consumer worker |  |  |
 | `do-grounded-work:agent-framework-with-quest-glue` | Agent framework with Quest glue |  |  |
 | `do-grounded-work:deep-runner-only` | Deep runner only |  |  |
-| `call-a-model:single_provider` | Single flat provider floor | [evaluation/components/model_providers/impls/single_provider.py](../evaluation/components/model_providers/impls/single_provider.py) |  |
-| `talk-over-a-channel:openclaw_bridge` | Fake-gateway conformance arm | [evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py](../evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py) |  |
-| `watch-for-risk:digest_probe` | No-judgement digest probe | [evaluation/components/overseer_signals/impls/digest_probe.py](../evaluation/components/overseer_signals/impls/digest_probe.py) |  |
-| `watch-for-risk:live_model` | Live overseer model arm | [evaluation/components/overseer_signals/impls/live_model.py](../evaluation/components/overseer_signals/impls/live_model.py) |  |
-| `track-usage-and-cost:qar_usage` | Live usage evaluation arm | [evaluation/components/track_usage_and_cost/impls/qar_usage.py](../evaluation/components/track_usage_and_cost/impls/qar_usage.py) |  |
 | `reason-and-answer:append_only_stream` | Carried message stream per request (proposed) |  |  |
 | `reason-and-answer:stream_with_compaction` | Carried stream with compaction (proposed) |  |  |
 | `remember-and-recall:goal_judge` | Small-model judge of every candidate (proposed) |  |  |
@@ -273,10 +268,6 @@ flowchart LR
 | `hold-the-intents:per_intent_cascade` | One view per intent, cascading down (proposed) |  |  |
 | `hold-the-intents:per_rep_assigned_view` | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) |  |  |
 | `justify-model-calls:spec_registry_ablation` | Registry plus per-call ablation against the owner metric (proposed) |  |  |
-| `keep-it-generic:registry_scan` | Registry read together with the code (today) | [evaluation/components/hub_of_hubs/impls/registry_scan.py](../evaluation/components/hub_of_hubs/impls/registry_scan.py) |  |
-| `keep-it-generic:structure_library` | Evolvable-structure library decides (live) | [evaluation/components/evolve_by_metric/impls/structure_library.py](../evaluation/components/evolve_by_metric/impls/structure_library.py) |  |
-| `keep-it-generic:keep_current` | Keep the selection as written (floor) | [evaluation/components/evolve_by_metric/impls/keep_current.py](../evaluation/components/evolve_by_metric/impls/keep_current.py) |  |
-| `know-the-world:memory_only` | Memory only, no research (floor) | [evaluation/components/know_the_world/impls/memory_only.py](../evaluation/components/know_the_world/impls/memory_only.py) |  |
 | `do-grounded-work:library` | quest-ai-runner library | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) | [select_context](select_context/README.md) |
 | `call-a-model:multi_provider` | Prefix-routing multi-provider | [quest_ai_runner/providers.py](../quest_ai_runner/providers.py) |  |
 | `watch-for-risk:overseer` | Digest-driven overseer | [quest_ai_runner/watch_for_risk/area.py](../quest_ai_runner/watch_for_risk/area.py) | [watch_for_risk](watch_for_risk/README.md) |
@@ -304,6 +295,15 @@ flowchart LR
 | `run-queued-tasks:personas` | Configured persona resolver | [quest_ai_runner/runner/personas.py](../quest_ai_runner/runner/personas.py) |  |
 | `run-queued-tasks:quest_folder_sync` | Work-folder sync | [quest_ai_runner/runner/quest_folder_sync.py](../quest_ai_runner/runner/quest_folder_sync.py) |  |
 | `run-queued-tasks:lane` | Shared lane entry point | [quest_ai_runner/runner/lane.py](../quest_ai_runner/runner/lane.py) |  |
+| `keep-it-generic:structure_library` | Evolvable-structure library decides (live) | [evaluation/components/evolve_by_metric/impls/structure_library.py](../evaluation/components/evolve_by_metric/impls/structure_library.py) |  |
+| `keep-it-generic:keep_current` | Keep the selection as written (floor) | [evaluation/components/evolve_by_metric/impls/keep_current.py](../evaluation/components/evolve_by_metric/impls/keep_current.py) |  |
+| `keep-it-generic:registry_scan` | Registry read together with the code (today) | [evaluation/components/hub_of_hubs/impls/registry_scan.py](../evaluation/components/hub_of_hubs/impls/registry_scan.py) |  |
+| `know-the-world:memory_only` | Memory only, no research (floor) | [evaluation/components/know_the_world/impls/memory_only.py](../evaluation/components/know_the_world/impls/memory_only.py) |  |
+| `call-a-model:single_provider` | Single flat provider floor | [evaluation/components/model_providers/impls/single_provider.py](../evaluation/components/model_providers/impls/single_provider.py) |  |
+| `watch-for-risk:digest_probe` | No-judgement digest probe | [evaluation/components/overseer_signals/impls/digest_probe.py](../evaluation/components/overseer_signals/impls/digest_probe.py) |  |
+| `watch-for-risk:live_model` | Live overseer model arm | [evaluation/components/overseer_signals/impls/live_model.py](../evaluation/components/overseer_signals/impls/live_model.py) |  |
+| `talk-over-a-channel:openclaw_bridge` | Fake-gateway conformance arm | [evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py](../evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py) |  |
+| `track-usage-and-cost:qar_usage` | Live usage evaluation arm | [evaluation/components/track_usage_and_cost/impls/qar_usage.py](../evaluation/components/track_usage_and_cost/impls/qar_usage.py) |  |
 
 ### Metrics
 

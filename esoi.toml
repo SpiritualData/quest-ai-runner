@@ -120,7 +120,7 @@ records = "../ai-hub-of-hubs-structure"
 template_version = 4
 # Each solution's records live once, in the folder that holds its code (docs/reference/records-beside-code.md in the esoi repository).
 # The top intent stays in esoi/; each area of QAR is a sub-intent folder of quest_ai_runner/, named by its intent id.
-beside_code = ["quest_ai_runner", "quest_ai_runner/*"]
+beside_code = ["quest_ai_runner", "quest_ai_runner/*", "evaluation/components/*", "evaluation/components/*/impls", "evaluation/components/*/broken", "tests", "scripts", "quest_ai_runner/tools"]
 
 # Public evidence: others' measurements, shown beside our own results and never counted as one. The file is the hub's derived
 # export of its registry (the hub keeps the source of truth); aliases map a candidate to the QAR arm it measures, only where the
