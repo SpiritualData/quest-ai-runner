@@ -1,4 +1,4 @@
-"""Offline tests for ``MCPRetrievalAdapter`` (``adapters/mcp_retrieval_adapter.py``).
+"""Offline tests for ``MCPRetrievalAdapter`` (``act_as_the_body/mcp_retrieval_adapter.py``).
 
 Fully offline: no real ``mcp`` package, no subprocess, no network. ``MCPRetrievalAdapter`` talks to
 an ``MCPClient`` through a small, entirely synchronous surface (``list_tools`` / ``list_resources``
@@ -29,9 +29,9 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.adapters.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from hubofhubs.act.mcp_client import MCPResourceResult, MCPServerSpec, MCPToolResult
-from quest_ai_runner.adapters.mcp_retrieval_adapter import MCPRetrievalAdapter
+from quest_ai_runner.act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter
 from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 
 
@@ -317,7 +317,7 @@ BANNED_REAL_NAMES = (
 
 
 def test_no_real_vendor_name_hardcoded_in_adapter_source():
-    src_path = Path(__file__).resolve().parents[1] / "quest_ai_runner" / "adapters" / "mcp_retrieval_adapter.py"
+    src_path = Path(__file__).resolve().parents[1] / "quest_ai_runner" / "act_as_the_body" / "mcp_retrieval_adapter.py"
     text = src_path.read_text(encoding="utf-8").lower()
     hits = [name for name in BANNED_REAL_NAMES if name in text]
     assert not hits, f"real vendor/org name(s) hardcoded in mcp_retrieval_adapter.py: {hits}"

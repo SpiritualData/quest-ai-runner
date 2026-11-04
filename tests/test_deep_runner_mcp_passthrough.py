@@ -2,7 +2,7 @@
 
   * ``SubprocessGoalRunner`` (core/goal_runner.py) builds ``claude -p ... --mcp-config <path>``
     when ``SubprocessConfig.mcp_config_path`` is set, and omits the flag entirely when unset.
-  * ``AcpDeepRunner`` (adapters/acp_deep_runner.py) passes ``AcpConfig.mcp_servers`` through to the
+  * ``AcpDeepRunner`` (act_as_the_body/acp_deep_runner.py) passes ``AcpConfig.mcp_servers`` through to the
     ACP agent's ``session/new`` call instead of the previously hardcoded ``[]``.
 
 No real ``claude`` binary or ACP agent is spawned in either test.
@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.deep import acp_runner as hub_acp_runner
-from quest_ai_runner.adapters import acp_deep_runner as acp
+from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 

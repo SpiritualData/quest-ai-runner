@@ -1,11 +1,11 @@
-"""CURRENT (opt-in): ``adapters.acp_deep_runner.AcpDeepRunner``, run through ``run_goal`` with its one SDK/process
+"""CURRENT (opt-in): ``act_as_the_body.acp_deep_runner.AcpDeepRunner``, run through ``run_goal`` with its one SDK/process
 seam (``open_agent_connection``) replaced by a scripted ACP connection (message chunks, a stop reason, a
 missing agent, a crash). Only that seam is faked. Zero model calls."""
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 from deep_runner.support import normalise
-from quest_ai_runner.adapters import acp_deep_runner as acp
+from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
 from hubofhubs.deep import acp_runner as hub_acp
 
 STOP_FOR_EXIT = {0: "end_turn"}

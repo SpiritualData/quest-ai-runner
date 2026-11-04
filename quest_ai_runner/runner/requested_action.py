@@ -110,7 +110,7 @@ def run_requested_action(task: Dict[str, Any], registry: Any, mcp_servers: Seque
                              status=result.status, decision_id=str(data.get("decision_id") or data.get("decisionId") or ""))
     alias = name.split(":", 1)[0]
     server = next(s for s in mcp_servers if getattr(s, "alias", None) == alias)
-    from ..adapters.mcp_write_adapter import MCPWriteAdapter
+    from ..act_as_the_body.mcp_write_adapter import MCPWriteAdapter
     written = MCPWriteAdapter(alias=server.alias, spec=server, writable_tools=server.writable_tools).write_operation(name, args)
     if written.ok:
         return ActionOutcome(True, f"Ran {name}.")

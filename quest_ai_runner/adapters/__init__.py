@@ -1,31 +1,24 @@
 """Reference adapter implementations.
 
 These satisfy the ports in ``quest_ai_runner.core.adapters_*`` (and ``hubofhubs.ports``); a consumer wires the ones it
-needs into a ``RunnerConfig``. This package is the public import path for them
-(``from quest_ai_runner.adapters import FilesAdapter, CompositeRetrievalAdapter``). Each class says what it is in its own
-module docstring, and ``esoi/COMPONENTS.md`` lists them by role: retrieval (files, remote files, cached DB, Claude
-sessions, Google Chat and Drive, Notion, Quest, MCP), model providers (Anthropic, Gemini, OpenAI, DeepSeek,
-Claude CLI), card stores (file, Qdrant, Quest API), the ACP deep runner
-and the file writer. The fast-edit and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). The optional extra ``qdrant`` is
-imported behind a guard, so a name whose extra is missing is ``None``. An adapter that only one area uses lives in that area's
-folder (``quest_ai_runner/<intent id>/``, for example ``know_the_world`` for web research and ``select_context`` for the context assemblers) and is imported from there.
+needs into a ``RunnerConfig``. This package is the import path for the adapters that more than one area, or the generic
+core, uses (``from quest_ai_runner.adapters import FilesAdapter``). An adapter that only one area uses lives in that area's
+folder (``quest_ai_runner/<intent id>/``: ``know_the_world`` for web research, ``select_context`` for the context assemblers,
+``act_as_the_body`` for the retrieval adapters, the writer, the ACP runner and the Quest, Notion and Drive sources) and is imported
+from there. Each class says what it is in its own module docstring, and ``esoi/COMPONENTS.md`` lists them by role. The fast-edit
+and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). The optional extra ``qdrant`` is
+imported behind a guard, so a name whose extra is missing is ``None``.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
 """
-from .acp_deep_runner import AcpConfig, AcpDeepRunner
-from .mcp_retrieval_adapter import MCPRetrievalAdapter
-from .cached_db_adapter import CachedDbAdapter
 from hubofhubs.websearch.cache import WebCache, normalize_query
 from hubofhubs.websearch.page_extract import check_url_is_safe, extract_main_text
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
 from .google_chat_adapter import GoogleChatAdapter, ChatSpaces, static_token_provider, service_account_token_provider
-from .notion_adapter import NotionAdapter
-from .google_drive_adapter import GoogleDriveAdapter
 from .drive_comments import COMMENT_WRITE_SCOPES, DriveComments, unanswered
 from .inbound_mail import InboundMail, is_bulk_mail, refuses_as_inbound_mailbox
-from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
 from .feedback_processor import FeedbackProcessor
@@ -36,12 +29,9 @@ from hubofhubs.recall.card_repository import (
 )
 from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
-from .remote_files_adapter import RemoteFilesAdapter
 from .private_link_web import PrivateLinkWebResearch
-from .files_writer import FilesWriter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .quest_guidance_loader import QuestGuidanceLoader
-from .quest_retrieval_adapter import QuestRetrievalAdapter
 from .quest_api_card_repository import QuestApiCardRepository, QuestApiCardVectorStore
 from hubofhubs.recall.reference_resolver import ReferenceResolver, NoteResolver, build_resolver_registry, collect_reference_resolvers
 

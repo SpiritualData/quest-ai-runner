@@ -17,14 +17,15 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.adapters import CompositeRetrievalAdapter, FilesAdapter
+from quest_ai_runner.adapters import FilesAdapter
+from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.adapters.files_server import (
     FileOperations,
     build_server,
     name_is_secret,
     redact,
 )
-from quest_ai_runner.adapters.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.act_as_the_body.remote_files_adapter import RemoteFilesAdapter
 
 TOKEN = "t" * 12 + "-test-token-0123456789"
 ALIAS = "box"

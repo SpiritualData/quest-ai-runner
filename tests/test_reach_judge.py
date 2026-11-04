@@ -747,7 +747,7 @@ def test_an_adapter_without_the_read_or_a_failing_one_changes_nothing():
 
 
 def test_the_composite_asks_only_the_first_member_that_offers_the_update_read():
-    from quest_ai_runner.adapters import CompositeRetrievalAdapter
+    from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
     first, second = UpdatesRetrieval(), UpdatesRetrieval()
     composite = CompositeRetrievalAdapter([StubRetrieval({}), first, second])
     assert composite.own_updates().text == "One task needs you."

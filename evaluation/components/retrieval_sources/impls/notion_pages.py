@@ -5,7 +5,7 @@ of the page (properties plus block text). A question answered only by a section 
 located, which is the real behaviour of a row-level index."""
 import re
 
-from quest_ai_runner.adapters.notion_adapter import NotionAdapter, static_token_provider
+from quest_ai_runner.act_as_the_body.notion_adapter import NotionAdapter, static_token_provider
 
 from retrieval import policy
 from retrieval.fakes import NOTION_DB, network, notion_router

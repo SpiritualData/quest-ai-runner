@@ -167,7 +167,7 @@ def test_a_connector_action_is_refused_unless_the_server_is_write_enabled():
 
 
 def test_a_connector_action_runs_through_the_write_adapter(monkeypatch):
-    from quest_ai_runner.adapters import mcp_write_adapter
+    from quest_ai_runner.act_as_the_body import mcp_write_adapter
     from quest_ai_runner.runner import action_catalog
     from hubofhubs.ports.deep import WriteResult
     seen = {}

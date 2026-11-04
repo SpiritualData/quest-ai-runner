@@ -384,15 +384,15 @@
    "verdict": "WIN"
   },
   "modules": {
-   "cached_db": "quest_ai_runner.adapters.cached_db_adapter",
-   "composite": "quest_ai_runner.adapters.composite_retrieval_adapter",
+   "cached_db": "quest_ai_runner.act_as_the_body.cached_db_adapter",
+   "composite": "quest_ai_runner.act_as_the_body.composite_retrieval_adapter",
    "files": "quest_ai_runner.adapters.files_adapter",
    "google_chat": "quest_ai_runner.adapters.google_chat_adapter",
-   "google_drive": "quest_ai_runner.adapters.google_drive_adapter",
-   "mcp": "quest_ai_runner.adapters.mcp_retrieval_adapter",
-   "notion": "quest_ai_runner.adapters.notion_adapter",
-   "quest": "quest_ai_runner.adapters.quest_retrieval_adapter",
-   "remote_files_adapter": "quest_ai_runner.adapters.remote_files_adapter"
+   "google_drive": "quest_ai_runner.act_as_the_body.google_drive_adapter",
+   "mcp": "quest_ai_runner.act_as_the_body.mcp_retrieval_adapter",
+   "notion": "quest_ai_runner.act_as_the_body.notion_adapter",
+   "quest": "quest_ai_runner.act_as_the_body.quest_retrieval_adapter",
+   "remote_files_adapter": "quest_ai_runner.act_as_the_body.remote_files_adapter"
   }
  },
  "ground-in-intent": {
@@ -737,11 +737,11 @@
    "verdict": "TIE"
   },
   "modules": {
-   "acp": "quest_ai_runner.adapters.acp_deep_runner",
+   "acp": "quest_ai_runner.act_as_the_body.acp_deep_runner",
    "fast_edit": "quest_ai_runner.config_resolvers",
    "lean_guarded": "quest_ai_runner.core.deep_launch",
    "mcp_write": "quest_ai_runner.config_resolvers",
-   "stream_json": "quest_ai_runner.core.goal_runner_stream",
+   "stream_json": "quest_ai_runner.act_as_the_body.goal_runner_stream",
    "subprocess": "quest_ai_runner.core.goal_runner"
   }
  },
@@ -961,7 +961,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "files": "quest_ai_runner.adapters.files_writer"
+   "files": "quest_ai_runner.act_as_the_body.files_writer"
   }
  },
  "write-through-mcp": {
@@ -972,7 +972,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "mcp": "quest_ai_runner.adapters.mcp_write_adapter"
+   "mcp": "quest_ai_runner.act_as_the_body.mcp_write_adapter"
   }
  }
 }

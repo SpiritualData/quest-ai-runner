@@ -14,7 +14,7 @@ from esoi import implementation
 from hubofhubs.deep.acp_config import AcpSettings
 from hubofhubs.deep.acp_runner import AcpDeepRunner as HubAcpDeepRunner, acp_model_family  # noqa: F401
 
-from .acp_deep_runner_config import (  # noqa: F401  (kept importable from here)
+from ..adapters.acp_deep_runner_config import (  # noqa: F401  (kept importable from here)
     ALLOW,
     AcpConfig,
     HUMAN,
@@ -27,7 +27,7 @@ from .acp_deep_runner_config import (  # noqa: F401  (kept importable from here)
     resolve_node_binary,
     select_option,
 )
-from .acp_deep_runner_protocol import (  # noqa: F401  (kept importable from here)
+from ..adapters.acp_deep_runner_protocol import (  # noqa: F401  (kept importable from here)
     ACP_MODEL_FAMILIES,
     ACP_PROTOCOL_VERSION,
     AcpUnavailable,
@@ -57,7 +57,7 @@ from .acp_deep_runner_protocol import (  # noqa: F401  (kept importable from her
     truncate,
     usage_from_prompt_response,
 )
-from .acp_deep_runner_session import AcpRun, AcpSessionClient, open_agent_connection  # noqa: F401
+from ..adapters.acp_deep_runner_session import AcpRun, AcpSessionClient, open_agent_connection  # noqa: F401
 
 
 @implementation("run-deep-work", "acp")

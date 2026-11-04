@@ -8,7 +8,7 @@ import re
 
 from hubofhubs.act import mcp_client
 from hubofhubs.act.mcp_client import MCPServerSpec
-from quest_ai_runner.adapters.mcp_retrieval_adapter import MCPRetrievalAdapter
+from quest_ai_runner.act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter
 
 from retrieval import policy
 from retrieval.fakes import mcp_session

@@ -3,7 +3,7 @@ package = "quest_ai_runner"
 # An area folder (quest_ai_runner/<intent id>/, listed here once it holds code) sits above core and adapters, at the rank of runner: core and
 # adapters never import an area folder, so the brain stays free of Quest; an area folder's modules import core, adapters and runner, and are
 # imported by the runner and the configuration. A file in an area folder is checked as that area, whatever layer its component row names.
-layers = ["core", "adapters", ["runner", "keep_it_generic", "know_the_world", "watch_for_risk", "think_critically", "select_context"], "config", ["cli", "tools"]]
+layers = ["core", "adapters", ["runner", "keep_it_generic", "know_the_world", "watch_for_risk", "think_critically", "select_context", "act_as_the_body"], "config", ["cli", "tools"]]
 other_layers = ["prompts", "docs", "evaluation", "examples", "scripts", "tests"]
 max_lines = 1500
 # Where the maintainers keep the skill that defines the intent template; absent elsewhere, then S27 is skipped

@@ -71,7 +71,7 @@ def attach_files(case, orchestrator):
         return None
     import tempfile
     from pathlib import Path
-    from quest_ai_runner.adapters.composite_retrieval_adapter import CompositeRetrievalAdapter
+    from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
     from quest_ai_runner.adapters.files_adapter import FilesAdapter
     root = Path(tempfile.mkdtemp(prefix="e2e_files_"))
     for rel, text in files.items():

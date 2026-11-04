@@ -18,7 +18,7 @@ Takes a person's queued requests to a reported outcome, so they run on time with
 - Entry call: `quest_ai_runner.run("run-queued-tasks", 'team-1')`
 - Selected implementation: `qar_runner`
 - Metric: Task lifecycle correctness over offline cases
-- Implemented by: [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/runner/__init__.py`](runner/__init__.py), [`quest_ai_runner/runner/action_catalog.py`](runner/action_catalog.py), [`quest_ai_runner/runner/auto_followup.py`](runner/auto_followup.py), [`quest_ai_runner/runner/channel_runner.py`](runner/channel_runner.py), [`quest_ai_runner/runner/channel_session.py`](runner/channel_session.py), [`quest_ai_runner/runner/config_wiring.py`](runner/config_wiring.py), [`quest_ai_runner/runner/executor.py`](runner/executor.py) and 31 more
+- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/runner/__init__.py`](runner/__init__.py), [`quest_ai_runner/runner/action_catalog.py`](runner/action_catalog.py), [`quest_ai_runner/runner/auto_followup.py`](runner/auto_followup.py), [`quest_ai_runner/runner/channel_runner.py`](runner/channel_runner.py), [`quest_ai_runner/runner/channel_session.py`](runner/channel_session.py), [`quest_ai_runner/runner/config_wiring.py`](runner/config_wiring.py) and 32 more
 
 ## Mind: one goal-focused working stream per request (`reason-and-answer`)
 
@@ -36,7 +36,7 @@ Lets a person trust what the AI says about their own account and about what it c
 - Entry call: `quest_ai_runner.run("act-as-the-body", 'NOTES.md')`
 - Selected implementation: `card_and_reads`
 - Metric: Account-state consistency across scripted sessions
-- Implemented by: [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/core/orchestrator.py`](core/orchestrator.py), [`quest_ai_runner/core/orchestrator_answering.py`](core/orchestrator_answering.py), [`quest_ai_runner/core/orchestrator_capabilities.py`](core/orchestrator_capabilities.py), [`quest_ai_runner/core/orchestrator_cards.py`](core/orchestrator_cards.py), [`quest_ai_runner/core/orchestrator_constants.py`](core/orchestrator_constants.py), [`quest_ai_runner/core/orchestrator_decide_tool.py`](core/orchestrator_decide_tool.py), [`quest_ai_runner/core/orchestrator_decisions.py`](core/orchestrator_decisions.py) and 22 more
+- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/core/orchestrator.py`](core/orchestrator.py), [`quest_ai_runner/core/orchestrator_answering.py`](core/orchestrator_answering.py), [`quest_ai_runner/core/orchestrator_capabilities.py`](core/orchestrator_capabilities.py), [`quest_ai_runner/core/orchestrator_cards.py`](core/orchestrator_cards.py), [`quest_ai_runner/core/orchestrator_constants.py`](core/orchestrator_constants.py), [`quest_ai_runner/core/orchestrator_decide_tool.py`](core/orchestrator_decide_tool.py) and 23 more
 
 ## Higher mind: an AI representative's standing view across its assigned quests, placed in the intent hierarchy (`hold-the-intents`)
 
@@ -63,7 +63,7 @@ access-quest-operations
 - Entry call: `quest_ai_runner.run("access-quest-operations", 'quest-id')`
 - Selected implementation: `quest_client`
 - Metric: none yet
-- Implemented by: [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py)
+- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py)
 
 ## take-in-the-world: the ways a request reaches QAR (`take-in-the-world`)
 

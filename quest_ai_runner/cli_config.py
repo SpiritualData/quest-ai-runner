@@ -12,11 +12,8 @@ import typing
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .adapters import (
-    ClaudeConversationsAdapter,
-    CompositeRetrievalAdapter,
-    FilesAdapter,
-)
+from .adapters import ClaudeConversationsAdapter, FilesAdapter
+from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from esoi import implementation, solution
 from hubofhubs.ports.model import ModelProvider
 from hubofhubs.seats import ModelCalling

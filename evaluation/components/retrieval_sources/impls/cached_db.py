@@ -3,7 +3,7 @@ edge) is the only fake: it filters rows by a regex on ``text`` or an exact ``id`
 term; ``read`` is a query filtered to the row id, as the adapter has no per-row read of its own."""
 import re
 
-from quest_ai_runner.adapters.cached_db_adapter import CachedDbAdapter
+from quest_ai_runner.act_as_the_body.cached_db_adapter import CachedDbAdapter
 
 from retrieval import policy
 from retrieval.world import Lazy, markdown

@@ -31,7 +31,7 @@ from typing import Optional
 from esoi import implementation
 from esoi.requirements import env
 from hubofhubs.ports.deep import FileWriterBase, WriteResult
-from .files_adapter import _BINARY_EXTS, resolve_in_tree
+from ..adapters.files_adapter import _BINARY_EXTS, resolve_in_tree
 
 _log = logging.getLogger("quest-ai-runner.files_writer")
 

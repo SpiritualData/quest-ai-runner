@@ -34,7 +34,7 @@ sources and change that shape, so moving the pin is a deliberate change with its
 Wire it into a CompositeRetrievalAdapter alongside the local corpus::
 
     from quest_ai_runner.adapters import CompositeRetrievalAdapter, FilesAdapter, NotionAdapter
-    from quest_ai_runner.adapters.notion_adapter import env_token_provider
+    from quest_ai_runner.act_as_the_body.notion_adapter import env_token_provider
 
     notion = NotionAdapter(
         token_provider=env_token_provider("NOTION_TOKEN"),

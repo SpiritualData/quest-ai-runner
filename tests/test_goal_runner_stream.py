@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hubofhubs.deep import stream_runner as hub_stream
-from quest_ai_runner.core import goal_runner_stream
+from quest_ai_runner.act_as_the_body import goal_runner_stream
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.core.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.act_as_the_body.goal_runner_stream import StreamJsonGoalRunner
 from hubofhubs.ports.control import ControlMessage, RunControl
 
 REPO_ROOT = str(Path(__file__).resolve().parents[1])

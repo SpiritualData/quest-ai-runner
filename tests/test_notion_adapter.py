@@ -20,8 +20,8 @@ import urllib.error
 
 import pytest
 
-from quest_ai_runner.adapters import notion_adapter as notion_module
-from quest_ai_runner.adapters.notion_adapter import (
+from quest_ai_runner.act_as_the_body import notion_adapter as notion_module
+from quest_ai_runner.act_as_the_body.notion_adapter import (
     NOTION_VERSION,
     NotionAdapter,
     NotionError,

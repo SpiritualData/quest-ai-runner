@@ -110,7 +110,7 @@ def _build_notion(block: Dict[str, Any]) -> Any:
     read lazily on every request (so a rotated one is picked up) and never logged.
     """
     try:
-        from .adapters.notion_adapter import (
+        from .act_as_the_body.notion_adapter import (
             NotionAdapter, env_token_provider, file_token_provider, normalize_id)
     except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
         _log.warning("notion: channel unavailable (%s)", e)

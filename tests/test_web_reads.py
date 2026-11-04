@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Union
 
-from quest_ai_runner.adapters import CompositeRetrievalAdapter
+from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
 from quest_ai_runner.core.adapters_values import Observation

@@ -43,7 +43,7 @@ Two first-class context channels, both generic, both off unless configured, both
 
 | | `NotionAdapter` | `GoogleChatAdapter` |
 |---|---|---|
-| module | `adapters/notion_adapter.py` | `adapters/google_chat_adapter.py` |
+| module | `act_as_the_body/notion_adapter.py` | `adapters/google_chat_adapter.py` |
 | reads | configured databases (`database_ids`: alias to id): rows, pages, block text | configured spaces (`space_names`): threads and messages |
 | auth | injected `token_provider` (`env_token_provider("NAME")`, `file_token_provider(path)`, `static_token_provider(t)`) | injected; `service_account_token_provider` for a Workspace |
 | HTTP | stdlib `urllib`, `Notion-Version` pinned (`NOTION_VERSION`) | stdlib `urllib` |

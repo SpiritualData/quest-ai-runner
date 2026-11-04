@@ -130,7 +130,7 @@ def connector_operations(mcp_servers: Sequence[Any]) -> List[Dict[str, Any]]:
         if not getattr(spec, "writable_tools", None):
             continue
         try:
-            from ..adapters.mcp_write_adapter import MCPWriteAdapter
+            from ..act_as_the_body.mcp_write_adapter import MCPWriteAdapter
             ops.extend(MCPWriteAdapter(alias=spec.alias, spec=spec, writable_tools=spec.writable_tools).list_writable_operations())
         except Exception:  # noqa: BLE001 -- one dead connector never stops the rest from publishing
             log.info("connector %s: operations not listed", getattr(spec, "alias", "?"), exc_info=True)

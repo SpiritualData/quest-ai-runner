@@ -85,7 +85,7 @@ def wire_web_research(cfg: Any) -> None:
                 web_model = _wreg.resolve_tier(web_tier)
                 if web_model and supports(web_model):
                     from .know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
-                    from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+                    from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
                     try:
                         _wmax = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
                     except ValueError:
@@ -109,12 +109,12 @@ def wire_web_research(cfg: Any) -> None:
 def wire_mcp_and_channels(cfg: Any) -> None:
     # Generic MCP (Model Context Protocol) servers -- fold each configured MCPServerSpec into the
     # retrieval stack as its own namespaced MCPRetrievalAdapter (read-only foundation phase; see
-    # adapters/mcp_client.py + adapters/mcp_retrieval_adapter.py). Same fold-into-composite pattern
+    # adapters/mcp_client.py + act_as_the_body/mcp_retrieval_adapter.py). Same fold-into-composite pattern
     # as the native web-search wiring just above, not a parallel mechanism.
     if cfg.mcp_servers:
         try:
-            from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
-            from .adapters.mcp_retrieval_adapter import MCPRetrievalAdapter as _MCPRA
+            from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+            from .act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter as _MCPRA
 
             mcp_adapters = [
                 _MCPRA(alias=spec.alias, spec=spec, allowed_tools=spec.allowed_tools)

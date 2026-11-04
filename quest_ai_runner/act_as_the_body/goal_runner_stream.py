@@ -23,7 +23,7 @@ from hubofhubs.deep.stream_runner import (  # noqa: F401  (same objects, old imp
     user_line,
 )
 
-from .goal_runner import SubprocessConfig, SubprocessGoalRunner
+from ..core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 
 @implementation("run-deep-work", "stream_json")

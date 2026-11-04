@@ -2,7 +2,7 @@
 ``QAR_REQUESTER_USER_ID``; an unknown requester clears the variable instead of inheriting one."""
 import subprocess
 
-from quest_ai_runner.adapters.acp_deep_runner import AcpDeepRunner
+from quest_ai_runner.act_as_the_body.acp_deep_runner import AcpDeepRunner
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.orchestrator_capabilities import run_goal_accepts_requester_user_id
 from quest_ai_runner.core.requester import (REQUESTER_ENV, apply_requester_env,

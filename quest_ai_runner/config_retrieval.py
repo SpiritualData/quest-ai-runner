@@ -21,7 +21,7 @@ def fold_into_retrieval(cfg: RunnerConfig, adapters: List[Any]) -> None:
     Idempotent (an adapter already in the stack is not added twice), and the same fold-in the web
     and MCP wiring use rather than a parallel mechanism.
     """
-    from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as CRA
+    from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as CRA
 
     existing = list(cfg.retrieval.adapters) if isinstance(cfg.retrieval, CRA) else (
         [cfg.retrieval] if cfg.retrieval is not None else [])
@@ -87,7 +87,7 @@ def _retrieval_has_web_search(retrieval) -> bool:
         return False
     try:
         from .know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
-        from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+        from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
     except Exception:  # noqa: BLE001
         return False
     if isinstance(retrieval, _PWSA):
@@ -155,7 +155,7 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
     if not web and retrieval is not None:
         try:
             from .know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
-            from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+            from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
 
             def _is_web(a) -> bool:
                 return isinstance(a, _PWSA)
@@ -190,7 +190,8 @@ def get_retrieval_adapter(cfg: RunnerConfig) -> Optional[RetrievalAdapter]:
 
     # Quest is configured; add QuestRetrievalAdapter to the stack
     try:
-        from quest_ai_runner.adapters import CompositeRetrievalAdapter, QuestRetrievalAdapter
+        from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+        from quest_ai_runner.act_as_the_body.quest_retrieval_adapter import QuestRetrievalAdapter
         from quest_ai_runner.runner.quest_client import QuestClient
 
         # Create a Quest client for the retrieval adapter

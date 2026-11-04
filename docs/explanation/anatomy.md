@@ -17,7 +17,7 @@ flowchart TB
   CT["Critical thinking<br/>enforces ESOI on every request<br/>think-critically<br/>core/goal_metrics.py"]
   OV["Overseer<br/>risk check<br/>watch-for-risk<br/>core/overseer.py"]
   BODY["Body<br/>acts inside Quest<br/>act-as-the-body<br/>runner/quest_client.py"]
-  WO["World out<br/>acts outside Quest<br/>claim-reach<br/>adapters/acp_deep_runner.py"]
+  WO["World out<br/>acts outside Quest<br/>claim-reach<br/>act_as_the_body/acp_deep_runner.py"]
   WI --> SUB --> MIND --> CT --> OV
   OV --> BODY
   OV --> WO
@@ -88,7 +88,7 @@ The table is generated from the `solutions.csv` and `metrics.csv` files of the r
 | Critical thinking | `quest_ai_runner/core/goal_metrics.py` | `think-critically` | `metric-think-critically` | arm built, selected: deep_runs_only |
 | Overseer | `quest_ai_runner/core/overseer.py` | `watch-for-risk` | `metric-watch-a-run` | arm built, selected: overseer |
 | Body | `quest_ai_runner/runner/quest_client.py` | `act-as-the-body` | `metric-act-as-the-body` | arm built, selected: card_and_reads |
-| World (act) | `quest_ai_runner/adapters/acp_deep_runner.py` | `claim-reach` | `metric-claim-reach` | arm built, selected: coding_agent_prompt_reach |
+| World (act) | `quest_ai_runner/act_as_the_body/acp_deep_runner.py` | `claim-reach` | `metric-claim-reach` | arm built, selected: coding_agent_prompt_reach |
 | Higher mind | `quest_ai_runner/runner/personas.py` | `hold-the-intents` | `metric-hold-the-long-view` | arm built, selected: separate_stores |
 | Rep selection | `quest_ai_runner/runner/personas.py` | `select-a-rep` | `metric-select-a-rep` | arm built, selected: persona_resolver_precedence |
 <!-- anatomy-table:end -->

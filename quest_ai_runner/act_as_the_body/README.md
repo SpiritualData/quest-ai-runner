@@ -107,26 +107,26 @@ flowchart LR
 | `operate-a-quest:qar_orchestrator` | Planner-only orchestration | [quest_ai_runner/area_act_as_the_body.py](../area_act_as_the_body.py) |  |
 | `operate-a-quest:direct_tool_call` | Direct tool-call ablation | [evaluation/components/quest_ops/impls/direct_tool_call.py](../../evaluation/components/quest_ops/impls/direct_tool_call.py) |  |
 | `gather-evidence:files` | Local file tree reader | [quest_ai_runner/adapters/files_adapter.py](../adapters/files_adapter.py) |  |
-| `gather-evidence:cached_db` | Cached live-database reader | [quest_ai_runner/adapters/cached_db_adapter.py](../adapters/cached_db_adapter.py) |  |
-| `gather-evidence:composite` | Parallel multi-source composite | [quest_ai_runner/adapters/composite_retrieval_adapter.py](../adapters/composite_retrieval_adapter.py) |  |
-| `gather-evidence:mcp` | MCP server reader | [quest_ai_runner/adapters/mcp_retrieval_adapter.py](../adapters/mcp_retrieval_adapter.py) |  |
-| `gather-evidence:remote_files_adapter` | Remote file server reader | [quest_ai_runner/adapters/remote_files_adapter.py](../adapters/remote_files_adapter.py) |  |
-| `gather-evidence:notion` | Notion database reader | [quest_ai_runner/adapters/notion_adapter.py](../adapters/notion_adapter.py) |  |
-| `gather-evidence:google_drive` | Drive document reader | [quest_ai_runner/adapters/google_drive_adapter.py](../adapters/google_drive_adapter.py) |  |
+| `gather-evidence:cached_db` | Cached live-database reader | [quest_ai_runner/act_as_the_body/cached_db_adapter.py](cached_db_adapter.py) |  |
+| `gather-evidence:composite` | Parallel multi-source composite | [quest_ai_runner/act_as_the_body/composite_retrieval_adapter.py](composite_retrieval_adapter.py) |  |
+| `gather-evidence:mcp` | MCP server reader | [quest_ai_runner/act_as_the_body/mcp_retrieval_adapter.py](mcp_retrieval_adapter.py) |  |
+| `gather-evidence:remote_files_adapter` | Remote file server reader | [quest_ai_runner/act_as_the_body/remote_files_adapter.py](remote_files_adapter.py) |  |
+| `gather-evidence:notion` | Notion database reader | [quest_ai_runner/act_as_the_body/notion_adapter.py](notion_adapter.py) |  |
+| `gather-evidence:google_drive` | Drive document reader | [quest_ai_runner/act_as_the_body/google_drive_adapter.py](google_drive_adapter.py) |  |
 | `gather-evidence:google_chat` | Chat conversation reader | [quest_ai_runner/adapters/google_chat_adapter.py](../adapters/google_chat_adapter.py) |  |
-| `gather-evidence:quest` | Quest API context reader | [quest_ai_runner/adapters/quest_retrieval_adapter.py](../adapters/quest_retrieval_adapter.py) |  |
+| `gather-evidence:quest` | Quest API context reader | [quest_ai_runner/act_as_the_body/quest_retrieval_adapter.py](quest_retrieval_adapter.py) |  |
 | `run-deep-work:subprocess` | Subprocess goal runner | [quest_ai_runner/core/goal_runner.py](../core/goal_runner.py) |  |
-| `run-deep-work:acp` | Agent-protocol deep runner | [quest_ai_runner/adapters/acp_deep_runner.py](../adapters/acp_deep_runner.py) |  |
+| `run-deep-work:acp` | Agent-protocol deep runner | [quest_ai_runner/act_as_the_body/acp_deep_runner.py](acp_deep_runner.py) |  |
 | `run-deep-work:fast_edit` | One-call fast file editor | [quest_ai_runner/config_resolvers.py](../config_resolvers.py) |  |
 | `run-deep-work:mcp_write` | One-call MCP operation runner | [quest_ai_runner/config_resolvers.py](../config_resolvers.py) |  |
 | `run-deep-work:subprocess_runner` | Subprocess runner scenarios | [evaluation/components/deep_runner/impls/subprocess_runner.py](../../evaluation/components/deep_runner/impls/subprocess_runner.py) |  |
 | `run-deep-work:acp_runner` | Agent-protocol runner scenarios | [evaluation/components/deep_runner/impls/acp_runner.py](../../evaluation/components/deep_runner/impls/acp_runner.py) |  |
 | `run-deep-work:goal_contract` | Goal contract rules check | [evaluation/components/deep_run/impls/goal_contract.py](../../evaluation/components/deep_run/impls/goal_contract.py) |  |
-| `write-files:files` | Contained backed-up writer | [quest_ai_runner/adapters/files_writer.py](../adapters/files_writer.py) |  |
+| `write-files:files` | Contained backed-up writer | [quest_ai_runner/act_as_the_body/files_writer.py](files_writer.py) |  |
 | `write-files:bounded_writer` | Scratch-tree boundary check | [evaluation/components/write_files/impls/bounded_writer.py](../../evaluation/components/write_files/impls/bounded_writer.py) |  |
-| `write-through-mcp:mcp` | MCP operation writer | [quest_ai_runner/adapters/mcp_write_adapter.py](../adapters/mcp_write_adapter.py) |  |
+| `write-through-mcp:mcp` | MCP operation writer | [quest_ai_runner/act_as_the_body/mcp_write_adapter.py](mcp_write_adapter.py) |  |
 | `write-through-mcp:allowlist_writer` | Fake-client allowlist check | [evaluation/components/write_through_mcp/impls/allowlist_writer.py](../../evaluation/components/write_through_mcp/impls/allowlist_writer.py) |  |
-| `run-deep-work:stream_json` | Persistent stream-json runner | [quest_ai_runner/core/goal_runner_stream.py](../core/goal_runner_stream.py) |  |
+| `run-deep-work:stream_json` | Persistent stream-json runner | [quest_ai_runner/act_as_the_body/goal_runner_stream.py](goal_runner_stream.py) |  |
 | `claim-reach:coding_agent_prompt_reach` | Coding agent, reach described in the prompt (today) | [quest_ai_runner/area_act_as_the_body.py](../area_act_as_the_body.py) |  |
 | `claim-reach:coding_agent_reach_judge` | Coding agent with the host reach summary and reach judge (built, off by default) | [quest_ai_runner/core/reach_judge.py](../core/reach_judge.py) |  |
 | `claim-reach:coding_agent_declared_inventory` | Coding agent with one declared inventory and receipts (proposed) |  |  |

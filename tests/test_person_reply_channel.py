@@ -479,7 +479,7 @@ BRIEF = {"task_id": "atask_1", "title": "Weekly reading brief", "status": "done"
 
 
 def adapter_for(tasks):
-    from quest_ai_runner.adapters.quest_retrieval_adapter import QuestRetrievalAdapter
+    from quest_ai_runner.act_as_the_body.quest_retrieval_adapter import QuestRetrievalAdapter
     return QuestRetrievalAdapter(TaskClient(tasks))
 
 
@@ -507,7 +507,7 @@ def test_a_task_that_is_not_there_is_said_plainly_not_invented():
 
 
 def test_a_report_sized_result_is_truncated_rather_than_flooding_the_run():
-    from quest_ai_runner.adapters.quest_retrieval_adapter import QuestRetrievalAdapter
+    from quest_ai_runner.act_as_the_body.quest_retrieval_adapter import QuestRetrievalAdapter
 
     huge = dict(BRIEF, result="x" * (QuestRetrievalAdapter.MAX_RESULT_CHARS + 5000))
     obs = adapter_for({"atask_1": huge}).query({"kind": "task_history", "task_id": "atask_1"})

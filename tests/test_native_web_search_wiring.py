@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from tests.conftest import StubProvider, StubRetrieval, StubEscalation
 from quest_ai_runner.config import RunnerConfig, build_orchestrator, derive_capabilities
-from quest_ai_runner.adapters import CompositeRetrievalAdapter
+from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
 
 #: Every env var ``select_search_backend``/``build_web_research_from_env`` reads to decide a

@@ -101,7 +101,7 @@ def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_librar
     try:
         register("write-files", "files", "quest_ai_runner.know_the_world.web_search_backends:BraveBackend")
         assert resolve("write-files", "files").__name__ == "BraveBackend"
-        import quest_ai_runner.adapters.files_writer  # noqa: F401  (the library's own declaration steps aside)
+        import quest_ai_runner.act_as_the_body.files_writer  # noqa: F401  (the library's own declaration steps aside)
         assert resolve("write-files", "files").__name__ == "BraveBackend"
     finally:
         entry.implementations.clear()

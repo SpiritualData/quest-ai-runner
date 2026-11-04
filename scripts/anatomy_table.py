@@ -21,7 +21,7 @@ PARTS = [
     ("Critical thinking", "quest_ai_runner/core/goal_metrics.py", "think-critically"),
     ("Overseer", "quest_ai_runner/core/overseer.py", "watch-for-risk"),
     ("Body", "quest_ai_runner/runner/quest_client.py", "act-as-the-body"),
-    ("World (act)", "quest_ai_runner/adapters/acp_deep_runner.py", "claim-reach"),
+    ("World (act)", "quest_ai_runner/act_as_the_body/acp_deep_runner.py", "claim-reach"),
     ("Higher mind", "quest_ai_runner/runner/personas.py", "hold-the-intents"),
     ("Rep selection", "quest_ai_runner/runner/personas.py", "select-a-rep"),
 ]

@@ -6,7 +6,7 @@ hard-scoped inside the root,
 skips secret-ish / binary / oversize files, and never shells out (pure ``re`` + ``os.walk``).
 
 The containment check itself lives here as the module-level ``resolve_in_tree``, and it is SHARED:
-the opt-in write side (``adapters.files_writer.FilesWriter``) resolves through this same function
+the opt-in write side (``act_as_the_body.files_writer.FilesWriter``) resolves through this same function
 rather than reimplementing the boundary. See its docstring for the contract and why each step of it
 is load-bearing.
 """
@@ -71,7 +71,7 @@ def resolve_in_tree(root: Path, rel_or_abs: str) -> Optional[Path]:
     """THE containment check: resolve ``rel_or_abs`` and return it only if it is inside ``root``.
 
     This is the single implementation of quest-ai-runner's filesystem boundary, shared by the
-    READ side (``FilesAdapter``) and the WRITE side (``adapters.files_writer.FilesWriter``). It is
+    READ side (``FilesAdapter``) and the WRITE side (``act_as_the_body.files_writer.FilesWriter``). It is
     deliberately one function rather than one per adapter: two independent implementations of a
     security boundary is itself the risk, because they drift and only one of them gets the fix.
 

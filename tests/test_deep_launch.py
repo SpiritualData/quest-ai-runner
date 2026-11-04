@@ -27,7 +27,7 @@ def argv(**over):
 
 # --- the default is today's launch, byte for byte --------------------------------------------------------------------
 
-# These lists are what core/goal_runner.py and core/goal_runner_stream.py built before the builder existed.
+# These lists are what core/goal_runner.py and act_as_the_body/goal_runner_stream.py built before the builder existed.
 TODAY_ONE_SHOT = ["claude", "-p", "--output-format", "json", "--dangerously-skip-permissions", "--model", "sonnet",
                   "--max-turns", "30", "--session-id", SID]
 TODAY_STREAM = ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",

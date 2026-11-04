@@ -422,7 +422,8 @@ import shutil
 # before anything below can import it. A user's own value wins.
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
-from .adapters import ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter
+from .adapters import ClaudeCliProvider, ClaudeConversationsAdapter, FilesAdapter
+from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (ConfigFileError, RunnerConfig, apply_file_defaults,
                      load_quest_client, resolve_config_objects)

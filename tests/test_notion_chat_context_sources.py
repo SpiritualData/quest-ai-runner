@@ -27,7 +27,7 @@ from quest_ai_runner.adapters.google_chat_adapter import (
     GoogleChatAdapter,
     static_token_provider as chat_token,
 )
-from quest_ai_runner.adapters.notion_adapter import NotionAdapter, static_token_provider
+from quest_ai_runner.act_as_the_body.notion_adapter import NotionAdapter, static_token_provider
 from quest_ai_runner.runner.context_updates import (
     CollectRequest,
     GoogleChatSource,
