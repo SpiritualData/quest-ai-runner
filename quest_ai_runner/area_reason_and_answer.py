@@ -78,9 +78,7 @@ class TurnAnswering(typing.Protocol):
 
 @implementation("answer-a-turn", "orchestrator_turn")
 class OrchestratorTurn:
-    """One turn of the orchestrator over the model, with no cards behind it. The loop opens the turn with a first line from the narrator
-    (``narrate-a-turn``) and, when the person asks how an answer was reached, adds the explanation (``explain-an-answer``) after the
-    answer is out."""
+    """One turn of the orchestrator over the model, with no cards behind it."""
     REQUIRES = ()     # the model it is handed
 
     def __init__(self, model: ModelCalling) -> None:

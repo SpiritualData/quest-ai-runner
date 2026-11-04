@@ -1,8 +1,7 @@
 """The turn's work trace: what the run did for the reader, derived from STRUCTURAL results and emitted live.
 
 A web search, a page read, a scholarly lookup, the records a turn drew on and the link check each become one step of a
-``hubofhubs.ports.trace.WorkTrace`` (the contract, the allowlist projector and the throttle live in the hub), sent through the turn's
-progress stream (``show-progress``) as each step happens. Everything
+``hubofhubs.ports.trace.WorkTrace`` (the contract, the allowlist projector and the throttle live in the hub). Everything
 here reads counts, domains and titles out of the result a call returned; nothing reads the model's wording, the query,
 a snippet or a page, and the projector drops anything that is not on its allowlist anyway.
 

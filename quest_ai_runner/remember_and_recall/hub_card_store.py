@@ -8,10 +8,6 @@ This adapter lets any ``CardRepository`` stand in that hub seat, so a consumer o
 A hub ``Card`` maps onto the QAR card schema as: ``id`` to ``id``, ``text`` to ``summary``, ``tags`` to ``keywords`` and
 ``source`` to ``provenance.source``. Search matches every word of the query as a case-insensitive substring of the summary
 and keywords, like the hub's own default store; QAR's ranked selection stays in ``FileContextStore``.
-
-The other members of the card store work over the same repository. ``index-by-meaning`` embeds its cards so a request is matched by
-meaning and not by words, ``label-context-cards`` writes the summary and keywords the word match here reads, and ``repair-a-card-store``
-tidies the repository when it has grown or filled with copies.
 """
 from __future__ import annotations
 

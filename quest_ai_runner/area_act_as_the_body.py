@@ -89,9 +89,7 @@ class ReachClaiming(typing.Protocol):
 
 @implementation("claim-reach", "coding_agent_prompt_reach")
 class PromptReach:
-    """The model infers what it can reach from each effector's own description in the planner prompt, and the route its planner decides is the claim.
-    A ``deep`` claim is work for ``run-deep-work``, whose ladder includes the one named changes a configured outside tool server accepts
-    (``write-through-mcp``); a ``tool`` claim is a call the host's registry runs; the reads are the host's (``gather-evidence``)."""
+    """The model infers what it can reach from each effector's own description in the planner prompt, and the route its planner decides is the claim."""
     REQUIRES = ()     # the model it is handed
 
     def __init__(self, model: ModelCalling) -> None:

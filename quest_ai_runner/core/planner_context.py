@@ -514,7 +514,7 @@ def gathered_content(gathered: List[Any]) -> List[Any]:
 @typing.runtime_checkable
 class CardRecall(Remembering, typing.Protocol):
     """What a request recalls: the hub's ``remember-and-recall`` interface (``recall``), which the loop also reads as its context
-    assembler (``assemble`` and ``record``, the ``ContextAssembler`` contract of ``select-context``, which chooses what a planner reads)."""
+    assembler (``assemble`` and ``record``)."""
 
 
 @implementation("remember-and-recall", "recency_window")
