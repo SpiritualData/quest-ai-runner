@@ -950,7 +950,7 @@
   },
   "modules": {
    "no_overseer": "quest_ai_runner.core.orchestrator_types",
-   "overseer": "quest_ai_runner.area_watch_for_risk"
+   "overseer": "quest_ai_runner.watch_for_risk.area"
   }
  },
  "write-files": {

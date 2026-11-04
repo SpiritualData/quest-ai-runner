@@ -24,7 +24,7 @@ from .area_hold_the_intents import IntentHolding
 from .keep_it_generic.area import KeepingGeneric
 from .know_the_world.area import KnowingTheWorld
 from .area_think_critically import MetricHolding
-from .area_watch_for_risk import RunWatching
+from .watch_for_risk.area import RunWatching
 from .runner.quest_client import QuestOperations
 
 

@@ -3,7 +3,7 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_watch_for_risk import RunWatching
+from quest_ai_runner.watch_for_risk.area import RunWatching
 from quest_ai_runner.core.adapters_values import Escalation
 from tests.conftest import StubProvider
 

@@ -15,9 +15,9 @@ from esoi.assemble import Lazy
 from hubofhubs.risk import OverseerSignal
 from hubofhubs.seats import ModelCalling, RiskWatching
 
-from .core import overseer
-from .core.adapters_deep import EscalationSink
-from .core.adapters_values import Escalation
+from ..core import overseer
+from ..core.adapters_deep import EscalationSink
+from ..core.adapters_values import Escalation
 
 
 @solution("watch-for-risk", kind="event", entry="watch", example="delete the old backup folder")

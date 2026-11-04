@@ -279,7 +279,7 @@ flowchart LR
 | `know-the-world:memory_only` |  | [evaluation/components/know_the_world/impls/memory_only.py](../evaluation/components/know_the_world/impls/memory_only.py) |  |
 | `do-grounded-work:library` | quest-ai-runner library | [quest_ai_runner/goal_agent.py](../quest_ai_runner/goal_agent.py) |  |
 | `call-a-model:multi_provider` | Prefix-routing multi-provider | [quest_ai_runner/providers.py](../quest_ai_runner/providers.py) |  |
-| `watch-for-risk:overseer` | Digest-driven overseer | [quest_ai_runner/area_watch_for_risk.py](../quest_ai_runner/area_watch_for_risk.py) | [watch_for_risk](watch_for_risk/README.md) |
+| `watch-for-risk:overseer` | Digest-driven overseer | [quest_ai_runner/watch_for_risk/area.py](../quest_ai_runner/watch_for_risk/area.py) | [watch_for_risk](watch_for_risk/README.md) |
 | `run-queued-tasks:qar_runner` | Offline lifecycle harness | [quest_ai_runner/area_act_as_the_body.py](../quest_ai_runner/area_act_as_the_body.py) |  |
 | `track-usage-and-cost:pricing` | Static price table lookup | [quest_ai_runner/pricing.py](../quest_ai_runner/pricing.py) |  |
 | `track-usage-and-cost:usage` | Persisted daily token tracker | [quest_ai_runner/usage.py](../quest_ai_runner/usage.py) |  |
