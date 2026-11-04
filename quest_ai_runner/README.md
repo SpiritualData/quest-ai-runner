@@ -18,7 +18,7 @@ Takes a person's queued requests to a reported outcome, so they run on time with
 - Entry call: `quest_ai_runner.run("run-queued-tasks", 'team-1')`
 - Selected implementation: `qar_runner`
 - Metric: Task lifecycle correctness over offline cases
-- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/runner/__init__.py`](runner/__init__.py), [`quest_ai_runner/runner/action_catalog.py`](runner/action_catalog.py), [`quest_ai_runner/runner/auto_followup.py`](runner/auto_followup.py), [`quest_ai_runner/runner/channel_runner.py`](runner/channel_runner.py), [`quest_ai_runner/runner/channel_session.py`](runner/channel_session.py), [`quest_ai_runner/runner/config_wiring.py`](runner/config_wiring.py) and 32 more
+- Implemented by: [`quest_ai_runner/act_as_the_body/__init__.py`](act_as_the_body/__init__.py), [`quest_ai_runner/area_act_as_the_body.py`](area_act_as_the_body.py), [`quest_ai_runner/runner/__init__.py`](runner/__init__.py), [`quest_ai_runner/runner/action_catalog.py`](runner/action_catalog.py), [`quest_ai_runner/runner/auto_followup.py`](runner/auto_followup.py), [`quest_ai_runner/runner/channel_runner.py`](runner/channel_runner.py), [`quest_ai_runner/runner/channel_session.py`](runner/channel_session.py), [`quest_ai_runner/runner/config_wiring.py`](runner/config_wiring.py) and 33 more
 
 ## Mind: one goal-focused working stream per request (`reason-and-answer`)
 

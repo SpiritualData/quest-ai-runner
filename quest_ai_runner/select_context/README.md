@@ -44,7 +44,7 @@ flowchart LR
 
 ## Metrics and their leaders
 
-- `metric-select-context`, Context selection ranking accuracy and card-quality outcome: leader `blind_grep`, 60 of 123 cases
+- `metric-select-context`, Context selection ranking accuracy and card-quality outcome: leader `blind_grep`, 86 of 185 cases
 - `metric-resolve-references`, Pointer-resolution safety over offline cases: leader `card_resolvers`, 16 of 16 cases
 - `metric-search-cards-and-specs`, Mixed card and specification selection, with both existing selection metrics held: leader `solutions_and_problems_with_links`, 14 of 17 cases
 - `metric-index-by-meaning`, Semantic recall and query latency on the synthetic handbook: leader `memory_cosine`, 16 of 17 cases
