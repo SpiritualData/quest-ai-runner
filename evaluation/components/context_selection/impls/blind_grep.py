@@ -1,5 +1,5 @@
-"""BASELINE: zero-model blind grep. Ranks every ``.py`` file by how many distinct task tokens (tokenized the
-way the store does) appear in its text. No cards, no docstrings, no index: the floor any context layer
+"""ALTERNATIVE: zero-model blind grep, a real method (text search over the files is how a coding agent finds context today). Ranks every ``.py`` file by how many distinct task tokens (tokenized the
+way the store does) appear in its text. No cards, no docstrings, no index: what any context layer
 must beat to justify its existence."""
 from quest_ai_runner.adapters.file_context_store import tokenize
 from context_selection.store_cost import store_charged

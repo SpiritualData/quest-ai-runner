@@ -4,7 +4,7 @@
 
 | Implementation | Name | Code | Selected |
 |---|---|---|---|
-| `select-context:blind_grep` | Blind text-search floor | [`evaluation/components/context_selection/impls/blind_grep.py`](blind_grep.py) |  |
+| `select-context:blind_grep` | Blind text search | [`evaluation/components/context_selection/impls/blind_grep.py`](blind_grep.py) |  |
 | `select-context:hub_folder_cards` | One card per folder, from the hub's card helpers | [`evaluation/components/context_selection/impls/hub_folder_cards.py`](hub_folder_cards.py) |  |
 | `select-context:hub_per_file_symbols` | The hub's per-file card arm | [`evaluation/components/context_selection/impls/hub_per_file_symbols.py`](hub_per_file_symbols.py) |  |
 | `select-context:hybrid_union` | Keyword plus vector fusion (measured live class) | [`evaluation/components/context_selection/impls/hybrid_union.py`](hybrid_union.py) |  |

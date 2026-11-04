@@ -14,7 +14,9 @@ live_calls = ["common.build_offline_orchestrator", "scripted_brain.build_brain",
 plugins = ["scripts/esoi_rules.py"]
 # measured code for staleness: the package and the evaluation drivers, not their prose
 # The records beside the code (see [records] beside_code) are not measured code either: editing one does not make a recorded result stale.
-code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md", ":(exclude,glob)quest_ai_runner/**/intent.csv",
+code_paths = ["quest_ai_runner", "evaluation/components", ":(exclude,glob)**/*.md",
+              # pytest modules check the arms and are imported by none of them: editing one cannot change what a recorded result measured
+              ":(exclude,glob)evaluation/components/**/test_*.py", ":(exclude,glob)evaluation/components/conftest.py", ":(exclude,glob)quest_ai_runner/**/intent.csv",
               ":(exclude,glob)quest_ai_runner/**/problems.csv", ":(exclude,glob)quest_ai_runner/**/ideals.csv",
               ":(exclude,glob)quest_ai_runner/**/solutions.csv", ":(exclude,glob)quest_ai_runner/**/implementations.csv",
               ":(exclude,glob)quest_ai_runner/**/metrics.csv"]
