@@ -5383,3 +5383,6 @@ context_selection,solutions_and_problems_with_links,48de2ca7,,,TOP-a122b91b,,0,0
 context_selection,solutions_and_problems_with_links,48de2ca7,,,TOP-d6a740f2,,0,0,0,0,0.0,,0.182549
 context_selection,solutions_and_problems_with_links,48de2ca7,,,TOP-6732522c,,0,0,0,0,0.0,,0.182549
 context_selection,solutions_and_problems_with_links,48de2ca7,,,TOP-aaefd22d,yes,0,0,0,0,0.0,,0.182549
+end_to_end,qar_live,2605b08c,,sample:3,E2E-GOAL-01,,1,8,72011,3768,46.2,,0.7345
+end_to_end,qar_live,2605b08c,,sample:3,E2E-HAND-01,,1,3,25741,894,13.3,,0.897773
+end_to_end,qar_live,2605b08c,,sample:3,E2E-IMPL-02,,1,7,42622,1505,35.8,,0.796223
