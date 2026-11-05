@@ -4,4 +4,5 @@ from quest_ai_runner.the_consciousness.prioritization.quest_ordering import Ques
 
 def build(meter):  # noqa: ARG001
     arm = QuestOrdering()
-    return lambda kind, args: [item["id"] for item in arm.prioritize(person=args["person"], candidates=args["candidates"], stated=args.get("stated"), now=args["now"])["ordered"]]
+    return lambda kind, args: [item["id"] for item in arm.prioritize(person=args["person"], candidates=args["candidates"], stated=args.get("stated"), now=args["now"],
+                                                                                                                  **{k: args[k] for k in ("subject", "batch_limit") if k in args})["ordered"]]

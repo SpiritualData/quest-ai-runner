@@ -19,7 +19,7 @@ USES.update({"milestones": "goals", "daily": "goals"})
 
 def case(name, kind, rule, source, person, candidates, expect, level="", stated=None):
     built = {"id": "quest-" + name, "kind": kind, "use": USES[kind], "level": level or LEVELS[kind], "origin": "rule: " + rule, "source": source,
-            "args": {"person": person, "candidates": candidates, "now": NOW}, "expect": expect}
+            "args": {"person": person, "candidates": candidates, "now": NOW, "subject": USES[kind]}, "expect": expect}
     if stated:
         built["args"]["stated"] = stated
     return built
