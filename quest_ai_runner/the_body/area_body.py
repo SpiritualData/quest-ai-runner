@@ -36,7 +36,8 @@ from quest_ai_runner.the_body.hands.quest_operations.interface import QuestOpera
 from quest_ai_runner.the_consciousness.request_intake.interface import QueueRunning
 from quest_ai_runner.the_body.internal_context.card_store.interface import CardKeeping
 from quest_ai_runner.the_world.tools.file_editing.interface import FileWriting
-from quest_ai_runner.the_body.hands.quest_operations.interface import GoalHandingOff, ReachClaiming
+from quest_ai_runner.the_consciousness.interface import GoalHandingOff
+from quest_ai_runner.the_world.interface import ReachClaiming
 
 
 @implementation("quest-body", "quest_client")

@@ -14,7 +14,7 @@ from esoi import Lazy, implementation
 from hubofhubs.api import Prioritizing
 
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
-from quest_ai_runner.the_body.hands.quest_operations.interface import GoalHandingOff
+from quest_ai_runner.the_consciousness.interface import GoalHandingOff
 from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import FeedbackKeeping
 from quest_ai_runner.the_consciousness.intent_evolution.interface import IntentEvolving
 from quest_ai_runner.the_consciousness.judgment_calls.interface import EscalationSink

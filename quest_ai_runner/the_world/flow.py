@@ -10,7 +10,7 @@ from typing import Any, Mapping
 from esoi import Lazy, implementation
 from hubofhubs.api import ModelPlumbing
 
-from quest_ai_runner.the_body.hands.quest_operations.interface import ReachClaiming
+from quest_ai_runner.the_world.interface import ReachClaiming
 from quest_ai_runner.the_world.science.interface import KnowingTheWorld
 
 
