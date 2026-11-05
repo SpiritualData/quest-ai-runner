@@ -481,7 +481,7 @@
  "prioritization": {
   "default": "quest_ordering",
   "evidence": {
-   "detail": "best guess, not yet significant: hub_as_given 0.328 against quest_ordering 0.897 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_stated_fields 0.825 against quest_ordering 0.897 on the point estimate; no case counts or per-case rows allow a test",
+   "detail": "best guess, not yet significant: hub_as_given 0.327 against quest_ordering 1 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_stated_fields 0.8 against quest_ordering 1 on the point estimate; no case counts or per-case rows allow a test",
    "p": null,
    "verdict": "WIN"
   },
