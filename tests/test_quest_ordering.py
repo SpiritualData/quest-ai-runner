@@ -16,7 +16,7 @@ def ids(answer):
 
 def test_every_quest_case_comes_back_in_the_reviewed_order():
     arm = QuestOrdering()
-    assert len(CASES) == 20
+    assert len(CASES) == 21
     for case in CASES:
         args = case["args"]
         got = ids(arm.prioritize(person=args["person"], candidates=args["candidates"], stated=args.get("stated"), now=args["now"], subject=args["subject"]))
@@ -88,7 +88,7 @@ def test_asks_for_you_come_overdue_first_then_by_deadline_and_the_undated_newest
 
 
 def test_every_quest_case_names_its_use_and_all_three_uses_are_measured():
-    assert {case["use"] for case in CASES} == {"work", "asks", "goals"} and len(CASES) == 20
+    assert {case["use"] for case in CASES} == {"work", "asks", "goals"} and len(CASES) == 21
 
 
 def test_goals_are_ordered_at_three_levels_and_the_day_has_no_invented_scheduling():

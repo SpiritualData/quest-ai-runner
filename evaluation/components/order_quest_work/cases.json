@@ -1110,5 +1110,44 @@
    "g-mine-2",
    "g-rep"
   ]
+ },
+ {
+  "id": "quest-goals-completed-after-a-blocked-open-goal",
+  "kind": "goals",
+  "use": "goals",
+  "level": "period",
+  "origin": "rule: the person's goals: a completed goal after every open one, including an open goal that waits for another",
+  "source": "quest-backend business/quests/my_responsibilities.py goal_sort_key",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-done",
+     "kind": "goal",
+     "completed": true,
+     "deadline": "2026-07-13"
+    },
+    {
+     "id": "g-blocked",
+     "kind": "goal",
+     "blocked_by": [
+      "g-first"
+     ],
+     "deadline": "2026-07-14"
+    },
+    {
+     "id": "g-first",
+     "kind": "goal",
+     "deadline": "2026-07-30"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z",
+   "subject": "goals"
+  },
+  "expect": [
+   "g-first",
+   "g-blocked",
+   "g-done"
+  ]
  }
 ]
