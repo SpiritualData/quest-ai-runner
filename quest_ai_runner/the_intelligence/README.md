@@ -32,7 +32,7 @@ flowchart LR
 
 This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
 
-- [Critical Thinking](critical_thinking/README.md) (sub-intent): Everything the AI does and says is held to the metric that serves the person's goals.
+- [Critical Thinking](critical_thinking/README.md) (sub-intent): The AI checks its work against what success means for the person.
 - [Mind](mind/README.md) (sub-intent): Each request is thought through step by step from everything its work has established so far.
 - [Subconscious](subconscious/README.md) (sub-intent): The right part of a person's own knowledge is already in mind when they ask.
 - [Quest Intents](higher_mind/objectives/README.md) (sub-intent): The AI works from the person's quests.

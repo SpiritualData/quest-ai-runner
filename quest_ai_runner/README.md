@@ -54,7 +54,7 @@ Let each Quest user grow with an AI aligned to them.
 ## One level below
 
 - [Quest Body](the_body/README.md) (sub-intent): Quest is the AI's body.
-- [Quest Consciousness](the_consciousness/README.md) (sub-intent): Each Quest user grows with an AI aligned to them.
+- [Quest Consciousness](the_consciousness/README.md) (sub-intent): The AI acts for each person the way that person would want.
 - [Intelligence](the_intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
 - [Quest Self](the_self/README.md) (sub-intent): Each Quest user meets one whole assistant.
 - [World](the_world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.

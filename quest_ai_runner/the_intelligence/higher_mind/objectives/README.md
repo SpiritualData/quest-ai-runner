@@ -32,6 +32,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`long-term-memory`): The retention policy and the recall over the Body's store: what the system keeps across requests, for how long, and how it is found again. Adopted from the library `hub`.
 - [Guidance](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`guidance`): An infrequent, longer-term nudge to the Planner, drawn from the objectives, and the context-specific criteria for what a good response is in this situation. Adopted from the library `hub`.
+- [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`recall-recent-context`): The retention policy and the recall over the Body's store: what the system keeps across requests, for how long, and how it is found again. Specializes the library `hub`.
+- [Guidance](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`guide-toward-the-long-term-goal`): An infrequent, longer-term nudge to the Planner, drawn from the objectives, and the context-specific criteria for what a good response is in this situation. Specializes the library `hub`.
 
 ## Metrics and their leaders
 

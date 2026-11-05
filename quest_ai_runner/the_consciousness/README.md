@@ -1,6 +1,6 @@
 # Quest Consciousness
 
-**Vision statement:** Each Quest user grows with an AI aligned to them.
+**Vision statement:** The AI acts for each person the way that person would want.
 
 Breadcrumb: [Top](../../esoi/README.md) > Quest Consciousness
 
@@ -56,6 +56,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Request Intake](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-requests`): Takes in the requests people make from every source Body declares and attaches each to the person who made it, so the rest of the flow can ask for that person's Representative. Specializes the library `hub`.
 - [Representatives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-representatives`): The AI personas that act for a person or a team. Specializes the library `hub`.
 - [Judgment Calls](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-decision-requests`): Decides, for one person, whether to ask, proceed or decline when the Nervous System raises a risk signal. Specializes the library `hub`.
+- [Representatives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`hand-off-a-goal`): The AI personas that act for a person or a team. Specializes the library `hub`.
+- [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`guide-by-feedback`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Specializes the library `hub`.
 - [Prioritization](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`prioritization`): The one solution that orders, for a person, the three things that compete for their attention: the work the AI is about to start unasked (tasks, standing-work triggers), the asks the AI puts to the person (questions, decisions and approvals waiting for them), and the person's own goals, which in the hub are the milestones of the solutions of their intents. Adopted from the library `hub`.
 - [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`feedback-learning`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Adopted from the library `hub`.
 

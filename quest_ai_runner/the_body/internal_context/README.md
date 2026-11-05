@@ -31,6 +31,9 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 ## Solutions from a library
 
 - [Card Store](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`card-store`): A small store that keeps cards, the hub's own memory unit, and finds them again by words or a tag. Adopted from the library `hub`.
+- [Internal Context](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`feed-context-sources`): Declares where the system's data lives and which World tool reads it. Specializes the library `hub`.
+- [Card Store](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`cache-cards`): A small store that keeps cards, the hub's own memory unit, and finds them again by words or a tag. Specializes the library `hub`.
+- [Card Store](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`persist-cards`): A small store that keeps cards, the hub's own memory unit, and finds them again by words or a tag. Specializes the library `hub`.
 
 ## Problems and ideals
 

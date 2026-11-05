@@ -32,7 +32,7 @@ flowchart LR
 This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
 
 - [Quest Body](../quest_ai_runner/the_body/README.md) (sub-intent): Quest is the AI's body.
-- [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md) (sub-intent): Each Quest user grows with an AI aligned to them.
+- [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md) (sub-intent): The AI acts for each person the way that person would want.
 - [Intelligence](../quest_ai_runner/the_intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
 - [Quest Self](../quest_ai_runner/the_self/README.md) (sub-intent): Each Quest user meets one whole assistant.
 - [World](../quest_ai_runner/the_world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.

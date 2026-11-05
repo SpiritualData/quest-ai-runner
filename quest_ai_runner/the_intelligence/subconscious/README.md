@@ -30,6 +30,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - [Intuition](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`the-intuition`): What comes to mind for a request without being asked for: cards and facts the Subconscious offers because they are close to the request, which the Mind may take or ignore. Adopted from the library `hub`.
 - [Cards From Files](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`cards-from-files`): Proposes a proportionate, current set of cards for material a consumer already keeps in files, without writing them. Adopted from the library `hub`.
+- [Context Retriever](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`choose-the-context`): Cuts a corpus (files, the text of cards, or the turns of a conversation) into units at natural boundaries and returns, for a request, the units that answer it best first within a token budget, or nothing when the request needs no context. Specializes the library `hub`.
 
 ## Metrics and their leaders
 

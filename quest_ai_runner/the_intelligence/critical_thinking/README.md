@@ -1,6 +1,6 @@
 # Critical Thinking
 
-**Vision statement:** Everything the AI does and says is held to the metric that serves the person's goals.
+**Vision statement:** The AI checks its work against what success means for the person.
 
 Breadcrumb: [Top](../../../esoi/README.md) > [Intelligence](../README.md) > Critical Thinking
 

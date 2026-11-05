@@ -37,6 +37,9 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Context Intake](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`context-intake`): The one intake of the Mind. Adopted from the library `hub`.
 - [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`planner`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Adopted from the library `hub`.
 - [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`quest-work-shown`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
+- [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`replay-known-operations`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Specializes the library `hub`.
+- [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`reply-in-steps`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
+- [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`show-progress`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
 
 ## Problems and ideals
 
