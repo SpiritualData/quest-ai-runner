@@ -20,13 +20,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec
-from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
-from hubofhubs.the_world.tools.deep import WriteResult
-from quest_ai_runner.body.mcp_write_adapter import MCPWriteAdapter
-from quest_ai_runner.config import RunnerConfig, build_orchestrator, resolve_mcp_write_runners
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, PlanDecision
+from hubofhubs.api import MCPServerSpec
+from hubofhubs.api import MCPOperationRunner
+from hubofhubs.api import WriteResult
+from quest_ai_runner.the_world.tools.connected_system_operations.mcp_write_adapter import MCPWriteAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator, resolve_mcp_write_runners
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, PlanDecision
 
 from .conftest import StubProvider, StubRetrieval
 

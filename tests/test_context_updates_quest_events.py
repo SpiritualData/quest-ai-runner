@@ -22,12 +22,7 @@ Offline, driven against fakes.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.runner.context_updates import (
-    DEFAULT_ALWAYS,
-    MAX_OPEN_PER_SOURCE,
-    UpdateEngine,
-    Watermarks,
-)
+from quest_ai_runner.the_body.intake_sources.context_updates import DEFAULT_ALWAYS, MAX_OPEN_PER_SOURCE, UpdateEngine, Watermarks
 
 NOW = datetime(2026, 9, 16, 9, 0, 0, tzinfo=timezone.utc)
 

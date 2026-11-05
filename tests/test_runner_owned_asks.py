@@ -10,15 +10,16 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_RESULT
-from quest_ai_runner.core import shared_thread, work_trace
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.ask_policy import ask_state_block, record_turn_ask
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_turn_messages import records_text
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry
-from quest_ai_runner.core.tools_quest_ops import create_decision_spec
+from hubofhubs.api import EVENT_DECISION, EVENT_RESULT
+from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
+from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_state_block, record_turn_ask
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import records_text
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import create_decision_spec
 
 from .conftest import StubRetrieval
 from .test_done_evidence import LOOKUP, Provider

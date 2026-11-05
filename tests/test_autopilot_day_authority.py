@@ -22,8 +22,8 @@ more (goals are context for a run, never an assignment to one). What these tests
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.autopilot_personas import PERSONA_HELD, resolve_task_persona
-from quest_ai_runner.runner.autopilot import AutopilotPass, resolve_persona, split_held_for_another_day
+from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import PERSONA_HELD, resolve_task_persona
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, resolve_persona, split_held_for_another_day
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _quest
 

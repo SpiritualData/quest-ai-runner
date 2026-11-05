@@ -59,8 +59,8 @@ def test_dispatch_interval_defaults_to_seconds():
 
 def test_run_forever_dispatches_on_its_own_short_loop_not_the_long_scan():
     import time
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
     from .conftest import StubProvider, StubRetrieval
 
     client = MockQuestClient([_ctx(1)])

@@ -10,11 +10,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import Mode
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.runner.executor_followup import FollowUpMixin
+from hubofhubs.api import DeepResult
+from hubofhubs.api import Mode
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation.executor_followup import FollowUpMixin
 
 from .conftest import StubRetrieval
 

@@ -4,7 +4,7 @@ Only the process edge is faked. Zero model calls."""
 import subprocess
 
 from deep_runner.support import normalise
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 
 class ScriptedPopen:

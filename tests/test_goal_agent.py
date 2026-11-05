@@ -1,11 +1,11 @@
 """The whole runner as one function: ``quest_ai_runner.run("quest-ai-runner", message)`` and the seats it is built from."""
 import pytest
 from esoi.entry import Pending
-from hubofhubs.the_body.internal_context.card_store.card import Card
-from hubofhubs.the_body.internal_context.card_store.cardstore import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
+from hubofhubs.api import Card
+from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
-from quest_ai_runner.loop_wiring import GoalAnswer
+from quest_ai_runner.the_self.loop_wiring import GoalAnswer
 from tests.conftest import StubProvider
 
 
@@ -64,11 +64,11 @@ def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_s
     vendor-model-caller's own interface (a subtype of the hub's, so a plain hub provider still fills it) and the recall seat is
     the-subconscious's own."""
     import typing
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
-    from hubofhubs.the_intelligence.subconscious.interface import Remembering
-    from quest_ai_runner.core.planner_context import CardRecall
-    from quest_ai_runner.goal_agent import QuestAiRunnerLibrary
-    from quest_ai_runner.providers import RoutedModelCalling
+    from hubofhubs.api import ModelCalling
+    from hubofhubs.api import Remembering
+    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import CardRecall
+    from quest_ai_runner.the_self.goal_agent import QuestAiRunnerLibrary
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import RoutedModelCalling
     hints = typing.get_type_hints(QuestAiRunnerLibrary.__init__)
     assert hints["model"] is RoutedModelCalling and issubclass(RoutedModelCalling, ModelCalling)
     assert hints["memory"] is CardRecall and issubclass(CardRecall, Remembering)
@@ -77,6 +77,6 @@ def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_s
 def test_the_step_reasoning_arm_asks_no_model_of_its_own():
     """The model asked at a tier is Model Plumbing's ``ask``; the Mind arm holds the parts of one step of the loop and the tier chooser."""
     import typing
-    from quest_ai_runner.area_mind import RebuiltPerStep
+    from quest_ai_runner.the_intelligence.mind.area_mind import RebuiltPerStep
     hints = typing.get_type_hints(RebuiltPerStep.__init__)
     assert "model" not in hints and "tiers" in hints and not hasattr(RebuiltPerStep, "reason") and hasattr(RebuiltPerStep, "think")

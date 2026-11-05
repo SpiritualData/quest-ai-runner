@@ -12,8 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import common  # noqa: F401  (puts the repo root on sys.path)
-from hubofhubs.the_body.internal_context.card_store.context_card_extraction import (
-    SOURCE_FILE_WEIGHT, TEST_FILE_WEIGHT, build_rich_summary, extract_symbols, is_test_path, path_slug)
+from hubofhubs.api import SOURCE_FILE_WEIGHT, TEST_FILE_WEIGHT, build_rich_summary, extract_symbols, is_test_path, path_slug
 
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".quest-context", ".eggs", ".mypy_cache",
              ".pytest_cache", "dist", "build", "quest_ai_runner.egg-info"}

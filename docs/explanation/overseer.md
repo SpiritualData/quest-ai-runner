@@ -225,7 +225,7 @@ are documented with real, reproducible numbers rather than estimates.
 ## Enabling it
 
 ```python
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 
 cfg = RunnerConfig(...)
 orch = build_orchestrator(cfg)

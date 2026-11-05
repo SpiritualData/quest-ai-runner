@@ -12,11 +12,7 @@ insights method at all must compose exactly the batch it composed before.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.autopilot import (
-    AutopilotPass,
-    compose_batch_text,
-    next_steps_from_pass,
-)
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text, next_steps_from_pass
 
 from tests.test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _quest
 

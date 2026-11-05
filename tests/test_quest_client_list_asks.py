@@ -4,7 +4,7 @@ pass. Must never raise. A failed read returns ``None``, kept distinct from a suc
 nothing (``[]``), so the gate can fail OPEN (run the pass) rather than reading a transient error
 as "nothing new" and silently wedging a reactive quest shut forever.
 """
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient, QuestNotConfigured
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient, QuestNotConfigured
 
 
 def client_capturing_call():

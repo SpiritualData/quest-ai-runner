@@ -18,7 +18,8 @@ done}`), so every consumer inherits identical policy.
 ## Public API (frozen)
 
 ```python
-from quest_ai_runner.core import Mode, StreamSink, MilestoneSink, ProgressEvent
+from hubofhubs.api import Mode, ProgressEvent
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink, MilestoneSink
 # orch = build_orchestrator(cfg)  (or Orchestrator(...))
 
 # --- LIVE, in-process streaming (chat backend / cockpit) ---

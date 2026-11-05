@@ -6,9 +6,9 @@ call, resource read, truncation), not a retrieval algorithm."""
 import contextlib
 import re
 
-from hubofhubs.the_world.tools.connected_system_operations import mcp_client
-from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec
-from quest_ai_runner.body.mcp_retrieval_adapter import MCPRetrievalAdapter
+from hubofhubs.api import mcp_client
+from hubofhubs.api import MCPServerSpec
+from quest_ai_runner.the_world.tools.connected_system_operations.mcp_retrieval_adapter import MCPRetrievalAdapter
 
 from retrieval import policy
 from retrieval.fakes import mcp_session

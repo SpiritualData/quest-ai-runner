@@ -2,7 +2,7 @@
 import threading
 import time
 
-from quest_ai_runner.take_in_the_world.async_bridge import run_coro_sync, run_detached
+from quest_ai_runner.the_consciousness.request_intake.async_bridge import run_coro_sync, run_detached
 
 
 def test_run_coro_sync_uses_one_persistent_loop():
@@ -23,7 +23,7 @@ def test_run_detached_runs_off_thread_and_swallows_errors():
 
 
 def test_scaffolding_strip_cuts_the_tail_and_reasoning_markup():
-    from quest_ai_runner.core.scaffolding import sanitize_user_text, strip_future_context
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.scaffolding import sanitize_user_text, strip_future_context
     text = "Done.\n=== FUTURE CONTEXT (for similar requests by this user) ===\n- a"
     assert strip_future_context(text) == "Done."
     assert sanitize_user_text("<think>hmm</think>Answer") == "Answer"

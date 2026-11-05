@@ -3,11 +3,11 @@
 Synthetic data only, fully offline."""
 import pytest
 
-from quest_ai_runner.core import scope_tags as st
-from quest_ai_runner.core.recent_context import FileRecentContextStore
-from quest_ai_runner.core import runtime_settings
-from quest_ai_runner.core.runtime_settings import CoreSettings, install_core_settings
-from quest_ai_runner.config_core_settings import core_settings_from_env
+from quest_ai_runner.the_intelligence.higher_mind.objectives import scope_tags as st
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import FileRecentContextStore
+from quest_ai_runner.the_body.configuration import runtime_settings
+from quest_ai_runner.the_body.configuration.runtime_settings import CoreSettings, install_core_settings
+from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
 
 
 @pytest.fixture
@@ -62,6 +62,6 @@ def test_recent_context_hides_other_quests_only_in_fence_mode(mode, tmp_path):
 
 
 def test_keyword_store_labels_and_ranks_an_other_quest_card(mode):
-    from quest_ai_runner.adapters.context_store_assembly import other_quest_label  # the label the render path uses
+    from quest_ai_runner.the_intelligence.subconscious.context_retriever.context_store_assembly import other_quest_label  # the label the render path uses
     mode("affinity")
     assert other_quest_label(B, ["quest:a"])

@@ -54,7 +54,7 @@ All 16 tests passing (100% pass rate):
 - **Status:** Committed to git branch `june` with commit hash 9e3dd32
 
 ### Code Analysis Performed
-- **File:** `quest_ai_runner/runner/poller.py`
+- **File:** `quest_ai_runner/the_consciousness/request_intake/poller.py`
   - Lines 38-46: Task signature generation (stable, status-sensitive)
   - Lines 49-85: StateStore implementation (thread-safe, atomic writes)
   - Lines 120-165: Poller discovery and dedup logic (uses StateStore)

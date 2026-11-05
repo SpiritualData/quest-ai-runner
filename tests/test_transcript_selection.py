@@ -14,7 +14,7 @@ from textual.geometry import Offset
 from textual.selection import Selection
 from textual.strip import Strip
 
-from quest_ai_runner.textual_ui import TranscriptLog
+from quest_ai_runner.the_consciousness.terminal.textual_ui import TranscriptLog
 
 
 def _cell_styles(strip: Strip) -> list:

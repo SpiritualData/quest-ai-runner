@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
-from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 
 
 class StubWebProvider:

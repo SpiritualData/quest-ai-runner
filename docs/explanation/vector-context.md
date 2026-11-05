@@ -51,7 +51,7 @@ pip install 'quest-ai-runner[bm25]'
 ```
 
 ```python
-from quest_ai_runner.select_context.bm25_content_store import BM25ContentStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.bm25_content_store import BM25ContentStore
 
 store = BM25ContentStore(root=".", confidence_threshold=0.0)
 ac = store.assemble("XFCALLBACK_7Q2")
@@ -70,7 +70,7 @@ state lives on the local filesystem.  No server is needed; no Docker, no
 cloud account.
 
 ```python
-from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
 # Default: state under <cwd>/.quest-context/qdrant
 store = QdrantVectorStore()
@@ -277,10 +277,10 @@ the caller falls back to plain Claude Code (the never-worse guarantee).
 results:
 
 ```python
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
-from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
 keyword_asm = FileContextStore(".quest-context/cards", repo_root=".")
 vector_asm  = VectorContextAssembler(QdrantVectorStore())
@@ -372,7 +372,7 @@ scores, wire ``QdrantVectorStore`` with **two separate Voyage embedders**, one
 per role:
 
 ```python
-from quest_ai_runner.subconscious.qdrant_vector_store import (
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import (
     QdrantVectorStore,
     make_voyage_embedder,
 )

@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from quest_ai_runner import load_config  # noqa: E402
-from quest_ai_runner.runner.lane import run_lane  # noqa: E402
+from quest_ai_runner.the_consciousness.request_intake.lane import run_lane  # noqa: E402
 
 CONFIG_PATH = Path(__file__).resolve().parent / "qar.toml"
 

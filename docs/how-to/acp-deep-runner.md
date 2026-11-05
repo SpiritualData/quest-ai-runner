@@ -67,9 +67,9 @@ otherwise pick up whichever `node` is first on `PATH`, usually the too-old one.
 Selecting a deep runner is just `RunnerConfig.deep_runner`, exactly as it is for the subprocess one:
 
 ```python
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.adapters import AcpConfig, AcpDeepRunner
-from quest_ai_runner.core.inbox import InMemoryInbox
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.adapters.__init__ import AcpConfig, AcpDeepRunner
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 
 inbox = InMemoryInbox()          # the same inbox the interface pushes user messages into
 
@@ -217,4 +217,4 @@ every deployment. That file is generated from Joshua's `evolvable-structure` ski
 `tests/test_standing_instructions.py` fails if the two drift. `QAR_DEEP_INSTRUCTIONS_FILES` changes it: unset uses the default, empty turns the
 layer off, and a path list (`os.pathsep`-separated, with `default` standing for the shipped file)
 replaces it, for example `default:/srv/org/rules.md`. Files are read on every run, so an edit applies
-to the next deep run without a restart. See `quest_ai_runner/core/standing_instructions.py`.
+to the next deep run without a restart. See `quest_ai_runner/the_self/integrity/prompts/standing_instructions.py`.

@@ -1,0 +1,988 @@
+"""GoogleChatAdapter -- RetrievalAdapter over Google Chat spaces, threads, and messages.
+
+This lets the orchestrator brain ground answers in a workspace's Google Chat
+conversations: it lists spaces, pulls recent messages, groups them into
+conversations (by thread or by space), and exposes them through the same
+``RetrievalAdapter`` surface every other source uses (read / grep / query +
+discovery), plus the optional pre-flight ``assemble`` injection.
+
+It is GENERIC by construction:
+
+  * HTTP is stdlib-only (``urllib.request`` + ``json``) -- no third-party deps in
+    the adapter itself, exactly like ``WebSearchAdapter``.
+  * AUTH is injected. The adapter never knows how a bearer token is minted; it
+    calls a ``token_provider()`` callable you supply. Ships two ready-made
+    providers: ``static_token_provider`` (a token you already hold) and
+    ``service_account_token_provider`` (a Google service-account JSON with
+    domain-wide delegation, for a Google Workspace -- this one needs the optional
+    ``[google]`` extra and is import-guarded so the module loads without it).
+  * Every public method catches all exceptions and returns ``Observation(kind="error")``
+    rather than raising, so a missing token, an unreachable endpoint, or a 403 from
+    Chat never breaks the orchestrator loop.
+
+Wire it into a CompositeRetrievalAdapter alongside the local corpus::
+
+    from quest_ai_runner.adapters import (
+        CompositeRetrievalAdapter, FilesAdapter, GoogleChatAdapter,
+    )
+    from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import service_account_token_provider
+
+    chat = GoogleChatAdapter(
+        token_provider=service_account_token_provider(
+            service_account_file="/path/to/sa.json",
+            subject="someone@your-workspace.org",   # domain-wide delegation
+        ),
+        lookback_days=14,
+    )
+    retrieval = CompositeRetrievalAdapter([FilesAdapter(corpus_root), chat])
+
+Conversations are normalized into the SAME dict shape Claude transcripts use
+(``{"messages": [{"role", "text"}], "updated_at": ...}``) so the shared
+conversation-format and TF-DF-IDF helpers rank and render them with no special
+casing.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import time as _time
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
+
+from esoi import implementation
+from hubofhubs.api import AssembledContext
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from hubofhubs.api import RetrievalAdapterBase
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_scoped_learning import (
+    active_card_terms, gate_terms, learn_card_references, learnable_candidates)
+from hubofhubs.api import conversation_digest, conversation_timestamp, conversation_to_text, resolve_conv_key
+from hubofhubs.api import extract_terms, keywords_from_text, select_representatives
+
+_log = logging.getLogger("quest-ai-runner.google-chat")
+
+_CHAT_API_BASE = "https://chat.googleapis.com/v1"
+
+# Read-only scopes sufficient to list spaces and read their messages.
+DEFAULT_CHAT_SCOPES = (
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/chat.messages.readonly",
+)
+
+# A token provider returns a bearer access token string (or None when it cannot
+# mint one -- the adapter then degrades to an error Observation rather than raising).
+TokenProvider = Callable[[], Optional[str]]
+
+
+# ---------------------------------------------------------------------------
+# Token providers (auth is injected; the adapter stays dependency-free)
+# ---------------------------------------------------------------------------
+
+def static_token_provider(token: str) -> TokenProvider:
+    """A token provider that always returns the same pre-minted bearer token.
+
+    Useful when the host already holds a valid OAuth access token (e.g. it ran the
+    user-consent flow itself, or pulls one from its own credential store).
+    """
+    def _provider() -> Optional[str]:
+        return token or None
+    return _provider
+
+
+def service_account_token_provider(
+    *,
+    service_account_file: Optional[str] = None,
+    service_account_info: Optional[Dict[str, Any]] = None,
+    subject: Optional[str] = None,
+    scopes: Optional[List[str]] = None,
+) -> TokenProvider:
+    """Build a token provider from a Google service-account credential.
+
+    This is the Google Workspace path: a service-account JSON with **domain-wide
+    delegation** enabled, impersonating ``subject`` (a Workspace user the delegation
+    is authorized for) so the adapter can read the spaces that user can see.
+
+    Requires the optional ``[google]`` extra (``google-auth``). The import is done
+    lazily inside the returned provider so importing this module never needs it; a
+    missing dependency surfaces as a logged warning and a ``None`` token (the
+    adapter then reports a clean "not configured" error, never a crash).
+
+    Args:
+        service_account_file: Path to the service-account JSON key file.
+        service_account_info: Already-parsed service-account dict (alternative to the file).
+        subject: Workspace user to impersonate via domain-wide delegation.
+        scopes: OAuth scopes to request (defaults to read-only spaces + messages).
+    """
+    use_scopes = list(scopes) if scopes else list(DEFAULT_CHAT_SCOPES)
+    _state: Dict[str, Any] = {"creds": None}
+
+    def _provider() -> Optional[str]:
+        try:
+            creds = _state["creds"]
+            if creds is None:
+                from google.oauth2 import service_account as _sa  # type: ignore
+
+                if service_account_info is not None:
+                    creds = _sa.Credentials.from_service_account_info(
+                        service_account_info, scopes=use_scopes
+                    )
+                elif service_account_file:
+                    creds = _sa.Credentials.from_service_account_file(
+                        service_account_file, scopes=use_scopes
+                    )
+                else:
+                    _log.warning(
+                        "service_account_token_provider: neither service_account_file "
+                        "nor service_account_info supplied; Google Chat disabled"
+                    )
+                    return None
+                if subject:
+                    creds = creds.with_subject(subject)
+                _state["creds"] = creds
+
+            # Refresh if needed (google-auth tracks expiry on the credential).
+            if not creds.valid:
+                from google.auth.transport.requests import Request as _Request  # type: ignore
+
+                creds.refresh(_Request())
+            return creds.token
+        except ImportError:
+            _log.warning(
+                "Google Chat needs the [google] extra (google-auth) for a service "
+                "account; install it or pass a static token_provider instead"
+            )
+            return None
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("service-account token mint failed: %s", exc)
+            return None
+
+    return _provider
+
+
+class ChatReadError(RuntimeError):
+    """A typed Chat read failed or was refused. The message never carries a token."""
+
+
+@dataclass
+class ChatSpaces:
+    """Every space the subject belongs to, as ``GoogleChatAdapter.list_member_spaces`` read them."""
+    spaces: List[Dict[str, Any]] = field(default_factory=list)   # name, displayName, spaceType, lastActiveTime
+    truncated: bool = False          # more spaces exist than ``max_spaces``; the rest were not listed
+    error: Optional[str] = None      # set when listing failed; ``spaces`` then holds what was read
+
+
+def space_label(name: str, display_name: Optional[str] = None, space_type: Optional[str] = None) -> str:
+    """A readable label for a space: its display name, else "direct message"/"group chat" plus a short id.
+
+    Direct messages and unnamed group chats have no ``displayName``, so a bare resource name would
+    be the only thing a reader sees. Never blank.
+    """
+    shown = str(display_name or "").strip()
+    if shown:
+        return shown
+    tail = str(name or "").rsplit("/", 1)[-1]
+    short = tail[:6] if tail else "?"
+    kind = str(space_type or "").upper()
+    if kind == "DIRECT_MESSAGE":
+        return f"direct message {short}"
+    if kind == "GROUP_CHAT":
+        return f"group chat {short}"
+    return f"space {short}"
+
+
+SPACE_NAME_RE = re.compile(r"^spaces/[A-Za-z0-9_-]+$")
+
+
+@dataclass
+class ChatMessages:
+    """The raw messages ``GoogleChatAdapter.fetch_messages_since`` read from one space."""
+    space: str = ""
+    display_name: str = ""
+    messages: List[Dict[str, Any]] = field(default_factory=list)   # newest first
+    truncated: bool = False          # more matched than ``max_messages``; the oldest were left out
+
+
+# ---------------------------------------------------------------------------
+# The adapter
+# ---------------------------------------------------------------------------
+
+@implementation("gather-evidence", "google_chat")
+class GoogleChatAdapter(RetrievalAdapterBase):
+    """RetrievalAdapter over Google Chat conversations.
+
+    Lists spaces (or a configured subset), pulls recent messages bounded by
+    ``lookback_days`` / ``max_messages_per_space``, groups them into conversations
+    (``group_by="thread"`` by default, or ``"space"``), and serves them through the
+    standard retrieval surface. Fetched data is cached for ``cache_ttl_seconds`` so
+    a single planner loop's repeated read/grep calls hit the network once.
+    """
+
+    # PERSISTED REFERENCE RESOLUTION (RetrievalAdapter optional capability). A learned Chat hit is a
+    # ``chat_thread`` reference -- a DISTINCT type from ``ClaudeConversationsAdapter``'s
+    # ``"conversation"`` (which contractually resolves via a LOCAL Claude session file by conv_id;
+    # overloading it would make chat content unresolvable). ``resolve_reference`` re-fetches the
+    # thread FRESH through this adapter's own read path. Advertising a non-None ``reference_type`` is
+    # the structural signal that Chat content can be a durable, resolvable card reference.
+    reference_type = "chat_thread"
+
+    def __init__(
+        self,
+        token_provider: Optional[TokenProvider] = None,
+        *,
+        space_names: Optional[List[str]] = None,
+        group_by: str = "thread",
+        lookback_days: Optional[int] = 30,
+        max_spaces: int = 50,
+        max_messages_per_space: int = 200,
+        cache_ttl_seconds: float = 300.0,
+        timeout_seconds: float = 20.0,
+        api_base: str = _CHAT_API_BASE,
+        card_store: Optional[Any] = None,
+        assistant_senders: Optional[List[str]] = None,
+        all_spaces: bool = False,
+    ) -> None:
+        """
+        Args:
+            token_provider: Callable returning a bearer access token (see the
+                ``*_token_provider`` helpers). If None, the adapter is "unconfigured"
+                and every method returns a clean error Observation.
+            space_names: Explicit space resource names ("spaces/AAAA") to read. When
+                None, the adapter lists spaces it can see via the API.
+            group_by: "thread" (one conversation per Chat thread, the natural unit) or
+                "space" (one conversation per space, all messages flattened).
+            lookback_days: Only pull messages newer than this many days (None = no bound).
+            max_spaces: Cap on spaces enumerated when ``space_names`` is None.
+            max_messages_per_space: Cap on messages pulled per space.
+            cache_ttl_seconds: How long a fetch is reused before re-hitting the API.
+            timeout_seconds: Per-request HTTP timeout.
+            api_base: Chat REST base URL (override only for testing / proxies).
+            card_store: OPTIONAL card store (duck-typed like ``FileContextStore``) used to turn a
+                relevance hit into a LEARNED ``chat_thread`` reference on the turn's ACTIVE card,
+                exactly as ``ClaudeConversationsAdapter`` does for Claude sessions. When supplied AND
+                ``assemble`` meta carries a ``thread_card_id``, ``assemble()`` widens its relevance
+                gate with the card's own topic terms and attaches / re-warms the selected threads on
+                that card via the shared ``card_scoped_learning`` module. When absent (or no card is
+                active) the adapter falls back to the pure global keyword + TF-DF-IDF scan, exactly as
+                before. Requires only ``get_card`` / ``update_card`` / ``mark_sources_used``.
+            assistant_senders: Sender resource names (``users/...``) or display names that are THIS
+                assistant's own voice. ``fetch_messages_since`` (what the ``google_chat`` context
+                source reads through) drops them, as it drops every Chat app (``sender.type ==
+                "BOT"``), so an assistant is never handed its own words back as news.
+            all_spaces: OPT-IN unrestricted mode (default False). When True the typed read accepts
+                any well-formed ``spaces/<id>`` and ``list_member_spaces`` enumerates every space,
+                group chat and direct message the subject belongs to. Reads everything the subject
+                can see, so use it only when the subject owns the deployment or has consented.
+        """
+        self._all_spaces = bool(all_spaces)
+        self._token_provider = token_provider
+        self._card_store = card_store
+        self._space_names = list(space_names) if space_names else None
+        self._assistant_senders = {str(x).strip() for x in (assistant_senders or []) if str(x).strip()}
+        self._group_by = "space" if str(group_by).lower() == "space" else "thread"
+        self._lookback_days = lookback_days
+        self._max_spaces = max(1, int(max_spaces))
+        self._max_messages_per_space = max(1, int(max_messages_per_space))
+        self._cache_ttl = max(0.0, float(cache_ttl_seconds))
+        self._timeout = float(timeout_seconds)
+        self._api_base = api_base.rstrip("/")
+
+        # Cache populated by _ensure_loaded().
+        self._conversations: Dict[str, Dict[str, Any]] = {}
+        self._conv_id_lookup: Dict[str, str] = {}
+        self._loaded_at: float = 0.0
+
+    # ------------------------------------------------------------------
+    # HTTP
+    # ------------------------------------------------------------------
+
+    def _get_json(self, url: str, token: str) -> Dict[str, Any]:
+        """GET a Chat API URL with a bearer token; return the parsed JSON. May raise."""
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            body = resp.read().decode("utf-8")
+        return json.loads(body)
+
+    def _build_url(self, path: str, params: Optional[Dict[str, Any]] = None) -> str:
+        base = f"{self._api_base}/{path.lstrip('/')}"
+        if params:
+            clean = {k: v for k, v in params.items() if v is not None and v != ""}
+            if clean:
+                return f"{base}?{urllib.parse.urlencode(clean)}"
+        return base
+
+    # ------------------------------------------------------------------
+    # Fetch + normalize
+    # ------------------------------------------------------------------
+
+    def _ensure_loaded(self) -> None:
+        """Refresh the conversation cache if empty or past its TTL. Never raises."""
+        fresh = self._loaded_at > 0 and (_time.time() - self._loaded_at) < self._cache_ttl
+        if fresh and self._conversations:
+            return
+        try:
+            self._load()
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("google chat load failed: %s", exc)
+            # Keep any previously good cache rather than wiping it on a transient error.
+            if not self._conversations:
+                self._conversations, self._conv_id_lookup = {}, {}
+        self._loaded_at = _time.time()
+
+    def _load(self) -> None:
+        if self._token_provider is None:
+            self._conversations, self._conv_id_lookup = {}, {}
+            return
+        token = self._token_provider()
+        if not token:
+            self._conversations, self._conv_id_lookup = {}, {}
+            return
+
+        space_names = self._space_names or self._list_space_names(token)
+        cutoff = None
+        if self._lookback_days is not None:
+            cutoff = _time.time() - self._lookback_days * 86400.0
+
+        # group_key -> conversation dict
+        convs: Dict[str, Dict[str, Any]] = {}
+        for space in space_names[: self._max_spaces]:
+            space_display = self._space_display.get(space, space) if hasattr(self, "_space_display") else space
+            for msg in self._list_messages(space, token):
+                ts = _parse_rfc3339(msg.get("createTime"))
+                if cutoff is not None and ts and ts < cutoff:
+                    continue
+                text = (msg.get("text") or "").strip()
+                if not text:
+                    continue  # skip attachment-only / system membership events with no body
+
+                if self._group_by == "space":
+                    key = space
+                    title = space_display
+                else:
+                    thread = (msg.get("thread") or {}).get("name") or space
+                    key = thread
+                    title = space_display
+
+                conv = convs.get(key)
+                if conv is None:
+                    conv = {
+                        "id": key,
+                        "space": space,
+                        "rep_name": title,          # surfaces in conversation_metadata()
+                        "messages": [],
+                        "updated_at": 0.0,
+                    }
+                    convs[key] = conv
+
+                sender = msg.get("sender") or {}
+                role = sender.get("displayName") or sender.get("name") or sender.get("type") or "user"
+                conv["messages"].append({"role": role, "text": text, "create_time": msg.get("createTime")})
+                if ts and ts > conv["updated_at"]:
+                    conv["updated_at"] = ts
+
+        # Order each conversation's messages chronologically and stamp turn_count.
+        for conv in convs.values():
+            conv["messages"].sort(key=lambda m: _parse_rfc3339(m.get("create_time")) or 0.0)
+            conv["turn_count"] = len(conv["messages"])
+
+        # Drop any that ended up empty after filtering.
+        convs = {k: c for k, c in convs.items() if c["messages"]}
+
+        lookup: Dict[str, str] = {}
+        for key in convs:
+            lookup[key.split("/")[-1]] = key  # tail (thread/space id) -> full key
+
+        self._conversations = convs
+        self._conv_id_lookup = lookup
+
+    def _list_space_names(self, token: str) -> List[str]:
+        """List space resource names visible to the credential. Best-effort, paginated."""
+        names: List[str] = []
+        self._space_display: Dict[str, str] = {}
+        page_token: Optional[str] = None
+        while True:
+            url = self._build_url("spaces", {"pageSize": 100, "pageToken": page_token})
+            data = self._get_json(url, token)
+            for sp in data.get("spaces", []) or []:
+                name = sp.get("name")
+                if not name:
+                    continue
+                names.append(name)
+                self._space_display[name] = sp.get("displayName") or name
+            page_token = data.get("nextPageToken")
+            if not page_token or len(names) >= self._max_spaces:
+                break
+        return names
+
+    def _list_messages(self, space: str, token: str) -> List[Dict[str, Any]]:
+        """List recent messages for one space, newest first, bounded. Best-effort, paginated."""
+        out: List[Dict[str, Any]] = []
+        page_token: Optional[str] = None
+        # Server-side time filter when we have a lookback window (RFC3339, UTC).
+        msg_filter = None
+        if self._lookback_days is not None:
+            cutoff = _time.time() - self._lookback_days * 86400.0
+            msg_filter = f'createTime > "{_to_rfc3339(cutoff)}"'
+        while True:
+            url = self._build_url(
+                f"{space}/messages",
+                {
+                    "pageSize": 100,
+                    "pageToken": page_token,
+                    "orderBy": "createTime desc",
+                    "filter": msg_filter,
+                },
+            )
+            data = self._get_json(url, token)
+            batch = data.get("messages", []) or []
+            out.extend(batch)
+            page_token = data.get("nextPageToken")
+            if not page_token or len(out) >= self._max_messages_per_space:
+                break
+        return out[: self._max_messages_per_space]
+
+    # ------------------------------------------------------------------
+    # Typed, allowlist-enforced reads (what the ``google_chat`` context source uses)
+    # ------------------------------------------------------------------
+
+    @property
+    def allowed_spaces(self) -> List[str]:
+        """The spaces this adapter may read by name (its ``space_names`` allowlist), or []."""
+        return list(self._space_names or [])
+
+    @property
+    def lookback_days(self) -> Optional[int]:
+        """The lookback window (days) used when a read has no watermark, or None for unbounded."""
+        return self._lookback_days
+
+    @property
+    def all_spaces(self) -> bool:
+        """Whether this adapter is in opt-in unrestricted mode (``all_spaces = true``)."""
+        return self._all_spaces
+
+    def space_allowed(self, space: str) -> bool:
+        """Whether ``space`` may be read. FAILS CLOSED: with no allowlist, nothing is allowed.
+
+        In opt-in ``all_spaces`` mode any well-formed ``spaces/<id>`` name passes (malformed names
+        are still rejected). Otherwise only names on the ``space_names`` allowlist pass.
+
+        The retrieval methods above may enumerate every space the credential can see when no
+        ``space_names`` was given (the long-standing behaviour). The typed read below never does:
+        a domain-wide-delegation credential can see every space its subject is in, so the only
+        thing standing between an automated pass and all of it is this list.
+        """
+        name = str(space or "").strip()
+        if self._all_spaces:
+            return bool(SPACE_NAME_RE.match(name))
+        return bool(self._space_names) and name in self._space_names
+
+    def list_member_spaces(self, max_spaces: int = 100) -> "ChatSpaces":
+        """Every space, group chat and direct message the subject belongs to. NEVER raises.
+
+        Paginates ``spaces.list`` up to ``max_spaces``. Each entry has ``name``, ``displayName``
+        (None when the API gives none, as for DMs), ``label`` (always readable, see ``space_label``),
+        ``spaceType`` and, when the API gives it, ``lastActiveTime``. A failure comes back in
+        ``ChatSpaces.error`` (no token, no HTTP body), never as an exception. Only allowed in
+        ``all_spaces`` mode: otherwise it returns an error and makes no request.
+        """
+        if not self._all_spaces:
+            return ChatSpaces(error="refused: listing member spaces needs all_spaces = true")
+        if self._token_provider is None:
+            return ChatSpaces(error="google chat not configured: no token_provider supplied")
+        cap = max(1, int(max_spaces))
+        out: List[Dict[str, Any]] = []
+        truncated = False
+        try:
+            token = self._token_provider()
+            if not token:
+                return ChatSpaces(error="google chat not configured: token_provider returned no token")
+            page_token: Optional[str] = None
+            while True:
+                url = self._build_url("spaces", {"pageSize": min(100, cap), "pageToken": page_token})
+                data = self._get_json(url, token)
+                for sp in data.get("spaces", []) or []:
+                    name = str(sp.get("name") or "")
+                    if not SPACE_NAME_RE.match(name):
+                        continue
+                    if len(out) >= cap:
+                        truncated = True
+                        break
+                    shown = sp.get("displayName") or None
+                    kind = sp.get("spaceType") or sp.get("type")
+                    out.append({"name": name, "displayName": shown,
+                                "label": space_label(name, shown, kind),
+                                "spaceType": kind, "lastActiveTime": sp.get("lastActiveTime")})
+                page_token = data.get("nextPageToken")
+                if truncated or not page_token:
+                    break
+                if len(out) >= cap:
+                    truncated = True
+                    break
+        except urllib.error.HTTPError as exc:
+            return ChatSpaces(spaces=out, truncated=truncated, error=f"HTTP {exc.code} listing spaces")
+        except Exception as exc:  # noqa: BLE001
+            return ChatSpaces(spaces=out, truncated=truncated,
+                              error=f"could not list spaces ({type(exc).__name__})")
+        return ChatSpaces(spaces=out, truncated=truncated)
+
+    def is_assistant_message(self, message: Dict[str, Any]) -> bool:
+        """Whether a raw Chat message is this assistant's own voice: any Chat app, or a configured sender."""
+        sender = (message or {}).get("sender") or {}
+        if str(sender.get("type") or "").upper() == "BOT":
+            return True
+        return bool({str(sender.get("name") or ""), str(sender.get("displayName") or "")}
+                    & self._assistant_senders)
+
+    def fetch_messages_since(self, space: str, since: Optional[Any], *,
+                             max_messages: int = 100) -> "ChatMessages":
+        """Raw messages created after ``since`` in ONE allowlisted space, newest first. RAISES.
+
+        Unlike the retrieval methods this does not swallow failures: a caller that advances a
+        watermark after reading must be able to tell "nothing new" from "could not read". Raises
+        ``ChatReadError`` for a space off the allowlist (refused BEFORE any request), for no
+        credential, and for an API failure. ``since`` is a datetime (or None for the lookback window).
+        """
+        name = str(space or "").strip()
+        if not self.space_allowed(name):
+            raise ChatReadError(f"refused: {name or 'that space'} is not on the allowlist (space_names)")
+        if self._token_provider is None:
+            raise ChatReadError("google chat not configured: no token_provider supplied")
+        token = self._token_provider()
+        if not token:
+            raise ChatReadError("google chat not configured: token_provider returned no token")
+        cap = max(1, int(max_messages))
+        if since is not None:
+            cutoff = since.timestamp()
+        elif self._lookback_days is not None:
+            cutoff = _time.time() - self._lookback_days * 86400.0
+        else:
+            cutoff = None
+        params: Dict[str, Any] = {"pageSize": min(100, cap + 1), "orderBy": "createTime desc"}
+        if cutoff is not None:
+            params["filter"] = f'createTime > "{_to_rfc3339(cutoff)}"'
+        out: List[Dict[str, Any]] = []
+        page_token: Optional[str] = None
+        try:
+            while True:
+                url = self._build_url(f"{name}/messages", {**params, "pageToken": page_token})
+                data = self._get_json(url, token)
+                out.extend(data.get("messages", []) or [])
+                page_token = data.get("nextPageToken")
+                if not page_token or len(out) > cap:
+                    break
+            display = space_label(name) if self._all_spaces else name
+            try:
+                info = self._get_json(self._build_url(name), token)
+                if self._all_spaces:
+                    display = space_label(name, info.get("displayName"),
+                                         info.get("spaceType") or info.get("type"))
+                else:
+                    display = str(info.get("displayName") or name)
+            except Exception:  # noqa: BLE001 -- a label is nice to have, never a reason to fail the read
+                pass
+        except urllib.error.HTTPError as exc:
+            raise ChatReadError(f"HTTP {exc.code} reading {name}") from None
+        except Exception as exc:  # noqa: BLE001
+            raise ChatReadError(f"could not read {name} ({type(exc).__name__})") from None
+        return ChatMessages(space=name, display_name=display,
+                            messages=out[:cap], truncated=len(out) > cap)
+
+    # ------------------------------------------------------------------
+    # Ranking helpers (shared with the Claude-conversations adapter)
+    # ------------------------------------------------------------------
+
+    def _recency_boost(self, cid: str) -> float:
+        """Multiplicative recency boost for a conversation. Half-life = 7 days."""
+        import math
+        ts = conversation_timestamp(self._conversations[cid])
+        if ts <= 0:
+            return 1.0
+        days_old = (_time.time() - ts) / 86400.0
+        return 1.0 + math.exp(-days_old * math.log(2) / 7.0)
+
+    # ------------------------------------------------------------------
+    # RetrievalAdapter interface
+    # ------------------------------------------------------------------
+
+    def read_section(
+        self,
+        rel_path: str,
+        *,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        heading: Optional[str] = None,
+        max_bytes: Optional[int] = None,
+    ) -> Observation:
+        """Read one conversation transcript by id (thread/space resource name or its tail)."""
+        try:
+            self._ensure_loaded()
+            if not self._conversations:
+                return Observation(kind="error", rel_path=rel_path, error=self._unconfigured_or_empty())
+
+            key = resolve_conv_key(rel_path, self._conversations, self._conv_id_lookup)
+            if key is None:
+                return Observation(kind="error", rel_path=rel_path, error=f"conversation not found: {rel_path}")
+
+            text = conversation_to_text(self._conversations[key])
+            if start_line or end_line:
+                lines = text.split("\n")
+                start = (start_line or 1) - 1
+                end = end_line or len(lines)
+                text = "\n".join(lines[max(0, start): min(len(lines), end)])
+            if max_bytes and len(text) > max_bytes:
+                text = text[:max_bytes].rsplit("\n", 1)[0] + "\n[truncated]"
+
+            return Observation(kind="read", rel_path=rel_path, text=text)
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("google chat read_section failed for %r: %s", rel_path, exc)
+            return Observation(kind="error", rel_path=rel_path, error=f"google chat read error: {exc}")
+
+    def grep(
+        self, pattern: str, *, scope: Optional[str] = None, max_hits: Optional[int] = None
+    ) -> Observation:
+        """Search a regex across all loaded Chat conversations. ``scope`` (optional) limits to a
+        conversation id / space whose key contains the scope string."""
+        try:
+            regex = re.compile(pattern, re.IGNORECASE)
+        except re.error as e:
+            return Observation(kind="error", pattern=pattern, error=f"invalid regex: {e}")
+        try:
+            self._ensure_loaded()
+            if not self._conversations:
+                return Observation(kind="error", pattern=pattern, error=self._unconfigured_or_empty())
+
+            hits: List[Dict[str, Any]] = []
+            for cid, conv in self._conversations.items():
+                if scope and scope not in cid and scope not in str(conv.get("space", "")):
+                    continue
+                for i, line in enumerate(conversation_to_text(conv).split("\n"), 1):
+                    if regex.search(line):
+                        hits.append({"line": line, "line_number": i, "file": cid})
+                        if max_hits and len(hits) >= max_hits:
+                            break
+                if max_hits and len(hits) >= max_hits:
+                    break
+
+            if not hits:
+                return Observation(kind="error", pattern=pattern, error=f"pattern not found: {pattern}")
+            return Observation(kind="grep", pattern=pattern, hits=hits)
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("google chat grep failed for %r: %s", pattern, exc)
+            return Observation(kind="error", pattern=pattern, error=f"google chat grep error: {exc}")
+
+    def query(self, spec: Dict[str, Any]) -> Observation:
+        """Relevance-select conversations for a query and return their transcripts.
+
+        Spec keys:
+          ``query`` / ``q``      -- natural-language query (selects by keyword overlap; optional).
+          ``samples``            -- how many conversations to return (default 4).
+          ``space``              -- optional space resource name to restrict to.
+        """
+        try:
+            self._ensure_loaded()
+            if not self._conversations:
+                return Observation(kind="error", error=self._unconfigured_or_empty())
+
+            space = spec.get("space")
+            cids = [
+                c for c in self._conversations
+                if not space or self._conversations[c].get("space") == space or space in c
+            ]
+            if not cids:
+                return Observation(kind="error", error="no conversations match the query scope")
+
+            samples = int(spec.get("samples", 4) or 4)
+            query_text = str(spec.get("query") or spec.get("q") or "").strip()
+
+            if query_text:
+                query_terms = set(keywords_from_text(query_text))
+                conv_kw = {c: set(keywords_from_text(conversation_digest(self._conversations[c]))) for c in cids}
+                overlapping = [c for c in cids if conv_kw[c] & query_terms] or cids
+                selected = select_representatives(
+                    items=overlapping,
+                    get_terms=lambda c: conv_kw.get(c) or extract_terms(conversation_digest(self._conversations[c])),
+                    samples_per_group=samples,
+                    get_score_boost=self._recency_boost,
+                )
+            else:
+                selected = select_representatives(
+                    items=cids,
+                    get_terms=lambda c: extract_terms(conversation_digest(self._conversations[c])),
+                    samples_per_group=samples,
+                    get_score_boost=self._recency_boost,
+                )
+
+            if not selected:
+                return Observation(kind="error", error="no conversations selected after sampling")
+
+            parts = []
+            for cid in selected[:samples]:
+                parts.append(f"=== Conversation: {cid} ===\n{conversation_to_text(self._conversations[cid])}")
+            return Observation(kind="query", text="\n\n".join(parts), rel_path=f"google_chat:{query_text[:60]}")
+        except Exception as exc:  # noqa: BLE001
+            _log.debug("google chat query failed: %s", exc)
+            return Observation(kind="error", error=f"google chat query error: {exc}")
+
+    def make_locator(self, candidate: Any) -> Dict[str, Any]:
+        """Build a ``chat_thread`` locator for a candidate conversation key this adapter surfaced.
+
+        GRANULARITY (honest): the finest unit this adapter can ADDRESS is one of its grouped
+        conversations -- a THREAD when ``group_by="thread"`` (``candidate`` is the thread resource
+        name, a real Chat thread boundary taken from each message's ``thread.name``), or a whole SPACE
+        when ``group_by="space"``. So the locator is ``{"space": <space resource name>,
+        "thread_or_message_id": <the conversation key>}``: ``thread_or_message_id`` is the addressable
+        id at whatever granularity this adapter groups by, NOT a guaranteed single-message id. Returns
+        ``{}`` for an unknown/empty candidate. Never raises."""
+        try:
+            key = str(candidate or "").strip()
+            if not key:
+                return {}
+            conv = self._conversations.get(key) or {}
+            return {"space": conv.get("space") or "", "thread_or_message_id": key}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def resolve_reference(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> Optional[str]:
+        """Re-fetch a learned ``chat_thread`` reference FRESH through this adapter's OWN read path.
+
+        Never a stale snapshot: ``read_section`` calls ``_ensure_loaded`` (which re-hits the Chat API
+        once its ``cache_ttl_seconds`` has elapsed), so a resolve returns the thread's CURRENT
+        content. Mirrors ``ReferenceResolver.resolve`` exactly, so this bound method wires straight
+        into ``build_resolver_registry``'s ``consumer_resolvers`` under ``"chat_thread"``. Returns the
+        transcript text, or ``None`` when the thread is unknown / has aged out of the ``lookback_days``
+        window / anything fails (an honest limit: content older than the window is no longer
+        re-fetchable and degrades to a graceful unresolved-pointer line, never a crash). Never
+        raises."""
+        try:
+            key = str((locator or {}).get("thread_or_message_id") or "").strip()
+            if not key:
+                return None
+            obs = self.read_section(key, max_bytes=max_chars)
+            if obs.kind == "error" or not obs.text:
+                return None
+            return obs.text
+        except Exception:  # noqa: BLE001 — a resolver must never raise
+            return None
+
+    def _learn_card_references(
+        self,
+        active_card_id: str,
+        selected: List[str],
+        conv_kw: Dict[str, Any],
+        query_terms: Any,
+        card_terms: Any,
+        *,
+        now: float,
+    ) -> None:
+        """Learn the selected relevance hits as ``chat_thread`` references on the active card.
+
+        The Google-Chat twin of ``ClaudeConversationsAdapter._learn_card_references``: it fixes only
+        the three type-specific choices -- this adapter's own ``reference_type`` (``"chat_thread"``),
+        its own ``make_locator``, and the ``why`` (``"chat topic match"``) -- and delegates the
+        union/intersection filtering, attach, dedupe and usage-stamp to the shared
+        ``card_scoped_learning`` functions. Reusing ``make_locator`` keeps the persisted locator shape
+        identical to what ``resolve_reference`` re-fetches, so learning and resolution never drift.
+        Best-effort; never raises out."""
+        eligible = learnable_candidates(
+            selected, lambda cid: conv_kw.get(cid) or set(), query_terms, card_terms
+        )
+        learn_card_references(
+            self._card_store,
+            active_card_id,
+            eligible,
+            ref_type=self.reference_type,
+            locator_fn=self.make_locator,
+            why="chat topic match",
+            now=now,
+        )
+
+    # ------------------------------------------------------------------
+    # Pre-flight ContextAssembler interface (optional, same as the Claude adapter)
+    # ------------------------------------------------------------------
+
+    def assemble(
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event: Optional[Any] = None
+    ) -> AssembledContext:
+        """Inject digests of Chat conversations relevant to ``task_text``. Never raises.
+
+        CARD-SCOPED LEARNING (now WIRED). When ``meta`` carries a ``thread_card_id`` (the turn's
+        ACTIVE card) AND a ``card_store`` was supplied, the relevance gate is WIDENED to the union of
+        the query terms and the card's own topic terms (so a chat thread on the card's topic surfaces
+        even when it doesn't match this turn's exact wording), and the selected threads relevant to
+        BOTH the request and the card are LEARNED as ``chat_thread`` references on that card --
+        persisted and usage-stamped so future turns retrieve them by recency. Each such reference is
+        re-fetched FRESH by ``resolve_reference`` (this adapter's own read path), so nothing dangles:
+        the ``"everything must be resolvable"`` principle holds because ``chat_thread`` now HAS a
+        resolver (this adapter). With no active card (or no store) this degrades EXACTLY to the prior
+        global keyword + TF-DF-IDF scan. The union-gate / intersection-learn / usage-stamp logic is
+        the shared, adapter-agnostic ``card_scoped_learning`` module, identical to the Claude adapter.
+
+        STILL OUT OF SCOPE (separate, harder problem): full thread-to-card TOPIC ROUTING -- deciding
+        WHICH chat thread belongs on WHICH card for a team-chat participant, given this adapter's flat
+        keyword matching with no per-thread topic isolation. What is solved here is only that Chat
+        content CAN be persisted as a learned reference and re-fetched fresh across turns; it does not
+        by itself solve assigning threads to the right card.
+        """
+        try:
+            self._ensure_loaded()
+            if not self._conversations:
+                return AssembledContext()
+
+            query_terms = set(keywords_from_text(task_text))
+            active_card_id = str((meta or {}).get("thread_card_id") or "").strip() or None
+            card_terms = active_card_terms(self._card_store, active_card_id)
+            # Widen the gate with the active card's topic terms so a thread about the card's idea
+            # surfaces even when it doesn't match this turn's exact wording. With no active card
+            # (card_terms empty) this is exactly the prior query-only gate.
+            surfacing_terms = gate_terms(query_terms, card_terms)
+
+            conv_kw = {
+                cid: set(keywords_from_text(conversation_digest(conv)))
+                for cid, conv in self._conversations.items()
+            }
+            overlapping = [cid for cid, kw in conv_kw.items() if kw & surfacing_terms]
+            if not overlapping:
+                return AssembledContext()
+
+            selected = select_representatives(
+                items=overlapping,
+                get_terms=lambda cid: conv_kw[cid],
+                samples_per_group=4,
+                get_score_boost=self._recency_boost,
+            )
+            if not selected:
+                return AssembledContext()
+
+            # Learn the hits onto the active card (best-effort; a store failure never discards the
+            # context we already assembled).
+            if active_card_id and card_terms and self._card_store is not None:
+                try:
+                    self._learn_card_references(
+                        active_card_id, selected, conv_kw, query_terms, card_terms,
+                        now=_time.time(),
+                    )
+                except Exception:  # noqa: BLE001 — learning is a side effect, never the answer
+                    pass
+
+            lines = ["--- RELEVANT GOOGLE CHAT CONVERSATIONS ---"]
+            for cid in selected:
+                conv = self._conversations[cid]
+                label = conv.get("rep_name") or cid
+                lines.append(f"[chat: {label} ({cid})]")
+                lines.append(conversation_digest(conv))
+            return AssembledContext(
+                context_view="\n".join(lines),
+                sources=[{"adapter": "google_chat", "label": "google chat", "items": list(selected)}],
+            )
+        except Exception:  # noqa: BLE001
+            return AssembledContext()
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        pass  # Chat is read-only here; messages are authored in Google Chat, not by QAR.
+
+    # ------------------------------------------------------------------
+    # Discovery
+    # ------------------------------------------------------------------
+
+    def list_sources(self) -> Observation:
+        try:
+            self._ensure_loaded()
+            if not self._conversations:
+                return Observation(kind="query", locator="list_sources", text=self._unconfigured_or_empty())
+            lines = []
+            for cid in sorted(self._conversations.keys()):
+                conv = self._conversations[cid]
+                lines.append(f"{cid}: Google Chat ({conv.get('rep_name', '')}, {conv.get('turn_count', 0)} msgs)")
+            return Observation(kind="query", locator="list_sources", text="\n".join(lines))
+        except Exception as exc:  # noqa: BLE001
+            return Observation(kind="error", error=f"google chat list_sources error: {exc}")
+
+    def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
+        try:
+            self._ensure_loaded()
+            key = resolve_conv_key(name, self._conversations, self._conv_id_lookup)
+            if key is None:
+                return Observation(kind="error", error=f"conversation not found: {name}")
+            conv = self._conversations[key]
+            return Observation(
+                kind="query",
+                locator=f"describe_source({name})",
+                text=(
+                    f"Google Chat conversation '{key}' in space {conv.get('space')} "
+                    f"({conv.get('rep_name')}) with {conv.get('turn_count', 0)} messages."
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return Observation(kind="error", error=f"google chat describe_source error: {exc}")
+
+    def list_operations(self) -> Observation:
+        return Observation(
+            kind="query",
+            locator="list_operations",
+            text=(
+                "chat_read: Read one Google Chat conversation transcript by id (pass it as rel_path).\n"
+                "chat_grep: Search a regex across all loaded Chat conversations.\n"
+                "chat_query: Relevance-select conversations for a query; pass {\"query\": \"...\"}."
+            ),
+        )
+
+    def describe_operation(self, name: str) -> Observation:
+        ops = {
+            "chat_read": "chat_read: read_section(conversation_id) -> transcript text.",
+            "chat_grep": "chat_grep: grep(pattern, scope=<conv id or space>, max_hits=N) -> matching lines.",
+            "chat_query": 'chat_query: query({"query": "terms", "samples": 4, "space": "spaces/AAA"}) -> selected transcripts.',
+        }
+        text = ops.get((name or "").lower().replace("-", "_").replace(" ", "_"))
+        if not text:
+            return Observation(kind="error", error=f"GoogleChatAdapter: unknown operation {name!r}.")
+        return Observation(kind="query", locator=f"describe_operation({name})", text=text)
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _unconfigured_or_empty(self) -> str:
+        if self._token_provider is None:
+            return "google chat not configured: no token_provider supplied"
+        if self._token_provider() is None:
+            return "google chat not configured: token_provider returned no token"
+        return "no Google Chat conversations available in the configured window"
+
+
+# ---------------------------------------------------------------------------
+# Small time helpers (RFC3339 <-> epoch), stdlib-only
+# ---------------------------------------------------------------------------
+
+def _parse_rfc3339(value: Any) -> float:
+    """Parse an RFC3339 timestamp (e.g. '2026-06-20T12:34:56.789Z') to epoch seconds, or 0.0."""
+    if not value or not isinstance(value, str):
+        return 0.0
+    try:
+        from datetime import datetime, timezone
+
+        s = value.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+def _to_rfc3339(epoch: float) -> str:
+    """Format epoch seconds as an RFC3339 UTC timestamp ('...Z') for the Chat API filter."""
+    from datetime import datetime, timezone
+
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

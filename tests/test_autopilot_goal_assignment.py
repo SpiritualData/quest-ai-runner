@@ -2,10 +2,10 @@
 assignee's rep. Both are best-effort and never fail a pass."""
 import json
 
-from quest_ai_runner.runner.autopilot import AutopilotPass
-from quest_ai_runner.runner.goal_handoff import choose_assignee, run_goal_handoff
-from quest_ai_runner.runner.quest_client import QuestApiError
-from quest_ai_runner.runner.quest_client_support import WriteResult
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
+from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import choose_assignee, run_goal_handoff
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import WriteResult
 
 from .test_autopilot import FakeAutopilotClient, _now, _quest
 
@@ -191,7 +191,7 @@ def test_dict_preferences_reach_the_prompt_as_json_not_python_repr():
 
 
 def test_ai_members_are_never_chosen_or_listed():
-    from quest_ai_runner.runner.goal_handoff import choose_assignee, human_member_ids
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import choose_assignee, human_member_ids
     rep = {"user_id": "u_rep", "name": "Bob's rep", "role": "ai_service"}
     assert human_member_ids([ALICE, rep]) == ["u_alice"]
     seen = []

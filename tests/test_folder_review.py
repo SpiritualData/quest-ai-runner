@@ -8,7 +8,7 @@ pin what each layer is for -- and what it must not do.
 import json
 from pathlib import Path
 
-import quest_ai_runner.adapters.file_context_store as fcs
+import quest_ai_runner.the_body.internal_context.card_store.file_context_store as fcs
 
 
 def _mk(root: Path, rel: str, n=3, ext=".md"):
@@ -150,10 +150,10 @@ import re
 
 import pytest
 
-from hubofhubs.the_body.internal_context.card_store import card_store_mounts as mounts
-from quest_ai_runner.adapters import card_store_migrate as migrate
-from quest_ai_runner.adapters import context_risk_gate as gate_mod
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from hubofhubs.api import card_store_mounts as mounts
+from quest_ai_runner.the_body.internal_context.card_store import card_store_migrate as migrate
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_risk_gate as gate_mod
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 from tests.test_card_store_mounts import card, make_owner, reader_store
 
 DATES = ("2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04")
@@ -400,7 +400,7 @@ def _live_corpus(root: Path) -> None:
 
 def _snapshot(root: Path, name: str, *, recorded_root=None, layout=(), store_id=None):
     """One backup folder with a card store, optionally recording another root or the live layout."""
-    from hubofhubs.the_body.internal_context.card_store.card_store_identity import update_identity
+    from hubofhubs.api import update_identity
     snap = root / "backups" / name
     make_owner(snap, [card(f"snap-{name}", ["hq/docs/a.py", "hq/docs/b.py"])])
     for sub in layout:
@@ -433,7 +433,7 @@ def test_a_lone_backup_copy_of_the_corpus_is_neither_indexed_nor_imported(tmp_pa
     _live_corpus(tmp_path)
     own_cards = tmp_path / "cards_elsewhere"
     if how == "own_store_id":
-        from hubofhubs.the_body.internal_context.card_store.card_store_identity import write_meta
+        from hubofhubs.api import write_meta
         own_cards.mkdir()
         write_meta(str(own_cards), {"store_id": "st_live"})
     kwargs = {"recorded_root": tmp_path} if how == "recorded_root" else \

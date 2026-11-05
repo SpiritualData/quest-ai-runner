@@ -26,15 +26,11 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.core import usage_limit
-from hubofhubs.the_world.tools.deep import DeepResult, runner_uses_deep_model
-from quest_ai_runner.core.goal_runner import (
-    SubprocessConfig,
-    SubprocessGoalRunner,
-    envelope_reports_no_work,
-)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+from hubofhubs.api import DeepResult, runner_uses_deep_model
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner, envelope_reports_no_work
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider

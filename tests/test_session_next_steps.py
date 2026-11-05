@@ -16,13 +16,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import quest_ai_runner
-from quest_ai_runner.interactive_session import InteractiveSession
-from quest_ai_runner.runner.quest_folder_sync import (
-    NEXT_STEPS_ENTRY_NAME,
-    quest_id_in_folder,
-    read_next_steps,
-)
-from quest_ai_runner.runner import session_next_steps as sns
+from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import NEXT_STEPS_ENTRY_NAME, quest_id_in_folder, read_next_steps
+from quest_ai_runner.the_intelligence.higher_mind.objectives import session_next_steps as sns
 
 
 QUEST_ID = "quest_aaaa1111bbbb"
@@ -430,5 +426,5 @@ def test_the_turn_completion_path_actually_calls_it():
     """The first half of this feature shipped with its attended trigger left unwired, which is the
     whole reason it needed a second pass. Read as source rather than imported so the check holds
     without a terminal or the optional UI dependencies."""
-    ui = (Path(quest_ai_runner.__file__).parent / "textual_ui_turn.py").read_text(encoding="utf-8")
+    ui = (Path(quest_ai_runner.__file__).parent / "the_consciousness" / "terminal" / "textual_ui_turn.py").read_text(encoding="utf-8")
     assert "_maybe_refresh_next_steps(final)" in ui

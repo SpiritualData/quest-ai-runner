@@ -15,39 +15,16 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from quest_ai_runner.config import resolve_anticipator, shutdown_background_index, RunnerConfig
-from quest_ai_runner.core.anticipation import (
-    CONF_FLOOR,
-    K,
-    MATCH_SERVE,
-    MAX_FOLLOWUPS,
-    MAX_PATTERNS_PER_SCOPE,
-    PREDICTION_TTL_SECONDS,
-    PRUNE_AGE_DAYS,
-    PRUNE_WEIGHT,
-    Anticipator,
-    FilePredictionStore,
-    Pattern,
-    Prediction,
-    apply_refresh,
-    assemble_with_scope_tags,
-    bundle_is_cross_quest_mixed,
-    bundle_scope_tags,
-    chips_for_now,
-    extract_features,
-    generate_predictions,
-    match_actual,
-    parse_refresh_response,
-    rank_patterns,
-    reinforce_or_create,
-    score_outcome,
-    similarity,
-    update_weight,
-)
-from quest_ai_runner.core.anticipation_learner import AskFeatures
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.scope_tags import scope_tags_from_keys
+from quest_ai_runner.the_body.configuration.config import resolve_anticipator, shutdown_background_index, RunnerConfig
+from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation import (
+    CONF_FLOOR, K, MATCH_SERVE, MAX_FOLLOWUPS, MAX_PATTERNS_PER_SCOPE, PREDICTION_TTL_SECONDS, PRUNE_AGE_DAYS, PRUNE_WEIGHT, Anticipator,
+    FilePredictionStore, Pattern, Prediction, apply_refresh, assemble_with_scope_tags, bundle_is_cross_quest_mixed, bundle_scope_tags,
+    chips_for_now, extract_features, generate_predictions, match_actual, parse_refresh_response, rank_patterns, reinforce_or_create, score_outcome,
+    similarity, update_weight)
+from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_learner import AskFeatures
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_tags_from_keys
 
 from .conftest import StubProvider, StubRetrieval
 

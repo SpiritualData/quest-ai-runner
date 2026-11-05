@@ -7,19 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner.quest_folder_sync import (
-    NEXT_STEPS_ENTRY_NAME,
-    NEXT_STEPS_NOTE_MARKER,
-    NextSteps,
-    QuestFolderSyncError,
-    publish_next_steps,
-    pull_quest_to_folder,
-    push_folder_to_quest,
-    read_next_steps,
-    render_sync_file,
-    sync_quest_folder,
-    write_next_steps,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import (
+    NEXT_STEPS_ENTRY_NAME, NEXT_STEPS_NOTE_MARKER, NextSteps, QuestFolderSyncError, publish_next_steps, pull_quest_to_folder, push_folder_to_quest,
+    read_next_steps, render_sync_file, sync_quest_folder, write_next_steps)
 
 QUEST_ID = "quest_c18a9d1409ff"
 
@@ -460,7 +450,7 @@ def test_publish_survives_a_quest_side_failure_with_the_local_file_intact(tmp_pa
 # --- QuestClient account-wide quest endpoint shaping (no network) ------------------
 
 def test_quest_client_account_quest_endpoints_shape_requests():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     calls = []
 
@@ -483,7 +473,7 @@ def test_quest_client_account_quest_endpoints_shape_requests():
 
 
 def test_quest_client_context_entry_endpoints_shape_requests():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     calls = []
 
@@ -521,8 +511,8 @@ def _quest_folder_aware_mock_client(quest_folder_client):
 
 
 def test_poller_pulls_quest_folder_before_running_when_mapped():
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -546,8 +536,8 @@ def test_poller_pulls_quest_folder_before_running_when_mapped():
 
 
 def test_poller_no_map_does_not_sync_quest_folder():
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -565,8 +555,8 @@ def test_poller_no_map_does_not_sync_quest_folder():
 
 def test_poller_quest_folder_sync_failure_never_breaks_the_task():
     """A sync that raises (bad folder, API error) must not stop the task from running."""
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -588,8 +578,8 @@ def test_poller_quest_folder_sync_failure_never_breaks_the_task():
 
 
 def test_poller_pushes_quest_folder_after_run_when_direction_is_push():
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -620,8 +610,8 @@ def test_poller_pushes_quest_folder_after_run_when_direction_is_push():
 def test_run_once_syncs_mapped_quest_folders_even_with_no_due_tasks():
     """The whole point of a per-scan sync: a mapped quest's folder must stay current even when
     no task ever fires for it (e.g. someone only edits the quest on Quest directly)."""
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient
@@ -647,8 +637,8 @@ def test_run_once_syncs_mapped_quest_folders_even_with_no_due_tasks():
 
 
 def test_run_once_periodic_sync_failure_never_breaks_the_scan():
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient
@@ -674,8 +664,8 @@ def test_run_once_periodic_sync_failure_never_breaks_the_scan():
 
 def test_run_once_syncs_every_mapped_quest_folder():
     """More than one mapped quest: each gets synced on the same scan."""
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient
@@ -718,7 +708,7 @@ def test_run_once_syncs_every_mapped_quest_folder():
 # --- env wiring for QAR_QUEST_FOLDER_MAP / QAR_QUEST_FOLDER_SYNC_DIRECTION ---------
 
 def test_env_wiring_for_quest_folder_map(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     monkeypatch.delenv("QAR_QUEST_FOLDER_MAP", raising=False)
     monkeypatch.delenv("QAR_QUEST_FOLDER_SYNC_DIRECTION", raising=False)
@@ -739,7 +729,7 @@ def test_env_wiring_for_quest_folder_map(monkeypatch):
 
 
 def test_env_wiring_ignores_invalid_quest_folder_map_json(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     monkeypatch.setenv("QAR_QUEST_FOLDER_MAP", "not valid json")
     cfg = _config_from_env()
@@ -771,7 +761,7 @@ def _pulled(client, folder):
 
 
 def test_editing_the_outcome_pushes_it():
-    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import push_quest_state
     with tempfile.TemporaryDirectory() as d:
         client = MockStateClient()
         path = _pulled(client, d)
@@ -785,7 +775,7 @@ def test_editing_the_outcome_pushes_it():
 
 
 def test_an_unedited_file_pushes_nothing():
-    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import push_quest_state
     with tempfile.TemporaryDirectory() as d:
         client = MockStateClient()
         _pulled(client, d)
@@ -794,7 +784,7 @@ def test_an_unedited_file_pushes_nothing():
 
 
 def test_ticking_the_status_pushes_completion():
-    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import push_quest_state
     with tempfile.TemporaryDirectory() as d:
         client = MockStateClient()
         path = _pulled(client, d)
@@ -806,7 +796,7 @@ def test_ticking_the_status_pushes_completion():
 
 def test_editing_current_state_is_reported_not_silently_dropped():
     """No role may write current_state; a person who retypes it must be told it did not land."""
-    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import push_quest_state
     with tempfile.TemporaryDirectory() as d:
         client = MockStateClient()
         path = _pulled(client, d)
@@ -819,7 +809,7 @@ def test_editing_current_state_is_reported_not_silently_dropped():
 
 
 def test_a_server_side_refusal_is_surfaced_not_reported_as_success():
-    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import push_quest_state
     with tempfile.TemporaryDirectory() as d:
         client = MockStateClient(ok=False, blocked=["outcome"], held="")
         path = _pulled(client, d)
@@ -829,7 +819,7 @@ def test_a_server_side_refusal_is_surfaced_not_reported_as_success():
 
 
 def test_push_state_without_a_file_raises():
-    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import push_quest_state
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises(QuestFolderSyncError):
             push_quest_state(MockStateClient(), QUEST_ID, d)
@@ -858,7 +848,7 @@ def _many_notes(n):
 
 
 def test_render_caps_the_notes_block_at_the_newest_and_says_how_many_were_left_out():
-    from quest_ai_runner.runner.quest_folder_sync import NOTES_BLOCK_LIMIT
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import NOTES_BLOCK_LIMIT
     out = render_sync_file("", QUEST_ID, MockQuestFolderClient()._state, _many_notes(NOTES_BLOCK_LIMIT + 30),
                            notes_total=5000)
     assert f"_{5000 - NOTES_BLOCK_LIMIT} older notes not shown, total 5000._" in out
@@ -872,7 +862,7 @@ def test_render_below_the_cap_is_unchanged_and_has_no_hidden_line():
 
 
 def test_pull_passes_the_clients_total_through():
-    from quest_ai_runner.runner.quest_client_quests import NotesList
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_quests import NotesList
     client = MockQuestFolderClient()
     client.list_quest_notes = lambda qid: NotesList(_many_notes(5), total=34616)
     with tempfile.TemporaryDirectory() as d:

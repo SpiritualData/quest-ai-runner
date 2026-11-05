@@ -8,11 +8,11 @@ nothing enforced it.
 """
 from typing import Any, Dict, List
 
-from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import NoteResolver
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from hubofhubs.api import NoteResolver
+from hubofhubs.api import AssembledContext
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider
 

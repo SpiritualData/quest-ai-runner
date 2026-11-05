@@ -14,11 +14,11 @@ EVENT_CONTEXT, EVENT_STATUS, narration EVENT_PARTIAL), and REPLY_VOICE_SYSTEM is
 """
 from typing import Any, Dict, List
 
-from hubofhubs.the_world.tools.deep import ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_UNDERSTANDING
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, _grounding_block
-from quest_ai_runner.core.orchestrator_decisions import restates_meaningfully
+from hubofhubs.api import ProgressEvent
+from hubofhubs.api import EVENT_UNDERSTANDING
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, _grounding_block
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import restates_meaningfully
 
 from .conftest import StubProvider, StubRetrieval
 

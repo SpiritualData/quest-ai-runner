@@ -1,17 +1,9 @@
 {
  "@intents": {
   "intents": {
-   "body": {
-    "arm": "card_and_reads",
-    "root": "the-body"
-   },
    "critical_thinking": {
     "arm": "deep_runs_only",
     "root": "critical-thinking"
-   },
-   "hold_the_intents": {
-    "arm": "separate_stores",
-    "root": "hold-the-intents"
    },
    "integrity": {
     "arm": "structure-library",
@@ -25,25 +17,25 @@
     "arm": "",
     "root": "escalate-to-a-human"
    },
+   "objectives": {
+    "arm": "separate_stores",
+    "root": "hold-the-intents"
+   },
    "quest-ai-runner": {
     "arm": "",
     "root": "do-grounded-work"
+   },
+   "request_intake": {
+    "arm": "ways_in",
+    "root": "take-in-the-world"
    },
    "science": {
     "arm": "",
     "root": "search-the-web"
    },
-   "select_context": {
-    "arm": "per_lane_assembly",
-    "root": "choose-the-context"
-   },
    "subconscious": {
     "arm": "recency_window",
     "root": "the-subconscious"
-   },
-   "take_in_the_world": {
-    "arm": "ways_in",
-    "root": "take-in-the-world"
    }
   },
   "scopes": {
@@ -133,7 +125,7 @@
  "access-quest-operations": {
   "default": "quest_client",
   "modules": {
-   "quest_client": "quest_ai_runner.area_body"
+   "quest_client": "quest_ai_runner.the_body.area_body"
   }
  },
  "answer-a-turn": {
@@ -144,7 +136,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "orchestrator_turn": "quest_ai_runner.area_mind"
+   "orchestrator_turn": "quest_ai_runner.the_intelligence.mind.area_mind"
   }
  },
  "answer-end-to-end": {
@@ -155,8 +147,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "qar_live": "quest_ai_runner.core.orchestrator",
-   "shipped_path": "quest_ai_runner.area_mind"
+   "qar_live": "quest_ai_runner.the_intelligence.mind.orchestrator",
+   "shipped_path": "quest_ai_runner.the_intelligence.mind.area_mind"
   }
  },
  "assemble-a-prompt": {
@@ -167,7 +159,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "planner_prompt": "quest_ai_runner.area_mind"
+   "planner_prompt": "quest_ai_runner.the_intelligence.mind.area_mind"
   }
  },
  "assist-a-terminal-session": {
@@ -178,7 +170,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "fast_model_helpers": "quest_ai_runner.cli_config"
+   "fast_model_helpers": "quest_ai_runner.the_body.configuration.cli_config"
   }
  },
  "cache-cards": {
@@ -189,15 +181,15 @@
    "verdict": "TIE"
   },
   "modules": {
-   "file": "quest_ai_runner.subconscious.card_cache_file",
-   "null": "quest_ai_runner.adapters.quest_api_card_repository"
+   "file": "quest_ai_runner.the_body.internal_context.card_store.card_cache_file",
+   "null": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository"
   }
  },
  "card-store": {
   "default": "quest-api-cards",
   "modules": {
-   "qar-card-repository": "quest_ai_runner.subconscious.hub_card_store",
-   "quest-api-cards": "quest_ai_runner.subconscious.hub_card_store"
+   "qar-card-repository": "quest_ai_runner.the_body.internal_context.card_store.hub_card_store",
+   "quest-api-cards": "quest_ai_runner.the_body.internal_context.card_store.hub_card_store"
   }
  },
  "cards-from-files": {
@@ -208,7 +200,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "qar_topic_bootstrap": "quest_ai_runner.subconscious.qar_topic_bootstrap"
+   "qar_topic_bootstrap": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.qar_topic_bootstrap"
   }
  },
  "choose-the-context": {
@@ -219,7 +211,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "per_lane_assembly": "quest_ai_runner.select_context.area"
+   "per_lane_assembly": "quest_ai_runner.the_intelligence.subconscious.area_context_retriever"
   }
  },
  "claim-reach": {
@@ -230,8 +222,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "coding_agent_prompt_reach": "quest_ai_runner.area_body",
-   "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
+   "coding_agent_prompt_reach": "quest_ai_runner.the_body.area_body",
+   "coding_agent_reach_judge": "quest_ai_runner.the_intelligence.mind.planner.reach_judge"
   }
  },
  "configure-a-lane": {
@@ -242,11 +234,11 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "config": "quest_ai_runner.config",
-   "config_core_settings": "quest_ai_runner.config_core_settings",
-   "config_environment": "quest_ai_runner.config_environment",
-   "config_file": "quest_ai_runner.config_file",
-   "runtime_settings": "quest_ai_runner.core.runtime_settings"
+   "config": "quest_ai_runner.the_body.configuration.config",
+   "config_core_settings": "quest_ai_runner.the_body.configuration.config_core_settings",
+   "config_environment": "quest_ai_runner.the_body.configuration.config_environment",
+   "config_file": "quest_ai_runner.the_body.configuration.config_file",
+   "runtime_settings": "quest_ai_runner.the_body.configuration.runtime_settings"
   }
  },
  "core-ml-tasks": {
@@ -257,7 +249,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "router_labels": "quest_ai_runner.area_mind"
+   "router_labels": "quest_ai_runner.the_intelligence.mind.area_mind"
   }
  },
  "critical-thinking": {
@@ -268,8 +260,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "deep_runs_only": "quest_ai_runner.critical_thinking.area",
-   "instruction_only": "quest_ai_runner.core.standing_instructions"
+   "deep_runs_only": "quest_ai_runner.the_intelligence.critical_thinking.area",
+   "instruction_only": "quest_ai_runner.the_self.integrity.prompts.standing_instructions"
   }
  },
  "describe-an-attachment": {
@@ -280,7 +272,7 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "vision_description": "quest_ai_runner.core.attachments"
+   "vision_description": "quest_ai_runner.the_intelligence.mind.context_intake.attachments"
   }
  },
  "detect-a-stalled-run": {
@@ -291,8 +283,8 @@
    "verdict": "TIE"
   },
   "modules": {
-   "goal_runner": "quest_ai_runner.core.goal_runner",
-   "live_reviewer": "quest_ai_runner.critical_thinking.area"
+   "goal_runner": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner",
+   "live_reviewer": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
  "do-grounded-work": {
@@ -303,7 +295,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "library": "quest_ai_runner.goal_agent"
+   "library": "quest_ai_runner.the_self.goal_agent"
   }
  },
  "draft-a-metric": {
@@ -314,7 +306,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "capped_model_draft": "quest_ai_runner.critical_thinking.area"
+   "capped_model_draft": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
  "escalate-to-a-human": {
@@ -325,7 +317,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "quest_decision": "quest_ai_runner.runner.quest_client"
+   "quest_decision": "quest_ai_runner.the_body.internal_context.quest.client.quest_client"
   }
  },
  "explain-an-answer": {
@@ -336,7 +328,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "model_explanation": "quest_ai_runner.core.orchestrator_judges"
+   "model_explanation": "quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges"
   }
  },
  "expose-the-public-api": {
@@ -348,8 +340,8 @@
   },
   "modules": {
    "__init__": "quest_ai_runner",
-   "async_bridge": "quest_ai_runner.take_in_the_world.async_bridge",
-   "package_front_doors": "quest_ai_runner.area_take_in_the_world"
+   "async_bridge": "quest_ai_runner.the_consciousness.request_intake.async_bridge",
+   "package_front_doors": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world"
   }
  },
  "feed-context-sources": {
@@ -360,8 +352,8 @@
    "verdict": "TIE"
   },
   "modules": {
-   "base": "quest_ai_runner.runner.context_sources_base",
-   "quest_channels": "quest_ai_runner.runner.context_updates"
+   "base": "quest_ai_runner.the_body.intake_sources.context_sources_base",
+   "quest_channels": "quest_ai_runner.the_body.intake_sources.context_updates"
   }
  },
  "gate-an-autopilot-pass": {
@@ -372,8 +364,8 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "autopilot_gates": "quest_ai_runner.critical_thinking.autopilot_gates",
-   "live_pass": "quest_ai_runner.critical_thinking.area"
+   "autopilot_gates": "quest_ai_runner.the_intelligence.proactivity.autopilot_gates",
+   "live_pass": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
  "gather-evidence": {
@@ -384,15 +376,15 @@
    "verdict": "WIN"
   },
   "modules": {
-   "cached_db": "quest_ai_runner.body.cached_db_adapter",
-   "composite": "quest_ai_runner.body.composite_retrieval_adapter",
-   "files": "quest_ai_runner.adapters.files_adapter",
-   "google_chat": "quest_ai_runner.adapters.google_chat_adapter",
-   "google_drive": "quest_ai_runner.body.google_drive_adapter",
-   "mcp": "quest_ai_runner.body.mcp_retrieval_adapter",
-   "notion": "quest_ai_runner.body.notion_adapter",
-   "quest": "quest_ai_runner.body.quest_retrieval_adapter",
-   "remote_files_adapter": "quest_ai_runner.body.remote_files_adapter"
+   "cached_db": "quest_ai_runner.the_body.internal_context.quest.cached_db_adapter",
+   "composite": "quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter",
+   "files": "quest_ai_runner.the_world.tools.file_reading.files_adapter",
+   "google_chat": "quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter",
+   "google_drive": "quest_ai_runner.the_world.tools.connected_system_operations.google_drive_adapter",
+   "mcp": "quest_ai_runner.the_world.tools.connected_system_operations.mcp_retrieval_adapter",
+   "notion": "quest_ai_runner.the_world.tools.connected_system_operations.notion_adapter",
+   "quest": "quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter",
+   "remote_files_adapter": "quest_ai_runner.the_world.tools.file_reading.remote_files_adapter"
   }
  },
  "ground-in-intent": {
@@ -403,10 +395,10 @@
    "verdict": "WIN"
   },
   "modules": {
-   "frame-card-drilldown": "quest_ai_runner.critical_thinking.quest_client_intents",
-   "frame-lazy-spec": "quest_ai_runner.core.tools_quest_intents",
-   "frame-line": "quest_ai_runner.critical_thinking.area",
-   "none": "quest_ai_runner.critical_thinking.autopilot_briefs"
+   "frame-card-drilldown": "quest_ai_runner.the_body.internal_context.quest.client.quest_client_intents",
+   "frame-lazy-spec": "quest_ai_runner.the_body.hands.quest_operations.tools_quest_intents",
+   "frame-line": "quest_ai_runner.the_intelligence.critical_thinking.area",
+   "none": "quest_ai_runner.the_intelligence.proactivity.autopilot_briefs"
   }
  },
  "guard-a-reply": {
@@ -417,7 +409,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "qar_guards": "quest_ai_runner.critical_thinking.area"
+   "qar_guards": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
  "guide-by-feedback": {
@@ -428,7 +420,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "universal": "quest_ai_runner.adapters.guidance_card_manager"
+   "universal": "quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager"
   }
  },
  "guide-toward-the-long-term-goal": {
@@ -439,7 +431,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "guided_v2": "quest_ai_runner.core.auxiliary_prompts"
+   "guided_v2": "quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts"
   }
  },
  "hand-off-a-goal": {
@@ -450,7 +442,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "model_judge": "quest_ai_runner.area_body"
+   "model_judge": "quest_ai_runner.the_body.area_body"
   }
  },
  "hold-the-intents": {
@@ -461,7 +453,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "separate_stores": "quest_ai_runner.hold_the_intents.area"
+   "separate_stores": "quest_ai_runner.the_intelligence.higher_mind.objectives.area"
   }
  },
  "index-by-meaning": {
@@ -472,7 +464,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "qdrant": "quest_ai_runner.subconscious.qdrant_vector_store"
+   "qdrant": "quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store"
   }
  },
  "iterate-by-spec": {
@@ -483,9 +475,9 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "generic-doctrine": "quest_ai_runner.critical_thinking.goal_iteration",
-   "slice-and-writeback": "quest_ai_runner.critical_thinking.goal_iteration",
-   "slice-only": "quest_ai_runner.critical_thinking.goal_iteration"
+   "generic-doctrine": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
+   "slice-and-writeback": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
+   "slice-only": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration"
   }
  },
  "judge-a-decision": {
@@ -496,7 +488,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "qar_judges": "quest_ai_runner.critical_thinking.area"
+   "qar_judges": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
  "justify-model-calls": {
@@ -507,7 +499,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "spec_registry": "quest_ai_runner.core.prompt_specs"
+   "spec_registry": "quest_ai_runner.the_self.integrity.prompts.prompt_specs"
   }
  },
  "label-context-cards": {
@@ -518,7 +510,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "fast_model_labels": "quest_ai_runner.subconscious.card_metadata_generator"
+   "fast_model_labels": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.card_metadata_generator"
   }
  },
  "learn-by-example": {
@@ -541,9 +533,9 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
-   "model_registry": "quest_ai_runner.core.model_registry",
-   "usage_limit": "quest_ai_runner.core.usage_limit"
+   "deep_model_selection": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection",
+   "model_registry": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry",
+   "usage_limit": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.usage_limit"
   }
  },
  "narrate-a-turn": {
@@ -554,7 +546,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "model_beat": "quest_ai_runner.core.orchestrator_turn"
+   "model_beat": "quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn"
   }
  },
  "nervous-system": {
@@ -565,8 +557,8 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "no_overseer": "quest_ai_runner.core.orchestrator_types",
-   "overseer": "quest_ai_runner.nervous_system.area"
+   "no_overseer": "quest_ai_runner.the_intelligence.mind.orchestrator_types",
+   "overseer": "quest_ai_runner.the_intelligence.nervous_system.area"
   }
  },
  "operate-a-quest": {
@@ -577,7 +569,7 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "qar_orchestrator": "quest_ai_runner.area_body"
+   "qar_orchestrator": "quest_ai_runner.the_body.area_body"
   }
  },
  "operate-from-a-terminal": {
@@ -588,12 +580,12 @@
    "verdict": "TIE"
   },
   "modules": {
-   "__main__": "quest_ai_runner.tools.__main__",
-   "cli": "quest_ai_runner.cli",
-   "cli_commands": "quest_ai_runner.area_take_in_the_world",
-   "cli_parser": "quest_ai_runner.cli_parser",
-   "cli_quest": "quest_ai_runner.cli_quest",
-   "store_cli": "quest_ai_runner.store_cli"
+   "__main__": "quest_ai_runner.the_consciousness.terminal.__main__",
+   "cli": "quest_ai_runner.the_consciousness.terminal.cli",
+   "cli_commands": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world",
+   "cli_parser": "quest_ai_runner.the_consciousness.terminal.cli_parser",
+   "cli_quest": "quest_ai_runner.the_consciousness.terminal.cli_quest",
+   "store_cli": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.store_cli"
   }
  },
  "persist-cards": {
@@ -604,9 +596,9 @@
    "verdict": "TIE"
   },
   "modules": {
-   "filesystem": "quest_ai_runner.config_assembler",
-   "qdrant": "quest_ai_runner.subconscious.qdrant_card_repository",
-   "quest_api": "quest_ai_runner.adapters.quest_api_card_repository"
+   "filesystem": "quest_ai_runner.the_body.configuration.config_assembler",
+   "qdrant": "quest_ai_runner.the_body.internal_context.card_store.qdrant_card_repository",
+   "quest_api": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository"
   }
  },
  "persist-predictions": {
@@ -617,7 +609,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "file": "quest_ai_runner.core.anticipation_store"
+   "file": "quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_store"
   }
  },
  "recall-recent-context": {
@@ -628,7 +620,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "file": "quest_ai_runner.core.recent_context"
+   "file": "quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context"
   }
  },
  "receive-input-mid-run": {
@@ -639,7 +631,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "in_memory": "quest_ai_runner.core.inbox"
+   "in_memory": "quest_ai_runner.the_intelligence.mind.delegation.inbox"
   }
  },
  "remember-conversations": {
@@ -650,7 +642,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "session_file": "quest_ai_runner.adapters.session_file_conversation_store"
+   "session_file": "quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store"
   }
  },
  "repair-a-card-store": {
@@ -661,8 +653,8 @@
    "verdict": "TIE"
   },
   "modules": {
-   "local_folder_tidy": "quest_ai_runner.adapters.context_store_heal",
-   "repository_tidy": "quest_ai_runner.adapters.card_store_tidy"
+   "local_folder_tidy": "quest_ai_runner.the_body.internal_context.card_store.context_store_heal",
+   "repository_tidy": "quest_ai_runner.the_body.internal_context.card_store.card_store_tidy"
   }
  },
  "replay-known-operations": {
@@ -673,7 +665,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "stored_recipes": "quest_ai_runner.area_mind"
+   "stored_recipes": "quest_ai_runner.the_intelligence.mind.area_mind"
   }
  },
  "reply-in-steps": {
@@ -684,7 +676,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "gated": "quest_ai_runner.core.interim_policy"
+   "gated": "quest_ai_runner.the_intelligence.mind.response_writer.interim_policy"
   }
  },
  "resolve-references": {
@@ -695,7 +687,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "note": "quest_ai_runner.config_assembler"
+   "note": "quest_ai_runner.the_body.configuration.config_assembler"
   }
  },
  "route-a-message": {
@@ -706,7 +698,7 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "planner_route": "quest_ai_runner.message_routing"
+   "planner_route": "quest_ai_runner.the_intelligence.mind.planner.message_routing"
   }
  },
  "run-deep-work": {
@@ -717,12 +709,12 @@
    "verdict": "TIE"
   },
   "modules": {
-   "acp": "quest_ai_runner.body.acp_deep_runner",
-   "fast_edit": "quest_ai_runner.config_resolvers",
-   "lean_guarded": "quest_ai_runner.core.deep_launch",
-   "mcp_write": "quest_ai_runner.config_resolvers",
-   "stream_json": "quest_ai_runner.body.goal_runner_stream",
-   "subprocess": "quest_ai_runner.core.goal_runner"
+   "acp": "quest_ai_runner.the_world.tools.delegated_agent_sessions.acp_deep_runner",
+   "fast_edit": "quest_ai_runner.the_body.configuration.config_resolvers",
+   "lean_guarded": "quest_ai_runner.the_body.configuration.deep_launch",
+   "mcp_write": "quest_ai_runner.the_body.configuration.config_resolvers",
+   "stream_json": "quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream",
+   "subprocess": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner"
   }
  },
  "run-queued-tasks": {
@@ -733,12 +725,12 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "executor": "quest_ai_runner.runner.executor",
-   "lane": "quest_ai_runner.runner.lane",
-   "personas": "quest_ai_runner.runner.personas",
-   "poller": "quest_ai_runner.runner.poller",
-   "qar_runner": "quest_ai_runner.area_body",
-   "quest_folder_sync": "quest_ai_runner.runner.quest_folder_sync"
+   "executor": "quest_ai_runner.the_consciousness.request_intake.executor",
+   "lane": "quest_ai_runner.the_consciousness.request_intake.lane",
+   "personas": "quest_ai_runner.the_consciousness.representatives.personas",
+   "poller": "quest_ai_runner.the_consciousness.request_intake.poller",
+   "qar_runner": "quest_ai_runner.the_body.area_body",
+   "quest_folder_sync": "quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync"
   }
  },
  "search-cards-and-specs": {
@@ -749,8 +741,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "solutions_and_problems_with_links": "quest_ai_runner.core.unified_search",
-   "two_pipelines": "quest_ai_runner.core.unified_search"
+   "solutions_and_problems_with_links": "quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search",
+   "two_pipelines": "quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search"
   }
  },
  "search-the-web": {
@@ -761,14 +753,14 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "brave": "quest_ai_runner.science.web_search_backends",
-   "gemini": "quest_ai_runner.science.web_search_backends",
-   "provider": "quest_ai_runner.science.web_search_backends",
-   "provider_web_search": "quest_ai_runner.science.provider_web_search_adapter",
-   "searxng": "quest_ai_runner.science.web_search_backends",
-   "serper": "quest_ai_runner.science.web_search_backends",
-   "tavily": "quest_ai_runner.science.web_search_backends",
-   "web_research": "quest_ai_runner.science.web_research"
+   "brave": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "gemini": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "provider": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "provider_web_search": "quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter",
+   "searxng": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "serper": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "tavily": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "web_research": "quest_ai_runner.the_world.tools.web_search.web_research"
   }
  },
  "select-a-rep": {
@@ -779,7 +771,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "persona_resolver_precedence": "quest_ai_runner.runner.personas"
+   "persona_resolver_precedence": "quest_ai_runner.the_consciousness.representatives.personas"
   }
  },
  "select-an-implementation": {
@@ -790,7 +782,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "resolve": "quest_ai_runner.core.resolve"
+   "resolve": "quest_ai_runner.the_self.assembler.resolve"
   }
  },
  "select-context": {
@@ -801,14 +793,14 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "blind_grep": "quest_ai_runner.select_context.retrieval_assembler",
-   "bm25": "quest_ai_runner.select_context.bm25_content_store",
-   "composite": "quest_ai_runner.config_assembler",
-   "file": "quest_ai_runner.adapters.file_context_store",
-   "hub_feature_rerank": "quest_ai_runner.select_context.retrieval_assembler",
-   "hybrid": "quest_ai_runner.select_context.hybrid_context_assembler",
-   "rep": "quest_ai_runner.select_context.rep_context_assembler",
-   "vector": "quest_ai_runner.select_context.vector_context_assembler"
+   "blind_grep": "quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler",
+   "bm25": "quest_ai_runner.the_intelligence.subconscious.context_retriever.bm25_content_store",
+   "composite": "quest_ai_runner.the_body.configuration.config_assembler",
+   "file": "quest_ai_runner.the_body.internal_context.card_store.file_context_store",
+   "hub_feature_rerank": "quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler",
+   "hybrid": "quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler",
+   "rep": "quest_ai_runner.the_intelligence.subconscious.context_retriever.rep_context_assembler",
+   "vector": "quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler"
   }
  },
  "show-progress": {
@@ -819,8 +811,8 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "milestone": "quest_ai_runner.core.adapters_sinks",
-   "stream": "quest_ai_runner.core.adapters_sinks"
+   "milestone": "quest_ai_runner.the_consciousness.terminal.adapters_sinks",
+   "stream": "quest_ai_runner.the_consciousness.terminal.adapters_sinks"
   }
  },
  "show-the-ais-work": {
@@ -831,8 +823,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "terminal_trail": "quest_ai_runner.textual_ui_trail",
-   "trail": "quest_ai_runner.core.work_trace"
+   "terminal_trail": "quest_ai_runner.the_consciousness.terminal.textual_ui_trail",
+   "trail": "quest_ai_runner.the_intelligence.mind.response_writer.work_trace"
   }
  },
  "spec-selection": {
@@ -843,9 +835,9 @@
    "verdict": "WIN"
   },
   "modules": {
-   "lexical-only": "quest_ai_runner.core.spec_selection",
-   "lexical-vector-gated": "quest_ai_runner.core.spec_selection",
-   "lexical-vector-llm": "quest_ai_runner.core.spec_selection"
+   "lexical-only": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
+   "lexical-vector-gated": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
+   "lexical-vector-llm": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection"
   }
  },
  "store-feedback": {
@@ -856,7 +848,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "ledger": "quest_ai_runner.hold_the_intents.feedback_ledger"
+   "ledger": "quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger"
   }
  },
  "system-integrity": {
@@ -867,7 +859,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "structure-library": "quest_ai_runner.integrity.area"
+   "structure-library": "quest_ai_runner.the_intelligence.critical_thinking.response_quality.area"
   }
  },
  "tag-solutions": {
@@ -884,7 +876,7 @@
  "take-in-the-world": {
   "default": "ways_in",
   "modules": {
-   "ways_in": "quest_ai_runner.area_take_in_the_world"
+   "ways_in": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world"
   }
  },
  "talk-over-a-channel": {
@@ -895,7 +887,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "openclaw": "quest_ai_runner.adapters.openclaw_channel"
+   "openclaw": "quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel"
   }
  },
  "the-body": {
@@ -906,7 +898,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "card_and_reads": "quest_ai_runner.area_body"
+   "card_and_reads": "quest_ai_runner.the_body.area_body"
   }
  },
  "the-mind": {
@@ -917,8 +909,8 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
-   "rebuilt_per_step": "quest_ai_runner.area_mind"
+   "rebuilt_full_context": "quest_ai_runner.the_intelligence.mind.planner.orchestrator_planning",
+   "rebuilt_per_step": "quest_ai_runner.the_intelligence.mind.area_mind"
   }
  },
  "the-science": {
@@ -929,7 +921,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "web_with_support_check": "quest_ai_runner.science.area"
+   "web_with_support_check": "quest_ai_runner.the_world.tools.web_search.area"
   }
  },
  "the-subconscious": {
@@ -940,7 +932,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "recency_window": "quest_ai_runner.core.planner_context"
+   "recency_window": "quest_ai_runner.the_intelligence.mind.context_intake.planner_context"
   }
  },
  "track-usage-and-cost": {
@@ -951,9 +943,9 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "pricing": "quest_ai_runner.pricing",
-   "resources": "quest_ai_runner.resources",
-   "usage": "quest_ai_runner.usage"
+   "pricing": "quest_ai_runner.the_world.model_plumbing.spend.pricing",
+   "resources": "quest_ai_runner.the_body.host.resources",
+   "usage": "quest_ai_runner.the_world.model_plumbing.spend.usage"
   }
  },
  "vendor-model-caller": {
@@ -964,8 +956,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
-   "multi_provider": "quest_ai_runner.providers"
+   "claude_cli": "quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider",
+   "multi_provider": "quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers"
   }
  },
  "verify-offline": {
@@ -987,7 +979,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "files": "quest_ai_runner.body.files_writer"
+   "files": "quest_ai_runner.the_world.tools.file_editing.files_writer"
   }
  },
  "write-through-mcp": {
@@ -998,7 +990,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "mcp": "quest_ai_runner.body.mcp_write_adapter"
+   "mcp": "quest_ai_runner.the_world.tools.connected_system_operations.mcp_write_adapter"
   }
  }
 }

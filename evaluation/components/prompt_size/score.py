@@ -12,14 +12,14 @@ from collections import Counter
 from pathlib import Path
 
 from prompt_size import budgets
-from quest_ai_runner.core import prompt_budget
+from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
 
 MIN_BLOCK_CHARS = 200
 
 
 def duplicate_blocks(text):
     """``(extra_update_blocks, extra_identical_paragraphs)`` in ``text``."""
-    from quest_ai_runner.core.prompt_budget import count_blocks
+    from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import count_blocks
     paras = [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n", text or "")]
     seen = Counter(p for p in paras if len(p) >= MIN_BLOCK_CHARS)
     return max(0, count_blocks(text) - 1), sum(n - 1 for n in seen.values() if n > 1)
@@ -76,7 +76,7 @@ def score_situations(fn, case):
     could do without are reported, not required, so the full profile passes too and the saving is read off the tokens:
     the size is compared with the full profile on the same turn (the budget is reported, not enforced: the planner
     point's own cases enforce it)."""
-    from quest_ai_runner.core.planner_prompt import PLANNER_RULES
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_RULES
     markers = {r.id: marker(r) for r in PLANNER_RULES}
     budget = budgets.derive("planner")["budget_chars"]
     problems, sizes, fulls, kept = [], [], [], []

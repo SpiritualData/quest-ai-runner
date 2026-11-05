@@ -27,7 +27,7 @@ class FakeQuest:
         self.calls = []
 
     def _build_registry(self):
-        from quest_ai_runner.core.tools import build_tool_registry
+        from quest_ai_runner.the_world.tools.tools import build_tool_registry
         env = dict(os.environ, QUEST_BASE_URL=common.OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval")
         registry = build_tool_registry(env)
         for name in registry.names():

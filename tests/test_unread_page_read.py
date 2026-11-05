@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_guard import GuardProvider, SucceedingDeepRunner
@@ -103,13 +103,13 @@ def test_a_page_that_cannot_be_opened_ends_with_an_honest_sentence_and_no_deep_r
 
 
 def test_failed_reads_are_found_from_the_error_observations_alone():
-    from quest_ai_runner.core.link_provenance_pass import failed_page_reads
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import failed_page_reads
     assert failed_page_reads([{"kind": "error", "rel_path": URL, "error": "x"}, {"kind": "read", "rel_path": "https://ok.example/"}])
     assert not failed_page_reads([{"kind": "read", "rel_path": URL}, {"kind": "error", "error": "no address"}])
 
 
 def test_planner_web_block_tells_the_planner_to_open_a_requested_official_page():
-    from quest_ai_runner.core.planner_context import PLANNER_WEB_HEAD, planner_web_block
+    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import PLANNER_WEB_HEAD, planner_web_block
     assert "official page or a link to a source" in PLANNER_WEB_HEAD
     assert "one web_page read before you answer" in PLANNER_WEB_HEAD
     assert "—" not in PLANNER_WEB_HEAD
@@ -119,7 +119,7 @@ def test_planner_web_block_tells_the_planner_to_open_a_requested_official_page()
 
 def test_an_unconfirmed_reply_stops_with_its_own_reason_and_a_real_out_of_tries_stop_keeps_its_own():
     from types import SimpleNamespace
-    from quest_ai_runner.core.orchestrator_turn_messages import turn_outcome
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
     unconfirmed = SimpleNamespace(deep_results=[], goal_verdict={"met": False, "blocker": "evidence_only"})
     assert turn_outcome(unconfirmed) == {"outcome": "stopped", "stop_reason": "unverified"}
     more_work = SimpleNamespace(deep_results=[], goal_verdict={"met": False, "blocker": "more_work"})
@@ -128,7 +128,7 @@ def test_an_unconfirmed_reply_stops_with_its_own_reason_and_a_real_out_of_tries_
 
 
 def test_an_evidence_only_verdict_ships_the_answer_with_no_deep_run_and_the_unverified_stop_reason():
-    from quest_ai_runner.core.orchestrator_turn_messages import turn_outcome
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
     provider = PageProvider(
         plan_decisions=[{"action": "answer", "rationale": "x"}],
         goal_verdicts=[{"met": False, "blocker": "evidence_only", "reason": "cited page is a home page",
@@ -155,7 +155,7 @@ WEAK = {"met": False, "blocker": "more_work", "reason": "the cited page is only 
 
 
 def test_facts_stated_and_a_page_opened_ships_the_answer_unverified_with_no_deep_run():
-    from quest_ai_runner.core.orchestrator_turn_messages import turn_outcome
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
     provider = PageProvider(plan_decisions=list(READ_THEN_ANSWER), goal_verdicts=[WEAK, {"met": False}], answer_text=FIRST)
     web = FakeWeb()
     res, runner = run(provider, web)

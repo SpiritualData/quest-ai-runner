@@ -141,7 +141,7 @@ class FakeQuestClient:
         return [dict(p) for p in PARTICIPANTS]
 
     def create_decision(self, summary, **kw):
-        from quest_ai_runner.core.adapters_values import Escalation
+        from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
         try:
             ident = self.sink.escalate(Escalation(summary=summary, kind=kw.get("kind", "approve"), quest_id=kw.get("quest_id"),
                                                   assignee=kw.get("assignee_user_id"), notify_user_id=kw.get("notify_user_id"),
@@ -176,7 +176,7 @@ def start_quest_stub(sink):
             except ValueError:
                 body = {}
             if self.path.rstrip("/").endswith("/decisions"):
-                from quest_ai_runner.core.adapters_values import Escalation
+                from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
                 try:
                     ident = sink.escalate(Escalation(summary=str(body.get("summary") or ""), kind=str(body.get("kind") or "approve"),
                                                      quest_id=body.get("quest_id"), assignee=body.get("assigned_to_user_id") or body.get("assignee_user_id"),
@@ -196,7 +196,7 @@ def start_quest_stub(sink):
 
 def instrument(orch, record):
     """Record, from results, the verdicts the loop read and each interim decision the policy made."""
-    from quest_ai_runner.core import orchestrator_deep_run as deep
+    from quest_ai_runner.the_intelligence.mind.delegation import orchestrator_deep_run as deep
     verify = orch._verify_goal
 
     def verified(*a, **k):
@@ -231,13 +231,13 @@ def run_turn(name, interim_replies):
     spec = TURNS[name]
     root = tempfile.mkdtemp(prefix="qar_interim_")
     clean_env(root, load_keys())
-    from quest_ai_runner.cli import _config_from_env
-    from quest_ai_runner.config import build_orchestrator
-    from quest_ai_runner.core.adapters_sinks import StreamSink
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.the_body.configuration.config import build_orchestrator
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
     sink = FakeDecisionSink([p["user_id"] for p in PARTICIPANTS])
     stub = start_quest_stub(sink)
     os.environ["QUEST_BASE_URL"] = f"http://127.0.0.1:{stub.server_address[1]}"
-    from quest_ai_runner.core import tools as core_tools
+    from quest_ai_runner.the_world.tools import tools as core_tools
     core_tools.set_quest_client_factory(lambda env: FakeQuestClient(sink))
     cfg = _config_from_env()
     cfg.escalation = sink
@@ -272,7 +272,7 @@ def run_turn(name, interim_replies):
 
 def check(case):
     """Structural truthfulness problems of one real turn. Empty list = every check passed. Reads the record, never the wording."""
-    from quest_ai_runner.core.interim_policy import done_text
+    from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import done_text
     problems = []
     log, messages = case["log"], case["messages"]
     interims = [m for m in messages if m["kind"] == "interim"]
@@ -351,7 +351,7 @@ def check(case):
             if title.lower() in m["text"].lower():
                 problems.append("a private card's text reached an interim, an ask or the final in the shared thread")
     if case["private_titles"]:   # a paraphrase too: the stored text of each private card against what the thread reads (the work trace's overlap test)
-        from quest_ai_runner.core import work_trace
+        from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
         for card_id, summary, _keywords in CARDS:
             if card_id in TEAM_VISIBLE:
                 continue

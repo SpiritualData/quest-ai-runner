@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.core.goal_runner_session import FILE_CHANGE_TOOLS, landed_file_changes
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_session import FILE_CHANGE_TOOLS, landed_file_changes
 
 SESSION = "11111111-2222-3333-4444-555555555555"
 

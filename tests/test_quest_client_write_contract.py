@@ -5,9 +5,9 @@ import urllib.error
 
 import pytest
 
-from quest_ai_runner.core.tools_status import ToolStatus
-from quest_ai_runner.runner.quest_client import QuestApiError
-from quest_ai_runner.runner.quest_client_support import QuestWriteError, WriteResult
+from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
 
 from .fake_quest_transport import make_client
 
@@ -169,7 +169,7 @@ def test_a_created_decision_is_applied_with_its_id(monkeypatch):
 
 
 def test_an_unconfigured_client_raises_a_typed_failure(monkeypatch):
-    from quest_ai_runner.runner.quest_client import QuestClient, QuestNotConfigured
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestNotConfigured
     with pytest.raises(QuestNotConfigured) as caught:
         QuestClient("", "").add_quest_note("q1", "t")
     assert caught.value.write_status is ToolStatus.FAILED

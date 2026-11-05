@@ -7,9 +7,9 @@ the only thing that eventually moves it is a backend staleness sweeper -- hours 
 no error. These tests pin the runner-side close: it remembers what it was holding, and a fresh
 process hands it back.
 """
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.runner.poller import Poller
-from quest_ai_runner.runner.state_store import StateStore
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+from quest_ai_runner.the_body.internal_context.run_store.state_store import StateStore
 
 from .conftest import StubProvider, StubRetrieval
 

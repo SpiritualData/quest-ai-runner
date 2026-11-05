@@ -464,7 +464,7 @@
    "plan_goal": "Explain how to add a --dry-run flag to poll",
    "plan_rationale": "cli.py shows where subcommands and flags are defined",
    "operations": [
-    "[read] quest_ai_runner/cli.py -> argparse subcommands incl. poll, flag wiring"
+    "[read] quest_ai_runner/the_consciousness/terminal/cli.py -> argparse subcommands incl. poll, flag wiring"
    ],
    "operations_total": 1,
    "tokens_in": 3000,
@@ -497,7 +497,7 @@
    "plan_goal": "Explain how a --dry-run flag would be added to poll",
    "plan_rationale": "cli.py shows where subcommands and flags are defined",
    "operations": [
-    "[read] quest_ai_runner/cli.py -> argparse subcommands incl. poll, flag wiring"
+    "[read] quest_ai_runner/the_consciousness/terminal/cli.py -> argparse subcommands incl. poll, flag wiring"
    ],
    "operations_total": 1,
    "tokens_in": 3000,

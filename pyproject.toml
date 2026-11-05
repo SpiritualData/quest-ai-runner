@@ -38,7 +38,7 @@ dependencies = [
     # the runner's local clock when a zone can't be resolved either way (see local_time.py), so a
     # missing database is a warning, never a crash.
     "tzdata>=2024.1",
-    # Reads PDF links a user pastes (hubofhubs.websearch.link_access.extract_pdf_text). Core, not an extra:
+    # Reads PDF links a user pastes (the hub's PDF link reader). Core, not an extra:
     # a deployed image installs only the core list, and without it every PDF link fails.
     "pypdf>=4.0",
     # Word and Excel text for attachments and for `serve-files` reads (core/attachments.py loads
@@ -53,12 +53,11 @@ dependencies = [
     # coordinated release window, changed in every file at once.
     "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@main#subdirectory=implementations/python",
     # The hub of hubs: the registry of AI-intelligence hubs, the seats (Protocols) and the assembly that wires them. QAR is
-    # Quest's connector and the production consumer: quest_ai_runner/hub.py imports it at startup and registers QAR's parts.
-    # Required, not an extra. TEMPORARY: the hub's `develop` branch, because the restructured hub (five containers, all code beneath the
-    # solution it implements) is not on `main` yet. Re-pin to a release tag in the coordinated release window, in every consumer at once.
-    # Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the sibling checkout
-    # `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
-    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@develop",
+    # Quest's connector and the production consumer: quest_ai_runner/the_self/assembler/hub.py imports it at startup and registers QAR's parts.
+    # Required, not an extra, and pinned to the release tag v0.3.0 (the tag must be pushed to the hub's remote before QAR is released).
+    # QAR imports the hub only through `hubofhubs.api` and `hubofhubs.run`. Its own dependency is `esoi` (bare), met by the esoi line above.
+    # Dev and tests may use the sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
+    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.3.0",
 ]
 
 [project.optional-dependencies]
@@ -68,7 +67,7 @@ gemini = ["google-genai>=2.0"]
 openai = ["openai>=1.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
 bm25 = ["bm25s>=0.2"]
-# The Voyage AI embedder (hubofhubs.recall.embedders.make_voyage_embedder, imported lazily when a lane selects it).
+# The Voyage AI embedder (the hub's Voyage AI embedder factory, imported lazily when a lane selects it).
 voyage = ["voyageai"]
 # AcpDeepRunner: the opt-in DeepRunner that drives Claude over the Agent Client Protocol instead
 # of a one-shot `claude -p` subprocess (see docs/how-to/acp-deep-runner.md). The default deep runner needs
@@ -101,7 +100,7 @@ all = [
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
-    "voyageai",      # the hub's Voyage AI embedder factory (hubofhubs.recall.embedders)
+    "voyageai",      # the hub's Voyage AI embedder factory
     "mcp==2.0.0",
     "trafilatura",   # the hub's page extraction (optional there: without it page text degrades)
 ]
@@ -119,14 +118,14 @@ Issues = "https://github.com/SpiritualData/quest-ai-runner/issues"
 Changelog = "https://github.com/SpiritualData/quest-ai-runner/blob/main/CHANGELOG.md"
 
 [project.scripts]
-quest-ai-runner = "quest_ai_runner.cli:main"
+quest-ai-runner = "quest_ai_runner.the_consciousness.terminal.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["quest_ai_runner*"]
 
 [tool.setuptools.package-data]
-quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "core/quest_field_guidance.yaml"]
+quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "the_intelligence/higher_mind/objectives/quest_field_guidance.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evaluation/components"]

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.core.adapters_values import Escalation, parse_deadline
-from quest_ai_runner.core.adapters_bases import EscalationSinkBase
+from quest_ai_runner.the_body.internal_context.adapters_values import Escalation, parse_deadline
+from quest_ai_runner.the_self.interface import EscalationSinkBase
 
 NOW = datetime(2026, 9, 19, 12, 0, 0, tzinfo=timezone.utc)
 

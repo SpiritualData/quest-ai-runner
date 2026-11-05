@@ -15,9 +15,9 @@ from typing import Any, Dict, List
 
 import pytest
 
-from hubofhubs.the_body.internal_context.card_store import card_limit, card_store_hygiene as hygiene
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from hubofhubs.api import card_limit, card_store_hygiene as hygiene
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 
@@ -364,7 +364,7 @@ class TestAJoinIsDoneOnceAndCanBeUndone:
         assert FilesystemCardRepository(str(cards)).read("t")["content"][0]["locator"]["text"] == "old"
 
     def test_the_command_does_the_same(self, tmp_path, capsys):
-        from quest_ai_runner.cli import main
+        from quest_ai_runner.the_consciousness.terminal.cli import main
         cards = tmp_path / "cards"
         self.copy_with_something(cards)
         assert main(["cards", "tidy", "--cards-dir", str(cards), "--apply"]) == 0
@@ -618,7 +618,7 @@ class TestAtOpen:
     def test_the_moves_are_paced_so_the_first_turn_is_not_starved(self, tmp_path, monkeypatch):
         self.inflate(tmp_path)
         pauses: List[int] = []
-        import quest_ai_runner.adapters.context_store_heal as heal
+        import quest_ai_runner.the_body.internal_context.card_store.context_store_heal as heal
 
         class CountingPacer:
             def __call__(self) -> None:
@@ -713,7 +713,7 @@ class TestTheTidyCommand:
     """``quest-ai-runner cards tidy``: the installed package's way to do what the cleanup script does for provable copies."""
 
     def test_it_is_a_dry_run_unless_asked(self, tmp_path, capsys):
-        from quest_ai_runner.cli import main
+        from quest_ai_runner.the_consciousness.terminal.cli import main
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
         seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files), card("mine", files, provenance={})])
@@ -723,7 +723,7 @@ class TestTheTidyCommand:
         assert len(ids(cards)) == 3
 
     def test_apply_moves_the_copy_and_never_the_card_a_person_wrote(self, tmp_path, capsys):
-        from quest_ai_runner.cli import main
+        from quest_ai_runner.the_consciousness.terminal.cli import main
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
         seed(cards, [card("t", files), card(f"{SD}--{PRODUCT}--t", files), card("mine", files, provenance={})])

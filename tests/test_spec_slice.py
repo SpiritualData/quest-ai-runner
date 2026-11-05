@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from esoi import scaffold
 
-from quest_ai_runner.core import repo_specs
-from quest_ai_runner.critical_thinking.goal_iteration import SliceAndWriteback, SliceOnly
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs
+from quest_ai_runner.the_intelligence.critical_thinking.goal_iteration import SliceAndWriteback, SliceOnly
 
 GREETING = "make the greeting function greet a person by name in the standard form"
 
@@ -84,8 +84,8 @@ def test_a_met_milestone_is_skipped_to_the_next_open_one(repo):
 
 
 def test_a_goals_reading_is_bounded_by_the_configured_arm_time_limit(repo, monkeypatch):
-    from quest_ai_runner.core.goal_metrics import GoalMetrics
-    from quest_ai_runner.core.runtime_settings import core_settings
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics
+    from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
     monkeypatch.setenv("QAR_METRIC_ARM_TIMEOUT_SECONDS", "7")
     record = GoalMetrics(SliceAndWriteback(), object(), "run1").record
     assert record.budget_seconds == core_settings().metric_arm_timeout_seconds == 7.0

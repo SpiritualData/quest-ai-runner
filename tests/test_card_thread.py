@@ -16,16 +16,10 @@ What these tests pin, in the order the design demands it:
 """
 import pytest
 
-from quest_ai_runner.core.adapters_values import PlanDecision
-from quest_ai_runner.core.context_doctrine import CARD_THREAD_GATE
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    DECIDE_TOOL,
-    Orchestrator,
-    OrchestratorConfig,
-    decide_tool_for,
-    normalize_decision,
-)
+from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.the_intelligence.mind.context_intake.context_doctrine import CARD_THREAD_GATE
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import DECIDE_TOOL, Orchestrator, OrchestratorConfig, decide_tool_for, normalize_decision
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -43,7 +37,7 @@ class _StubAssembler:
         self.meta_seen: dict = {}
 
     def assemble(self, task_text, *, meta=None):
-        from hubofhubs.the_body.internal_context.context import AssembledContext
+        from hubofhubs.api import AssembledContext
         self.calls += 1
         self.meta_seen = dict(meta or {})
         return AssembledContext(context_view="## cards\n(the assembled cards)",

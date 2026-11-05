@@ -11,10 +11,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.runner import metric_draft
-from quest_ai_runner.runner.executor import TaskExecutor
-from quest_ai_runner.runner.quest_client import QuestApiError
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import metric_draft
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
 from tests.conftest import StubDeepRunner
 
 CARD = {"name": "Weekly distance", "purpose": "Ensure the weekly running distance is known", "disadvantages": "Cannot see pace or effort",

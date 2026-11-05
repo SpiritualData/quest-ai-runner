@@ -17,7 +17,7 @@ model calls belong here and not in the library. The generic stages themselves (l
 | 5. Read in full | the caller reads tier 2 of only the returned ids | the caller's |
 
 ```python
-from quest_ai_runner.core.spec_selection import load_spec_index, select_specs
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import load_spec_index, select_specs
 
 index = load_spec_index("spec_index.json")          # refuses a version it does not understand
 chosen = select_specs(task_text, index, provider=provider, model="fast", vector_search=my_search)
@@ -49,7 +49,7 @@ The metric ranks by a balanced score of accuracy (70%), cost (15%) and time (15%
 
 ## Day-to-day use (`core/repo_specs.py`)
 
-A run working in a repository with an `esoi.toml` (or `QAR_SPEC_ROOT`) gets four read-only tools, `find_specs`, `related_specs`, `intent_specs` and `show_spec` (`core/tools_repo_specs.py`), plus `search_cards_and_specs` (below). The index is cached and rebuilt only when a record file changes, a local vector search is added when `fastembed` is installed, and the run walks links on demand instead of reading every record. The same functions run free from a shell: `python -m quest_ai_runner.core.repo_specs find|related|intent|show`.
+A run working in a repository with an `esoi.toml` (or `QAR_SPEC_ROOT`) gets four read-only tools, `find_specs`, `related_specs`, `intent_specs` and `show_spec` (`core/tools_repo_specs.py`), plus `search_cards_and_specs` (below). The index is cached and rebuilt only when a record file changes, a local vector search is added when `fastembed` is installed, and the run walks links on demand instead of reading every record. The same functions run free from a shell: `python -m quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs find|related|intent|show`.
 
 A deep worker calls them from its own shell, a new process that may start in another folder and so would not find the repository
 (`unknown tool 'find_specs'`). The brief's command therefore carries the root the run's process found, `python -m

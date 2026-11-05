@@ -2,7 +2,7 @@ import json
 import os
 import time
 
-from quest_ai_runner.core.goal_runner import subagent_work_in_flight
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import subagent_work_in_flight
 
 
 def _write(path, recs):

@@ -8,7 +8,7 @@ import json
 import common
 from esoi import leaderboard, runtime
 
-from quest_ai_runner.core import resolve
+from quest_ai_runner.the_self.assembler import resolve
 
 
 def row_of(impl, spec):

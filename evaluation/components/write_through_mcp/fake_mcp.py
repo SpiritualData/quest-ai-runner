@@ -1,5 +1,5 @@
 """The fake MCP client for the write_through_mcp component: the process edge, nothing else."""
-from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPToolResult
+from hubofhubs.api import MCPToolResult
 
 
 class FakeMCPClient:

@@ -8,8 +8,8 @@ live need (creating a Quest with just outcome/current_state/purpose, no strategy
 """
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
-from quest_ai_runner.runner.quest_client_support import QuestPendingApproval
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestPendingApproval
 
 
 def client_capturing_calls():

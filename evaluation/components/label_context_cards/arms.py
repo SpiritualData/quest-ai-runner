@@ -5,10 +5,10 @@ import tempfile
 from pathlib import Path
 
 import common  # noqa: F401  (puts the repository on the path)
-from quest_ai_runner.subconscious.card_metadata_generator import CardMetadataGenerator
-from quest_ai_runner.adapters.context_card_updater import categorize_files_with_llm
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.the_body.internal_context.card_store.text_sampling import keywords_from_text
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.card_metadata_generator import CardMetadataGenerator
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import categorize_files_with_llm
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from hubofhubs.api import keywords_from_text
 
 
 class StubCollectionResolver:

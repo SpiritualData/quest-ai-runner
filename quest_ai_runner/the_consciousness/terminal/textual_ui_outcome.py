@@ -1,0 +1,205 @@
+"""How a turn ended, in plain words: the one closing line, why work could not start, a failed model call.
+
+Pure functions with no Textual in them, so the wording is testable on its own and every consumer of
+the terminal reads the outcome the same way. Every decision here reads a structured field
+(``DeepResult.met``, ``launch_failed``, ``usage_limited``, ``paused``, ``decision_id``,
+``OrchestratorResult.kind``), never the words of a model's output (hard rule #3).
+"""
+from __future__ import annotations
+
+import re
+from datetime import datetime
+from typing import Any, List, Optional, Sequence, Tuple
+
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.api import format_provider_error
+
+from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+
+# The most passes one request gets without the person asking again: their own, plus one automatic
+# second pass when a plan was written and nothing ran.
+MAX_AUTO_PASSES = 2
+
+# How a turn ended (``turn_outcome``).
+OUTCOME_FINISHED = "finished"          # every goal was met
+OUTCOME_STOPPED = "stopped"            # the work ran and did not finish
+OUTCOME_NOT_STARTED = "not_started"    # the worker could not start; nothing ran
+OUTCOME_NOT_RUN = "not_run"            # a plan, but no worker was run at all
+OUTCOME_LIMIT = "limit"                # paused at the subscription's usage limit
+OUTCOME_WAITING = "waiting"            # waiting for the person's answer
+
+
+def speaker_label(rep_name: str) -> str:
+    """``Quest AI:`` for a rep whose name already says it is an AI, else ``Zee (AI):``.
+
+    A name that already contains the word AI needs no second one; a person's name does, so nobody
+    reads a reply as the person's own words."""
+    name = (rep_name or "").strip() or "Assistant"
+    return f"{name}:" if re.search(r"\bAI\b", name) else f"{name} (AI):"
+
+
+def deep_results(final: Any) -> List[Any]:
+    return list(getattr(final, "deep_results", None) or [])
+
+
+def waits_for_person(final: Any) -> bool:
+    """True when the turn ended on a question or an approval only the person can answer."""
+    if getattr(final, "kind", None) == "confirm" or getattr(final, "decision_id", None):
+        return True
+    return any(getattr(d, "decision_id", None) for d in deep_results(final))
+
+
+def turn_outcome(final: Any) -> Optional[str]:
+    """How the turn ended, or None for a plain answer (which has no outcome to report).
+
+    A turn waiting for the person wins over everything else: that is what they have to act on. A run
+    the person paused or stopped, with a session to continue, is worded by the terminal's own
+    pause and cancel lines (``_settle_run_control``) and never reaches here; any other run that did
+    not finish is "stopped before finishing"."""
+    if waits_for_person(final):
+        return OUTCOME_WAITING
+    if getattr(final, "kind", None) != "deep":
+        return None
+    results = deep_results(final)
+    if any(getattr(d, "usage_limited", False) for d in results):
+        return OUTCOME_LIMIT
+    if any(getattr(d, "launch_failed", False) for d in results):
+        return OUTCOME_NOT_STARTED
+    if not results:
+        return OUTCOME_NOT_RUN
+    if all(getattr(d, "met", False) for d in results):
+        return OUTCOME_FINISHED
+    return OUTCOME_STOPPED
+
+
+def allows_second_pass(final: Any) -> bool:
+    """False when something other than "nothing ran" is why the work did not run.
+
+    A worker that could not start would fail the same way again, a usage limit is refused until it
+    resets, a question waits for its answer, and a pause or a cancel was the person's own choice."""
+    if waits_for_person(final):
+        return False
+    return not any(getattr(d, flag, False) for d in deep_results(final)
+                   for flag in ("launch_failed", "usage_limited", "paused", "cancelled"))
+
+
+def closing_text(outcome: str) -> Tuple[str, str]:
+    """The (text, style) that opens the closing line for ``outcome``. Never a sentence of its own: the closing
+    line is items separated by dots, and the explanation of a stop is written above it (``limit_lines``)."""
+    if outcome == OUTCOME_FINISHED:
+        return "✓ Done", "green"
+    if outcome == OUTCOME_STOPPED:
+        return "~ Stopped before finishing", "yellow"
+    if outcome == OUTCOME_NOT_STARTED:
+        return "✗ Nothing ran", "yellow"
+    if outcome == OUTCOME_NOT_RUN:
+        return "~ Nothing was run", "yellow"
+    if outcome == OUTCOME_LIMIT:
+        return "~ Stopped at the limit", "yellow"
+    return "Waiting for your answer", "yellow"
+
+
+def limit_reset(final: Any, now: Optional[datetime] = None) -> str:
+    """The reset clause (``at 15:40``) of the usage limit a deep result stopped on, or ``""``.
+
+    Read from the limit the run itself reported (the CLI's own refusal text in ``DeepResult.error``),
+    else from the one the lane noted when it hit it. Never a time nobody reported."""
+    for d in deep_results(final):
+        if getattr(d, "usage_limited", False):
+            found = usage_limit.detect_usage_limit(getattr(d, "error", None) or "", now)
+            if found is not None and found.resets_at is not None:
+                return usage_limit.reset_clause(found, now)
+    return usage_limit.reset_clause(usage_limit.active_limit(now), now)
+
+
+def launch_failure_lines(final: Any, request_restored: bool = False) -> List[str]:
+    """What the person reads when the worker never started, or [] when it did (or it was not asked to).
+
+    ``request_restored`` says the request is back in the prompt box, so Enter sends it again."""
+    failed = [d for d in deep_results(final) if getattr(d, "launch_failed", False)]
+    if not failed:
+        return []
+    again = ("Your request is back in the box: fix that, then press Enter to send it again."
+             if request_restored else "Fix that, then send your request again.")
+    return ["I couldn't start the work, so nothing was changed.",
+            f"The reason: {launch_failure.cause(getattr(failed[0], 'error', None), getattr(failed[0], 'launch_problem', ''))}",
+            again]
+
+
+def limit_lines(reset: str) -> List[str]:
+    """Why the work stopped at Claude Code's usage limit, and the way forward, as two plain sentences.
+
+    ``reset`` is the reset clause (``usage_limit.reset_clause``), empty when the limit did not say when. Nothing
+    here promises the work will carry on by itself: in this terminal it does not, so the way forward is to send
+    the request again once the limit has reset. (The task executor does resume a limited task on its own.)"""
+    if reset:
+        return [f"Claude Code's usage limit is reached, so the work stopped. It resets {reset}.",
+                "Send your request again after that."]
+    return ["Claude Code's usage limit is reached, so the work stopped. It has not said when it resets.",
+            "Send your request again once it has."]
+
+
+def provider_error_lines(error: BaseException, *, message_restored: bool,
+                         now: Optional[datetime] = None) -> List[str]:
+    """A failed model call as two plain sentences: what happened, and the way forward.
+
+    ``message_restored`` says the failed message is back in the prompt box, so Enter sends it again."""
+    limit = usage_limit.from_exception(error)
+    if limit is not None:
+        when = usage_limit.reset_clause(limit, now)
+        what = "Claude Code's usage limit is reached, so I couldn't answer."
+        if when:
+            what += f" It resets {when}."
+        later = " after it resets"
+    elif provider_outage.from_exception(error) is not None:
+        what = "The AI service is busy right now, so I couldn't answer."
+        later = " in a minute"
+    else:
+        detail = " ".join(format_provider_error(error).split())[:240].rstrip()
+        what = f"I couldn't answer: {detail}" if detail else "I couldn't answer."
+        later = ""
+    if message_restored:
+        again = f"Your message is back in the box: press Enter to try again{later}."
+    else:
+        again = f"Send your message again to try again{later}."
+    return [what, again]
+
+
+def turn_work(final) -> list:
+    """The tasks a turn ran, to save with it: ``[{"goal", "model", "resolved_model", "met"}]``, one per deep task, or a
+    single entry naming the model that answered when no task ran. Plain data (it goes into the conversation file)."""
+    results = list(getattr(final, "deep_results", None) or [])
+    if getattr(final, "kind", "") == "deep" and results:
+        goals = list(getattr(final, "goals", None) or [])
+        return [{"goal": str(goals[i]) if len(goals) == len(results) else "",
+                 "model": str(getattr(r, "model", "") or ""), "resolved_model": str(getattr(r, "resolved_model", "") or ""),
+                 "met": getattr(r, "met", None)} for i, r in enumerate(results)]
+    model = str(getattr(final, "model", "") or "")
+    return [{"goal": "", "model": model, "resolved_model": "", "met": None}] if model else []
+
+
+def work_lines(work) -> list:
+    """The saved tasks of a turn as plain lines for a replay: what ran and on which model (the full id when known)."""
+    from quest_ai_runner.the_consciousness.terminal.interactive_session_render import _model_display
+    lines = []
+    for item in work if isinstance(work, list) else []:
+        if not isinstance(item, dict):
+            continue
+        goal = " ".join(str(item.get("goal") or "").split())
+        goal = goal if len(goal) <= 160 else goal[:159] + "…"
+        model = _model_display(item.get("model") or None, item.get("resolved_model") or None)
+        mark = {True: "done", False: "not finished"}.get(item.get("met"))
+        text = " · ".join(part for part in (goal or ("answered" if model else ""), model and f"on {model}", mark) if part)
+        if text:
+            lines.append(f"▸ {text}")
+    return lines
+
+
+def model_text(labels: Sequence[Tuple[Optional[str], Optional[str]]], verbose: bool) -> str:
+    """The model(s) a turn ran on, once each: the short alias (``sonnet``), or with ``-v`` the full
+    ``sonnet (claude-sonnet-5-5)``. ``labels`` are (model, resolved model) pairs."""
+    from quest_ai_runner.the_consciousness.terminal.interactive_session_render import _model_display, _model_label
+    shown = {(_model_display(model, resolved) if verbose else _model_label(model or resolved))
+             for model, resolved in labels if model or resolved}
+    return ", ".join(sorted(s for s in shown if s))

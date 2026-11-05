@@ -9,9 +9,9 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.config import shutdown_background_index
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.adapters_values import Escalation, Observation
+from quest_ai_runner.the_body.configuration.config import shutdown_background_index
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_body.internal_context.adapters_values import Escalation, Observation
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +34,7 @@ def hermetic_qar_environment(monkeypatch):
 @pytest.fixture(autouse=True)
 def quest_capability_cache_starts_empty():
     """The Quest client remembers what a backend said about itself for the whole process; no test inherits another's answer."""
-    from quest_ai_runner.runner.quest_client_transport import PROBE_CACHE
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_transport import PROBE_CACHE
     PROBE_CACHE.clear()
     yield
     PROBE_CACHE.clear()

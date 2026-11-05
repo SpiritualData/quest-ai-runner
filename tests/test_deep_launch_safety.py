@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "
 import common  # noqa: E402,F401
 from deep_runner.launch_experiment import decide  # noqa: E402
 
-from quest_ai_runner.core.deep_launch import DeepLaunchSettings, build_deep_argv  # noqa: E402
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner  # noqa: E402
-from quest_ai_runner.core.goal_runner_contract import goal_settings  # noqa: E402
+from quest_ai_runner.the_body.configuration.deep_launch import DeepLaunchSettings, build_deep_argv  # noqa: E402
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner  # noqa: E402
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import goal_settings  # noqa: E402
 
 SID = "22222222-2222-4222-8222-222222222222"
 
@@ -187,8 +187,8 @@ def test_the_lean_arm_loads_no_setting_source_which_includes_user_hooks_and_envi
 
 # --- the selectable profile that keeps the guards ---------------------------------------------------------------------------
 
-from quest_ai_runner.config_core_settings import deep_launch_from_env  # noqa: E402
-from quest_ai_runner.core.deep_launch import LEAN_GUARDED, PROFILES  # noqa: E402
+from quest_ai_runner.the_body.configuration.config_core_settings import deep_launch_from_env  # noqa: E402
+from quest_ai_runner.the_body.configuration.deep_launch import LEAN_GUARDED, PROFILES  # noqa: E402
 
 
 def test_no_profile_is_today_s_launch_and_the_profile_is_opt_in_by_name():

@@ -2,9 +2,9 @@
 Offline: a scripted provider, a fake OpenAlex transport."""
 from types import SimpleNamespace
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.tools_science import TOOL_NAME, reset_shared_state
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.science.tools_science import TOOL_NAME, reset_shared_state
 
 from .conftest import StubProvider, StubRetrieval
 from .test_tools_science import WORKS, Response, Transport, registry_with

@@ -14,8 +14,8 @@ import os
 
 import pytest
 
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.runner.lane import install_local_time_due_gate, load_env_file, run_lane
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_consciousness.request_intake.lane import install_local_time_due_gate, load_env_file, run_lane
 from tests.conftest import StubProvider, StubRetrieval
 
 
@@ -58,8 +58,8 @@ def test_not_configured_keywords_controls_which_problems_degrade(monkeypatch):
         reached["ran_once"] = True
         return []
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.run_once", fake_run_once)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.run_once", fake_run_once)
     rc = run_lane(["--once"], prog="t", description="d", lane_label="t", log_name="t-lane2",
                   build_config=build, not_configured_keywords=("key", "url"))
     assert rc == 0
@@ -81,7 +81,7 @@ def test_check_reports_key_status(monkeypatch):
         self.cfg = cfg
         self.client = FakeClient()
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
     rc = run_lane(["--check"], prog="t", description="d", lane_label="t", log_name="t-lane3",
                   build_config=_complete_cfg)
     assert rc == 0
@@ -97,7 +97,7 @@ def test_check_reports_failure_as_exit_1(monkeypatch):
         self.cfg = cfg
         self.client = FakeClient()
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
     rc = run_lane(["--check"], prog="t", description="d", lane_label="t", log_name="t-lane4",
                   build_config=_complete_cfg)
     assert rc == 1
@@ -112,8 +112,8 @@ def test_once_calls_run_once(monkeypatch):
     def fake_run_once(self):
         return handled
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.run_once", fake_run_once)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.run_once", fake_run_once)
     rc = run_lane(["--once"], prog="t", description="d", lane_label="t", log_name="t-lane5",
                   build_config=_complete_cfg)
     assert rc == 0
@@ -128,8 +128,8 @@ def test_no_flags_calls_run_forever(monkeypatch):
     def fake_run_forever(self):
         calls["forever"] = True
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.run_forever", fake_run_forever)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.run_forever", fake_run_forever)
     rc = run_lane([], prog="t", description="d", lane_label="t", log_name="t-lane6",
                   build_config=_complete_cfg)
     assert rc == 0
@@ -145,8 +145,8 @@ def test_state_path_defaults_to_qar_state_path_env(monkeypatch, tmp_path):
         seen["state_path"] = state_path
         self.cfg = cfg
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.run_once", lambda self: [])
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.run_once", lambda self: [])
     wanted = str(tmp_path / "custom_state.json")
     monkeypatch.setenv("QAR_STATE_PATH", wanted)
     run_lane(["--once"], prog="t", description="d", lane_label="t", log_name="t-lane7",
@@ -161,8 +161,8 @@ def test_explicit_state_path_wins_over_env(monkeypatch, tmp_path):
         seen["state_path"] = state_path
         self.cfg = cfg
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.run_once", lambda self: [])
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.run_once", lambda self: [])
     monkeypatch.setenv("QAR_STATE_PATH", str(tmp_path / "env_state.json"))
     explicit = tmp_path / "explicit" / "state.json"
     run_lane(["--once"], prog="t", description="d", lane_label="t", log_name="t-lane8",
@@ -208,8 +208,8 @@ def test_run_lane_loads_env_file_before_build_config(tmp_path, monkeypatch):
     def fake_poller_init(self, cfg, *, state_path=None, **kw):
         self.cfg = cfg
 
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.__init__", fake_poller_init)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.Poller.run_once", lambda self: [])
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.__init__", fake_poller_init)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.Poller.run_once", lambda self: [])
     # --once: build_config must still run, but the loop-forever path (which would hang the test
     # suite) is never reached.
     run_lane(["--once"], prog="t", description="d", lane_label="t", log_name="t-lane9",
@@ -220,7 +220,7 @@ def test_run_lane_loads_env_file_before_build_config(tmp_path, monkeypatch):
 # --- install_local_time_due_gate is now an inert, logged no-op -------------
 
 def test_install_local_time_due_gate_is_a_noop_and_never_patches_quest_client(caplog):
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     original = QuestClient.discover_due
     log = logging.getLogger("t-lane-gate")

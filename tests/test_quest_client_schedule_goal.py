@@ -1,7 +1,7 @@
 """QuestClient.schedule_goal sets a goal's day and time via scheduled_start, validated client-side."""
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 
 def client_capturing_body():
@@ -42,6 +42,6 @@ def test_schedule_goal_rejects_bad_time_without_a_request(time):
 
 
 def test_schedule_goal_is_discovered_as_a_write_method():
-    from quest_ai_runner.cli_quest import _quest_callable_methods, _quest_method_is_read_only
+    from quest_ai_runner.the_consciousness.terminal.cli_quest import _quest_callable_methods, _quest_method_is_read_only
     assert "schedule_goal" in _quest_callable_methods()
     assert not _quest_method_is_read_only("schedule_goal")

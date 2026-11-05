@@ -16,12 +16,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_RESULT, Mode
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator_text import UNCONFIRMED_NO_CHANGE_LEAD
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, unconfirmed_no_change_text
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_RESULT, Mode
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import UNCONFIRMED_NO_CHANGE_LEAD
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, unconfirmed_no_change_text
 from tests.conftest import StubEscalation, StubRetrieval
 
 CLAIM = "I updated the goal with a deadline of 30 October."

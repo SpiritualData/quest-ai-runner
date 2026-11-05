@@ -1,9 +1,9 @@
 """The intent frame in the autopilot brief: why the quest exists, computed by the server (no model call),
 read once per quest, placed before the goal ladder, absent for a person with no intents, and cut before the
 request tier when the brief is over budget."""
-from quest_ai_runner.core import prompt_budget
-from quest_ai_runner.runner.autopilot import AutopilotPass, compose_batch_text
-from quest_ai_runner.critical_thinking.autopilot_briefs import INTENT_FRAME_PREAMBLE
+from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
+from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import INTENT_FRAME_PREAMBLE
 
 from .test_autopilot import FakeAutopilotClient, _now, _quest
 from .test_autopilot_goal_ladder import FULL_LADDER_PAYLOAD
@@ -39,7 +39,7 @@ def test_no_frame_composes_byte_identically_to_before():
 
 
 def test_the_frame_is_cut_before_the_request_when_the_brief_is_over_budget(monkeypatch):
-    import quest_ai_runner.critical_thinking.autopilot_briefs as briefs
+    import quest_ai_runner.the_intelligence.proactivity.autopilot_briefs as briefs
     monkeypatch.setattr(briefs, "AUTOPILOT_BRIEF_TOKEN_BUDGET", 60)
     text = compose_batch_text("Run a marathon", None, intent_frame=FRAME * 30)
     assert "Quest outcome: Run a marathon" in text

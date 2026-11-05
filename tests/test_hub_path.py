@@ -3,11 +3,11 @@ import sys
 
 import pytest
 
-from quest_ai_runner import hub_path
+from quest_ai_runner.the_self.assembler import hub_path
 
 
 def layout(tmp_path, with_hub):
-    package_file = tmp_path / "launch_code" / "quest-ai-runner" / "quest_ai_runner" / "hub_path.py"
+    package_file = tmp_path / "launch_code" / "quest-ai-runner" / "quest_ai_runner" / "the_self" / "assembler" / "hub_path.py"
     package_file.parent.mkdir(parents=True)
     package_file.write_text("")
     if with_hub:

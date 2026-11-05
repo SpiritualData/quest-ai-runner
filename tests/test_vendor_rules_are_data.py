@@ -1,8 +1,8 @@
 """Vendor knowledge in core is data (patterns and tables), not branches on a vendor name."""
 import pytest
 
-from quest_ai_runner.core import model_registry
-from quest_ai_runner.core.goal_runner_contract import _is_claude_model
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import model_registry
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import _is_claude_model
 
 
 @pytest.mark.parametrize("model,family", [

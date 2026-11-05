@@ -18,8 +18,8 @@ prose supplies the card's topic terms; ``auto_bootstrap=False`` so no provider i
 import json
 import time
 
-from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def _write_conv(sessions_dir, name, exchanges):
@@ -101,7 +101,7 @@ def test_second_turn_bumps_usage_without_duplicating(tmp_path, monkeypatch):
     adapter = ClaudeConversationsAdapter(sessions_dir=str(sessions), card_store=store)
 
     # Drive a controllable clock; the two turns are > the store's 60s usage debounce apart.
-    import quest_ai_runner.adapters.claude_conversations_adapter as cca_mod
+    import quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter as cca_mod
     clock = {"t": 1000.0}
     monkeypatch.setattr(cca_mod.time, "time", lambda: clock["t"])
 

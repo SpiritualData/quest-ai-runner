@@ -4,14 +4,14 @@ Offline: fake web, scholarly and link-guard results, no network and no model."""
 import json
 from types import SimpleNamespace
 
-from hubofhubs.the_world.tools.deep import ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_WORK_TRACE
-from hubofhubs.the_world.observation import Observation
-from hubofhubs.the_consciousness.terminal.trace import validate
+from hubofhubs.api import ProgressEvent
+from hubofhubs.api import EVENT_WORK_TRACE
+from hubofhubs.api import Observation
+from hubofhubs.api import validate
 
-from quest_ai_runner.core import work_trace
-from quest_ai_runner.core.orchestrator_reads import ReadsMixin
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
+from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
 
 
 class Sink:
@@ -367,7 +367,7 @@ def test_only_the_exact_site_the_reply_names_is_cited():
 
 
 def test_a_vector_hit_is_titled_by_its_own_name_not_by_the_slice_of_its_text():
-    from quest_ai_runner.core.orchestrator_events import _project_card_metadata_for_event
+    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event
     hit = {"id": "card:m1", "title": "Run a marathon in April Week 6 of 16. Left knee sore after hills, physio visit booked for Thursday.",
            "name": "Run a marathon in April", "adapter": "vector"}
     bodyless = {"id": "card:m2", "title": "Morning pages habit Skipping pages on travel days. Goal is 20 days in a row; streak 4.", "adapter": "vector"}

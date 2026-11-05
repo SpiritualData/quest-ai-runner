@@ -1,8 +1,8 @@
 """The CLI alias lags a release, so CLI lanes pass the newest live id, falling back to the alias."""
 import pytest
 
-from quest_ai_runner.adapters import claude_live_models as live
-from quest_ai_runner.adapters.claude_cli_provider import cli_model
+from quest_ai_runner.the_world.tools.delegated_agent_sessions import claude_live_models as live
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
 
 IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1", "claude-opus-5", "claude-sonnet-5",
        "claude-opus-4-8", "claude-haiku-4-5-20251001"]

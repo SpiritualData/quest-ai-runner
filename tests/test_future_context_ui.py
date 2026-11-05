@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.interactive_session import _DeepRunTracker
-from quest_ai_runner.textual_ui import FutureContextPanel, QuestAITerminal
-from quest_ai_runner.textual_ui_helpers import _build_future_context_text
+from quest_ai_runner.the_consciousness.terminal.interactive_session import _DeepRunTracker
+from quest_ai_runner.the_consciousness.terminal.textual_ui import FutureContextPanel, QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import _build_future_context_text
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ def test_narration_beat_consecutive_duplicate_not_doubled():
 # (not just deep turns with a future_context bullet list from the orchestrator)
 # ---------------------------------------------------------------------------
 
-from quest_ai_runner.textual_ui_helpers import _build_shallow_context_bullets  # noqa: E402
+from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import _build_shallow_context_bullets  # noqa: E402
 
 
 def test_build_shallow_context_bullets_from_cards():

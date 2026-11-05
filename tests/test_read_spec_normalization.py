@@ -5,7 +5,7 @@ named read operation written top-level (``{"operation": ..., "args": ...}``, the
 consumer's own discovery text can show) was dropped: the "read" step ran nothing and the turn
 answered from no data.
 """
-from quest_ai_runner.core.orchestrator import OrchestratorConfig, normalize_decision
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig, normalize_decision
 
 
 def plan(reads):

@@ -15,10 +15,10 @@ reset-accumulate-read sequence is unaffected by the others.
 import threading
 import time
 
-from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.router import MultiProvider
-from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor
-from quest_ai_runner.core.adapters_bases import ModelProviderBase
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+from hubofhubs.api import MultiProvider
+from hubofhubs.api import ScopedThreadPoolExecutor
+from hubofhubs.api import ModelProviderBase
 
 
 class CountingProvider(ModelProviderBase):

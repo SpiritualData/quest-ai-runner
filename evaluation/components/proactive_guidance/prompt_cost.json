@@ -38,7 +38,7 @@
   "input_price_per_mtok_haiku": 0.8,
   "uncached": 0.000498,
   "cache_read_at_a_tenth": 4.98e-05,
-  "output": "Not priced: the output price is not in quest_ai_runner/pricing.py, so the output change is reported in tokens only."
+  "output": "Not priced: the output price is not in quest_ai_runner/the_world/model_plumbing/spend/pricing.py, so the output change is reported in tokens only."
  },
  "verdict": "Justified at the measured size: about 623 input tokens a reply, about half a thousandth of a dollar uncached and about a twentieth of that cached, for a section that moves the two-sided value from 0.42 to 0.50 up to 0.79 on the tuning set and 0.83 to 0.92 on the held-out set. Flag: it is on every chat reply, including the many that need no pointer; if a cheap pre-check can tell those apart, the section could be added only where it matters."
 }

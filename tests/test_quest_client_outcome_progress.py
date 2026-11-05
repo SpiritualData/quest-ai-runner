@@ -6,8 +6,8 @@ against that fake to prove the --write gate and that the refusal text reaches st
 """
 import pytest
 
-from quest_ai_runner import cli, cli_quest
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_consciousness.terminal import cli, cli_quest
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 REFUSAL = ("A progress note must name concrete evidence (a goal, file, metric or result), "
            "not a generic line such as 'making progress'.")

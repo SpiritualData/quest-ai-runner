@@ -5,11 +5,11 @@ Reproduces the 2026-10-16 incident: a goals read answering a server error sent o
 fresh worker sessions, each judged "not met" and each on a stronger model, until a person cancelled it.
 The verifier is scripted (an LLM call); the goal loop and the report are the real ones.
 """
-from quest_ai_runner.core import orchestrator as o
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.orchestrator import PlanDecision
-from quest_ai_runner.runner.executor import TaskExecutor
-from quest_ai_runner.core.orchestrator import OrchestratorResult
+from quest_ai_runner.the_intelligence.mind import orchestrator as o
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.orchestrator import PlanDecision
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
 
 from .conftest import StubProvider
 from .test_fast_edit_ladder import RecordingRunner, _orch

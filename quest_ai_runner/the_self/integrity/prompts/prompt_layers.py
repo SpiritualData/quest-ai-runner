@@ -1,0 +1,147 @@
+"""PromptLayers -- the ONE shared prompt-assembly primitive (cache-friendly layering).
+
+Provider prompt caches are PREFIX caches: a call reads from cache only the LONGEST byte-identical
+prefix it has already seen. A single turn makes many LLM calls (plan, re-plan, answer, verify,
+overseer); when each builds a differently-shaped prompt they share no prefix, so every call pays
+full input price (measured: 0 cached tokens). Layering fixes that by making every call start from
+the SAME [head][context] prefix and vary only in a per-call tail:
+
+  L1 head    -- stable system / persona / standards text, identical for the whole conversation.
+  L2 context -- the assembled context / cards block, stable-ordered upstream (by card id, never by
+                per-turn relevance score); identical while the card selection is unchanged.
+  L3 tail    -- the volatile per-call part: date / time, the step instruction (plan vs re-plan vs
+                answer vs verify), the new message, the gathered observations. NEVER cached.
+
+Because L1 and L2 render byte-identical across the calls of a turn (and across turns while the
+cards are unchanged), a lineage re-reads that prefix from cache instead of re-sending it, and only
+the tail is fresh. The same rendered layers can feed several cached lineages (the cheap worker and
+the best-tier overseer); per-model caches never cross, so each keeps its own copy.
+
+Generic (hard rule #2): nothing here knows about any org, model, or provider. A ``ModelProvider``
+maps the ordered blocks onto its own cache mechanism (Anthropic ``cache_control`` breakpoints,
+Gemini ``system_instruction`` + stable ``contents``). A provider that supports no caching just
+joins the block texts back into the plain-string shape, so behavior is unchanged when nobody reads
+the cache markers.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+from hubofhubs.api import LayerBlock, join_layers
+
+# Supported non-English language codes a user-facing prompt can pin a reply to. Small and
+# deliberate: only add a code here once a consumer actually offers it as a stored preference.
+# Mirrors quest-backend's ``app/prompts/quest_ai_prompts.py`` ``_LANGUAGE_NAMES`` so the two
+# Quest AI prompt surfaces describe language the same way.
+LANGUAGE_NAMES = {"es": "Spanish"}
+
+
+def language_instruction(language: Optional[str] = None) -> str:
+    """A LANGUAGE instruction block for a user-facing prompt surface: a reply/system voice
+    contract, or a narration/rationale instruction.
+
+    Deliberately NOT wired into ``turn_prompt_head``/``compose_layers``: not every call built
+    through those produces text a user ever sees (the silent plan/decide tool call, the internal
+    verify judge), so a caller whose text IS user-facing appends this to its own prompt/system
+    text instead (see ``orchestrator.REPLY_VOICE_SYSTEM`` and the narrate rationale instructions).
+
+    - A code in ``LANGUAGE_NAMES`` pins the reply to that language explicitly, the shape a stored
+      per-user preference would use once one is wired in here (mirrors quest-backend's
+      ``app/prompts/quest_ai_prompts.py`` ``_language_addendum``).
+    - ``None`` or anything else (the default, since quest-ai-runner has no per-user preference
+      lookup of its own) pins the reply to English unless the user explicitly asks for another
+      language. Mirroring the message language let foreign-language context pull replies out of
+      English (reported by a team member, 2026-10-15), so English is the default.
+    """
+    name = LANGUAGE_NAMES.get((language or "").strip().lower())
+    if name:
+        return (
+            "--- LANGUAGE ---\n"
+            f"Reply in {name}, and keep any reasoning or narration shown to the user in {name} "
+            "too, regardless of what language their message is written in. Keep product names, "
+            "code, file paths, URLs, and their own proper nouns (people, quest titles they wrote) "
+            "exactly as written; do not translate them. Never use em dashes; split the sentence "
+            "or use a comma, colon, or parentheses instead."
+        )
+    return (
+        "--- LANGUAGE ---\n"
+        "Reply in English, and keep any reasoning or narration shown to the user in English too. "
+        "Only reply in another language when the user explicitly asks you to, and then keep using "
+        "it until they say otherwise. Quest titles, quoted data, or context written in another "
+        "language never change your reply language. Keep product names, code, file "
+        "paths, URLs, and their own proper nouns (people, quest titles they wrote) exactly as "
+        "written; do not translate them. Never use em dashes; split the sentence or use a comma, "
+        "colon, or parentheses instead."
+    )
+
+
+@dataclass
+class PromptLayers:
+    """One turn-call's prompt, split into the three cache layers.
+
+    ``head`` (L1) and ``context`` (L2) are the cache-eligible prefix; ``tail`` (L3) is volatile.
+    Build every plan / re-plan / answer / verify call through this so their L1 + L2 render
+    byte-identical and only the tail differs.
+    """
+
+    head: str = ""      # L1 -- stable head (system / persona / standards)
+    context: str = ""   # L2 -- context / cards layer (stable-ordered)
+    tail: str = ""      # L3 -- volatile tail (step instruction + new message + gathered + date)
+
+    def prefix(self) -> str:
+        """The cache-eligible portion (L1 + L2) as one string.
+
+        This is the byte-identical prefix that sibling calls share; it is always a byte-prefix of
+        ``render()``.
+        """
+        return join_layers(self.head, self.context)
+
+    def render(self) -> str:
+        """Flatten to ONE plain string (head + context + tail) for a plain-string call path."""
+        return join_layers(self.head, self.context, self.tail)
+
+    def blocks(self) -> List[LayerBlock]:
+        """The ordered layer blocks: head and context marked ``cache=True``, tail ``cache=False``.
+
+        Empty head / context layers are dropped so a provider never emits an empty cached block.
+        The tail block is always present (even when empty) so there is always a final, volatile
+        turn for the provider to attach. The number of ``cache=True`` blocks never exceeds
+        ``MAX_CACHE_BREAKPOINTS``.
+        """
+        out: List[LayerBlock] = []
+        if self.head.strip():
+            out.append({"text": self.head, "cache": True})
+        if self.context.strip():
+            out.append({"text": self.context, "cache": True})
+        out.append({"text": self.tail, "cache": False})
+        return out
+
+
+def turn_prompt_head(persona: str = "", standards: str = "") -> str:
+    """Render the stable L1 head from a turn's persona and quality standards.
+
+    Deterministic in its inputs: the SAME (persona, standards) always yield the SAME bytes, which is
+    what lets plan / answer / verify share a byte-identical head when they are built from the same
+    turn constants. Either part may be empty; an empty head is fine (the block is simply dropped).
+    """
+    parts: List[str] = []
+    p = (persona or "").strip()
+    if p:
+        parts.append("--- ACT AS THIS PERSONA ---\n" + p)
+    s = (standards or "").strip()
+    if s:
+        parts.append("--- QUALITY STANDARDS (the bar the result must meet) ---\n" + s)
+    return "\n\n".join(parts)
+
+
+def compose_layers(*, persona: str = "", standards: str = "", context: str = "",
+                   tail: str = "") -> PromptLayers:
+    """THE shared prompt-assembly entry point every turn-call routes through.
+
+    Builds the stable L1 head from ``persona`` + ``standards`` (deterministic in those inputs), sets
+    L2 to the ``context`` block, and takes the per-call ``tail`` as L3. Because the head and context
+    depend only on turn constants, plan / re-plan / answer / verify calls built from the same
+    (persona, standards, context) render a byte-identical ``prefix()`` and differ only in the tail.
+    """
+    return PromptLayers(head=turn_prompt_head(persona, standards), context=context or "", tail=tail or "")

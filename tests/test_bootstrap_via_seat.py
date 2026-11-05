@@ -7,9 +7,9 @@ match exactly."""
 import json
 from pathlib import Path
 
-from quest_ai_runner.adapters import context_card_builder
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.subconscious.qar_topic_bootstrap import QarTopicBootstrap
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_card_builder
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.qar_topic_bootstrap import QarTopicBootstrap
 from tests.fake_topic_provider import TopicProvider, write_corpus
 
 VOLATILE = {"mtime", "created_at", "last_verified_at", "origin", "completed_at", "store_id", "first_bootstrap_completed_at", "index_hash"}

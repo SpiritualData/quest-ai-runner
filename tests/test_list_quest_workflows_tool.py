@@ -2,9 +2,9 @@
 failure, and that a workflow-dispatched task's tool set offers it."""
 import pytest
 
-from quest_ai_runner.core import tools_quest_ops as ops
-from quest_ai_runner.core.tools import ToolContext, build_tool_registry
-from quest_ai_runner.runner.action_catalog import is_publishable_tool
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
+from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.the_body.hands.quest_operations.action_catalog import is_publishable_tool
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
 

@@ -22,16 +22,15 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
-from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_EXEC, EVENT_PLAN, EVENT_STATUS, EVENT_UNDERSTANDING
-from quest_ai_runner.core.inbox import InMemoryInbox
-from quest_ai_runner.core.orchestrator import OrchestratorResult
-from quest_ai_runner.interactive_session_tracker import _DeepRunTracker
-from quest_ai_runner.textual_ui import QuestAITerminal
-from quest_ai_runner.textual_ui_helpers import context_block_lines, person_line
-from quest_ai_runner.textual_ui_widgets import (
-    _AWAITING_DECISION_PLACEHOLDER, _BUSY_PLACEHOLDER, _READY_PLACEHOLDER, KeyHints,
-)
+from hubofhubs.api import DeepResult, ProgressEvent
+from hubofhubs.api import EVENT_CONTEXT, EVENT_EXEC, EVENT_PLAN, EVENT_STATUS, EVENT_UNDERSTANDING
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.the_consciousness.terminal.interactive_session_tracker import _DeepRunTracker
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import context_block_lines, person_line
+from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import (
+    _AWAITING_DECISION_PLACEHOLDER, _BUSY_PLACEHOLDER, _READY_PLACEHOLDER, KeyHints)
 
 # The words a person should never meet in the default view (they stay in the log, Alt+D and -v).
 INTERNAL_TERMS = ("deep run", "deep worker", "deep task", "QAR", "card", "corpus", "[Pass", "claude-")
@@ -336,7 +335,7 @@ def test_nothing_a_person_reads_by_default_contains_an_internal_word():
 
 
 def test_the_status_strings_say_the_work_and_never_the_deep_run():
-    from quest_ai_runner.core.launch_failure import status_text
+    from quest_ai_runner.the_intelligence.mind.delegation.launch_failure import status_text
     text = status_text(DeepResult(met=False, launch_failed=True, launch_problem="missing_program",
                                   error="The deep worker could not start: binary not found (claude)."))
     assert text == ("Could not start the work: Claude Code (the claude program) isn't installed on this machine, "
@@ -367,8 +366,8 @@ def test_the_work_panels_clock_is_the_turns_clock_not_a_second_one():
     now = [1000.0]
 
     async def build(app, pilot):
-        import quest_ai_runner.interactive_session_tracker as tracker
-        import quest_ai_runner.textual_ui_turn as turn
+        import quest_ai_runner.the_consciousness.terminal.interactive_session_tracker as tracker
+        import quest_ai_runner.the_consciousness.terminal.textual_ui_turn as turn
         fake_time = SimpleNamespace(time=lambda: now[0], monotonic=lambda: now[0])
         original = (tracker.time, turn.time)
         tracker.time = turn.time = fake_time
@@ -394,9 +393,9 @@ FITS_BESIDE_THE_CLOCK = 52
 
 
 def fixed_start_statuses():
-    from quest_ai_runner.core.deep_model_selection import start_status_text
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import start_status_text
     from esoi.iteration import READING_STATUS
-    from quest_ai_runner.core.goal_metrics import NUDGE_STATUS
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import NUDGE_STATUS
     ladder = {"start_model": "sonnet", "ladder": ["sonnet", "opus"], "difficulty": "simple"}
     pinned = {"start_model": "opus", "ladder": ["opus"]}
     return [start_status_text(ladder), start_status_text(pinned), NUDGE_STATUS,
@@ -500,7 +499,7 @@ def test_a_command_typed_before_the_session_is_ready_says_what_happens_next():
 
 
 def test_the_header_says_resuming_with_the_ellipsis_character_the_rest_of_the_app_uses():
-    from quest_ai_runner import chat_conversations
+    from quest_ai_runner.the_intelligence.higher_mind.long_term_memory import chat_conversations
     conv = chat_conversations.SavedConversation(path=None, history=[("a", "b")], meta={"rep_name": "Quest AI"})
 
     async def go():

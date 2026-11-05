@@ -14,9 +14,9 @@ import textwrap
 
 import pytest
 
-from quest_ai_runner import cli
-from quest_ai_runner.config import ConfigFileError, RunnerConfig, apply_file_defaults
-from quest_ai_runner.runner.personas import PersonaResolverConfig
+from quest_ai_runner.the_consciousness.terminal import cli
+from quest_ai_runner.the_body.configuration.config import ConfigFileError, RunnerConfig, apply_file_defaults
+from quest_ai_runner.the_consciousness.representatives.personas import PersonaResolverConfig
 
 
 def _write(tmp_path, text: str, name: str = "qar.toml"):
@@ -164,7 +164,7 @@ def test_config_from_env_file_fills_a_field_no_env_var_sets(tmp_path, monkeypatc
 def test_config_from_env_file_supplies_corpus_root_and_builds_a_retrieval_adapter(tmp_path, monkeypatch):
     """corpus_root is special-cased in _config_from_env (it drives FilesAdapter construction
     before the generic file-defaults layering even runs) — a file-only corpus must still work."""
-    from quest_ai_runner.adapters import FilesAdapter
+    from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
     corpus_dir = tmp_path / "corpus"
     corpus_dir.mkdir()

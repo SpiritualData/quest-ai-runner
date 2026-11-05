@@ -1,7 +1,7 @@
 """``store-info --vector-location``: an empty ``--vector-collection-prefix`` falls back to QAR's default collection prefix."""
 import argparse
 
-from quest_ai_runner.store_cli import vector_location_from_args
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.store_cli import vector_location_from_args
 
 
 def args(prefix):

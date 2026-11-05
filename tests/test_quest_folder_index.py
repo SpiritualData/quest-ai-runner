@@ -15,9 +15,8 @@ import tempfile
 
 import pytest
 
-from quest_ai_runner.runner.quest_folder_index import (
-    discover_quest_folders, match_quest_folder, render_quest_folder_context,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import (
+    discover_quest_folders, match_quest_folder, render_quest_folder_context)
 
 
 def make_quest(root, folder, quest_id, goal, state="", next_steps=""):
@@ -87,7 +86,7 @@ def test_matching(corpus, message, expected):
 
 
 def test_home_quest_is_the_default_and_only_a_named_quest_replaces_it(corpus):
-    from quest_ai_runner.runner.quest_folder_index import quest_for_directory
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import quest_for_directory
     folders = discover_quest_folders(str(corpus))
     (corpus / "quest_subscribers_growth" / "sub").mkdir()
     home = quest_for_directory(str(corpus / "quest_subscribers_growth" / "sub"), folders)
@@ -102,7 +101,7 @@ def test_home_quest_is_the_default_and_only_a_named_quest_replaces_it(corpus):
 
 
 def test_quest_card_carries_full_paths_state_and_next_steps(corpus):
-    from quest_ai_runner.runner.quest_folder_index import quest_card
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import quest_card
     quest = match_quest_folder("1000 subscribers", discover_quest_folders(str(corpus)))
     card = quest_card(quest, str(corpus))
     note = card["content"][0]["locator"]["text"]
@@ -115,12 +114,12 @@ def test_quest_card_carries_full_paths_state_and_next_steps(corpus):
 
 
 def make_store(corpus):
-    from quest_ai_runner.adapters.file_context_store import FileContextStore
+    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
     return FileContextStore(str(corpus / ".cards"), repo_root=str(corpus), auto_bootstrap=False)
 
 
 def test_quest_cards_are_synced_once_and_refreshed_on_change(corpus):
-    from quest_ai_runner.runner.quest_folder_index import quest_card_id, sync_quest_cards
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import quest_card_id, sync_quest_cards
     store = make_store(corpus)
     quests = discover_quest_folders(str(corpus))
     assert sync_quest_cards(store, quests, str(corpus)) == 4
@@ -132,7 +131,7 @@ def test_quest_cards_are_synced_once_and_refreshed_on_change(corpus):
 
 
 def test_priority_card_is_selected_first_even_without_shared_words(corpus):
-    from quest_ai_runner.runner.quest_folder_index import quest_card_id, sync_quest_cards
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import quest_card_id, sync_quest_cards
     store = make_store(corpus)
     sync_quest_cards(store, discover_quest_folders(str(corpus)), str(corpus))
     subs = quest_card_id("quest_subs")
@@ -151,8 +150,8 @@ def test_priority_card_is_selected_first_even_without_shared_words(corpus):
 # -- session: auto, none (remembered), pinned, follow-ups ------------------------------------
 
 def make_session(monkeypatch, corpus, tmp_path, env_default=None):
-    from quest_ai_runner import interactive_session as mod
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.terminal import interactive_session as mod
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
     class FakeOrch:
         """Stands in for the LLM quest judge: picks the quest whose title shares a word with the
@@ -179,7 +178,7 @@ def make_session(monkeypatch, corpus, tmp_path, env_default=None):
         monkeypatch.setenv("QAR_QUEST_AUTO_MATCH", env_default)
     else:
         monkeypatch.delenv("QAR_QUEST_AUTO_MATCH", raising=False)
-    monkeypatch.setattr("quest_ai_runner.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
+    monkeypatch.setattr("quest_ai_runner.the_body.configuration.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
     monkeypatch.setattr(mod.InteractiveSession, "_build_model_tiers_menu", lambda self: None)
     monkeypatch.setattr(mod.InteractiveSession, "_try_load_skill_by_name", lambda self, n: None)
     monkeypatch.setattr(mod.InteractiveSession, "_refresh_rep_name_from_skill", lambda self: None)
@@ -203,7 +202,7 @@ def test_matched_turn_puts_the_quest_card_first(monkeypatch, corpus, tmp_path):
 
 
 def test_quest_without_local_folder_goes_in_the_preamble(monkeypatch, corpus, tmp_path):
-    from quest_ai_runner.runner.quest_folder_index import quest_without_folder
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import quest_without_folder
     sess, _ = make_session(monkeypatch, corpus, tmp_path)
     sess.remote_quests = [quest_without_folder("quest_remote", "Launch the podcast series",
                                                "Two episodes recorded.")]
@@ -259,7 +258,7 @@ def test_selected_quest_binds_every_turn_like_quest_ai_chat(monkeypatch, corpus,
 # -- shared-corpus file permissions ----------------------------------------------------------
 
 def test_atomic_card_write_is_readable_by_others(tmp_path):
-    from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+    from hubofhubs.api import FilesystemCardRepository
     old = os.umask(0o022)
     try:
         repo = FilesystemCardRepository(str(tmp_path))
@@ -271,8 +270,8 @@ def test_atomic_card_write_is_readable_by_others(tmp_path):
 
 
 def test_discovery_falls_back_to_the_working_directory(monkeypatch, corpus, tmp_path):
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner import interactive_session as mod
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.terminal import interactive_session as mod
     monkeypatch.chdir(corpus)
     sess, lines = make_session(monkeypatch, corpus, tmp_path)
     # make_session passes corpus_root; rebuild the same way with none set.
@@ -289,8 +288,8 @@ def test_empty_quest_list_says_why(monkeypatch, tmp_path):
 
 
 def test_goal_id_flag_starts_with_the_quest_selected_and_auto_clears_it(monkeypatch, corpus, tmp_path):
-    from quest_ai_runner import interactive_session as mod
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.terminal import interactive_session as mod
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     make_session(monkeypatch, corpus, tmp_path)  # applies the offline patches
     sess = mod.InteractiveSession(RunnerConfig(quest_base_url="", quest_api_key="",
                                                corpus_root=str(corpus)), goal_id="quest_wiki")
@@ -322,7 +321,7 @@ def test_session_in_a_quest_folder_defaults_to_it(monkeypatch, corpus, tmp_path)
 
 
 def test_judge_failure_falls_back_to_home_quest_never_to_word_overlap():
-    from quest_ai_runner.core.orchestrator import Orchestrator
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
     class Boom:
         def resolve_tier(self, tier):
             raise RuntimeError("no tier")

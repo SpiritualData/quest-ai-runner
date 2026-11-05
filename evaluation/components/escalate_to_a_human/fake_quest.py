@@ -1,5 +1,5 @@
 """The fake Quest client for the escalate_to_a_human component: the network edge, nothing else."""
-from quest_ai_runner.runner.quest_client_support import QuestApiError
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
 
 
 class FakeQuest:

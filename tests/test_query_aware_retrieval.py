@@ -25,15 +25,15 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from hubofhubs.the_body.internal_context.context import AssembledContext, ConversationContext
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import DECIDE_TOOL, Orchestrator, parse_goal_condition_reply
-from quest_ai_runner.core.orchestrator_decisions import _format_now_block
-from quest_ai_runner.core.recent_context import filter_relevant, render_recent_cards
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
+from hubofhubs.api import AssembledContext, ConversationContext
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import DECIDE_TOOL, Orchestrator, parse_goal_condition_reply
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _format_now_block
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import filter_relevant, render_recent_cards
 
 from .conftest import StubProvider, StubRetrieval
 

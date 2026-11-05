@@ -1,6 +1,6 @@
 """The read-only ``find_quest`` tool: the way out of "No quest is open in this run"."""
-from quest_ai_runner.core import tools_quest_ops as ops
-from quest_ai_runner.core.tools import ToolContext
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
+from quest_ai_runner.the_world.tools.tools import ToolContext
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
 

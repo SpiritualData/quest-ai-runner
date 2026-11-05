@@ -10,7 +10,7 @@ builds stores through repeated passes; this arm measures the part that acts on a
 from pathlib import Path
 
 from card_store_growth import world
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def build(meter):  # noqa: ARG001

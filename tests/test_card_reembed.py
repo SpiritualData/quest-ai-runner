@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def _write(cards_dir: Path, card: Dict[str, Any]) -> None:

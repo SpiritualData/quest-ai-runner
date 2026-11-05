@@ -7,8 +7,9 @@ PAID = True
 import json
 
 import live_arm
-from quest_ai_runner.core import quest_judge, reach_judge
-from quest_ai_runner.core.card_filter import _extract_json
+from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_judge
+from quest_ai_runner.the_intelligence.mind.planner import reach_judge
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import _extract_json
 
 
 def build(meter):

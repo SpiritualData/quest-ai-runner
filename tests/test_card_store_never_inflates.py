@@ -31,8 +31,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_store_growth import world  # noqa: E402
@@ -309,7 +309,7 @@ def test_the_store_write_path_refuses_it_and_the_callers_that_promise_not_to_rai
 
 
 def test_the_quest_backend_repository_refuses_it_too_and_so_does_a_bulk_upload():
-    from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
+    from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
     from tests.quest_card_backend_fake import FakeCardBackend
     backend = FakeCardBackend()
     try:
@@ -440,7 +440,7 @@ def test_a_card_written_before_dates_were_kept_stays_undated(tmp_path):
 def test_a_card_a_person_wrote_stays_theirs_through_a_refresh_that_regenerates_it(tmp_path):
     """Found by the review fuzz: a card with no author (written by hand) pinning files that changed was regenerated
     and labelled as an index-pass card, which made it movable by the tidy and the card limit."""
-    from hubofhubs.the_body.internal_context.card_store.card_origin import protection
+    from hubofhubs.api import protection
     root = notes(tmp_path / "top", ["auth", "chat"])
     index(root)
     mine = open_store(root)

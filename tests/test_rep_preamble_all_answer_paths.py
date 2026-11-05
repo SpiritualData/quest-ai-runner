@@ -7,8 +7,8 @@ without it, so a multi-part question was answered with no persona and none of th
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 

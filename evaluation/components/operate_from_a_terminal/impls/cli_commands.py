@@ -1,11 +1,11 @@
-"""PACKAGE ARM: the package's own terminal member, ``quest_ai_runner.area_take_in_the_world.CliCommands`` (the ``cli_commands`` arm of
-``operate-from-a-terminal``), driven on the same cases as ``qar_main``: ``quest-ai-runner`` and ``python -m quest_ai_runner.tools`` called in
+"""PACKAGE ARM: the package's own terminal member, ``quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world.CliCommands`` (the ``cli_commands`` arm of
+``operate-from-a-terminal``), driven on the same cases as ``qar_main``: ``quest-ai-runner`` and ``python -m quest_ai_runner tools`` called in
 process with a scrubbed environment and a scratch folder, output and exit code captured. Nothing is faked. Zero model calls."""
 import tempfile
 from pathlib import Path
 
 from common import hermetic_env
-from quest_ai_runner.area_take_in_the_world import CliCommands
+from quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world import CliCommands
 
 
 def build(meter):  # noqa: ARG001

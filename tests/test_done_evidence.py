@@ -9,15 +9,15 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_INTERIM
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_decide_tool import decide_tool_for
-from quest_ai_runner.core.orchestrator_decisions import normalize_decision
-from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
-from quest_ai_runner.core.prompt_budget import estimate_tokens
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_INTERIM
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import decide_tool_for
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROFILES
+from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import estimate_tokens
 
 from .conftest import StubRetrieval
 

@@ -8,8 +8,8 @@ non-answer. The net after the verification loop closes all of them.
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 
@@ -96,7 +96,7 @@ def test_overseer_prompt_keeps_impossible_asks_and_its_question_user_facing():
     """An overseer escalate_human replaced a correct decline ("I cannot move money") with its own
     third-person reason ("The user is requesting a direct financial transaction ...") as the
     question shown to the user (2026-10-07)."""
-    from quest_ai_runner.core.overseer import OVERSEER_PROMPT
+    from quest_ai_runner.the_intelligence.mind.delegation.overseer import OVERSEER_PROMPT
     assert "NOTHING here can" in OVERSEER_PROMPT
     assert "never about them" in OVERSEER_PROMPT
 
@@ -123,8 +123,8 @@ def test_a_users_own_request_may_still_reach_the_queue_through_an_escalation():
 
 
 def test_an_empty_escalation_that_filed_a_decision_still_reports_itself():
-    from hubofhubs.the_world.tools.deep import DeepResult
-    from quest_ai_runner.core.orchestrator_decide_tool import own_escalation_adds_nothing
+    from hubofhubs.api import DeepResult
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import own_escalation_adds_nothing
 
     class Res:
         text = ""
@@ -133,7 +133,7 @@ def test_an_empty_escalation_that_filed_a_decision_still_reports_itself():
     Res.deep_results = [DeepResult(met=False, output="")]
     assert own_escalation_adds_nothing(Res()) is True
 
-    from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact
+    from hubofhubs.api import ExecutionFact
 
     class Record:
         facts = [ExecutionFact(goal="old")]

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from hubofhubs.the_world.tools.events import EVENT_CONTEXT
-from quest_ai_runner.textual_ui import QuestAITerminal
+from hubofhubs.api import EVENT_CONTEXT
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
 
 class _FakeSession:

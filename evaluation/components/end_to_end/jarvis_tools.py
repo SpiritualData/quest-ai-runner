@@ -9,8 +9,8 @@ which says plainly that nothing was sent or scheduled. So a reply that claims ei
 import re
 from datetime import datetime, timedelta
 
-from quest_ai_runner.core.tools import ToolResult, ToolSpec
-from quest_ai_runner.core.tools_status import ToolStatus
+from quest_ai_runner.the_world.tools.tools import ToolResult, ToolSpec
+from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 
 CALENDAR_TOOL, EMAIL_TOOL = "propose_calendar_block", "draft_email_for_approval"
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

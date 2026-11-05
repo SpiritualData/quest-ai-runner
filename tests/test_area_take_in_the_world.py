@@ -3,9 +3,9 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_take_in_the_world import RequestTakingIn
-from quest_ai_runner.core.adapters_channels import InboundBatch, OutboundReply, SendResult
-from quest_ai_runner.core.inbox import InMemoryInbox
+from quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world import RequestTakingIn
+from quest_ai_runner.the_consciousness.request_intake.interface import InboundBatch, OutboundReply, SendResult
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 from tests.conftest import StubProvider
 
 AREA_IDS = ("take-in-the-world", "route-a-message", "talk-over-a-channel", "receive-input-mid-run", "feed-context-sources",

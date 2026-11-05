@@ -8,11 +8,8 @@ Fully offline.
 """
 from __future__ import annotations
 
-from quest_ai_runner.core.deep_model_selection import (
-    DEFAULT_AUTO_DEEP_LADDER,
-    DEFAULT_DIFFICULTY_MODELS,
-)
-from quest_ai_runner.core.model_registry import DEFAULT_FALLBACK_TOP, bucket_top
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import DEFAULT_AUTO_DEEP_LADDER, DEFAULT_DIFFICULTY_MODELS
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import DEFAULT_FALLBACK_TOP, bucket_top
 
 LIVE_WITH_OPUS = [
     "claude-haiku-5-5",

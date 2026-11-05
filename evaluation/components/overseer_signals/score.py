@@ -2,7 +2,7 @@
 ``must_show`` and stays within the 1600-char budget. ``sig_ok``: the solution's signal is one of ``want``
 (only when the solution returned one). ``ok`` needs both. ``aggregate`` reports the two apart, because an
 offline run measures only the first."""
-from quest_ai_runner.core.overseer import build_digest
+from quest_ai_runner.the_intelligence.mind.delegation.overseer import build_digest
 
 BUDGET = 1600
 

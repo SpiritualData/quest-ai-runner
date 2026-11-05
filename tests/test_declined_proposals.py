@@ -7,10 +7,10 @@ already been turned down, and a real production conversation re-fired one declin
 quests" proposal ten times across seventy-two messages. ``declined_proposals_block`` now feeds the
 SAME history into ``context_view`` itself, so both the planner and the grounded answer see it.
 """
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.planner_prompt import DECLINED_PROPOSALS_NOTE
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.planner_context import declined_proposals_block
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DECLINED_PROPOSALS_NOTE
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import declined_proposals_block
 
 from .conftest import StubProvider, StubRetrieval
 

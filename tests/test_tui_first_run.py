@@ -13,8 +13,8 @@ Textual event loop needed) and confirm `_build_session_worker` routes through
 
 from __future__ import annotations
 
-from quest_ai_runner.textual_ui import QuestAITerminal
-from quest_ai_runner.textual_ui_helpers import _missing_model_provider_message
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import _missing_model_provider_message
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ def test_build_session_worker_fails_fast_when_no_provider(monkeypatch):
     app._finish_startup = lambda session: calls.__setitem__("finish_startup_called", True)
 
     monkeypatch.setattr(
-        "quest_ai_runner.textual_ui_startup._missing_model_provider_message",
+        "quest_ai_runner.the_consciousness.terminal.textual_ui_startup._missing_model_provider_message",
         lambda: "No AI provider is configured. Set ANTHROPIC_API_KEY...",
     )
 
@@ -127,12 +127,12 @@ def test_build_session_worker_proceeds_when_provider_available(monkeypatch):
     app._finish_startup = lambda session: calls.__setitem__("finish_startup_called", True)
 
     monkeypatch.setattr(
-        "quest_ai_runner.textual_ui_startup._missing_model_provider_message",
+        "quest_ai_runner.the_consciousness.terminal.textual_ui_startup._missing_model_provider_message",
         lambda: None,
     )
     # Stub out InteractiveSession construction so this stays offline/fast.
     monkeypatch.setattr(
-        "quest_ai_runner.interactive_session.InteractiveSession",
+        "quest_ai_runner.the_consciousness.terminal.interactive_session.InteractiveSession",
         lambda *a, **k: _FakeSession(),
     )
 

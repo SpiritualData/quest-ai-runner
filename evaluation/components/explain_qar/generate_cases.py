@@ -23,7 +23,7 @@ def documents():
 def main():
     import env_vars
     import quest_ai_runner
-    from quest_ai_runner import cli_parser
+    from quest_ai_runner.the_consciousness.terminal import cli_parser
     cases = []
 
     def add(kind, desc, args, expect):

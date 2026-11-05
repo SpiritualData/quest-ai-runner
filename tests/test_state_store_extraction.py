@@ -3,7 +3,7 @@
 
 ``tests/test_statestore_edge_cases.py`` already exercises ``StateStore``'s actual behavior in
 depth (rotation, concurrency, atomic writes, corruption, the 5000-signature cap) via
-``from quest_ai_runner.runner.poller import StateStore`` -- unchanged, and still green after the
+``from quest_ai_runner.the_consciousness.request_intake.poller import StateStore`` -- unchanged, and still green after the
 extraction (see the module docstring on ``runner/state_store.py``). This file pins the two things
 that test suite doesn't: that both import paths resolve to the EXACT SAME class object (so
 ``poller.StateStore`` and ``channel_runner``'s use of ``state_store.StateStore`` share the one
@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import tempfile
 
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.runner import state_store as state_store_module
-from quest_ai_runner.runner.channel_runner import ChannelRunner
-from quest_ai_runner.runner.poller import StateStore as PollerStateStore
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_body.internal_context.run_store import state_store as state_store_module
+from quest_ai_runner.the_consciousness.request_intake.channel_runner import ChannelRunner
+from quest_ai_runner.the_consciousness.request_intake.poller import StateStore as PollerStateStore
 
 
 def test_poller_reexports_the_same_class_object():
-    """`from quest_ai_runner.runner.poller import StateStore` (every existing caller/test) must
+    """`from quest_ai_runner.the_consciousness.request_intake.poller import StateStore` (every existing caller/test) must
     resolve to the literal same class as the new home, not a re-implementation or a copy."""
     assert PollerStateStore is state_store_module.StateStore
 

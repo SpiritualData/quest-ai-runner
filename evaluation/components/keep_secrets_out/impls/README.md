@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Integrity](../../../../quest_ai_runner/integrity/README.md)
+- Owning intent: [Integrity](../../../../quest_ai_runner/the_self/integrity/README.md)
 - Repository: [top README](../../../../README.md)

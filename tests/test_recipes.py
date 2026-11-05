@@ -3,10 +3,10 @@ search, a near-miss is not, and nothing a recipe does can make a turn fail."""
 import pytest
 
 from .conftest import StubProvider, StubRetrieval
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.recipes import RecipeStore, content_tokens, similarity
-from quest_ai_runner.core.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.recipes import RecipeStore, content_tokens, similarity
+from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 
 
 class CountingAssembler:
@@ -219,7 +219,7 @@ def test_skeleton_ignores_payload_words_so_free_text_requests_still_match():
 
 # --------------------------------------------------------------------------- deep recipes
 
-from hubofhubs.the_world.tools.deep import DeepResult
+from hubofhubs.api import DeepResult
 
 
 class RecordingDeepRunner:

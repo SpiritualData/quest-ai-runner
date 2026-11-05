@@ -20,12 +20,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from hubofhubs.the_body.internal_context.card_store import card_limit
-from hubofhubs.the_body.internal_context.card_store.card_limit_report import REPORT_NAME, breakdown
-from quest_ai_runner.adapters import card_store_settings
-from quest_ai_runner.adapters.card_limit_report import VOICE, notice_lines, report_for
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from hubofhubs.api import card_limit
+from hubofhubs.api import REPORT_NAME, breakdown
+from quest_ai_runner.the_body.configuration import card_store_settings
+from quest_ai_runner.the_body.internal_context.card_store.card_limit_report import VOICE, notice_lines, report_for
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_store_growth.world import DiskProvider  # noqa: E402
@@ -108,8 +108,8 @@ class TestTheKnob:
     def test_the_runner_builds_its_store_with_the_limit_from_the_environment(self, tmp_path, monkeypatch, env, expected):
         """The 1,000 default belongs to the runner (its builder), not to the library under it."""
         from unittest.mock import MagicMock
-        import quest_ai_runner.subconscious.qdrant_vector_store as qdrant_module
-        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+        import quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store as qdrant_module
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_context_assembler
         for name in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID",
                      "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL", "QDRANT_URL", "QAR_EMBEDDER_BACKEND",
                      "QAR_VECTOR_BACKEND", "QAR_CARD_MOUNT", "QAR_MAX_CARDS"):
@@ -119,7 +119,7 @@ class TestTheKnob:
         monkeypatch.setenv("QAR_CARDS_BACKEND", "local")
         if env is not None:
             monkeypatch.setenv("QAR_MAX_CARDS", env)
-        monkeypatch.setattr("quest_ai_runner.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
+        monkeypatch.setattr("quest_ai_runner.the_body.configuration.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
         monkeypatch.setattr(FileContextStore, "prewarm", lambda self, notify=None: 0)
         root = tmp_path / "repo"
         root.mkdir()
@@ -364,7 +364,7 @@ class TestAStaleWriterDoesNotUndoTheLimit:
         assert "is back in the index" in caplog.text
 
     def test_a_note_for_a_copy_that_was_moved_out_lands_on_the_card_that_stands_for_it(self, tmp_path, caplog):
-        from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
+        from hubofhubs.api import card_store_hygiene as hygiene
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
         seed(cards, [card("topic", files=files, name="a topic"),
@@ -396,7 +396,7 @@ class TestAStaleWriterDoesNotUndoTheLimit:
 def lock_log(monkeypatch):
     """Every acquisition of a card folder's lock in this process: whether it waited, and what the folder's
     repository was asked to do while it was held (``load_all`` parses every card, ``read`` one)."""
-    from hubofhubs.the_body.internal_context.card_store.card_store_lock import StoreLock
+    from hubofhubs.api import StoreLock
     log = {"acquired": [], "held": 0, "under_lock": []}
     real_acquire, real_release = StoreLock.acquire, StoreLock.release
 
@@ -607,7 +607,7 @@ class TestTheNotice:
     def test_both_lines_survive_the_terminals_cut_whatever_the_window(self, tmp_path, caplog, width):
         """Review finding 10: the transcript shows the first sentence of a warning, cut to the window (width - 8);
         the counts and the instruction both have to be on screen in full, and the report path never is."""
-        from quest_ai_runner.textual_ui_widgets import LOG_LINE_CHARS, short_log_text
+        from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import LOG_LINE_CHARS, short_log_text
         store = mixed_store(tmp_path)
         with caplog.at_level(logging.WARNING, logger=LOGGER):
             self.refuse_one(store)
@@ -618,7 +618,7 @@ class TestTheNotice:
         assert not any("card_limit_report" in line or "/" in line for line in shown), "the path is in the log only"
 
     def test_the_counts_fit_one_80_column_line_even_for_the_incident_sized_store(self):
-        from hubofhubs.the_body.internal_context.card_store.card_limit_report import Breakdown, count_line
+        from hubofhubs.api import Breakdown, count_line
         for numbers in ((1000, 1000, 812, 150, 30, 8), (1000, 1430, 1200, 200, 25, 5),
                         (1000, 142781, 130000, 10000, 2000, 781)):
             line = count_line(Breakdown(*numbers), VOICE)
@@ -698,7 +698,7 @@ class TestTheNotice:
         assert "| limit | 1 |" in report, "the moved card is listed by reason"
 
     def test_cards_report_prints_it(self, tmp_path, capsys):
-        from quest_ai_runner.cli import main
+        from quest_ai_runner.the_consciousness.terminal.cli import main
         mixed_store(tmp_path)
         assert main(["cards", "report", "--cards-dir", str(tmp_path / "cards")]) == 0
         out = capsys.readouterr().out
@@ -732,8 +732,8 @@ class TestTheNotice:
 # --- the other writers -------------------------------------------------------------------------------
 
 def test_a_merge_that_would_pass_the_limit_is_a_problem_and_applies_nothing(tmp_path):
-    from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
-    from quest_ai_runner.adapters.card_store_merge import apply_merge
+    from hubofhubs.api import card_store_identity as ident
+    from quest_ai_runner.the_body.internal_context.card_store.card_store_merge import apply_merge
     wide, narrow = tmp_path / "wide" / ".quest-context", tmp_path / "wide" / "sub" / ".quest-context"
     seed(wide, [card(f"w{i}", files=[f"w{i}/a.md", f"w{i}/b.md"]) for i in range(3)])
     seed(narrow, [card(f"n{i}", files=[f"n{i}/a.md", f"n{i}/b.md"]) for i in range(3)])

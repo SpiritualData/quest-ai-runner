@@ -22,7 +22,7 @@ def claude_path():
 
 def real_provider(meter):
     """The runner's own keyless model client over the logged-in ``claude`` CLI, every call counted by the meter."""
-    from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
     return meter.wrap(ClaudeCliProvider(claude_path=claude_path(), timeout_seconds=120))
 
 
@@ -33,7 +33,7 @@ def real_vector_search():
     import numpy as np
     from context_selection.embedder import MODEL
     from fastembed import TextEmbedding
-    from quest_ai_runner.core.spec_selection import card_line
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import card_line
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     model = TextEmbedding(model_name=MODEL, cache_dir=os.environ.get("FASTEMBED_CACHE_PATH", "/tmp/fastembed_cache"))
 

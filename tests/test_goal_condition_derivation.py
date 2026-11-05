@@ -10,8 +10,8 @@ Offline, no network.
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubProvider, StubRetrieval
 

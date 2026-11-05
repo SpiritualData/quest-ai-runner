@@ -16,17 +16,17 @@ import pytest
 
 pytest.importorskip("qdrant_client")
 
-from quest_ai_runner import store_cli  # noqa: E402
-from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident  # noqa: E402
-from hubofhubs.the_body.internal_context.card_store import card_store_merge as hub_merge  # noqa: E402
-from quest_ai_runner.adapters import card_store_merge as merge  # noqa: E402
-from hubofhubs.the_body.internal_context.card_store import card_store_mounts as mounts
-from quest_ai_runner.adapters import card_store_fence as fence  # noqa: E402
-from quest_ai_runner.adapters import card_store_vectors as vectors  # noqa: E402
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository  # noqa: E402
-from quest_ai_runner.adapters.file_context_store import FileContextStore  # noqa: E402
-from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore  # noqa: E402
-from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE  # noqa: E402
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import store_cli  # noqa: E402
+from hubofhubs.api import card_store_identity as ident  # noqa: E402
+from hubofhubs.api import card_store_merge as hub_merge  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store import card_store_merge as merge  # noqa: E402
+from hubofhubs.api import card_store_mounts as mounts
+from quest_ai_runner.the_body.internal_context.card_store import card_store_fence as fence  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store import card_store_vectors as vectors  # noqa: E402
+from hubofhubs.api import FilesystemCardRepository  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE  # noqa: E402
 from tests.test_card_store_mounts import (  # noqa: E402
     VEC,
     CountingEmbedder,
@@ -72,7 +72,7 @@ def make_store(root: Path, cards: List[Dict[str, Any]], *, legacy: bool = False)
 
 
 def make_owner_meta(cards_dir: Path, root: Path, count: int, legacy: bool) -> None:
-    from quest_ai_runner.adapters.file_context_store import write_bootstrap_meta
+    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import write_bootstrap_meta
     if legacy:
         ident.write_meta(str(cards_dir), {"version": 1, "feature_versions": {}, "card_count": count,
                                           "root": str(root)})
@@ -433,7 +433,7 @@ class TestVectorLocationIdentity:
                               "embedded", "--apply"]) == 0
         rec = ident.vector_location_of(ident.read_meta(str(d)))
         assert rec["location"] == "embedded" and rec["path"] == str(d / "qdrant")
-        from quest_ai_runner.adapters.file_context_store import write_bootstrap_meta
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import write_bootstrap_meta
         write_bootstrap_meta(str(d), 1, root=str(tmp_path / "o"))
         assert ident.vector_location_of(ident.read_meta(str(d))) == rec
 

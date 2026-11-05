@@ -5,12 +5,7 @@ raised exception) and the wall-clock construction ``scheduled_moment``/``now_in_
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.local_time import (
-    now_in_zone,
-    resolve_zone,
-    scheduled_moment,
-    today_in_zone,
-)
+from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone, resolve_zone, scheduled_moment, today_in_zone
 
 
 def test_resolve_zone_returns_a_working_zoneinfo_for_a_real_name():
@@ -107,7 +102,7 @@ def test_an_aware_utc_now_with_no_zone_is_expressed_on_the_runners_local_clock()
     UTC date. At 22:05 US/Pacific that is already tomorrow, so the daily pass was scheduled a day
     late and the run never happened."""
     from datetime import datetime, timedelta, timezone as _tz
-    from quest_ai_runner.runner import local_time
+    from quest_ai_runner.the_consciousness.request_intake import local_time
 
     # An instant that is a DIFFERENT calendar day in UTC than on any negative-offset local clock.
     now_utc = datetime.now(_tz.utc).replace(hour=5, minute=5)
@@ -120,7 +115,7 @@ def test_a_naive_now_with_no_zone_is_passed_through_unchanged():
     """The pre-existing convention the rest of the repo relies on: a naive timestamp is already a
     local reading, so the fallback must not shift it."""
     from datetime import datetime
-    from quest_ai_runner.runner import local_time
+    from quest_ai_runner.the_consciousness.request_intake import local_time
 
     naive = datetime(2026, 9, 2, 22, 5)
     assert local_time.now_in_zone(None, naive) == naive

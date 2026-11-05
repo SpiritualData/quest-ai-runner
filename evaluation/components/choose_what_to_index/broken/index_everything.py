@@ -2,7 +2,7 @@
 snapshot's card store is imported or mounted and every snapshot's files are walked. Zero model calls."""
 from pathlib import Path
 
-from quest_ai_runner.adapters.context_risk_gate import FolderGate
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_risk_gate import FolderGate
 
 
 def build(meter):  # noqa: ARG001

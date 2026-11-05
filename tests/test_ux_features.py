@@ -24,14 +24,14 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_body.internal_context.context import AssembledContext, ContextAssembler
-from hubofhubs.the_world.tools.deep import ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_PARTIAL, EVENT_STATUS, Mode
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
+from hubofhubs.api import AssembledContext, ContextAssembler
+from hubofhubs.api import ProgressEvent
+from hubofhubs.api import EVENT_PARTIAL, EVENT_STATUS, Mode
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -155,7 +155,7 @@ class TestInstantAck:
 
         # The first beat is emitted as EVENT_PARTIAL with data={"narration": True} so consumers
         # render it as a live (non-persisted) assistant line / spoken on voice, not a spinner tick.
-        from hubofhubs.the_world.tools.events import EVENT_PARTIAL
+        from hubofhubs.api import EVENT_PARTIAL
         narration_events = [e for e in events if e["type"] == EVENT_PARTIAL
                             and isinstance(e.get("data"), dict) and e["data"].get("narration")]
         assert narration_events, (
@@ -188,7 +188,7 @@ class TestInstantAck:
         """Approach B: on a read step, the planner's (conversational) rationale is relayed as the
         narration beat, and the plan/replan event carries NO duplicate text (so a consumer won't
         show the line twice). Zero extra LLM call: the beat IS the planner's rationale."""
-        from hubofhubs.the_world.tools.events import EVENT_PLAN, EVENT_REPLAN
+        from hubofhubs.api import EVENT_PLAN, EVENT_REPLAN
         beat = "I'm pulling up your quest history so we can see where things break down."
         cfg = OrchestratorConfig(narrate=True)
         # read -> answer. The read step's rationale is the conversational beat.
@@ -612,7 +612,7 @@ class TestDailyUsageStatus:
 
     def _make_session_stub(self):
         """A bare object carrying just enough for _daily_usage_status to run unbound."""
-        from quest_ai_runner.interactive_session import InteractiveSession
+        from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
         return InteractiveSession.__new__(InteractiveSession)
 
     def test_no_usage_file_returns_none(self, tmp_path, monkeypatch):
@@ -671,14 +671,14 @@ class TestHelpPointers:
     """The in-session /help text points at search-context and bootstrap --dry-run."""
 
     def test_help_mentions_search_context(self):
-        from quest_ai_runner.interactive_session import _HELP
+        from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
         assert "search-context" in _HELP
 
     def test_help_mentions_bootstrap_dry_run(self):
-        from quest_ai_runner.interactive_session import _HELP
+        from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
         assert "bootstrap --dry-run" in _HELP
 
     def test_help_has_no_em_dash(self):
         """Brand rule: no em dashes in user-facing copy, including the new help lines."""
-        from quest_ai_runner.interactive_session import _HELP
+        from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
         assert "—" not in _HELP

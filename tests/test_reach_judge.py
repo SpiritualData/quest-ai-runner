@@ -24,27 +24,17 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_capabilities import provider_call_accepts_tier
-from quest_ai_runner.core.reach_judge import (
-    RECORDS_LINE,
-    OUTSIDE_UNCOVERED_LINE,
-    OUTSIDE_UNCOVERED_LINE_WEB,
-    REACH_JUDGE_TOOL,
-    REACH_VERDICTS,
-    VERDICT_HEADING,
-    WEB_REACH_NOTE,
-    judge_prompt,
-    normalize_verdict,
-    parse_judge_text,
-    verdict_block,
-)
+from hubofhubs.api import AssembledContext
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import provider_call_accepts_tier
+from quest_ai_runner.the_intelligence.mind.planner.reach_judge import (
+    RECORDS_LINE, OUTSIDE_UNCOVERED_LINE, OUTSIDE_UNCOVERED_LINE_WEB, REACH_JUDGE_TOOL, REACH_VERDICTS, VERDICT_HEADING, WEB_REACH_NOTE,
+    judge_prompt, normalize_verdict, parse_judge_text, verdict_block)
 
 from .conftest import StubRetrieval
-from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +256,7 @@ def test_judge_prompt_cuts_the_middle_of_an_over_long_message_and_keeps_the_ask_
 
 
 # Captured by running quest-ai-runner's core/reach_judge.py AT ITS COMMIT PARENT TO bf609a8
-# (`git show bf609a8^:quest_ai_runner/core/reach_judge.py`), where judge_prompt() had no
+# (`git show bf609a8^:quest_ai_runner/the_intelligence/mind/planner/reach_judge.py`), where judge_prompt() had no
 # web_configured parameter at all, calling it with the exact same arguments this test uses. This
 # is the real pin: comparing the default call against an explicit web_configured=False call, both
 # through the NEW code (what this test used to do), proves nothing about whether either one
@@ -747,7 +737,7 @@ def test_an_adapter_without_the_read_or_a_failing_one_changes_nothing():
 
 
 def test_the_composite_asks_only_the_first_member_that_offers_the_update_read():
-    from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
+    from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
     first, second = UpdatesRetrieval(), UpdatesRetrieval()
     composite = CompositeRetrievalAdapter([StubRetrieval({}), first, second])
     assert composite.own_updates().text == "One task needs you."
@@ -777,7 +767,7 @@ class ExplodingWeb:
 
 
 def build_direct(reach_response, result):
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates  # noqa: F401
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates  # noqa: F401
     provider = DispatchingProvider(reach_response=reach_response,
                                    decide_response={"action": "answer", "rationale": "ok"})
     retrieval = DirectUpdatesRetrieval(result)
@@ -792,7 +782,7 @@ def planner_calls(provider):
 
 
 def test_judge_true_replies_with_the_digest_text_and_never_plans_reads_or_goes_deep():
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
     digest = "One task needs you. Two finished."
     orch, retrieval, provider = build_direct({"reach": "world", "asks_own_updates": True}, OwnUpdates(text=digest))
     result = orch.run("what's the latest?")
@@ -803,7 +793,7 @@ def test_judge_true_replies_with_the_digest_text_and_never_plans_reads_or_goes_d
 
 
 def test_nothing_new_replies_with_the_consumers_plain_sentence():
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
     orch, _, provider = build_direct({"reach": "inside", "asks_own_updates": True},
                                      OwnUpdates(text="Nothing new since you last looked.", nothing_new=True))
     result = orch.run("what's new?")
@@ -811,14 +801,14 @@ def test_nothing_new_replies_with_the_consumers_plain_sentence():
 
 
 def test_judge_false_is_unchanged_and_does_not_read():
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
     orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": False}, OwnUpdates(text="X"))
     result = orch.run("what's the latest?")
     assert retrieval.update_reads == 0 and result.text != "X" and planner_calls(provider)
 
 
 def test_a_failed_read_falls_through_to_the_normal_planner_path():
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
     for bad in (RuntimeError("down"), Observation(kind="error", error="x"), OwnUpdates(text="  ")):
         orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": True}, bad)
         result = orch.run("what's the latest?")
@@ -828,7 +818,7 @@ def test_a_failed_read_falls_through_to_the_normal_planner_path():
 
 def test_own_updates_wins_over_a_turn_start_clarifying_question():
     """A short message the understanding step would end on a clarifying question is still answered from the updates."""
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
     orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": True}, OwnUpdates(text="Two tasks finished."))
     orch.conversation_store = object()
     orch._needs_context_to_understand = lambda message: True
@@ -839,7 +829,7 @@ def test_own_updates_wins_over_a_turn_start_clarifying_question():
 
 
 def test_a_missing_verdict_skips_the_short_circuit_and_says_why(caplog):
-    from quest_ai_runner.core.adapters_retrieval import OwnUpdates
+    from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
     orch, retrieval, provider = build_direct({"reach": "inside", "asks_own_updates": True}, OwnUpdates(text="X"))
     orch.reach_verdict = lambda message: None
     with caplog.at_level("INFO"):

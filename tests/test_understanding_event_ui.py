@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from typing import List
 
-from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_UNDERSTANDING
-from quest_ai_runner.interactive_session import _DeepRunTracker
-from quest_ai_runner.textual_ui import QuestAITerminal
+from hubofhubs.api import EVENT_DECISION, EVENT_UNDERSTANDING
+from quest_ai_runner.the_consciousness.terminal.interactive_session import _DeepRunTracker
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
 
 # ---------------------------------------------------------------------------

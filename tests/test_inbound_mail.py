@@ -21,13 +21,8 @@ Offline throughout: no network, no real mailbox, no model provider.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.adapters.inbound_mail import MailMessage, is_bulk_mail, refuses_as_inbound_mailbox
-from quest_ai_runner.runner.context_updates import (
-    InboundMailSource,
-    RelayedItems,
-    UpdateEngine,
-    Watermarks,
-)
+from quest_ai_runner.the_body.intake_sources.inbound_mail import MailMessage, is_bulk_mail, refuses_as_inbound_mailbox
+from quest_ai_runner.the_body.intake_sources.context_updates import InboundMailSource, RelayedItems, UpdateEngine, Watermarks
 
 NOW = datetime(2026, 9, 14, 12, 0, 0, tzinfo=timezone.utc)
 

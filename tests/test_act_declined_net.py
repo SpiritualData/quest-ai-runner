@@ -7,14 +7,11 @@ answer. The planner's own structured verdict `act_declined` now says the answer 
 response, and the nets that escalate an "act" answer to deep honor it. Also pins the three prompt
 rules (the planner rubric, the overseer, the queued-hand-off sentence). Offline, no network.
 """
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.core.orchestrator_decisions import normalize_decision
-from quest_ai_runner.core.overseer import OVERSEER_PROMPT
-from quest_ai_runner.core.planner_prompt import (
-    DEFERRED_DEEP_QUEUED_SEMANTICS,
-    PLANNER_DECISION_RUBRIC,
-)
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.the_intelligence.mind.delegation.overseer import OVERSEER_PROMPT
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEFERRED_DEEP_QUEUED_SEMANTICS, PLANNER_DECISION_RUBRIC
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 
@@ -48,7 +45,7 @@ def test_the_same_act_answer_without_the_verdict_still_escalates():
 
 
 def test_act_declined_is_true_only_for_a_real_boolean():
-    from quest_ai_runner.core.adapters_values import PlanDecision  # noqa: F401
+    from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision  # noqa: F401
     cfg = Orchestrator(retrieval=StubRetrieval(), provider=StubProvider(decisions=[]),
                        registry=ModelRegistry(StubProvider(decisions=[]))).cfg
     assert normalize_decision({"action": "answer", "act_declined": True}, cfg).act_declined is True

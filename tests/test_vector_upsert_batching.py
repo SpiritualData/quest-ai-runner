@@ -8,7 +8,7 @@ needing a real model.
 """
 import pytest
 
-from quest_ai_runner.subconscious import qdrant_vector_store as qvs
+from quest_ai_runner.the_body.internal_context.card_store import qdrant_vector_store as qvs
 
 
 class FakeQdrant:

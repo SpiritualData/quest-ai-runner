@@ -1,10 +1,9 @@
 """ESOI_SPEC.md sync and the "send only on change" polls, against a MOCK client. No network."""
 import os
 
-from quest_ai_runner.runner.quest_folder_sync import (
-    NEXT_STEPS_ENTRY_NAME, NextSteps, SPEC_FILE_NAME, SYNC_FILE_NAME, publish_next_steps,
-    pull_quest_to_folder, push_folder_to_quest, push_quest_state, sync_quest_folder,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import (
+    NEXT_STEPS_ENTRY_NAME, NextSteps, SPEC_FILE_NAME, SYNC_FILE_NAME, publish_next_steps, pull_quest_to_folder, push_folder_to_quest,
+    push_quest_state, sync_quest_folder)
 from tests.test_quest_folder_sync import QUEST_ID, MockQuestFolderClient
 
 SPEC = {
@@ -144,7 +143,7 @@ def test_solution_shows_approach_first_and_tags_with_their_risks(tmp_path):
 
 
 def test_spec_line_reads_a_solution_as_name_plus_approach_then_purpose():
-    from quest_ai_runner.core.tools_quest_intents import spec_line
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_intents import spec_line
     row = {"recordId": "r1", "type": "solution", "revision": 1, "fields": {"name": "Weekly call", "purpose": "Welcome new users."}}
     assert spec_line(row).endswith("Weekly call: Welcome new users.")
     row["fields"]["approach"] = "Walk users through setup."

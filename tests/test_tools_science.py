@@ -2,8 +2,8 @@
 planner is told it is unavailable when it is not offered. Offline: the OpenAlex reply is a fake transport (invented works)."""
 import pytest
 
-from quest_ai_runner.core.tools import ToolContext, build_tool_registry
-from quest_ai_runner.core.tools_science import TOOL_NAME, reset_shared_state
+from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.the_world.science.tools_science import TOOL_NAME, reset_shared_state
 
 
 @pytest.fixture(autouse=True)
@@ -42,7 +42,7 @@ class Transport:
 
 
 def registry_with(transport, env=None):
-    from quest_ai_runner.core.tools_science import science_literature_spec
+    from quest_ai_runner.the_world.science.tools_science import science_literature_spec
     registry = build_tool_registry({"QAR_STANDARD_TOOLS": "1"})
     registry.register(science_literature_spec(env or {"OPENALEX_API_KEY": "key-for-tests"}, transport=transport))
     return registry
@@ -159,7 +159,7 @@ def test_the_daily_count_survives_the_registry_being_rebuilt():
 
 
 def test_without_a_fake_transport_the_registry_hands_out_one_shared_arm_and_cache():
-    from quest_ai_runner.core.tools_science import shared_arm
+    from quest_ai_runner.the_world.science.tools_science import shared_arm
     env = {"OPENALEX_API_KEY": "key-for-tests"}
     assert shared_arm("key-for-tests", "", 300) is shared_arm("key-for-tests", "", 300)
     assert shared_arm("key-for-tests", "", 300) is not shared_arm("key-for-tests", "", 5)

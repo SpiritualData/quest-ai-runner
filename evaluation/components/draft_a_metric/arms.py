@@ -1,6 +1,6 @@
 """Shared machinery of the arms: the fake Quest client at the boundary and one runner of the real ``MetricDraft`` over a case."""
 import common  # noqa: F401  (puts the repository on the path)
-from quest_ai_runner.runner import metric_draft
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import metric_draft
 
 TASK_ID = "task_1"
 

@@ -31,7 +31,7 @@ SANDBOX_NOTE = ("EVALUATION SANDBOX: no tools, files or shell are available in t
 def compose(case, compose_goal_prompt, standing):
     """The real deep-run prompt for this case, built by QAR's ``compose_goal_prompt`` (passed in by the arm);
     ``standing`` False empties the standing-instructions layer."""
-    from quest_ai_runner.core import standing_instructions
+    from quest_ai_runner.the_self.integrity.prompts import standing_instructions
     saved = standing_instructions.load_standing_instructions
     if not standing:
         standing_instructions.load_standing_instructions = lambda: ""
@@ -47,7 +47,7 @@ def compose(case, compose_goal_prompt, standing):
 
 def build_runner(meter, model):
     """``run(prompt) -> reply text`` through the headless CLI with no tools, counted by ``meter``."""
-    from quest_ai_runner.adapters.claude_cli_provider import cli_model
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
 
     binary = shutil.which("claude") or str(Path("~/.local/bin/claude").expanduser())
     env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDECODE")}

@@ -7,8 +7,8 @@ import urllib.error
 
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
-from quest_ai_runner.runner.quest_client_support import QuestWriteError, parse_retry_after
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, parse_retry_after
 
 from .fake_quest_transport import make_client
 
@@ -305,7 +305,7 @@ def test_the_probe_waits_at_most_five_seconds_however_long_the_timeout_is(monkey
     client.backend_capabilities()
     assert transport.requests[0][1] == "/api/health" and transport.requests[0][4] == 5.0
     short, transport = make_client([ADVERTISES], monkeypatch, timeout=2)
-    from quest_ai_runner.runner.quest_client_transport import PROBE_CACHE
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_transport import PROBE_CACHE
     PROBE_CACHE.clear()
     short.backend_capabilities()
     assert transport.requests[0][4] == 2

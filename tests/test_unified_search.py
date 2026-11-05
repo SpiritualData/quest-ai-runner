@@ -6,8 +6,8 @@ import pytest
 
 from esoi import spec_search
 
-from quest_ai_runner.core import unified_search as us
-from quest_ai_runner.core.spec_selection import load_spec_index
+from quest_ai_runner.the_intelligence.subconscious.context_retriever import unified_search as us
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import load_spec_index
 
 from .records_copy import copy_records
 
@@ -125,8 +125,8 @@ def test_the_repository_fixture_index_answers_a_spec_only_request_with_kinds():
 
 
 def test_card_views_come_from_a_card_repository_without_writing(tmp_path):
-    from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-    from quest_ai_runner.adapters.card_views import card_views
+    from hubofhubs.api import FilesystemCardRepository
+    from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_views import card_views
     repo = FilesystemCardRepository(str(tmp_path))
     repo.write("backup-keys", {"id": "backup-keys", **CARDS["backup-keys"]})
     stamp = repo.revision()
@@ -144,8 +144,8 @@ def spec_repo(tmp_path, monkeypatch):
 
 
 def test_the_tool_sits_beside_find_specs_reads_cards_when_a_source_is_registered_and_needs_the_root(spec_repo, monkeypatch):
-    from quest_ai_runner.core import tools_repo_specs
-    from quest_ai_runner.core.tools import ToolContext, build_tool_registry
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import tools_repo_specs
+    from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
     spec = tools_repo_specs.REPO_SPEC_BUILDERS["search_cards_and_specs"]({})
     assert spec is not None and not spec.mutates and spec.needs_spec_root
     assert tools_repo_specs.REPO_SPEC_BUILDERS["find_specs"]({}) is not None
@@ -165,13 +165,13 @@ def test_the_tool_sits_beside_find_specs_reads_cards_when_a_source_is_registered
 
 
 def test_the_repository_tag_table_is_read_from_the_record_files(spec_repo):
-    from quest_ai_runner.core import repo_specs
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs
     table = repo_specs.repo_tag_table(spec_repo)
     assert "specifications" in table.tag_problems and "specifications" in table.solution_tags["spec-selection"]
 
 
 def test_two_pipelines_puts_the_injected_cards_then_the_find_specs_records_side_by_side():
-    from quest_ai_runner.core.spec_selection import lexical_vector_gated
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import lexical_vector_gated
     task = "nightly invoice batch queue finishes late"
     got = us.two_pipelines(task, views(), select_cards=lambda t: ["card:invoice-runbook", "invoice-runbook", "unknown-card"])
     assert kinds(got)[:2] == [("card", "card:invoice-runbook"), ("card", "card:unknown-card")]

@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from quest_ai_runner.runner.autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES
-from quest_ai_runner.runner.quest_client import QuestApiError
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
 
 from .test_autopilot_pass_task import FakePassClient, _poller
 

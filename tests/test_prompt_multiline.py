@@ -19,7 +19,7 @@ from textual.app import App
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from quest_ai_runner.textual_ui import PromptTextArea, QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui import PromptTextArea, QuestAITerminal
 
 LONG = "the quick brown fox jumps over the lazy dog " * 4
 
@@ -214,7 +214,7 @@ def parsed_keys(data: str) -> list[str]:
     ],
 )
 def test_terminal_bytes_reach_the_prompt_as_the_right_key(data, key):
-    import quest_ai_runner.textual_ui  # noqa: F401  registers the Alt+Enter sequence
+    import quest_ai_runner.the_consciousness.terminal.textual_ui  # noqa: F401  registers the Alt+Enter sequence
 
     assert parsed_keys(data) == [key]
 
@@ -223,7 +223,7 @@ def test_terminal_bytes_reach_the_prompt_as_the_right_key(data, key):
 def test_alt_letter_from_an_esc_prefixed_terminal_reaches_the_app_as_alt_letter(letter):
     """xterm, VTE, tmux and macOS Terminal send Alt+T as ESC t. Textual 8 alone turns that into a stray key plus a typed letter,
     so Alt+T, Alt+U and Alt+K (the Trail keys) never fired in a plain terminal."""
-    import quest_ai_runner.textual_ui  # noqa: F401  registers the sequences
+    import quest_ai_runner.the_consciousness.terminal.textual_ui  # noqa: F401  registers the sequences
 
     assert parsed_keys(f"\x1b{letter}") == [f"alt+{letter}"]
 
@@ -261,7 +261,7 @@ async def test_alt_letter_runs_its_app_binding_and_types_nothing_into_the_prompt
 
 
 def test_newline_hint_does_not_promise_shift_enter_in_vte_terminals():
-    from quest_ai_runner.textual_ui_widgets import newline_hint
+    from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import newline_hint
 
     assert newline_hint({"VTE_VERSION": "8000"}) == "Ctrl+J or Alt+Enter=newline"
     assert newline_hint({}) == "Shift+Enter or Ctrl+J=newline"

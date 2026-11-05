@@ -24,14 +24,14 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.goal_runner import SubprocessConfig
-from quest_ai_runner.body.goal_runner_stream import StreamJsonGoalRunner
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
-from quest_ai_runner.runner import executor as executor_module
-from quest_ai_runner.runner.executor import TaskExecutor
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig
+from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.the_consciousness.request_intake import executor as executor_module
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 from .conftest import StubProvider, StubRetrieval
 from .test_goal_runner_stream import make_claude, read_log

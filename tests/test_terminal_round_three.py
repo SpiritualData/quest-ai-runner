@@ -21,16 +21,14 @@ import pytest
 from rich.console import Console
 from rich.text import Text
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_CONTEXT
-from quest_ai_runner.core.inbox import InMemoryInbox
-from quest_ai_runner.core.orchestrator import OrchestratorResult
-from quest_ai_runner.core.orchestrator_text import ellipsize, sentence
-from quest_ai_runner.textual_ui import ActivityBar, PromptTextArea, QuestAITerminal
-from quest_ai_runner.textual_ui_helpers import (
-    HangingText, clean_title, context_block_lines, indented_line, person_line,
-)
-from quest_ai_runner.textual_ui_widgets import NEW_OUTPUT_BELOW
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_CONTEXT
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import ellipsize, sentence
+from quest_ai_runner.the_consciousness.terminal.textual_ui import ActivityBar, PromptTextArea, QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import HangingText, clean_title, context_block_lines, indented_line, person_line
+from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import NEW_OUTPUT_BELOW
 
 
 class Session:
@@ -353,14 +351,14 @@ def test_the_hint_words_name_sources_and_details():
 # --- N16, N17: start-up wording ---------------------------------------------------------------------
 
 def test_the_header_while_the_session_builds_says_starting_up():
-    from quest_ai_runner import interactive_session_persona
+    from quest_ai_runner.the_consciousness.terminal import interactive_session_persona
     import inspect
     assert 'notify("Starting up…")' in inspect.getsource(interactive_session_persona)
     assert "Resolving AI persona" not in inspect.getsource(interactive_session_persona)
 
 
 def test_picking_up_a_conversation_counts_messages_not_turns(tmp_path):
-    from quest_ai_runner import chat_conversations
+    from quest_ai_runner.the_intelligence.higher_mind.long_term_memory import chat_conversations
 
     history = [(f"question {i}", f"answer {i}") for i in range(12)] + [("last question", "")]
     path = tmp_path / (chat_conversations.FILE_PREFIX + "20261020-1142-ab12cd34.json")

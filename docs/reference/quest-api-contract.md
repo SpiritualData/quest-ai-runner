@@ -1,7 +1,7 @@
 # Quest API contract
 
 The runner speaks a small, explicit slice of the Quest API. This is implemented in
-`quest_ai_runner/runner/quest_client.py` (`QuestClient` + `QuestDecisionSink`). If you run your own
+`quest_ai_runner/the_body/internal_context/quest/client/quest_client.py` (`QuestClient` + `QuestDecisionSink`). If you run your own
 Quest-compatible backend, these are the endpoints it must provide.
 
 ## Authentication & identity
@@ -466,7 +466,7 @@ matter: items come back **newest first**, the envelope is **camelCase** (`fieldV
 `runner/insights.py` composes them into one `InsightsContext`:
 
 ```python
-from quest_ai_runner.runner.insights import collect_quest_insights
+from quest_ai_runner.the_intelligence.higher_mind.guidance.insights import collect_quest_insights
 
 ctx = collect_quest_insights(client, quest_id, since=last_pass_at)   # or no `since`, for the window
 ctx.as_text()                 # a dated, tagged block for a prompt
@@ -541,7 +541,7 @@ client with no context-entry support falls back to a `[next-steps]`-marked note 
   considered answer in place for the next pass rather than replacing it with an empty block.
 
 ```python
-from quest_ai_runner.runner.session_next_steps import (
+from quest_ai_runner.the_intelligence.higher_mind.objectives.session_next_steps import (
     load_standing_next_steps, render_standing_next_steps, refresh_from_turn,
 )
 

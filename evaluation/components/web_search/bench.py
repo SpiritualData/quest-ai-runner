@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 import common
-from hubofhubs.the_world.tools.web_search.cache import WebCache
-from quest_ai_runner.science.web_research import WebResearchAdapter
+from hubofhubs.api import WebCache
+from quest_ai_runner.the_world.tools.web_search.web_research import WebResearchAdapter
 
 _TOOL = None
 

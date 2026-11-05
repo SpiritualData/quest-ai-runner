@@ -19,9 +19,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
-from quest_ai_runner.runner import executor_pauses
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.orchestrator import OrchestratorResult
+from quest_ai_runner.the_consciousness.judgment_calls import executor_pauses
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
 
 OVERLOADED = "Error code: 529 - overloaded_error: Overloaded"
 UNAVAILABLE = "503 Service Unavailable: the model is temporarily unavailable"
@@ -77,7 +77,7 @@ class FixedOrchestrator:
 
 
 def execute(orch, client=None):
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     client = client or RecordingClient()
     outcome = TaskExecutor(client, orch).execute(

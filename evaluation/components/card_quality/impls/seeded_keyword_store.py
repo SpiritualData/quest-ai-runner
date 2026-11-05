@@ -10,8 +10,8 @@ import re
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.the_body.internal_context.card_store.text_sampling import keywords_from_text
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from hubofhubs.api import keywords_from_text
 
 COLLECTION = re.compile(r"collection '([^']+)' \(id (\w+)\)")
 

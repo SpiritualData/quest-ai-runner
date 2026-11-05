@@ -11,7 +11,7 @@ import sys
 import tempfile
 
 from deep_runner.support import normalise
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 WORKER = '''#!{python}
 import json, os, signal, sys

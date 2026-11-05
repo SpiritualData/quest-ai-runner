@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from quest_ai_runner.core import goal_runner_receipts as rr
-from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
-from quest_ai_runner.core.interim_policy import done_text
+from quest_ai_runner.the_intelligence.mind.delegation import goal_runner_receipts as rr
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import done_text
 
 
 def use(i, name, **inp):

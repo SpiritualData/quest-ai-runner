@@ -16,14 +16,14 @@ Covers:
 """
 import json
 
-from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import compact_message
-from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from hubofhubs.the_body.internal_context.context import ConversationContext
-from hubofhubs.the_world.tools.deep import ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_UNDERSTANDING, Mode
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from hubofhubs.api import compact_message
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
+from hubofhubs.api import ConversationContext
+from hubofhubs.api import ProgressEvent
+from hubofhubs.api import EVENT_UNDERSTANDING, Mode
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

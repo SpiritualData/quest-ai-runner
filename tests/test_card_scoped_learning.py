@@ -13,13 +13,9 @@ proving it works for an ARBITRARY ``ref_type`` / ``locator_fn`` -- not just ``co
 
 All offline: no network, no API key, no LLM (``auto_bootstrap=False``).
 """
-from quest_ai_runner.adapters.card_scoped_learning import (
-    active_card_terms,
-    gate_terms,
-    learn_card_references,
-    learnable_candidates,
-)
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_scoped_learning import (
+    active_card_terms, gate_terms, learn_card_references, learnable_candidates)
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def _store(tmp_path):

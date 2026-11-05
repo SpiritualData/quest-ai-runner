@@ -18,13 +18,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.inbox import InMemoryInbox
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
-from hubofhubs.the_world.tools.delegated_agent_sessions.control import RunControl
-from quest_ai_runner.textual_ui import QuestAITerminal
-from quest_ai_runner.textual_ui_control import TerminalRunControl
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
+from hubofhubs.api import RunControl
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_control import TerminalRunControl
 
 from .conftest import StubProvider, StubRetrieval
 from .test_goal_runner_stream import STEPS3, make_claude, make_runner, read_log

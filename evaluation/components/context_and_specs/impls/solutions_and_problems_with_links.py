@@ -6,7 +6,7 @@ links; "no solution yet" when the top record is a problem or intent no solution 
 ambiguous request returns the best fused candidates and the arm makes zero model calls. Tags named by a request filter the
 candidates (``tag_mode="filter"``), as the search_cards_and_specs tool does when a run passes tags."""
 from context_and_specs.world import world
-from quest_ai_runner.core.unified_search import solutions_and_problems_with_links
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search import solutions_and_problems_with_links
 
 
 def build(meter):  # noqa: ARG001

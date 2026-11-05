@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.adapters import ClaudeConversationsAdapter
-from quest_ai_runner.core.turn_context_store import TurnContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
 
 QUERY = "What questions do I need to answer about multilingual support?"
 

@@ -1,9 +1,8 @@
 # esoi configuration for quest-ai-runner (one adopter's setup; copy it to the repository root as esoi.toml).
 package = "quest_ai_runner"
-# An area folder (quest_ai_runner/<intent id>/, listed here once it holds code) sits above core and adapters, at the rank of runner: core and
-# adapters never import an area folder, so the brain stays free of Quest; an area folder's modules import core, adapters and runner, and are
-# imported by the runner and the configuration. A file in an area folder is checked as that area, whatever layer its component row names.
-layers = ["core", "adapters", ["runner", "integrity", "science", "nervous_system", "take_in_the_world", "critical_thinking", "select_context", "body", "hold_the_intents", "subconscious"], "config", ["cli", "tools"]]
+# QAR mirrors the hub's five containers. They depend on one another in every direction (Joshua's rule: a container is a part of the mind, not a layer),
+# so they share one rank; the folder a module sits in says what it is for, and the solution's records sit beside it.
+layers = [["the_self", "the_body", "the_intelligence", "the_world", "the_consciousness"]]
 other_layers = ["prompts", "docs", "evaluation", "examples", "scripts", "tests"]
 max_lines = 1500
 # Where the maintainers keep the skill that defines the intent template; absent elsewhere, then S27 is skipped
@@ -150,7 +149,7 @@ records = "../ai-hub-of-hubs-structure"
 template_version = 4
 # Each solution's records live once, in the folder that holds its code (docs/reference/records-beside-code.md in the esoi repository).
 # The top intent stays in esoi/; each area of QAR is a sub-intent folder of quest_ai_runner/, named by its intent id.
-beside_code = ["quest_ai_runner", "quest_ai_runner/*", "evaluation/components/*", "evaluation/components/*/impls"]
+beside_code = ["quest_ai_runner", "quest_ai_runner/*", "quest_ai_runner/*/*", "quest_ai_runner/*/*/*", "quest_ai_runner/*/*/*/*", "evaluation/components/*", "evaluation/components/*/impls"]
 # Folders that hold the code of an arm (or a check) whose record belongs to an intent elsewhere: each gets a generated README, no records move.
 arm_folders = ["evaluation/components/*/broken", "evaluation/components/classification", "tests", "scripts", "quest_ai_runner/tools"]
 

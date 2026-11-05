@@ -33,8 +33,8 @@ content of the candidate files, ask for the edit in one call, apply the result, 
 Everything about this is gated on one thing: whether you handed the library a `FileWriter`.
 
 ```python
-from quest_ai_runner.adapters import FilesWriter
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.adapters.__init__ import FilesWriter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 
 cfg = RunnerConfig(
     retrieval=...,
@@ -204,7 +204,7 @@ override a choice someone already made explicitly:
 
 ```python
 from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditConfig, FastEditRunner
-from quest_ai_runner.adapters import FilesWriter
+from quest_ai_runner.adapters.__init__ import FilesWriter
 
 FilesWriter(
     root,

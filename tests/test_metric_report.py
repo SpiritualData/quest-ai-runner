@@ -5,13 +5,13 @@
 carries them passes them on as the progress post's ``data``. A client or a test double that does not declare
 ``result_data`` is called exactly as before, and a run with no metric facts reports exactly as before.
 """
-from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
+from hubofhubs.api import DeepResult, ProgressEvent
 from esoi.metric_results import MAX_METRICS, MetricResult, payload_of, reconcile
-from quest_ai_runner.core.orchestrator_types import OrchestratorResult
-from quest_ai_runner.runner.executor import TaskExecutor
-from quest_ai_runner.runner.executor_support import _TaskProgressSink
-from quest_ai_runner.runner.quest_client import QuestClient
-from quest_ai_runner.runner.quest_client_support import QuestApiError
+from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.executor_support import _TaskProgressSink
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
 
 ENTRIES = payload_of(reconcile([
     MetricResult(source="measured", solution_id="receive-input", metric_id="metric-receive-input",

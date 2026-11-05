@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner import cli
+from quest_ai_runner.the_consciousness.terminal import cli
 
 
 def _base_env(monkeypatch):
@@ -73,7 +73,7 @@ def test_deep_max_turns_invalid_value_is_ignored_not_raised(monkeypatch):
     _base_env(monkeypatch)
     monkeypatch.setenv("QAR_DEEP_MAX_TURNS", "not-a-number")
     cfg = cli._config_from_env()  # must not raise
-    from quest_ai_runner.core.orchestrator_constants import DEFAULT_DEEP_MAX_TURNS
+    from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEFAULT_DEEP_MAX_TURNS
     assert cfg.orchestrator.deep_max_turns == DEFAULT_DEEP_MAX_TURNS
 
 
@@ -156,7 +156,7 @@ def test_context_preamble_file_unreadable_logs_and_leaves_preamble_unset(monkeyp
 
 def test_context_preamble_reaches_the_auto_built_deep_runner(monkeypatch, tmp_path):
     """The whole point of the field: no SubprocessConfig written by hand to set a preamble."""
-    from quest_ai_runner.config import resolve_deep_runner
+    from quest_ai_runner.the_body.configuration.config import resolve_deep_runner
 
     binary = tmp_path / "claude"
     binary.write_text("#!/bin/sh\nexit 0\n")

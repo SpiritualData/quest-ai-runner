@@ -9,8 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from quest_ai_runner.core.adapters_channels import OutboundReply
+from quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
+from quest_ai_runner.the_consciousness.request_intake.interface import OutboundReply
 
 GATEWAY = Path(__file__).resolve().parent.parent / "real_gateway.py"
 ALLOWED = {"events_wait", "messages_send", "attachments_fetch"}

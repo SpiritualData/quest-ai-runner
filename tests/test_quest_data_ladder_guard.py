@@ -1,14 +1,10 @@
 """The quest-data ladder guard: a change to the person's own Quest data must never land on a rung
 that can only edit files, and prefers the governed-operations rung over the full agent.
 """
-from hubofhubs.the_world.tools.deep import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
-from quest_ai_runner.core.orchestrator import (
-    QUEST_DATA_WRITE_SURFACE_INSTRUCTION,
-    OrchestratorConfig,
-    apply_quest_data_ladder_guard,
-    normalize_decision,
-)
-from quest_ai_runner.core.orchestrator_decisions import ladder_for_quest_data
+from hubofhubs.api import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
+from quest_ai_runner.the_intelligence.mind.orchestrator import (
+    QUEST_DATA_WRITE_SURFACE_INSTRUCTION, OrchestratorConfig, apply_quest_data_ladder_guard, normalize_decision)
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import ladder_for_quest_data
 
 
 class Rung:

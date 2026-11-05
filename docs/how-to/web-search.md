@@ -1,6 +1,6 @@
 # Web search
 
-`WebResearchAdapter` (`quest_ai_runner/science/web_research.py`) gives the orchestrator fast,
+`WebResearchAdapter` (`quest_ai_runner/the_world/tools/web_search/web_research.py`) gives the orchestrator fast,
 token-efficient access to the live web, the same way ChatGPT/Perplexity-style assistants stay
 cheap: **snippet-first search, full-page reads only on request, everything cached.**
 
@@ -212,7 +212,7 @@ SearchResponse` method (raising `SearchBackendError` on failure) satisfies the `
 protocol and can be passed straight to `WebResearchAdapter`:
 
 ```python
-from quest_ai_runner.adapters import WebResearchAdapter, SearchHit, SearchResponse
+from quest_ai_runner.adapters.__init__ import WebResearchAdapter, SearchHit, SearchResponse
 
 class MyBackend:
     name = "my-backend"

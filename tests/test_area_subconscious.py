@@ -1,11 +1,11 @@
 """The the-subconscious area: its ids answer offline by the strict definition, and the arm recalls over the card store it is handed."""
 import pytest
 from esoi.entry import Pending, targets
-from hubofhubs.the_body.internal_context.card_store.card import Card
-from hubofhubs.the_body.internal_context.card_store.cardstore import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
+from hubofhubs.api import Card
+from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
-from quest_ai_runner.core.planner_context import CardRecall
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import CardRecall
 
 AREA_IDS = ("the-subconscious", "card-store")
 

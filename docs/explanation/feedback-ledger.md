@@ -1,6 +1,6 @@
 # The feedback ledger: what was asked, and how far anybody got
 
-**Code:** [`hold_the_intents/feedback_ledger.py`](../../quest_ai_runner/hold_the_intents/feedback_ledger.py).
+**Code:** [`hold_the_intents/feedback_ledger.py`](../../quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py).
 **Wiring:** `RunnerConfig.feedback_ledger` (on by default), `feedback_ledger_path`.
 **Reads it:** `quest-ai-runner context <quest_id> --tracked`.
 

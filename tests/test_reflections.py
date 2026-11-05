@@ -9,9 +9,9 @@ existed that could go and read it.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.body.quest_retrieval_adapter import QuestRetrievalAdapter
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
-from quest_ai_runner.runner.reflections import ReflectionContext, collect_reflections
+from quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_intelligence.mind.context_intake.reflections import ReflectionContext, collect_reflections
 
 NOW = datetime(2026, 8, 12, 9, 0, 0, tzinfo=timezone.utc)
 

@@ -4,7 +4,7 @@ Model calls are counted (a reply and a grader per case, the grader skipped when 
 esoi/metric-run-policy.md: 3 cases, then 10, then the set, and always pass ``--max-calls``."""
 PAID = True
 from proactive_guidance import arms
-from quest_ai_runner.core.auxiliary_prompts import LONG_TERM_GUIDANCE, REPLY_VOICE_SYSTEM
+from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import LONG_TERM_GUIDANCE, REPLY_VOICE_SYSTEM
 
 
 def build(meter):

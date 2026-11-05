@@ -1,7 +1,7 @@
 """CURRENT: the live ``InMemoryInbox`` wired into the live Orchestrator (``input_inbox=``), which drains it
 between planner steps. Zero model calls."""
 import receive_input_mid_run.driver as driver
-from quest_ai_runner.core.inbox import InMemoryInbox
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 
 
 def build(meter):  # noqa: ARG001

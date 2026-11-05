@@ -3,7 +3,7 @@
     command(kind: str, args: dict) -> dict
 
 A person (or a deep run's shell) operates the runner from a terminal: ``quest-ai-runner <subcommand>`` and
-``python -m quest_ai_runner.tools <list|show|call>``. This component scores that surface offline: the real
+``python -m quest_ai_runner tools <list|show|call>``. This component scores that surface offline: the real
 ``main()`` is called with an argv, the process environment is scrubbed, and any file a case needs is written
 into a scratch folder. Only non-interactive, no-network subcommands are cases (the chat UI and the poll loop
 need a terminal and a server); what is measured is that arguments are parsed, a bad invocation is refused

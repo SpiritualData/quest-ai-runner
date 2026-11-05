@@ -34,7 +34,7 @@ class Pinned:
 
 def api_provider(model):
     """The API provider that serves ``model``: Anthropic for a Claude id (the default), Gemini only for a Gemini candidate."""
-    from quest_ai_runner.hub import make_provider
+    from quest_ai_runner.the_self.assembler.hub import make_provider
     if str(model).lower().startswith("gemini") and os.environ.get("QAR_EVAL_ALLOW_NON_ANTHROPIC") != "1":
         raise SystemExit(f"metrics run on Anthropic models: {FAST_MODEL_ENV}={model!r} names Gemini "
                          "(set QAR_EVAL_ALLOW_NON_ANTHROPIC=1 to measure a candidate on purpose)")
@@ -44,7 +44,7 @@ def api_provider(model):
 def build(meter, route):
     """``(pinned provider, model name)`` for ``route`` (``subscription`` or ``fast_api``), counted on ``meter``."""
     if route == "subscription":
-        from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
+        from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
         provider = meter.wrap(ClaudeCliProvider(claude_path="claude", timeout_seconds=420))
         meter.model = "claude-code-subscription"
         return Pinned(provider, SUBSCRIPTION_MODEL), SUBSCRIPTION_MODEL

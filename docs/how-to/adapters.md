@@ -18,7 +18,7 @@ can satisfy them structurally (just match the methods) or subclass the provided 
 How the brain gathers grounding. All three methods return an `Observation`.
 
 ```python
-from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 
 class MyRetrieval:
     def read_section(self, rel_path, *, start_line=None, end_line=None,
@@ -217,8 +217,8 @@ facts, feature-flow guides, behavior policies) into a corpus of opaque **guidanc
 retrieves on demand. Cards are opaque text to the runner, so it stays app-agnostic.
 
 ```python
-from quest_ai_runner.core.adapters_guidance import GuidanceCard
-from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
+from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceCard
+from quest_ai_runner.the_self.interface import GuidanceProviderBase
 
 class MyGuidance(GuidanceProviderBase):
     def list(self):                      # cheap catalog: id + title + relevance, body EMPTY
@@ -247,10 +247,10 @@ and every other port in the solutions' records) is data, not an `if`/`elif` at t
 each implementation is declared beside its code with `@implementation("<solution id>", "<name>")` (from `esoi`), and
 the `implementations.csv` of the folder that holds their code lists the same implementations with their file, so those records are the only list; the slot's default
 is the solution's `selected` in its `solutions.csv`;
-`quest_ai_runner.core.resolve.resolve(solution_id, name=None, overrides=None)` returns the class:
+`quest_ai_runner.the_self.assembler.resolve.resolve(solution_id, name=None, overrides=None)` returns the class:
 
 ```python
-from quest_ai_runner.core.resolve import resolve, register
+from quest_ai_runner.the_self.assembler.resolve import resolve, register
 
 resolve("vendor-model-caller", "gemini")                      # an explicit name
 resolve("run-deep-work", overrides=cfg.selections)     # RunnerConfig.selections, else the project default
@@ -285,7 +285,7 @@ See [writing-a-consumer.md](writing-a-consumer.md) for the full config and
 ## DeepSeek provider
 
 `DeepSeekProvider` (`hubofhubs.the_world.model_plumbing.vendor_model_caller.openai`) is the OpenAI adapter pointed at the
-OpenAI-compatible DeepSeek API. `quest_ai_runner/providers.py` registers it only when `DEEPSEEK_API_KEY` is set, and model
+OpenAI-compatible DeepSeek API. `quest_ai_runner/the_world/model_plumbing/vendor_model_caller/providers.py` registers it only when `DEEPSEEK_API_KEY` is set, and model
 ids starting with `deepseek` route to it (orchestrator and `MultiProvider`). `DEEPSEEK_BASE_URL`
 overrides the default `https://api.deepseek.com`. Thinking is off by default (the API default is
 on, which is slower and bills reasoning tokens); set `DEEPSEEK_THINKING=1` to enable it.

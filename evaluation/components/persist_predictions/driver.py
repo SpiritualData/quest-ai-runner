@@ -3,7 +3,7 @@ supplies and reports each result in order."""
 import json
 from pathlib import Path
 
-from quest_ai_runner.core.anticipation_learner import Pattern, Prediction
+from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_learner import Pattern, Prediction
 
 
 def run_ops(args, store):

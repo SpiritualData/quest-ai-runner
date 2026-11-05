@@ -693,7 +693,7 @@ def formula_score(case, v):
 
 
 def claude_provider():
-    from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
     return ClaudeCliProvider(claude_path=DEV_ENV.get("QAR_CLAUDE_PATH") or "claude",
                              timeout_seconds=420)
 

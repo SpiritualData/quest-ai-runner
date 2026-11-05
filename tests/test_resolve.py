@@ -13,8 +13,8 @@ import pytest
 from esoi import config as esoi_config
 from esoi import declarations, runtime
 
-from quest_ai_runner.core import resolve as resolve_mod
-from quest_ai_runner.core.resolve import chosen_name, default_name, names, register, resolve, resolve_config
+from quest_ai_runner.the_self.assembler import resolve as resolve_mod
+from quest_ai_runner.the_self.assembler.resolve import chosen_name, default_name, names, register, resolve, resolve_config
 
 ROOT = Path(__file__).resolve().parent.parent
 SNAPSHOT_PATH = ROOT / "quest_ai_runner" / "esoi_selection.json"
@@ -88,7 +88,7 @@ def test_a_config_class_comes_with_runners_that_take_one():
 
 
 def test_register_adds_an_implementation_of_the_consumers_own():
-    register("search-the-web", "mine", "quest_ai_runner.science.web_search_backends:BraveBackend")
+    register("search-the-web", "mine", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
     assert "mine" in names("search-the-web")
     assert resolve("search-the-web", "mine").__name__ == "BraveBackend"
     assert default_name("search-the-web") == "web_research"
@@ -99,9 +99,9 @@ def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_librar
     entry = runtime.entry_for("write-files", None, resolve_mod.SCOPE)
     saved = dict(entry.implementations)
     try:
-        register("write-files", "files", "quest_ai_runner.science.web_search_backends:BraveBackend")
+        register("write-files", "files", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
         assert resolve("write-files", "files").__name__ == "BraveBackend"
-        import quest_ai_runner.body.files_writer
+        import quest_ai_runner.the_world.tools.file_editing.files_writer
         assert resolve("write-files", "files").__name__ == "BraveBackend"
     finally:
         entry.implementations.clear()
@@ -110,14 +110,14 @@ def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_librar
 
 
 def test_resolve_module_reads_no_environment():
-    text = (ROOT / "quest_ai_runner" / "core" / "resolve.py").read_text()
+    text = (ROOT / "quest_ai_runner" / "the_self" / "assembler" / "resolve.py").read_text()
     assert not re.search(r"os\.environ|os\.getenv|\bgetenv\(", text)
 
 
 # --- the selection sites use the declarations ------------------------------------------------------
 
 def test_model_provider_follows_the_declarations(monkeypatch):
-    from quest_ai_runner.cli_config import _model_provider_from_env
+    from quest_ai_runner.the_body.configuration.cli_config import _model_provider_from_env
     for var in ("OPENAI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("QAR_MODEL_BACKEND", "claude_cli")
@@ -128,7 +128,7 @@ def test_model_provider_follows_the_declarations(monkeypatch):
 
 
 def test_search_backend_class_comes_from_the_declarations():
-    from quest_ai_runner.science.web_search_backends import BraveBackend, SerperBackend, select_search_backend
+    from quest_ai_runner.the_world.tools.web_search.web_search_backends import BraveBackend, SerperBackend, select_search_backend
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper", "SERPER_API_KEY": "k"}), SerperBackend)
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "brave", "BRAVE_API_KEY": "k"}), BraveBackend)
     assert select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper"}) is None      # key missing
@@ -136,8 +136,8 @@ def test_search_backend_class_comes_from_the_declarations():
 
 
 def test_deep_runner_default_and_override(monkeypatch, tmp_path):
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.config_resolvers import resolve_deep_runner
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config_resolvers import resolve_deep_runner
     fake = tmp_path / "claude"
     fake.write_text("#!/bin/sh\n")
     fake.chmod(0o755)
@@ -152,7 +152,7 @@ def test_deep_runner_default_and_override(monkeypatch, tmp_path):
 
 
 def test_selections_can_come_from_a_config_file(tmp_path):
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     p = tmp_path / "lane.toml"
     p.write_text('[selections]\n"run-deep-work" = "acp"\n"index-by-meaning" = "qdrant"\n')
     cfg = RunnerConfig.from_file(str(p))
@@ -199,7 +199,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
     esoi_home = str(Path(runtime.__file__).resolve().parent.parent)
     hub_home = str(ROOT.parent / "ai-hub-of-hubs-structure")   # the required hub, as a sibling checkout (not pip-installed here)
     code = (
-        "import quest_ai_runner.core.resolve as r\n"
+        "import quest_ai_runner.the_self.assembler.resolve as r\n"
         f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
         "assert r.default_name('vendor-model-caller') == 'multi_provider'\n"
         "assert r.resolve('search-the-web').__name__ == 'WebResearchAdapter'\n"
@@ -212,7 +212,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
 
 
 def test_the_automatic_model_backend_prefers_the_cli_then_anthropic_then_gemini_then_openai():
-    from quest_ai_runner.cli_config import _auto_backend
+    from quest_ai_runner.the_body.configuration.cli_config import _auto_backend
     keys = {"ANTHROPIC_API_KEY": "k", "GOOGLE_API_KEY": "k", "OPENAI_API_KEY": "k"}
     assert _auto_backend(keys, which=lambda name: "/bin/claude") == "claude_cli"          # the subscription first
     assert _auto_backend(keys, which=lambda name: None) == "anthropic"                    # no CLI: the Anthropic API

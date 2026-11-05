@@ -1,8 +1,5 @@
 """The multimodal handler: prepare_attachments native vs describe vs extract vs reject."""
-from quest_ai_runner.core.attachments import (
-    DEFAULT_MAX_ATTACHMENT_BYTES,
-    prepare_attachments,
-)
+from quest_ai_runner.the_intelligence.mind.context_intake.attachments import DEFAULT_MAX_ATTACHMENT_BYTES, prepare_attachments
 
 
 class _VisionProvider:

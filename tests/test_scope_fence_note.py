@@ -9,9 +9,9 @@ into the context view once per turn; an unbound turn gets nothing, so a question
 
 Fully offline, no model calls.
 """
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.scope_tags import SCOPE_FENCE_NOTE, scope_fence_block
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import SCOPE_FENCE_NOTE, scope_fence_block
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -74,7 +74,7 @@ def test_a_turn_that_is_not_a_persons_message_gets_no_note():
 
 
 def test_a_card_derived_from_one_quest_stays_with_that_quest_whatever_tags_later_turns_added():
-    from quest_ai_runner.core.scope_tags import card_visible_to_turn
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import card_visible_to_turn
     business = {"id": "quest-quest_biz", "managed_by": "quest", "quest_id": "quest_biz",
                 "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}   # polluted by an earlier cross-quest touch
     assert not card_visible_to_turn(business, ["quest:quest_fit"])
@@ -87,8 +87,8 @@ def test_a_card_derived_from_one_quest_stays_with_that_quest_whatever_tags_later
 def test_vector_hit_of_a_quest_card_is_fenced_by_its_quest_alone():
     """The vector arm fences a hit by the payload's scope_tags, so a quest card whose stored tags grew
     another quest's tag must still carry only its own quest's tag there (REL-ISO-01)."""
-    from quest_ai_runner.core.scope_tags import card_scope_tags
-    from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import scope_tags_allow
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import card_scope_tags
+    from hubofhubs.api import scope_tags_allow
     business = {"managed_by": "quest", "quest_id": "quest_biz", "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}
     assert card_scope_tags(business) == ["quest:quest_biz"]
     assert not scope_tags_allow(card_scope_tags(business), ["quest:quest_fit"])

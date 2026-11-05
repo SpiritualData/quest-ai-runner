@@ -8,8 +8,8 @@ before the goal ladder), the byte-identical guarantee when instructions are abse
 rule itself, the title fallback chain, the defensive truncation, and that a quest carrying
 instructions never reaches the goal-proposal path.
 """
-from quest_ai_runner.runner.autopilot import MAX_INSTRUCTIONS_CHARS, AutopilotPass, _batch_title, compose_batch_text
-from quest_ai_runner.runner.autopilot_defaults import PROPOSAL_TEXT_PREFIX
+from quest_ai_runner.the_intelligence.proactivity.autopilot import MAX_INSTRUCTIONS_CHARS, AutopilotPass, _batch_title, compose_batch_text
+from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import PROPOSAL_TEXT_PREFIX
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 
@@ -151,7 +151,7 @@ def test_instructions_set_with_plan_and_work_produces_no_goal_proposal():
 # --- the default briefs require one Solution, a before/after metric report, and filling thin specs --
 
 def test_default_quest_instructions_require_solution_metric_before_and_after():
-    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as text
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as text
     assert "ONE Solution" in text
     assert "before <value> (source, date), after <value> (source, date), change <delta>" in text
     assert "ESOI_SPEC.md in the quest's synced folder, when present" in text
@@ -161,7 +161,7 @@ def test_default_quest_instructions_require_solution_metric_before_and_after():
 
 
 def test_default_quest_instructions_create_missing_spec_and_milestones_without_blocking():
-    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as text
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as text
     for needle in ("no next milestone", "edit_spec_record", "create_goal", "otherwise propose it in a quest note",
                    "locked", "never stop for a decision"):
         assert needle in text
@@ -169,16 +169,16 @@ def test_default_quest_instructions_create_missing_spec_and_milestones_without_b
 
 
 def test_default_persona_instructions_pick_the_solution_furthest_from_target():
-    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS as text
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS as text
     assert "furthest from its target" in text
     assert "—" not in text
 
 
 def test_explicit_instructions_still_replace_the_defaults_and_the_brief_fits_its_budget():
-    from quest_ai_runner.critical_thinking.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
-    from quest_ai_runner.runner.autopilot_defaults import (
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
         BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS as dp, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS as dq)
-    from quest_ai_runner.core import prompt_budget
+    from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
     written = compose_batch_text("Ship it", "bailey", instructions="Quest rule X.",
                                  persona_instructions="Persona rule Y.",
                                  default_quest_instructions=dq, default_persona_instructions=dp)
@@ -191,8 +191,8 @@ def test_explicit_instructions_still_replace_the_defaults_and_the_brief_fits_its
 
 
 def test_custom_quest_instructions_still_get_the_before_after_metric_requirement():
-    from quest_ai_runner.critical_thinking.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
-    from quest_ai_runner.core import prompt_budget
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import AUTOPILOT_BRIEF_TOKEN_BUDGET
+    from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
     written = compose_batch_text("Ship it", "bailey", instructions="Quest rule X.",
                                  persona_instructions="Persona rule Y.")
     assert "Quest rule X." in written and "Persona rule Y." in written

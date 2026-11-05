@@ -4,7 +4,7 @@ Defense in depth: the Quest backend turns the mode off when a quest is archived,
 also reads the ``archived`` flag the API returns (on the team listing row and on the quest state)
 and refuses to schedule or work such a quest.
 """
-from quest_ai_runner.runner.autopilot import AutopilotPass
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 from .test_autopilot_pass_task import FakePassClient, _poller

@@ -5,9 +5,8 @@ sentence when nothing is pending. Real file reads, a fake Quest client; no Drive
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.autopilot import AutopilotPass
-from quest_ai_runner.runner.autopilot_pending import (
-    count_pending_rows, pass_due, pending_work_for)
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
+from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import count_pending_rows, pass_due, pending_work_for
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 
@@ -72,8 +71,8 @@ def test_nothing_pending_leaves_the_cadence_gate_in_charge(tmp_path):
 def test_schedule_creates_todays_pass_for_a_weekly_quest_with_pending_work(tmp_path):
     """The schedule and the gate read the same ``pass_due``: a weekly quest that ran yesterday is
     scheduled for today (not tomorrow) while its pending file has rows, from the real snapshot."""
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
     from .conftest import StubProvider, StubRetrieval
     from .test_autopilot_pass_task import FakePassClient
 

@@ -3,8 +3,8 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.nervous_system.area import RunWatching
-from quest_ai_runner.core.adapters_values import Escalation
+from quest_ai_runner.the_intelligence.nervous_system.area import RunWatching
+from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
 from tests.conftest import StubProvider
 
 AREA_IDS = ("nervous-system", "escalate-to-a-human")

@@ -1,11 +1,11 @@
 """Standing instructions reach every deep prompt, by default and whoever the run acts as."""
-from quest_ai_runner.core import standing_instructions as si
+from quest_ai_runner.the_self.integrity.prompts import standing_instructions as si
 import importlib.util
 from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.core.goal_runner import compose_goal_prompt
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import compose_goal_prompt
 
 SYNC_SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "sync_standing_instructions.py"
 

@@ -9,9 +9,9 @@ import os
 import pytest
 from esoi.metric_results import MAX_METRICS, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger
 
-from quest_ai_runner.core import answer_explanation
-from quest_ai_runner.core.tools import ToolContext, build_tool_registry
-from quest_ai_runner.core.tools_metric_results import metric_ledger_from_env
+from quest_ai_runner.the_intelligence.mind.response_writer import answer_explanation
+from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import metric_ledger_from_env
 
 PAYLOAD_KEYS = {"solution_id", "metric_id", "name", "milestone", "before", "after", "delta", "source", "reason",
                 "disagrees"}
@@ -89,7 +89,7 @@ def test_the_tool_is_a_standing_deep_operation_and_never_a_chat_one(registry):
 
 
 def test_a_worker_calls_it_from_the_shell_with_a_run_id(tmp_path, monkeypatch, capsys):
-    from quest_ai_runner.tools.__main__ import main
+    from quest_ai_runner.the_consciousness.terminal.__main__ import main
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("QAR_STANDARD_TOOLS", "1")   # the test suite turns the standard tools off unless asked
     monkeypatch.setenv("QAR_METRIC_LEDGER_DIR", str(tmp_path / "ledger"))

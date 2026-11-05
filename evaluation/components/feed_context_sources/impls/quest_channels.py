@@ -1,11 +1,11 @@
-"""PACKAGE ARM: the ``quest_channels`` arm of ``feed-context-sources`` (``quest_ai_runner.runner.context_updates``) is the ``UpdateEngine``
+"""PACKAGE ARM: the ``quest_channels`` arm of ``feed-context-sources`` (``quest_ai_runner.the_body.intake_sources.context_updates``) is the ``UpdateEngine``
 over the built-in channels; here it is given a fake Quest client and the real quest channels, on the same cases as ``update_engine``. A
 case's ``kind`` selects the channels watched. Zero model calls."""
 from datetime import datetime
 
 from feed_context_sources.fake_quest import FakeQuest
-from quest_ai_runner.runner.context_sources_quest import DecisionsSource, GoalUpdatesSource, QuestNotesSource
-from quest_ai_runner.runner.context_updates import UpdateEngine
+from quest_ai_runner.the_body.intake_sources.context_sources_quest import DecisionsSource, GoalUpdatesSource, QuestNotesSource
+from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
 CHANNELS = {"notes": ("quest_notes",), "goal_updates": ("goal_updates",), "decisions": ("decisions",),
             "mixed": ("quest_notes", "goal_updates", "decisions")}

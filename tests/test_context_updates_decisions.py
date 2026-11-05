@@ -17,7 +17,7 @@ Offline, driven against fakes.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.runner.context_updates import UpdateEngine, Watermarks
+from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine, Watermarks
 
 NOW = datetime(2026, 10, 8, 9, 0, 0, tzinfo=timezone.utc)
 

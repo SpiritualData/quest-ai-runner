@@ -6,7 +6,7 @@ the arm makes zero model calls. The implementation keeps its own settings, the o
 solutions and problems ranked, at most five, ideals, metrics, intents and implementations brought by links. As for every arm
 here, the ranked items are the selected ids and the linked ones are not checked."""
 from esoi import spec_search
-from quest_ai_runner.core.unified_search import solutions_and_problems_with_links
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search import solutions_and_problems_with_links
 from spec_selection import arms
 
 

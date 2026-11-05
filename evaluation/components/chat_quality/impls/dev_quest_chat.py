@@ -18,7 +18,7 @@ import os
 import sys
 
 from quest_ai_runner import __version__ as brain_version
-from quest_ai_runner import pricing
+from quest_ai_runner.the_world.model_plumbing.spend import pricing
 from quest_ops import dev_world
 
 def list_price(models, prompt_tokens, completion_tokens):

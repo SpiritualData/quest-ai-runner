@@ -21,22 +21,11 @@ Offline, driven against fakes.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.core.managed_blocks import BLOCK_END, BLOCK_START
-from quest_ai_runner.runner.context_updates import (
-    ContextUpdate,
-    ContextUpdates,
-    SourceReport,
-    UpdateEngine,
-    Watermarks,
-    build_update_engine,
-    default_spec_resolver,
-    parse_manifest,
-    parse_usage_notes,
-    render_receipt,
-    strip_usage_block,
-    watermark_path_for,
-)
-from quest_ai_runner.runner.context_update_receipts import append_receipt
+from quest_ai_runner.the_body.intake_sources.managed_blocks import BLOCK_END, BLOCK_START
+from quest_ai_runner.the_body.intake_sources.context_updates import (
+    ContextUpdate, ContextUpdates, SourceReport, UpdateEngine, Watermarks, build_update_engine, default_spec_resolver, parse_manifest,
+    parse_usage_notes, render_receipt, strip_usage_block, watermark_path_for)
+from quest_ai_runner.the_body.intake_sources.context_update_receipts import append_receipt
 
 NOW = datetime(2026, 9, 9, 9, 0, 0, tzinfo=timezone.utc)
 
@@ -223,7 +212,7 @@ def test_an_open_note_too_old_to_be_a_live_question_is_dropped():
 
 
 def test_a_burst_of_open_notes_is_capped_at_the_newest_few():
-    from quest_ai_runner.runner.context_updates import MAX_OPEN_PER_SOURCE
+    from quest_ai_runner.the_body.intake_sources.context_updates import MAX_OPEN_PER_SOURCE
 
     client = NotesClient([
         {"id": f"n{i}", "text": f"note {i}", "author_kind": "user",
@@ -448,7 +437,7 @@ def test_every_capture_is_its_own_row_and_every_row_is_relevant_to_the_quest():
     assert all(u.needs_response for u in rows.values())
     assert rows["e1"].title == rows["e2"].title            # tags promote nothing
     assert all(u.slot == "insights" and u.ref for u in bundle.updates)
-    from quest_ai_runner.runner.insights import BLOCK_FOOTER
+    from quest_ai_runner.the_intelligence.higher_mind.guidance.insights import BLOCK_FOOTER
     slot = bundle.slot_text("insights")
     assert slot.startswith("Insights the person captured on Quest")
     assert slot.rstrip().endswith(BLOCK_FOOTER)
@@ -502,7 +491,7 @@ def test_a_non_quest_card_naming_its_quest_reads_that_quests_insights():
 
 def test_the_cache_expires_so_an_afternoon_task_sees_the_mornings_captures():
     """The poller keeps ONE engine for its whole life; without an expiry the first read stands."""
-    from quest_ai_runner.runner.context_updates import CACHE_TTL_SECONDS
+    from quest_ai_runner.the_body.intake_sources.context_updates import CACHE_TTL_SECONDS
 
     client = InsightsClient({"q1": [_capture("e1", "One thought", ["PhD"])]})
     clock = {"now": NOW}
@@ -518,7 +507,7 @@ def test_the_cache_expires_so_an_afternoon_task_sees_the_mornings_captures():
 def test_the_judge_is_given_the_whole_description_of_the_work():
     """Clipping the assembled description to 400 characters cut it off before the description the
     judge was given it for; verified live when a tagged capture was dropped on the outcome alone."""
-    from quest_ai_runner.runner.context_updates import llm_relevance_judge
+    from quest_ai_runner.the_body.intake_sources.context_updates import llm_relevance_judge
 
     prompts = []
 
@@ -529,7 +518,7 @@ def test_the_judge_is_given_the_whole_description_of_the_work():
 
     judge = llm_relevance_judge(lambda: Provider())
     description = "ITPP corpus, construct coding, " * 30 + "THE TAIL OF THE DESCRIPTION"
-    from quest_ai_runner.runner.context_updates import _describe_work
+    from quest_ai_runner.the_body.intake_sources.context_updates import _describe_work
     work = _describe_work({"outcome": "I've completed my dissertation", "description": description},
                           "Dissertation")
     keep = judge(work, "", [ContextUpdate(source="notes", item_id="e1", body="x")])
@@ -555,7 +544,7 @@ class _OwnerComments:
         return []
 
     def files_owned_by(self, owner, **kw):
-        from quest_ai_runner.adapters.drive_comments import DriveFileChange
+        from quest_ai_runner.the_body.intake_sources.drive_comments import DriveFileChange
         return [DriveFileChange(file_id="f1", file_name="A summary doc", file_url="u")]
 
     def comments_for_file(self, file_id, **kw):
@@ -568,8 +557,8 @@ class _OwnerComments:
 def test_a_card_can_watch_every_doc_one_account_owns():
     from datetime import datetime, timezone
 
-    from quest_ai_runner.adapters.drive_comments import DriveComment
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.drive_comments import DriveComment
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     open_thread = DriveComment(
         file_id="f1", file_name="A summary doc", comment_id="c1", author="Joshua",
@@ -594,9 +583,8 @@ def test_a_card_can_watch_every_doc_one_account_owns():
 def test_open_comment_threads_are_bounded_like_open_notes():
     """A thread nobody can answer would otherwise ride in every bundle for good, and since open
     items are never the ones the cap evicts, it would crowd everything else out with it."""
-    from quest_ai_runner.adapters.drive_comments import DriveComment
-    from quest_ai_runner.runner.context_updates import (MAX_OPEN_PER_SOURCE,
-                                                        OPEN_ITEM_MAX_AGE_DAYS)
+    from quest_ai_runner.the_body.intake_sources.drive_comments import DriveComment
+    from quest_ai_runner.the_body.intake_sources.context_updates import MAX_OPEN_PER_SOURCE, OPEN_ITEM_MAX_AGE_DAYS
 
     threads = [DriveComment(file_id="f1", file_name="Chapter two", comment_id=f"c{i}",
                             author="Ada", content=f"question {i}",
@@ -606,7 +594,7 @@ def test_open_comment_threads_are_bounded_like_open_notes():
                                 author="Ada", content="from last year",
                                 created_at=NOW - timedelta(days=OPEN_ITEM_MAX_AGE_DAYS + 30)))
     bundle = _engine(sources=[__import__(
-        "quest_ai_runner.runner.context_updates", fromlist=["DriveCommentsSource"]
+        "quest_ai_runner.the_body.intake_sources.context_updates", fromlist=["DriveCommentsSource"]
     ).DriveCommentsSource(_OwnerComments(threads))]).collect(
         {"context_sources": [{"source": "drive_comments", "owner": "assistant@example.org"}]},
         card_id="q1")
@@ -620,8 +608,8 @@ def test_open_comment_threads_are_bounded_like_open_notes():
 def test_folder_and_owner_routes_do_not_double_report_the_same_file():
     from datetime import datetime, timezone
 
-    from quest_ai_runner.adapters.drive_comments import DriveComment, DriveFileChange
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.drive_comments import DriveComment, DriveFileChange
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     thread = DriveComment(file_id="f1", file_name="doc", comment_id="c1", author="J",
                           content="q?", created_at=datetime(2026, 9, 8, tzinfo=timezone.utc))
@@ -650,7 +638,7 @@ def test_a_persons_note_on_the_quest_is_collected_without_the_card_asking():
     backend rejects the field a quest would declare them in, so the one channel he had just used
     was the one channel the engine never looked at.
     """
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     class Client:
         def list_quest_notes(self, quest_id):
@@ -670,7 +658,7 @@ def test_a_persons_note_on_the_quest_is_collected_without_the_card_asking():
 
 
 def test_an_ai_note_is_not_reported_back_as_the_persons_news():
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     class Client:
         def list_quest_notes(self, quest_id):
@@ -688,7 +676,7 @@ def test_a_note_is_labelled_by_the_quests_name_not_its_outcome():
     "note · I've completed my dissertation and have a PhD", because the outcome was the fallback
     label. That column exists to say WHERE the note is so a person can scan a column of them.
     """
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     class Client:
         def list_quest_notes(self, quest_id):
@@ -712,7 +700,7 @@ def test_a_note_is_labelled_by_the_quests_name_not_its_outcome():
 
 def test_the_callers_own_label_beats_whatever_the_card_row_carries():
     """An autopilot pass has already resolved a display label; the quest state endpoint has not."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     class Client:
         def list_quest_notes(self, quest_id):
@@ -731,7 +719,7 @@ def test_the_callers_own_label_beats_whatever_the_card_row_carries():
 def _relevance_capture(item_id, body):
     from datetime import datetime, timezone
 
-    from quest_ai_runner.runner.context_updates import ContextUpdate
+    from quest_ai_runner.the_body.intake_sources.context_updates import ContextUpdate
     return ContextUpdate(source="insights", kind="capture", item_id=item_id, body=body,
                          occurred_at=datetime(2026, 9, 10, tzinfo=timezone.utc))
 
@@ -758,7 +746,7 @@ class _Notes:
     def collect(self, request):
         from datetime import datetime, timezone
 
-        from quest_ai_runner.runner.context_updates import ContextUpdate
+        from quest_ai_runner.the_body.intake_sources.context_updates import ContextUpdate
         return [ContextUpdate(source="quest_notes", kind="note", item_id="n1",
                               body="do the method chapter", needs_response=True,
                               occurred_at=datetime(2026, 9, 10, tzinfo=timezone.utc))]
@@ -768,7 +756,7 @@ def test_a_capture_about_other_work_never_reaches_the_run():
     """Joshua, 2026-09-10, on a live brief: 'Passed over: the 9/10 Cornerstone capture
     (collaboration tracking) isn't this quest's domain.' That line is the context engine's work
     showing up as the assistant's chatter."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     rows = [_relevance_capture("cornerstone", "collaboration tracking at Cornerstone"),
             _relevance_capture("method", "idea for the construct weighting")]
@@ -783,7 +771,7 @@ def test_a_capture_about_other_work_never_reaches_the_run():
 
 def test_a_judge_that_fails_costs_nothing_and_keeps_everything():
     """The worst case has to be a noisier brief, never a silently emptier one."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     rows = [_relevance_capture("a", "one"), _relevance_capture("b", "two")]
     for judge in (lambda *a: None, lambda *a: (_ for _ in ()).throw(RuntimeError("boom"))):
@@ -796,7 +784,7 @@ def test_a_judge_that_fails_costs_nothing_and_keeps_everything():
 def test_a_card_scoped_channel_is_never_put_to_a_relevance_judgment():
     """A note on this quest is relevant because of WHERE it was written. Judging it could only
     ever lose one."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     seen = {}
 
@@ -842,7 +830,7 @@ def test_a_card_can_watch_a_habit_by_its_name():
 
     A run composing a brief without it is guessing at exactly the thing they already measured.
     """
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     client = _CollectionClient([_habit_entry("e1", "2026-09-09", "started", 10573, 10)])
     # Clock pinned, like test_only_habit_entries_since_the_last_look_are_offered below. These
@@ -865,7 +853,7 @@ def test_a_card_can_watch_a_habit_by_its_name():
 def test_a_week_of_habit_entries_is_one_update_not_seven():
     """A log is one channel. Seven refs would be seven receipt lines each saying "noted", and
     live they were the bulk of a bundle with the person's one capture at the bottom."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     client = _CollectionClient([
         _habit_entry(f"e{d}", f"2026-09-0{d}", "started", 3600, 1) for d in range(3, 10)])
@@ -886,7 +874,7 @@ def test_a_week_of_habit_entries_is_one_update_not_seven():
 
 def test_a_habits_bookkeeping_fields_and_blanks_stay_out_of_the_brief():
     """Live render bug: a field the person left blank printed as "value_achieved: "."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     client = _CollectionClient([
         _habit_entry("e1", "2026-09-09", "started", 600, 1,
@@ -907,7 +895,7 @@ def test_a_habits_bookkeeping_fields_and_blanks_stay_out_of_the_brief():
 def test_only_habit_entries_since_the_last_look_are_offered():
     from datetime import timedelta
 
-    from quest_ai_runner.runner.context_updates import UpdateEngine, Watermarks
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine, Watermarks
 
     client = _CollectionClient([
         _habit_entry("old", "2026-09-01", "yes", 3600, 1),
@@ -926,7 +914,7 @@ def test_only_habit_entries_since_the_last_look_are_offered():
 
 def test_a_habit_is_never_put_to_a_relevance_judgment():
     """A collection reaches a card only because the card NAMED it: card-scoped by construction."""
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     from datetime import datetime, timedelta, timezone
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()  # inside the window
@@ -940,7 +928,7 @@ def test_a_habit_is_never_put_to_a_relevance_judgment():
 
 
 def test_a_collection_named_by_something_that_does_not_exist_is_a_reported_gap():
-    from quest_ai_runner.runner.context_updates import UpdateEngine
+    from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
 
     client = _CollectionClient([])
     bundle = UpdateEngine(client, always=()).collect(
@@ -1018,7 +1006,7 @@ class _ReadClient:
 
 
 def test_reading_a_quests_context_is_one_call_and_repeats_identically():
-    from quest_ai_runner.runner.context_updates import collect_quest_context
+    from quest_ai_runner.the_body.intake_sources.context_updates import collect_quest_context
 
     client = _ReadClient()
     first = collect_quest_context("q1", client=client)
@@ -1030,7 +1018,7 @@ def test_reading_a_quests_context_is_one_call_and_repeats_identically():
 
 
 def test_a_read_can_be_narrowed_to_one_channel():
-    from quest_ai_runner.runner.context_updates import collect_quest_context
+    from quest_ai_runner.the_body.intake_sources.context_updates import collect_quest_context
 
     bundle = collect_quest_context("q1", client=_ReadClient(), sources=["quest_notes"])
 
@@ -1040,7 +1028,7 @@ def test_a_read_can_be_narrowed_to_one_channel():
 
 def test_a_read_takes_a_time_period_instead_of_the_stored_stamp(tmp_path):
     """``days`` is the question a person actually asks: what has this quest seen this week?"""
-    from quest_ai_runner.runner.context_updates import collect_quest_context
+    from quest_ai_runner.the_body.intake_sources.context_updates import collect_quest_context
 
     path = tmp_path / "wm.json"
     Watermarks(str(path)).set("q1", "quest_notes", NOW)   # "already delivered everything"
@@ -1060,7 +1048,7 @@ def test_a_read_takes_a_time_period_instead_of_the_stored_stamp(tmp_path):
 
 
 def test_a_read_needs_a_client_or_a_config_to_build_one_from():
-    from quest_ai_runner.runner.context_updates import collect_quest_context
+    from quest_ai_runner.the_body.intake_sources.context_updates import collect_quest_context
 
     try:
         collect_quest_context("q1")
@@ -1072,7 +1060,7 @@ def test_a_read_needs_a_client_or_a_config_to_build_one_from():
 
 def test_the_bundle_serialises_for_a_caller_that_is_not_a_prompt():
     """A report, a dashboard or a test asks the bundle, not the prompt text it renders."""
-    from quest_ai_runner.runner.context_updates import collect_quest_context
+    from quest_ai_runner.the_body.intake_sources.context_updates import collect_quest_context
 
     payload = collect_quest_context("q1", client=_ReadClient()).as_dict()
 
@@ -1177,11 +1165,11 @@ class _AnsweredComments:
 
     def files_owned_by(self, owner, **kwargs):
         self.owners_asked.append(owner)
-        from quest_ai_runner.adapters.drive_comments import DriveFileChange
+        from quest_ai_runner.the_body.intake_sources.drive_comments import DriveFileChange
         return [DriveFileChange(file_id=f"f-{owner}", file_name=f"Doc for {owner}")]
 
     def comments_for_file(self, file_id, **kwargs):
-        from quest_ai_runner.adapters.drive_comments import DriveComment, DriveReply
+        from quest_ai_runner.the_body.intake_sources.drive_comments import DriveComment, DriveReply
         replies = [DriveReply(content="fixed", author_is_me=True)] if self.answered else []
         return [DriveComment(file_id=file_id, file_name=kwargs.get("file_name", ""),
                              comment_id="c1", author="The owner", content="this is wrong",

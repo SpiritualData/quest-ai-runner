@@ -15,9 +15,9 @@ tests/test_web_reads.py for the NEW cfg.web_research wiring/dispatch behavior.
 from __future__ import annotations
 
 from tests.conftest import StubProvider, StubRetrieval, StubEscalation
-from quest_ai_runner.config import RunnerConfig, build_orchestrator, derive_capabilities
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator, derive_capabilities
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter import ProviderWebSearchAdapter
 
 #: Every env var ``select_search_backend``/``build_web_research_from_env`` reads to decide a
 #: backend is available. Cleared in every test here so an ambient host key (e.g. a real

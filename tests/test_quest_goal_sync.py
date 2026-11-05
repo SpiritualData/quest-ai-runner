@@ -4,15 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner.quest_goal_sync import (
-    GOALS_FILE_NAME,
-    QuestGoalSyncError,
-    parse_goal_edits,
-    pull_quest_goals,
-    push_goals_to_quest,
-    render_goals_block,
-    sync_quest_goals,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_goal_sync import (
+    GOALS_FILE_NAME, QuestGoalSyncError, parse_goal_edits, pull_quest_goals, push_goals_to_quest, render_goals_block, sync_quest_goals)
 
 QUEST_ID = "quest_c18a9d1409ff"
 
@@ -251,7 +244,7 @@ def test_list_quest_goals_falls_back_to_the_quests_own_team(monkeypatch):
     import urllib.error
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     urls = []
 
@@ -300,7 +293,7 @@ def test_list_quest_goals_honors_an_explicit_team(monkeypatch):
     import urllib.error
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     urls = []
 
@@ -326,7 +319,7 @@ def goal_client_with_moving_quest(monkeypatch, urls, owner_team):
     import urllib.error
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class FakeResp:
         def __init__(self, payload):

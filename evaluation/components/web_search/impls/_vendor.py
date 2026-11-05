@@ -1,6 +1,6 @@
 """Builds one vendor backend over the fixture HTTP seam. Private helper for the single-vendor solutions."""
 from web_search import bench
-from quest_ai_runner.science import web_search_backends as wsb
+from quest_ai_runner.the_world.tools.web_search import web_search_backends as wsb
 
 
 def backend_for(vendor, payloads):

@@ -162,9 +162,9 @@ quest-ai-runner chat --continue     # reopen the latest conversation
 **Use the brain from Python:**
 
 ```python
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
-from quest_ai_runner.adapters import FilesAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
 cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/docs"),
                    model_provider=AnthropicProvider(api_key="..."))

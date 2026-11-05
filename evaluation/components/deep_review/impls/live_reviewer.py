@@ -5,8 +5,7 @@ recorded, on a host without it (waivers.csv S10 run-deep-work:unmeasured). Makes
 --record where the CLI exists."""
 import shutil
 
-from quest_ai_runner.core.goal_runner import (
-    DEEP_REVIEW_PROMPT, SubprocessConfig, SubprocessGoalRunner, parse_deep_review)
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import DEEP_REVIEW_PROMPT, SubprocessConfig, SubprocessGoalRunner, parse_deep_review
 
 
 def build(meter):

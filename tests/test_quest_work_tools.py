@@ -3,8 +3,8 @@
 Each behaviour here is one a team lost work to before it existed: a follow-up that served no goal,
 a near-duplicate goal for work the plan already named, a hand-over with no reason for the new owner.
 """
-from quest_ai_runner.core import tools_quest_work as work
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, build_tool_registry
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_work as work
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, build_tool_registry
 
 CREDS = {"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "key"}
 MEMBERS = [{"user_id": "u_ana", "name": "Ana Reyes", "email": "ana@example.org"},
@@ -158,7 +158,7 @@ def test_the_operations_are_registered_and_create_task_is_never_withheld_by_rele
 
 
 def test_the_client_sends_the_goal_fields_the_backend_accepts():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
     sent = []
     client = QuestClient(base_url="https://quest.example", api_key="k", team_id="t")
     client._request = lambda method, path, **kw: sent.append((method, path, kw.get("body"))) or {"id": "x"}
@@ -174,7 +174,7 @@ def test_the_client_sends_the_goal_fields_the_backend_accepts():
 def test_a_request_to_save_something_on_the_quest_offers_the_note_tool():
     """Found by evaluation/components/end_to_end: "Save this on my fitness quest: ..." offered five goal and
     experiment tools and not add_quest_note, so the planner had no tool to write the note and went to a deep run."""
-    from quest_ai_runner.core.tools import build_tool_registry
+    from quest_ai_runner.the_world.tools.tools import build_tool_registry
     registry = build_tool_registry({"QUEST_BASE_URL": "http://quest.invalid", "QUEST_API_KEY": "k"})
     for message in ("Save this on my fitness quest: my physio cleared easy cycling from Monday.",
                     "Remember that the plumber can only come on Thursdays.",

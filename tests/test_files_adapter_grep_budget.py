@@ -1,7 +1,7 @@
 """grep stays bounded on a huge tree: a time budget, a file cap, a focus directory, QAR_SKIP_DIRS."""
 from __future__ import annotations
 
-from quest_ai_runner.adapters.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
 
 def build(tmp_path):

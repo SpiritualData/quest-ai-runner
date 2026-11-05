@@ -1,5 +1,5 @@
 """Runs a cache_cards scenario on the live ``QuestApiCardRepository`` with the cache an impl supplies."""
-from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
 from tests.quest_card_backend_fake import FakeCardBackend
 
 

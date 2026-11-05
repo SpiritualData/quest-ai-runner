@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from quest_ai_runner.command_menu import menu_items, parse_help
-from quest_ai_runner.interactive_session import _HELP
-from quest_ai_runner.runner.quest_folder_index import quest_without_folder
+from quest_ai_runner.the_consciousness.terminal.command_menu import menu_items, parse_help
+from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import quest_without_folder
 
 COMMANDS = parse_help(_HELP)
 
@@ -51,7 +51,7 @@ def test_quest_choices_filter_and_mark_current():
 
 
 def run_app(keys, quests=()):
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
     ran = []
 
@@ -100,7 +100,7 @@ def test_escape_closes_the_menu_and_keeps_the_text():
 # -- choosing an option: /model, /quest open a chooser, not a printed list ------------------
 
 def run_chooser(keys, quests=()):
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
     calls = {"quest": [], "persisted": 0}
 
@@ -151,7 +151,7 @@ def test_bare_quest_opens_a_chooser_and_pins_the_pick():
 
 
 def test_quest_chooser_fills_in_when_the_quest_list_arrives():
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
     later = []
 
     async def go():
@@ -178,7 +178,7 @@ def test_quest_chooser_fills_in_when_the_quest_list_arrives():
 # -- a "/" line is never handed to the AI ----------------------------------------------------
 
 def test_slash_command_during_a_turn_runs_instead_of_going_to_the_ai():
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
     pushed = []
 
     async def go():
@@ -200,7 +200,7 @@ def test_slash_command_during_a_turn_runs_instead_of_going_to_the_ai():
 
 
 def test_command_typed_while_loading_runs_as_a_command():
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
     dispatched, turns = [], []
 
     async def go():

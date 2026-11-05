@@ -104,7 +104,7 @@ is covered by a named test.
 ## Usage
 
 ```python
-from quest_ai_runner.adapters.personal_lexicon import (
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.personal_lexicon import (
     CombinedBackground, CorpusBackground, LanguageBaseline,
     build_personal_lexicon, lexicon_term_strings, terms_within_budget,
 )

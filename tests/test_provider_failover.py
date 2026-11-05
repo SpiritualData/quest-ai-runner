@@ -2,9 +2,9 @@
 configured vendor can answer. Offline, fake providers, no model call (``fallback_models`` is the hub router's ordered failover list)."""
 import pytest
 
-from quest_ai_runner import config_orchestrator
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.providers import failover_models, routed
+from quest_ai_runner.the_body.configuration import config_orchestrator
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import failover_models, routed
 
 
 class FakeVendor:
@@ -117,7 +117,7 @@ def test_the_failover_list_names_one_model_per_other_configured_vendor_and_honou
 
 
 def test_build_orchestrators_wiring_gives_the_router_its_failover_models(monkeypatch):
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
+    from hubofhubs.api import AnthropicProvider
     for variable in ("ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_BASE_URL", "QAR_FALLBACK_MODELS"):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")

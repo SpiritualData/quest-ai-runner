@@ -3,8 +3,8 @@ orchestrator's default window): the newest few observations in full, older ones 
 characters, every one admitted. No goal-relevance gate and no scope fence at this point (the fence is upstream, in the
 retrieval adapters). Zero model calls."""
 import common  # noqa: F401
-from quest_ai_runner.core.orchestrator_types import OrchestratorConfig
-from quest_ai_runner.core.planner_context import _render_gathered_for_planner
+from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import _render_gathered_for_planner
 
 
 def build(meter):  # noqa: ARG001

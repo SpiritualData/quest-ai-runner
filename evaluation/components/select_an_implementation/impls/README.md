@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Taking in requests from anywhere](../../../../quest_ai_runner/take_in_the_world/README.md)
+- Owning intent: [Taking in requests from anywhere](../../../../quest_ai_runner/the_consciousness/request_intake/README.md)
 - Repository: [top README](../../../../README.md)

@@ -9,16 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner import store_cli
-from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
-from quest_ai_runner.adapters.card_store_upload import REASON_IMPORTED, plan_upload
-from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import store_cli
+from hubofhubs.api import card_store_identity as ident
+from quest_ai_runner.the_body.internal_context.card_store.card_store_upload import REASON_IMPORTED, plan_upload
+from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
 from tests.quest_card_backend_fake import FakeCardBackend
 from tests.test_card_store_mounts import VEC, CountingEmbedder, card, make_owner, seed
 from tests.test_card_store_mounts import reader_store
 
 pytest.importorskip("qdrant_client")
-from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 
 EMBEDDER = "test:embedder-a"
 
@@ -157,7 +157,7 @@ def test_missing_credentials_is_a_clear_error(tmp_path, monkeypatch, capsys):
 def test_copies_recording_their_origin_and_ids_that_may_never_be_stored_are_not_uploaded(tmp_path):
     """A copy that records its origin (not only ``imported_from``) is the source store's to upload, and a
     card under an id that repeats an import namespace never goes up (it would be refused there anyway)."""
-    from quest_ai_runner.adapters.card_store_upload import REASON_REFUSED_ID
+    from quest_ai_runner.the_body.internal_context.card_store.card_store_upload import REASON_REFUSED_ID
     copy = card("sd-aaaaaa--topic", ["src/c.py"])
     copy["provenance"] = {"origin_store": "st_other", "origin_id": "topic", "origin_root": "sd"}
     looped = card("sd-aaaaaa--root-bbbbbb--sd-aaaaaa--topic", ["src/l.py"])

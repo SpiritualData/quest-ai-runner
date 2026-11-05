@@ -9,12 +9,11 @@ the real ``ToolRegistry.invoke``, exactly as the deep worker's shell command doe
 """
 import tempfile
 
-from hubofhubs.the_body.internal_context.run_store.tool_ledger import (
-    FileToolLedger, ToolOutcome, failure_signature, repeated_failure, unrecovered_failures)
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.orchestrator import OrchestratorResult, PlanDecision
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.runner.executor import TaskExecutor
+from hubofhubs.api import FileToolLedger, ToolOutcome, failure_signature, repeated_failure, unrecovered_failures
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult, PlanDecision
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubProvider
 from .test_fast_edit_ladder import _orch

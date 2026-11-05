@@ -2,7 +2,7 @@
 breaks, ``communicate`` raises) must come back as a not-met ``DeepResult`` with a reason, not an exception."""
 import subprocess
 
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 
 class DyingPopen:

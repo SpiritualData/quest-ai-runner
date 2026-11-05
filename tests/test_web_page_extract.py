@@ -1,7 +1,7 @@
 """Tests for web_page_extract -- SSRF guard, HTML extraction, passage selection. Offline."""
 from __future__ import annotations
 
-from hubofhubs.the_world.tools.web_search.page_extract import check_url_is_safe, estimate_tokens, extract_main_text, select_passages, split_passages
+from hubofhubs.api import check_url_is_safe, estimate_tokens, extract_main_text, select_passages, split_passages
 
 
 # ---------------------------------------------------------------------------

@@ -36,11 +36,12 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider  # the hub's provider arm: settings are arguments
-from quest_ai_runner.adapters import ClaudeCliProvider, FilesAdapter
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.core.orchestrator import OrchestratorConfig
+from hubofhubs.api import AnthropicProvider  # the hub's provider arm: settings are arguments
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
 
 
 def _model_provider():

@@ -141,7 +141,7 @@
    "seconds_per_call": 5,
    "tokens": null
   },
-  "budget_source": "cost: the 2026-10-23 spend audit's average production request ($67 over 1,534 requests, about $0.044), the bound the metric record names (the cost of the answer it precedes or informs), declared in esoi.toml [balance.narrate_a_turn]; seconds: Narrator.flush_first joins the first beat for at most 5 seconds and then the turn goes on without it (quest_ai_runner/core/orchestrator_turn.py); no token budget is declared, so none is enforced",
+  "budget_source": "cost: the 2026-10-23 spend audit's average production request ($67 over 1,534 requests, about $0.044), the bound the metric record names (the cost of the answer it precedes or informs), declared in esoi.toml [balance.narrate_a_turn]; seconds: Narrator.flush_first joins the first beat for at most 5 seconds and then the turn goes on without it (quest_ai_runner/the_intelligence/mind/response_writer/orchestrator_turn.py); no token budget is declared, so none is enforced",
   "source": "owner metric metric-narrate-a-turn; owner cases evaluation/components/narrate_a_turn/cases.json (all cases, the same for both arms); the grader's calls are tagged eval.judge and are not counted as the prompt's"
  },
  {
@@ -333,7 +333,7 @@
    "seconds_per_call": 8.0,
    "tokens": null
   },
-  "budget_source": "quest_ai_runner/core/runtime_settings.py quest_judge_timeout_seconds (8.0s): the turn uses the home quest when the judge is slower. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
+  "budget_source": "quest_ai_runner/the_body/configuration/runtime_settings.py quest_judge_timeout_seconds (8.0s): the turn uses the home quest when the judge is slower. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
   "source": "owner metric metric-judge-a-decision (its live arm judge_live_decisions/live_judges); owner cases evaluation/components/judge_live_decisions/cases.json (the quest_rank cases, the same for both arms); the calls are on the Claude Code subscription at the cheapest tier, not the deployment's configured tier"
  },
  {
@@ -357,7 +357,7 @@
    "seconds_per_call": 20.0,
    "tokens": null
   },
-  "budget_source": "quest_ai_runner/core/orchestrator_types.py planner_reach_judge_timeout_seconds (20.0s): planning proceeds without a verdict after that. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
+  "budget_source": "quest_ai_runner/the_intelligence/mind/orchestrator_types.py planner_reach_judge_timeout_seconds (20.0s): planning proceeds without a verdict after that. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
   "source": "owner metric metric-claim-reach (its live arm judge_live_decisions/live_judges); owner cases evaluation/components/judge_live_decisions/cases.json (the reach cases, the same for both arms); the calls are on the Claude Code subscription at the cheapest tier, not the deployment's configured tier"
  }
 ]

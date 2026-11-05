@@ -13,15 +13,10 @@ Pinned here:
 
 Fully offline, no LLM calls.
 """
-from hubofhubs.the_intelligence.mind.context_intake.doctrine import assemble_doctrine, check_rules
+from hubofhubs.api import assemble_doctrine, check_rules
 
-from quest_ai_runner.core.planner_doctrine import FACTS, SITUATIONAL_PROFILE, planner_situation, situational_template
-from quest_ai_runner.core.planner_prompt import (
-    PLANNER_DECISION_RUBRIC,
-    PLANNER_PROFILES,
-    PLANNER_PROMPT,
-    PLANNER_RULES,
-)
+from quest_ai_runner.the_intelligence.mind.planner.planner_doctrine import FACTS, SITUATIONAL_PROFILE, planner_situation, situational_template
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_DECISION_RUBRIC, PLANNER_PROFILES, PLANNER_PROMPT, PLANNER_RULES
 
 from .test_planner_prompt_profiles import CapturingProvider, build
 

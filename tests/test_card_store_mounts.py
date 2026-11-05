@@ -23,12 +23,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
-from quest_ai_runner.adapters import card_store_fence as fence
-from quest_ai_runner.adapters import card_store_migrate as migrate
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore, write_bootstrap_meta
-from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
+from hubofhubs.api import card_store_identity as ident
+from quest_ai_runner.the_body.internal_context.card_store import card_store_fence as fence
+from quest_ai_runner.the_body.internal_context.card_store import card_store_migrate as migrate
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore, write_bootstrap_meta
+from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
 
 
 # --------------------------------------------------------------------------------------------
@@ -437,7 +437,7 @@ class TestMigrateImports:
 # --------------------------------------------------------------------------------------------
 
 def test_quest_api_repository_carries_a_store_identity():
-    from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
+    from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
     repo = QuestApiCardRepository("https://quest.example.test", "k", "u1", store_id="api-store-1")
     assert repo.store_id == "api-store-1"
     assert QuestApiCardRepository("https://quest.example.test", "k", "u1").store_id == ""
@@ -448,7 +448,7 @@ def test_quest_api_repository_carries_a_store_identity():
 # --------------------------------------------------------------------------------------------
 
 pytest.importorskip("qdrant_client")
-from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore  # noqa: E402
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 
 VEC = 8
 
@@ -642,7 +642,7 @@ def shutil_tree(src: Path, dst: Path) -> None:
 def test_mount_request_on_a_backend_that_cannot_mount_does_not_copy_import(tmp_path):
     """Mounting falls back to copy mode on the Quest backend; that must not revive the copy-import,
     which compounds imported ids (``root-a--root-b--...``) that ``card_origin.refuse`` then rejects."""
-    from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
+    from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
     repo = QuestApiCardRepository("https://quest.example.test", "k", "u1")
     store = FileContextStore(str(tmp_path / "cards"), card_repository=repo, mount_mode="mount",
                              repo_root=str(tmp_path))

@@ -1,8 +1,8 @@
 """The live deep-run monitor must find the worker's session file under any Claude config base."""
 from pathlib import Path
 
-from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session
-from quest_ai_runner.core import goal_runner
+from hubofhubs.api import session as hub_session
+from quest_ai_runner.the_intelligence.mind.delegation import goal_runner
 
 
 def _session(base: Path, sid: str) -> Path:
@@ -61,7 +61,7 @@ def test_finding_a_session_never_walks_every_recorded_session(tmp_path, monkeypa
 
 
 def test_session_file_size_is_what_a_resumed_worker_already_wrote(tmp_path, monkeypatch):
-    from quest_ai_runner.core.goal_runner_session import session_file_size
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_session import session_file_size
 
     home = tmp_path / "home"
     mine = _session(home / ".claude", "my-session")
@@ -78,7 +78,7 @@ def test_a_resumed_session_does_not_replay_what_the_person_already_saw(tmp_path,
     import threading
     import time
 
-    from quest_ai_runner.core.goal_runner_session import _monitor_claude_session, session_file_size
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_session import _monitor_claude_session, session_file_size
 
     project = tmp_path / ".claude" / "projects" / "proj"
     project.mkdir(parents=True)

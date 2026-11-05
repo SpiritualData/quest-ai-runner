@@ -3,9 +3,9 @@ import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_body import BodyActing
-from quest_ai_runner.adapters.files_adapter import FilesAdapter
-from quest_ai_runner.body.files_writer import FilesWriter
+from quest_ai_runner.the_body.area_body import BodyActing
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
 from tests.conftest import StubProvider
 
 AREA_IDS = ("the-body", "persist-cards", "write-files", "operate-a-quest", "claim-reach", "run-queued-tasks",

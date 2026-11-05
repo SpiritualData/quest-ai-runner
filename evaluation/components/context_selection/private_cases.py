@@ -29,7 +29,7 @@ quest is not the request's is removed from the corpus before ranking, as the har
 ranking is re-ordered by the hub's soft affinity factor, so an item of the request's quest ranks first and the others stay reachable). Each item card
 carries ``affinity_tags`` from its ``quest_relation`` (``same_quest`` / ``same_goal``: the request's tag ``TURN_TAG``; else a tag from the item's
 ``quest_title``, or ``quest:other``), and the request carries ``TURN_TAG``. Compare the three by running the metric with the flag set to each
-value; ``cross_quest_recall`` against noise shows what each mode costs and gains. The weights are ``quest_ai_runner.core.scope_tags``
+value; ``cross_quest_recall`` against noise shows what each mode costs and gains. The weights are ``quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags``
 ``AFFINITY_HOME_BOOST`` / ``AFFINITY_AWAY_FACTOR``.
 
 The mix of private input kinds is set here, in ``KIND_MIX``, and nowhere else; the share of this source in the one number is in ``esoi.toml``.
@@ -260,8 +260,8 @@ def item_affinity_tags(item):
 def reorder_by_affinity(ranked, owner, candidates):
     """``ranked`` (file paths, best first) re-ordered by position score ``1/(rank+1)`` times the hub's affinity factor for the item's tags against
     the request's; ties keep the arm's order. Nothing is removed."""
-    from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.affinity_tags import affinity_factor
-    from quest_ai_runner.core.scope_tags import AFFINITY_AWAY_FACTOR, AFFINITY_HOME_BOOST
+    from hubofhubs.api import affinity_factor
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import AFFINITY_AWAY_FACTOR, AFFINITY_HOME_BOOST
     by_id = {c["item_id"]: c for c in candidates}
 
     def score(pair):
@@ -275,7 +275,7 @@ def item_corpus(case, scope_mode="none"):
     """The case's candidate items as a corpus: one text file and one card per item (the card starts with the item's metadata, then its text).
     An item with a ``path`` is written under that path (sanitized, unique), else as ``item_NNN.txt``. Returns ``(corpus, {file path: item id})``."""
     from context_selection.corpus import Corpus
-    from hubofhubs.the_body.internal_context.card_store.context_card_extraction import SOURCE_FILE_WEIGHT
+    from hubofhubs.api import SOURCE_FILE_WEIGHT
     root = Path(tempfile.mkdtemp(dir=scratch_root()))
     corpus, owner, used = Corpus(root=root), {}, set()
     for index, item in enumerate(case["candidates"]):

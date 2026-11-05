@@ -7,9 +7,9 @@ import tempfile
 from pathlib import Path
 
 from common import hermetic_env
-from quest_ai_runner.cli_config import _config_from_env
-from quest_ai_runner.config import ConfigFileError, RunnerConfig
-from quest_ai_runner.config_core_settings import core_settings_from_env
+from quest_ai_runner.the_body.configuration.cli_config import _config_from_env
+from quest_ai_runner.the_body.configuration.config import ConfigFileError, RunnerConfig
+from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
 
 CORE_FIELDS = ("read_op_timeout_seconds", "context_assembly_timeout_seconds", "verify_context_max_chars",
                "note_floor_relevance_gated", "deep_prompt_token_budget", "deep_timeout_seconds",

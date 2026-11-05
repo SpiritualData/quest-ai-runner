@@ -16,10 +16,10 @@ network, no real token, no real space id.
 """
 import time
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter, static_token_provider
-from quest_ai_runner.adapters.card_scoped_learning import learn_card_references
-from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import build_resolver_registry
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import GoogleChatAdapter, static_token_provider
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_scoped_learning import learn_card_references
+from hubofhubs.api import build_resolver_registry
 
 
 class _FakeChat:
@@ -161,7 +161,7 @@ def test_assemble_second_turn_bumps_without_duplicating(tmp_path, monkeypatch):
     })
     adapter = _adapter(fake, store)
 
-    import quest_ai_runner.adapters.google_chat_adapter as gc_mod
+    import quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter as gc_mod
     clock = {"t": 1000.0}
     monkeypatch.setattr(gc_mod._time, "time", lambda: clock["t"])
 

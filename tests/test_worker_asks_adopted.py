@@ -11,12 +11,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, FrozenSet, List
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_DECISION
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.worker_ask_adoption import adopt_worker_asks
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_DECISION
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation.worker_ask_adoption import adopt_worker_asks
 
 from .conftest import StubRetrieval
 from .test_done_evidence import ANALYSIS, Provider
@@ -167,7 +167,7 @@ def test_a_sink_without_the_row_or_withdraw_capability_adopts_nothing():
 
 
 def test_the_quest_sink_lists_rows_and_withdraws_through_the_client():
-    from quest_ai_runner.runner.quest_client import QuestDecisionSink
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestDecisionSink
 
     class Client:
         def __init__(self):

@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Mind](../../../quest_ai_runner/mind/README.md)
+- Owning intent: [Mind](../../../quest_ai_runner/the_intelligence/mind/README.md)
 - Repository: [top README](../../../README.md)

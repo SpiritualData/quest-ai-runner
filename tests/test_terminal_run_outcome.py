@@ -23,14 +23,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from quest_ai_runner.core import launch_failure, usage_limit
-from hubofhubs.the_world.tools.deep import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
-from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_EXEC, EVENT_MILESTONE
-from quest_ai_runner.core.orchestrator import OrchestratorResult
-from quest_ai_runner import textual_ui_outcome as outcome
-from quest_ai_runner import textual_ui_turn
-from quest_ai_runner.textual_ui import QuestAITerminal
-from quest_ai_runner.textual_ui_widgets import _AWAITING_DECISION_PLACEHOLDER
+from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+from hubofhubs.api import DeepResult, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED
+from hubofhubs.api import EVENT_DECISION, EVENT_EXEC, EVENT_MILESTONE
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.the_consciousness.terminal import textual_ui_outcome as outcome
+from quest_ai_runner.the_consciousness.terminal import textual_ui_turn
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import _AWAITING_DECISION_PLACEHOLDER
 
 REPO = Path(__file__).resolve().parent.parent
 GOAL = "Add the opportunities to the spreadsheet"
@@ -302,7 +303,7 @@ def test_the_cli_error_text_is_not_shown_as_the_answer_of_a_run_that_never_start
 def test_the_launch_failure_wording_matches_what_the_runners_write(tmp_path):
     """The cause is the runner's sentence minus its stock opening, so the opening must be the one the
     runners write (the quest mailer keys on the same words)."""
-    from quest_ai_runner.core.goal_runner import SubprocessGoalRunner, SubprocessConfig
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner, SubprocessConfig
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(tmp_path / "no-such-claude")))
     res = runner.run_goal(goal="g", brief="g")
     assert res.launch_failed and res.error.startswith(launch_failure.LAUNCH_FAILED_PREFIX)
@@ -511,10 +512,10 @@ def string_literals(path: Path, skip_docstrings: bool = True):
 
 
 def test_no_string_the_terminal_can_print_contains_a_long_dash():
-    files = sorted(glob.glob(str(REPO / "quest_ai_runner" / "textual_ui*.py"))) + [
-        str(REPO / "quest_ai_runner" / "textual_session.py"),
-        str(REPO / "quest_ai_runner" / "interactive_session_commands.py"),
-        str(REPO / "quest_ai_runner" / "interactive_session_text.py")]
+    files = sorted(glob.glob(str(REPO / "quest_ai_runner" / "the_consciousness" / "terminal" / "textual_ui*.py"))) + [
+        str(REPO / "quest_ai_runner" / "the_consciousness" / "terminal" / "textual_session.py"),
+        str(REPO / "quest_ai_runner" / "the_consciousness" / "terminal" / "interactive_session_commands.py"),
+        str(REPO / "quest_ai_runner" / "the_consciousness" / "terminal" / "interactive_session_text.py")]
     found = [f"{Path(f).name}:{line}: {text[:60]!r}" for f in files for line, text in string_literals(Path(f))
              if EM in text or EN in text]
     assert not found, found
@@ -525,7 +526,7 @@ STATUS_CALLS = {"status", "ProgressEvent"}
 
 def test_no_status_the_core_emits_contains_a_long_dash():
     found = []
-    for f in sorted(glob.glob(str(REPO / "quest_ai_runner" / "core" / "*.py"))):
+    for f in sorted(glob.glob(str(REPO / "quest_ai_runner" / "the_intelligence" / "**" / "*.py"), recursive=True)):
         tree = ast.parse(Path(f).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
@@ -561,7 +562,7 @@ def test_a_structured_launch_problem_is_worded_plainly_and_any_other_failure_kee
 
 
 def test_the_runners_set_the_structured_launch_problem_from_the_process_outcome(tmp_path):
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
     missing = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(tmp_path / "no-such")))
     assert missing.run_goal(goal="g", brief="g").launch_problem == LAUNCH_MISSING_PROGRAM
     not_executable = tmp_path / "claude"
@@ -569,7 +570,7 @@ def test_the_runners_set_the_structured_launch_problem_from_the_process_outcome(
     denied = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(not_executable)))
     assert denied.run_goal(goal="g", brief="g").launch_problem == LAUNCH_PERMISSION_DENIED
     # The live-session runner reports the same two causes the same way.
-    from quest_ai_runner.body.goal_runner_stream import StreamJsonGoalRunner
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
     stream_missing = StreamJsonGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(tmp_path / "no-such")))
     assert stream_missing.run_goal(goal="g", brief="g").launch_problem == LAUNCH_MISSING_PROGRAM
     stream_denied = StreamJsonGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(not_executable)))

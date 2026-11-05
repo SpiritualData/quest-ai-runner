@@ -103,6 +103,6 @@ def test_the_aggregate_reports_value_time_and_cost():
 
 
 def test_the_first_beat_prompt_asks_for_an_i_sentence_and_no_invented_date():
-    from quest_ai_runner.core.orchestrator_turn import NARRATE_BEAT_SPEC
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import NARRATE_BEAT_SPEC
     text = NARRATE_BEAT_SPEC.template
     assert "starts with I" in text and "today's date" in text

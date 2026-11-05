@@ -1,0 +1,365 @@
+"""FilesAdapter — read_section / grep over a CONFIGURED root (a RetrievalAdapter).
+
+The hard read boundary is whatever root the CONSUMER passes — there is NO path baked in. Used
+to ground on indexed files (an org's docs + corpus). Strictly read-only; everything is
+hard-scoped inside the root,
+skips secret-ish / binary / oversize files, and never shells out (pure ``re`` + ``os.walk``).
+
+The containment check itself lives here as the module-level ``resolve_in_tree``, and it is SHARED:
+the opt-in write side (``body.files_writer.FilesWriter``) resolves through this same function
+rather than reimplementing the boundary. See its docstring for the contract and why each step of it
+is load-bearing.
+"""
+from __future__ import annotations
+
+import logging
+import os
+import re
+import time
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from esoi import implementation
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from hubofhubs.api import RetrievalAdapterBase
+from hubofhubs.api import is_claude_state_file, prune_dirnames
+from quest_ai_runner.the_body.configuration.walk_settings import effective_skip_dirs
+
+log = logging.getLogger("quest-ai-runner.files_adapter")
+
+
+def grep_budget_seconds() -> float:
+    """Wall-clock budget for one grep. Env ``QAR_GREP_BUDGET_SECONDS`` (default 20), kept well under
+    the orchestrator's per-read timeout so a huge tree returns partial hits instead of timing out."""
+    try:
+        value = float(os.getenv("QAR_GREP_BUDGET_SECONDS", "20"))
+    except ValueError:
+        return 20.0
+    return value if value > 0 else 20.0
+
+
+def grep_max_files() -> int:
+    """Most files one grep opens. Env ``QAR_GREP_MAX_FILES`` (default 20000)."""
+    try:
+        value = int(os.getenv("QAR_GREP_MAX_FILES", "20000"))
+    except ValueError:
+        return 20000
+    return value if value > 0 else 20000
+
+_BINARY_EXTS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mov",
+    ".woff", ".woff2", ".ttf", ".ico", ".so", ".pyc", ".bin", ".db", ".sqlite",
+}
+_SECRET_HINTS = ("secret", "credential", "password")
+_SECRET_SUFFIXES = (".env", ".key", ".pem")
+
+
+def _is_secretish(name: str) -> bool:
+    low = name.lower()
+    if low.startswith(".env") or any(low.endswith(s) for s in _SECRET_SUFFIXES):
+        return True
+    if is_claude_state_file(name):
+        # Discovery (list_sources/grep, below) already skips every dotfile, so this only bites a
+        # DIRECT read_section(".claude.json") by exact path -- but that path contains OAuth account
+        # metadata, so it belongs in the same refusal as .env/.key/.pem, not left to the dotfile
+        # skip alone.
+        return True
+    return any(h in low for h in _SECRET_HINTS)
+
+
+def resolve_in_tree(root: Path, rel_or_abs: str) -> Optional[Path]:
+    """THE containment check: resolve ``rel_or_abs`` and return it only if it is inside ``root``.
+
+    This is the single implementation of quest-ai-runner's filesystem boundary, shared by the
+    READ side (``FilesAdapter``) and the WRITE side (``body.files_writer.FilesWriter``). It is
+    deliberately one function rather than one per adapter: two independent implementations of a
+    security boundary is itself the risk, because they drift and only one of them gets the fix.
+
+    How it holds, and why each step is load-bearing:
+
+      * A relative path is joined onto ``root``; an absolute path is taken as given. Either way it
+        is then ``Path.resolve()``d, which BOTH normalizes ``..`` components AND follows symlinks,
+        so the path checked below is the real destination on disk, not the name used to reach it.
+      * ``resolved.relative_to(self.root)`` raises ``ValueError`` unless the resolved path is at or
+        under the root. That exception, not a string comparison, is the check — no ``startswith``
+        on paths (``/corpus-evil`` starts with ``/corpus``), no manual ``..`` stripping.
+      * ``_is_secretish`` then refuses credential-ish names (``.env*``, ``*.key``, ``*.pem``,
+        anything containing "secret"/"credential"/"password") even when they ARE inside the root.
+        Reads have always refused those; a write path must refuse them for the same reason.
+
+    Verified behaviour (see ``tests/test_file_write_containment.py``): a traversal
+    (``../../../etc/passwd``) is rejected; a symlinked directory pointing outside the root is
+    rejected, because resolution follows the link before the containment test; an absolute path
+    outside the root is rejected; an absolute path INSIDE the root is allowed; and a target that
+    does not exist yet is ALLOWED, which matters because that is the ordinary case for creating a
+    file (``Path.resolve()`` on a nonexistent path is non-strict and still normalizes).
+
+    Returns the resolved absolute path, or None if it is not allowed. Never raises.
+    """
+    raw = (rel_or_abs or "").strip()
+    if not raw:
+        return None
+    p = Path(raw)
+    candidate = p if p.is_absolute() else (root / p)
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(root)
+    except (ValueError, OSError):
+        return None
+    if _is_secretish(resolved.name):
+        return None
+    return resolved
+
+
+@implementation("gather-evidence", "files")
+class FilesAdapter(RetrievalAdapterBase):
+    def __init__(self, root: str, *, default_read_max_bytes: int = 20000,
+                 default_grep_max_hits: int = 40, grep_max_file_bytes: int = 256 * 1024):
+        self.root = Path(root).resolve()
+        self.default_read_max_bytes = default_read_max_bytes
+        self.default_grep_max_hits = default_grep_max_hits
+        self.grep_max_file_bytes = grep_max_file_bytes
+        self.skip_dirs = effective_skip_dirs(self.root)
+
+    # --- scope helpers -------------------------------------------------------
+
+    def _resolve_in_tree(self, rel_or_abs: str) -> Optional[Path]:
+        # Delegates to the module-level ``resolve_in_tree`` — the ONE containment implementation,
+        # shared with the write side. See its docstring for the contract this relies on.
+        return resolve_in_tree(self.root, rel_or_abs)
+
+    def _rel(self, path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(self.root))
+        except ValueError:
+            return path.name
+
+    def _readable(self, path: Path) -> bool:
+        return not _is_secretish(path.name) and path.suffix.lower() not in _BINARY_EXTS
+
+    @staticmethod
+    def _heading_section(lines: List[str], heading: str):
+        want = heading.strip().lower().lstrip("#").strip()
+        if not want:
+            return None
+
+        def level(ln: str):
+            m = re.match(r"^(#{1,6})\s+", ln)
+            return len(m.group(1)) if m else None
+
+        start_idx = None
+        start_level = 0
+        for i, ln in enumerate(lines):
+            lvl = level(ln)
+            if lvl is not None and want in ln.lstrip("#").strip().lower():
+                start_idx, start_level = i, lvl
+                break
+        if start_idx is None:
+            return None
+        end_idx = len(lines)
+        for j in range(start_idx + 1, len(lines)):
+            lvl = level(lines[j])
+            if lvl is not None and lvl <= start_level:
+                end_idx = j
+                break
+        return {"start_line": start_idx + 1, "end_line": end_idx,
+                "text": "\n".join(lines[start_idx:end_idx])}
+
+    # --- RetrievalAdapter API ------------------------------------------------
+
+    def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None,
+                     max_bytes=None) -> Observation:
+        max_bytes = max_bytes if (max_bytes and max_bytes > 0) else self.default_read_max_bytes
+        resolved = self._resolve_in_tree(rel_path)
+        if resolved is None:
+            return Observation(kind="error", rel_path=rel_path, error="path outside root or not allowed")
+        if not resolved.is_file():
+            return Observation(kind="error", rel_path=rel_path, error="not a file")
+        if not self._readable(resolved):
+            return Observation(kind="error", rel_path=rel_path, error="binary/secret file not readable")
+        rel = self._rel(resolved)
+        try:
+            raw = resolved.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            return Observation(kind="error", rel_path=rel, error=f"read failed: {type(e).__name__}")
+
+        lines = raw.splitlines()
+        if heading:
+            sec = self._heading_section(lines, heading)
+            if sec is None:
+                return Observation(kind="error", rel_path=rel, error=f"heading not found: {heading!r}")
+            locator = f"heading={heading!r}"
+            text = sec["text"]
+        elif start_line is not None or end_line is not None:
+            s = max(1, int(start_line)) if start_line is not None else 1
+            e = int(end_line) if end_line is not None else len(lines)
+            e = min(max(e, s), len(lines))
+            locator = f"lines {s}-{e}"
+            text = "\n".join(lines[s - 1:e])
+        else:
+            locator = "head"
+            text = raw
+
+        encoded = text.encode("utf-8", errors="replace")
+        if len(encoded) > max_bytes:
+            text = encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip() + "\n…[truncated]"
+        return Observation(kind="read", rel_path=rel, locator=locator, text=text)
+
+    def grep(self, pattern, *, scope=None, max_hits=None) -> Observation:
+        max_hits = max_hits if (max_hits and max_hits > 0) else self.default_grep_max_hits
+        search_root = self.root
+        if scope:
+            resolved = self._resolve_in_tree(scope)
+            if resolved is None:
+                return Observation(kind="error", pattern=pattern, scope=scope, error="scope outside root")
+            search_root = resolved
+        if not search_root.exists():
+            return Observation(kind="error", pattern=pattern, scope=scope, error="scope does not exist")
+        try:
+            rx = re.compile(pattern, re.IGNORECASE)
+        except re.error as e:
+            return Observation(kind="error", pattern=pattern, scope=scope, error=f"bad regex: {e}")
+
+        budget = grep_budget_seconds()
+        deadline = time.monotonic() + budget
+        # No scope given: look where the person is working first (the process's own directory, when
+        # it is inside the root and narrower than it), and only widen to the whole root when that
+        # finds nothing. The whole root can hold hundreds of thousands of files.
+        passes: List[Path] = [search_root]
+        if not scope and search_root == self.root:
+            focus = self.focus_dir()
+            if focus is not None:
+                passes = [focus, search_root]
+
+        hits: List[Dict[str, Any]] = []
+        stats = {"files": 0, "stopped": ""}
+        for pass_root in passes:
+            hits = self.grep_pass(pass_root, rx, max_hits, deadline, stats)
+            if hits or stats["stopped"]:
+                break
+        if stats["stopped"]:
+            log.warning("grep(%r) stopped early (%s) after %d files; pass a narrower scope",
+                        pattern, stats["stopped"], stats["files"])
+        note = (f"Search stopped early ({stats['stopped']}) after {stats['files']} files; "
+                f"results may be incomplete. Retry with a narrower scope." if stats["stopped"] else None)
+        return Observation(kind="grep", pattern=pattern, scope=scope, hits=hits, text=note)
+
+    def focus_dir(self) -> Optional[Path]:
+        try:
+            here = Path.cwd().resolve()
+            here.relative_to(self.root)
+        except (OSError, ValueError):
+            return None
+        return None if here == self.root else here
+
+    # A line longer than this is only matched on its first characters: one multi-megabyte minified
+    # line must not hand a regex unbounded work. Subclasses may lower it.
+    grep_max_line_chars = 100_000
+
+    def format_hit_line(self, line: str) -> str:
+        """The text reported for a matching line, before the 300 character cap. Subclasses that
+        must scrub the text (the file server redacts secret values) override this."""
+        return line
+
+    def grep_pass(self, pass_root: Path, rx, max_hits: int, deadline: float,
+                  stats: Dict[str, Any], on_hit: Optional[Callable[[Dict[str, Any]], None]] = None
+                  ) -> List[Dict[str, Any]]:
+        """One bounded walk of ``pass_root``: stops at ``max_hits``, the time budget, or the file cap."""
+        hits: List[Dict[str, Any]] = []
+        max_files = grep_max_files()
+        if pass_root.is_file():
+            walk = [(str(pass_root.parent), [], [pass_root.name])]
+        else:
+            walk = os.walk(pass_root)
+        for dirpath, dirnames, filenames in walk:
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.skip_dirs)
+            for fn in filenames:
+                if fn.startswith(".") and not pass_root.is_file():
+                    continue
+                path = Path(dirpath) / fn
+                if not self._readable(path):
+                    continue
+                if time.monotonic() > deadline:
+                    stats["stopped"] = "time budget"
+                    return hits
+                if stats["files"] >= max_files:
+                    stats["stopped"] = "file cap"
+                    return hits
+                stats["files"] += 1
+                try:
+                    if path.stat().st_size > self.grep_max_file_bytes:
+                        continue
+                    with open(path, "r", encoding="utf-8", errors="replace") as f:
+                        for line_no, line in enumerate(f, start=1):
+                            if rx.search(line[:self.grep_max_line_chars]):
+                                snippet = self.format_hit_line(line.rstrip("\n")[:self.grep_max_line_chars])
+                                if len(snippet) > 300:
+                                    snippet = snippet[:300].rstrip() + " …"
+                                hit = {"rel_path": self._rel(path), "line_no": line_no,
+                                       "line": snippet}
+                                hits.append(hit)
+                                if on_hit is not None:
+                                    on_hit(hit)
+                                if len(hits) >= max_hits:
+                                    return hits
+                except OSError:
+                    continue
+        return hits
+
+    # --- discovery -----------------------------------------------------------
+
+    def _walk_readable(self, limit: int) -> List[str]:
+        names: List[str] = []
+        for dirpath, dirnames, filenames in os.walk(self.root):
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.skip_dirs)
+            for fn in filenames:
+                p = Path(dirpath) / fn
+                if not fn.startswith(".") and self._readable(p):
+                    names.append(self._rel(p))
+                    if len(names) >= limit:
+                        names.sort()
+                        return names
+        names.sort()
+        return names
+
+    def list_sources(self) -> Observation:
+        names = self._walk_readable(limit=500)
+        body = "\n".join(f"- {n}" for n in names) or "(no readable files under the root)"
+        return Observation(kind="query", locator="list_sources",
+                           text=f"Readable doc files under the configured root "
+                                f"(read with read_section(rel_path, heading|lines), grep with a "
+                                f"pattern):\n{body}")
+
+    def describe_source(self, name, *, path=None) -> Observation:
+        resolved = self._resolve_in_tree(name)
+        if resolved is None or not resolved.is_file() or not self._readable(resolved):
+            return Observation(kind="query", locator=f"describe_source({name})",
+                               text=f"{name!r} is not a readable file under the root. "
+                                    f"Call list_sources to see what exists.")
+        try:
+            lines = resolved.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as e:
+            return Observation(kind="query", locator=f"describe_source({name})",
+                               text=f"could not read {name!r}: {type(e).__name__}")
+        headings = [ln.rstrip() for ln in lines if re.match(r"^#{1,6}\s+", ln)]
+        outline = "\n".join(headings[:200]) or "(no markdown headings; read the file directly)"
+        return Observation(kind="query", locator=f"describe_source({name})",
+                           text=f"Outline of {self._rel(resolved)} "
+                                f"(read a section with read_section(rel_path, heading=...)):\n{outline}")
+
+    def list_operations(self) -> Observation:
+        return Observation(kind="query", locator="list_operations",
+                           text="This source is READ-ONLY documents. Operations:\n"
+                                "- read_section(rel_path, heading|start_line/end_line): read part of a file\n"
+                                "- grep(pattern, scope): locate a regex across files\n"
+                                "No mutations are available.")
+
+    def describe_operation(self, name: str) -> Observation:
+        ops = {
+            "read_section": "read_section(rel_path, *, heading=None, start_line=None, end_line=None) "
+                            "→ a specific part of a file.",
+            "grep": "grep(pattern, *, scope=None) → lines across files matching a regex.",
+        }
+        detail = ops.get((name or "").strip())
+        return Observation(kind="query", locator=f"describe_operation({name})",
+                           text=detail or f"Unknown operation {name!r}. Call list_operations to see them.")

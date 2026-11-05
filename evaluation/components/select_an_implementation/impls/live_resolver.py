@@ -9,11 +9,11 @@ from pathlib import Path
 from common import hermetic_env
 from esoi import config as esoi_config
 from esoi import declarations
-from quest_ai_runner.science.web_search_backends import select_search_backend
-from quest_ai_runner.cli_config import _model_provider_from_env
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.config_resolvers import resolve_deep_runner
-from quest_ai_runner.core.resolve import chosen_name, default_name, names, resolve
+from quest_ai_runner.the_world.tools.web_search.web_search_backends import select_search_backend
+from quest_ai_runner.the_body.configuration.cli_config import _model_provider_from_env
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_body.configuration.config_resolvers import resolve_deep_runner
+from quest_ai_runner.the_self.assembler.resolve import chosen_name, default_name, names, resolve
 
 CONFIG = esoi_config.load(Path(__file__).resolve().parents[4])
 DECLARED = declarations.scan(CONFIG, declarations.code_files(CONFIG))

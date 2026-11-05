@@ -9,13 +9,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import quest_ai_runner.subconscious.qdrant_vector_store as qdrant_store_module
-from quest_ai_runner import config as config_mod
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.quest_api_card_repository import (
+import quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store as qdrant_store_module
+from quest_ai_runner.the_body.configuration import config as config_mod
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import (
     QuestApiCardRepository, QuestApiCardVectorStore, quest_card_settings_from_env)
-from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_context_assembler
 from tests.quest_card_backend_fake import FakeCardBackend
 
 ENV_NAMES = (
@@ -40,9 +40,9 @@ def local_vector(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     store_cls = MagicMock(name="QdrantVectorStore")
     monkeypatch.setattr(qdrant_store_module, "QdrantVectorStore", store_cls)
-    monkeypatch.setattr("quest_ai_runner.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
+    monkeypatch.setattr("quest_ai_runner.the_body.configuration.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
     embedder = MagicMock(name="make_voyage_embedder")
-    import quest_ai_runner.subconscious.qdrant_vector_store as qvs
+    import quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store as qvs
     monkeypatch.setattr(qvs, "make_voyage_embedder", embedder)
     return store_cls, embedder
 

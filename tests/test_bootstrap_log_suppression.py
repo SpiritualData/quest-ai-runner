@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import logging
 
-from quest_ai_runner.interactive_session_persona import _BACKGROUND_BOOTSTRAP_LOGGER_NAMES
-from quest_ai_runner.interactive_session import _suppress_background_bootstrap_logs
+from quest_ai_runner.the_consciousness.terminal.interactive_session_persona import _BACKGROUND_BOOTSTRAP_LOGGER_NAMES
+from quest_ai_runner.the_consciousness.terminal.interactive_session import _suppress_background_bootstrap_logs
 
 
 def _reset_loggers():
@@ -39,7 +39,7 @@ def test_default_call_also_raises_bm25_content_store_logger():
     _reset_loggers()
     try:
         _suppress_background_bootstrap_logs(verbose=False)
-        log = logging.getLogger("quest_ai_runner.select_context.bm25_content_store")
+        log = logging.getLogger("quest_ai_runner.the_intelligence.subconscious.context_retriever.bm25_content_store")
         assert not log.isEnabledFor(logging.INFO)
     finally:
         _reset_loggers()

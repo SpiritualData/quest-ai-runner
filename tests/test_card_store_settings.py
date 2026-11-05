@@ -1,7 +1,7 @@
 """QAR reads the card store's environment variables and hands them to the hub as arguments; the names and defaults are unchanged."""
 import pytest
 
-from quest_ai_runner.adapters import card_store_settings as settings
+from quest_ai_runner.the_body.configuration import card_store_settings as settings
 
 VARIABLES = ("QAR_MAX_CARDS", "QAR_BOOTSTRAP_WORKERS", "QAR_MAX_PARALLEL", "QAR_BOOTSTRAP_MAX_FILES", "QAR_BOOTSTRAP_MAX_CARDS",
              "QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "QAR_SKIP_NESTED_REPOS", "QAR_FOLDER_REVIEW", "QAR_PRUNE_DEAD_CARDS")

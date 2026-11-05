@@ -26,16 +26,11 @@ All offline: no network, no API key.
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    truncate_verify_context,
-    verify_context_max_chars,
-)
-from quest_ai_runner.core.orchestrator_events import grounding_context_layer
+from hubofhubs.api import AssembledContext
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, truncate_verify_context, verify_context_max_chars
+from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
 
 from .conftest import StubProvider, StubRetrieval
 

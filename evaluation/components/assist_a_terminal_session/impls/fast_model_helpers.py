@@ -5,7 +5,7 @@ deterministic, and it scores the code around the call (the printed line, the fal
 a ceiling for the model route. What a real model answers is measured by ``fast_model_helpers_live``."""
 SIMULATED = True   # meters a stand-in for the model: recorded as model 'simulated' at cost 0.0, compared on calls
 from assist_a_terminal_session import arms
-from quest_ai_runner import cli_quest
+from quest_ai_runner.the_consciousness.terminal import cli_quest
 
 
 def build(meter):

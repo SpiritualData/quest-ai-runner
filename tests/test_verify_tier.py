@@ -14,8 +14,8 @@ Offline, no network.
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -153,7 +153,7 @@ def test_answer_verification_checks_the_derived_goal_condition():
 
 
 def test_env_wiring_for_overseer_and_verify_tier(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     for var in ("QAR_OVERSEER", "QAR_OVERSEER_TIER", "QAR_OVERSEER_MAX_SIGNALS",
                 "QAR_VERIFY_TIER"):

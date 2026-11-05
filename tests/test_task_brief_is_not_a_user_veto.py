@@ -17,11 +17,11 @@ Offline: the real Orchestrator/TaskExecutor with a capturing deep runner, mirror
 ``test_working_dir_override``. The deep runner being called at all IS the assertion -- a vetoed
 turn never reaches it.
 """
-from quest_ai_runner.core.orchestrator_decisions import message_forbids_new_task
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import message_forbids_new_task
 
 from .test_working_dir_override import CapturingDeepRunner, _brain
 from .test_runner import MockQuestClient
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 # Lines lifted verbatim in shape from the real autopilot brief that degraded a live run.
 BRIEF_WITH_HOLD_PHRASES = (

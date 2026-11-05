@@ -14,10 +14,10 @@ helps at 6 files has not ranked anything better.
 import tempfile
 
 from context_selection.embedder import embedder
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
-from hubofhubs.the_body.internal_context.context import VectorHit
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
+from hubofhubs.api import VectorHit
 from context_selection.store_cost import store_charged
 
 ARM_CARDS = 3

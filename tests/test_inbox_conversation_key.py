@@ -6,9 +6,9 @@ orchestrator's auto-wired drain used to read ``quest_id or context conversation_
 looked at ``conv_id``, so in a quest chat the message sat in memory under the conversation id while
 the drain read the quest id. These tests pin that the drain reads the conversation id first.
 """
-from quest_ai_runner.core.inbox import InMemoryInbox
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 

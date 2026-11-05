@@ -17,11 +17,11 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.delegated_agent_sessions import stream_runner as hub_stream
-from quest_ai_runner.body import goal_runner_stream
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.body.goal_runner_stream import StreamJsonGoalRunner
-from hubofhubs.the_world.tools.delegated_agent_sessions.control import ControlMessage, RunControl
+from hubofhubs.api import stream_runner as hub_stream
+from quest_ai_runner.the_world.tools.delegated_agent_sessions import goal_runner_stream
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
+from hubofhubs.api import ControlMessage, RunControl
 
 REPO_ROOT = str(Path(__file__).resolve().parents[1])
 
@@ -300,7 +300,7 @@ def test_a_claude_too_old_to_report_an_interrupt_runs_one_shot(tmp_path, monkeyp
 
     def fake_once(self, **kwargs):
         called.update(kwargs)
-        from hubofhubs.the_world.tools.deep import DeepResult
+        from hubofhubs.api import DeepResult
         return DeepResult(met=True, output="one-shot")
 
     monkeypatch.setattr(SubprocessGoalRunner, "run_goal_once", fake_once)
@@ -309,7 +309,7 @@ def test_a_claude_too_old_to_report_an_interrupt_runs_one_shot(tmp_path, monkeyp
 
 
 def test_the_runner_is_declared_and_not_selected():
-    from quest_ai_runner.core import resolve
+    from quest_ai_runner.the_self.assembler import resolve
     assert StreamJsonGoalRunner.config_class is SubprocessConfig
     assert goal_runner_stream.MIN_STREAM_CONTROL_VERSION == (2, 1, 219)
     assert "stream_json" in resolve.names("run-deep-work")

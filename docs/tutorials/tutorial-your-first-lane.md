@@ -63,7 +63,7 @@ Then the entire entry point is:
 #!/usr/bin/env python3
 """My first quest-ai-runner lane."""
 from quest_ai_runner import load_config
-from quest_ai_runner.runner.lane import run_lane
+from quest_ai_runner.the_consciousness.request_intake.lane import run_lane
 
 def main(argv=None) -> int:
     return run_lane(

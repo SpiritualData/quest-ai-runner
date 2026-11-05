@@ -1,6 +1,6 @@
 """Offline tests for quest_judge: one ranker for single and batch calls, with a fake judge."""
 
-from quest_ai_runner.core.quest_judge import rank_quests, select_and_rank_quests, select_quest
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_judge import rank_quests, select_and_rank_quests, select_quest
 
 QUESTS = [
     {"quest_id": "q_a", "title": "Fitness", "state": "running 3x a week"},
@@ -126,7 +126,7 @@ def test_select_quest_returns_only_the_pick():
 
 
 def test_long_state_keeps_its_newest_end_not_its_start():
-    from quest_ai_runner.core.quest_judge import STATE_LIMIT, _quest_lines
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_judge import STATE_LIMIT, _quest_lines
     old = "OLDSTART " + "filler " * 200
     state = old + "NEWEST: the tiler confirmed Thursday."
     line = _quest_lines([{"quest_id": "q1", "title": "Bathroom", "state": state}], None)
@@ -136,7 +136,7 @@ def test_long_state_keeps_its_newest_end_not_its_start():
 
 
 def test_short_state_is_untouched():
-    from quest_ai_runner.core.quest_judge import _quest_lines
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_judge import _quest_lines
     line = _quest_lines([{"quest_id": "q1", "title": "Run", "state": "Ran 5k today"}], None)
     assert line.endswith("| state: Ran 5k today")
 

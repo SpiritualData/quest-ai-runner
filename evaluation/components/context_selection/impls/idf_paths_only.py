@@ -3,7 +3,7 @@ and symbol names remain (the pre-docstring state). Isolates how much the docstri
 contributes. Zero model calls."""
 import tempfile
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 from context_selection.store_cost import store_charged
 
 

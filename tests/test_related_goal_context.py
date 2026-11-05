@@ -17,7 +17,7 @@ supplies the quest id to fetch it with. The two cases this covers:
 """
 from __future__ import annotations
 
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 
 class GoalClient:

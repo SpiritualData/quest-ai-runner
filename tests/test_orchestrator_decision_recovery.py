@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from typing import Any, FrozenSet, List
 
-from quest_ai_runner.core.adapters_values import Escalation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

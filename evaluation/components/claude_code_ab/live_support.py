@@ -109,7 +109,7 @@ def cold_prompt(task: str) -> str:
         f"{task}\n\n"
         "Use your tools to locate the relevant file in this repository. "
         "When you have identified it, answer with ONLY the repo-relative path "
-        "(e.g. quest_ai_runner/core/orchestrator.py). "
+        "(e.g. quest_ai_runner/the_intelligence/mind/orchestrator.py). "
         "Do not include any other text."
     )
 
@@ -123,7 +123,7 @@ def warm_prompt(task: str, hint_file: str) -> str:
         "obviously fit, discard it immediately and search normally as if it were not there. Do "
         "not spend extra effort verifying or working around a hint that does not fit. "
         "Answer with ONLY the repo-relative path "
-        "(e.g. quest_ai_runner/core/orchestrator.py). "
+        "(e.g. quest_ai_runner/the_intelligence/mind/orchestrator.py). "
         "Do not include any other text."
     )
 

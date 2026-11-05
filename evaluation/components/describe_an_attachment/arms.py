@@ -7,9 +7,9 @@ import subprocess
 
 import common  # noqa: F401  (puts the repository on the path)
 from PIL import Image, ImageDraw, ImageFont
-from quest_ai_runner import usage
-from quest_ai_runner.adapters import claude_cli_provider as cli
-from quest_ai_runner.core.attachments import prepare_attachments
+from quest_ai_runner.the_world.model_plumbing.spend import usage
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller import claude_cli_provider as cli
+from quest_ai_runner.the_intelligence.mind.context_intake.attachments import prepare_attachments
 
 VISION_MODEL = "claude-haiku"   # the family alias the claude CLI resolves; the describing model of this arm
 ANSWER_MODEL = "claude-haiku"

@@ -6,50 +6,24 @@ This file orients any contributor (human or AI) working in `quest-ai-runner`, an
 ## What this project is
 
 `quest-ai-runner` is **Quest's connector** and the production consumer of the hub of hubs (`hubofhubs`, a required
-dependency; `quest_ai_runner/hub.py` imports it at startup and registers QAR's parts under names QAR owns): the
-orchestrator **brain** (`quest_ai_runner.core`) plus the queued-task **executor** (`quest_ai_runner.runner`) for Quest AI
+dependency; `quest_ai_runner/the_self/assembler/hub.py` imports it at startup and registers QAR's parts under names QAR owns): the
+orchestrator **brain** (`the_intelligence/`) plus the queued-task **executor** (`the_consciousness/request_intake/`) for Quest AI
 tasks. It is published as open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment. The
-brain (`core/`) stays free of Quest; the Quest-specific parts are the adapters, the runner and the config. Generic engines
+brain (`the_intelligence/`) holds the plan, gather, answer loop; the Quest-specific parts are the Body arms (the Quest client, card stores, configuration), Request Intake and the terminal. Generic engines
 are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR keeps what knows Quest.
-- `core/`: the brain, a bounded plan → gather → re-plan → answer/deep/confirm loop. Imports
-  nothing about Quest, any database, any org, or any user. Depends only on the adapter
-  *interfaces* (`Protocol` ports) it defines in `core/adapters*.py`; the solutions' records list them all (`esoi/README.md` links to every folder that holds records).
-  Prompt text is split out by definition: the planner prompt (rubric, full/compact variants, mode
-  notes, profile table) is `core/planner_prompt.py`; `orchestrator.py` holds the loop and re-exports
-  those names. A new prompt variant is an entry in `PLANNER_PROFILES`; add prompt text there, not to
-  the loop.
-  The other prompt text and tool schemas (goal verification, intent and mode-release directives,
-  future-context asks, card updater, reply voice, post-work synthesis) are `core/auxiliary_prompts.py`;
-  how gathered observations, links and past escalations are rendered into the planner's view is
-  `core/planner_context.py`. Both are re-exported from `orchestrator.py`; put new prompt text or
-  rendering helpers in those modules, not in the loop.
-  The `Orchestrator` class itself is split by role into mixins (`orchestrator_reads`, `_planning`,
-  `_answering`, `_judges`, `_deep_models`, `_deep_context`, `_deep_run`, `_cards`, `_oversee`,
-  `_understanding`, `_run`, `_recipes`); `orchestrator.py` keeps `__init__` and re-exports every
-  moved name, and the module-level pieces live in `orchestrator_constants`, `_types`,
-  `_decide_tool`, `_decisions`, `_text`, `_events`, `_capabilities` and `_turn`. Add a method to
-  the mixin that owns that role, not to `orchestrator.py`. `RunMixin.run` is a short dispatcher: its
-  turn is a chain of phase methods (`_run_begin`, `_run_plan_loop`, ...) held in `orchestrator_run_begin`,
-  `_loop`, `_answer` and `_close`, which share one run-local namespace `rs`. The ports (`core/adapters_*`) and
-  `core/goal_runner.py` are split the same way (`adapters_*`, `goal_runner_*`); importers name the defining module, and
-  `core/adapters.py` re-exports only the names the Quest backend imports from it. `core` never imports
-  outward: what it needs from `adapters`/`runner` is injected, and `quest_ai_runner/__init__.py`
-  registers `cli_model` (`goal_runner.set_cli_model_translator`) and the Quest client factory
-  (`tools.set_quest_client_factory`). The same pattern applies to
-  `adapters/file_context_store.py` (`context_*` modules), `runner/quest_client.py`
-  (`quest_client_*`), `runner/context_updates.py` (`context_update_*`, `context_sources_*`),
-  `runner/autopilot.py` (`autopilot_*`), `runner/poller.py` (`poller_*`), `runner/executor.py`
-  (`executor_*`), `config.py` (`config_*`), `cli.py` (`cli_*`: one module per subcommand family, `cli.py` keeps `main()`),
-  `textual_ui.py` (`textual_ui_*`: widgets plus `QuestAITerminal` mixins) and `interactive_session.py`
-  (`interactive_session_*`). A test that monkeypatches a module global patches the
-  module whose code looks the name up, so patch the module that now holds the function.
-- `runner/`: the executor: poll → claim → run → escalate → report.
-- `adapters/`: reference *implementations* of the interfaces: retrieval (`FilesAdapter`,
-  `CachedDbAdapter`, `CompositeRetrievalAdapter`, MCP, Notion, Google), model providers (Anthropic,
-  Gemini, OpenAI, DeepSeek, Claude CLI, behind `MultiProvider`), card stores, vector and hybrid context
-  assemblers, web research, deep runners and conversation stores. `esoi/COMPONENTS.md` is the
-  current list.
-- `config.py`: `RunnerConfig`, the single place a consumer supplies everything specific.
+- **The package mirrors the hub's five containers** (`the_self/`, `the_body/`, `the_intelligence/`, `the_world/`, `the_consciousness/`) and holds a
+  folder only where QAR overrides or adds a solution; the folder path is the hub's solution path (`the_intelligence/mind/planner/` is QAR's arm of the
+  hub's Planner). A solution's records (`solutions.csv`, `implementations.csv`, `metrics.csv`, generated `README.md`) sit in the folder of its code.
+  Quest is the interface: the Quest API client and card stores are Body arms, quests and goals are Objectives under Higher Mind, the task queue
+  and terminal are Request Intake and Terminal under the Consciousness. There are no layer folders (`core/`, `adapters/`, `runner/` are gone).
+- **One front door.** `quest_ai_runner.run("<id>", input)` runs any solution (beside `hubofhubs.run`); `quest_ai_runner/api.py` lists the stable names a
+  host application (the Quest backend) imports, so a module can move without breaking it; `python -m quest_ai_runner <cli|tools|lane|requirements>` is
+  the one stable command line (deep workers and lane scripts call it, never a module path).
+- **The hub only through `hubofhubs.api` and `hubofhubs.run`.** Never import a hub internal path (three modules the hub has not exported yet,
+  `card_origin`, `outage` and `card_selection`, are the open exceptions).
+- The orchestrator loop (`the_intelligence/mind/orchestrator*.py`, split by role into mixins) is the one arm of the hub's Mind that QAR selects today;
+  `the_intelligence/mind/delegation/` holds the deep run and its goal runner. Tests are in `tests/`, evaluation components in `evaluation/components/`.
+- `config`: `RunnerConfig` and the `config_*` modules are in `the_body/configuration/`, the single place a consumer supplies everything specific.
 - `examples/`: runnable reference consumers (env-driven, no real data).
 - `docs/`: four Diataxis folders (`tutorials/`, `how-to/`, `explanation/`, `reference/`), indexed by `docs/README.md`; `esoi docs check` enforces them and `esoi docs wiki` generates the wiki from them (never edit the wiki). A new page goes in exactly one folder and in the index.
 
@@ -67,12 +41,7 @@ evolvable-structure skill, not copied here). **The records live beside the code*
 `README.md` in each of those folders shows its solutions, implementations, metrics and diagram. `esoi/` keeps the top intent (`intent.csv`, why this project
 exists, in its own words, with the generated `README.md` that links to every folder), `components.csv` (placement only), `waivers.csv`, `overrides.csv`,
 `tags.csv`, `hub_seats.csv`, `env_descriptions.csv` and `metric-run-policy.md`, which are not records, and the records that follow no code of the package
-(measuring arms in `evaluation/`, solutions with no code yet). **The areas of QAR are sub-intents**: `quest_ai_runner/<intent id>/` holds the `intent.csv`,
-records and README of `mind`, `subconscious`, `select_context`, `take_in_the_world`, `body`, `critical_thinking`,
-`nervous_system`, `hold_the_intents`, `integrity` and `science`, each arising from the composition arm of its area solution (named back in that
-arm's `sub_intent`). **An area that overrides a hub solution is named by that solution's display name and carries its id** (`mind` is `the-mind`, `subconscious` is `the-subconscious`, `critical_thinking` is `critical-thinking`, `nervous_system` is `nervous-system`, `integrity` is `system-integrity`, `science` is `the-science`, `body` is `the-body`), and its arm offers the hub's entry point of that solution (`think`, `recall`, `evaluate`, `watch`, `audit`, `search`, `describe`) beside QAR's own lines; `take_in_the_world`, `hold_the_intents` and `select_context` override no hub solution yet (see `docs/explanation/hub-of-hubs.md`). **The code only one area uses lives in that area's folder too**: its composition is `area.py` and its exclusive
-modules sit beside it (importers name `quest_ai_runner.<intent id>.<module>`); a module another area, `core` or the
-runner also imports stays in `core/`, `adapters/` or `runner/`, and an area folder is a layer of its own in `esoi.toml`, above `core` and `adapters` at the rank of `runner` (`core` and `adapters` never import it). To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
+(measuring arms in `evaluation/`, solutions with no code yet). **The areas of QAR are sub-intents**: an area is a folder named by its intent id, holding the `intent.csv`, records and README of `mind`, `subconscious`, `context_retriever`, `request_intake`, `internal_context`, `critical_thinking`, `nervous_system`, `objectives`, `integrity` and `science` (under `the_intelligence/`, `the_consciousness/`, `the_body/`, `the_self/` and `the_world/`), each arising from the composition arm of its area solution (named back in that arm's `sub_intent`). The composition arm's code sits in the folder above its intent folder (`the_body/area_body.py`, `the_intelligence/subconscious/area_context_retriever.py`), so the arm's record is owned by the parent intent. The five containers are one rank in `esoi.toml` (they depend on one another in every direction). To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
 program reads the records as one tree (`esoi.intents.read_tree(folder, name)` or `esoi.registry.load`), never one CSV file. `esoi.toml` configures esoi for this repo and
 `scripts/esoi_rules.py` adds QAR's own rules: S15 (environment variables are documented), Q1 (solution tags), Q2 (every metric starts model-free) and Q3 (no generic code left in QAR: a module under `quest_ai_runner/` with no Quest-domain word from `QUEST_DOMAIN_WORDS` and no `hubofhubs` import that its code uses is generic and belongs in the hub; the `Q3` rows of `esoi/waivers.csv` are the hub-migration backlog, and each check prints the waived count). Nothing lives outside a solution:
 a component that serves none (S19) fails the check, and the code is removed rather than waived; a solution with no
@@ -80,7 +49,7 @@ recorded run, or a row whose measured code changed (S20), is advice that never f
 **Swappable parts are declared once, beside their code.** An implementation of a port is a class with
 `@implementation("<solution id>", "<name>")` (from `esoi`), and the `implementations.csv` of its folder lists the same implementation
 with the file it lives in (`esoi records sync` writes a missing row; `esoi check` rule S30 fails a declaration with no
-record). There is no table to keep in step: `core/resolve.py` is a thin entry point over `esoi.runtime` under the scope
+record). There is no table to keep in step: `the_self/assembler/resolve.py` is a thin entry point over `esoi.runtime` under the scope
 `quest_ai_runner`, imports each implementation lazily from the file its record names, and takes the default from the
 solution's `selected` (change it with `esoi select --promote`, then `esoi select --snapshot
 quest_ai_runner/esoi_selection.json`, because an installed copy ships without the records; `tests/test_resolve.py` pins the
@@ -101,10 +70,10 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
 - **Hub requirements and coherence:** `.venv/bin/quest-ai-runner doctor` (unmet requirements with their fix, plus lock status when a lock exists)
   and `.venv/bin/esoi requirements --package quest_ai_runner --coherence --offline` (the selected implementations resolve together; the unmet items it lists are
   keys, programs and variables, not failures). The hub-declared part of `.env.example` is generated by
-  `python -m quest_ai_runner.hub_requirements --write-env-example .env.example`; `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md`.
+  `python -m quest_ai_runner requirements --write-env-example .env.example`; `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md`.
 - **The hub of hubs** (`ai-hub-of-hubs-structure`, a sibling repository; package `hubofhubs`) is a REQUIRED dependency: the
   registry of AI-intelligence hubs, the seats (Protocols), the assembly and the scorer behind sub-metric QME9. QAR imports it at
-  startup in one place, `quest_ai_runner/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
+  startup in one place, `quest_ai_runner/the_self/assembler/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
   beside this repository (pytest `pythonpath` in `pyproject.toml`; `evaluation/components/hub_of_hubs` also puts it on the path)
   rather than pip-installing it. QAR keeps its bindings (`esoi/hub_seats.csv`), probes and Quest adapters; registry facts are
   changed in the hub repository, never copied here (`docs/explanation/hub-of-hubs.md`). Generic assembly, selection, cascade and checking
@@ -146,7 +115,7 @@ adapter implementation in THIS repo (parameterized by connection/config), not du
 consumer; the consumer just wires it. (Anyone using the repo is of course free to write their own.)
 
 Nothing here is frozen. This is pre-release and single-consumer, so the public API in
-`quest_ai_runner.core` (`Mode`, `StreamSink`, `MilestoneSink`, `ProgressEvent`, `Orchestrator`) is
+`quest_ai_runner.api` (`StreamSink`, `MilestoneSink`, `Orchestrator` and the rest of `api.__all__`) is
 free to evolve: change it whenever the design calls for it. Prefer additive, backward-compatible
 changes where they're just as clean, but a breaking change is fine when it's the right shape; just
 keep it generic (hard rule #2 above), update the `CHANGELOG.md` (Unreleased) and any affected docs,
@@ -263,12 +232,12 @@ capabilities that never met, until both were rebuilt as one generic module.
 function inside a consumer, ask "would a second lane need this?" If yes, it is not consumer logic;
 it is a gap in this library, and the fix is here:
 
-- A shared entry-point shape, loop, or process-lifecycle concern → `runner/lane.py` (or a new
+- A shared entry-point shape, loop, or process-lifecycle concern → `the_consciousness/request_intake/lane.py` (or a new
   module next to it), not a copy in your consumer. Start from
   [`docs/tutorials/tutorial-your-first-lane.md`](docs/tutorials/tutorial-your-first-lane.md).
 - A policy for deciding WHO or WHAT handles a task, expressible as data rather than one lane's
   bespoke code → a `RunnerConfig` field with a resolver function beside it (see
-  `runner/personas.py`), documented in [`docs/how-to/personas.md`](docs/how-to/personas.md), not a hand-written
+  `the_consciousness/representatives/personas.py`), documented in [`docs/how-to/personas.md`](docs/how-to/personas.md), not a hand-written
   callable duplicated across consumers.
 - Anything else generic → an adapter interface (hard rule #2) or a new `RunnerConfig` field, per
   the usual rule.

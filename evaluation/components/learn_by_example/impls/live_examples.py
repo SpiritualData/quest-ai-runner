@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.config import RunnerConfig
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
 REPO = Path(__file__).resolve().parents[4]
 EXAMPLES = REPO / "examples"

@@ -14,7 +14,7 @@ import urllib.parse
 
 import pytest
 
-from quest_ai_runner.body.google_drive_adapter import GoogleDriveAdapter, parse_drive_url, DEFAULT_DRIVE_SCOPES
+from quest_ai_runner.the_world.tools.connected_system_operations.google_drive_adapter import GoogleDriveAdapter, parse_drive_url, DEFAULT_DRIVE_SCOPES
 
 
 class _FakeDrive:
@@ -186,7 +186,7 @@ def test_query_list_requires_folder_id():
 def test_query_list_truncates_huge_folder():
     """A folder with more children than _MAX_LIST_FILES is capped, not dumped unbounded into the
     LLM's grounding context (regression test for an unbounded-listing prompt-blowup risk)."""
-    from quest_ai_runner.body import google_drive_adapter as mod
+    from quest_ai_runner.the_world.tools.connected_system_operations import google_drive_adapter as mod
 
     fake = _FakeDrive()
     fake.children = [

@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-from quest_ai_runner.runner import metric_draft
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import metric_draft
 
 HERE = Path(__file__).resolve().parent
 WORD = re.compile(r"[a-z0-9]+")

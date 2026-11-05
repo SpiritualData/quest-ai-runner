@@ -9,10 +9,10 @@ enumerates real files + outlines.
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.adapters import FilesAdapter
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -155,7 +155,7 @@ def test_files_adapter_discovery():
 # CachedDbAdapter discovery
 # ---------------------------------------------------------------------------
 
-from quest_ai_runner.body.cached_db_adapter import CachedDbAdapter
+from quest_ai_runner.the_body.internal_context.quest.cached_db_adapter import CachedDbAdapter
 
 
 def _make_db(rows_by_coll=None, *, sources=None, operations=None, describe=None):

@@ -10,17 +10,12 @@ deferred hand-off brief), and shown to the answer next to the planner analysis.
 
 Fully offline, no model calls.
 """
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_decide_tool import DECIDE_TOOL, decide_tool_for
-from quest_ai_runner.core.orchestrator_decisions import (
-    FACTS_ANSWER_HEAD,
-    FACTS_BRIEF_HEAD,
-    MAX_FACT_CHARS,
-    MAX_FACTS_READ,
-    normalize_decision,
-)
-from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL, decide_tool_for
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import (
+    FACTS_ANSWER_HEAD, FACTS_BRIEF_HEAD, MAX_FACT_CHARS, MAX_FACTS_READ, normalize_decision)
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROFILES
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

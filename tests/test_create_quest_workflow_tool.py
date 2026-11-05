@@ -1,7 +1,7 @@
 """The ``create_quest_workflow`` tool: people resolved by name, the wire body, refusals reported
 honestly, and that it is a registered write."""
-from quest_ai_runner.core import tools_quest_ops as ops
-from quest_ai_runner.core.tools import ToolContext, build_tool_registry
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
+from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
 MEMBERS = [{"user_id": "u1", "name": "Ann Example", "email": "ann@example.invalid"},

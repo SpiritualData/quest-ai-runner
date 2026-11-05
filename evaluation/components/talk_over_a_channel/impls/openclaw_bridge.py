@@ -2,8 +2,8 @@
 injected at the process edge. Zero model calls, zero network."""
 import base64
 
-from quest_ai_runner.adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from quest_ai_runner.core.adapters_channels import OutboundReply
+from quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
+from quest_ai_runner.the_consciousness.request_intake.interface import OutboundReply
 from talk_over_a_channel.fake_gateway import FakeGateway
 
 

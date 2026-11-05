@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Holding the intents across quests](../../../../quest_ai_runner/hold_the_intents/README.md)
+- Owning intent: [Holding the intents across quests](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
 - Repository: [top README](../../../../README.md)

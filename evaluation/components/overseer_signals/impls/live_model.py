@@ -6,7 +6,7 @@ PAID = True
 import os
 
 import common
-from quest_ai_runner.core.overseer import oversee
+from quest_ai_runner.the_intelligence.mind.delegation.overseer import oversee
 
 
 def build(meter):

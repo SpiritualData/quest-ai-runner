@@ -9,7 +9,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 
-from quest_ai_runner import pricing  # noqa: E402
+from quest_ai_runner.the_world.model_plumbing.spend import pricing  # noqa: E402
 
 
 def load_list_price():

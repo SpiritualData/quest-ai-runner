@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.the_body.internal_context.card_store.context_card_extraction import managed_names
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from hubofhubs.api import managed_names
 
 
 def _store(tmp_path: Path) -> FileContextStore:

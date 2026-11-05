@@ -9,8 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPClient, MCPServerSpec
-from quest_ai_runner.body.mcp_write_adapter import MCPWriteAdapter
+from hubofhubs.api import MCPClient, MCPServerSpec
+from quest_ai_runner.the_world.tools.connected_system_operations.mcp_write_adapter import MCPWriteAdapter
 
 SERVER = Path(__file__).resolve().parent.parent / "real_server.py"
 

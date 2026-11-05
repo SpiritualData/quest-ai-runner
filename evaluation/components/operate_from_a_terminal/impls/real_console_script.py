@@ -1,5 +1,5 @@
 """ALTERNATIVE, real console (the single-case arm of ``operate-from-a-terminal``): the commands as an operator types them. Each case starts the
-installed ``quest-ai-runner`` console script (the entry point the package declares; ``python -m quest_ai_runner.tools`` for the
+installed ``quest-ai-runner`` console script (the entry point the package declares; ``python -m quest_ai_runner tools`` for the
 tools entry) as a real child process in a scratch folder with the hermetic environment of the component (the variables esoi.toml scrubs are gone, the
 case's are set, ``HOME`` is the scratch folder), so argument parsing, the process exit code and the real stdout and stderr streams are the ones a person gets. Nothing
 is called in-process and nothing is faked. Zero model calls (a command that would call a model is not among the cases)."""
@@ -19,7 +19,7 @@ def command_line(entry, argv):
     if entry == "qar":
         if CONSOLE.exists():
             return [str(CONSOLE), *argv]
-        return [sys.executable, "-c", "import sys; from quest_ai_runner.cli import main; sys.exit(main(sys.argv[1:]))", *argv]
+        return [sys.executable, "-c", "import sys; from quest_ai_runner.the_consciousness.terminal.cli import main; sys.exit(main(sys.argv[1:]))", *argv]
     if entry == "tools":
         return [sys.executable, "-m", "quest_ai_runner.tools", *argv]
     raise ValueError(entry)

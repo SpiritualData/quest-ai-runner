@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Nervous System](../../../../quest_ai_runner/nervous_system/README.md)
+- Owning intent: [Nervous System](../../../../quest_ai_runner/the_intelligence/nervous_system/README.md)
 - Repository: [top README](../../../../README.md)

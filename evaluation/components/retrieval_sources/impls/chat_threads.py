@@ -3,7 +3,7 @@ document is one Chat thread of short messages. Search is the adapter's ``grep`` 
 read is ``read_section`` of the thread (resolved by its tail id)."""
 import time
 
-from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter, static_token_provider
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import GoogleChatAdapter, static_token_provider
 
 from retrieval import policy
 from retrieval.fakes import CHAT_SPACE, chat_router, network

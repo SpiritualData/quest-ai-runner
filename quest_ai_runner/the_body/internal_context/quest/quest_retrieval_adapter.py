@@ -1,0 +1,600 @@
+"""Quest retrieval adapter — query Quest API for relevant context.
+
+This adapter queries the Quest backend for context related to a goal/task:
+- Goal metadata, notes, related goals
+- Task history and results
+- Cross-environment context discovery
+
+Designed to be composed with file/db adapters via CompositeRetrievalAdapter.
+Intelligently skips Quest queries when not necessary (local-only tasks).
+
+Example:
+    >>> from quest_ai_runner.adapters import CompositeRetrievalAdapter, FilesAdapter, QuestRetrievalAdapter
+    >>> from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    >>> quest_client = QuestClient(base_url="...", api_key="...")
+    >>> files = FilesAdapter("/corpus")
+    >>> quest = QuestRetrievalAdapter(quest_client)
+    >>> retrieval = CompositeRetrievalAdapter([files, quest])
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_body.internal_context.interface import RetrievalAdapter
+from quest_ai_runner.the_intelligence.mind.context_intake.reflections import DEFAULT_PERIODS, collect_reflections
+from esoi import implementation
+
+
+@implementation("gather-evidence", "quest")
+class QuestRetrievalAdapter(RetrievalAdapter):
+    """Query the Quest API for goal, task, and cross-environment context.
+
+    This adapter:
+    - Fetches goal/quest metadata and notes
+    - Reads the person's own reflections (daily review + period review), which are user-scoped
+      and need no ids
+    - Searches related goals and tasks
+    - Supports cross-environment context discovery
+    - Conditionally queries only when goal_id/quest_id is present
+    - Never raises; returns Observation(kind="error") on API failures
+    """
+
+    def __init__(self, quest_client: Any):  # a runner.quest_client.QuestClient (duck-typed)
+        """Initialize with a configured QuestClient.
+
+        Args:
+            quest_client: A QuestClient with base_url, api_key, and team_id set.
+        """
+        self.client = quest_client
+
+    def read_section(
+        self,
+        rel_path: str,
+        *,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        heading: Optional[str] = None,
+        max_bytes: Optional[int] = None,
+    ) -> Observation:
+        """Not supported — Quest context is accessed via query() or discovery methods."""
+        return Observation(
+            kind="error",
+            error="Quest adapter does not support read_section — use query() or list_sources()/describe_source()",
+        )
+
+    def grep(
+        self, pattern: str, *, scope: Optional[str] = None, max_hits: Optional[int] = None
+    ) -> Observation:
+        """Not supported — use query() for structured lookups."""
+        return Observation(
+            kind="error",
+            error="Quest adapter does not support grep — use query()",
+        )
+
+    def query(self, spec: Dict[str, Any]) -> Observation:
+        """Structured lookup against Quest API.
+
+        Supports:
+        - goal_context: fetch goal metadata, notes, related goals (requires goal_id + quest_id)
+        - quest_context: fetch quest metadata and goals (requires quest_id)
+        - reflection_context: fetch the person's own latest daily + period reflections (no ids)
+        - task_history: fetch one task in full, including the result the person read (requires
+          task_id; a goal note answering an email names the task it answers)
+        - cross_env_search: search related goals/tasks across envs (future)
+
+        When exact IDs aren't available, use list_sources() first to discover quests,
+        then describe_source() to drill into a specific quest.
+
+        Spec format (example):
+            {
+                "kind": "goal_context",
+                "goal_id": "goal_123",
+                "quest_id": "quest_456",
+                "include_notes": true
+            }
+        """
+        if not self.client.configured:
+            return Observation(kind="error", error="Quest client not configured")
+
+        kind = spec.get("kind", "")
+        try:
+            if kind == "goal_context":
+                return self._query_goal_context(spec)
+            elif kind == "quest_context":
+                return self._query_quest_context(spec)
+            elif kind == "reflection_context":
+                return self._query_reflection_context(spec)
+            elif kind == "task_history":
+                return self._query_task_history(spec)
+            elif kind == "cross_env_search":
+                return self._query_cross_env(spec)
+            else:
+                return Observation(
+                    kind="error",
+                    error=f"Unknown query kind: {kind}. Use list_sources() to discover quests first, or describe_source() to explore a specific quest.",
+                )
+        except Exception as e:  # noqa: BLE001
+            return Observation(kind="error", error=f"Quest query error: {type(e).__name__}: {e}")
+
+    def _query_goal_context(self, spec: Dict[str, Any]) -> Observation:
+        """Fetch goal metadata, notes, and related context."""
+        goal_id = spec.get("goal_id")
+        quest_id = spec.get("quest_id")
+        include_notes = spec.get("include_notes", True)
+        include_related = spec.get("include_related", False)
+
+        if not goal_id or not quest_id:
+            return Observation(
+                kind="error",
+                error="goal_context query requires goal_id and quest_id. Use list_sources() to discover available quests, then describe_source('quest/<id>') to see its goals.",
+            )
+
+        text_parts = []
+
+        # Fetch goal metadata
+        goal = self.client.get_goal(goal_id, quest_id=quest_id)
+        if goal:
+            text_parts.append(f"Goal: {goal.get('name', goal_id)}")
+            if goal.get("description"):
+                text_parts.append(f"Description: {goal['description']}")
+            if goal.get("deadline"):
+                text_parts.append(f"Deadline: {goal['deadline']}")
+            completed = goal.get("completed")
+            if completed is not None:
+                text_parts.append(f"Status: {'completed' if completed else 'in progress'}")
+
+        # Fetch the goal's own update thread -- the per-goal check-in feed the Quest product
+        # actually writes to (see ``_fetch_goal_updates`` for why this replaced a plain
+        # ``list_goal_notes`` call here).
+        if include_notes:
+            rows = self._render_goal_update_rows(self._fetch_goal_updates(goal_id, quest_id))
+            if rows:
+                text_parts.append("\nGoal updates (the person's own words on this goal, newest first):")
+                text_parts.extend(rows)
+
+        # Could fetch related goals here if include_related=True
+        # (requires additional API methods)
+
+        text = "\n".join(text_parts) if text_parts else ""
+        return Observation(
+            kind="query",
+            text=text,
+            rel_path=f"quest://goal/{goal_id}",
+        )
+
+    def _fetch_goal_updates(self, goal_id: str, quest_id: Optional[str]) -> List[Dict[str, Any]]:
+        """This goal's own check-in thread, falling back to the older per-goal notes route.
+
+        ``list_goal_updates`` is the Quest product's per-goal update feed and what the reference
+        backend actually serves. ``list_goal_notes`` -- the ORIGINAL source both call sites below
+        used -- hits a route the reference backend has never implemented, so it always returned
+        nothing; it is kept only as a fallback for a deployment that does implement it. Duck-typed
+        via getattr, not called directly like the rest of this class's ``self.client.*`` calls,
+        because ``list_goal_updates`` is new enough that not every consumer's client carries it.
+        """
+        list_goal_updates = getattr(self.client, "list_goal_updates", None)
+        if callable(list_goal_updates):
+            try:
+                updates = list(list_goal_updates(goal_id, limit=5) or [])
+                if updates:
+                    return updates
+            except Exception:  # noqa: BLE001
+                pass  # API unavailable or error; fall through to the per-goal notes route
+        list_goal_notes = getattr(self.client, "list_goal_notes", None)
+        if callable(list_goal_notes):
+            try:
+                return list(list_goal_notes(goal_id, quest_id=quest_id, limit=5) or [])
+            except Exception:  # noqa: BLE001
+                pass  # API unavailable or error; continue with what we have
+        return []
+
+    def _render_goal_update_rows(self, updates: List[Dict[str, Any]]) -> List[str]:
+        """One bullet per update, tolerant of either source's shape: ``list_goal_updates`` gives
+        ``note``/``userName``/``createdAt``, the ``list_goal_notes`` fallback gives
+        ``text``/``author_name``/``created_at`` -- one renderer for either, so a caller never needs
+        to know which route actually answered.
+        """
+        lines = []
+        for update in updates:
+            text = update.get("note") or update.get("text") or ""
+            if not text:
+                continue
+            who = str(update.get("userName") or update.get("author_name") or "").strip()
+            when = str(update.get("createdAt") or update.get("created_at") or "")[:10]
+            stamp = f"[{when}] " if when else ""
+            prefix = f"({who}) " if who else ""
+            lines.append(f"  • {stamp}{prefix}{text}")
+        return lines
+
+    # Cap on how many decisions ever go into one context block: this is grounding for the AI
+    # doing the work, not a full decision log, and a quest that has accumulated many should not
+    # push everything else out of the preamble.
+    MAX_DECISIONS_IN_CONTEXT = 10
+
+    def fetch_quest_decisions(self, quest_id: str) -> List[Dict[str, Any]]:
+        """This quest's decisions (open and resolved), or [] if the client can't fetch them.
+
+        Duck-typed via getattr like ``_fetch_goal_updates`` above: ``list_decisions_for_quest`` is
+        new enough that not every consumer's client (a test double, an older pin) carries it.
+        """
+        list_decisions = getattr(self.client, "list_decisions_for_quest", None)
+        if not callable(list_decisions):
+            return []
+        try:
+            return list(list_decisions(quest_id) or [])
+        except Exception:  # noqa: BLE001 — a decisions lookup must never break quest context
+            return []
+
+    @staticmethod
+    def flatten_quest_goals(goals_response: Any) -> List[Dict[str, Any]]:
+        """Flatten ``QuestClient.list_quest_goals``' period-grouped response into one flat list.
+
+        The real response shape is ``{quest_id, outcome, period_groups: [{..., goals: [...]}]}}``
+        (goals grouped by time period), not a flat list -- iterating the dict directly (its OLD
+        behavior here) silently yielded dict KEYS, and every call also passed a ``limit=`` kwarg
+        the method never accepted, raising ``TypeError`` on every single call (caught by the
+        surrounding ``except Exception`` in ``query()``, so ``quest_context`` always came back
+        ``kind="error"`` with no goals -- or the decisions block below -- ever shown). Tolerant of
+        already being a flat list too, so a future/alternate client shape is not broken by this.
+        """
+        if isinstance(goals_response, list):
+            return [g for g in goals_response if isinstance(g, dict)]
+        flat: List[Dict[str, Any]] = []
+        for group in (goals_response or {}).get("period_groups") or []:
+            flat.extend(g for g in (group.get("goals") or []) if isinstance(g, dict))
+        return flat
+
+    def render_quest_decisions(self, decisions: List[Dict[str, Any]]) -> List[str]:
+        """Compact "what's already been asked/answered on this quest" block.
+
+        Open decisions first (so the reader sees what's still pending before older history),
+        then the most recent resolved ones, capped at ``MAX_DECISIONS_IN_CONTEXT`` total. The
+        closing instruction is the point of including this at all: a rep with no memory of past
+        turns would otherwise re-raise a question that was already asked (a duplicate open
+        decision) or already answered (re-asking something settled).
+        """
+        opens = [d for d in decisions if str(d.get("status") or "").strip().lower() == "open"]
+        resolved = [d for d in decisions if str(d.get("status") or "").strip().lower() not in ("open", "")]
+        ordered = (opens + resolved)[: self.MAX_DECISIONS_IN_CONTEXT]
+        if not ordered:
+            return []
+
+        lines = ["\nDecisions already raised on this quest (do not duplicate an OPEN one below, "
+                "and do not re-ask a RESOLVED one -- it is settled):"]
+        for d in ordered:
+            summary = (d.get("summary") or "").strip() or "(no summary)"
+            status = str(d.get("status") or "").strip().lower() or "unknown"
+            if status == "open":
+                lines.append(f"  • OPEN: {summary}")
+                continue
+            resolution = (d.get("resolution") or "").strip()
+            response = (d.get("response_text") or "").strip()
+            resolver = (d.get("resolved_by_name") or "").strip()
+            auto = bool(d.get("auto_resolved"))
+            tail_bits = []
+            if resolution:
+                tail_bits.append(resolution)
+            if response:
+                tail_bits.append(f'"{response}"')
+            if resolver:
+                tail_bits.append(f"by {resolver}")
+            elif auto:
+                tail_bits.append("auto-resolved on its deadline")
+            tail = ", ".join(tail_bits) if tail_bits else status
+            lines.append(f"  • RESOLVED: {summary} -> {tail}")
+        return lines
+
+    def _query_quest_context(self, spec: Dict[str, Any]) -> Observation:
+        """Fetch quest metadata and list its goals."""
+        quest_id = spec.get("quest_id")
+
+        if not quest_id:
+            return Observation(
+                kind="error",
+                error="quest_context query requires quest_id. Use list_sources() to discover available quests.",
+            )
+
+        text_parts = []
+
+        # Fetch quest metadata
+        quest = self.client.get_quest(quest_id)
+        if quest:
+            text_parts.append(f"Quest: {quest.get('name', quest_id)}")
+            if quest.get("outcome"):
+                text_parts.append(f"Outcome: {quest['outcome']}")
+            completed = quest.get("completed")
+            if completed is not None:
+                text_parts.append(f"Status: {'completed' if completed else 'in progress'}")
+
+        # Fetch goals in this quest
+        goals = self.flatten_quest_goals(self.client.list_quest_goals(quest_id))
+        if goals:
+            text_parts.append("\nGoals in this quest:")
+            for goal in goals:
+                goal_id = goal.get("id") or goal.get("goal_id", "?")
+                goal_name = goal.get("name", goal_id)
+                text_parts.append(f"  • {goal_name} ({goal_id})")
+
+        # What's already been asked and answered on this quest, so the reader doesn't re-raise a
+        # duplicate or re-ask something already settled (see render_quest_decisions).
+        text_parts.extend(self.render_quest_decisions(self.fetch_quest_decisions(quest_id)))
+
+        text = "\n".join(text_parts) if text_parts else ""
+        return Observation(
+            kind="query",
+            text=text,
+            rel_path=f"quest://{quest_id}",
+        )
+
+    def _query_reflection_context(self, spec: Dict[str, Any]) -> Observation:
+        """Fetch the person's own latest reflection: one period review (week/month/...).
+
+        Needs no goal_id or quest_id — reflections live on the USER. This exists because a planner
+        asked to work "based on my reflection" previously had no action that could go and get one,
+        so the best it could do was say it did not have the text and ask the person to paste it.
+        Now it can read it.
+
+        The DAILY plan's free text (how yesterday went, what they planned for the day) is
+        deliberately NEVER included here, whatever ``include_daily`` says. Quest now asks an LLM to
+        split that text into per-quest notes at reflection time, and those notes already reach the
+        quest they were assigned to through its own notes (any conversation scoped to a quest can
+        read that quest's own notes). Reading the WHOLE daily reflection here would defeat that
+        scoping: whichever quest this conversation is scoped to would learn what the person wrote
+        about every OTHER quest too, and a request is not evidence the person wants that. The
+        ``include_daily`` key is still accepted so an older caller does not get a TypeError, it is
+        simply ignored.
+
+        An absence is reported as a normal result, not an error: "the person has not written one"
+        is a true, useful answer, and returning kind="error" would read as "this lookup is broken"
+        and push the planner back into asking the human for text it just verified does not exist.
+        """
+        periods = spec.get("periods") or spec.get("period") or DEFAULT_PERIODS
+        if isinstance(periods, str):
+            periods = [periods]
+        use_previous = bool(spec.get("use_previous", False))
+
+        ctx = collect_reflections(
+            self.client,
+            include_daily=False,
+            periods=list(periods),
+            use_previous=use_previous,
+        )
+        if not ctx.has_any():
+            checked = ", ".join(ctx.checked_periods) or "no period"
+            return Observation(
+                kind="query",
+                locator="reflection_context",
+                rel_path="quest://reflections",
+                text=("No period reflection is recorded on Quest right now. Checked the "
+                      f"{checked} review; the person has not submitted one. This does not cover "
+                      "the daily reflection's free text -- read this quest's own notes for what "
+                      "the person said about it specifically. Do not invent what either might "
+                      "have said."),
+            )
+        return Observation(
+            kind="query",
+            locator="reflection_context",
+            rel_path="quest://reflections",
+            text=ctx.as_text(),
+        )
+
+    # How much of a task's result to hand back. A brief is a page; anything past this is a report
+    # that was written to a file, and the run asked for the message, not the archive.
+    MAX_RESULT_CHARS = 20000
+
+    def _query_task_history(self, spec: Dict[str, Any]) -> Observation:
+        """One task in full: what it was asked to do and what it produced.
+
+        This is the far end of an emailed reply. A note the person sent back by mail names the task
+        whose result they were reading, and this is how a run reads that result IN FULL. Without
+        it, the only thing a run has to match a reply against is the run-history block, which
+        carries 300 characters of each recent result: enough to see that a brief happened, not
+        enough to know what "yes, do that" is agreeing to.
+
+        Fetched on demand rather than pasted into every prompt, because most runs never need it
+        and a reply-heavy quest would otherwise carry its whole outbox in context.
+        """
+        task_id = spec.get("task_id")
+        if not task_id:
+            return Observation(
+                kind="error",
+                error=("task_history query requires task_id. A goal note that answers one of your "
+                       "emails names it (\"task atask_...\"); pass that id here to read the "
+                       "message being answered."),
+            )
+
+        task = self.client.get_task(task_id) or {}
+        if not task:
+            return Observation(
+                kind="error",
+                error=(f"No task {task_id} is readable on this Quest account. It may have been "
+                       "deleted, or belong to a different account."),
+            )
+
+        parts = [f"Task: {task.get('title') or task_id}"]
+        for label, key in (("Status", "status"), ("Scheduled", "scheduled_for"),
+                           ("Updated", "updated_at")):
+            value = task.get(key)
+            if value:
+                parts.append(f"{label}: {value}")
+        if (task.get("text") or "").strip():
+            parts.append(f"\nWhat it was asked to do:\n{task['text'].strip()}")
+        result = (task.get("result") or "").strip()
+        if result:
+            if len(result) > self.MAX_RESULT_CHARS:
+                result = result[:self.MAX_RESULT_CHARS].rstrip() + "\n\n[truncated]"
+            parts.append(f"\nWhat it produced (this is what the person read):\n{result}")
+        else:
+            parts.append("\nThis task produced no result text.")
+
+        return Observation(
+            kind="query",
+            text="\n".join(parts),
+            rel_path=f"quest://task/{task_id}",
+        )
+
+    def _query_cross_env(self, spec: Dict[str, Any]) -> Observation:
+        """Search related goals/tasks across external environments (future)."""
+        return Observation(
+            kind="error",
+            error="cross_env_search not yet implemented",
+        )
+
+    def list_sources(self) -> Observation:
+        """DISCOVERY: list available Quest context sources.
+
+        Returns sources in "name: description" format for compatibility with
+        CompositeRetrievalAdapter. Format: "quest/<id>: <outcome>" per line.
+        """
+        if not self.client.configured:
+            return Observation(kind="error", error="Quest client not configured")
+
+        try:
+            quests = self.client.list_quests()
+            if not quests:
+                return Observation(
+                    kind="error",
+                    error="No quests available on this Quest instance.",
+                )
+
+            lines = []
+            for quest in quests[:20]:  # Limit display to avoid explosion
+                quest_id = quest.get("quest_id", "?")
+                outcome = quest.get("outcome", "unknown")
+                lines.append(f"quest/{quest_id}: {outcome}")
+
+            return Observation(kind="query", text="\n".join(lines))
+        except Exception as e:  # noqa: BLE001
+            return Observation(kind="error", error=f"list_sources failed: {e}")
+
+    def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
+        """DISCOVERY: drill down into a specific quest or goal.
+
+        Supports:
+        - describe_source("quest/quest_id") — shows quest metadata and its goals
+        - describe_source("goal/goal_id") — shows goal details and notes
+        """
+        if not self.client.configured:
+            return Observation(kind="error", error="Quest client not configured")
+
+        # Parse name as "quest/quest_id" or "goal/goal_id"
+        try:
+            kind, source_id = name.split("/", 1)
+        except ValueError:
+            return Observation(kind="error", error=f"Invalid source name: {name}. Use 'quest/quest_id' or 'goal/goal_id'")
+
+        try:
+            if kind == "quest":
+                quest = self.client.get_quest(source_id)
+                if not quest:
+                    return Observation(kind="error", error=f"Quest not found: {source_id}")
+
+                lines = [
+                    f"Quest: {quest.get('name', source_id)}",
+                    f"Outcome: {quest.get('outcome', 'unknown')}",
+                    f"Status: {'completed' if quest.get('completed') else 'in progress'}",
+                ]
+
+                # Include goals in this quest
+                goals = self.flatten_quest_goals(self.client.list_quest_goals(source_id))
+                if goals:
+                    lines.append("\nGoals:")
+                    for goal in goals:
+                        goal_id = goal.get("id") or goal.get("goal_id", "?")
+                        goal_name = goal.get("name", goal_id)
+                        lines.append(f"  • {goal_name} ({goal_id})")
+
+                lines.extend(self.render_quest_decisions(self.fetch_quest_decisions(source_id)))
+
+                return Observation(kind="query", text="\n".join(lines))
+
+            elif kind == "goal":
+                # For goal, we need the quest_id (passed via path parameter or list_sources discovery)
+                quest_id = path
+                if not quest_id:
+                    return Observation(
+                        kind="error",
+                        error=f"To describe goal {source_id}, provide its quest_id via the path parameter: describe_source('goal/{source_id}', path='quest_id')",
+                    )
+
+                goal = self.client.get_goal(source_id, quest_id=quest_id)
+                if not goal:
+                    return Observation(kind="error", error=f"Goal not found: {source_id}")
+
+                lines = [
+                    f"Goal: {goal.get('name', source_id)}",
+                    f"Description: {goal.get('description', 'N/A')}",
+                    f"Deadline: {goal.get('deadline', 'N/A')}",
+                    f"Status: {'completed' if goal.get('completed') else 'in progress'}",
+                ]
+
+                # Same update thread as _query_goal_context above, so describing a goal this way
+                # surfaces the same material a goal_context query would.
+                rows = self._render_goal_update_rows(self._fetch_goal_updates(source_id, quest_id))
+                if rows:
+                    lines.append("\nGoal updates (the person's own words on this goal, newest first):")
+                    lines.extend(rows)
+
+                return Observation(kind="query", text="\n".join(lines))
+
+            else:
+                return Observation(kind="error", error=f"Unknown source kind: {kind}. Use 'quest/ID' or 'goal/ID'")
+        except Exception as e:  # noqa: BLE001
+            return Observation(kind="error", error=f"describe_source failed: {e}")
+
+    def list_operations(self) -> Observation:
+        """DISCOVERY: operations the brain can invoke.
+
+        Returns operations in "name: description" format for compatibility with
+        CompositeRetrievalAdapter.
+        """
+        lines = [
+            "get_goal_context: Fetch goal metadata and the goal's own update thread (the "
+            "person's check-in notes on that specific goal) from Quest",
+            "query_quest: Query a specific quest for goals and metadata",
+            "discover_goals: List goals available in a quest",
+            "get_reflection_context: Fetch the person's own latest period review from Quest (their "
+            "week/month review of how it went and what to focus on next). Needs no ids. Does NOT "
+            "cover the daily reflection's free text -- that is split into notes on the quest(s) it "
+            "concerns, so read this quest's own notes for that instead. Use this whenever a "
+            "request refers to their week or month review, or what they said they want to focus "
+            "on next",
+            "get_task: Read one task in full, including the result the person received. Use it "
+            "when a goal note answers one of your emails and names the task it answers",
+        ]
+        return Observation(kind="query", locator="list_operations", text="\n".join(lines))
+
+    def describe_operation(self, name: str) -> Observation:
+        """DISCOVERY: full signature and usage for an operation."""
+        ops = {
+            "get_goal_context": "Fetch goal metadata, deadline, and the goal's own update thread "
+            "(the person's check-in notes on that specific goal, newest first) from Quest. Usage: "
+            "query({kind: 'goal_context', goal_id: '...', quest_id: '...', include_notes: true})",
+            "query_quest": "Query a specific quest for metadata and status. Usage: query({kind: 'goal_context', quest_id: '...'})",
+            "discover_goals": "List goals within a quest. Usage: list_sources() to discover available quests, then query() with goal_id from context.",
+            "get_task": (
+                "Read one task in full: what it was asked to do, and the result text the person "
+                "actually received. This is how you read the message an emailed reply is "
+                "answering, instead of inferring it from the truncated run history. "
+                "Usage: query({kind: 'task_history', task_id: 'atask_...'})"
+            ),
+            "get_reflection_context": (
+                "Fetch what the person themselves last wrote in their most recent submitted "
+                "period review: 'how did it go' and 'what to focus on next'. USER-scoped, so no "
+                "goal_id or quest_id is needed or accepted. Usage: query({kind: "
+                "'reflection_context', periods: ['week', 'month'], use_previous: false}). All "
+                "fields optional; periods may be any of week/month/quarter/year, tried in the "
+                "order given, first submitted review wins. This does NOT cover the daily "
+                "reflection's free text (how yesterday went, today's plan) -- that is split into "
+                "verbatim notes on the quest(s) it concerns at reflection time, so read THIS "
+                "quest's own notes for what the person said about it specifically, rather than "
+                "asking for it here. When nothing is on record it returns a plain statement to "
+                "that effect, not an error, so read it before telling the person you cannot see "
+                "their reflection."
+            ),
+        }
+        desc = ops.get(name)
+        if desc:
+            return Observation(kind="query", text=desc)
+        return Observation(kind="error", error=f"Unknown operation: {name}")

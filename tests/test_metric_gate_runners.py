@@ -30,19 +30,19 @@ from typing import Any, Dict, List, Optional
 import pytest
 from esoi import scaffold
 
-from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditRunner
-from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
-from hubofhubs.the_world.tools.deep import WriteResult
-from quest_ai_runner.body import acp_deep_runner as acp
-from quest_ai_runner.body.files_writer import FilesWriter
-from hubofhubs.the_world.tools.delegated_agent_sessions import stream_runner as hub_stream
-from quest_ai_runner.body import goal_runner_stream
-from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.body.goal_runner_stream import StreamJsonGoalRunner
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import PlanDecision
-from quest_ai_runner.core.tools import ToolContext, build_tool_registry
+from hubofhubs.api import FastEditRunner
+from hubofhubs.api import MCPOperationRunner
+from hubofhubs.api import WriteResult
+from quest_ai_runner.the_world.tools.delegated_agent_sessions import acp_deep_runner as acp
+from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
+from hubofhubs.api import stream_runner as hub_stream
+from quest_ai_runner.the_world.tools.delegated_agent_sessions import goal_runner_stream
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import NUDGE_BRIEF
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import PlanDecision
+from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
 
 from .conftest import StubProvider
 from .test_acp_deep_runner import FakeConn, config as acp_config, install_fake_connection
@@ -424,7 +424,7 @@ def test_the_acp_agent_is_given_the_run_id_in_its_environment(tmp_path):
 def test_an_acp_edit_that_failed_or_a_read_that_completed_is_no_change():
     kinds: Dict[str, str] = {}
     names: Dict[str, str] = {}
-    from quest_ai_runner.adapters.acp_deep_runner_protocol import landed_file_change
+    from hubofhubs.api import landed_file_change
     assert landed_file_change({"sessionUpdate": "tool_call", "toolCallId": "e1", "kind": "edit", "status": "pending"},
                               kinds, names) is None
     assert landed_file_change({"sessionUpdate": "tool_call_update", "toolCallId": "e1", "status": "failed"},
@@ -438,7 +438,7 @@ def test_an_acp_edit_that_failed_or_a_read_that_completed_is_no_change():
 def test_an_acp_tool_named_as_a_file_edit_counts_when_it_declares_no_kind():
     kinds: Dict[str, str] = {}
     names: Dict[str, str] = {}
-    from quest_ai_runner.adapters.acp_deep_runner_protocol import landed_file_change
+    from hubofhubs.api import landed_file_change
     update = {"sessionUpdate": "tool_call", "toolCallId": "w1", "status": "completed",
               "_meta": {"claudeCode": {"toolName": "Write"}}}
     assert landed_file_change(update, kinds, names) == "w1"

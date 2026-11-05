@@ -19,13 +19,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from quest_ai_runner.adapters.drive_comments import (
-    COMMENT_WRITE_SCOPES,
-    DriveComments,
-    MAX_COMMENT_CHARS,
-    render_comments,
-    unanswered,
-)
+from quest_ai_runner.the_body.intake_sources.drive_comments import COMMENT_WRITE_SCOPES, DriveComments, MAX_COMMENT_CHARS, render_comments, unanswered
 
 SINCE = datetime(2026, 9, 1, 0, 0, 0, tzinfo=timezone.utc)
 
@@ -260,7 +254,7 @@ def test_html_entities_in_comment_and_quote_are_decoded():
     person's own words, and a run trying to find the quoted passage in the document searches for
     a string that is not in it.
     """
-    from quest_ai_runner.adapters.drive_comments import DriveComments
+    from quest_ai_runner.the_body.intake_sources.drive_comments import DriveComments
 
     dc = DriveComments(token_provider=lambda: "t")
     comment = dc._parse_comment(

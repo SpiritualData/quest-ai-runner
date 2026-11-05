@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402
 from esoi import harness  # noqa: E402
-from quest_ai_runner import usage  # noqa: E402
+from quest_ai_runner.the_world.model_plumbing.spend import usage  # noqa: E402
 
 OUT = HERE.parents[1] / "traces" / "justified_model_spend"   # outside code_paths: a new trace does not stale the owner rows it describes
 

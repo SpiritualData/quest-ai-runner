@@ -6,9 +6,9 @@ and it is metered like every other call so an arm's call, token and time totals 
 API key from the environment, so the run costs no API dollars; the dollar figures it reports are list-price equivalents."""
 import common  # noqa: F401  (puts the repository on the path)
 from esoi.harness import BudgetExceeded
-from quest_ai_runner import usage
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli import extract_json_object
-from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
+from quest_ai_runner.the_world.model_plumbing.spend import usage
+from hubofhubs.api import extract_json_object
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
 
 JUDGE_MODEL = "claude-sonnet"   # family alias; the CLI resolves it to the newest sonnet
 JUDGE_TAG = "eval.judge"

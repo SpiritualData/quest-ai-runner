@@ -3,11 +3,11 @@
 ``pricing.py`` table, driven with fake providers. Zero model calls, zero network."""
 
 from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.retry import format_provider_error, retry_transient
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.router import MultiProvider
+from hubofhubs.api import format_provider_error, retry_transient
+from hubofhubs.api import MultiProvider
 from model_providers import fakes
-from quest_ai_runner import pricing
-from quest_ai_runner.adapters.dryrun_provider import DryRunProvider
+from quest_ai_runner.the_world.model_plumbing.spend import pricing
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.dryrun_provider import DryRunProvider
 
 PLAN_SCHEMA = {"name": "plan", "input_schema": {"type": "object", "properties": {}}}
 

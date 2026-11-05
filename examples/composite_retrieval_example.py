@@ -14,9 +14,10 @@ import json
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.adapters import ClaudeConversationsAdapter, FilesAdapter
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 
 
 def setup_example_corpus():

@@ -26,15 +26,15 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.delegated_agent_sessions import acp_runner as hub_acp_runner
-from quest_ai_runner.body import acp_deep_runner as acp
-from hubofhubs.the_world.tools.delegated_agent_sessions import acp_config
-from hubofhubs.the_world.tools.deep import DeepRunner
-from hubofhubs.the_world.tools.events import EVENT_EXEC
-from quest_ai_runner.core.adapters_values import Escalation
-from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
-from hubofhubs.the_body.internal_context.run_store.execution_record import classify_exec_phase
-from quest_ai_runner.core.inbox import InMemoryInbox
+from hubofhubs.api import acp_runner as hub_acp_runner
+from quest_ai_runner.the_world.tools.delegated_agent_sessions import acp_deep_runner as acp
+from hubofhubs.api import acp_config
+from hubofhubs.api import DeepRunner
+from hubofhubs.api import EVENT_EXEC
+from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
+from hubofhubs.api import classify_exec_phase
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 
 
 # --- scripted fake ACP connection --------------------------------------------------------------
@@ -187,7 +187,7 @@ def test_web_capability_derives_from_the_same_tool_gating():
 def test_runner_is_reported_as_a_code_and_web_capability():
     """``config.derive_capabilities`` reads ``deep_runner.cfg.web_enabled()`` generically, so this
     runner must advertise itself through exactly the same path the subprocess one does."""
-    from quest_ai_runner.config import RunnerConfig, derive_capabilities
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig, derive_capabilities
 
     cfg = RunnerConfig(deep_runner=acp.AcpDeepRunner(config()))
     caps = derive_capabilities(cfg)

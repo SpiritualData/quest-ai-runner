@@ -5,9 +5,9 @@ composite merges, dedupes and attributes. ``read`` tries ``read_section`` (first
 falls back to a query by id for a row that no file read can see."""
 import re
 
-from quest_ai_runner.body.cached_db_adapter import CachedDbAdapter
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.adapters.files_adapter import FilesAdapter
+from quest_ai_runner.the_body.internal_context.quest.cached_db_adapter import CachedDbAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
 from retrieval import policy
 from retrieval_sources.impls.cached_db import COLLECTION, ROW_ID, make_fetch

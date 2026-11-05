@@ -8,30 +8,14 @@ the backend turns a change into an ask, and items the user did not ask for never
 """
 import pytest
 
-from quest_ai_runner.core.quest_field_instructions import (
-    GOAL_PERIOD_NUANCES,
-    ITEM_INSTRUCTIONS,
-    QUEST_FIELD_INSTRUCTIONS,
-    goal_instructions_text,
-    period_kind,
-    render_compact_block,
-    render_markdown,
-)
-from quest_ai_runner.core.tools_quest_standard import (
-    QUEST_DATA_TOOLS,
-    QUEST_FIELD_TOOLS,
-    add_measurable_outcome_spec,
-    add_quest_strategy_spec,
-    create_quest_goal_spec,
-    create_quest_habit_spec,
-    quest_field_tool_spec,
-)
-from quest_ai_runner.core.tools import ToolContext, build_tool_registry
-from quest_ai_runner.core.tools_quest_experiments import (
-    create_quest_experiment_spec,
-    find_quest_experiments_spec,
-    update_quest_experiment_spec,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_field_instructions import (
+    GOAL_PERIOD_NUANCES, ITEM_INSTRUCTIONS, QUEST_FIELD_INSTRUCTIONS, goal_instructions_text, period_kind, render_compact_block, render_markdown)
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import (
+    QUEST_DATA_TOOLS, QUEST_FIELD_TOOLS, add_measurable_outcome_spec, add_quest_strategy_spec, create_quest_goal_spec, create_quest_habit_spec,
+    quest_field_tool_spec)
+from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_experiments import (
+    create_quest_experiment_spec, find_quest_experiments_spec, update_quest_experiment_spec)
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
 
@@ -395,7 +379,7 @@ def test_experiment_tools_are_standard_and_selected_by_their_words():
 
 
 def test_experiment_search_ignores_filler_stems_and_the_default_questions_context():
-    from quest_ai_runner.core.tools_quest_experiments import search_experiments
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_experiments import search_experiments
     rows = FakeQuestClient.experiments + [
         {"research_question_id": "rq_ctx", "kind": "default", "status": "open",
          "question": "What will it take to run a marathon?",
@@ -458,7 +442,7 @@ def test_experiment_purpose_sub_questions_and_assumptions_flow_through_create_up
 
 
 def test_delete_experiment_previews_then_needs_confirmation_and_spares_the_default():
-    from quest_ai_runner.core.tools_quest_experiments import delete_quest_experiment_spec
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_experiments import delete_quest_experiment_spec
     class Deleting(FakeQuestClient):
         def delete_experiment(self, quest_id, rid):
             self.calls.append(("delete_experiment", quest_id, rid))
@@ -484,7 +468,7 @@ def test_delete_experiment_previews_then_needs_confirmation_and_spares_the_defau
 
 
 def test_a_quest_tool_with_no_quest_tells_the_planner_how_to_fix_the_call():
-    from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT, _QUEST_ID_PARAM
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import NO_QUEST_HINT, _QUEST_ID_PARAM
     client = FakeQuestClient()
     spec = create_quest_goal_spec({}, client_factory=factory(client))
     refused = spec.handler({"title": "Call the plumber", "period": "2026_W44", "user_asked_for_this_field": True},

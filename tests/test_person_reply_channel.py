@@ -16,13 +16,9 @@ faults broke it, each of them silent:
 """
 from __future__ import annotations
 
-from quest_ai_runner.runner.executor_contracts import (
-    PERSON_NOTE_FLOOR,
-    REPLY_LOOP_CONTRACT,
-    describe_reply_target,
-    render_goal_notes,
-)
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.executor_contracts import (
+    PERSON_NOTE_FLOOR, REPLY_LOOP_CONTRACT, describe_reply_target, render_goal_notes)
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 
 def person(text: str, *, name: str = "Ada", when: str = "2026-08-14") -> dict:
@@ -174,8 +170,8 @@ def test_a_client_that_can_answer_nothing_invents_no_data():
     """No notes, captures or history means no DATA, only the standing rules (how to write a result,
     and what to do about a blocker), which are behaviour rather than something fetched, so they must
     not depend on a client answering."""
-    from quest_ai_runner.runner.executor_contracts import KEEP_GOING_CONTRACT
-    from quest_ai_runner.runner.executor import RESULT_IS_THE_WORK_CONTRACT
+    from quest_ai_runner.the_consciousness.request_intake.executor_contracts import KEEP_GOING_CONTRACT
+    from quest_ai_runner.the_consciousness.request_intake.executor import RESULT_IS_THE_WORK_CONTRACT
 
     class Bare:
         pass
@@ -479,7 +475,7 @@ BRIEF = {"task_id": "atask_1", "title": "Weekly reading brief", "status": "done"
 
 
 def adapter_for(tasks):
-    from quest_ai_runner.body.quest_retrieval_adapter import QuestRetrievalAdapter
+    from quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
     return QuestRetrievalAdapter(TaskClient(tasks))
 
 
@@ -507,7 +503,7 @@ def test_a_task_that_is_not_there_is_said_plainly_not_invented():
 
 
 def test_a_report_sized_result_is_truncated_rather_than_flooding_the_run():
-    from quest_ai_runner.body.quest_retrieval_adapter import QuestRetrievalAdapter
+    from quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
 
     huge = dict(BRIEF, result="x" * (QuestRetrievalAdapter.MAX_RESULT_CHARS + 5000))
     obs = adapter_for({"atask_1": huge}).query({"kind": "task_history", "task_id": "atask_1"})

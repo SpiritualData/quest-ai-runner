@@ -81,14 +81,14 @@ The table is generated from the `solutions.csv` and `metrics.csv` files of the r
 <!-- anatomy-table:begin -->
 | Part | QAR component | Solution | Metric id | Status |
 |---|---|---|---|---|
-| World (input) | `quest_ai_runner/runner/poller.py` | `run-queued-tasks` | `metric-run-queued-tasks` | arm built, selected: qar_runner |
-| Subconscious, incl. Intuition | `quest_ai_runner/core/card_filter.py` | `the-subconscious` | `metric-admit-to-the-mind` | arm built, selected: recency_window |
-| Mind | `quest_ai_runner/core/orchestrator.py` | `the-mind` | `metric-keep-a-working-stream` | arm built, selected: rebuilt_per_step |
-| Science | `quest_ai_runner/science/web_research.py` | `the-science` | `metric-know-the-world` | arm built, selected: web_with_support_check |
-| Critical thinking | `quest_ai_runner/core/goal_metrics.py` | `critical-thinking` | `metric-think-critically` | arm built, selected: deep_runs_only |
-| Overseer | `quest_ai_runner/core/overseer.py` | `nervous-system` | `metric-watch-a-run` | arm built, selected: overseer |
-| Body | `quest_ai_runner/runner/quest_client.py` | `the-body` | `metric-act-as-the-body` | arm built, selected: card_and_reads |
-| World (act) | `quest_ai_runner/body/acp_deep_runner.py` | `claim-reach` | `metric-claim-reach` | arm built, selected: coding_agent_prompt_reach |
-| Higher mind | `quest_ai_runner/runner/personas.py` | `hold-the-intents` | `metric-hold-the-long-view` | arm built, selected: separate_stores |
-| Rep selection | `quest_ai_runner/runner/personas.py` | `select-a-rep` | `metric-select-a-rep` | arm built, selected: persona_resolver_precedence |
+| World (input) | `quest_ai_runner/the_consciousness/request_intake/poller.py` | `run-queued-tasks` | `metric-run-queued-tasks` | arm built, selected: qar_runner |
+| Subconscious, incl. Intuition | `quest_ai_runner/the_intelligence/subconscious/context_retriever/card_filter.py` | `the-subconscious` | `metric-admit-to-the-mind` | arm built, selected: recency_window |
+| Mind | `quest_ai_runner/the_intelligence/mind/orchestrator.py` | `the-mind` | `metric-keep-a-working-stream` | arm built, selected: rebuilt_per_step |
+| Science | `quest_ai_runner/the_world/tools/web_search/web_research.py` | `the-science` | `metric-know-the-world` | arm built, selected: web_with_support_check |
+| Critical thinking | `quest_ai_runner/the_intelligence/critical_thinking/metric_translation/goal_metrics.py` | `critical-thinking` | `metric-think-critically` | arm built, selected: deep_runs_only |
+| Overseer | `quest_ai_runner/the_intelligence/mind/delegation/overseer.py` | `nervous-system` | `metric-watch-a-run` | arm built, selected: overseer |
+| Body | `quest_ai_runner/the_body/internal_context/quest/client/quest_client.py` | `the-body` | `metric-act-as-the-body` | arm built, selected: card_and_reads |
+| World (act) | `quest_ai_runner/the_world/tools/delegated_agent_sessions/acp_deep_runner.py` | `claim-reach` | `metric-claim-reach` | arm built, selected: coding_agent_prompt_reach |
+| Higher mind | `quest_ai_runner/the_consciousness/representatives/personas.py` | `hold-the-intents` | `metric-hold-the-long-view` | arm built, selected: separate_stores |
+| Rep selection | `quest_ai_runner/the_consciousness/representatives/personas.py` | `select-a-rep` | `metric-select-a-rep` | arm built, selected: persona_resolver_precedence |
 <!-- anatomy-table:end -->

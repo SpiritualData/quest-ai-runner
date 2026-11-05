@@ -2,7 +2,7 @@
 ``RequestHandler.dispatch``), with only the HTTP socket replaced by the adapter's injectable transport.
 Search is the adapter's scoped ``grep`` (a scope is required by design), read is ``read_section`` of
 ``alias:<id>.md``."""
-from quest_ai_runner.body.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
 
 from retrieval import policy
 from retrieval.fakes import remote_transport

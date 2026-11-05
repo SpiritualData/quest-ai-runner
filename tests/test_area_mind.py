@@ -3,9 +3,9 @@ import pytest
 from esoi.entry import Pending
 
 import quest_ai_runner
-from quest_ai_runner.area_mind import StepReasoning
-from quest_ai_runner.core.interim_policy import EXAMPLE_STATE
-from quest_ai_runner.loop_wiring import GoalAnswer
+from quest_ai_runner.the_intelligence.mind.area_mind import StepReasoning
+from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import EXAMPLE_STATE
+from quest_ai_runner.the_self.loop_wiring import GoalAnswer
 from tests.conftest import StubProvider
 
 AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "assemble-a-prompt", "answer-a-turn", "answer-end-to-end",

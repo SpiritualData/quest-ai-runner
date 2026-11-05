@@ -9,11 +9,11 @@ import pytest
 
 from .conftest import StubDeepRunner, StubProvider
 from .test_tools import make_orch
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, build_tool_registry
-from quest_ai_runner.core import tools_quest_ops as ops
-from quest_ai_runner.runner.executor_support import AUTOPILOT_WORK_KIND
-from quest_ai_runner.core.tools_quest_work import AUTOPILOT_WORK_PINS
-from quest_ai_runner.runner.run_operations import pinned_operations
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, build_tool_registry
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
+from quest_ai_runner.the_consciousness.request_intake.executor_support import AUTOPILOT_WORK_KIND
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_work import AUTOPILOT_WORK_PINS
+from quest_ai_runner.the_body.hands.quest_operations.run_operations import pinned_operations
 
 @pytest.fixture(autouse=True)
 def standard_tools_on(monkeypatch):
@@ -221,7 +221,7 @@ def test_update_goal_relinks_but_cannot_complete_or_rename():
 
 def test_every_operation_is_complete_and_named_after_the_client_method_it_wraps():
     registry = build_tool_registry(CREDS)
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
     for name in ops.QUEST_OPERATION_BUILDERS:
         spec = registry.get(name)
         assert spec and spec.when_to_use and spec.when_not_to_use and spec.description, name
@@ -250,7 +250,7 @@ PLAIN_TASK = {"id": "atask_plain", "text": "Summarize this PDF of grants for me"
 
 
 def deep_brief_for(task, tools):
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     from .test_runner import MockQuestClient
 
     deep = StubDeepRunner(met=True)
@@ -265,7 +265,7 @@ def test_an_autopilot_batch_is_given_the_asks_and_progress_how_to_without_any_pr
     brief = deep_brief_for(AUTOPILOT_BATCH, build_tool_registry(CREDS))
     for name in ops.AUTOPILOT_PINS + AUTOPILOT_WORK_PINS:
         assert f"- {name} (standard" in brief, name
-    assert "-m quest_ai_runner.tools call" in brief and "--kw" in brief
+    assert "-m quest_ai_runner tools call" in brief and "--kw" in brief
     assert "- create_goal (" not in brief                    # needs a request; not pinned
     assert "- update_quest_scope (" not in brief             # unrelated field tools stay out
 
@@ -296,11 +296,11 @@ def test_only_autopilot_composed_tasks_are_pinned():
 
 
 def test_the_shell_form_takes_plain_kw_arguments(monkeypatch, capsys):
-    from quest_ai_runner.tools.__main__ import main
+    from quest_ai_runner.the_consciousness.terminal.__main__ import main
     client = FakeClient()
     monkeypatch.setenv("QUEST_BASE_URL", CREDS["QUEST_BASE_URL"])
     monkeypatch.setenv("QUEST_API_KEY", CREDS["QUEST_API_KEY"])
-    from quest_ai_runner.core import tools as core_tools
+    from quest_ai_runner.the_world.tools import tools as core_tools
     monkeypatch.setattr(core_tools, "_quest_client_factory", lambda env: client)
     code = main(["call", "create_decision", "--quest", "quest_1", "--kw", "summary=Approve the 2026 budget?",
                  "--kw", "kind=approve"])
@@ -322,7 +322,7 @@ def test_a_digit_only_text_argument_stays_text():
 
 
 def test_quest_describe_prints_the_registry_entry_and_suggests_names(capsys):
-    from quest_ai_runner import cli
+    from quest_ai_runner.the_consciousness.terminal import cli
     assert cli.main(["quest", "--describe", "update_ask"]) == 0
     out = capsys.readouterr().out
     assert "USE WHEN" in out and "tools call update_ask" in out
@@ -331,7 +331,7 @@ def test_quest_describe_prints_the_registry_entry_and_suggests_names(capsys):
 
 
 def test_a_write_that_returns_nothing_is_not_reported_as_success(monkeypatch, capsys):
-    from quest_ai_runner import cli, cli_quest
+    from quest_ai_runner.the_consciousness.terminal import cli, cli_quest
 
     class Refusing:
         def create_decision(self, summary, **kw):

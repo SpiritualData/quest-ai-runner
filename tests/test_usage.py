@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from quest_ai_runner.usage import DailyUsageLimits, DailyUsageTracker
+from quest_ai_runner.the_world.model_plumbing.spend.usage import DailyUsageLimits, DailyUsageTracker
 
 
 # ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ from quest_ai_runner.usage import DailyUsageLimits, DailyUsageTracker
 # ---------------------------------------------------------------------------
 
 def test_limits_from_env_unset_uses_default():
-    from quest_ai_runner.usage import DEFAULT_DAILY_TOKEN_LIMIT
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import DEFAULT_DAILY_TOKEN_LIMIT
     limits = DailyUsageLimits.from_env({})
     assert limits.enabled()
     assert limits.max_daily_tokens == DEFAULT_DAILY_TOKEN_LIMIT
@@ -34,7 +34,7 @@ def test_limits_from_env_disable_keywords():
 
 
 def test_limits_from_env_garbage_value_falls_back_to_default(caplog):
-    from quest_ai_runner.usage import DEFAULT_DAILY_TOKEN_LIMIT
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import DEFAULT_DAILY_TOKEN_LIMIT
     limits = DailyUsageLimits.from_env({"QAR_DAILY_TOKEN_LIMIT": "lots"})
     assert limits.enabled()
     assert limits.max_daily_tokens == DEFAULT_DAILY_TOKEN_LIMIT
@@ -190,7 +190,7 @@ def test_tracker_failed_write_leaves_previous_file_intact(tmp_path, monkeypatch)
 
 def test_multi_provider_records_tokens_to_tracker():
     from tests.conftest import StubProvider
-    from quest_ai_runner.providers import routed
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import routed
 
     class Spending(StubProvider):
         def answer(self, messages, *, model, system=None, layers=None):
@@ -207,7 +207,7 @@ def test_multi_provider_records_tokens_to_tracker():
 
 def test_multi_provider_answer_returns_limit_message_when_over():
     from tests.conftest import StubProvider
-    from quest_ai_runner.providers import routed
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import routed
 
     stub = StubProvider(decisions=[])
     tracker = DailyUsageTracker(path=None, limits=DailyUsageLimits(max_daily_tokens=100))
@@ -221,7 +221,7 @@ def test_multi_provider_answer_returns_limit_message_when_over():
 
 def test_multi_provider_plan_returns_answer_action_when_over():
     from tests.conftest import StubProvider
-    from quest_ai_runner.providers import routed
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import routed
 
     stub = StubProvider(decisions=[])
     tracker = DailyUsageTracker(path=None, limits=DailyUsageLimits(max_daily_tokens=100))
@@ -237,9 +237,9 @@ def test_multi_provider_plan_returns_answer_action_when_over():
 # ---------------------------------------------------------------------------
 
 def _poller_with_tracker(client, provider, tracker):
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
-    from quest_ai_runner.resources import ResourceGuard, ResourceLimits
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.the_body.host.resources import ResourceGuard, ResourceLimits
     from tests.conftest import StubRetrieval
 
     cfg = RunnerConfig(
@@ -309,9 +309,9 @@ def test_poller_default_limit_does_not_block_normal_scan():
     """Default-on tracker with 0 tokens used must not block a normal scan."""
     from tests.test_runner import MockQuestClient
     from tests.conftest import StubProvider
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
-    from quest_ai_runner.resources import ResourceGuard, ResourceLimits
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.the_body.host.resources import ResourceGuard, ResourceLimits
     from tests.conftest import StubRetrieval
 
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
@@ -334,8 +334,8 @@ def test_poller_default_limit_does_not_block_normal_scan():
 # ---------------------------------------------------------------------------
 
 def test_rendering_a_spec_tags_the_next_call_and_the_summary_reads_it():
-    from quest_ai_runner.core.prompt_specs import SPECS_BY_ID, PromptSpec
-    from quest_ai_runner.usage import UNTAGGED, active_spec, tag_spec
+    from quest_ai_runner.the_self.integrity.prompts.prompt_specs import SPECS_BY_ID, PromptSpec
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import UNTAGGED, active_spec, tag_spec
     spec = PromptSpec(id="test-usage.tagged", solution="justify-model-calls", metric="metric-justified-model-spend",
                       tier="fast", cache_layer="none", template="Say hi to {name}.", inputs=("name",))
     assert "test-usage.tagged" not in SPECS_BY_ID   # not registered: render tags by the spec's own id
@@ -360,7 +360,7 @@ def test_rendering_a_spec_tags_the_next_call_and_the_summary_reads_it():
 
 def test_the_tag_is_per_context_so_concurrent_turns_do_not_mix():
     import contextvars
-    from quest_ai_runner.usage import active_spec, tag_spec
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import active_spec, tag_spec
     tag_spec("outer")
     seen = {}
 
@@ -376,7 +376,7 @@ def test_the_tag_is_per_context_so_concurrent_turns_do_not_mix():
 # ---------------------------------------------------------------------------
 
 def test_every_recorded_call_persists_with_its_spec_tag_and_seconds(tmp_path):
-    from quest_ai_runner.usage import summarize_call_log
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import summarize_call_log
     tracker = DailyUsageTracker(path=str(tmp_path / "u.json"), call_log_path=str(tmp_path / "calls.jsonl"))
     tracker.record(100, 20, spec_id="watch-a-run.overseer", seconds=1.5)
     tracker.record(120, 30, spec_id="watch-a-run.overseer", seconds=3.5)
@@ -390,7 +390,7 @@ def test_every_recorded_call_persists_with_its_spec_tag_and_seconds(tmp_path):
 
 
 def test_a_new_process_reads_what_an_earlier_one_wrote(tmp_path):
-    from quest_ai_runner.usage import summarize_call_log
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import summarize_call_log
     DailyUsageTracker(path=str(tmp_path / "u.json"), call_log_path=str(tmp_path / "c.jsonl")).record(5, 5, spec_id="a.b", seconds=2.0)
     DailyUsageTracker(path=str(tmp_path / "u.json"), call_log_path=str(tmp_path / "c.jsonl")).record(5, 5, spec_id="a.b", seconds=4.0)
     assert summarize_call_log(tmp_path / "c.jsonl", "a.b")["a.b"]["seconds"]["max"] == 4.0
@@ -405,7 +405,7 @@ def test_the_call_log_default_path_follows_the_usage_file_and_can_be_switched_of
 
 
 def test_the_call_log_rotates_and_skips_a_corrupt_line(tmp_path):
-    from quest_ai_runner.usage import CallLog, read_call_log
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import CallLog, read_call_log
     path = tmp_path / "c.jsonl"
     small = CallLog(str(path), max_bytes=200)
     for i in range(6):

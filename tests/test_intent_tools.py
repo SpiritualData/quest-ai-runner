@@ -8,11 +8,11 @@ import json
 
 import pytest
 
-from quest_ai_runner.core import tools_quest_intents as intents
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry
-from quest_ai_runner.runner.quest_client import QuestClient
-from quest_ai_runner.critical_thinking.quest_client_intents import refusal_of
-from quest_ai_runner.runner.quest_client_support import QuestApiError
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_intents as intents
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_intents import refusal_of
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
 
 CREDS = {"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "key"}
 

@@ -2,7 +2,7 @@
 through the shared conformance scenarios (see ``backends.py``). The embedder is a deterministic hash vector, so
 no model is involved. Zero model calls."""
 from persist_cards.backends import DIMENSION, FolderHarness, hash_embedder, on_backend
-from quest_ai_runner.subconscious.qdrant_card_repository import QdrantCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_card_repository import QdrantCardRepository
 
 
 def build(meter):  # noqa: ARG001

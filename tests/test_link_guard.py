@@ -2,7 +2,7 @@
 is tested in the hub; every test here is offline."""
 from __future__ import annotations
 
-from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import DEAD, OK, LinkGuard, LinkPolicy
+from hubofhubs.api import DEAD, OK, LinkGuard, LinkPolicy
 
 
 def fetcher_for(statuses):
@@ -32,8 +32,8 @@ APP = LinkPolicy(
 
 def test_a_finished_answer_has_its_fabricated_link_stripped_before_it_is_emitted():
     """End to end through Orchestrator.run: the guard is the last thing to touch the words."""
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -61,8 +61,8 @@ def test_a_finished_answer_has_its_fabricated_link_stripped_before_it_is_emitted
 
 
 def test_the_guard_can_be_switched_off_and_then_the_reply_is_untouched():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -92,8 +92,8 @@ REACHABLE = {
 def test_the_orchestrator_hands_the_turns_own_material_to_the_guard():
     """End to end: a link from the user's message and one from a gathered read pass; an invented
     one is stripped. The evidence comes from the run, not from a global."""
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -116,8 +116,8 @@ def test_the_orchestrator_hands_the_turns_own_material_to_the_guard():
 
 
 def test_a_policy_object_on_the_config_builds_the_guard_without_a_file():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -133,8 +133,8 @@ def test_a_policy_object_on_the_config_builds_the_guard_without_a_file():
 # --- provenance for deep runs: model output is never evidence ----------------------------------
 
 def deep_turn(runner, message="show me my docs"):
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .test_deep_run_status_honesty import deep_plan
     from .test_per_goal_context_iteration import ScriptedProvider
@@ -153,7 +153,7 @@ def deep_turn(runner, message="show me my docs"):
 
 
 def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_itself():
-    from hubofhubs.the_world.tools.deep import DeepResult
+    from hubofhubs.api import DeepResult
 
     from .test_deep_run_status_honesty import ScriptedRunner
 
@@ -169,7 +169,7 @@ def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_it
 
 
 def test_a_real_claude_code_workers_output_keeps_its_exemption():
-    from hubofhubs.the_world.tools.deep import DeepResult
+    from hubofhubs.api import DeepResult
 
     from .test_deep_run_status_honesty import ScriptedRunner
 
@@ -182,8 +182,8 @@ def test_a_real_claude_code_workers_output_keeps_its_exemption():
 def test_link_evidence_excludes_model_written_deep_output_but_keeps_what_it_read():
     from types import SimpleNamespace
 
-    from hubofhubs.the_world.tools.deep import DeepResult
-    from quest_ai_runner.core.orchestrator_judges import JudgesMixin
+    from hubofhubs.api import DeepResult
+    from quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges import JudgesMixin
 
     res = SimpleNamespace(deep_results=[
         DeepResult(met=True, output="https://model.example.com/x", model_written=True,

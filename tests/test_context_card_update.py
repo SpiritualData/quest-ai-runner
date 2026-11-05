@@ -79,7 +79,7 @@ def test_context_card_categorization():
     }
 
     # Import the updater
-    from quest_ai_runner.adapters.context_card_updater import categorize_files_with_llm
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import categorize_files_with_llm
 
     # Test categorization
     provider = MockModelProvider()
@@ -118,7 +118,7 @@ def test_context_card_categorization():
 
 def test_context_card_update_with_new_files():
     """Test that new files are added to cards."""
-    from quest_ai_runner.adapters.context_card_updater import update_context_cards
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import update_context_cards
 
     # Create temporary card files
     with tempfile.TemporaryDirectory() as tmpdir:

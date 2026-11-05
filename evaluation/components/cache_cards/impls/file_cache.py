@@ -4,7 +4,7 @@ Zero model calls."""
 import tempfile
 
 from cache_cards.driver import run_scenario
-from quest_ai_runner.subconscious.card_cache_file import FileCardCache
+from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
 
 
 def build(meter):  # noqa: ARG001

@@ -7,7 +7,7 @@ is the thin, best-effort wrapper the executor's throttled ``pending_inputs`` pol
 must degrade the same way ``report_progress`` / ``list_goal_notes`` do: never raise, safe-default
 empty list.
 """
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 
 def client_capturing_request(response):
@@ -61,7 +61,7 @@ def test_claim_task_messages_never_raises_on_api_error():
 
 
 def test_claim_task_messages_never_raises_when_not_configured():
-    from quest_ai_runner.runner.quest_client import QuestNotConfigured
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestNotConfigured
 
     client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
 

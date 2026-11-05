@@ -14,7 +14,7 @@ PROMPT = Path(common.REPO) / "quest_ai_runner" / "prompts" / "evolvable_structur
 
 
 def build(meter):
-    from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
     provider = meter.wrap(ClaudeCliProvider())
     model = os.environ.get("QAR_EVAL_MODEL", "haiku")
     system = PROMPT.read_text()

@@ -4,8 +4,8 @@ own bounds (first-look window, open-ask age and count) apply. Zero model calls."
 from datetime import datetime
 
 from feed_context_sources.fake_quest import FakeQuest
-from quest_ai_runner.runner.context_updates import UpdateEngine
-from quest_ai_runner.runner.context_sources_quest import DecisionsSource, GoalUpdatesSource, QuestNotesSource
+from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine
+from quest_ai_runner.the_body.intake_sources.context_sources_quest import DecisionsSource, GoalUpdatesSource, QuestNotesSource
 
 CHANNELS = {"notes": ("quest_notes",), "goal_updates": ("goal_updates",), "decisions": ("decisions",),
             "mixed": ("quest_notes", "goal_updates", "decisions")}

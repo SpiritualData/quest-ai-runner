@@ -16,19 +16,19 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Union
 
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.answer_explanation import TurnTrace
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, decide_tool_for, normalize_decision
-from quest_ai_runner.core.planner_context import _DISCOVERY_SPEC_KEYS, _is_discovery_spec, planner_web_block
-from quest_ai_runner.core.orchestrator_capabilities import describe_read_spec
-from quest_ai_runner.core.reach_judge import verdict_block, WORLD_LINE, WORLD_LINE_WEB
-from hubofhubs.the_intelligence.critical_thinking.goal_completion.sufficiency import READ_SPEC_KEYS
-from hubofhubs.the_world.tools.events import EVENT_READ
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import TurnTrace
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, decide_tool_for, normalize_decision
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import _DISCOVERY_SPEC_KEYS, _is_discovery_spec, planner_web_block
+from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import describe_read_spec
+from quest_ai_runner.the_intelligence.mind.planner.reach_judge import verdict_block, WORLD_LINE, WORLD_LINE_WEB
+from hubofhubs.api import READ_SPEC_KEYS
+from hubofhubs.api import EVENT_READ
 
 from .conftest import StubEscalation, StubProvider, StubRetrieval
 
@@ -200,7 +200,7 @@ def test_decide_schema_web_fields_only_when_configured():
 def test_decide_schema_identity_preserved_when_web_not_requested():
     """decide_tool_for(False, False) with web defaulting to False must still return the shared
     DECIDE_TOOL singleton (identity, not just equality) -- existing callers rely on this."""
-    from quest_ai_runner.core import orchestrator as orch_mod
+    from quest_ai_runner.the_intelligence.mind import orchestrator as orch_mod
     assert decide_tool_for(False, False) is orch_mod.DECIDE_TOOL
 
 
@@ -388,7 +388,7 @@ def test_build_orchestrator_wires_web_research_from_env_and_skips_legacy_fold_in
         return built
 
     monkeypatch.setattr(
-        "quest_ai_runner.science.web_research.build_web_research_from_env", fake_builder)
+        "quest_ai_runner.the_world.tools.web_search.web_research.build_web_research_from_env", fake_builder)
     cfg = _runner_cfg()
     orch = build_orchestrator(cfg)
     assert cfg.web_research is built
@@ -407,7 +407,7 @@ def test_build_orchestrator_respects_an_already_set_web_research(monkeypatch):
         raise AssertionError("build_web_research_from_env must not be called when already set")
 
     monkeypatch.setattr(
-        "quest_ai_runner.science.web_research.build_web_research_from_env", fake_builder)
+        "quest_ai_runner.the_world.tools.web_search.web_research.build_web_research_from_env", fake_builder)
     cfg = _runner_cfg(web_research=mine)
     orch = build_orchestrator(cfg)
     assert orch.web is mine

@@ -9,12 +9,12 @@ from typing import Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.web_search.cache import WebCache
-from hubofhubs.the_world.tools.web_search.fetch import UnsupportedContentTypeError, canonicalize_url
-from hubofhubs.the_world.tools.web_search.limiter import DailyLimiter
-from hubofhubs.the_world.tools.web_search.page_extract import estimate_tokens
-from quest_ai_runner.science.web_research import WebResearchAdapter, build_web_research_from_env
-from quest_ai_runner.science.web_search_backends import SearchBackendError, SearchHit, SearchResponse
+from hubofhubs.api import WebCache
+from hubofhubs.api import UnsupportedContentTypeError, canonicalize_url
+from hubofhubs.api import DailyLimiter
+from hubofhubs.api import estimate_tokens
+from quest_ai_runner.the_world.tools.web_search.web_research import WebResearchAdapter, build_web_research_from_env
+from quest_ai_runner.the_world.tools.web_search.web_search_backends import SearchBackendError, SearchHit, SearchResponse
 
 
 class FakeBackend:
@@ -473,7 +473,7 @@ def _patch_stream(monkeypatch, script):
     """
     import httpx
 
-    from hubofhubs.the_world.tools.web_search import page_extract as web_page_extract
+    from hubofhubs.api import page_extract as web_page_extract
 
     monkeypatch.setattr(web_page_extract, "default_resolver", lambda host: ["93.184.216.34"])
 
@@ -492,7 +492,7 @@ def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
     """follow_redirects=True would have walked straight past check_url_is_safe: the guard only
     ever saw the URL the planner asked for, so a public URL that 302s to localhost or a cloud
     metadata endpoint was fetched anyway."""
-    from hubofhubs.the_world.tools.web_search.fetch import PageFetchError, default_page_fetcher
+    from hubofhubs.api import PageFetchError, default_page_fetcher
 
     script = {
         "https://public.example/go": _FakeStream(
@@ -508,7 +508,7 @@ def test_default_fetcher_refuses_a_redirect_into_a_private_address(monkeypatch):
 
 
 def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
-    from hubofhubs.the_world.tools.web_search.fetch import default_page_fetcher
+    from hubofhubs.api import default_page_fetcher
 
     script = {
         "https://public.example/a": _FakeStream(301, {"location": "/b"}),
@@ -524,7 +524,7 @@ def test_default_fetcher_follows_a_safe_relative_redirect(monkeypatch):
 
 
 def test_default_fetcher_stops_after_too_many_redirects(monkeypatch):
-    from hubofhubs.the_world.tools.web_search.fetch import PageFetchError, default_page_fetcher
+    from hubofhubs.api import PageFetchError, default_page_fetcher
 
     url = "https://public.example/loop"
     script = {url: _FakeStream(302, {"location": url})}
@@ -537,7 +537,7 @@ def test_default_fetcher_stops_after_too_many_redirects(monkeypatch):
 def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypatch):
     """A windows-1252 page decoded as UTF-8 turns every accented character into U+FFFD, which
     then poisons the focus scoring as well as the text the model reads."""
-    from hubofhubs.the_world.tools.web_search.fetch import default_page_fetcher
+    from hubofhubs.api import default_page_fetcher
 
     body = "<html><body><p>café résumé naïve</p></body></html>".encode("windows-1252")
     script = {
@@ -552,7 +552,7 @@ def test_default_fetcher_decodes_the_declared_charset_not_assumed_utf8(monkeypat
 
 
 def test_default_fetcher_sniffs_a_meta_charset_when_the_header_omits_one(monkeypatch):
-    from hubofhubs.the_world.tools.web_search.fetch import default_page_fetcher
+    from hubofhubs.api import default_page_fetcher
 
     body = (
         "<html><head><meta charset='iso-8859-1'></head><body><p>naïve</p></body></html>"

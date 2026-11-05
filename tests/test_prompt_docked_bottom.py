@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.textual_ui import QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
 
 class _FakeSession:

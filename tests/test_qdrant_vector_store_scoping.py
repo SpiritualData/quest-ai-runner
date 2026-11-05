@@ -23,7 +23,7 @@ import pytest
 
 pytest.importorskip("qdrant_client")
 
-from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
 VEC_SIZE = 8
 

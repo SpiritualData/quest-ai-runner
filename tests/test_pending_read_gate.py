@@ -5,10 +5,10 @@ promised to open it: the turn ended without the file ever being read. The planne
 `pending_read` field declares what it still owes, and the loop honors it (no word list over the
 planner's prose; hard rule #3). Bounded, and a read that already ran is never repeated.
 """
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_decide_tool import DECIDE_TOOL
-from quest_ai_runner.core.orchestrator_decisions import normalize_decision
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
 
 from .conftest import StubProvider, StubRetrieval
 

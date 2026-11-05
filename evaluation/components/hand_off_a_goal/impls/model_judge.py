@@ -2,7 +2,7 @@
 behind them, `claude -p` on its cheapest tier. No API dollars; model calls are counted. PAID in the sense of the run policy (it spends
 subscription calls): stay on the ladder and always pass ``--max-calls``."""
 PAID = True
-from quest_ai_runner.runner import goal_handoff
+from quest_ai_runner.the_intelligence.higher_mind.objectives import goal_handoff
 from hand_off_a_goal import arms
 import live_arm
 

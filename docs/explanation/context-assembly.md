@@ -355,7 +355,7 @@ lands on the right card at all.
 ### Card assignment: the independent-recall test
 
 Every message needs a `card_thread` decision: continue the current topic card, switch to a known
-one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/core/context_doctrine.py`; read
+one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/the_intelligence/mind/context_intake/context_doctrine.py`; read
 that constant for the exact, current prompt text). The gate used to say "match on meaning, not
 shared words," which is true but untestable, and it let one specific failure mode through
 repeatedly: a **sub-decision inside a plan** (a price, a timeline, a vendor pick, a channel) often
@@ -505,7 +505,7 @@ Measured on this repo (`quest-ai-runner`) as the corpus, no API key, no model ca
   `poller.py` / `executor.py`; "fix the orchestrator planner loop" routes to the core module. The
   task lands on the right files before any grep.
 - **Staleness over time:** editing a pinned file flips that card to stale on the next `assemble()`
-  (`stale=['quest_ai_runner/core/orchestrator.py']`), deterministically, 0 LLM calls.
+  (`stale=['quest_ai_runner/the_intelligence/mind/orchestrator.py']`), deterministically, 0 LLM calls.
 
 So the differentiating properties are concrete: instant grounding on a fresh repo, deterministic
 freshness, and a context map that compounds as tasks run, all without spending a token to maintain it.
@@ -550,7 +550,7 @@ whole history of unrelated topics on every single turn.
 
 ### The solution: turn cards + the same hybrid retrieval stack
 
-`quest_ai_runner.core.turn_context_store.TurnContextStore` stores conversation turns as JSON
+`quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store.TurnContextStore` stores conversation turns as JSON
 card files (under `.quest-context/turns/` by default) using the SAME card format as
 `FileContextStore`. It is a full `ContextAssembler` implementation: its `record()` writes a card
 after each turn, and its `assemble()` retrieves relevant past turns by IDF keyword overlap --
@@ -606,9 +606,9 @@ and calls each on `record()` best-effort (never raises). This is how turn cards 
 file cards or any other assembler:
 
 ```python
-from quest_ai_runner.core.turn_context_store import TurnContextStore
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
 from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 file_store = FileContextStore(cards_dir=".quest-context/cards")
 turn_store = TurnContextStore(turns_dir=".quest-context/turns")

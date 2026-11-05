@@ -23,20 +23,20 @@ def registered(solution_id, name, target):
 
 
 def web_search():
-    from quest_ai_runner.science.web_search_backends import select_search_backend
+    from quest_ai_runner.the_world.tools.web_search.web_search_backends import select_search_backend
     with registered("search-the-web", "fakehub", "hub_of_hubs.fake_hub:FakeSearch"):
         got = select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "fakehub", "FAKEHUB_URL": "http://hub.invalid"})
     return got is not None and type(got).__name__ == "FakeSearch", "selected by QAR_WEB_SEARCH_BACKEND"
 
 
 def model_providers():
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
+    from hubofhubs.api import MODEL_PREFIX_PROVIDERS, provider_name_for_model
     name = provider_name_for_model("fakevendor-1", {"fakevendor", "anthropic"}, {**MODEL_PREFIX_PROVIDERS, "fakevendor": "fakevendor"})
     return name == "fakevendor", "model prefix routed by registered data"
 
 
 def tools_mcp():
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     text = '[[mcp_servers]]\nalias = "fakehub"\ntransport = "http"\nurl = "http://hub.invalid/mcp"\n'
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "lane.toml"
@@ -46,7 +46,7 @@ def tools_mcp():
 
 
 def agent_harness():
-    from quest_ai_runner.adapters.acp_deep_runner_config import resolve_agent_entry
+    from quest_ai_runner.the_body.configuration.acp_deep_runner_config import resolve_agent_entry
     saved = os.environ.get("QAR_ACP_AGENT_COMMAND")
     os.environ["QAR_ACP_AGENT_COMMAND"] = "fakehub-acp-agent"
     try:
@@ -60,7 +60,7 @@ def agent_harness():
 
 
 def context_assembly():
-    from quest_ai_runner.core.resolve import resolve
+    from quest_ai_runner.the_self.assembler.resolve import resolve
     with registered("index-by-meaning", "fakehub", "hub_of_hubs.fake_hub:FakeVectorStore"):
         got = resolve("index-by-meaning", overrides={"index-by-meaning": "fakehub"})
     return got.__name__ == "FakeVectorStore", "chosen by cfg.selections for index-by-meaning"
@@ -79,7 +79,7 @@ def mcp_source():
 
 def world_hub():
     """The world is ONE connection to an aggregator: the shipped preset loads as exactly one MCP server, no per-app entry."""
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     import hubofhubs
     cfg = RunnerConfig.from_file(Path(hubofhubs.__file__).resolve().parents[1] / "docs" / "reference" / "lane-world-hub.toml")
     ok = [s.alias for s in cfg.mcp_servers] == ["world-hub"] and cfg.mcp_servers[0].transport == "http"

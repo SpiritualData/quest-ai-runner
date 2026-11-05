@@ -1,7 +1,7 @@
 """The reader-first standard is ONE text, said once on each surface a person reads."""
-from quest_ai_runner.core.orchestrator import REPLY_VOICE_SYSTEM
-from quest_ai_runner.core.reader_first import READER_FIRST_STANDARD
-from quest_ai_runner.runner.executor import RESULT_IS_THE_WORK_CONTRACT
+from quest_ai_runner.the_intelligence.mind.orchestrator import REPLY_VOICE_SYSTEM
+from quest_ai_runner.the_self.integrity.prompts.reader_first import READER_FIRST_STANDARD
+from quest_ai_runner.the_consciousness.request_intake.executor import RESULT_IS_THE_WORK_CONTRACT
 
 
 def test_chat_replies_and_task_results_carry_the_same_standard_once():

@@ -5,7 +5,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
 
 from conversation_recall.interface import MAX_CONVS
 

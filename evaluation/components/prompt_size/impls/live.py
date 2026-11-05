@@ -35,12 +35,12 @@ def build(meter, profile="full"):
                        turn_facts=facts)
             return cap.prompt
         if point == "autopilot_batch":
-            from quest_ai_runner.critical_thinking.autopilot_briefs import compose_batch_text
+            from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import compose_batch_text
             return compose_batch_text(**inputs)
         if point == "context_update_bundle":
             return inputs["bundle"].as_prompt_block()
         if point == "deep_prompt":
-            from quest_ai_runner.core.goal_runner_contract import compose_goal_prompt
+            from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import compose_goal_prompt
             return compose_goal_prompt(inputs["goal"], inputs["brief"], preamble=inputs["preamble"])
         raise ValueError(f"unknown assembly point: {point}")
     return assemble

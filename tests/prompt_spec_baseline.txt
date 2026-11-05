@@ -1,10 +1,10 @@
 # Model-call sites not yet migrated to a registered prompt spec (core/prompt_specs.py).
 # The baseline only shrinks: delete a line when its site migrates; never add one.
-adapters/context_card_dedup.py::_dedup_cluster_llm
-config_resolvers.py::_resolve_anticipation_refiner
-core/orchestrator_cards.py::CardsMixin._call_card_updater
-core/orchestrator_planning.py::PlanningMixin._plan
-core/orchestrator_planning.py::PlanningMixin.cascade_review
-core/orchestrator_planning.py::PlanningMixin.judge_reach
-core/orchestrator_recipes.py::RecipesMixin._recipe_fill_args
-interactive_session_persona.py::_resolve_persona_from_corpus
+the_intelligence/subconscious/cards_from_files/context_card_dedup.py::_dedup_cluster_llm
+the_body/configuration/config_resolvers.py::_resolve_anticipation_refiner
+the_intelligence/subconscious/context_retriever/orchestrator_cards.py::CardsMixin._call_card_updater
+the_intelligence/mind/planner/orchestrator_planning.py::PlanningMixin._plan
+the_intelligence/mind/planner/orchestrator_planning.py::PlanningMixin.cascade_review
+the_intelligence/mind/planner/orchestrator_planning.py::PlanningMixin.judge_reach
+the_intelligence/mind/planner/orchestrator_recipes.py::RecipesMixin._recipe_fill_args
+the_consciousness/terminal/interactive_session_persona.py::_resolve_persona_from_corpus

@@ -10,5 +10,5 @@
 
 ## Where to go next
 
-- Owning intent: [Subconscious](../../../../quest_ai_runner/subconscious/README.md)
+- Owning intent: [Subconscious](../../../../quest_ai_runner/the_intelligence/subconscious/README.md)
 - Repository: [top README](../../../../README.md)

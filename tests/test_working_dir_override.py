@@ -7,10 +7,10 @@ All offline: a capturing deep runner (records every kwarg ``run_goal`` was calle
 real ``Orchestrator``/``TaskExecutor``/``SubprocessGoalRunner``. No network, no subprocess spawn
 (``SubprocessGoalRunner`` tests intercept ``subprocess.Popen``).
 """
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.runner.executor import TaskExecutor
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 from .test_runner import MockQuestClient
@@ -130,7 +130,7 @@ def test_older_deep_runner_without_working_dir_kwarg_is_untouched():
 def test_subprocess_runner_uses_working_dir_override_for_cwd(monkeypatch):
     import subprocess as _sp
 
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     captured = {}
 
@@ -155,7 +155,7 @@ def test_subprocess_runner_uses_working_dir_override_for_cwd(monkeypatch):
 def test_subprocess_runner_falls_back_to_configured_working_dir_when_override_omitted(monkeypatch):
     import subprocess as _sp
 
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     captured = {}
 
@@ -180,7 +180,7 @@ def test_subprocess_runner_falls_back_to_configured_working_dir_when_override_om
 def test_goal_runner_wrapper_forwards_working_dir_only_when_accepted():
     """GoalRunner.run() mirrors the context_preamble opt-in discipline for working_dir: forwarded
     to a runner that accepts it, omitted for one that doesn't (StubDeepRunner)."""
-    from quest_ai_runner.core.goal_runner import GoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import GoalRunner
 
     class AcceptingRunner:
         def __init__(self):

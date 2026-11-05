@@ -11,7 +11,7 @@ from card_store_growth import world
 
 
 def new_store(root, cards=None, **kwargs):
-    from quest_ai_runner.adapters.file_context_store import FileContextStore
+    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
     wanted = dict(kwargs)
     wanted.setdefault("max_cards", 0)
     wanted.setdefault("mount_mode", "copy")

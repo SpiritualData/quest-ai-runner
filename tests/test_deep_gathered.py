@@ -1,9 +1,9 @@
 """Tests that ``gathered`` is forwarded into ``context_preamble`` for the deep runner."""
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 

@@ -18,8 +18,8 @@ import os
 
 import pytest
 
-from quest_ai_runner.adapters.files_adapter import FilesAdapter, resolve_in_tree
-from quest_ai_runner.body.files_writer import FilesWriter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter, resolve_in_tree
+from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
 
 
 @pytest.fixture

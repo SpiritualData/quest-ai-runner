@@ -310,4 +310,4 @@ Not built here: `/replay`. It needs the run log of the pause-and-resume design, 
 | `QAR_CONFIG_FILE` | none | A TOML config file, same as `--config`. |
 
 The full list of variables the runner reads is in the module docstring of
-[`quest_ai_runner/cli.py`](../../quest_ai_runner/cli.py).
+[`quest_ai_runner/the_consciousness/terminal/cli.py`](../../quest_ai_runner/the_consciousness/terminal/cli.py).

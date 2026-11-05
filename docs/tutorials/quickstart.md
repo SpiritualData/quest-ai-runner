@@ -24,9 +24,9 @@ a model key (`ANTHROPIC_API_KEY`) and a folder of files.
 ```python
 import os
 
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
-from quest_ai_runner.adapters import FilesAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
 cfg = RunnerConfig(
     retrieval=FilesAdapter("/path/to/docs"),     # any folder of text/markdown/code

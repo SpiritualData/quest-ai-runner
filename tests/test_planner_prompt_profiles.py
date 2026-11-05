@@ -21,19 +21,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    DECIDE_TOOL,
-    PLANNER_DECISION_RUBRIC,
-    PLANNER_PROFILES,
-    PLANNER_PROMPT,
-    Orchestrator,
-    OrchestratorConfig,
-    decide_tool_for,
-    planner_prompt_defaults,
-)
-from quest_ai_runner.core.planner_prompt import PLANNER_BOUNDARY_EXAMPLES, PLANNER_PROMPT_COMPACT
-from quest_ai_runner.core.orchestrator_decide_tool import planner_prompt_for_profile, strip_schema_descriptions
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import (
+    DECIDE_TOOL, PLANNER_DECISION_RUBRIC, PLANNER_PROFILES, PLANNER_PROMPT, Orchestrator, OrchestratorConfig, decide_tool_for,
+    planner_prompt_defaults)
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_BOUNDARY_EXAMPLES, PLANNER_PROMPT_COMPACT
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import planner_prompt_for_profile, strip_schema_descriptions
 
 from .conftest import StubRetrieval
 
@@ -406,13 +399,13 @@ def test_already_said_echo_back_is_bounded_to_the_most_recent_lines():
 def test_both_profiles_say_that_outside_world_work_nothing_can_do_is_not_queued():
     """Found by evaluation/components/end_to_end (E2E-REFUSE-01): "Order 10 more kilos of wax from my supplier" went
     to a deep run instead of an honest "I cannot place orders"."""
-    from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROFILES
     for name, prompt in PLANNER_PROFILES.items():
         assert "Never queue work that cannot be done" in " ".join(prompt.split()), name
 
 
 def test_an_act_in_the_outside_world_needs_a_named_service_or_the_reply_says_it_cannot_on_both_profiles():
-    from quest_ai_runner.core.planner_prompt import PLANNER_PROMPT_COMPACT as compact
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROMPT_COMPACT as compact
     for prompt in (PLANNER_PROMPT, compact):
         assert "can you NAME the listed service" in prompt
         assert "cannot buy, pay, order" in prompt or "they cannot buy, pay, order" in prompt
@@ -425,5 +418,5 @@ def test_buying_paying_or_ordering_for_the_person_is_declined_in_the_ordered_rub
 
 
 def test_an_empty_read_of_the_persons_own_records_is_the_answer_not_a_hand_off():
-    from quest_ai_runner.core.planner_prompt import PLANNER_PROMPT
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROMPT
     assert "that IS the answer" in PLANNER_PROMPT and "never hand it off to look again" in PLANNER_PROMPT

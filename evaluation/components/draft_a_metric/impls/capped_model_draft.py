@@ -2,7 +2,7 @@
 structured `plan` call to `claude -p` on its cheapest tier. No API dollars; model calls are counted. Stay on the ladder and always
 pass ``--max-calls``."""
 PAID = True
-from quest_ai_runner.runner import metric_draft
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import metric_draft
 from draft_a_metric import arms
 import live_arm
 

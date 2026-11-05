@@ -17,8 +17,8 @@ already are, per ``TaskExecutor._fetch_person_notes``) closes that gap. This cov
 """
 from __future__ import annotations
 
-from quest_ai_runner.runner.executor_contracts import GOAL_UPDATE_CONTEXT_LIMIT, render_goal_updates
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.executor_contracts import GOAL_UPDATE_CONTEXT_LIMIT, render_goal_updates
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 
 def update(note: str, *, who: str = "Joshua", when: str = "2026-09-14") -> dict:

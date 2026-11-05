@@ -4,7 +4,7 @@ import tempfile
 
 import common  # noqa: F401  (sets sys.path for the repo)
 from persist_predictions.scenarios import KINDS
-from quest_ai_runner.core.anticipation_store import FilePredictionStore
+from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_store import FilePredictionStore
 
 
 def build(meter):  # noqa: ARG001

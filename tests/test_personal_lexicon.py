@@ -5,17 +5,9 @@ vocabulary they happen to write most. Volume is damped, ordinary English collaps
 a term nobody else in the deployment avoids is not personal to anyone. Pure arithmetic over text:
 no model, no network, no fixtures.
 """
-from quest_ai_runner.adapters.personal_lexicon import (
-    CombinedBackground,
-    CorpusBackground,
-    LanguageBaseline,
-    LexiconTerm,
-    build_personal_lexicon,
-    drop_subsumed_terms,
-    lexicon_term_strings,
-    terms_within_budget,
-    tokenize,
-)
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.personal_lexicon import (
+    CombinedBackground, CorpusBackground, LanguageBaseline, LexiconTerm, build_personal_lexicon, drop_subsumed_terms, lexicon_term_strings,
+    terms_within_budget, tokenize)
 
 
 # ---------------------------------------------------------------------------

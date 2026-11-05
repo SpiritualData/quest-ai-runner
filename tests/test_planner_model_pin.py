@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 
@@ -80,7 +80,7 @@ def test_planner_model_does_not_move_the_shared_planner_tier():
 
 
 def test_env_reaches_the_config(monkeypatch):
-    from quest_ai_runner import cli
+    from quest_ai_runner.the_consciousness.terminal import cli
     monkeypatch.setenv("QAR_PLANNER_MODEL", "some-cheap-model-1")
     monkeypatch.setenv("QUEST_API_KEY", "test-key")
     monkeypatch.setenv("QUEST_TEAM_ID", "team-test")
@@ -89,7 +89,7 @@ def test_env_reaches_the_config(monkeypatch):
 
 
 def test_reach_summary_from_env_or_file(monkeypatch, tmp_path):
-    from quest_ai_runner import cli
+    from quest_ai_runner.the_consciousness.terminal import cli
     monkeypatch.setenv("QUEST_API_KEY", "test-key")
     monkeypatch.setenv("QUEST_TEAM_ID", "team-test")
     monkeypatch.setenv("QAR_READ_REACH_SUMMARY", "Reads reach the notes folder.")

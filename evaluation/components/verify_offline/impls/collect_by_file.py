@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from quest_ai_runner import resources  # noqa: F401  (the suite is collected against the live package)
+from quest_ai_runner.the_body.host import resources  # noqa: F401  (the suite is collected against the live package)
 from verify_offline import collector
 
 REPO = Path(__file__).resolve().parents[4]

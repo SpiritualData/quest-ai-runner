@@ -4,7 +4,7 @@ run reports is a list-price equivalent. Stay on the ladder of esoi/metric-run-po
 PAID = True
 import claude_judge
 from narrate_a_turn import arms, score
-from quest_ai_runner.core.orchestrator import Narrator
+from quest_ai_runner.the_intelligence.mind.orchestrator import Narrator
 
 
 def build(meter):

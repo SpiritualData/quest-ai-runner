@@ -19,14 +19,14 @@ import logging
 
 import pytest
 
-from quest_ai_runner.adapters import FilesAdapter
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.adapters.google_chat_adapter import DEFAULT_CHAT_SCOPES, GoogleChatAdapter
-from quest_ai_runner.body.notion_adapter import NotionAdapter
-from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
-from quest_ai_runner.config import ConfigFileError, RunnerConfig, resolve_config_objects
-from quest_ai_runner.config_retrieval import fold_into_retrieval
-from quest_ai_runner.runner.context_updates import build_update_engine
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import DEFAULT_CHAT_SCOPES, GoogleChatAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.notion_adapter import NotionAdapter
+from hubofhubs.api import collect_reference_resolvers
+from quest_ai_runner.the_body.configuration.config import ConfigFileError, RunnerConfig, resolve_config_objects
+from quest_ai_runner.the_body.configuration.config_retrieval import fold_into_retrieval
+from quest_ai_runner.the_body.intake_sources.context_updates import build_update_engine
 
 DB = "0123456789abcdef0123456789abcdef"
 TOKEN_VALUE = "tok-value-must-never-be-logged"
@@ -105,7 +105,7 @@ def test_google_chat_is_built_read_only_with_its_allowlist(sa_file, monkeypatch)
         seen.update(kwargs)
         return lambda: "tok"
 
-    monkeypatch.setattr("quest_ai_runner.adapters.google_chat_adapter.service_account_token_provider",
+    monkeypatch.setattr("quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter.service_account_token_provider",
                         fake_provider)
     cfg = resolve_config_objects(RunnerConfig(google_chat={
         "service_account_file": sa_file, "subject": "someone@example.org",
@@ -140,7 +140,7 @@ def test_google_chat_needs_a_key_file_that_exists(tmp_path):
 
 def test_scopes_can_be_overridden_but_default_to_read_only(sa_file, monkeypatch):
     seen = {}
-    monkeypatch.setattr("quest_ai_runner.adapters.google_chat_adapter.service_account_token_provider",
+    monkeypatch.setattr("quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter.service_account_token_provider",
                         lambda **kw: seen.update(kw) or (lambda: "tok"))
     resolve_config_objects(RunnerConfig(google_chat={
         "service_account_file": sa_file, "space_names": ["spaces/A"], "scopes": ["custom-scope"]}))
@@ -219,7 +219,7 @@ def test_folding_into_an_empty_stack_and_a_single_adapter_stack(token_env):
 
 def test_build_orchestrator_puts_the_configured_adapters_in_the_brains_retrieval(token_env, sa_file, monkeypatch):
     from tests.conftest import StubEscalation, StubProvider, StubRetrieval
-    from quest_ai_runner.config import build_orchestrator
+    from quest_ai_runner.the_body.configuration.config import build_orchestrator
 
     monkeypatch.setenv("WEB_SEARCH_ENABLED", "false")
     cfg = resolve_config_objects(RunnerConfig(

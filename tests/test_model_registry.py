@@ -1,12 +1,8 @@
 """model_registry bucketing — tier -> live top model id."""
 import pytest
 
-from quest_ai_runner.core.model_registry import (
-    DEFAULT_FALLBACK_TOP,
-    ModelRegistry,
-    bucket_top,
-    is_vision_capable,
-)
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import (
+    DEFAULT_FALLBACK_TOP, ModelRegistry, bucket_top, is_vision_capable)
 
 
 def test_bucket_takes_latest_first_of_each_family():
@@ -116,7 +112,7 @@ def test_is_vision_capable_false_for_text_only_or_unknown(model):
 
 
 def test_family_names_resolve_to_newest_for_every_vendor():
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import newest_in_family
+    from hubofhubs.api import newest_in_family
     live = ["models/gemini-3.5-flash", "models/gemini-3.1-flash-lite", "models/gemini-2.0-flash",
             "models/gemini-3.1-pro", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-image-1",
             "claude-sonnet-4-6", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-opus-5-5"]
@@ -165,7 +161,7 @@ def measurement(tier, provider, model, cases=20, passed=19, tokens_in=1_000_000,
 @pytest.fixture
 def measured(monkeypatch):
     """Plant tier measurements (the registry ships none); returns the dict to fill, ``{hub tier: [arm]}``."""
-    from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
+    from hubofhubs.api import tiers as hub_tiers
     rows = {}
     monkeypatch.setattr(hub_tiers, "measured_arms", lambda folder=None: {t: list(a) for t, a in rows.items()})
     return rows
@@ -210,7 +206,7 @@ def test_a_measurement_below_the_bars_is_not_applied(measured):
 
 
 def test_deepseek_is_picked_only_when_it_is_measured_and_priced(measured, monkeypatch):
-    from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
+    from hubofhubs.api import tiers as hub_tiers
     registry = lambda: ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), deepseek=Keyed("k")))
     assert registry().selected() == {} and registry().top_models()["fast"] == "claude-haiku-5-5"      # a key alone changes nothing
     real = hub_tiers.registry.read
@@ -230,7 +226,7 @@ def test_a_provider_with_no_key_is_never_offered(measured):
 
 
 def test_resolve_tier_never_raises_when_the_selector_does(monkeypatch):
-    from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
+    from hubofhubs.api import tiers as hub_tiers
 
     def broken(**kwargs):
         raise ValueError("bad csv")
@@ -240,7 +236,7 @@ def test_resolve_tier_never_raises_when_the_selector_does(monkeypatch):
 
 
 def test_the_credit_source_reaches_the_selector(measured, monkeypatch):
-    from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
+    from hubofhubs.api import tiers as hub_tiers
     seen = []
     real = hub_tiers.choose
     monkeypatch.setattr(hub_tiers, "choose", lambda **kw: seen.append(kw.get("credits")) or real(**kw))

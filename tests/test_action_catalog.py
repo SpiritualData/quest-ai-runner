@@ -3,12 +3,11 @@ workflow step asks for (runner/action_catalog.py, runner/requested_action.py).""
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.runner.action_catalog import (
-    CatalogPublisher, build_actions, connector_actions, is_publishable_tool, params_schema_from_json_schema,
-)
-from quest_ai_runner.runner.quest_client import QuestClient
-from quest_ai_runner.runner.requested_action import decode_json_params, run_requested_action
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_body.hands.quest_operations.action_catalog import (
+    CatalogPublisher, build_actions, connector_actions, is_publishable_tool, params_schema_from_json_schema)
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.the_body.hands.quest_operations.requested_action import decode_json_params, run_requested_action
 
 SEND_PARAMS = {
     "type": "object", "required": ["subject", "quest_id"],
@@ -167,9 +166,9 @@ def test_a_connector_action_is_refused_unless_the_server_is_write_enabled():
 
 
 def test_a_connector_action_runs_through_the_write_adapter(monkeypatch):
-    from quest_ai_runner.body import mcp_write_adapter
-    from quest_ai_runner.runner import action_catalog
-    from hubofhubs.the_world.tools.deep import WriteResult
+    from quest_ai_runner.the_world.tools.connected_system_operations import mcp_write_adapter
+    from quest_ai_runner.the_body.hands.quest_operations import action_catalog
+    from hubofhubs.api import WriteResult
     seen = {}
 
     class FakeAdapter:
@@ -224,8 +223,8 @@ class ReportingClient:
 
 
 def poller_with(tmp_path, registry, client, **cfg_kw):
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
     from tests.conftest import StubProvider, StubRetrieval
     cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1", tool_registry=registry,
                        retrieval=StubRetrieval({}), model_provider=StubProvider(decisions=[]), **cfg_kw)
@@ -236,7 +235,7 @@ def test_the_poller_runs_a_requested_action_directly_and_reports_done(tmp_path, 
     send = spec("send_mail", parameters={"type": "object", "properties": {"subject": {"type": "string"}}})
     client = ReportingClient()
     poller = poller_with(tmp_path, ToolRegistry([send]), client)
-    monkeypatch.setattr("quest_ai_runner.runner.poller.TaskExecutor", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no executor")))
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.request_intake.poller.TaskExecutor", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no executor")))
     task = task_for("tool", "send_mail", {"subject": "Hi"}, text="x", status="queued")
     assert poller._handle_one(task) == "task_1"
     assert client.reports == [("done", "task_1", "send_mail ok")]
@@ -386,7 +385,7 @@ def test_an_owner_without_a_stamp_still_runs():
 
 
 def standard_registry(calls):
-    from quest_ai_runner.core.tools_quest_standard import file_email_draft_spec, send_quest_email_spec
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import file_email_draft_spec, send_quest_email_spec
 
     class Mailer:
         def send_quest_email(self, quest_id, **kw):
@@ -421,7 +420,7 @@ def test_an_email_to_an_outsider_cannot_be_sent_and_the_draft_path_files_it_for_
 
 
 def test_outward_and_user_attested_tools_are_not_published_or_lose_the_attestation():
-    from quest_ai_runner.core.tools import build_tool_registry
+    from quest_ai_runner.the_world.tools.tools import build_tool_registry
     registry = build_tool_registry({"QUEST_BASE_URL": "http://x", "QUEST_API_KEY": "qsk_t"})
     published = {a["action_id"]: [f["name"] for f in a["params_schema"]] for a in build_actions(registry)}
     for withheld in ("create_quest_goal", "add_quest_strategy", "create_quest_habit", "create_quest_experiment", "update_quest_experiment", "delete_quest_experiment"):

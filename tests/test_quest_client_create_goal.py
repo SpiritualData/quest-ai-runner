@@ -7,7 +7,7 @@ _maybe_create_goal, which degraded to a no-op because "QuestClient has no create
 """
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 
 def client_capturing_body():

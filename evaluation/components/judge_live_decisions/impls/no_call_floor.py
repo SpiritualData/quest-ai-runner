@@ -1,6 +1,6 @@
 """ALTERNATIVE, offline: the model call of each judge is dropped. The quest ranker falls back to the home quest (else none), and with no reach
 verdict the planner plans as it would for a request inside the readable sources. Zero model calls."""
-from quest_ai_runner.core import quest_judge
+from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_judge
 
 
 def build(meter):  # noqa: ARG001

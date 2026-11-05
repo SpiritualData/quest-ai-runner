@@ -61,7 +61,7 @@ def test_judged_scoring_uses_regex_only_as_a_prefilter():
 
 def test_in_situ_prompt_carries_the_standing_instructions_only_in_the_standing_arm():
     from esoi_behavior import insitu
-    from quest_ai_runner.core.goal_runner_contract import compose_goal_prompt
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import compose_goal_prompt
     case = CASES[0]
     with_layer, without = insitu.compose(case, compose_goal_prompt, True), insitu.compose(case, compose_goal_prompt, False)
     assert "Evolvable Structure that Optimizes Intent" in with_layer and "Evolvable Structure" not in without

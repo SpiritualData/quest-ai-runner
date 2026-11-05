@@ -4,7 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.body.files_writer import FilesWriter
+from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
 
 SENTINEL = "OUTSIDE-ORIGINAL"
 

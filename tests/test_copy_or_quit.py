@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.textual_ui import QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
 
 class _FakeSession:
@@ -64,7 +64,7 @@ def test_copy_when_text_is_selected(monkeypatch):
 
 def arm_clock(app, monkeypatch, start: float = 1000.0) -> dict:
     """Move the clock the quit window reads, so the tests do not wait."""
-    from quest_ai_runner import textual_ui_actions
+    from quest_ai_runner.the_consciousness.terminal import textual_ui_actions
     clock = {"now": start}
     monkeypatch.setattr(textual_ui_actions.time, "monotonic", lambda: clock["now"])
     return clock

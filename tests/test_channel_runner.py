@@ -28,10 +28,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.core.adapters_channels import InboundBatch, InboundMessage, OutboundReply, SendResult
-from quest_ai_runner.runner.channel_runner import ChannelRunner
-from quest_ai_runner.runner.channel_session import ChannelSink
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_consciousness.request_intake.interface import InboundBatch, InboundMessage, OutboundReply, SendResult
+from quest_ai_runner.the_consciousness.request_intake.channel_runner import ChannelRunner
+from quest_ai_runner.the_consciousness.request_intake.channel_session import ChannelSink
 
 
 # ---------------------------------------------------------------------------

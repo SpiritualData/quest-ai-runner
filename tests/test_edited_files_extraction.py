@@ -18,7 +18,7 @@ class MockDeepResult:
 
 def test_extract_edited_files_from_output_yaml():
     """Test parsing YAML-style EDITED_FILES output."""
-    from quest_ai_runner.adapters.context_card_updater import _parse_edited_files_from_output
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import _parse_edited_files_from_output
 
     output = """\
 Task completed successfully.
@@ -38,7 +38,7 @@ Next steps: deploy
 
 def test_extract_edited_files_from_output_json():
     """Test parsing JSON-style edited_files output."""
-    from quest_ai_runner.adapters.context_card_updater import _parse_edited_files_from_output
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import _parse_edited_files_from_output
 
     output = json.dumps({
         "status": "completed",
@@ -53,7 +53,7 @@ def test_extract_edited_files_from_output_json():
 
 def test_extract_edited_files_from_result_metadata():
     """Test extracting edited_files from result.data["edited_files"]."""
-    from quest_ai_runner.adapters.context_card_updater import extract_edited_files
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import extract_edited_files
 
     result = MockDeepResult(
         met=True,
@@ -70,7 +70,7 @@ def test_extract_edited_files_from_result_metadata():
 
 def test_extract_edited_files_fallback_to_output():
     """Test fallback to output parsing when metadata is missing."""
-    from quest_ai_runner.adapters.context_card_updater import extract_edited_files
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import extract_edited_files
 
     result = MockDeepResult(
         met=True,
@@ -88,7 +88,7 @@ EDITED_FILES:
 
 def test_claude_code_jsonl_parsing():
     """Test parsing Claude Code session JSONL."""
-    from quest_ai_runner.adapters.context_card_updater import discover_claude_code_edits
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import discover_claude_code_edits
 
     # Create a temporary session structure
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -159,7 +159,7 @@ def test_claude_code_jsonl_parsing():
 
 def test_get_prompt_instruction():
     """Test that prompt instruction is well-formed."""
-    from quest_ai_runner.adapters.context_card_updater import get_edited_files_prompt_instruction
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import get_edited_files_prompt_instruction
 
     instruction = get_edited_files_prompt_instruction()
     assert "EDITED_FILES:" in instruction

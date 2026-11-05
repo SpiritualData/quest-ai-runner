@@ -9,7 +9,7 @@ choice and guards the pre-existing team-scoped behavior against regression.
 """
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestNotConfigured, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestNotConfigured, QuestClient
 
 # The runner reports the Claude models its deep worker can run on every heartbeat.
 RUNNABLE_AVAILABLE_MODELS = [{"provider": "anthropic", "model": m} for m in ("haiku", "sonnet", "opus", "fable")]
@@ -101,7 +101,7 @@ def test_heartbeat_reports_the_tool_listing_when_the_client_has_one():
 
 def test_tool_registry_public_listing_is_serializable_and_hides_handlers():
     import json
-    from quest_ai_runner.core.tools import ToolRegistry, ToolSpec
+    from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolSpec
     registry = ToolRegistry([ToolSpec(
         name="zeta", description="Z", handler=lambda a, c: "x", when_to_use="always", mutates=False,
         parameters={"type": "object", "properties": {"q": {"type": "string", "flag": "--q"}}, "required": ["q"]},

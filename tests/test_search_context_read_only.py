@@ -8,8 +8,8 @@ import argparse
 import hashlib
 from pathlib import Path
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.cli_context import _cmd_search_context, select_card_ids_for_text
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_consciousness.terminal.cli_context import _cmd_search_context, select_card_ids_for_text
 
 
 def _corpus(tmp_path: Path) -> Path:

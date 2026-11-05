@@ -63,7 +63,7 @@ class PrivateTrained:
     MIN_ROWS, MIN_POSITIVES, MAX_TRAIN_CASES = 60, 15, 60
 
     def __init__(self, abstain=False):
-        from hubofhubs.the_intelligence.subconscious.context_retriever.fusion import HybridRrf
+        from hubofhubs.api import HybridRrf
         self.hybrid_class, self.abstain = HybridRrf, abstain
         self.cases = None
         self.rows = {}            # case id -> (feature rows, labels), computed once
@@ -80,7 +80,7 @@ class PrivateTrained:
 
     def features(self, case):
         from context_selection import private_cases
-        from hubofhubs.the_intelligence.subconscious.context_retriever.fusion import Candidates
+        from hubofhubs.api import Candidates
         if case["id"] not in self.rows:
             corpus, owner = private_cases.item_corpus(case)
             hybrid = self.hybrid_class()
@@ -109,8 +109,8 @@ class PrivateTrained:
 
     def select(self, task, corpus):
         import numpy as np
-        from hubofhubs.the_intelligence.subconscious.context_retriever.abstain import CONFIDENCE_FLOOR, confidence
-        from hubofhubs.the_intelligence.subconscious.context_retriever.fusion import Candidates
+        from hubofhubs.api import CONFIDENCE_FLOOR, confidence
+        from hubofhubs.api import Candidates
         self.load()
         position = self.by_task.get(task)
         hybrid = self.hybrid_class()

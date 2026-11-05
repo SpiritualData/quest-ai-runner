@@ -1,4 +1,4 @@
-from quest_ai_runner.runner.executor import earlier_run_block
+from quest_ai_runner.the_consciousness.request_intake.executor import earlier_run_block
 
 
 def test_first_run_gets_nothing():

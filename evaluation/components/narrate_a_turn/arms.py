@@ -4,7 +4,7 @@ import threading
 import time
 
 import common  # noqa: F401  (puts the repository on the path)
-from quest_ai_runner.core.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
+from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
 
 MODEL = "claude-haiku"          # the family alias the claude CLI resolves; the tier a first beat runs on (QAR_MODEL_FAST)
 BEAT_WAIT_SECONDS = 90.0        # how long the eval waits for a beat that never comes before it records none

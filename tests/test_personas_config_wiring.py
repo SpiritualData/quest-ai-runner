@@ -11,8 +11,8 @@ this at construction time and writes the result back onto ``config.rep_sync_reso
 """
 from __future__ import annotations
 
-from quest_ai_runner.config import RunnerConfig, resolve_rep_sync_resolver
-from quest_ai_runner.runner.personas import PersonaResolverConfig
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_rep_sync_resolver
+from quest_ai_runner.the_consciousness.representatives.personas import PersonaResolverConfig
 
 
 def test_neither_set_stays_none():
@@ -66,7 +66,7 @@ def test_does_not_mutate_cfg_itself():
 
 def test_poller_writes_the_resolved_callable_back_onto_config(monkeypatch, tmp_path):
     from tests.conftest import StubProvider, StubRetrieval
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     registry_file = tmp_path / "registry.json"
     registry_file.write_text('{"user_1": "alex"}')

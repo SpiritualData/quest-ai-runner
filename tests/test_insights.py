@@ -7,16 +7,11 @@ block does no matching between an insight's category tags and any quest.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.runner.insights import (
-    DEFAULT_WINDOW_DAYS,
-    InsightsContext,
-    block_header,
-    collect_quest_insights,
-)
+from quest_ai_runner.the_intelligence.higher_mind.guidance.insights import DEFAULT_WINDOW_DAYS, InsightsContext, block_header, collect_quest_insights
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
-from quest_ai_runner.runner.quest_client_support import QuestWriteError
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError
 
 NOW = datetime(2026, 8, 12, 9, 0, 0, tzinfo=timezone.utc)
 
@@ -245,14 +240,14 @@ def test_empty_context_renders_nothing():
 
 def test_collect_unacted_insights_no_longer_exists():
     """The review-all path is gone on purpose; context assembly must not be able to call it."""
-    import quest_ai_runner.runner.insights as mod
+    import quest_ai_runner.the_intelligence.higher_mind.guidance.insights as mod
     assert not hasattr(mod, "collect_unacted_insights")
 
 
 # --- the executor's context view -----------------------------------------------------------
 
 def test_executor_reads_the_tasks_quest_insights_only():
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     client = FakeQuestInsightsClient([_entry("e1", "assigned to this quest", created_at=NOW)])
     ex = TaskExecutor(client, None)
     text = ex._fetch_quest_captures("q1")
@@ -261,7 +256,7 @@ def test_executor_reads_the_tasks_quest_insights_only():
 
 
 def test_executor_with_no_quest_gets_no_insights_and_reads_nothing():
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     client = FakeQuestInsightsClient([_entry("e1", "x")])
     ex = TaskExecutor(client, None)
     assert ex._fetch_quest_captures(None) == ""

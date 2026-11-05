@@ -2,7 +2,7 @@
 and empty requests are answered with no model call, every other request costs ONE real ``claude`` CLI call (the runner's
 ``ClaudeCliProvider``) that judges the best candidates together. No scripted stand-in; needs a logged-in ``claude`` and the cached
 embedder."""
-from quest_ai_runner.core import spec_selection
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import spec_selection
 from spec_selection import arms
 
 PAID = True   # real model calls (subscription-metered): `esoi run --stale` asks before running it

@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 import common
-from quest_ai_runner.core.recipes import RecipeStore
+from quest_ai_runner.the_intelligence.mind.planner.recipes import RecipeStore
 
 
 def build(meter):

@@ -24,7 +24,7 @@ class FakeQuestClient:
 
     def create_task(self, text, **kwargs):  # noqa: ARG002
         if self.mode == "raises":
-            from quest_ai_runner.runner.quest_client import QuestApiError
+            from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
             raise QuestApiError("queue refused")
         return {} if self.mode == "no_id" else {"id": "task-1"}
 
@@ -83,7 +83,7 @@ def reference_answer(case):
 
 def run_ack(case, provider_factory, send=None):
     """The real ``send`` command with the task queue and the model provider at the boundary."""
-    from quest_ai_runner import cli_quest
+    from quest_ai_runner.the_consciousness.terminal import cli_quest
     send = send or cli_quest._cmd_send
     FakeQuestClient.mode = case.get("create_task", "ok")
     args = types.SimpleNamespace(text=case["request"], team_id="", goal_id=None, scheduled_at=None, card_ids=[],
@@ -100,7 +100,7 @@ def run_ack(case, provider_factory, send=None):
 
     out = io.StringIO()
     with common.hermetic_env({"QUEST_BASE_URL": common.OFFLINE_QUEST_URL, "QUEST_API_KEY": "offline-eval"}), \
-            mock.patch("quest_ai_runner.runner.quest_client.QuestClient", FakeQuestClient), \
+            mock.patch("quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient", FakeQuestClient), \
             mock.patch.object(cli_quest, "_model_provider_from_env", counted if provider_factory else no_provider), \
             contextlib.redirect_stdout(out):
         code = send(args, mock.MagicMock())
@@ -109,13 +109,13 @@ def run_ack(case, provider_factory, send=None):
 
 def helpers_from(provider, model="stub-model"):
     """The real ``_ask_classifier`` and ``_goal_judge`` with the model resolution replaced by the arm's provider."""
-    from quest_ai_runner import cli_config
+    from quest_ai_runner.the_body.configuration import cli_config
     with mock.patch.object(cli_config, "_quest_model", lambda: (provider, model)):
         return cli_config._ask_classifier("q1", FakeQuestClient()), cli_config._goal_judge("q1", FakeQuestClient())
 
 
 def run_classify(case, classify):
-    from quest_ai_runner.runner.plan_reconcile import validate_decision
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.plan_reconcile import validate_decision
     raw = classify(dict(case["ask"]), ROSTER) if classify else None
     return {"raw": raw, "decision": validate_decision(raw, {m["user_id"] for m in ROSTER})}
 
@@ -125,7 +125,7 @@ def run_judge(case, judge):
 
 
 def run_gate(case, classify):
-    from quest_ai_runner.runner.plan_reconcile import classify_asks
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.plan_reconcile import classify_asks
     sent = []
 
     def spy(ask, roster):

@@ -1,5 +1,5 @@
-"""CURRENT: the live entry points. ``quest_ai_runner.cli.main`` (argparse tree, store commands, quest, send,
-create-goal, context) and ``quest_ai_runner.tools.__main__.main`` (list, show, call), called in-process with a
+"""CURRENT: the live entry points. ``quest_ai_runner.the_consciousness.terminal.cli.main`` (argparse tree, store commands, quest, send,
+create-goal, context) and ``quest_ai_runner.the_consciousness.terminal.__main__.main`` (list, show, call), called in-process with a
 scrubbed environment and a scratch folder; stdout and stderr are captured. Nothing is faked. Zero model calls."""
 import contextlib
 import io
@@ -7,8 +7,8 @@ import tempfile
 from pathlib import Path
 
 from common import hermetic_env
-from quest_ai_runner import cli
-from quest_ai_runner.tools import __main__ as tools_main
+from quest_ai_runner.the_consciousness.terminal import cli
+from quest_ai_runner.the_consciousness.terminal import __main__ as tools_main
 
 ENTRIES = {"qar": cli.main, "tools": tools_main.main}
 

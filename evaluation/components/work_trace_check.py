@@ -39,8 +39,8 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import urlsplit
 
-from hubofhubs.the_consciousness.terminal.trace import domain_of, validate
-from quest_ai_runner.core.work_trace import facts_about, host_cited, is_record_title, reply_draws_on
+from hubofhubs.api import domain_of, validate
+from quest_ai_runner.the_intelligence.mind.response_writer.work_trace import facts_about, host_cited, is_record_title, reply_draws_on
 
 PRIVATE_KINDS = ("records", "action")
 HOSTNAME = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$")

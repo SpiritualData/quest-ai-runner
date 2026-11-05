@@ -8,13 +8,11 @@ its persona + learned corrections into the deep run.
 
 What the resolver seam did **not** give you was anything to build a resolver *with*. So every lane
 wrote the same machinery by hand: a registry mapping ids to skill folders under a skills root, plus
-a policy for choosing one. `quest_ai_runner.runner.personas` is that machinery, and the policies are
+a policy for choosing one. `quest_ai_runner.the_consciousness.representatives.personas` is that machinery, and the policies are
 configuration:
 
 ```python
-from quest_ai_runner.runner import (
-    PersonaResolverConfig, build_persona_resolver,
-)
+from quest_ai_runner.the_consciousness.representatives.personas import PersonaResolverConfig, build_persona_resolver
 
 cfg.rep_sync_resolver = build_persona_resolver(
     PersonaResolverConfig(skills_root=SKILLS_ROOT, registry_file=REGISTRY_FILE),

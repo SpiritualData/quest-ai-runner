@@ -13,7 +13,7 @@
    "exit": 0,
    "contract": true
   },
-  "source": "quest_ai_runner/cli_quest.py _cmd_send and the ack prompt spec: a queued task prints one acknowledgement sentence, at most 20 words, no dash; the request text is the fixture ASKS of tests/test_quest_asks_brief.py"
+  "source": "quest_ai_runner/the_consciousness/terminal/cli_quest.py _cmd_send and the ack prompt spec: a queued task prints one acknowledgement sentence, at most 20 words, no dash; the request text is the fixture ASKS of tests/test_quest_asks_brief.py"
  },
  {
   "id": "AST-ACK-02",

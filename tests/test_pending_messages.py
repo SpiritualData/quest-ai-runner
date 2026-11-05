@@ -17,9 +17,9 @@ attempt/verification boundary (see ``core/orchestrator.py`` deep retry loop, :54
 """
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubProvider, StubRetrieval
 from .test_runner import MockQuestClient

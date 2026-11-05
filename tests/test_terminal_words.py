@@ -1,8 +1,8 @@
 """QAR keeps the Quest wording in the hub's terminal blocks: what users see is the Quest app's sentence, not the hub's generic one."""
-from hubofhubs.the_consciousness.terminal import strings
+from hubofhubs.api import strings
 
-import quest_ai_runner.textual_ui_trail  # noqa: F401  (the terminal's setup imports the Quest wording)
-from quest_ai_runner.terminal_words import QUEST_WORDS
+import quest_ai_runner.the_consciousness.terminal.textual_ui_trail  # noqa: F401  (the terminal's setup imports the Quest wording)
+from quest_ai_runner.the_consciousness.terminal.terminal_words import QUEST_WORDS
 
 
 def event(visible=False):
@@ -22,7 +22,7 @@ def test_the_terminal_setup_registers_the_quest_words():
 
 
 def test_a_rendered_trail_reads_as_quest():
-    from hubofhubs.the_consciousness.terminal import trail
+    from hubofhubs.api import trail
     group = next(g for g in trail.expanded_groups(trail.apply_event([], event()), False) if g["id"] == "records")
     assert group["title"] == "From your Quest"
     assert any(row.endswith("Quest") for row in group["rows"])

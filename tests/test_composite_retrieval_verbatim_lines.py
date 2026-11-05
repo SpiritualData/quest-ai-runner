@@ -12,8 +12,8 @@ text before the first colon is used as the dedup key.
 """
 from __future__ import annotations
 
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 
 
 class _StubSourceAdapter:

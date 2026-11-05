@@ -17,14 +17,9 @@ lists (``_previous_period_summary``, ``_last_run_output``), the same pattern
 ``tests/test_autopilot.py`` already uses for ``_eligible_quests``/``_handle_proposal``/
 ``_maybe_create_goal``; no network and no full pass run needed.
 """
-from quest_ai_runner.runner.autopilot import (
-    AUTOPILOT_PASS_KIND,
-    AutopilotPass,
-    compose_batch_text,
-    current_scope_label,
-)
-from quest_ai_runner.runner.autopilot_defaults import AUTOPILOT_WORK_KIND, LAST_RUN_OUTPUT_MAX_CHARS
-from quest_ai_runner.critical_thinking.autopilot_briefs import render_last_run_output, select_last_run_output
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AUTOPILOT_PASS_KIND, AutopilotPass, compose_batch_text, current_scope_label
+from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import AUTOPILOT_WORK_KIND, LAST_RUN_OUTPUT_MAX_CHARS
+from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import render_last_run_output, select_last_run_output
 
 from .test_autopilot import NOW, FakeAutopilotClient, _goal, _goals_payload, _now
 

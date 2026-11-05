@@ -11,12 +11,7 @@ Offline; the store here is an in-memory dict standing in for a real database.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.hold_the_intents.feedback_ledger import (
-    ACCEPTED,
-    AWAITING_ACCEPTANCE,
-    DONE,
-    FeedbackLedger,
-)
+from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import ACCEPTED, AWAITING_ACCEPTANCE, DONE, FeedbackLedger
 
 NOW = datetime(2026, 9, 12, 9, 0, 0, tzinfo=timezone.utc)
 

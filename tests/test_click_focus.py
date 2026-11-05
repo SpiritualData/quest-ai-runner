@@ -12,7 +12,7 @@ fake-session pattern in test_future_context_ui.py.
 
 from __future__ import annotations
 
-from quest_ai_runner.textual_ui import QuestAITerminal, TranscriptLog, PromptTextArea
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal, TranscriptLog, PromptTextArea
 
 
 class _FakeSession:

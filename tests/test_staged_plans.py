@@ -21,19 +21,16 @@ from __future__ import annotations
 import threading
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import Mode
-from quest_ai_runner.core.adapters_values import PlanDecision
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_decide_tool import (
-    DECIDE_TOOL, DEFERRED_RUNNER_KEY, decide_tool_for,
-)
-from quest_ai_runner.core.orchestrator_decisions import normalize_decision
-from quest_ai_runner.core.orchestrator_turn import _Emitter
-from quest_ai_runner.core.adapters_deep import StagedPlanRunner
-from hubofhubs.the_intelligence.mind.planner.staged_plan import (
-    count_tasks, is_staged, normalize_staged_subtasks, sequence_stages, split_plan, step_allows, tasks_flat)
+from hubofhubs.api import DeepResult
+from hubofhubs.api import Mode
+from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL, DEFERRED_RUNNER_KEY, decide_tool_for
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import _Emitter
+from quest_ai_runner.the_consciousness.judgment_calls.interface import StagedPlanRunner
+from hubofhubs.api import count_tasks, is_staged, normalize_staged_subtasks, sequence_stages, split_plan, step_allows, tasks_flat
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import RecordingRunner, ScriptedProvider
@@ -348,7 +345,7 @@ def test_a_quest_data_plan_gets_the_same_write_surface_instruction_a_single_task
     subtasks = normalize_staged_subtasks([[task("A"), task("B", "prev_met")]], max_items=4, max_stages=4, max_tasks=8)
     run_plan(orchestrator(RecordingRunner()), subtasks, runner_override=queue, user_ordered=True,
              plan_kw={"deep_target": "quest_data"})
-    _, expected_brief = __import__("quest_ai_runner.core.orchestrator_decisions", fromlist=["x"]).apply_quest_data_ladder_guard(
+    _, expected_brief = __import__("quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions", fromlist=["x"]).apply_quest_data_ladder_guard(
         [queue], "do A", deliberate_choice=True)
     assert queue.offers[0]["stages"][0][0]["brief"] == expected_brief
     assert expected_brief != "do A"
@@ -395,13 +392,12 @@ def test_the_compact_schema_keeps_the_nesting_description_only_when_staged_plans
 
 
 def test_the_planner_prompt_stops_calling_every_entry_a_concurrent_run_only_when_staged_plans_are_on():
-    from quest_ai_runner.core.planner_prompt import (
-        DEEP_FAN_OUT, DEEP_FAN_OUT_CONCURRENT, DEEP_FAN_OUT_STAGED, PLANNER_PROFILES,
-    )
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
+        DEEP_FAN_OUT, DEEP_FAN_OUT_CONCURRENT, DEEP_FAN_OUT_STAGED, PLANNER_PROFILES)
     assert DEEP_FAN_OUT_CONCURRENT in DEEP_FAN_OUT
     for template in PLANNER_PROFILES.values():
         assert DEEP_FAN_OUT_CONCURRENT in template
-    from quest_ai_runner.core.orchestrator_planning import PlanningMixin  # noqa: F401
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_planning import PlanningMixin  # noqa: F401
     captured: Dict[str, str] = {}
 
     class Capture(ScriptedProvider):
@@ -420,7 +416,7 @@ def test_the_planner_prompt_stops_calling_every_entry_a_concurrent_run_only_when
 
 def test_turning_staged_plans_off_adds_no_prompt_or_schema_tokens():
     import json
-    from quest_ai_runner.core.prompt_budget import estimate_tokens
+    from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import estimate_tokens
     base = estimate_tokens(json.dumps(decide_tool_for(False, False), separators=(",", ":")))
     off = estimate_tokens(json.dumps(decide_tool_for(False, False, staged_plans=False), separators=(",", ":")))
     base_c = estimate_tokens(json.dumps(decide_tool_for(False, False, compact=True), separators=(",", ":")))

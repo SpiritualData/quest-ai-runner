@@ -4,7 +4,7 @@
 listing each team's quests, not by the one configured ``team_id``. This is the read that starts
 that walk, reachable from the CLI as ``quest-ai-runner quest list_teams``.
 """
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 
 def client_returning(response):
@@ -48,6 +48,6 @@ def test_list_teams_never_raises_on_api_error():
 
 
 def test_list_teams_is_a_read_for_the_quest_cli():
-    from quest_ai_runner.cli import _quest_method_is_read_only
+    from quest_ai_runner.the_consciousness.terminal.cli import _quest_method_is_read_only
 
     assert _quest_method_is_read_only("list_teams")

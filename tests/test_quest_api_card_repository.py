@@ -10,8 +10,8 @@ import logging
 
 import pytest
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.quest_api_card_repository import (
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import (
     BULK_MAX_CARDS, NullCardCache, QuestApiCardRepository, QuestApiCardVectorStore)
 from tests.quest_card_backend_fake import FakeCardBackend
 
@@ -46,7 +46,7 @@ def test_load_all_returns_the_mapping_the_protocol_requires(backend):
 
 
 def test_older_mapping_reply_shape_is_still_accepted():
-    from quest_ai_runner.adapters.quest_api_card_repository import _cards_by_id
+    from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import _cards_by_id
     assert _cards_by_id({"k": {"name": "No id"}}) == {"k": {"name": "No id", "id": "k"}}
     assert _cards_by_id({"cards": "junk"}) == {}
     assert _cards_by_id(["not a card"]) == {}

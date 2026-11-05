@@ -14,24 +14,13 @@ import urllib.request
 
 import pytest
 
-from quest_ai_runner.adapters.files_server import build_server
-from quest_ai_runner.adapters.google_link_reader import (
-    KIND_DOC,
-    KIND_FILE,
-    KIND_FOLDER,
-    KIND_FORM,
-    KIND_SHEET,
-    KIND_SLIDES,
-    GoogleLinkConfig,
-    GoogleLinkReader,
-    GoogleReadError,
-    ReadOnlyGoogleClient,
-    is_allowed_read_url,
-    parse_google_link,
-)
-from quest_ai_runner.adapters.private_link_web import PrivateLinkWebResearch
-from quest_ai_runner.body.remote_files_adapter import RemoteFilesAdapter
-from quest_ai_runner.core.adapters_values import Observation
+from quest_ai_runner.the_world.tools.file_reading.files_server import build_server
+from quest_ai_runner.the_world.tools.web_search.google_link_reader import (
+    KIND_DOC, KIND_FILE, KIND_FOLDER, KIND_FORM, KIND_SHEET, KIND_SLIDES, GoogleLinkConfig, GoogleLinkReader, GoogleReadError,
+    ReadOnlyGoogleClient, is_allowed_read_url, parse_google_link)
+from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateLinkWebResearch
+from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 
 DOC = "docAAAAAAAAAA1"
 SHEET = "sheetBBBBBBB2"
@@ -513,7 +502,7 @@ def test_wrapper_prefers_the_readers_specific_error():
 
 
 def test_a_sheet_excerpt_keeps_the_tab_names_and_header_row():
-    from quest_ai_runner.adapters.google_link_reader import sheet_orientation
+    from quest_ai_runner.the_world.tools.web_search.google_link_reader import sheet_orientation
     drive = FakeDrive()
     rows = "\n".join(f"row{i}\t" + "cell " * 40 for i in range(900))
     drive.sheet_csv = "colA,colB\n" + rows

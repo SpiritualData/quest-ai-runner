@@ -23,7 +23,7 @@ topic, and two cards are duplicates only when they pin the same files AND name t
 """
 import json
 
-from hubofhubs.the_body.internal_context.card_store.context_card_extraction import path_slug
+from hubofhubs.api import path_slug
 
 OUTER_ROOT, INNER_ROOT = "corpus", "corpus/org"
 INNER_TOPICS = ("poller", "executor", "ledger", "planner", "router", "budget")

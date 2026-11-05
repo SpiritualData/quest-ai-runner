@@ -223,7 +223,7 @@ QAR_ANTICIPATION_LLM=1   # ALSO opt in the optional one-call-per-turn display-te
 Or from config directly:
 
 ```python
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 
 cfg = RunnerConfig(...)
 cfg.orchestrator.anticipation_enabled = True

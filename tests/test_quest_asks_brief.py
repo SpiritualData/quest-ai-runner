@@ -8,12 +8,12 @@ backend's POST /api/asks and PATCH /api/asks/{key} (by_run) expect, driven throu
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.core import tools_quest_ops as ops
-from quest_ai_runner.core.tools import ToolContext
-from quest_ai_runner.runner.autopilot import AutopilotPass
-from quest_ai_runner.critical_thinking.autopilot_briefs import compose_batch_text
-from quest_ai_runner.runner.quest_asks_brief import asks_brief_section, fetch_asks
-from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
+from quest_ai_runner.the_world.tools.tools import ToolContext
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
+from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import compose_batch_text
+from quest_ai_runner.the_intelligence.proactivity.quest_asks_brief import asks_brief_section, fetch_asks
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 
@@ -146,7 +146,7 @@ def test_update_ask_sends_a_run_claim_and_never_an_acceptance():
 
 def test_the_client_methods_raise_on_failure_and_omit_unset_fields():
     import pytest
-    from quest_ai_runner.runner.quest_client_support import QuestApiError, QuestWriteError
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError, QuestWriteError
     client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
     sent = []
 

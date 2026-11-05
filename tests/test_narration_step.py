@@ -6,8 +6,8 @@ STEP_REPLY, so a failed (or refused) beat was recorded as a failed reply and a l
 as failed. These tests pin: own step, no emission on failure (detected via the step outcome, not
 the stand-in text), and a prompt that does not ask the model to reveal its thinking.
 """
-from hubofhubs.the_world.model_plumbing.model import STEP_NARRATION, STEP_REPLY
-from quest_ai_runner.core.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
+from hubofhubs.api import STEP_NARRATION, STEP_REPLY
+from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
 
 STAND_IN = "Sorry, something went wrong on my side."
 

@@ -12,30 +12,17 @@ they work to, and the goals only ever appear in the ladder.
 import time
 from datetime import datetime, timezone
 
-from quest_ai_runner.runner.autopilot_defaults import (
-    AUTOPILOT_WORK_KIND,
-    BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS,
-    BUNDLED_DEFAULT_QUEST_INSTRUCTIONS,
-    DEFAULT_ASSISTANT_REP_ID,
-)
-from quest_ai_runner.runner.autopilot import (
-    DEFAULT_TEAM_DAILY_BUDGET,
-    AutopilotPass,
-    current_scope_label,
-    default_persona_instructions_for,
-    default_quest_instructions_for,
-    has_new_ask_since,
-    run_requested,
-    compose_batch_text,
-    persona_instructions_for,
-    resolve_persona,
-)
-from quest_ai_runner.runner.autopilot_personas import PERSONA_HELD, personas_on_duty, resolve_task_persona
-from quest_ai_runner.runner.autopilot_periods import cadence_due
+from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
+    AUTOPILOT_WORK_KIND, BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS, DEFAULT_ASSISTANT_REP_ID)
+from quest_ai_runner.the_intelligence.proactivity.autopilot import (
+    DEFAULT_TEAM_DAILY_BUDGET, AutopilotPass, current_scope_label, default_persona_instructions_for, default_quest_instructions_for,
+    has_new_ask_since, run_requested, compose_batch_text, persona_instructions_for, resolve_persona)
+from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import PERSONA_HELD, personas_on_duty, resolve_task_persona
+from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import cadence_due
 # The client's OWN period formats, so the fake below accepts exactly what the real one accepts
 # instead of a shape invented here (the five quest-backend's period_utils parses).
-from quest_ai_runner.runner.quest_client import _PERIOD_RE
-from quest_ai_runner.runner.quest_client_support import WriteResult
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import _PERIOD_RE
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import WriteResult
 
 NOW = datetime(2026, 7, 12, 9, 0, 0, tzinfo=timezone.utc)  # a Sunday
 MONDAY = datetime(2026, 7, 13, 9, 0, 0, tzinfo=timezone.utc)
@@ -895,7 +882,7 @@ def test_created_task_links_to_the_QUEST_not_a_per_goal_id():
     # The autopilot-authored marker is the PERSISTENT task_kind, and it must be the WORK kind,
     # never the pass kind (which the executor would route into another autopilot pass: a loop).
     assert created["task_kind"] == "autopilot_work"
-    from quest_ai_runner.runner.autopilot import AUTOPILOT_PASS_KIND
+    from quest_ai_runner.the_intelligence.proactivity.autopilot import AUTOPILOT_PASS_KIND
     assert created["task_kind"] != AUTOPILOT_PASS_KIND
     # source must be a value the API's closed enum accepts, or the create 400s.
     assert created["source"] in ("chat", "reflection", "review")
@@ -1063,7 +1050,7 @@ def test_no_resolved_persona_sends_no_rep_field():
 def _propose(client, quest, *, mode="act", dry_run=False, scope_label="day:2026-07-12",
              result=None):
     """Run the proposal path for one quest, the way ``_run_one_quest`` would with no batches."""
-    from quest_ai_runner.runner.autopilot import AutopilotResult
+    from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotResult
 
     passer = AutopilotPass(client, team_id="team1", now=_now)
     result = result if result is not None else AutopilotResult(ran_at=NOW, dry_run=dry_run)
@@ -1510,7 +1497,7 @@ def test_compose_batch_text_improves_one_solution_even_under_a_written_brief():
     in the built-in quest brief, which a quest's own brief replaces outright, so any quest whose
     owner had written one never saw it. It belongs to the brief's always-required part instead,
     with or without a written brief, and once, not again inside the default brief."""
-    from quest_ai_runner.runner.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
     written = compose_batch_text("Ship it", instructions="Work only on the eval tracker.",
                                  default_quest_instructions=BUNDLED_DEFAULT_QUEST_INSTRUCTIONS)
     assert "Work only on the eval tracker." in written
@@ -1632,7 +1619,7 @@ def test_period_keys_match_the_backends_underscore_format():
     plain ISO date, but week/month/quarter are 2026_W28 / 2026_07 / 2026_Q3. A hyphen here would
     never match the current period, so every quest would silently fall through to the unscoped
     fallback and today's goals would never be worked."""
-    from quest_ai_runner.runner.autopilot_periods import _current_period_key
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import _current_period_key
 
     assert _current_period_key("day", NOW) == "2026-07-12"
     assert _current_period_key("week", NOW) == "2026_W28"
@@ -1760,9 +1747,9 @@ def test_daily_budget_defaults_to_the_documented_default():
 # --- executor routing: handler == "autopilot" replaces the normal deep-run path ------------------
 
 def test_executor_routes_autopilot_handler_to_the_wired_pass():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient
@@ -1786,9 +1773,9 @@ def test_executor_routes_autopilot_handler_to_the_wired_pass():
 
 
 def test_executor_reports_failed_when_autopilot_handler_but_no_pass_wired():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient
@@ -1810,7 +1797,7 @@ def test_executor_routes_on_task_kind_even_after_a_claim_overwrote_the_handler()
     or resumed after a claim no longer has handler == "autopilot" -- routing on handler alone would
     silently run the pass task as an ordinary deep task. ``task_kind`` is persistent and is never
     touched by the claim path, so it must be what decides the route."""
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     from .conftest import StubProvider
     from .test_runner import MockQuestClient, _brain
@@ -1834,7 +1821,7 @@ def test_executor_routes_on_task_kind_even_after_a_claim_overwrote_the_handler()
 
 def test_executor_still_routes_a_legacy_handler_only_pass_task():
     """Back-compat: a pass task queued BEFORE the backend gained task_kind still routes."""
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     from .conftest import StubProvider
     from .test_runner import MockQuestClient, _brain
@@ -1854,8 +1841,8 @@ def test_autopilot_created_work_is_never_routed_back_into_another_pass():
     """The loop guard. Work batches carry task_kind="autopilot_work", NOT the pass's "autopilot"
     kind -- otherwise the executor would route each created task into another autopilot pass,
     which would create more tasks, forever."""
-    from quest_ai_runner.runner.executor import _is_autopilot_pass
-    from quest_ai_runner.runner.autopilot_defaults import AUTOPILOT_WORK_KIND
+    from quest_ai_runner.the_consciousness.request_intake.executor import _is_autopilot_pass
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import AUTOPILOT_WORK_KIND
 
     assert _is_autopilot_pass({"task_kind": "autopilot"}) is True
     assert _is_autopilot_pass({"task_kind": AUTOPILOT_WORK_KIND}) is False
@@ -1866,7 +1853,7 @@ def test_executor_ordinary_handler_value_is_not_routed_to_autopilot():
     the autopilot route — only the exact value "autopilot" triggers it. Proof: with NO
     autopilot_pass wired, a misrouted task would report failed ("autopilot is not configured");
     instead it completes normally through the answer path."""
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     from .conftest import StubProvider
     from .test_runner import MockQuestClient, _brain
@@ -1916,7 +1903,7 @@ class _ContextEntryClient(FakeAutopilotClient):
 
 
 def test_a_pass_writes_its_conclusion_as_the_quests_next_steps(tmp_path):
-    from quest_ai_runner.runner.quest_folder_sync import NEXT_STEPS_ENTRY_NAME, read_next_steps
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import NEXT_STEPS_ENTRY_NAME, read_next_steps
 
     client = _ContextEntryClient(
         quests=[_quest("q1")],
@@ -1954,7 +1941,7 @@ def test_a_second_pass_replaces_the_artifact_instead_of_adding_another(tmp_path)
 def test_the_batch_reads_the_standing_artifact_as_the_plan_of_record(tmp_path):
     """An attended session may have refreshed it since the last pass, so the pass must work from
     the same answer rather than its own reconstruction."""
-    from quest_ai_runner.runner.quest_folder_sync import NextSteps, write_next_steps
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import NextSteps, write_next_steps
 
     write_next_steps(str(tmp_path), "q1", NextSteps(
         steps=["Send the revised draft to the reader who is waiting on it"],
@@ -1996,8 +1983,7 @@ def test_a_pass_that_produced_nothing_leaves_the_existing_artifact_alone(tmp_pat
     """Overwriting a considered answer on a day the quest was gated would make the artifact less
     trustworthy than the guesswork it replaces. The gate here is the cadence: a weekly quest that
     already ran today does no work, and must not rewrite its own conclusion either."""
-    from quest_ai_runner.runner.quest_folder_sync import (NextSteps, read_next_steps,
-                                                          write_next_steps)
+    from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import NextSteps, read_next_steps, write_next_steps
 
     write_next_steps(str(tmp_path), "q1", NextSteps(steps=["The considered answer"]))
     client = _ContextEntryClient(

@@ -600,7 +600,7 @@ def test_the_broken_baseline_fails_every_jarvis_case_and_the_floor_fails_those_t
 
 
 def test_no_jarvis_message_reads_as_a_veto_on_the_write_it_asks_for():
-    from quest_ai_runner.core.orchestrator_decisions import message_forbids_new_task
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import message_forbids_new_task
     assert not [c["id"] for c in JARVIS if message_forbids_new_task(c["message"])]
 
 

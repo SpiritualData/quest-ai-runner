@@ -6,9 +6,9 @@ ask "did the guidance / the mid-run message reach the planner?". ``answer`` retu
 here calls out of the process. ``on_plan`` is an optional hook called with the 0-based planner call index
 before the decision is returned, which is how a case pushes a message "while the run is working"."""
 import common  # noqa: F401  (puts the repo on sys.path)
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 
 class ScriptedProvider:

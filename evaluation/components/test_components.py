@@ -46,7 +46,7 @@ def test_classification_scorer_rules():
 def test_quest_ops_scorer_catches_wrong_and_extra_writes():
     from quest_ops.fake_quest import WORLD
     from quest_ops.score import score_case
-    from quest_ai_runner.core.tools import ToolContext
+    from quest_ai_runner.the_world.tools.tools import ToolContext
 
     def do(*calls):
         def fn(msg, world):
@@ -76,7 +76,7 @@ def test_every_impl_builds_a_callable():
 def test_planner_situation_scorer_fails_a_prompt_that_drops_a_needed_rule():
     """The invariant is only worth its name if a prompt missing a rule the turn needs fails it."""
     from prompt_size.score import marker, score_case
-    from quest_ai_runner.core.planner_prompt import PLANNER_RULES
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_RULES
     texts = {r.id: marker(r) for r in PLANNER_RULES}
     case = {"point": "planner_situation", "name": "n", "situation": {}, "requires": ["deep-action"], "absent": ["deep-difficulty"]}
     good = lambda point, inputs: texts["decision-order"] + texts["deep-action"]  # noqa: E731
@@ -142,7 +142,7 @@ def test_staleness_scorer_separates_sha256_from_mtime_size():
 def test_recipe_fast_path_scorer_teaches_once_and_checks_the_world():
     from recipe_fast_path import score
     from recipe_fast_path.fake_world import TEACH_TOOLS
-    from quest_ai_runner.core.tools import ToolContext
+    from quest_ai_runner.the_world.tools.tools import ToolContext
     sent = []
 
     def good(msg, world):
@@ -188,7 +188,7 @@ def test_hybrid_union_wraps_the_live_assembler(tmp_path, monkeypatch):
             return out
         return embed
     monkeypatch.setattr(hybrid_union, "embedder", fake_embedder)
-    import quest_ai_runner.select_context.hybrid_context_assembler as live
+    import quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler as live
     calls = []
     original = live.HybridContextAssembler.assemble
     monkeypatch.setattr(live.HybridContextAssembler, "assemble",

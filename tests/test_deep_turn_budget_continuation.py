@@ -28,10 +28,10 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -280,7 +280,7 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
     task failed. The account of the work travels WITH the failure now, labelled unfinished."""
     from .conftest import StubProvider
     from .test_runner import MockQuestClient
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
@@ -317,7 +317,7 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
 def test_the_grown_budget_is_capped():
     """A worker going in circles must not talk its way into an unbounded run one continuation at a
     time: the growth stops at the cap, it does not keep doubling."""
-    from quest_ai_runner.core.orchestrator import DEEP_CONTINUATION_TURN_MULTIPLIER_CAP as CAP
+    from quest_ai_runner.the_intelligence.mind.orchestrator import DEEP_CONTINUATION_TURN_MULTIPLIER_CAP as CAP
 
     provider = ScriptedProvider(plans=[PLAN],
                                 verdicts=[{"met": False, "reason": reason} for reason in (

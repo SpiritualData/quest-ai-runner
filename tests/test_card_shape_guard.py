@@ -1,11 +1,11 @@
 """No card per file reaches the card store or the Quest backend: a batch of one card per file is refused with a notice, topic cards pass."""
 import json
 
-from quest_ai_runner.adapters import card_shape_guard
-from quest_ai_runner.adapters.card_store_upload import apply_upload, plan_upload
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
-from hubofhubs.the_body.internal_context.card_store import card_limit as limit_mod
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import card_shape_guard
+from quest_ai_runner.the_body.internal_context.card_store.card_store_upload import apply_upload, plan_upload
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
+from hubofhubs.api import card_limit as limit_mod
 
 
 def card(card_id, paths):
@@ -75,7 +75,7 @@ def test_a_bootstrap_pass_of_a_card_per_file_writes_nothing_and_says_so(tmp_path
     for i in range(60):
         (corpus / f"d{i}").mkdir()
         (corpus / f"d{i}" / "f.md").write_text(f"# note {i}\n", encoding="utf-8")
-    from quest_ai_runner.adapters import context_card_builder
+    from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_card_builder
     monkeypatch.setattr(context_card_builder, "factory", lambda provider, model: type("Builder", (), {
         "build": staticmethod(lambda root, files, existing: [
             {"id": f"c{i}", "name": f"c{i}", "keywords": [], "summary": "s", "files": [f]} for i, f in enumerate(files)])})())

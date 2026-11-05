@@ -12,24 +12,12 @@ import textwrap
 import pytest
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    Orchestrator,
-    OrchestratorConfig,
-    decide_tool_for,
-    normalize_decision,
-)
-from quest_ai_runner.core.tools_quest_standard import QUEST_DATA_TOOLS, file_email_draft_spec, send_quest_email_spec
-from quest_ai_runner.core.tools import (
-    SHOW_ALL_AT_OR_BELOW,
-    ToolContext,
-    ToolRegistry,
-    ToolResult,
-    ToolSpec,
-    build_tool_registry,
-    command_args_as_flags,
-)
-from quest_ai_runner.core.tools_quest_ops import QUEST_OPERATION_BUILDERS
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, decide_tool_for, normalize_decision
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import QUEST_DATA_TOOLS, file_email_draft_spec, send_quest_email_spec
+from quest_ai_runner.the_world.tools.tools import (
+    SHOW_ALL_AT_OR_BELOW, ToolContext, ToolRegistry, ToolResult, ToolSpec, build_tool_registry, command_args_as_flags)
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import QUEST_OPERATION_BUILDERS
 
 # The tool every deep run is offered with or without credentials (core/tools_metric_results.py).
 CREDENTIAL_FREE = ["record_metric_result"]
@@ -200,7 +188,7 @@ def test_file_email_draft_without_a_draft_id_is_a_failure():
 
 
 def test_quest_client_posts_the_draft_to_the_email_drafts_route():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
     seen = {}
     client = QuestClient(base_url="https://api.example.org", api_key="qsk_x")
     client._request = lambda method, path, **kw: seen.update(method=method, path=path, **kw) or {"id": "d"}
@@ -277,7 +265,7 @@ def test_toml_entry_without_when_not_to_use_is_rejected(tmp_path, caplog):
 
 
 def test_cli_list_and_call(tmp_path, monkeypatch, capsys):
-    from quest_ai_runner.tools.__main__ import main
+    from quest_ai_runner.the_consciousness.terminal.__main__ import main
     mod = tmp_path / "echo_tool.py"
     mod.write_text("def run(args, ctx):\n    return f\"echo {args['text']} quest={ctx.quest_id}\"\n")
     toml = tmp_path / "tools.toml"
@@ -461,7 +449,7 @@ def test_deep_brief_lists_relevant_tools_with_commands():
     assert deep.calls, "deep run expected"
     brief = deep.calls[0]["brief"]
     assert "TOOLS YOU CAN CALL" in brief
-    assert f"{sys.executable}" in brief and "-m quest_ai_runner.tools call" in brief
+    assert f"{sys.executable}" in brief and "-m quest_ai_runner tools call" in brief
     assert "--quest quest_9" in brief
 
 
@@ -473,7 +461,7 @@ def test_no_tools_means_no_tool_vocabulary():
 
 
 def test_build_orchestrator_wires_tools_from_config_credentials(monkeypatch):
-    from quest_ai_runner.config import RunnerConfig, resolve_tool_registry
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_tool_registry
     monkeypatch.delenv("QAR_STANDARD_TOOLS", raising=False)
     monkeypatch.delenv("QUEST_BASE_URL", raising=False)
     monkeypatch.delenv("QUEST_API_URL", raising=False)
@@ -499,7 +487,7 @@ def test_tools_block_comes_after_the_planner_body():
 def test_executor_hands_the_task_id_to_direct_tools_and_the_deep_brief():
     """docs/how-to/tools.md promises every command tool QAR_TOOL_TASK_ID: the executor must put the
     task's id in the turn's context so ToolContext.task_id (and the deep brief) carry it."""
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     from .test_runner import MockQuestClient
 
     seen = []
@@ -525,8 +513,8 @@ def test_executor_hands_the_task_id_to_direct_tools_and_the_deep_brief():
 
 def test_the_same_tool_call_twice_in_one_step_is_kept_once():
     """A planner that lists one write twice must not write twice; two different calls are both kept."""
-    from quest_ai_runner.core.orchestrator import OrchestratorConfig
-    from quest_ai_runner.core.orchestrator_decisions import normalize_decision
+    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
     add = {"name": "create_quest_goal", "args": {"title": "Plumbing visit"}}
     other = {"name": "create_quest_goal", "args": {"title": "Tile the walls"}}
     plan = normalize_decision({"action": "tool", "tool_calls": [add, dict(add), other]}, OrchestratorConfig(),

@@ -3,7 +3,7 @@
 gate is pure lexical code."""
 import tempfile
 
-from quest_ai_runner.core.recent_context import FileRecentContextStore, filter_relevant
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import FileRecentContextStore, filter_relevant
 
 
 def build(meter):  # noqa: ARG001

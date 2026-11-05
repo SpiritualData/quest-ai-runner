@@ -1,6 +1,6 @@
 """Scoring is the hub's (``hubofhubs.score``); this module only hands it QAR's bindings."""
 from hubofhubs import evaluate
-from hubofhubs.the_self.integrity import score as hub_score
+from hubofhubs.api import score as hub_score
 
 from hub_of_hubs.binding import binding
 

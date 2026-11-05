@@ -2,11 +2,10 @@
 ``QAR_REQUESTER_USER_ID``; an unknown requester clears the variable instead of inheriting one."""
 import subprocess
 
-from quest_ai_runner.body.acp_deep_runner import AcpDeepRunner
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.core.orchestrator_capabilities import run_goal_accepts_requester_user_id
-from quest_ai_runner.core.requester import (REQUESTER_ENV, apply_requester_env,
-                                            requester_from_meta, requester_from_task)
+from quest_ai_runner.the_world.tools.delegated_agent_sessions.acp_deep_runner import AcpDeepRunner
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import run_goal_accepts_requester_user_id
+from quest_ai_runner.the_intelligence.mind.delegation.requester import REQUESTER_ENV, apply_requester_env, requester_from_meta, requester_from_task
 
 ENV = "QAR_REQUESTER_USER_ID"
 
@@ -75,7 +74,7 @@ def test_runners_opt_in_by_signature():
 def test_command_tool_environment_carries_the_requester():
     import sys
 
-    from quest_ai_runner.core.tools import ToolContext, make_command_handler
+    from quest_ai_runner.the_world.tools.tools import ToolContext, make_command_handler
     handler = make_command_handler(
         [sys.executable, "-c", "import os;print(os.environ.get('QAR_REQUESTER_USER_ID','none'))"], {})
     assert handler({}, ToolContext(user_id="u-tool")).text == "u-tool"

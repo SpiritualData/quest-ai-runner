@@ -13,17 +13,11 @@ Covers the four contract points:
 import time
 from typing import Any, Dict, List
 
-from hubofhubs.the_world.tools.events import EVENT_MODE_SIGNAL
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import (
-    BRAINSTORM_HELD_WORK_ACK_NOTE,
-    BRAINSTORM_NO_ACTION_ACK_NOTE,
-    MODE_RELEASE_TOOL,
-    Orchestrator,
-    OrchestratorConfig,
-    normalize_decision,
-)
+from hubofhubs.api import EVENT_MODE_SIGNAL
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import (
+    BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, MODE_RELEASE_TOOL, Orchestrator, OrchestratorConfig, normalize_decision)
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 

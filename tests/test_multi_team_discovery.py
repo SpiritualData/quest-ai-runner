@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import threading
 
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.runner.poller import Poller
-from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
 from .conftest import StubProvider, StubRetrieval
 from .test_runner import MockQuestClient
@@ -175,7 +175,7 @@ def test_rep_sync_uses_the_tasks_own_team_not_the_lanes_home_team(monkeypatch):
     """Per-task work follows the TASK's team. This was already true in the code (a task carries
     its own ``team_id``); the test pins it, because it is the property that makes serving several
     teams from one lane correct at all rather than merely possible."""
-    from quest_ai_runner.runner import rep_sync
+    from quest_ai_runner.the_consciousness.representatives import rep_sync
 
     pushed = []
     monkeypatch.setattr(rep_sync, "push_skill_to_rep",

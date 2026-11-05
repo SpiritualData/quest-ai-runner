@@ -3,7 +3,7 @@ a Gemini flash-lite model, so the dollars, tokens and seconds are what a fast-ti
 is the cheapest tier a caller can pick and a lower bound on a stronger one. API priced (fractions of a cent per case): one case, then the
 set, with ``--max-calls``."""
 PAID = True
-from quest_ai_runner.runner import metric_draft
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import metric_draft
 from draft_a_metric import arms
 import live_arm
 

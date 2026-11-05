@@ -13,16 +13,9 @@ still on duty and still getting its own batch), one batch per character on duty,
 fallback. The rule that a character works only on their own days lives in
 ``test_autopilot_day_authority.py``.
 """
-from quest_ai_runner.runner.autopilot import (
-    MAX_INSTRUCTIONS_CHARS,
-    AutopilotPass,
-    _batch_title,
-    compose_batch_text,
-    persona_entries_on_duty,
-    persona_instructions_for,
-    resolve_persona,
-)
-from quest_ai_runner.runner.autopilot_personas import personas_on_duty, resolve_task_persona
+from quest_ai_runner.the_intelligence.proactivity.autopilot import (
+    MAX_INSTRUCTIONS_CHARS, AutopilotPass, _batch_title, compose_batch_text, persona_entries_on_duty, persona_instructions_for, resolve_persona)
+from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import personas_on_duty, resolve_task_persona
 
 from .test_autopilot import NOW, FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 

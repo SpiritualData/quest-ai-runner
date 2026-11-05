@@ -4,7 +4,7 @@ and its current reading, chosen by what the context holds (a goal in focus, one 
 as the other arms, on the subscription."""
 PAID = True
 from proactive_guidance import arms
-from quest_ai_runner.core.auxiliary_prompts import REPLY_VOICE_SYSTEM
+from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
 
 
 def build(meter):

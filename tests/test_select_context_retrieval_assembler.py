@@ -1,8 +1,9 @@
 """The production assemblers of the ``select-context`` seat: real ``ContextAssembler`` classes the seat can build, one ranking method that the
 evaluation arms share. No model call, no network, no embedding model."""
-from hubofhubs.the_body.internal_context.context import ContextAssembler
+from hubofhubs.api import ContextAssembler
 
-from quest_ai_runner.select_context.retrieval_assembler import BlindGrepAssembler, FeatureRerankAssembler, read_folder
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler import (
+    BlindGrepAssembler, FeatureRerankAssembler, read_folder)
 
 FILES = {"net.py": "def retry_delay(attempt):\n    return 2 ** attempt\n", "ui.py": "def draw():\n    pass\n"}
 
@@ -34,7 +35,7 @@ def test_record_is_a_no_op_and_both_arms_are_context_assemblers():
 
 
 def test_the_seat_builds_its_default_selection():
-    from quest_ai_runner import hub
+    from quest_ai_runner.the_self.assembler import hub
     from esoi.assemble import AssemblyConfig
     built = hub.child().assemble(AssemblyConfig(solutions=("select-context",)))
     assert isinstance(built["select-context"], ContextAssembler)

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.core.note_context_store import NoteContextStore, _stem_candidates
-from hubofhubs.the_body.internal_context.context import AssembledContext
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.note_context_store import NoteContextStore, _stem_candidates
+from hubofhubs.api import AssembledContext
 
 
 # ---------------------------------------------------------------------------

@@ -25,14 +25,14 @@ import time
 from concurrent.futures import Future
 from typing import Any, Dict, List, Optional, Tuple
 
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_STATUS, Mode
-from quest_ai_runner.core.adapters_values import PlanDecision
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_deep_context import CONTEXT_DROPPED_STATUS
-from quest_ai_runner.core.orchestrator_turn import TurnCardCache, _Emitter
+from hubofhubs.api import AssembledContext
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_STATUS, Mode
+from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_deep_context import CONTEXT_DROPPED_STATUS
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import TurnCardCache, _Emitter
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -500,7 +500,7 @@ class BriefCapturingRunner(OrderedRunner):
 
 
 def test_a_self_started_search_gets_the_read_only_instruction_and_an_ordered_run_does_not():
-    from quest_ai_runner.core.auxiliary_prompts import SELF_INITIATED_READ_ONLY_INSTRUCTION
+    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import SELF_INITIATED_READ_ONLY_INSTRUCTION
 
     def brief_for(**kw):
         timeline = Timeline()

@@ -4,9 +4,9 @@
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.pricing import estimate_bootstrap_cost, get_input_cost_per_mtok, get_provider_and_model
-from quest_ai_runner.resources import ResourceGuard, ResourceLimits, ResourceSnapshot
-from quest_ai_runner.usage import DailyUsageLimits, DailyUsageTracker
+from quest_ai_runner.the_world.model_plumbing.spend.pricing import estimate_bootstrap_cost, get_input_cost_per_mtok, get_provider_and_model
+from quest_ai_runner.the_body.host.resources import ResourceGuard, ResourceLimits, ResourceSnapshot
+from quest_ai_runner.the_world.model_plumbing.spend.usage import DailyUsageLimits, DailyUsageTracker
 
 
 def daily_budget(args):

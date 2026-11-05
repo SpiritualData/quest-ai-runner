@@ -30,8 +30,8 @@ from typing import Any, Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from examples.custom_consumer import build_config  # noqa: E402
-from quest_ai_runner.runner.poller import Poller  # noqa: E402
-from quest_ai_runner.runner.quest_client import QuestClient  # noqa: E402
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller  # noqa: E402
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient  # noqa: E402
 
 HUMAN_ONLY_MARKER = "[HUMAN-ONLY]"
 

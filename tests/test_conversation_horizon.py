@@ -18,15 +18,15 @@ import json
 import os
 import time
 
-from quest_ai_runner.adapters import session_file_conversation_store as sfcs_module
-from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import rank_candidates_by_digest, truncate_transcript_middle
-from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.runner.executor_support import CONV_CONTEXT_MAX_BYTES
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory import session_file_conversation_store as sfcs_module
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from hubofhubs.api import rank_candidates_by_digest, truncate_transcript_middle
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_consciousness.request_intake.executor_support import CONV_CONTEXT_MAX_BYTES
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubProvider
 

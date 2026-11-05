@@ -5,7 +5,7 @@ planner question/clarification could exceed that and the POST was rejected with
 "Goal condition is limited to 4000 characters (got NNNNN)". The client now truncates at the single
 boundary to Quest so the request always succeeds, regardless of which caller built the summary.
 """
-from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
 
 def _client_capturing_body():

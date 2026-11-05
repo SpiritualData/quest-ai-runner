@@ -14,11 +14,10 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 import quest_ai_runner
-from quest_ai_runner import bootstrap_email
-from quest_ai_runner.core import scaffolding
-from hubofhubs.the_world.model_plumbing import signature_probe
-from quest_ai_runner.take_in_the_world import async_bridge
-from hubofhubs.the_world.tools.file_editing import editblock as aider_editblock
+from quest_ai_runner.the_intelligence.critical_thinking.response_quality import scaffolding
+from hubofhubs.api import signature_probe
+from quest_ai_runner.the_consciousness.request_intake import async_bridge
+from hubofhubs.api import editblock as aider_editblock
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([.-]\w+)?$")
 NO_NETWORK = ("import socket\n"
@@ -92,10 +91,11 @@ def front_door(args):
 
 
 def hook(args):
-    from quest_ai_runner.adapters.claude_cli_provider import cli_model
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.core import goal_runner_contract, tools
-    from quest_ai_runner.runner import config_wiring
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner_contract
+    from quest_ai_runner.the_world.tools import tools
+    from quest_ai_runner.the_body.configuration import config_wiring
     if args["hook"] == "translator":
         return {"is_cli_model": getattr(goal_runner_contract, "_cli_model_translator") is cli_model}
     if args["hook"] == "client_factory":
@@ -149,20 +149,6 @@ def detached(args):
         return {"ran": False, "raised": True}
 
 
-def email_due(args):
-    form = args.get("form", "iso")
-    if form == "missing":
-        state = {}
-    elif form == "empty":
-        state = {"last_email_sent": ""}
-    elif form == "garbage":
-        state = {"last_email_sent": "last tuesday"}
-    else:
-        when = datetime.now(timezone.utc) - timedelta(days=args["days_ago"])
-        state = {"last_email_sent": when.replace(tzinfo=None).isoformat() if form == "naive" else when.isoformat()}
-    return {"due": bootstrap_email.should_send_monthly_email(state, args.get("months", 1))}
-
-
 def edit_blocks(args):
     if args["fn"] == "search_replace":
         return {"blocks": [list(b) for b in aider_editblock.find_original_update_blocks(args["content"])]}
@@ -204,10 +190,6 @@ def build(meter):  # noqa: ARG001
             return {"kept": signature_probe.filter_keywords(args["kwargs"], allowed, "synthetic")}
         if kind == "scrub":
             return {"text": getattr(scaffolding, args["fn"])(args["text"])}
-        if kind == "email_due":
-            return email_due(args)
-        if kind == "email_body":
-            return {"text": bootstrap_email.generate_bootstrap_email_body(**args)}
         if kind == "offline_import":
             return offline_import(args)
         if kind == "edit":

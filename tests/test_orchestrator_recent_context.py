@@ -15,14 +15,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import EVENT_CONTEXT, Mode, Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.recent_context import (
-    FileRecentContextStore,
-    conv_scope_key,
-    quest_scope_key,
-)
+from hubofhubs.api import AssembledContext
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_CONTEXT, Mode, Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import FileRecentContextStore, conv_scope_key, quest_scope_key
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 
@@ -345,7 +341,7 @@ def test_recent_scope_keys_global_disabled_knob_excludes_global():
 
 
 def test_disabled_global_knob_env_wiring(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     monkeypatch.delenv("QAR_RECENT_CONTEXT_GLOBAL", raising=False)
     cfg = _config_from_env()

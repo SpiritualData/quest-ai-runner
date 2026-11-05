@@ -7,12 +7,12 @@ runner pulls the rep, injects its persona into the deep run, and (only when aske
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.config import RunnerConfig
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.runner.executor import TaskExecutor
-from quest_ai_runner.runner.poller import Poller
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
 from .conftest import StubProvider, StubRetrieval
 from .test_rep_sync import MockProfileClient
@@ -153,7 +153,7 @@ def test_direction_push_only_pushes_and_does_not_pull():
     with tempfile.TemporaryDirectory() as d:
         # Seed a skill file so push has something to read (push without a file would error,
         # best-effort, and is logged — but here we prove the push path runs cleanly).
-        from quest_ai_runner.runner.rep_sync import pull_rep_to_skill
+        from quest_ai_runner.the_consciousness.representatives.rep_sync import pull_rep_to_skill
         pull_rep_to_skill(client, "team1", "u1", d)
         skill = Path(d, "SKILL.md")   # a local persona edit, so the push has something to send
         skill.write_text(skill.read_text().replace("decisive", "gentle"))

@@ -19,26 +19,11 @@ Offline, driven against fakes and a tmp_path store.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.runner.context_updates import UpdateEngine, parse_dispositions
-from quest_ai_runner.runner.context_update_receipts import split_disposition, usage_receipt_gate
-from quest_ai_runner.hold_the_intents.feedback_ledger import (
-    DONE,
-    IN_FORCE,
-    IN_PROGRESS,
-    KIND_REQUEST,
-    KIND_STANDING,
-    NEEDS_REAPPLYING,
-    OPEN,
-    PARTIALLY_APPLIED,
-    FeedbackLedger,
-    ask_id,
-    build_ledger,
-    guidance_writer_for,
-    ledger_path_for,
-    normalize_disposition,
-    open_items_block,
-    record_run_account,
-)
+from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine, parse_dispositions
+from quest_ai_runner.the_body.intake_sources.context_update_receipts import split_disposition, usage_receipt_gate
+from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import (
+    DONE, IN_FORCE, IN_PROGRESS, KIND_REQUEST, KIND_STANDING, NEEDS_REAPPLYING, OPEN, PARTIALLY_APPLIED, FeedbackLedger, ask_id, build_ledger,
+    guidance_writer_for, ledger_path_for, normalize_disposition, open_items_block, record_run_account)
 
 NOW = datetime(2026, 9, 12, 9, 0, 0, tzinfo=timezone.utc)
 
@@ -478,7 +463,7 @@ def test_a_persons_own_diary_is_never_something_they_owe_an_answer_to(tmp_path):
     """Live failure, first run of this: the habit log and the daily reflection were tracked as
     asks, so the next morning both came back as "still owed, needs an answer" -- an assistant
     asking a person to answer their own diary."""
-    from quest_ai_runner.runner.context_updates import Watermarks
+    from quest_ai_runner.the_body.intake_sources.context_updates import Watermarks
 
     class _Client:
         def list_quest_notes(self, quest_id):

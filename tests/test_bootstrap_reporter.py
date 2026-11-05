@@ -8,14 +8,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from quest_ai_runner.adapters.bootstrap_reporter import (
-    check_should_send_monthly_report,
-    generate_bootstrap_report,
-    get_corpus_stats,
-    mark_bootstrap_completed,
-    mark_report_sent,
-    send_bootstrap_report_via_quest,
-)
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.bootstrap_reporter import (
+    check_should_send_monthly_report, generate_bootstrap_report, get_corpus_stats, mark_bootstrap_completed, mark_report_sent,
+    send_bootstrap_report_via_quest)
 
 
 def test_no_report_before_bootstrap_completed():

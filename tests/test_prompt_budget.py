@@ -18,23 +18,21 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session
-from quest_ai_runner.core import goal_runner, goal_runner_session, prompt_budget
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.goal_runner import (SubprocessConfig, SubprocessGoalRunner,
-                                              compose_goal_prompt)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.prompt_budget import (PRIORITY_HISTORY, PRIORITY_REQUEST,
-                                                PRIORITY_RETRIEVAL, PRIORITY_UPDATES, Section,
-                                                count_blocks, estimate_tokens, fit_sections)
-from quest_ai_runner.core.turn_context_store import TurnContextStore
-from quest_ai_runner.runner.autopilot import compose_batch_text
-from quest_ai_runner.critical_thinking.autopilot_briefs import render_last_run_output
-from quest_ai_runner.core.managed_blocks import BLOCK_END, BLOCK_START
-from quest_ai_runner.runner.context_updates import parse_manifest
-from quest_ai_runner.runner.context_update_receipts import usage_receipt_gate
-from quest_ai_runner.runner.executor import TaskExecutor, across_pass_resume, task_scope_tags
+from hubofhubs.api import session as hub_session
+from quest_ai_runner.the_intelligence.mind.delegation import goal_runner, goal_runner_session, prompt_budget
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner, compose_goal_prompt
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import (
+    PRIORITY_HISTORY, PRIORITY_REQUEST, PRIORITY_RETRIEVAL, PRIORITY_UPDATES, Section, count_blocks, estimate_tokens, fit_sections)
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
+from quest_ai_runner.the_intelligence.proactivity.autopilot import compose_batch_text
+from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import render_last_run_output
+from quest_ai_runner.the_body.intake_sources.managed_blocks import BLOCK_END, BLOCK_START
+from quest_ai_runner.the_body.intake_sources.context_updates import parse_manifest
+from quest_ai_runner.the_body.intake_sources.context_update_receipts import usage_receipt_gate
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor, across_pass_resume, task_scope_tags
 
 from .conftest import StubProvider, StubRetrieval
 from .test_deep_model_pin import PLAN, RecordingRunner, ScriptedProvider
@@ -394,7 +392,7 @@ def test_an_autopilot_runs_receipt_closes_what_it_accounts_for(tmp_path):
     """The pass composes the brief; the executor runs it later holding only the task. The run's
     receipt used to be dropped (no bundle on the executor), so every item it finished came back
     "still owed" on every later pass: 18 of 20 refs in the incident's block."""
-    from quest_ai_runner.hold_the_intents.feedback_ledger import FeedbackLedger
+    from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import FeedbackLedger
 
     ledger = FeedbackLedger(str(tmp_path / "feedback.json"))
     ledger.observe(card_id="quest_a", source="quest_notes", item_id="n1",
@@ -417,8 +415,8 @@ def test_an_autopilot_runs_receipt_closes_what_it_accounts_for(tmp_path):
 # --- one history per prompt, and never the thread's own earlier runs ----------------------------
 
 def test_only_one_turn_history_is_rendered():
-    from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
-    from quest_ai_runner.core.turn_context_store import assembler_renders_turns
+    from hubofhubs.api import CompositeContextAssembler
+    from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import assembler_renders_turns
 
     class Hybrid:
         def __init__(self, keyword):
@@ -446,7 +444,7 @@ def test_a_threads_own_earlier_runs_are_not_retrieved_as_past_conversations(tmp_
 # --- judges get the gist of a request, not the whole brief --------------------------------------
 
 def test_a_relevance_judge_gets_the_gist_not_the_whole_brief():
-    from quest_ai_runner.core.card_filter import filter_cards_by_relevance
+    from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import filter_cards_by_relevance
 
     seen: List[str] = []
 
@@ -466,7 +464,7 @@ def test_a_relevance_judge_gets_the_gist_not_the_whole_brief():
 def test_a_threads_run_record_is_one_card_and_never_retrieved_by_that_thread(tmp_path):
     """The run-recorded card used to be keyed by each pass's whole brief: a new card every day,
     and the top match for the thread's next pass (self-retrieval)."""
-    from quest_ai_runner.adapters.file_context_store import FileContextStore
+    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
     store = FileContextStore(cards_dir=str(tmp_path / "cards"), repo_root=str(tmp_path))
     for day in (1, 2):

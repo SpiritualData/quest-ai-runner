@@ -11,8 +11,8 @@ import pytest
 pytest.importorskip("esoi.spec_index")
 from esoi import spec_index  # noqa: E402
 
-from quest_ai_runner.core import repo_specs, tools_repo_specs  # noqa: E402
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, build_tool_registry  # noqa: E402
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs, tools_repo_specs  # noqa: E402
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, build_tool_registry  # noqa: E402
 
 from .records_copy import copy_records  # noqa: E402
 
@@ -90,7 +90,7 @@ def test_the_brief_hands_the_worker_the_root_so_the_spec_tools_it_names_exist_in
     request = "request=a queued task was lost or run twice"
     block = build_tool_registry({"QAR_STANDARD_TOOLS": "1"}).render_deep_block("a queued task was lost", pins=("find_specs",))
     assert "- find_specs " in block
-    assert f"-m quest_ai_runner.tools --spec-root {shlex.quote(str(repo))} call <name>" in block, "the command carries the root"
+    assert f"-m quest_ai_runner tools --spec-root {shlex.quote(str(repo))} call <name>" in block, "the command carries the root"
     before = worker_shell(repo, tmp_path, tmp_path_factory, "call", "find_specs", "--kw", request)   # the command as it was taught before
     assert before.returncode == 1 and "unknown tool 'find_specs'" in before.stderr + before.stdout
     after = worker_shell(repo, tmp_path, tmp_path_factory, "--spec-root", str(repo), "call", "find_specs", "--kw", request)

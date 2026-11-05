@@ -4,13 +4,14 @@ orchestrator with ``interim_replies`` on."""
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.core import ask_policy, interim_policy
+from quest_ai_runner.the_consciousness.judgment_calls import ask_policy
+from quest_ai_runner.the_intelligence.mind.response_writer import interim_policy
 
 
 def interim_text(args):
     """The real ``maybe_send_interim`` with a stub orchestrator and sink: what an interim would show for one attempt's record."""
     from types import SimpleNamespace
-    from quest_ai_runner.core.orchestrator_turn_messages import maybe_send_interim
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import maybe_send_interim
     sent = []
     emit = SimpleNamespace(emit=sent.append)
     orch = SimpleNamespace(cfg=SimpleNamespace(interim_replies=True, max_interims_per_turn=4, min_seconds_between_interims=0.0))

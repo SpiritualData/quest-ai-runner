@@ -12,15 +12,9 @@ applies it. These tests pin:
 
 import pytest
 
-from quest_ai_runner.core.work_model import (
-    RUNNABLE_MODELS,
-    WorkModelUnavailable,
-    anthropic_options,
-    apply_work_model,
-    default_effective,
-    is_tier_word,
-)
-from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.the_intelligence.mind.delegation.work_model import (
+    RUNNABLE_MODELS, WorkModelUnavailable, anthropic_options, apply_work_model, default_effective, is_tier_word)
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 from tests.test_runner import MockQuestClient, _brain, _ModelCapturingProvider
 
 
@@ -112,7 +106,7 @@ def test_runnable_models_are_the_claude_family():
 @pytest.mark.parametrize("source", ["team", "org"])
 def test_team_or_org_configuration_counts_as_configured(source, monkeypatch):
     # The backend resolves team override then org; a result from either is an explicit configuration.
-    from quest_ai_runner.runner import executor as ex_mod
+    from quest_ai_runner.the_consciousness.request_intake import executor as ex_mod
 
     class _Client(MockQuestClient):
         def get_work_model_config(self, **kw):
@@ -125,7 +119,7 @@ def test_team_or_org_configuration_counts_as_configured(source, monkeypatch):
 
 
 def test_built_in_default_source_pins_nothing(monkeypatch):
-    from quest_ai_runner.runner import executor as ex_mod
+    from quest_ai_runner.the_consciousness.request_intake import executor as ex_mod
 
     class _Client(MockQuestClient):
         def get_work_model_config(self, **kw):
@@ -194,8 +188,8 @@ def _premium_excluded_payload():
 
 
 def test_executor_excluded_opus_pin_runs_on_the_default_instead():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "model_tier": "haiku", "rationale": "ok"}])
     ex = TaskExecutor(_ConfigClient(_premium_excluded_payload()), _brain(provider))
     out = ex.execute({"id": "wm1", "text": "say hi", "deep_run_model": "opus"})
@@ -205,8 +199,8 @@ def test_executor_excluded_opus_pin_runs_on_the_default_instead():
 
 
 def test_executor_allowed_pin_is_kept():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "model_tier": "haiku", "rationale": "ok"}])
     ex = TaskExecutor(_ConfigClient(_premium_excluded_payload()), _brain(provider))
     out = ex.execute({"id": "wm2", "text": "say hi", "deep_run_model": "haiku"})
@@ -216,8 +210,8 @@ def test_executor_allowed_pin_is_kept():
 
 
 def test_executor_read_failure_restricts_nothing():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "model_tier": "haiku", "rationale": "ok"}])
     ex = TaskExecutor(_ConfigClient(error=RuntimeError("backend down")), _brain(provider))
     out = ex.execute({"id": "wm3", "text": "say hi", "deep_run_model": "opus"})
@@ -227,8 +221,8 @@ def test_executor_read_failure_restricts_nothing():
 
 
 def test_executor_tier_word_leaves_work_model_alone():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "model_tier": "haiku", "rationale": "ok"}])
     ex = TaskExecutor(_ConfigClient(_premium_excluded_payload()), _brain(provider))
     out = ex.execute({"id": "wm4", "text": "say hi", "model": "best"})
@@ -238,7 +232,7 @@ def test_executor_tier_word_leaves_work_model_alone():
 
 
 def test_executor_refuses_run_when_no_claude_model_is_allowed():
-    from quest_ai_runner.runner.executor import TaskExecutor
+    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     payload = {"source": "org", "config": {}, "effective": _view(
         [{"provider": "ollama", "model": "llama-3", "tier": "standard"}], default="llama-3")}

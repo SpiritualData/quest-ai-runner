@@ -115,10 +115,10 @@ def scratch_env(scratch: Path, claude: str) -> Dict[str, str]:
 
 def build_orchestrator(arm: Dict[str, Any], workspace: Path, claude: str, timeout: float, runner_factory: Optional[Callable] = None):
     """The real orchestrator for one replay: a Claude Code worker in ``workspace`` and the arm's iterate-by-spec."""
-    from quest_ai_runner.cli import _config_from_env
-    from quest_ai_runner.config import build_orchestrator as build
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-    from quest_ai_runner.core.resolve import resolve
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.the_body.configuration.config import build_orchestrator as build
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_self.assembler.resolve import resolve
     cfg = _config_from_env()
     cfg.selections = {**(cfg.selections or {}), "iterate-by-spec": arm["iteration"]}
     worker_cfg = SubprocessConfig(working_dir=str(workspace), claude_path=claude, timeout_seconds=timeout,
@@ -152,7 +152,7 @@ def count_spawns(runner: Any, meter: Any, spawned: List[Dict[str, Any]]) -> None
 def replay(case: Dict[str, Any], arm: Dict[str, Any], meter: Any, *, timeout: float = 420.0,
            runner_factory: Optional[Callable] = None, provider: Any = None, claude: Optional[str] = None) -> Dict[str, Any]:
     """Replay one case with one arm. Returns the facts the scorer reads; never raises for a worker that failed."""
-    from quest_ai_runner.core.orchestrator import PlanDecision
+    from quest_ai_runner.the_intelligence.mind.orchestrator import PlanDecision
     claude = claude or find_claude()
     if not claude:
         raise SystemExit("task_replay needs the claude CLI on the path")

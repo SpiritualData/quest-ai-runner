@@ -14,9 +14,9 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.delegated_agent_sessions import acp_runner as hub_acp_runner
-from quest_ai_runner.body import acp_deep_runner as acp
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from hubofhubs.api import acp_runner as hub_acp_runner
+from quest_ai_runner.the_world.tools.delegated_agent_sessions import acp_deep_runner as acp
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 
 # --- SubprocessGoalRunner: --mcp-config passthrough ---------------------------------------------

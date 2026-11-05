@@ -24,8 +24,8 @@ import threading
 import time
 from pathlib import Path
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.config import _bootstrap_if_needed, shutdown_background_index
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_body.configuration.config import _bootstrap_if_needed, shutdown_background_index
 
 
 def _index_threads_alive():

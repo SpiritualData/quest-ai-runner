@@ -18,7 +18,7 @@ def seats():
 
 def binding(names_of=None):
     if names_of is None:
-        from quest_ai_runner.core import resolve
+        from quest_ai_runner.the_self.assembler import resolve
         names_of = resolve.names
     return Binding(consumer=CONSUMER, root=REPO, seats=seats(), core_dir=REPO / "quest_ai_runner" / "core",
                    records_dir=REPO / "esoi", names_of=names_of, probes=probes.PROBES)

@@ -20,10 +20,10 @@ import threading
 import time
 from typing import List, Optional
 
-from quest_ai_runner.core.adapters_guidance import GuidanceCard
-from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceCard
+from quest_ai_runner.the_self.interface import GuidanceProviderBase
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -57,7 +57,7 @@ def _orch(provider, retrieval, **kw):
 
 
 def test_hanging_guidance_select_does_not_hang_the_turn(monkeypatch):
-    import quest_ai_runner.core.orchestrator as orch_mod
+    import quest_ai_runner.the_intelligence.mind.orchestrator as orch_mod
     monkeypatch.setenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", "0.1")
 
     guidance = _HangingGuidance(block_seconds=5.0)
@@ -78,19 +78,19 @@ def test_hanging_guidance_select_does_not_hang_the_turn(monkeypatch):
 
 def test_guidance_selection_timeout_env_default(monkeypatch):
     monkeypatch.delenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", raising=False)
-    from quest_ai_runner.core.orchestrator_capabilities import guidance_selection_timeout_seconds
+    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import guidance_selection_timeout_seconds
     assert guidance_selection_timeout_seconds() == 15.0
 
 
 def test_guidance_selection_timeout_env_override(monkeypatch):
     monkeypatch.setenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", "2.5")
-    from quest_ai_runner.core.orchestrator_capabilities import guidance_selection_timeout_seconds
+    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import guidance_selection_timeout_seconds
     assert guidance_selection_timeout_seconds() == 2.5
 
 
 def test_guidance_selection_timeout_invalid_env_falls_back(monkeypatch):
     monkeypatch.setenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", "not-a-number")
-    from quest_ai_runner.core.orchestrator_capabilities import guidance_selection_timeout_seconds
+    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import guidance_selection_timeout_seconds
     assert guidance_selection_timeout_seconds() == 15.0
 
 

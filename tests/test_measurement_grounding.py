@@ -5,9 +5,9 @@ your Run Log are identical") although the Run Log held one and the second was a 
 same 54:10. The answer prompt's evidence gate and the support check now say that the same figure in two
 records is one event by default, and that a figure belongs to the record it was found in.
 """
-from quest_ai_runner.core import context_doctrine as cd
-from quest_ai_runner.core.auxiliary_prompts import VERIFY_SUPPORT_RULES
-from quest_ai_runner.core.orchestrator import _grounding_block
+from quest_ai_runner.the_intelligence.mind.context_intake import context_doctrine as cd
+from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import VERIFY_SUPPORT_RULES
+from quest_ai_runner.the_intelligence.mind.orchestrator import _grounding_block
 
 
 def test_the_evidence_gate_counts_a_repeated_figure_once_and_names_its_record():

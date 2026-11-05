@@ -6,8 +6,8 @@ complete and the missing seven-eighths were never revisited. These tests pin the
 behaviours that replaced it: no limit unless a deployment asks for one, and a limit that says so
 when it bites.
 """
-import quest_ai_runner.adapters.file_context_store as fcs
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+import quest_ai_runner.the_body.internal_context.card_store.file_context_store as fcs
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def test_no_limit_by_default(monkeypatch):
@@ -46,7 +46,7 @@ def test_a_truncated_walk_warns_loudly(tmp_path, monkeypatch, caplog):
 
 
 def test_counting_indexable_files_matches_the_walk_rules(tmp_path):
-    from quest_ai_runner.cli_context import _count_indexable_files
+    from quest_ai_runner.the_consciousness.terminal.cli_context import _count_indexable_files
     corpus = tmp_path / "c"
     (corpus / "node_modules" / "pkg").mkdir(parents=True)
     (corpus / "node_modules" / "pkg" / "index.js").write_text("x")   # skipped dir

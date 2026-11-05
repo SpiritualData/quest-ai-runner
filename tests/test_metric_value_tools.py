@@ -5,9 +5,9 @@ to the proposal route and reports the value as proposed, not recorded, and that 
 """
 import pytest
 
-from quest_ai_runner.core import tools_metric_values as metric_tools
-from quest_ai_runner.core.tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolRegistry
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_values as metric_tools
+from quest_ai_runner.the_world.tools.tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolRegistry
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 CREDS = {"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "key"}
 CARD = {"name": "Weekly distance", "questions": [{"name": "Kilometres", "type": "number", "min": None, "max": None},

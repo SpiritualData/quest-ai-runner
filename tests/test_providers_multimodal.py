@@ -4,8 +4,8 @@
   unflattened, and the plain-string path is unchanged. Uses a fake SDK client so it's offline.
 * ClaudeCliProvider._flatten_messages degrades a block list to text and never crashes.
 """
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli import _flatten_block, _flatten_messages
+from hubofhubs.api import AnthropicProvider
+from hubofhubs.api import _flatten_block, _flatten_messages
 
 
 class _FakeTextBlock:

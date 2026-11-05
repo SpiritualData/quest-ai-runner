@@ -12,8 +12,7 @@ import os
 
 import pytest
 
-from quest_ai_runner.config import (RunnerConfig, apply_config_environment,
-                                    resolve_config_objects)
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, apply_config_environment, resolve_config_objects
 
 
 @pytest.fixture(autouse=True)

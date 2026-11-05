@@ -20,7 +20,7 @@ textual = pytest.importorskip("textual")
 from rich.text import Text
 from textual.app import App, ComposeResult
 
-from quest_ai_runner.textual_ui import QuestAITerminal, TranscriptLog
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal, TranscriptLog
 
 LONG_TEXT = (
     "This is a fairly long sentence that should wrap onto multiple lines when the "

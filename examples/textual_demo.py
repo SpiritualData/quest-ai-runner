@@ -17,8 +17,8 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from quest_ai_runner.textual_ui import QuestAITerminal
-from quest_ai_runner.core.orchestrator import ProgressEvent
+from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.the_intelligence.mind.orchestrator import ProgressEvent
 
 
 async def demo_orchestrator_events():

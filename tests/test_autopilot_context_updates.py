@@ -10,11 +10,11 @@ composes byte-identically to what it composed before any of this existed.
 """
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.runner.autopilot import AutopilotPass, compose_batch_text
-from quest_ai_runner.core.managed_blocks import BLOCK_START
-from quest_ai_runner.runner.context_updates import ContextUpdate, UpdateEngine, Watermarks, build_update_engine
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
+from quest_ai_runner.the_body.intake_sources.managed_blocks import BLOCK_START
+from quest_ai_runner.the_body.intake_sources.context_updates import ContextUpdate, UpdateEngine, Watermarks, build_update_engine
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from tests.test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _quest
 
@@ -201,7 +201,7 @@ class _ReceiptExecutor(TaskExecutor):
 
 
 def _task_text_with(update):
-    from quest_ai_runner.runner.context_updates import ContextUpdates
+    from quest_ai_runner.the_body.intake_sources.context_updates import ContextUpdates
     bundle = ContextUpdates(card_id="q1", updates=[update])
     bundle.updates[0].ref = "U1"
     return "Work this batch.\n\n" + bundle.as_prompt_block()
@@ -253,7 +253,7 @@ def _executor_with(engine, notes):
 def test_a_delegated_task_is_handed_what_changed_and_its_result_carries_the_receipt():
     """Not only a batch the pass composed: a task somebody delegated from chat asks the engine
     too, so nobody has to write "check my notes" into the prompt."""
-    from quest_ai_runner.runner.executor_contracts import REPLY_LOOP_CONTRACT
+    from quest_ai_runner.the_consciousness.request_intake.executor_contracts import REPLY_LOOP_CONTRACT
 
     marks = Watermarks(None)
     engine = UpdateEngine(None, watermarks=marks, always=("quest_notes",), now_fn=_now)
@@ -367,7 +367,7 @@ def test_the_library_default_is_on_and_a_consumer_can_switch_it_off():
 def test_the_poller_hands_its_one_engine_to_the_pass_it_builds(tmp_path):
     """Where the feature actually switches on for a real deployment: an unconfigured runner gets an
     engine whose stamps persist beside its own state file, and a consumer that said no gets none."""
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 
     cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1")
     poller = Poller(cfg, state_path=str(tmp_path / "qar_state.json"))

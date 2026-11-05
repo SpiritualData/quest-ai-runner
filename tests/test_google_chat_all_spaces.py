@@ -9,10 +9,10 @@ from datetime import datetime
 
 import pytest
 
-from quest_ai_runner.adapters.google_chat_adapter import (
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import (
     ChatReadError, GoogleChatAdapter, space_label, static_token_provider as chat_token)
-from quest_ai_runner.config import RunnerConfig, resolve_config_objects
-from quest_ai_runner.runner.context_updates import UpdateEngine, Watermarks
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_config_objects
+from quest_ai_runner.the_body.intake_sources.context_updates import UpdateEngine, Watermarks
 from .notion_fake import Resp
 
 S_TEAM = "spaces/AAAA1111"
@@ -117,7 +117,7 @@ def sa_file(tmp_path):
 
 
 def test_all_spaces_wires_without_space_names_and_logs_it(sa_file, monkeypatch, caplog):
-    monkeypatch.setattr("quest_ai_runner.adapters.google_chat_adapter.service_account_token_provider",
+    monkeypatch.setattr("quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter.service_account_token_provider",
                         lambda **kw: (lambda: "tok"))
     with caplog.at_level(logging.INFO):
         cfg = resolve_config_objects(RunnerConfig(google_chat={

@@ -1,13 +1,13 @@
 """Situation standards at the answer checkpoint: the measurements, the code-built repair rounds and the last-resort repair."""
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.core.orchestrator_decide_tool import DECIDE_TOOL
-from quest_ai_runner.core.orchestrator_decisions import normalize_decision
-from quest_ai_runner.core.overseer import OVERSEER_PROMPT
-from quest_ai_runner.core.planner_prompt import PLANNER_PROFILES
-from quest_ai_runner.core.reply_standards import REPLY_SHAPES, STANDARDS, measure, repair, standard_for
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.the_intelligence.mind.delegation.overseer import OVERSEER_PROMPT
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROFILES
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import REPLY_SHAPES, STANDARDS, measure, repair, standard_for
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -148,7 +148,7 @@ def test_an_iso_timestamp_in_the_evidence_supports_that_day_and_not_the_day_befo
 
 
 def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not():
-    from quest_ai_runner.core.reply_standards import STANDARDS, SHAPE_DEFAULT, day_count_errors, measure
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import STANDARDS, SHAPE_DEFAULT, day_count_errors, measure
     evidence = "Current date: 2026-11-01 (Sunday). The in-laws arrive 20 Nov."
     wrong = "If they arrive a week early, on 13 Nov, that leaves you 10 days from today instead of 19."
     assert day_count_errors(wrong, evidence) == ["12 days from today to 13 Nov, not 10"]
@@ -161,7 +161,7 @@ def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not()
 
 
 def test_a_day_offset_from_an_event_date_the_paragraph_states_is_checked():
-    from quest_ai_runner.core.reply_standards import event_offset_errors
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import event_offset_errors
     wrong = ("If they arrive a week early they would come on 13 Nov, which leaves you until 10 Nov, and your own "
              "target is already 3 days before arrival (17 Nov). That squeezes the work.")
     errors = event_offset_errors(wrong)
@@ -198,7 +198,7 @@ class RecordsAssembler:
         self.records = records
 
     def assemble(self, task_text, *, meta=None):
-        from hubofhubs.the_body.internal_context.context import AssembledContext
+        from hubofhubs.api import AssembledContext
         sources = [{"adapter": "records", "label": "your records", "items": ["quest-note:1"]}] if self.records else []
         return AssembledContext(context_view="Quest note: the tutor only teaches Tuesday and Thursday evenings.", sources=sources)
 
@@ -234,13 +234,13 @@ def test_a_judge_outage_keeps_the_reply():
 
 
 def test_the_found_constraint_standard_is_generic_and_has_no_em_dash():
-    from quest_ai_runner.core.reply_standards import FOUND_CONSTRAINT_STANDARD, found_constraint_hint
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import FOUND_CONSTRAINT_STANDARD, found_constraint_hint
     assert "—" not in FOUND_CONSTRAINT_STANDARD and "—" not in found_constraint_hint("a", "b")
     assert "Friday" not in FOUND_CONSTRAINT_STANDARD.replace("(for example 'Friday will not work: <fact>')", "")
 
 
 def test_the_head_for_a_reply_the_model_did_not_write_is_built_from_the_verdict_fields_only():
-    from quest_ai_runner.core.reply_standards import found_constraint_head
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import found_constraint_head
     assert found_constraint_head("The tutor only teaches Tuesday and Thursday evenings", "Friday will not work") == \
         "Friday will not work. The tutor only teaches Tuesday and Thursday evenings."
     assert found_constraint_head("", "") == ""
@@ -255,7 +255,7 @@ def test_a_reply_that_states_the_conflict_but_still_offers_the_request_is_also_r
 def test_the_judge_runs_only_on_turns_whose_context_held_the_persons_records():
     provider, _ = run_constraint([STATES], {"conflict": True, "states_it_first": False}, records=False)
     assert provider.constraint_calls == 0 and not steered(provider)
-    from quest_ai_runner.core.reply_standards import constraint_violated, turn_holds_records
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import constraint_violated, turn_holds_records
     assert turn_holds_records([{"adapter": "records", "items": ["x"]}]) and not turn_holds_records([{"adapter": "records", "items": []}, {"adapter": "recent", "items": ["y"]}], [])
     assert not constraint_violated({"conflict": False, "leaves_request_open": True})
     assert not constraint_violated({"conflict": True, "states_it_first": True, "leaves_request_open": False})
@@ -273,14 +273,14 @@ def test_a_found_conflict_queues_nothing_even_when_the_planner_forgot_act_declin
 
 
 def test_the_ask_carries_the_conflict_in_the_question_that_is_shown_and_filed():
-    from quest_ai_runner.core.orchestrator_turn_messages import file_blocked_ask
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import file_blocked_ask
     seen = {}
 
     class Orch:
         escalation = None
         def _concise_decision_summary(self, q):
             return q
-    import quest_ai_runner.core.orchestrator_turn_messages as m
+    import quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages as m
     orig = m.file_ask
     m.file_ask = lambda *a, **k: seen.update(k) or type("O", (), {"filed": False, "decision_id": "", "assignee": None})()
     try:
@@ -293,7 +293,7 @@ def test_the_ask_carries_the_conflict_in_the_question_that_is_shown_and_filed():
 
 
 def test_ask_path_runs_the_found_constraint_judge_once_and_stores_the_head():
-    from quest_ai_runner.core.orchestrator_turn_messages import ensure_found_constraint_head
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import ensure_found_constraint_head
 
     class FakeOrch:
         calls = 0
@@ -310,7 +310,7 @@ def test_ask_path_runs_the_found_constraint_judge_once_and_stores_the_head():
 
 
 def test_ask_path_leaves_the_question_alone_without_a_conflict():
-    from quest_ai_runner.core.orchestrator_turn_messages import ensure_found_constraint_head
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import ensure_found_constraint_head
 
     class FakeOrch:
         def found_constraint_verdict(self, request, records, reply):

@@ -20,9 +20,9 @@ latency is four real generations, not a payload or retry problem.
 """
 from typing import Any, Dict, List
 
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from hubofhubs.api import AssembledContext
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 

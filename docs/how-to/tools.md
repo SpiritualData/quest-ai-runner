@@ -49,9 +49,9 @@ quest and its surroundings (`core/tools_quest_ops.py`). Each is defined once, na
 | `create_goal`, `update_goal` | writes | Fill a plan gap, link a goal to its outcome (`on_request_only`: shown only to a run that pins them) |
 
 The quest comes from the run (`context_args`), so no id has to be pasted. A deep run sees
-`python -m quest_ai_runner.tools call NAME --kw arg=value` (`--kw` values that parse as JSON stay
+`python -m quest_ai_runner tools call NAME --kw arg=value` (`--kw` values that parse as JSON stay
 typed; `--args` takes one JSON object for nested values; `--spec-root FOLDER` before the subcommand names the repository the
-specification tools read, which the brief fills in for a run that works in one); `python -m quest_ai_runner.tools show NAME`
+specification tools read, which the brief fills in for a run that works in one); `python -m quest_ai_runner tools show NAME`
 and `quest-ai-runner quest --describe NAME` print one operation's how-to on demand. The same entry
 is the planner's `tool` action, and Quest AI chat in quest-backend has a helper of the same name for
 the asks operations.
@@ -117,13 +117,13 @@ that it cannot search research papers and names no paper, author or DOI from mem
 `end_to_end` E2E-SCI-01 (configured, fake OpenAlex transport) and E2E-SCI-02 (not configured).
 
 A consumer building its own `RunnerConfig` can instead pass a ready `ToolRegistry` as
-`RunnerConfig.tool_registry` (from `quest_ai_runner.core.tools`); that wins over the env.
+`RunnerConfig.tool_registry` (from `quest_ai_runner.the_world.tools.tools`); that wins over the env.
 
 A broken tools file never stops a lane: it is logged and skipped. Check what a lane would see with:
 
 ```bash
-python -m quest_ai_runner.tools list                        # the whole catalog
-python -m quest_ai_runner.tools list --query "email a donor" # what this request would surface
+python -m quest_ai_runner tools list                        # the whole catalog
+python -m quest_ai_runner tools list --query "email a donor" # what this request would surface
 ```
 
 ## Declaring a custom tool
@@ -174,7 +174,7 @@ command also gets `QAR_TOOL_QUEST_ID` and `QAR_TOOL_TASK_ID` in its environment,
 **The call ledger.** `ToolRegistry.invoke` appends every call's outcome (tool, ok, a failure
 signature, whether the tool acts) to a per-task file under `QAR_TOOL_LEDGER_DIR` (default: a folder
 in the system temp directory), keyed by the task id, or by the run's id (`--run`, `QAR_TOOL_RUN_ID`) when the call has no
-task. The brain and a deep worker's shell command (`python -m quest_ai_runner.tools call ... --task ID`) write to the same
+task. The brain and a deep worker's shell command (`python -m quest_ai_runner tools call ... --task ID`) write to the same
 file. The goal loop reads it to tell a tool that keeps failing from a worker's mistake, whatever the verifier called the gap,
 and to know that a tool that acts has changed something (`docs/explanation/metric-results.md`).
 
@@ -213,10 +213,10 @@ keywords = ["notify"]
 The deep-run brief lists the relevant tools with the exact command for each:
 
 ```bash
-python -m quest_ai_runner.tools call send_quest_email \
+python -m quest_ai_runner tools call send_quest_email \
   --kw subject="Weekly plan" --kw body="..." --quest <quest id>
 # or one JSON object, for nested values:
-python -m quest_ai_runner.tools call send_quest_email --args '{"subject": "Weekly plan", "body": "..."}'
+python -m quest_ai_runner tools call send_quest_email --args '{"subject": "Weekly plan", "body": "..."}'
 ```
 
 `--args-file PATH` (or `-` for stdin) takes the JSON from a file. Exit code 0 means the request was taken (applied,

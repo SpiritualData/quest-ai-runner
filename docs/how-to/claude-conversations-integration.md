@@ -70,12 +70,10 @@ Or use `quest-ai-runner chat` with the `--save` command to export directly.
 ### 2. Wire the Adapter
 
 ```python
-from quest_ai_runner.adapters import (
-    FilesAdapter,
-    ClaudeConversationsAdapter,
-    CompositeRetrievalAdapter,
-)
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.adapters.__init__ import CompositeRetrievalAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 
 # Point to your corpus root (conversations will auto-discover corpus/conversations/)
 corpus_root = "/path/to/corpus"
@@ -204,7 +202,7 @@ automatically in `config.py`'s default assembler stack).
 
 **The logic is a shared, adapter-agnostic module, not private to this adapter.** The
 union-gate / intersection-learn / usage-stamp behavior lives in
-[`quest_ai_runner/adapters/card_scoped_learning.py`](../../quest_ai_runner/adapters/card_scoped_learning.py),
+[`quest_ai_runner/the_intelligence/subconscious/context_retriever/card_scoped_learning.py`](../../quest_ai_runner/the_intelligence/subconscious/context_retriever/card_scoped_learning.py),
 which knows nothing about conversations. It exposes `active_card_terms(card_store, card_id)`,
 `gate_terms(query_terms, card_terms)`, `learnable_candidates(candidates, terms_of, query, card)`, and
 `learn_card_references(card_store, card_id, candidates, *, ref_type, locator_fn, why, now)`.

@@ -2,7 +2,7 @@
 scratch ``root`` and returns what it observed. The implementations differ only in which store they build."""
 import time
 
-from quest_ai_runner.core.anticipation_learner import Pattern, Prediction
+from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_learner import Pattern, Prediction
 
 
 def pattern(pid, text="what is due today"):

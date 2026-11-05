@@ -18,12 +18,12 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.core import usage_limit
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.orchestrator import OrchestratorConfig, OrchestratorResult
-from quest_ai_runner.core.orchestrator_constants import AUTO_FOLLOWUP_MAX_RUNS
-from quest_ai_runner.runner.auto_followup import assess, followup_brief
-from quest_ai_runner.runner.executor import TaskExecutor
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.the_intelligence.mind.orchestrator_constants import AUTO_FOLLOWUP_MAX_RUNS
+from quest_ai_runner.the_intelligence.mind.delegation.auto_followup import assess, followup_brief
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from .test_runner import MockQuestClient
 

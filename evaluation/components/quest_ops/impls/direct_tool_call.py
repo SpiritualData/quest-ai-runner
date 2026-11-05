@@ -6,7 +6,7 @@ import os
 import re
 
 import common  # noqa: F401
-from quest_ai_runner.core.tools import ToolContext
+from quest_ai_runner.the_world.tools.tools import ToolContext
 
 SYSTEM = ("You carry out ONE request on a user's quest by choosing tool calls. Reply with ONLY JSON "
           '{"calls": [{"name": ..., "args": {...}}]}. Use [] when the user asked for no change or only a read. '
@@ -15,7 +15,7 @@ SYSTEM = ("You carry out ONE request on a user's quest by choosing tool calls. R
 
 
 def build(meter):
-    from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
     provider = meter.wrap(ClaudeCliProvider())
     model = os.environ.get("QAR_EVAL_MODEL", "haiku")
 

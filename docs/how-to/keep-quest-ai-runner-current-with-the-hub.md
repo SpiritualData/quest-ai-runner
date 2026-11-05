@@ -19,7 +19,7 @@ The terminal shows one line at startup only when something required is unmet.
 
 A key is a step for a person: take the signup link from the report, never invent a key, and never write one into a committed file.
 The hub-declared variables in `.env.example` are generated from the hub's declarations
-(`python -m quest_ai_runner.hub_requirements --write-env-example .env.example`); QAR's own variables stay in
+(`python -m quest_ai_runner requirements --write-env-example .env.example`); QAR's own variables stay in
 `esoi/env_descriptions.csv` and the rest of `.env.example`.
 
 ## 2. Check for a newer selection
@@ -63,9 +63,9 @@ Exit 0 means the selected implementations' requirements can coexist. It is part 
 
 QAR differs from the hub's defaults in a few seats, and each difference is a row of `esoi/overrides.csv` that cites QAR's own problem, ideal
 and metric. `cards-from-files` is one: the hub's default builder is `per_file_symbols`, measured as the best free file finder, but QAR
-selects its own `qar_topic_bootstrap` (`quest_ai_runner/subconscious/qar_topic_bootstrap.py`), because a QAR card groups what several files
+selects its own `qar_topic_bootstrap` (`quest_ai_runner/the_intelligence/subconscious/cards_from_files/qar_topic_bootstrap.py`), because a QAR card groups what several files
 say about one subject and a card per file is a file index. The bootstrap resolves the seat through QAR's Assembler
-(`quest_ai_runner/hub.py`, `cards_from_files`), so whatever the hub learns about building cards reaches QAR as a candidate arm, while origin
+(`quest_ai_runner/the_self/assembler/hub.py`, `cards_from_files`), so whatever the hub learns about building cards reaches QAR as a candidate arm, while origin
 stamps, scope tags, the card limit, the ceilings, the folder gate and the upload stay QAR's. The upload and the Quest backend write path
 refuse a batch of one card per file (`adapters/card_shape_guard.py`, `QAR_MAX_CARDS_PER_FILE` and `QAR_MAX_SINGLE_FILE_CARD_SHARE`), whatever arm
 is selected: the guard is a safety net in the write path, not part of the ranking.

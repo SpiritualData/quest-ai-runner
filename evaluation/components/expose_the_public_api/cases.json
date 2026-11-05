@@ -135,27 +135,12 @@
   }
  },
  {
-  "id": "API-010",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.Mode is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "Mode"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
   "id": "API-011",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.StreamSink is public",
+  "description": "quest_ai_runner.api.StreamSink is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "StreamSink"
   },
   "expect": {
@@ -168,25 +153,10 @@
   "id": "API-012",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.MilestoneSink is public",
+  "description": "quest_ai_runner.api.MilestoneSink is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "MilestoneSink"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-013",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.ProgressEvent is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "ProgressEvent"
   },
   "expect": {
    "eq": {
@@ -198,9 +168,9 @@
   "id": "API-014",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.Orchestrator is public",
+  "description": "quest_ai_runner.api.Orchestrator is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "Orchestrator"
   },
   "expect": {
@@ -213,40 +183,10 @@
   "id": "API-015",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.RetrievalAdapter is public",
+  "description": "quest_ai_runner.api.RetrievalAdapter is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "RetrievalAdapter"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-016",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.ModelProvider is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "ModelProvider"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-017",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.DeepRunner is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "DeepRunner"
   },
   "expect": {
    "eq": {
@@ -258,55 +198,10 @@
   "id": "API-018",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.EscalationSink is public",
+  "description": "quest_ai_runner.api.EscalationSink is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "EscalationSink"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-019",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.Observation is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "Observation"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-020",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.PlanDecision is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "PlanDecision"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-021",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.core.DeepResult is public",
-  "args": {
-   "module": "quest_ai_runner.core",
-   "name": "DeepResult"
   },
   "expect": {
    "eq": {
@@ -318,9 +213,9 @@
   "id": "API-022",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.Escalation is public",
+  "description": "quest_ai_runner.api.Escalation is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "Escalation"
   },
   "expect": {
@@ -333,9 +228,9 @@
   "id": "API-023",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.FanoutSink is public",
+  "description": "quest_ai_runner.api.FanoutSink is public",
   "args": {
-   "module": "quest_ai_runner.core",
+   "module": "quest_ai_runner.api",
    "name": "FanoutSink"
   },
   "expect": {
@@ -1055,214 +950,12 @@
   }
  },
  {
-  "id": "API-074",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "no record yet: send",
-  "args": {
-   "days_ago": null,
-   "form": "missing",
-   "months": 1
-  },
-  "expect": {
-   "eq": {
-    "due": true
-   }
-  }
- },
- {
-  "id": "API-075",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "empty record: send",
-  "args": {
-   "days_ago": null,
-   "form": "empty",
-   "months": 1
-  },
-  "expect": {
-   "eq": {
-    "due": true
-   }
-  }
- },
- {
-  "id": "API-076",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "unreadable record: send",
-  "args": {
-   "days_ago": null,
-   "form": "garbage",
-   "months": 1
-  },
-  "expect": {
-   "eq": {
-    "due": true
-   }
-  }
- },
- {
-  "id": "API-077",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "10 days ago: not due",
-  "args": {
-   "days_ago": 10,
-   "form": "iso",
-   "months": 1
-  },
-  "expect": {
-   "eq": {
-    "due": false
-   }
-  }
- },
- {
-  "id": "API-078",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "40 days ago: due",
-  "args": {
-   "days_ago": 40,
-   "form": "iso",
-   "months": 1
-  },
-  "expect": {
-   "eq": {
-    "due": true
-   }
-  }
- },
- {
-  "id": "API-079",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "naive timestamp 40 days ago: due",
-  "args": {
-   "days_ago": 40,
-   "form": "naive",
-   "months": 1
-  },
-  "expect": {
-   "eq": {
-    "due": true
-   }
-  }
- },
- {
-  "id": "API-080",
-  "area": "email_due",
-  "kind": "email_due",
-  "description": "40 days ago with a 3 month interval: not due",
-  "args": {
-   "days_ago": 40,
-   "form": "iso",
-   "months": 3
-  },
-  "expect": {
-   "eq": {
-    "due": false
-   }
-  }
- },
- {
-  "id": "API-081",
-  "area": "email_body",
-  "kind": "email_body",
-  "description": "the report states cards, tokens, cost, elapsed time, model and provider",
-  "args": {
-   "cards_created": 1234,
-   "corpus_path": "/data/corpus",
-   "tokens_used": 56789,
-   "cost_usd": 0.0123,
-   "elapsed_seconds": 125.0,
-   "model": "model-x",
-   "provider": "provider-y"
-  },
-  "expect": {
-   "contains": [
-    "Cards created: 1,234",
-    "Tokens used: 56,789",
-    "Cost: $0.0123",
-    "Time elapsed: 2m 5s",
-    "Model: model-x",
-    "Provider: provider-y",
-    "Corpus: /data/corpus"
-   ]
-  }
- },
- {
-  "id": "API-082",
-  "area": "email_body",
-  "kind": "email_body",
-  "description": "the report body has no em dash and no placeholder",
-  "args": {
-   "cards_created": 0,
-   "corpus_path": "c",
-   "tokens_used": 0,
-   "cost_usd": 0,
-   "elapsed_seconds": 0,
-   "model": "m",
-   "provider": "p"
-  },
-  "expect": {
-   "not_contains": [
-    "\u2014",
-    "{",
-    "TODO"
-   ]
-  }
- },
- {
   "id": "API-083",
   "area": "offline_import",
   "kind": "offline_import",
   "description": "quest_ai_runner imports with every socket call refusing",
   "args": {
    "module": "quest_ai_runner"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-084",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.core imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.core"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-085",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.adapters imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.adapters"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-086",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.runner imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.runner"
   },
   "expect": {
    "eq": {

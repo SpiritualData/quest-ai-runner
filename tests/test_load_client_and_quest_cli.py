@@ -15,14 +15,9 @@ import textwrap
 
 import pytest
 
-from quest_ai_runner import cli
-from quest_ai_runner.config import (
-    ConfigFileError,
-    RunnerConfig,
-    load_quest_client,
-    parse_decision_assignees,
-)
-from quest_ai_runner.runner.quest_client import QuestClient, QuestNotConfigured
+from quest_ai_runner.the_consciousness.terminal import cli
+from quest_ai_runner.the_body.configuration.config import ConfigFileError, RunnerConfig, load_quest_client, parse_decision_assignees
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestNotConfigured
 
 
 def _write(tmp_path, text: str, name: str = "qar.toml"):

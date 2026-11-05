@@ -7,12 +7,12 @@ import json
 
 import pytest
 
-from quest_ai_runner import store_cli
-from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.card_store_upload import REASON_IMPORTED, plan_upload
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.adapters.quest_api_card_repository import (
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import store_cli
+from hubofhubs.api import card_store_identity as ident
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.card_store_upload import REASON_IMPORTED, plan_upload
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import (
     CardScopeError, QuestApiCardRepository, quest_card_settings_from_env, select_card_scope)
 from tests.quest_card_backend_fake import FakeCardBackend
 from tests.test_quest_card_backend_default import card_store, local_vector, resolve  # noqa: F401

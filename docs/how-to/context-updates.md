@@ -3,8 +3,8 @@
 *What has changed since an assistant last looked at this work?* One engine answers that question
 for every channel, and every caller asks the same engine.
 
-Module: [`runner/context_updates.py`](../../quest_ai_runner/runner/context_updates.py).
-Drive channel: [`adapters/drive_comments.py`](../../quest_ai_runner/adapters/drive_comments.py).
+Module: [`runner/context_updates.py`](../../quest_ai_runner/the_body/intake_sources/context_updates.py).
+Drive channel: [`adapters/drive_comments.py`](../../quest_ai_runner/the_body/intake_sources/drive_comments.py).
 
 ## The problem it exists to fix
 
@@ -218,7 +218,8 @@ convention `context_updates_judge_relevance`/`context_updates_relevance_tier` al
 The Drive channel needs a token, and minting one is a deployment concern:
 
 ```python
-from quest_ai_runner.adapters import DriveComments, service_account_token_provider
+from quest_ai_runner.the_body.intake_sources.drive_comments import DriveComments
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import service_account_token_provider
 cfg.drive_comments = DriveComments(token_provider=service_account_token_provider(...))
 ```
 
@@ -292,7 +293,7 @@ quest-ai-runner context quest_1625d9f47a06 --config qar.toml
 
 ```python
 from quest_ai_runner import load_config
-from quest_ai_runner.runner.context_updates import collect_quest_context
+from quest_ai_runner.the_body.intake_sources.context_updates import collect_quest_context
 
 bundle = collect_quest_context("quest_1625d9f47a06", cfg=load_config("qar.toml"))
 print(bundle.as_prompt_block())     # exactly the text a run on this quest would be handed

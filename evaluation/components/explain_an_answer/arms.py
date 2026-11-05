@@ -3,8 +3,9 @@ reading of a payload as text."""
 import types
 
 import common  # noqa: F401  (puts the repository on the path)
-from quest_ai_runner.core.answer_explanation import TurnTrace, build_payload, render_record_for_prompt, render_signals
-from quest_ai_runner.core.orchestrator_judges import JudgesMixin
+from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import (
+    TurnTrace, build_payload, render_record_for_prompt, render_signals)
+from quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges import JudgesMixin
 
 MODEL = "claude-haiku"   # the fast tier (explain_tier default) on the claude CLI backend
 

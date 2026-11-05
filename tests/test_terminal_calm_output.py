@@ -27,20 +27,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from quest_ai_runner.chat_conversations import chat_log_path
-from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_EXEC, EVENT_MILESTONE, EVENT_PLAN, EVENT_STATUS
-from quest_ai_runner.textual_ui import ActivityBar, QuestAITerminal, _RichLogHandler
-from quest_ai_runner import textual_ui_widgets
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.chat_conversations import chat_log_path
+from hubofhubs.api import EVENT_CONTEXT, EVENT_EXEC, EVENT_MILESTONE, EVENT_PLAN, EVENT_STATUS
+from quest_ai_runner.the_consciousness.terminal.textual_ui import ActivityBar, QuestAITerminal, _RichLogHandler
+from quest_ai_runner.the_consciousness.terminal import textual_ui_widgets
 from esoi.metric_results import NOT_RECORDED_LINE
-from quest_ai_runner.textual_ui_helpers import (
-    METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines, metric_number, union_entries,
-)
-from quest_ai_runner.interactive_session_tracker import format_elapsed
-from quest_ai_runner.textual_ui_widgets import (
-    LOG_LINE_CHARS,
-    LOG_LINES_SHOWN,
-    short_log_text,
-)
+from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
+    METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines, metric_number, union_entries)
+from quest_ai_runner.the_consciousness.terminal.interactive_session_tracker import format_elapsed
+from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import LOG_LINE_CHARS, LOG_LINES_SHOWN, short_log_text
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -176,7 +171,7 @@ def test_an_error_is_always_shown_and_never_counted_away(tmp_path):
 
 def test_a_record_that_says_it_is_not_for_the_transcript_goes_to_the_file_only(tmp_path):
     handler, log, path = make_handler(tmp_path)
-    record = make_record("quest_ai_runner.core.usage_limit", "Claude Code usage limit reached (weekly limit); resets at 20:00")
+    record = make_record("quest_ai_runner.the_world.model_plumbing.model_tier_chooser.usage_limit", "Claude Code usage limit reached (weekly limit); resets at 20:00")
     record.in_transcript = False
     handler.handle(record)
     handler.write_summary()
@@ -186,7 +181,7 @@ def test_a_record_that_says_it_is_not_for_the_transcript_goes_to_the_file_only(t
 
 
 def test_the_usage_limit_record_is_marked_for_the_file_only_so_the_closing_line_is_the_only_telling(tmp_path):
-    from quest_ai_runner.core import usage_limit
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
     usage_limit.reset_for_tests()
     captured: list = []
 
@@ -250,7 +245,7 @@ def test_a_warning_is_cut_to_the_terminal_width_on_a_clause_or_a_word(tmp_path):
         "Context assembly timed out after 30.0s with no partial result; turn-start context was dropped "
         "and this turn proceeds without it (QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust)"))
     handler.handle(make_record(
-        "quest_ai_runner.select_context.vector_context_assembler",
+        "quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler",
         "Card store has 142781 cards; only the first 1000 are searched by meaning "
         "(prune it with quarantine_cards.py)."))
     handler.close()
@@ -342,7 +337,7 @@ def child_env(**extra) -> dict:
 
 
 def test_importing_the_cli_sets_the_hub_verbosity_default_and_a_users_value_wins():
-    code = "import os, quest_ai_runner.cli; print(os.environ.get('HF_HUB_VERBOSITY'))"
+    code = "import os, quest_ai_runner.the_consciousness.terminal.cli; print(os.environ.get('HF_HUB_VERBOSITY'))"
     default = subprocess.run([sys.executable, "-c", code], cwd=REPO_ROOT, env=child_env(),
                              capture_output=True, text=True, timeout=120)
     assert default.stdout.strip() == "error", default.stderr[-500:]
@@ -354,7 +349,7 @@ def test_importing_the_cli_sets_the_hub_verbosity_default_and_a_users_value_wins
 def test_the_hub_logger_stays_at_error_even_though_its_import_resets_the_level():
     pytest.importorskip("huggingface_hub")
     # Importing the hub's utilities is what configures its logger (it is lazy about the rest).
-    code = ("import logging, quest_ai_runner.cli, huggingface_hub.utils; "
+    code = ("import logging, quest_ai_runner.the_consciousness.terminal.cli, huggingface_hub.utils; "
             "print(logging.getLogger('huggingface_hub').level)")
     result = subprocess.run([sys.executable, "-c", code], cwd=REPO_ROOT, env=child_env(),
                             capture_output=True, text=True, timeout=120)

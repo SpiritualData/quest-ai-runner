@@ -2,9 +2,9 @@
 the run made a successful mutating call (or a deep goal was verified met) and ``nothing_done`` for an
 answer that only talked. Quest Workflows reads it so a step is not recorded done on a reply like
 "I can send it if you'd like"."""
-from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord
-from quest_ai_runner.core.orchestrator_types import OrchestratorResult
-from quest_ai_runner.runner.executor import TaskExecutor
+from hubofhubs.api import ExecutionFact, ExecutionRecord
+from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 
 class Client:
@@ -54,8 +54,8 @@ def test_a_failed_mutating_call_is_not_work_done():
 def test_a_backend_that_refuses_result_data_still_gets_the_task_reported_done(monkeypatch):
     """A backend older than ``result_data`` answers 422 to the whole PATCH; the report is retried
     without the stamp instead of leaving the finished task in progress."""
-    from quest_ai_runner.runner.quest_client import QuestClient
-    from quest_ai_runner.runner.quest_client_support import QuestApiError
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
 
     bodies = []
 

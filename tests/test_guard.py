@@ -12,12 +12,12 @@ already executed (no double mutation).
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_EXEC
-from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord, classify_exec_phase
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.runner.executor import TaskExecutor
+from hubofhubs.api import DeepResult, ProgressEvent
+from hubofhubs.api import EVENT_EXEC
+from hubofhubs.api import ExecutionFact, ExecutionRecord, classify_exec_phase
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubRetrieval
 

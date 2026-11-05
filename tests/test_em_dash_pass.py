@@ -1,7 +1,7 @@
 """The em dash pass: text with a dash comes out with the punctuation its context needs, never a hyphen glued to words, and the
 two places text leaves the AI (the final reply, a tool that writes the person's data) both use it. Offline; no model."""
-from quest_ai_runner.core.em_dash_pass import clean_value, remove_em_dashes
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_intelligence.critical_thinking.response_quality.em_dash_pass import clean_value, remove_em_dashes
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
 
 D = "—"
 
@@ -53,8 +53,8 @@ def test_a_tool_that_changes_data_receives_text_without_a_dash_and_a_read_is_lef
 
 
 def test_the_final_reply_of_a_turn_carries_no_em_dash():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 

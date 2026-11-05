@@ -1,6 +1,6 @@
 """The live ``FilesAdapter`` over the handbook written as ``<id>.md`` files: one ``grep`` per question term,
 then ``read_section`` of the top documents. No fake needed (it is a local source); nothing is re-implemented."""
-from quest_ai_runner.adapters.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
 from retrieval import policy
 from retrieval.world import Lazy, doc_id_from_path, write_tree

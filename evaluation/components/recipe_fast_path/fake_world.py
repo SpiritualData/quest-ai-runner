@@ -1,7 +1,7 @@
 """Five fake quest tools over an in-memory call log, built from the REAL ``ToolRegistry`` / ``ToolSpec``
 types so a planner sees real tool descriptions and schemas. No Quest server, no network, no deep run."""
 import common  # noqa: F401
-from quest_ai_runner.core.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 
 TEACH_TOOLS = {"complete_habit": "mark my meditation habit done",
                "add_note": "add a note saying call the dentist on Friday",

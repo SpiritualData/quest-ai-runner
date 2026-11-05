@@ -46,8 +46,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 from unittest.mock import patch
 
-from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from hubofhubs.api import FilesystemCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 MERGE_RENAME = re.compile(r"--m[0-9a-f]{8}$")      # ``merge-into`` renames a colliding card <id>--m<8 hex>
 VOCAB = ["auth", "billing", "chat", "docs", "export", "search"]
@@ -67,7 +67,7 @@ SETTLE_EVERY = 8
 @contextlib.contextmanager
 def offline_git() -> Iterator[None]:
     """No ``git hash-object`` subprocess per file: the same cards, a few times faster."""
-    with patch("quest_ai_runner.adapters.context_store_bootstrap.subprocess.run", side_effect=FileNotFoundError):
+    with patch("quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_store_bootstrap.subprocess.run", side_effect=FileNotFoundError):
         yield
 
 
@@ -82,7 +82,7 @@ def runner_self_heal() -> bool:
     the builder passes none (the store's default) or the value is not a plain constant."""
     import ast
     try:
-        from quest_ai_runner import config_assembler
+        from quest_ai_runner.the_body.configuration import config_assembler
         tree = ast.parse(Path(inspect.getsourcefile(config_assembler)).read_text(encoding="utf-8"))
     except (ImportError, OSError, SyntaxError, TypeError):      # an older checkout without that builder module
         return False
@@ -265,8 +265,8 @@ class World:
 
     def apply(self, op: str, i: int) -> None:
         """Do ``op`` at level ``i``. Anything it raises is for the caller to report."""
-        from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
-        from quest_ai_runner.adapters.card_store_merge import apply_merge
+        from hubofhubs.api import card_store_identity as ident
+        from quest_ai_runner.the_body.internal_context.card_store.card_store_merge import apply_merge
         if op == "bootstrap":
             self.index(i)
         elif op == "refresh":

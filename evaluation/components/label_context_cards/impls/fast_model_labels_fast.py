@@ -3,8 +3,8 @@ and placement as ``fast_model_labels`` over a Gemini flash-lite model, so the do
 (the placement runs through the host ``generate`` adapter, see ``fast_model_labels``). API priced (fractions of a cent per case): one
 case, then the set, with ``--max-calls``."""
 PAID = True
-from quest_ai_runner.adapters import context_card_updater
-from quest_ai_runner.subconscious import card_metadata_generator
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_card_updater
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import card_metadata_generator
 from label_context_cards import arms
 import live_arm
 

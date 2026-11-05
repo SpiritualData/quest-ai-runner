@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 import scripted_brain
-from quest_ai_runner.core.recipes import RecipeStore
+from quest_ai_runner.the_intelligence.mind.planner.recipes import RecipeStore
 from recipe_fast_path.rule_model import RuleModel
 
 

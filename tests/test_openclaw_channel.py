@@ -26,9 +26,9 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPToolResult
-from quest_ai_runner.adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from quest_ai_runner.core.adapters_channels import OutboundReply
+from hubofhubs.api import MCPToolResult
+from quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
+from quest_ai_runner.the_consciousness.request_intake.interface import OutboundReply
 
 
 @dataclass
@@ -273,7 +273,7 @@ def test_bridge_never_calls_permissions_respond():
     """Structural proof, not a scan: OpenClawChannel names it only in documentation (the module
     docstring explains the boundary) -- ALLOWED_TOOLS (the documented call boundary) does not
     include it, and it never appears as a tool-name argument passed to call_tool()."""
-    from quest_ai_runner.adapters import openclaw_channel as oc
+    from quest_ai_runner.the_world.tools.connected_system_operations import openclaw_channel as oc
 
     assert "permissions_respond" not in oc.ALLOWED_TOOLS
     source = open(oc.__file__).read()

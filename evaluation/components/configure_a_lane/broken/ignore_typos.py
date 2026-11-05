@@ -4,8 +4,8 @@ supported, a bad number raises, and a malformed tuning value crashes startup. Ze
 import dataclasses
 import tomllib
 
-from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.core.runtime_settings import CoreSettings
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.the_body.configuration.runtime_settings import CoreSettings
 
 CORE_FIELDS = ("read_op_timeout_seconds", "context_assembly_timeout_seconds", "verify_context_max_chars",
                "note_floor_relevance_gated", "deep_prompt_token_budget", "deep_timeout_seconds",

@@ -42,7 +42,7 @@ def test_scorer_fails_a_prompt_over_its_derived_budget_and_reports_headroom():
 
 def test_budgets_come_from_the_window_a_share_of_it_and_the_cost_per_call():
     from prompt_size import budgets
-    from quest_ai_runner.core import prompt_budget
+    from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
     planner = budgets.derive("planner")
     assert planner["window_tokens"] == prompt_budget.context_window_tokens("claude-haiku-5-5")
     assert planner["budget_tokens"] == min(planner["window_bound"], planner["cost_bound"])
@@ -65,7 +65,7 @@ def test_a_tighter_spend_cap_lowers_the_budget(monkeypatch):
 
 
 def test_incident_fixtures_really_carry_the_duplicated_blocks_the_live_path_must_remove():
-    from quest_ai_runner.core.prompt_budget import count_blocks
+    from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import count_blocks
     deep = fixtures.build_inputs(dict(point="deep_prompt", fixture="incident"))
     assert count_blocks(deep["preamble"] + deep["brief"]) >= 16
     auto = fixtures.build_inputs(dict(point="autopilot_batch", fixture="incident"))

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_guard import GuardProvider, SucceedingDeepRunner
@@ -89,7 +89,7 @@ def test_verdict_carries_the_flag_and_shows_what_was_read():
 
     provider.plan = plan  # type: ignore[assignment]
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider))
-    from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
+    from hubofhubs.api import ExecutionRecord
     gathered = [{"kind": "read", "locator": "notes/sleep.md", "text": "Sleep log: 6 hours a night."}]
     verdict, error = orch._verify_goal(
         "answer", "how do I sleep?", "You sleep 6 hours.", exec_record=ExecutionRecord(),

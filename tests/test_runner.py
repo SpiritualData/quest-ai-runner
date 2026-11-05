@@ -2,12 +2,12 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session, subprocess_runner as hub_runner
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorResult
-from quest_ai_runner.runner.executor import TaskExecutor
-from quest_ai_runner.runner.poller import Poller, _task_signature
+from hubofhubs.api import session as hub_session, subprocess_runner as hub_runner
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorResult
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller, _task_signature
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
@@ -338,7 +338,7 @@ def test_executor_incomplete_falls_back_to_failed_for_a_client_without_report_in
 
 
 def test_quest_client_report_incomplete_patches_incomplete_status():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
     calls = []
     qc = QuestClient.__new__(QuestClient)
     qc._request = lambda method, path, body=None, **kw: calls.append((method, path, body)) or {}
@@ -573,7 +573,7 @@ def test_quest_client_progress_url_keeps_colon_for_team_conv_id(monkeypatch):
     by mocking the HTTP layer (no network)."""
     import json
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -606,7 +606,7 @@ def test_quest_client_progress_url_same_shape_for_qaconv_id(monkeypatch):
     """Regression guard: the SAME method builds the SAME URL shape for a ``qaconv_`` id, so the
     team-id path isn't a special case — both ids are simply interpolated verbatim."""
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -629,7 +629,7 @@ def test_quest_client_progress_url_same_shape_for_qaconv_id(monkeypatch):
 # --- poller integration tests ---------------------------------------------------
 
 def _poller_with(client, provider, *, team_id="team1", **kw):
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test", team_id=team_id,
         retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider, **kw,
@@ -777,7 +777,7 @@ def test_scheduled_task_runs_once_its_due_time_passes():
 def test_subprocess_config_web_enabled_derivation():
     """web_enabled() honestly tracks the worker's tool gating: default = web on (Claude Code ships
     WebSearch/WebFetch), pinning without web = off, allowing a web tool = on, disallowing = off."""
-    from quest_ai_runner.core.goal_runner import SubprocessConfig
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig
 
     assert SubprocessConfig(working_dir="/w").web_enabled() is True
     assert SubprocessConfig(working_dir="/w", allowed_tools=["Read", "Bash"]).web_enabled() is False
@@ -790,7 +790,7 @@ def test_subprocess_runner_passes_tool_flags_and_runs_web_goal(monkeypatch):
     what the env ADVERTISES (web_enabled) matches what the worker is actually allowed to do. We
     intercept subprocess.Popen to capture the command (no real spawn)."""
     import subprocess as _sp
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     captured = {}
 
@@ -827,9 +827,7 @@ def test_subprocess_runner_drops_non_claude_model(monkeypatch):
     (latest of family) and a bucket LABEL can never reach the binary raw. See
     tests/test_deep_failure_session_diagnostics.py for the label case."""
     import subprocess as _sp
-    from quest_ai_runner.core.goal_runner import (
-        BALANCED_CLI_MODEL, SubprocessConfig, SubprocessGoalRunner,
-    )
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import BALANCED_CLI_MODEL, SubprocessConfig, SubprocessGoalRunner
 
     captured = {}
 
@@ -862,7 +860,7 @@ def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
     """Exit 0 with NO output is a silent no-op (the worker never ran the goal), not a success.
     The runner must report met=False with a clear message rather than a hollow 'Completed'."""
     import subprocess as _sp
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     class _MockPopen:
         returncode = 0
@@ -882,8 +880,8 @@ def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
 def test_resolve_deep_timeout_seconds_env_var_and_config_precedence(monkeypatch):
     """The hard cap is OPT-IN. Explicit SubprocessConfig.timeout_seconds wins, then
     QAR_DEEP_TIMEOUT_SECONDS; unset, zero or garbage means no fixed cap (None)."""
-    from quest_ai_runner.core.goal_runner_contract import QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR
-    from quest_ai_runner.core.goal_runner import resolve_deep_timeout_seconds
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import resolve_deep_timeout_seconds
 
     monkeypatch.delenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     assert resolve_deep_timeout_seconds(None) is None      # no arbitrary default kill
@@ -928,7 +926,7 @@ def test_deep_run_has_no_fixed_kill_and_reviews_on_an_interval(monkeypatch):
     """With no hard cap configured the wait is sliced by the review interval, and a reviewer that
     says keep going leaves the run alone (it then finishes normally, nothing killed)."""
     import subprocess as _sp
-    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
 
     monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     killed = {}
@@ -956,7 +954,7 @@ def test_deep_run_has_no_fixed_kill_and_reviews_on_an_interval(monkeypatch):
 
 def test_deep_run_stopped_only_when_reviewer_says_so_and_reason_is_in_output(monkeypatch):
     import subprocess as _sp
-    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
 
     monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     killed = {}
@@ -980,7 +978,7 @@ def test_deep_run_stopped_only_when_reviewer_says_so_and_reason_is_in_output(mon
 def test_deep_run_review_failure_fails_open(monkeypatch):
     """A broken or garbled reviewer must never kill a run."""
     import subprocess as _sp
-    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
 
     monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
     killed = {}
@@ -1002,7 +1000,7 @@ def test_deep_run_review_failure_fails_open(monkeypatch):
 
 
 def test_parse_deep_review():
-    from quest_ai_runner.core.goal_runner import parse_deep_review
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import parse_deep_review
     assert parse_deep_review('ok {"stop": true, "reason": "Out of tokens."}') == (True, "Out of tokens.")
     assert parse_deep_review('{"stop": "yes"}') is None
     assert parse_deep_review("nothing") is None
@@ -1012,7 +1010,7 @@ def test_subprocess_runner_optional_hard_timeout_kills_process_group_and_fails_c
     """An explicitly configured hard cap still works: it kills the WHOLE process group and fails
     clearly, naming how long it ran and the limit, with no em dash."""
     import subprocess as _sp
-    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
 
     killed = {}
     monkeypatch.setattr(hub_runner, "kill_process_group", lambda proc: killed.setdefault("pid", proc.pid))
@@ -1033,7 +1031,7 @@ def test_subprocess_runner_passes_explicit_session_id(monkeypatch):
     monitor can watch the deterministic session file instead of guessing from 'any new jsonl'."""
     import subprocess as _sp
     import uuid as _uuid
-    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
 
     captured = []
 
@@ -1072,7 +1070,7 @@ def test_monitor_binds_to_explicit_session_id_ignores_other_sessions(tmp_path, m
     import json as _json
     import threading as _threading
     import time as _time
-    from quest_ai_runner.core import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
 
     project_dir = tmp_path / ".claude" / "projects" / "proj"
     project_dir.mkdir(parents=True)
@@ -1122,8 +1120,8 @@ def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
     virtual seconds elapsing via a fast fake clock so the test itself stays fast."""
     import threading as _threading
     import time as _time
-    from quest_ai_runner.core import goal_runner as gr
-    from quest_ai_runner.core import goal_runner_session as gr_session
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner_session as gr_session
 
     monkeypatch.setattr(hub_session, "find_claude_project_dir", lambda working_dir, config_dir=None: None)
 
@@ -1159,7 +1157,7 @@ def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
 # --- the escalation-marker contract: a deep worker that raised a human decision --------------
 
 def test_extract_escalation_id():
-    from quest_ai_runner.core.goal_runner import extract_escalation_id
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import extract_escalation_id
 
     assert extract_escalation_id("no marker here") is None
     assert extract_escalation_id("") is None
@@ -1190,7 +1188,7 @@ def test_subprocess_runner_parses_escalation_marker(monkeypatch):
     runner returns met=False + decision_id so the executor reports needs_you with the decision
     linked — regardless of the worker's exit code (escalated-and-exited-clean is still paused)."""
     import subprocess as _sp
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     class _MockPopen:
         returncode = 0
@@ -1210,7 +1208,7 @@ def test_subprocess_runner_parses_escalation_marker(monkeypatch):
 def test_goal_runner_normalizes_decision_to_not_met():
     """GoalRunner never lets a runner report met=True alongside a decision_id — a paused-on-human
     run must reach the executor as not-met so it reports needs_you, not done."""
-    from quest_ai_runner.core.goal_runner import GoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import GoalRunner
 
     gr = GoalRunner(StubDeepRunner(met=True, output="staged", decision_id="dec_7"))
     res = gr.run(goal="g", brief="b")
@@ -1293,7 +1291,7 @@ def test_poller_heartbeat_reports_web_via_subprocess_runner_default():
     DEFAULT SubprocessConfig (skip_permissions, no tool restrictions) the worker CAN browse, so the
     env honestly advertises web:true. Proves web is derived from the SubprocessConfig's real tool
     gating, not a hardcode."""
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     client = MockQuestClient([])
@@ -1308,7 +1306,7 @@ def test_poller_heartbeat_reports_web_via_subprocess_runner_default():
 def test_poller_heartbeat_reports_web_false_when_subprocess_tools_pinned_without_web():
     """If a consumer PINS the subprocess to a tool set without the web tools (or disallows them),
     the env reports web:false honestly — the derivation tracks the actual gating both ways."""
-    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     client = MockQuestClient([])
@@ -1326,12 +1324,12 @@ def test_poller_heartbeat_reports_web_false_via_files_adapter_no_deep_runner():
     nothing that can browse, so code AND web are False. Proves derivation reads the actual wiring,
     not a hardcoded claim."""
     import tempfile
-    from quest_ai_runner.adapters import FilesAdapter
+    from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     client = MockQuestClient([])
     with tempfile.TemporaryDirectory() as d:
-        from quest_ai_runner.config import RunnerConfig
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig
         cfg = RunnerConfig(
             quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
             retrieval=FilesAdapter(d), model_provider=provider,
@@ -1368,7 +1366,7 @@ def test_poller_no_team_id_skips_heartbeat_cleanly():
     (not an error) and the poll proceeds normally."""
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     client = MockQuestClient([])
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test", team_id="",
         retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider,
@@ -1404,7 +1402,7 @@ def test_poller_org_only_still_heartbeats_with_no_team_id():
     team_id, even though team_id is still required separately for task claiming/escalation."""
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     client = MockQuestClient([])
-    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test", team_id="", org_id="org_example",
         retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider,
@@ -1422,7 +1420,7 @@ def test_claim_includes_handler_in_patch_body(monkeypatch):
     body (alongside status), so the task records WHO ran it. Mock the HTTP layer (no network)."""
     import json
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -1451,7 +1449,7 @@ def test_claim_without_handler_omits_it(monkeypatch):
     """Backward compatibility: claim() with no handler sends only {status} — body unchanged."""
     import json
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -1476,7 +1474,7 @@ def test_report_progress_posts_to_right_path_and_body(monkeypatch):
     fields ({kind, text?, output?, data?}), mirroring post_conversation_message's body build."""
     import json
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -1508,7 +1506,7 @@ def test_report_progress_swallows_http_errors(monkeypatch):
     error is logged and an empty dict returned."""
     import urllib.error
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     def _boom_urlopen(req, timeout=None):
         raise urllib.error.HTTPError(req.full_url, 500, "boom", hdrs=None, fp=None)
@@ -1625,7 +1623,7 @@ def test_executor_task_model_field_reaches_provider():
     out = ex.execute({"id": "tmh1", "text": "say hi", "model": "opus"})
     assert out.status == "done"
     # The provider must have been called with the "opus" resolution, not "haiku".
-    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_opus = registry.resolve_tier("opus")
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
@@ -1643,7 +1641,7 @@ def test_executor_task_without_model_field_uses_planner_tier():
     ex = TaskExecutor(client, _brain(provider))
     out = ex.execute({"id": "tmh2", "text": "say hi"})
     assert out.status == "done"
-    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_balanced = registry.resolve_tier("balanced")  # planner_tier default = balanced
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
@@ -1667,7 +1665,7 @@ def test_executor_deep_run_model_wins_over_model():
     ex = TaskExecutor(client, _brain(provider))
     out = ex.execute({"id": "tmh4", "text": "say hi", "model": "fast", "deep_run_model": "opus"})
     assert out.status == "done"
-    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_fast = registry.resolve_tier("fast")
     expected_opus = registry.resolve_tier("opus")
@@ -1687,7 +1685,7 @@ def test_executor_falls_back_to_model_when_no_deep_run_model():
     ex = TaskExecutor(client, _brain(provider))
     out = ex.execute({"id": "tmh5", "text": "say hi", "model": "opus", "deep_run_model": None})
     assert out.status == "done"
-    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_fast = registry.resolve_tier("fast")
     expected_opus = registry.resolve_tier("opus")
@@ -1703,7 +1701,7 @@ def test_executor_task_model_none_is_same_as_absent():
     ex = TaskExecutor(client, _brain(provider))
     out = ex.execute({"id": "tmh3", "text": "say hi", "model": None})
     assert out.status == "done"
-    from quest_ai_runner.core.model_registry import ModelRegistry
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_sonnet = registry.resolve_tier("sonnet")
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
@@ -1856,7 +1854,7 @@ def test_build_cancel_check_no_task_id_is_always_false():
 # --- QuestClient.is_task_cancelled ------------------------------------------------
 
 def test_is_task_cancelled_true_for_status_cancelled():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class _FakeGetTaskClient(QuestClient):
         def get_task(self, task_id):
@@ -1867,7 +1865,7 @@ def test_is_task_cancelled_true_for_status_cancelled():
 
 
 def test_is_task_cancelled_true_for_cancel_requested_flag():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class _FakeGetTaskClient(QuestClient):
         def get_task(self, task_id):
@@ -1878,7 +1876,7 @@ def test_is_task_cancelled_true_for_cancel_requested_flag():
 
 
 def test_is_task_cancelled_false_when_neither_signal_set():
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class _FakeGetTaskClient(QuestClient):
         def get_task(self, task_id):
@@ -1891,7 +1889,7 @@ def test_is_task_cancelled_false_when_neither_signal_set():
 def test_is_task_cancelled_false_on_api_error():
     """FAIL-OPEN by contract: a transient error must never be mistaken for a cancellation and kill
     a legitimate run."""
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class _BoomGetTaskClient(QuestClient):
         def get_task(self, task_id):
@@ -1904,7 +1902,7 @@ def test_is_task_cancelled_false_on_api_error():
 def test_is_task_cancelled_false_when_task_not_found():
     """``get_task`` already degrades to {} on a 404/API error (see its own docstring); an empty
     task has neither signal, so this must be False, not raise."""
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class _MissingTaskClient(QuestClient):
         def get_task(self, task_id):
@@ -1919,7 +1917,7 @@ def test_is_task_cancelled_false_when_task_not_found():
 def test_post_conversation_message_includes_task_id_when_given(monkeypatch):
     import json
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -1945,7 +1943,7 @@ def test_post_conversation_message_omits_task_id_when_absent(monkeypatch):
     """Backward compatibility: no ``task_id`` -> the body is exactly {content, kind}, unchanged."""
     import json
     import urllib.request
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -2061,8 +2059,8 @@ def test_monitor_says_which_model_the_worker_runs_on_once_while_it_runs(tmp_path
     import json as _json
     import threading as _threading
     import time as _time
-    from quest_ai_runner.core import goal_runner as gr
-    from hubofhubs.the_world.tools.events import EVENT_STATUS
+    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner as gr
+    from hubofhubs.api import EVENT_STATUS
 
     project_dir = tmp_path / ".claude" / "projects" / "proj"
     project_dir.mkdir(parents=True)

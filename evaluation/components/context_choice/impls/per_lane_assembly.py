@@ -1,6 +1,6 @@
 """CURRENT: the area arm over scripted members. ``choose`` reads the lane's assembler, ``resolve`` and ``find`` hand the question to
 the member that owns it, ``search`` ranks through the mixed search. Zero model calls."""
-from quest_ai_runner.select_context.area import PerLaneAssembly
+from quest_ai_runner.the_intelligence.subconscious.area_context_retriever import PerLaneAssembly
 
 
 class Assembler:

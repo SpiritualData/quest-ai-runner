@@ -2,11 +2,11 @@
 and a cycle or an unmet need fails with a named error. Test-only arms, typed with the hub's Protocols; offline, no model call."""
 import pytest
 from esoi.assemble import AssemblyConfig, AssemblyError
-from hubofhubs.the_body.internal_context.card_store.interface import CardStore
-from hubofhubs.the_intelligence.subconscious.context_retriever.interface import ContextRetrieval
-from hubofhubs.the_world.tools.web_search.interface import SearchBackend
+from hubofhubs.api import CardStore
+from hubofhubs.api import ContextRetrieval
+from hubofhubs.api import SearchBackend
 
-import quest_ai_runner.hub as qar_hub
+import quest_ai_runner.the_self.assembler.hub as qar_hub
 
 
 class DictRepository:

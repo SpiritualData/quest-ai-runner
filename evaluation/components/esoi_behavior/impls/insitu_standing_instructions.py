@@ -5,7 +5,7 @@ Compare with ``insitu_plain``. Costs real money; run on a subset (``--only``) an
 import os
 
 import common  # noqa: F401  (sets sys.path for the repo)
-from quest_ai_runner.core.goal_runner_contract import compose_goal_prompt
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import compose_goal_prompt
 
 from esoi_behavior import insitu
 from esoi_behavior.judge import build_judge

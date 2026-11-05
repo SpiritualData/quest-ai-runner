@@ -17,10 +17,7 @@ from __future__ import annotations
 import gc
 from typing import Any, Dict, List
 
-from quest_ai_runner.core.card_filter import (
-    consolidate_context,
-    filter_cards_by_relevance,
-)
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import consolidate_context, filter_cards_by_relevance
 
 
 class _CountingProvider:

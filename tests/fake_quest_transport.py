@@ -10,7 +10,7 @@ import json
 import urllib.error
 import urllib.request
 
-from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
 
 class FakeResponse:

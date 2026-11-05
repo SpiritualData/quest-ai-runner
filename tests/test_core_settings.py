@@ -1,8 +1,7 @@
 """Core's tunables come from CoreSettings, resolved by the config layer (structure rule S13)."""
-from quest_ai_runner.config_core_settings import core_settings_from_env
-from quest_ai_runner.core.orchestrator_capabilities import read_op_timeout_seconds, verify_context_max_chars
-from quest_ai_runner.core.runtime_settings import (
-    CoreSettings, core_settings, install_core_settings, process_environment)
+from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
+from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import read_op_timeout_seconds, verify_context_max_chars
+from quest_ai_runner.the_body.configuration.runtime_settings import CoreSettings, core_settings, install_core_settings, process_environment
 
 
 def test_defaults_match_the_old_environment_defaults():
@@ -31,7 +30,7 @@ def test_core_reads_the_environment_fresh_through_the_config_layer(monkeypatch):
 
 
 def test_a_pinned_core_settings_wins_over_the_environment(monkeypatch):
-    from quest_ai_runner.config_core_settings import core_settings_from_env as provider, install_for_config
+    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env as provider, install_for_config
     monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "99")
     try:
         install_for_config(CoreSettings(read_op_timeout_seconds=7.0))

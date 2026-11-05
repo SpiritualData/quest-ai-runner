@@ -14,14 +14,8 @@ import datetime
 import hashlib
 import json
 
-from quest_ai_runner.core.recent_context import (
-    FileRecentContextStore,
-    build_item_usage_hint,
-    conv_scope_key,
-    filter_relevant,
-    quest_scope_key,
-    render_recent_cards,
-)
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import (
+    FileRecentContextStore, build_item_usage_hint, conv_scope_key, filter_relevant, quest_scope_key, render_recent_cards)
 
 
 def _seed_raw_file(tmp_path, key: str, turns: list) -> None:

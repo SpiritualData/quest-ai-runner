@@ -17,14 +17,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.adapters_values import PlanDecision
-from quest_ai_runner.core.deep_model_selection import (
-    normalize_difficulty,
-    select_deep_start,
-)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, normalize_decision
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import normalize_difficulty, select_deep_start
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, normalize_decision
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -233,7 +230,7 @@ def test_plan_decision_defaults_to_no_rating():
 # --- env wiring --------------------------------------------------------------------------------
 
 def test_env_wiring(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     monkeypatch.setenv("QAR_DEEP_AUTO_MODEL", "off")
     monkeypatch.setenv("QAR_DEEP_MODEL_HARD", "opus")
@@ -245,7 +242,7 @@ def test_env_wiring(monkeypatch):
 
 
 def test_env_defaults(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     for var in ("QAR_DEEP_AUTO_MODEL", "QAR_DEEP_MODEL_SIMPLE", "QAR_DEEP_MODEL_NORMAL",
                 "QAR_DEEP_MODEL_HARD"):

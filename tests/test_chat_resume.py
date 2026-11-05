@@ -13,11 +13,10 @@ import time
 
 import pytest
 
-from quest_ai_runner import cli, cli_chat
-from quest_ai_runner.chat_conversations import (
-    list_conversations, read_conversation, resolve_conversation,
-)
-from quest_ai_runner.config import RunnerConfig
+from quest_ai_runner.the_consciousness.terminal import cli, cli_chat
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.chat_conversations import (
+    list_conversations, read_conversation, resolve_conversation)
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
 
 def write_conv(conv_dir, hexid, turns, corpus_root=None, goal_id=None, age=0.0):
@@ -82,7 +81,7 @@ def run_chat(argv, monkeypatch, tmp_path):
     monkeypatch.setattr(cli_chat, "_config_from_env", lambda config_path=None: RunnerConfig(
         quest_base_url="http://example.invalid", quest_api_key="qsk_test",
         retrieval=object(), model_provider=object(), corpus_root=None))
-    import quest_ai_runner.textual_session as textual_session
+    import quest_ai_runner.the_consciousness.terminal.textual_session as textual_session
     monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)
     calls = []
     monkeypatch.setattr(textual_session, "start_textual_interactive",
@@ -114,7 +113,7 @@ def test_cli_bare_resume_opens_picker(monkeypatch, tmp_path):
         offered.append([c.short_id for c in convs])
         return convs[1]
 
-    monkeypatch.setattr("quest_ai_runner.conversation_picker.pick_conversation", fake_pick)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.terminal.conversation_picker.pick_conversation", fake_pick)
     rc, calls = run_chat(["chat", "--resume"], monkeypatch, tmp_path)
     assert rc == 0
     assert offered == [["new2", "old1"]]
@@ -124,7 +123,7 @@ def test_cli_bare_resume_opens_picker(monkeypatch, tmp_path):
 def test_cli_picker_cancel_exits_without_chat(monkeypatch, tmp_path):
     write_conv(tmp_path, "new2", [("c", "d")])
     fake_tty(monkeypatch, True)
-    monkeypatch.setattr("quest_ai_runner.conversation_picker.pick_conversation", lambda convs: None)
+    monkeypatch.setattr("quest_ai_runner.the_consciousness.terminal.conversation_picker.pick_conversation", lambda convs: None)
     rc, calls = run_chat(["chat", "-r"], monkeypatch, tmp_path)
     assert rc == 0
     assert calls == []
@@ -157,7 +156,7 @@ def picker_convs(tmp_path):
 
 def drive_picker(convs, keys):
     import asyncio
-    from quest_ai_runner.conversation_picker import picker_app
+    from quest_ai_runner.the_consciousness.terminal.conversation_picker import picker_app
 
     async def run():
         app = picker_app(convs)
@@ -219,14 +218,14 @@ def test_cli_list_conversations(monkeypatch, tmp_path, capsys):
 # -- session ----------------------------------------------------------------------------------
 
 def test_session_restores_history_and_appends_to_same_file(monkeypatch, tmp_path):
-    from quest_ai_runner import interactive_session as mod
+    from quest_ai_runner.the_consciousness.terminal import interactive_session as mod
 
     class FakeOrch:
         class cfg:
             instant_ack = False
 
     monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path))
-    monkeypatch.setattr("quest_ai_runner.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
+    monkeypatch.setattr("quest_ai_runner.the_body.configuration.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
     monkeypatch.setattr(mod.InteractiveSession, "_load_session_state", lambda self: None)
     monkeypatch.setattr(mod.InteractiveSession, "_build_model_tiers_menu", lambda self: None)
     monkeypatch.setattr(mod.InteractiveSession, "_try_load_skill_by_name", lambda self, n: None)
@@ -256,7 +255,7 @@ def test_session_restores_history_and_appends_to_same_file(monkeypatch, tmp_path
 def test_resumed_history_shows_before_session_is_ready(tmp_path):
     import asyncio
     from types import SimpleNamespace
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
     path = write_conv(tmp_path, "abc123", [("first question", "first answer"),
                                            ("second question", "second answer")])
@@ -289,7 +288,7 @@ def test_resumed_history_shows_before_session_is_ready(tmp_path):
 
 def test_resume_with_v_names_the_conversation_and_every_rep_label_follows_the_rule(tmp_path):
     import asyncio
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
     path = write_conv(tmp_path, "abc123", [("hello", "hi there")])
     conv = read_conversation(path)
@@ -317,7 +316,7 @@ def run_chat_returning(argv, monkeypatch, tmp_path, conv_id):
     monkeypatch.setattr(cli_chat, "_config_from_env", lambda config_path=None: RunnerConfig(
         quest_base_url="http://example.invalid", quest_api_key="qsk_test",
         retrieval=object(), model_provider=object(), corpus_root=None))
-    import quest_ai_runner.textual_session as textual_session
+    import quest_ai_runner.the_consciousness.terminal.textual_session as textual_session
     monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)
     monkeypatch.setattr(textual_session, "start_textual_interactive", lambda cfg, **kw: conv_id)
     return cli.main(argv)
@@ -342,7 +341,7 @@ def test_no_hint_when_nothing_was_saved(monkeypatch, tmp_path, capsys):
 
 def test_saved_conversation_id_only_for_files_on_disk(tmp_path):
     from types import SimpleNamespace
-    from quest_ai_runner.textual_session import saved_conversation_id
+    from quest_ai_runner.the_consciousness.terminal.textual_session import saved_conversation_id
 
     written = write_conv(tmp_path, "abc123", [("a", "b")])
     unwritten = tmp_path / "qar_chat_never.json"
@@ -357,14 +356,14 @@ def test_saved_conversation_id_only_for_files_on_disk(tmp_path):
 
 def test_what_a_turn_showed_is_saved_beside_the_note_the_model_reads_back(monkeypatch, tmp_path):
     """A deep run's history entry is a short "Completed: <goal>" note; the answer that was on screen is kept too."""
-    from quest_ai_runner import interactive_session as mod
+    from quest_ai_runner.the_consciousness.terminal import interactive_session as mod
 
     class FakeOrch:
         class cfg:
             instant_ack = False
 
     monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path))
-    monkeypatch.setattr("quest_ai_runner.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
+    monkeypatch.setattr("quest_ai_runner.the_body.configuration.config.build_orchestrator", lambda cfg, notify=None: FakeOrch())
     for name in ("_load_session_state", "_build_model_tiers_menu", "_refresh_rep_name_from_skill"):
         monkeypatch.setattr(mod.InteractiveSession, name, lambda self: None)
     monkeypatch.setattr(mod.InteractiveSession, "_try_load_skill_by_name", lambda self, n: None)
@@ -383,7 +382,7 @@ def test_what_a_turn_showed_is_saved_beside_the_note_the_model_reads_back(monkey
 
 def test_resume_replays_what_the_turn_showed_not_the_note_behind_it(tmp_path):
     import asyncio
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
     path = write_conv(tmp_path, "abc123", [("a question", "Completed: the goal")])
     conv = read_conversation(path)
@@ -403,7 +402,7 @@ def test_resume_replays_what_the_turn_showed_not_the_note_behind_it(tmp_path):
 
 def test_resume_replays_the_tasks_a_turn_ran_and_the_model_version_between_question_and_answer(tmp_path):
     import asyncio
-    from quest_ai_runner.textual_ui import QuestAITerminal
+    from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
 
     path = write_conv(tmp_path, "abc123", [("a question", "Completed: the goal")])
     conv = read_conversation(path)
@@ -429,7 +428,7 @@ def test_resume_replays_the_tasks_a_turn_ran_and_the_model_version_between_quest
 
 def test_the_tasks_of_a_turn_are_saved_with_their_models():
     from types import SimpleNamespace
-    from quest_ai_runner.textual_ui_outcome import turn_work
+    from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import turn_work
 
     deep = SimpleNamespace(kind="deep", goals=["one", "two"], deep_results=[
         SimpleNamespace(model="opus", resolved_model="claude-opus-5-5", met=True),

@@ -1,6 +1,6 @@
 # Live work trace: showing the AI's work to the person, as it happens
 
-Status: the contract (hub `hubofhubs.the_consciousness.terminal.trace`), the QAR emit (`quest_ai_runner/core/work_trace.py`), the backend forward and persist
+Status: the contract (hub `hubofhubs.the_consciousness.terminal.trace`), the QAR emit (`quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py`), the backend forward and persist
 and the frontend Trail are built. Real turns on the Claude Code subscription (web, the person's own records, scholarly papers, a
 shared thread) were run on 2026-11-01 and the arms are measured by `metric-work-trace-experience` (solution `show-the-ais-work`; see
 "First real runs" at the end). Background-task cards and other locales are not built. Working name for the feature in the app: "Trail".
@@ -18,7 +18,7 @@ How a run reaches the app (verified by reading code, not by running it):
 
 - QAR emits `ProgressEvent` objects (`type`, `text`, `step`, `data`) through a `ProgressSink`
   (`hubofhubs/the_world/tools/deep.py`, type constants in `hubofhubs/the_world/tools/events.py`). `StreamSink`
-  (`quest_ai_runner/core/adapters_sinks.py`) forwards all of them live; `MilestoneSink` keeps only
+  (`quest_ai_runner/the_consciousness/terminal/adapters_sinks.py`) forwards all of them live; `MilestoneSink` keeps only
   the "surfacing" types for background runs.
 - The backend chat stream (`quest-backend/app/api/endpoints/quest_ai/conversations.py`) turns each
   event into an SSE frame. Frames today: `status`, `understanding`, `plan`, `context`, `read`,

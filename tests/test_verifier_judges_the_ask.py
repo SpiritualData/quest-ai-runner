@@ -4,7 +4,7 @@ The planner writes the done-standard and the verifier judges it. Neither names r
 production, or any one team's workflow: a goal covers only what the request asked for, and the
 verifier accepts the evidence the task naturally produces.
 """
-from quest_ai_runner.core import orchestrator as o
+from quest_ai_runner.the_intelligence.mind import orchestrator as o
 
 
 def flat(text: str) -> str:

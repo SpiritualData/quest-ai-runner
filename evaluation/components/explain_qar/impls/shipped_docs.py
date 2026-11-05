@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 import quest_ai_runner
-from quest_ai_runner import cli_parser
+from quest_ai_runner.the_consciousness.terminal import cli_parser
 
 REPO = Path(__file__).resolve().parents[4]
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")

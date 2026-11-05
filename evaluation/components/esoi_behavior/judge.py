@@ -40,7 +40,7 @@ def judge_prompt(case, reply):
 
 def parse_verdict(text):
     """``(passed, reason)`` from the judge's text. An unparseable answer is a fail, never a pass."""
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli import extract_json_object
+    from hubofhubs.api import extract_json_object
     obj = extract_json_object(text or "")
     verdict = str(obj.get("verdict", "")).strip().lower()
     reason = " ".join(str(obj.get("reason", "")).split())
@@ -57,7 +57,7 @@ def build_judge(meter, provider_class=None):
     """``judge(case, reply) -> (passed, reason)``, every call counted by ``meter``. ``provider_class`` defaults to
     the claude CLI provider."""
     if provider_class is None:
-        from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider as provider_class
+        from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider as provider_class
     provider = meter.wrap(provider_class())
     model = judge_model()
 

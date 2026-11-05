@@ -9,6 +9,6 @@ def build(meter):  # noqa: ARG001
         if case["kind"] == "doability":
             return arms.run_doability(case, None)
         arms.run_assignee(case, None)   # the real fallback runs; the floor's own answer is the creator
-        from quest_ai_runner.runner.goal_handoff import default_owner_id
+        from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import default_owner_id
         return {"assignee": case.get("creator") or default_owner_id(case["members"]), "ai_can_do": False}
     return hand_off

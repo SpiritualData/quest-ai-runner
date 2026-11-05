@@ -6,7 +6,7 @@ events and the structural records of what the calls returned. Nothing here calls
 
 Turns: ``web`` (a current-facts question), ``records`` (a question about the person's own quests), ``papers`` (a scholarly question),
 ``unrelated`` (a coding question with the records seeded: no records step should show), ``group`` (the records question in a shared thread: the backend always asks the runner for the owner's view and projects it per viewer, so the events carry titles and are then marked ``visible_to_all`` as the backend does). Each case also records which selected cards the answer used and which returned works the reply cited, computed
-from the run's own planner facts and reply by ``quest_ai_runner.core.work_trace`` (a quote found in the card, a DOI or title in the reply). The web search needs ``GOOGLE_AI_API_KEY`` (or another
+from the run's own planner facts and reply by ``quest_ai_runner.the_intelligence.mind.response_writer.work_trace`` (a quote found in the card, a DOI or title in the reply). The web search needs ``GOOGLE_AI_API_KEY`` (or another
 backend ``web_search`` knows) and the scholarly search ``OPENALEX_API_KEY`` in the environment; they are read by name and never
 printed. The environment is rebuilt from an allowlist so no deployment's card store, tools file or keys leak into the run, and the
 Quest URL is unroutable, so a write tool can reach nothing."""
@@ -119,9 +119,9 @@ def run_turn(name):
     spec = TURNS[name]
     root = tempfile.mkdtemp(prefix="qar_trace_")
     clean_env(root)
-    from quest_ai_runner.cli import _config_from_env
-    from quest_ai_runner.config import build_orchestrator
-    from quest_ai_runner.core.adapters_sinks import StreamSink
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.the_body.configuration.config import build_orchestrator
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
     cfg = _config_from_env()
     cfg.deep_runner = None
     orch = build_orchestrator(cfg)
@@ -136,7 +136,7 @@ def run_turn(name):
             for card in (f.get("data") or {}).get("card_metadata") or []:
                 if isinstance(card, dict) and card.get("id") and str(card.get("adapter") or "").lower() != "turn":
                     cards[str(card["id"])] = {"id": str(card["id"]), "title": str(card.get("name") or card.get("title") or ""), "relevance": card.get("relevance_score")}
-    from quest_ai_runner.core import work_trace
+    from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
     facts = [f for c in calls if c.get("kind") == "plan_facts" for f in c["facts"]]
     reply = str(getattr(result, "text", "") or "")
     details = {c[0]: c[2] for c in CARDS}

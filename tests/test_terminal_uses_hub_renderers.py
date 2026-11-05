@@ -7,7 +7,7 @@ import ast
 import re
 from pathlib import Path
 
-from hubofhubs.the_consciousness.terminal import strings
+from hubofhubs.api import strings
 
 PACKAGE = Path(__file__).resolve().parent.parent / "quest_ai_runner"
 HUB_RENDERERS = {"live_text", "summary_text", "summary_sentences", "expanded_groups", "earlier_preview", "interim_parts", "stopped_reason",
@@ -34,6 +34,6 @@ def test_qar_defines_none_of_the_hub_renderers():
 
 
 def test_the_terminal_imports_the_hub_renderers():
-    text = (PACKAGE / "textual_ui_trail.py").read_text()
-    assert "from hubofhubs.the_consciousness.terminal import" in text
-    assert "from hubofhubs.the_consciousness.terminal import" in (PACKAGE / "textual_ui_blocks.py").read_text()
+    text = (PACKAGE / "the_consciousness" / "terminal" / "textual_ui_trail.py").read_text()
+    assert "from hubofhubs.api import" in text
+    assert "from hubofhubs.api import" in (PACKAGE / "the_consciousness" / "terminal" / "textual_ui_blocks.py").read_text()

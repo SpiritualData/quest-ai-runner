@@ -1,8 +1,8 @@
 """FileCardCache: the durable CardCache, and the repository serving its stored listing on a cold start."""
 import pytest
 
-from quest_ai_runner.subconscious.card_cache_file import FileCardCache
-from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
+from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
+from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
 from tests.quest_card_backend_fake import FakeCardBackend
 
 

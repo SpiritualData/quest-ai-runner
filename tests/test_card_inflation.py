@@ -22,14 +22,12 @@ from typing import Any, Dict, List
 import pytest
 from unittest.mock import MagicMock
 
-from hubofhubs.the_body.internal_context.card_store.card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
-from hubofhubs.the_body.internal_context.card_store.context_folder_review import folder_review
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import (
-    apply_card_ceilings, card_folder_key, card_is_too_thin, card_preference_key, collapse_cards_by_file_set, path_is_data_file)
-from hubofhubs.the_body.internal_context.card_store.context_folder_review import (
-    drop_verdicts_under_final_exclusions, final_exclusion_covering, verdict_is_final, verdict_is_pinned, is_excluded_folder)
-from quest_ai_runner.adapters.walk_settings import STORE_DIR_NAME, effective_skip_dirs
+from hubofhubs.api import QUARANTINE_DIR_NAME, FilesystemCardRepository
+from hubofhubs.api import folder_review
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from hubofhubs.api import apply_card_ceilings, card_folder_key, card_is_too_thin, card_preference_key, collapse_cards_by_file_set, path_is_data_file
+from hubofhubs.api import drop_verdicts_under_final_exclusions, final_exclusion_covering, verdict_is_final, verdict_is_pinned, is_excluded_folder
+from quest_ai_runner.the_body.configuration.walk_settings import STORE_DIR_NAME, effective_skip_dirs
 
 
 def topic_provider(topics):
@@ -379,7 +377,7 @@ class TestCardCeilings:
         # What is true now: the owner's number (QAR_MAX_CARDS, 1,000 unless set) is enforced where cards
         # are written, a new folder is refused, and the refusal is ANNOUNCED with what fills the store and
         # how to change the limit, so it is never the silent permanent refusal that was removed.
-        from hubofhubs.the_body.internal_context.card_store import card_limit
+        from hubofhubs.api import card_limit
         card_limit.reset_announcements()
         repo = tmp_path / "repo"
         (repo / "pkg").mkdir(parents=True)
@@ -432,7 +430,7 @@ class TestCardCeilings:
         assert not [r for r in logged if r.levelno >= logging.WARNING], "expected behavior is not warning noise"
 
     def test_the_per_folder_knob_raises_or_removes_the_limit(self, monkeypatch):
-        from quest_ai_runner.adapters.card_store_settings import max_cards_per_folder
+        from quest_ai_runner.the_body.configuration.card_store_settings import max_cards_per_folder
         cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(7)]
         monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "3")
         assert len(apply_card_ceilings(cards, [], per_folder=max_cards_per_folder())) == 3

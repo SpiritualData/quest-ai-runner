@@ -101,21 +101,21 @@ reading the actual source files in this repo. Files covered:
 
 | Task theme | Target file |
 |---|---|
-| plan-gather-replan loop | `quest_ai_runner/core/orchestrator.py` |
-| RetrievalAdapter Protocol | `quest_ai_runner/core/adapters_retrieval.py` |
-| model tier bucketing | `quest_ai_runner/core/model_registry.py` |
-| SubprocessGoalRunner | `quest_ai_runner/core/goal_runner.py` |
-| prepare_attachments | `quest_ai_runner/core/attachments.py` |
-| FilesAdapter read_section / grep | `quest_ai_runner/adapters/files_adapter.py` |
-| FileContextStore IDF bootstrap | `quest_ai_runner/adapters/file_context_store.py` |
+| plan-gather-replan loop | `quest_ai_runner/the_intelligence/mind/orchestrator.py` |
+| RetrievalAdapter Protocol | `quest_ai_runner/the_body/internal_context/interface.py` |
+| model tier bucketing | `quest_ai_runner/the_world/model_plumbing/model_tier_chooser/model_registry.py` |
+| SubprocessGoalRunner | `quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py` |
+| prepare_attachments | `quest_ai_runner/the_intelligence/mind/context_intake/attachments.py` |
+| FilesAdapter read_section / grep | `quest_ai_runner/the_world/tools/file_reading/files_adapter.py` |
+| FileContextStore IDF bootstrap | `quest_ai_runner/the_body/internal_context/card_store/file_context_store.py` |
 | AnthropicProvider SDK wrapper | `hubofhubs/models/anthropic.py` (the hub's) |
-| claude CLI headless provider | `quest_ai_runner/adapters/claude_cli_provider.py` |
-| poller discovers due tasks | `quest_ai_runner/runner/poller.py` |
-| executor runs one task | `quest_ai_runner/runner/executor.py` |
-| QuestClient PATCH done/needs_you | `quest_ai_runner/runner/quest_client.py` |
-| RunnerConfig consumer API key | `quest_ai_runner/config.py` |
-| console entry --once / --check | `quest_ai_runner/cli.py` |
-| bundled resource files | `quest_ai_runner/resources.py` |
+| claude CLI headless provider | `quest_ai_runner/the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py` |
+| poller discovers due tasks | `quest_ai_runner/the_consciousness/request_intake/poller.py` |
+| executor runs one task | `quest_ai_runner/the_consciousness/request_intake/executor.py` |
+| QuestClient PATCH done/needs_you | `quest_ai_runner/the_body/internal_context/quest/client/quest_client.py` |
+| RunnerConfig consumer API key | `quest_ai_runner/the_body/configuration/config.py` |
+| console entry --once / --check | `quest_ai_runner/the_consciousness/terminal/cli.py` |
+| bundled resource files | `quest_ai_runner/the_body/host/resources.py` |
 
 ### A/B task set (6 tasks + 1 adversarial)
 

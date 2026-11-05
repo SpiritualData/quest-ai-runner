@@ -1,11 +1,11 @@
 """An acting tool's receipt carries its whole message, so the answer check can see what was sent."""
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.core.orchestrator_reads import ACTING_TOOL_ARGS_CHARS
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
-from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_reads import ACTING_TOOL_ARGS_CHARS
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from hubofhubs.api import ExecutionRecord
 
 from .conftest import StubProvider, StubRetrieval
-from quest_ai_runner.core.model_registry import ModelRegistry
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 
 def receipt_for(mutates):

@@ -17,15 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.adapters import FilesAdapter
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.adapters.files_server import (
-    FileOperations,
-    build_server,
-    name_is_secret,
-    redact,
-)
-from quest_ai_runner.body.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_server import FileOperations, build_server, name_is_secret, redact
+from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
 
 TOKEN = "t" * 12 + "-test-token-0123456789"
 ALIAS = "box"
@@ -169,7 +164,7 @@ def test_there_is_no_write_route(server):
 
 
 def test_cli_refuses_to_start_without_token(monkeypatch, tree, caplog):
-    from quest_ai_runner.cli_serve_files import _cmd_serve_files
+    from quest_ai_runner.the_world.tools.file_reading.cli_serve_files import _cmd_serve_files
 
     class Args:
         root = str(tree)
@@ -728,7 +723,7 @@ def test_connection_cap_answers_503_instead_of_spawning_threads(tree):
 
 
 def test_the_request_handler_has_a_socket_timeout():
-    from quest_ai_runner.adapters.files_server import RequestHandler
+    from quest_ai_runner.the_world.tools.file_reading.files_server import RequestHandler
     assert 0 < RequestHandler.timeout <= 60
 
 

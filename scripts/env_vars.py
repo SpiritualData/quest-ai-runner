@@ -76,7 +76,7 @@ def descriptions(root: Path = ROOT) -> dict[str, str]:
         with path.open(newline="") as fh:
             own = {r["variable"]: r["description"] for r in csv.DictReader(fh)}
     try:   # variables the hub declares are described by the hub, not repeated in QAR's records
-        from quest_ai_runner.hub_requirements import hub_env_descriptions
+        from quest_ai_runner.the_self.assembler.hub_requirements import hub_env_descriptions
         return {**hub_env_descriptions(), **own}
     except Exception:  # noqa: BLE001
         return own

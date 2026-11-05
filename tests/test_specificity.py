@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_body.internal_context.context import VectorHit
-from hubofhubs.the_body.internal_context.context import VectorStoreBase
-from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
+from hubofhubs.api import VectorHit
+from hubofhubs.api import VectorStoreBase
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
 
 
 # ---------------------------------------------------------------------------

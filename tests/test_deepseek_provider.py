@@ -1,8 +1,8 @@
 """DeepSeek provider in QAR: opt-in registration, tier safety, the environment it is built from. No network (the arm itself is tested in the hub)."""
 import types
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.openai import DeepSeekProvider
-from quest_ai_runner.core.model_registry import bucket_top
+from hubofhubs.api import DeepSeekProvider
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import bucket_top
 
 
 class Marker:
@@ -14,7 +14,7 @@ class Marker:
 
 
 def test_orchestrator_routes_deepseek_ids():
-    from quest_ai_runner.core.orchestrator import Orchestrator
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
     ds, primary = Marker("ds"), Marker("primary")
     fake = types.SimpleNamespace(
         provider=primary, registry=types.SimpleNamespace(_providers={"deepseek": ds}))
@@ -38,7 +38,7 @@ def test_bucket_top_honours_explicit_pin():
 
 
 def test_registered_only_when_key_set(monkeypatch):
-    from quest_ai_runner.config_resolvers import register_deepseek
+    from quest_ai_runner.the_body.configuration.config_resolvers import register_deepseek
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     reg = {}
     register_deepseek(reg)
@@ -49,7 +49,7 @@ def test_registered_only_when_key_set(monkeypatch):
 
 
 def test_the_provider_is_built_from_the_environment(monkeypatch):
-    from quest_ai_runner.hub import make_provider
+    from quest_ai_runner.the_self.assembler.hub import make_provider
     env = {"DEEPSEEK_API_KEY": "k-test", "DEEPSEEK_BASE_URL": "https://example.invalid", "DEEPSEEK_THINKING": "1"}
     p = make_provider("deepseek", env)
     assert (p.api_key, p.base_url, p.create_kwargs) == ("k-test", "https://example.invalid", {})
@@ -57,7 +57,7 @@ def test_the_provider_is_built_from_the_environment(monkeypatch):
 
 
 def test_a_provider_that_cannot_be_built_does_not_stop_the_others(monkeypatch):
-    import quest_ai_runner.config_resolvers as resolvers
+    import quest_ai_runner.the_body.configuration.config_resolvers as resolvers
     monkeypatch.setenv("DEEPSEEK_API_KEY", "k-test")
 
     def broken(name):

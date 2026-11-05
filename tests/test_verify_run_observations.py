@@ -30,10 +30,10 @@ All offline: no network, no API key.
 import re
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.orchestrator import OrchestratorConfig
-from quest_ai_runner.core.auxiliary_prompts import VERIFY_RUN_OBSERVATIONS_NOTE
-from quest_ai_runner.core.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
+from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import VERIFY_RUN_OBSERVATIONS_NOTE
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS
 
 from .conftest import StubProvider
 

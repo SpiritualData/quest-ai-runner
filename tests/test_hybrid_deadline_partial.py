@@ -10,8 +10,8 @@ zero-results case). Without a deadline, behavior is unchanged.
 """
 import time
 
-from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from hubofhubs.the_body.internal_context.context import AssembledContext
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
+from hubofhubs.api import AssembledContext
 
 
 class _StubArm:
@@ -157,7 +157,7 @@ def test_consolidation_skipped_on_partial_result(monkeypatch):
         return None
 
     monkeypatch.setattr(
-        "quest_ai_runner.core.card_filter.consolidate_context", fake_consolidate
+        "quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter.consolidate_context", fake_consolidate
     )
     kw = _StubArm(view="keyword content", card_metadata=_item_bearing_metadata())
     vec = _StubArm(view="vector content", delay=0.6)
@@ -177,7 +177,7 @@ def test_consolidation_skipped_when_budget_nearly_exhausted(monkeypatch):
         return None
 
     monkeypatch.setattr(
-        "quest_ai_runner.core.card_filter.consolidate_context", fake_consolidate
+        "quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter.consolidate_context", fake_consolidate
     )
     kw = _StubArm(view="keyword content", card_metadata=_item_bearing_metadata())
     vec = _StubArm(view="vector content")
@@ -197,7 +197,7 @@ def test_consolidation_still_runs_with_ample_budget(monkeypatch):
         return None  # None -> hybrid falls back to the mechanical merge
 
     monkeypatch.setattr(
-        "quest_ai_runner.core.card_filter.consolidate_context", fake_consolidate
+        "quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter.consolidate_context", fake_consolidate
     )
     kw = _StubArm(view="keyword content", card_metadata=_item_bearing_metadata())
     vec = _StubArm(view="vector content")

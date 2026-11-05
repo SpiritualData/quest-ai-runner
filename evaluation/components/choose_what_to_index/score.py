@@ -23,8 +23,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from choose_what_to_index import fixtures
-from quest_ai_runner.adapters import context_store_bootstrap, context_store_bootstrap_walk
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_store_bootstrap, context_store_bootstrap_walk
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 SEAMS = (context_store_bootstrap, context_store_bootstrap_walk)
 

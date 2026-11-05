@@ -8,7 +8,7 @@ import pytest
 
 from esoi import spec_search
 
-from quest_ai_runner.core import repo_specs, spec_selection as ss
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs, spec_selection as ss
 
 INDEX = ss.load_spec_index(Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "esoi_repo_spec_index.json")
 RIVAL = "a rival implementation beats the selected one and nobody switches the default"

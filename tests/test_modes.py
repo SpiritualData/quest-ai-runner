@@ -10,12 +10,12 @@ These tests pin the contract quest-backend and the cockpit import:
     sink, NOT the live one.
   * run_stream yields events then the terminal OrchestratorResult.
 """
-from hubofhubs.the_world.tools.deep import ProgressEvent
-from hubofhubs.the_world.tools.events import (
+from hubofhubs.api import ProgressEvent
+from hubofhubs.api import (
     EVENT_DECISION, EVENT_DONE, EVENT_MILESTONE, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_RESULT, EVENT_STATUS, SURFACING_EVENTS, Mode)
-from quest_ai_runner.core.adapters_sinks import MilestoneSink, StreamSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import MilestoneSink, StreamSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
@@ -235,8 +235,8 @@ def test_run_stream_yields_events_then_result():
 
 # --- deep-run EXECUTION-lifecycle streaming (emit) ------------------------------
 
-from hubofhubs.the_world.tools.deep import DeepResult  # noqa: E402
-from hubofhubs.the_world.tools.events import EVENT_EXEC  # noqa: E402
+from hubofhubs.api import DeepResult  # noqa: E402
+from hubofhubs.api import EVENT_EXEC  # noqa: E402
 
 
 class EmitDeepRunner:

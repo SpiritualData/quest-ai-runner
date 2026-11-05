@@ -14,12 +14,12 @@ These tests pin that: two adapters that SHOULD support it do, one that clearly s
 ``None`` via the base-class default (untouched), and the generic ``collect_reference_resolvers`` walk
 discovers exactly the resolvable ones (including through a composite). All offline.
 """
-from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.adapters.files_adapter import FilesAdapter
-from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter
-from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
-from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import GoogleChatAdapter
+from quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter import ProviderWebSearchAdapter
+from hubofhubs.api import collect_reference_resolvers
 
 
 def test_resolvable_adapters_advertise_a_reference_type():

@@ -33,14 +33,9 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.core.goal_runner_session import SESSION_TAIL_MAX_ACTIONS
-from quest_ai_runner.core.goal_runner import (
-    SubprocessConfig,
-    SubprocessGoalRunner,
-    read_session_activity_tail,
-    resolve_session_file,
-    worker_output_is_thin,
-)
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_session import SESSION_TAIL_MAX_ACTIONS
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import (
+    SubprocessConfig, SubprocessGoalRunner, read_session_activity_tail, resolve_session_file, worker_output_is_thin)
 
 
 # --- helpers ----------------------------------------------------------------------------------
@@ -370,7 +365,7 @@ def test_pinned_and_alias_claude_ids_still_reach_the_cli(monkeypatch):
 
 def test_non_claude_models_still_omit_the_flag(monkeypatch):
     """The worker only runs Claude, so a foreign id never reaches it: the run takes the balanced tier."""
-    from quest_ai_runner.core.goal_runner import BALANCED_CLI_MODEL
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import BALANCED_CLI_MODEL
     assert spawn_model_arg(monkeypatch, "gemini-3.5-flash") == BALANCED_CLI_MODEL
     assert spawn_model_arg(monkeypatch, "gpt-4o") == BALANCED_CLI_MODEL
     assert spawn_model_arg(monkeypatch, None) == BALANCED_CLI_MODEL
@@ -379,8 +374,8 @@ def test_non_claude_models_still_omit_the_flag(monkeypatch):
 def test_cli_safe_model_matches_the_adapter_translator():
     """The deep path must use the SAME translator the shallow plan/answer path uses, not a second
     copy of the rules that can drift from it."""
-    from quest_ai_runner.adapters.claude_cli_provider import cli_model
-    from quest_ai_runner.core.goal_runner import cli_safe_model
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
 
     for m in ("claude-sonnet", "claude-opus-4-8", "haiku", "us.anthropic.claude-x-1",
               "gemini-3.5-flash", "", None):

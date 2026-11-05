@@ -17,18 +17,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_world.tools.deep import ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_OVERSEER, EVENT_PLAN, Mode
-from quest_ai_runner.core.adapters_sinks import MilestoneSink
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, _oversee_worth_a_look
-from quest_ai_runner.core.planner_context import _prior_escalation_lines, _recent_conversation_turns
-from quest_ai_runner.core.overseer import (
-    OVERSEER_PROMPT,
-    OverseerSignal,
-    build_digest,
-    oversee,
-)
+from hubofhubs.api import ProgressEvent
+from hubofhubs.api import EVENT_OVERSEER, EVENT_PLAN, Mode
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import MilestoneSink
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, _oversee_worth_a_look
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import _prior_escalation_lines, _recent_conversation_turns
+from quest_ai_runner.the_intelligence.mind.delegation.overseer import OVERSEER_PROMPT, OverseerSignal, build_digest, oversee
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
@@ -1003,7 +998,7 @@ def test_submit_oversee_no_duplicate_retry_when_tiers_resolve_to_same_model():
 
 
 def test_build_digest_sheds_operations_and_conversation_before_prior_escalations():
-    from quest_ai_runner.core.overseer import build_digest
+    from quest_ai_runner.the_intelligence.mind.delegation.overseer import build_digest
     digest = build_digest(
         user_message="Open the second workspace.",
         step=3,

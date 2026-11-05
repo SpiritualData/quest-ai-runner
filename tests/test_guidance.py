@@ -7,10 +7,10 @@ an already-selected id returns the de-dupe note. All offline — no network, no 
 """
 from typing import List, Optional
 
-from quest_ai_runner.core.adapters_guidance import GuidanceCard
-from quest_ai_runner.core.adapters_bases import GuidanceProviderBase
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceCard
+from quest_ai_runner.the_self.interface import GuidanceProviderBase
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubProvider, StubRetrieval
 

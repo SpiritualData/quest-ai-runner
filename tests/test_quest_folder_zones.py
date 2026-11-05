@@ -7,19 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner.quest_folder_zones import (
-    AI_DRIVEN_DIR,
-    GUIDE_FILE,
-    HUMAN_CONTEXT_DIR,
-    INBOUND_DIR,
-    LEDGER_NAME,
-    LEDGER_STATUSES,
-    SOURCE_OF_TRUTH_DIR,
-    capture_human_input,
-    ensure_folder_zones,
-    folder_zones_contract,
-    is_human_note,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_zones import (
+    AI_DRIVEN_DIR, GUIDE_FILE, HUMAN_CONTEXT_DIR, INBOUND_DIR, LEDGER_NAME, LEDGER_STATUSES, SOURCE_OF_TRUTH_DIR, capture_human_input,
+    ensure_folder_zones, folder_zones_contract, is_human_note)
 
 
 @pytest.fixture
@@ -306,7 +296,7 @@ def test_contract_names_the_zones_and_the_ledger():
 
 
 def test_contract_shares_wording_with_the_rendered_files(folder):
-    from quest_ai_runner.runner import quest_folder_zones as z
+    from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_folder_zones as z
     text = folder_zones_contract()
     ensure_folder_zones(folder)
     guide = (Path(folder) / GUIDE_FILE).read_text()

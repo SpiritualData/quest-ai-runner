@@ -22,20 +22,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from quest_ai_runner.adapters.google_chat_adapter import (
-    ChatReadError,
-    GoogleChatAdapter,
-    static_token_provider as chat_token,
-)
-from quest_ai_runner.body.notion_adapter import NotionAdapter, static_token_provider
-from quest_ai_runner.runner.context_updates import (
-    CollectRequest,
-    GoogleChatSource,
-    NotionDatabaseSource,
-    SourceGap,
-    UpdateEngine,
-    Watermarks,
-)
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import (
+    ChatReadError, GoogleChatAdapter, static_token_provider as chat_token)
+from quest_ai_runner.the_world.tools.connected_system_operations.notion_adapter import NotionAdapter, static_token_provider
+from quest_ai_runner.the_body.intake_sources.context_updates import (
+    CollectRequest, GoogleChatSource, NotionDatabaseSource, SourceGap, UpdateEngine, Watermarks)
 
 from .notion_fake import DB_ID, FakeNotion, Resp, make_page, minute_rounded
 

@@ -3,7 +3,7 @@
 Nothing here decides a verdict. A judge (or none) is handed in by the arm; the library's own functions render the prompts, parse the
 answers, apply their fallbacks and stamp the hand-off."""
 import common  # noqa: F401  (puts the repository on the path)
-from quest_ai_runner.runner import goal_handoff
+from quest_ai_runner.the_intelligence.higher_mind.objectives import goal_handoff
 
 REP_OF = {"rep_id": "rep_bob", "owner_user_id": "u_bob", "is_default": True}
 

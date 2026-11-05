@@ -36,7 +36,7 @@ long-lived provider tokens: a lane receives a token through the environment vari
 
 ## How QAR uses the hub
 
-- **Import.** `hubofhubs` is a required dependency (`pyproject.toml`). `quest_ai_runner/hub.py` imports it once, at startup, and
+- **Import.** `hubofhubs` is a required dependency (`pyproject.toml`). `quest_ai_runner/the_self/assembler/hub.py` imports it once, at startup, and
   registers the parts QAR owns under names QAR owns, only where the hub has a seat (Protocol) for them: today the card store, as
   `qar-card-repository` (a hub `CardStore` over QAR's `CardRepository`, `subconscious/hub_card_store.py`). The web search
   backend is an external seat that QAR passes in `provided`; its model seat is its own router arm of `vendor-model-caller`. For dev and tests a sibling checkout beside this

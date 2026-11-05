@@ -8,7 +8,7 @@ the reliability work bans: an ack is a promise, so enqueue failures must raise.
 """
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 
 def client_capturing_body():

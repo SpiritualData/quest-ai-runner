@@ -19,8 +19,6 @@ scrubbed environment and no model. Kinds and the dict a solution returns:
   fields         {fixture}              -> {"names": sorted list | None} for accepted_fields
   filter         {kwargs, allowed}      -> {"kept": dict} for filter_keywords
   scrub          {fn, text}             -> {"text"} for the reply-boundary strippers
-  email_due      {days_ago, months, form} -> {"due": bool} for should_send_monthly_email
-  email_body     {...}                  -> {"text"} for generate_bootstrap_email_body
   offline_import {module}               -> {"imported": bool} in a subprocess whose sockets all raise
   edit           {content, before, after} -> {"text", "ok"} for the vendored apply_edit
   edit_blocks    {content, fn, valid}   -> {"blocks": [[file, before, after] | [file, content]]}

@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 
 import common
-from quest_ai_runner.core.adapters_values import Observation
-from quest_ai_runner.core.tools import ToolResult
-from quest_ai_runner.core.tools_quest_ops import NO_QUEST
-from quest_ai_runner.core.tools_quest_standard import NO_QUEST_HINT
+from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+from quest_ai_runner.the_world.tools.tools import ToolResult
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import NO_QUEST
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import NO_QUEST_HINT
 from end_to_end.clock import world_today
 from end_to_end.docs_mode_rules import DOCS_MODE_RULES
 
@@ -166,7 +166,7 @@ class World:
 
     # ---- the tool catalogue on this state
     def build_registry(self):
-        from quest_ai_runner.core.tools import build_tool_registry
+        from quest_ai_runner.the_world.tools.tools import build_tool_registry
         # No literature key unless the case configures the tool: a key in the machine's own environment must not reach the world.
         env = {k: v for k, v in os.environ.items() if k != "OPENALEX_API_KEY"}
         registry = build_tool_registry(dict(env, QUEST_BASE_URL=common.OFFLINE_QUEST_URL, QUEST_API_KEY="offline-eval"))
@@ -183,7 +183,7 @@ class World:
                 registry.register(spec)
         if self.science:
             # The real tool over the hub's OpenAlex arm, with the HTTP call replaced by the fake: only the network is stubbed.
-            from quest_ai_runner.core.tools_science import science_literature_spec
+            from quest_ai_runner.the_world.science.tools_science import science_literature_spec
             spec = science_literature_spec({"OPENALEX_API_KEY": "offline-eval", "QAR_SCIENCE_DAILY_LIMIT": "0"}, transport=self.openalex)   # 0: no cap, the counter is shared across worlds
             real = spec.handler
 

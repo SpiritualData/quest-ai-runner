@@ -1,5 +1,5 @@
 """The planner prompt caps its volatile sections: newest kept, explicit marker, latest message intact."""
-from quest_ai_runner.core.planner_context import cap_section
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import cap_section
 
 
 def test_within_limit_is_unchanged():

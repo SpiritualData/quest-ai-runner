@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run one executor lane built from ``custom_consumer.build_config``: discover, claim, run, report.
 
-NOTE: this file predates ``quest_ai_runner.runner.lane.run_lane`` (the library's own shared
+NOTE: this file predates ``quest_ai_runner.the_consciousness.request_intake.lane.run_lane`` (the library's own shared
 ``--check``/``--once``/loop-forever driver) and duplicates what that function now does. It is kept
 for reference alongside ``custom_consumer.py``'s from-scratch adapter wiring, but a NEW lane should
 start from ``examples/minimal_lane.py`` (see ``docs/tutorials/tutorial-your-first-lane.md``) instead of
@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from examples.custom_consumer import build_config  # noqa: E402
-from quest_ai_runner.runner.poller import Poller  # noqa: E402
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller  # noqa: E402
 
 
 def main(argv=None) -> int:

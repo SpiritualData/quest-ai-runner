@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner.poller import StateStore
+from quest_ai_runner.the_consciousness.request_intake.poller import StateStore
 
 
 class TestStateStoreBasics:
@@ -345,7 +345,7 @@ class TestStateStoreTaskSignatureIntegration:
 
     def test_same_task_same_status_same_signature(self):
         """A task with the same id/status/timestamp has the same signature."""
-        from quest_ai_runner.runner.poller import _task_signature
+        from quest_ai_runner.the_consciousness.request_intake.poller import _task_signature
         task = {"id": "t1", "status": "queued", "updated_at": "2026-06-17T10:00:00Z"}
         sig1 = _task_signature(task)
         sig2 = _task_signature(dict(task))
@@ -353,7 +353,7 @@ class TestStateStoreTaskSignatureIntegration:
 
     def test_task_status_change_changes_signature(self):
         """A task that changes status gets a new signature (re-runnable)."""
-        from quest_ai_runner.runner.poller import _task_signature
+        from quest_ai_runner.the_consciousness.request_intake.poller import _task_signature
         task1 = {"id": "t1", "status": "queued", "updated_at": "2026-06-17T10:00:00Z"}
         task2 = dict(task1)
         task2["status"] = "in_progress"
@@ -363,7 +363,7 @@ class TestStateStoreTaskSignatureIntegration:
 
     def test_dedup_chain_queued_then_claimed(self):
         """A task goes from queued -> claimed -> run. Signature changes at each stage."""
-        from quest_ai_runner.runner.poller import _task_signature
+        from quest_ai_runner.the_consciousness.request_intake.poller import _task_signature
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "state.json")
             store = StateStore(path)

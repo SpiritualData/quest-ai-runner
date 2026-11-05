@@ -4,7 +4,7 @@ what a gate reads, and anything past the gates (goal reads, task creation) is re
 outcome is exactly "skipped for this reason" or "got past every gate". Zero model calls."""
 from datetime import datetime
 
-from quest_ai_runner.runner.autopilot import AutopilotPass
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
 
 QUEST = "quest_a"
 TEAM = "team_a"

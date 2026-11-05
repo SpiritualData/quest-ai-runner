@@ -60,7 +60,7 @@ def right_without_the_call(case, ids):
 
 
 def registered(spec_id):
-    from quest_ai_runner.core.prompt_specs import SPECS_BY_ID
+    from quest_ai_runner.the_self.integrity.prompts.prompt_specs import SPECS_BY_ID
     load_all_specs()
     return spec_id in SPECS_BY_ID
 
@@ -126,7 +126,7 @@ def score_case(fn, case):
 
 def unmeasured():
     """Every registered prompt spec that has no case here: listed, never guessed."""
-    from quest_ai_runner.core.prompt_specs import SPECS_BY_ID
+    from quest_ai_runner.the_self.integrity.prompts.prompt_specs import SPECS_BY_ID
     load_all_specs()
     have = {c["spec_id"] for c in json.loads((HERE / "cases.json").read_text())}
     return sorted(set(SPECS_BY_ID) - have)

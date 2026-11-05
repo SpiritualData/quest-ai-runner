@@ -10,8 +10,8 @@ from datetime import date
 
 import pytest
 
-from quest_ai_runner import cli
-from quest_ai_runner.runner.quest_client import QuestApiError
+from quest_ai_runner.the_consciousness.terminal import cli
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
 
 
 def _patch_env(monkeypatch):
@@ -30,7 +30,7 @@ def test_create_goal_passes_title_quest_id_and_period(monkeypatch, capsys):
         return {"id": "goal_1", "deadline": "2026-08-18"}
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", fake_create_goal)
 
     rc = cli.main(["create-goal", "Fill out the form",
                    "--quest-id", "quest_9", "--period", "2026-08-18"])
@@ -52,7 +52,7 @@ def test_create_goal_defaults_period_to_today(monkeypatch):
         return {"id": "goal_1", "deadline": kwargs["period"]}
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", fake_create_goal)
 
     rc = cli.main(["create-goal", "No period given"])
 
@@ -69,7 +69,7 @@ def test_create_goal_quest_id_omitted_when_not_given(monkeypatch):
         return {"id": "goal_1", "deadline": kwargs["period"]}
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", fake_create_goal)
 
     rc = cli.main(["create-goal", "Standalone goal"])
 
@@ -86,7 +86,7 @@ def test_create_goal_passes_assigned_to_user_id_when_given(monkeypatch):
         return {"id": "goal_1", "deadline": kwargs["period"]}
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", fake_create_goal)
 
     rc = cli.main(["create-goal", "Review the chat history request",
                    "--quest-id", "quest_9", "--period", "2026-09-29",
@@ -105,7 +105,7 @@ def test_create_goal_assigned_to_user_id_omitted_when_not_given(monkeypatch):
         return {"id": "goal_1", "deadline": kwargs["period"]}
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", fake_create_goal)
 
     rc = cli.main(["create-goal", "Standalone goal"])
 
@@ -120,7 +120,7 @@ def test_create_goal_reports_api_failure_and_returns_nonzero(monkeypatch, capsys
         raise QuestApiError("Quest API POST /api/planning/goals -> 400: bad period")
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", failing_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", failing_create_goal)
 
     rc = cli.main(["create-goal", "Doomed goal"])
 
@@ -135,7 +135,7 @@ def test_create_goal_missing_id_in_response_is_treated_as_failure(monkeypatch, c
         return {}  # API answered but with no goal id
 
     monkeypatch.setattr(
-        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+        "quest_ai_runner.the_body.internal_context.quest.client.quest_client.QuestClient.create_goal", fake_create_goal)
 
     rc = cli.main(["create-goal", "No id returned"])
 

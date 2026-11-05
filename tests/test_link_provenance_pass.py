@@ -1,7 +1,7 @@
 """Link provenance: a link or file address in a reply stays only if the turn held it or its host is trusted. Offline, no model."""
 from __future__ import annotations
 
-from quest_ai_runner.core.link_provenance_pass import strip_unseen_links
+from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import strip_unseen_links
 
 CONTEXT = ("Readable file sources (read-only): team server.\n"
            "File: reports/launch-summary.md. Address (already checked): https://files.example.test/reports/launch-summary.md\n")
@@ -63,8 +63,8 @@ def test_text_without_links_is_unchanged():
 
 
 def test_the_orchestrator_removes_an_invented_address_even_with_no_link_policy():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -82,8 +82,8 @@ def test_the_orchestrator_removes_an_invented_address_even_with_no_link_policy()
 
 
 def test_the_switch_leaves_the_reply_untouched():
-    from quest_ai_runner.core.model_registry import ModelRegistry
-    from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 

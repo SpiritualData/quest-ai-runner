@@ -20,10 +20,11 @@ import json
 from pathlib import Path
 
 import common  # noqa: F401  (sets sys.path for the repo)
-from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
-from quest_ai_runner import pricing
-from quest_ai_runner.core import model_registry, prompt_budget
-from quest_ai_runner.core.orchestrator_types import OrchestratorConfig
+from hubofhubs.api import tiers as hub_tiers
+from quest_ai_runner.the_world.model_plumbing.spend import pricing
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import model_registry
+from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
+from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
 
 INPUTS = json.loads((Path(__file__).resolve().parent / "budget_inputs.json").read_text())["points"]
 

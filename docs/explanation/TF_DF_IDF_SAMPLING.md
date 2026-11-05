@@ -154,7 +154,7 @@ At 10,000 files, you're still under 30k tokens, and costs are *sublinear* in cor
 
 ### In FileContextStore (code bootstrap)
 ```python
-from quest_ai_runner.adapters import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 store = FileContextStore(
     cards_dir="/path/to/cards",
@@ -168,7 +168,7 @@ context = store.assemble("find auth middleware")
 
 ### In ClaudeConversationsAdapter (conversation retrieval)
 ```python
-from quest_ai_runner.adapters import ClaudeConversationsAdapter
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
 
 adapter = ClaudeConversationsAdapter(sessions_dir="~/.claude/sessions")
 

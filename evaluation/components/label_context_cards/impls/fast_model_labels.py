@@ -7,8 +7,8 @@ This arm hands the updater a host adapter with a ``generate`` (``live_arm.Pinned
 it can run; what the shipped wiring does with a real provider is pinned by the offline test, not by this arm. Stay on the ladder and
 always pass ``--max-calls``."""
 PAID = True
-from quest_ai_runner.adapters import context_card_updater
-from quest_ai_runner.subconscious import card_metadata_generator
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_card_updater
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files import card_metadata_generator
 from label_context_cards import arms
 import live_arm
 

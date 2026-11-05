@@ -17,19 +17,13 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-import quest_ai_runner.adapters.context_store_cards as store_cards
-from hubofhubs.the_body.internal_context.card_store.card_origin import last_touched as card_last_touched
-from quest_ai_runner.adapters.context_store_cards import (
-    card_seed_key,
-    cards_in_seed_order,
-)
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.select_context.vector_context_assembler import (
-    VectorContextAssembler,
-    seed_source_takes_limit,
-)
-from hubofhubs.the_body.internal_context.context import VectorStoreBase
-from quest_ai_runner.core.vector_scopes import SeedItems
+import quest_ai_runner.the_body.internal_context.card_store.context_store_cards as store_cards
+from hubofhubs.api import last_touched as card_last_touched
+from quest_ai_runner.the_body.internal_context.card_store.context_store_cards import card_seed_key, cards_in_seed_order
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler, seed_source_takes_limit
+from hubofhubs.api import VectorStoreBase
+from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import SeedItems
 
 
 def make_card(card_id: str, *, used: int = 0, touched: float = 0.0, managed: bool = False,

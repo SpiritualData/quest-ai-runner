@@ -17,7 +17,7 @@ The system uses **three fallback strategies** to maximize compatibility with dif
 Include this prompt instruction in your system prompt or final instruction:
 
 ```python
-from quest_ai_runner.adapters.context_card_updater import get_edited_files_prompt_instruction
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import get_edited_files_prompt_instruction
 
 # Add to system prompt or final instruction
 instruction = get_edited_files_prompt_instruction()
@@ -127,7 +127,7 @@ Tests cover:
 
 ## Modules
 
-### `quest_ai_runner.adapters.context_card_updater`
+### `quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater`
 
 **New functions:**
 
@@ -152,7 +152,7 @@ Tests cover:
 - `categorize_files_with_llm()`: LLM-based file categorization
 - `update_context_cards()`: idempotent card updates
 
-### `quest_ai_runner.core.orchestrator`
+### `quest_ai_runner.the_intelligence.mind.orchestrator`
 
 **Updated method:**
 
@@ -174,7 +174,7 @@ result = orchestrator.run(user_message, ...)
 ### Managed Agents (With Prompt)
 
 ```python
-from quest_ai_runner.adapters.context_card_updater import get_edited_files_prompt_instruction
+from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_updater import get_edited_files_prompt_instruction
 
 # Include in agent system prompt
 system_prompt = f"""

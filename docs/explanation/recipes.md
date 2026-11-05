@@ -2,7 +2,7 @@
 
 A recipe is a tool call that already succeeded, remembered with the request that caused it. A later
 request for the same kind of operation runs it immediately, before understanding and before any
-context search, and the tool's receipt is the answer. Code: `quest_ai_runner/core/recipes.py`.
+context search, and the tool's receipt is the answer. Code: `quest_ai_runner/the_intelligence/mind/planner/recipes.py`.
 
 ## Turning it on
 

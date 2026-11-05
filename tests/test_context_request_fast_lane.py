@@ -19,9 +19,9 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.config import RunnerConfig
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from quest_ai_runner.runner.poller import Poller, _task_signature
+from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from hubofhubs.api import AssembledContext
+from quest_ai_runner.the_consciousness.request_intake.poller import Poller, _task_signature
 
 from .conftest import StubProvider, StubRetrieval
 from .test_runner import MockQuestClient
@@ -329,7 +329,7 @@ def test_quest_client_wait_for_interactive_builds_url_and_pads_timeout(monkeypat
     import json
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -366,7 +366,7 @@ def test_quest_client_wait_for_interactive_empty_wait_returns_none(monkeypatch):
     import json
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     class _Resp:
         def __enter__(self):
@@ -388,7 +388,7 @@ def test_quest_client_wait_for_interactive_never_raises_on_transport_error(monke
     import urllib.error
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     def _boom(req, timeout=None):
         raise urllib.error.URLError("no route to host")
@@ -402,7 +402,7 @@ def test_quest_client_list_interactive_due_builds_url(monkeypatch):
     import json
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -432,7 +432,7 @@ def test_quest_client_discover_due_includes_env_id(monkeypatch):
     import json
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 
@@ -460,7 +460,7 @@ def test_quest_client_report_done_with_data_omits_result_data_when_empty(monkeyp
     import json
     import urllib.request
 
-    from quest_ai_runner.runner.quest_client import QuestClient
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
     captured = {}
 

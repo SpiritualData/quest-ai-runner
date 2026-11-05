@@ -5,8 +5,8 @@ export work and that the right file is readable; its cost grows with the folder,
 import json
 import re
 
-from quest_ai_runner.adapters.google_chat_adapter import static_token_provider
-from quest_ai_runner.body.google_drive_adapter import GoogleDriveAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import static_token_provider
+from quest_ai_runner.the_world.tools.connected_system_operations.google_drive_adapter import GoogleDriveAdapter
 
 from retrieval import policy
 from retrieval.fakes import DRIVE_FOLDER, drive_router, network

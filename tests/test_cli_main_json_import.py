@@ -6,7 +6,7 @@ use in another subcommand (reconcile-plan's json.dumps) raises UnboundLocalError
 import ast
 from pathlib import Path
 
-CLI = Path(__file__).resolve().parent.parent / "quest_ai_runner" / "cli.py"
+CLI = Path(__file__).resolve().parent.parent / "quest_ai_runner" / "the_consciousness" / "terminal" / "cli.py"
 
 
 def test_main_has_no_local_json_import():

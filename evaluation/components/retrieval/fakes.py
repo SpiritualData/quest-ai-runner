@@ -222,7 +222,7 @@ def mcp_session(docs):
 # --- remote file server --------------------------------------------------------------------------
 
 def remote_transport(root):
-    from quest_ai_runner.adapters.files_server import FileOperations, RequestHandler
+    from quest_ai_runner.the_world.tools.file_reading.files_server import FileOperations, RequestHandler
     handler = SimpleNamespace(operations=FileOperations(str(root)))
 
     def transport(url, headers, body, timeout):  # noqa: ARG001

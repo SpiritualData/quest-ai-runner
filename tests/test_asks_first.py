@@ -1,7 +1,7 @@
 """The planner's ``asks_first`` verdict: parsed as a boolean field, told to the reply writer as a directive, and stated in the rubric."""
-from quest_ai_runner.core.orchestrator import OrchestratorConfig
-from quest_ai_runner.core.orchestrator_decisions import normalize_decision
-from quest_ai_runner.core.planner_prompt import ASK_FIRST_DIRECTIVE, PLANNER_PROFILES
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import ASK_FIRST_DIRECTIVE, PLANNER_PROFILES
 
 
 def test_the_flag_is_read_from_the_decision_and_defaults_to_false():

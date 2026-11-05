@@ -23,13 +23,13 @@ from typing import List, Optional
 
 import pytest
 
-from quest_ai_runner.core import goal_runner_contract
-from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
-from hubofhubs.the_world.tools.events import EVENT_EXEC
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.core.goal_runner_contract import kill_process_group
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.delegation import goal_runner_contract
+from hubofhubs.api import DeepResult, ProgressEvent
+from hubofhubs.api import EVENT_EXEC
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import kill_process_group
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider

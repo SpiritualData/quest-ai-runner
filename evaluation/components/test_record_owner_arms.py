@@ -82,7 +82,7 @@ def test_the_pass_stops_when_api_spend_passes_the_cap():
 
 def test_the_production_report_reads_the_persisted_log_and_never_guesses(tmp_path):
     import production
-    from quest_ai_runner.usage import CallLog
+    from quest_ai_runner.the_world.model_plumbing.spend.usage import CallLog
     path = tmp_path / "calls.jsonl"
     assert production.report(path, "watch-a-run.overseer") == ([f"no recorded production call of watch-a-run.overseer in {path}"], False)
     for seconds in (1.0, 3.0):

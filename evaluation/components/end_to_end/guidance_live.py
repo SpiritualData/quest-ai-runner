@@ -70,7 +70,7 @@ def run_case(case, model, max_calls):
                                        "(prices, versions, news) is reachable only through a web search.")
     hosts = tuple((case.get("world") or {}).get("trusted_link_hosts") or ())
     if hosts:   # the offline world has no network: a host the case names is one whose link the guard may keep without fetching it
-        from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import LinkPolicy
+        from hubofhubs.api import LinkPolicy
         orch.cfg.link_policy = LinkPolicy(trusted_hosts=hosts, check_external=False)
     seen = estimate_tokens(orch)
     got = drive.run_with(case, world, orch)

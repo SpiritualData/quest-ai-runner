@@ -9,11 +9,11 @@ import subprocess as _sp
 
 import pytest
 
-from quest_ai_runner.config_core_settings import deep_launch_from_env
-from quest_ai_runner.core.deep_launch import DeepLaunchSettings, build_deep_argv, lean_flags
-from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.core.goal_runner_contract import resolve_deep_launch
-from quest_ai_runner.core.runtime_settings import CoreSettings
+from quest_ai_runner.the_body.configuration.config_core_settings import deep_launch_from_env
+from quest_ai_runner.the_body.configuration.deep_launch import DeepLaunchSettings, build_deep_argv, lean_flags
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import resolve_deep_launch
+from quest_ai_runner.the_body.configuration.runtime_settings import CoreSettings
 
 SID = "11111111-1111-4111-8111-111111111111"
 
@@ -130,7 +130,7 @@ def test_environment_names_parse_into_the_settings():
 
 
 def test_runner_config_wins_over_the_environment_settings(monkeypatch):
-    from quest_ai_runner.core import runtime_settings
+    from quest_ai_runner.the_body.configuration import runtime_settings
     monkeypatch.setattr(runtime_settings, "_settings_source", CoreSettings(deep_launch=DeepLaunchSettings(strict_mcp=True)))
     assert resolve_deep_launch(None).strict_mcp is True
     pinned = DeepLaunchSettings(exclude_dynamic_sections=True)
@@ -157,7 +157,7 @@ def capture(monkeypatch):
 
 
 def test_the_one_shot_runner_default_launch_adds_no_lean_flag(monkeypatch):
-    from quest_ai_runner.core import runtime_settings
+    from quest_ai_runner.the_body.configuration import runtime_settings
     monkeypatch.setattr(runtime_settings, "_settings_source", CoreSettings())
     seen = capture(monkeypatch)
     SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude")).run_goal(

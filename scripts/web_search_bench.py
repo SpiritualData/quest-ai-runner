@@ -169,7 +169,7 @@ def run_benchmark(
     fresh: bool = False,
 ) -> BenchReport:
     """Run ``adapter.search()`` once per item (sequentially, or across ``parallel`` threads)."""
-    from hubofhubs.the_world.tools.web_search.page_extract import estimate_tokens
+    from hubofhubs.api import estimate_tokens
 
     if not items:
         return BenchReport()
@@ -262,7 +262,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("error: no queries to run (file had none under \"search\", or --queries was empty)", file=sys.stderr)
         return 2
 
-    from quest_ai_runner.science.web_research import build_web_research_from_env
+    from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
 
     adapter = build_web_research_from_env()
     if adapter is None:

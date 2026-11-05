@@ -16,8 +16,8 @@ Offline, no network.
 """
 import logging
 
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -32,7 +32,7 @@ def _orch(provider, **kw):
 # --- cli.py env wiring -------------------------------------------------------------------------
 
 def test_qar_deep_models_env_builds_explicit_ladder(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     monkeypatch.setenv("QAR_DEEP_MODELS", "claude-sonnet-4-6, claude-opus-4-8")
     cfg = _config_from_env()
@@ -40,7 +40,7 @@ def test_qar_deep_models_env_builds_explicit_ladder(monkeypatch):
 
 
 def test_qar_deep_models_unset_leaves_ladder_none(monkeypatch):
-    from quest_ai_runner.cli import _config_from_env
+    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
 
     monkeypatch.delenv("QAR_DEEP_MODELS", raising=False)
     cfg = _config_from_env()
@@ -117,7 +117,7 @@ def test_deep_models_extends_a_bucket_label_ladder_on_a_cli_only_deployment(capl
     "claude-opus". The ladder used to stop at one rung whenever the fallback was Claude-shaped,
     which is how a live run retried the SAME model six times: the escalation mechanism ran with
     nothing to escalate to. Claude-shaped is not the same question as "a distinct rung"."""
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli import CLI_RUNNABLE_MODELS
+    from hubofhubs.api import CLI_RUNNABLE_MODELS
 
     provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
     orch = _orch(provider, config=OrchestratorConfig())
@@ -156,7 +156,7 @@ def test_fallback_deep_ladder_warns_at_the_opus_ceiling_and_does_not_invent_fabl
     fix is NOT to invent a further family (e.g. Fable) as an automatic "stronger than Opus" rung,
     since Fable is a different family, not a higher tier. The warning naming
     QAR_DEEP_MODELS/QAR_MODEL_BEST is the correct, actionable outcome (2026-09-26)."""
-    from hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli import CLI_RUNNABLE_MODELS
+    from hubofhubs.api import CLI_RUNNABLE_MODELS
 
     provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
     orch = _orch(provider, config=OrchestratorConfig())

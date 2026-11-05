@@ -2,12 +2,12 @@
 companion. Offline; no model."""
 from types import SimpleNamespace
 
-from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
+from hubofhubs.api import ExecutionRecord
 
-from quest_ai_runner.core import tool_guards
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
-from quest_ai_runner.core.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_world.tools import tool_guards
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -146,7 +146,7 @@ def test_detail_reads_are_the_companions_a_registry_declares():
 
 
 def run_turn(message, decisions, specs, context_view=LISTING, quest_id=None, order_verdict=None):
-    from quest_ai_runner.core.orchestrator_types import OrchestratorConfig
+    from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
     provider = StubProvider(decisions)
     config = OrchestratorConfig()
     config.overseer = False
@@ -191,8 +191,8 @@ def test_a_how_do_i_question_that_proposes_a_write_changes_nothing():
 
 
 def test_tool_calls_with_no_action_are_run_not_dropped():
-    from quest_ai_runner.core.orchestrator_decisions import normalize_decision
-    from quest_ai_runner.core.orchestrator_types import OrchestratorConfig
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+    from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
     raw = {"action": None, "tool_calls": [{"name": "create_quest_goal", "args": {"quest_id": "q_home"}}]}
     assert normalize_decision(raw, OrchestratorConfig(), tools_enabled=True).action == "tool"
     assert normalize_decision(raw, OrchestratorConfig(), tools_enabled=False).action == "answer"
@@ -296,7 +296,7 @@ def test_no_search_is_owed_without_web_without_a_world_verdict_or_after_a_web_re
 
 
 def test_the_loop_searches_the_web_before_an_answer_the_reach_judge_called_world_and_not_when_it_did_not():
-    from quest_ai_runner.core.orchestrator import OrchestratorConfig
+    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
 
     from .test_web_reads import FakeWeb
 
@@ -319,7 +319,7 @@ def test_the_loop_searches_the_web_before_an_answer_the_reach_judge_called_world
 
 
 def test_the_reach_judge_prompt_names_its_keys_so_a_provider_without_forced_tool_use_answers_in_them():
-    from quest_ai_runner.core.orchestrator import OrchestratorConfig
+    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
 
     provider = StubProvider([{"reach": "world"}])
     config = OrchestratorConfig()

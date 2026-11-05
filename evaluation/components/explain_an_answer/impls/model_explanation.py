@@ -5,7 +5,7 @@ pass ``--max-calls``."""
 PAID = True
 import claude_judge
 from explain_an_answer import arms
-from quest_ai_runner.core.orchestrator_judges import JudgesMixin
+from quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges import JudgesMixin
 
 
 def build(meter):

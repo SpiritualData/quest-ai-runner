@@ -22,27 +22,14 @@ from typing import Any, Dict, List
 
 import pytest
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_DONE, EVENT_EXPLANATION, EVENT_RESULT
-from quest_ai_runner.core.answer_explanation import (
-    EXPLAIN_PROMPT,
-    EXPLANATION_VERSION,
-    MAX_ITEMS_PER_KIND,
-    METRIC_KEYS,
-    METRIC_RULE,
-    TurnTrace,
-    build_payload,
-    has_renderable_content,
-    is_eligible,
-    metric_rule,
-    render_metrics,
-    render_record_for_prompt,
-    render_used,
-    trace_from_result,
-)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Mode, Orchestrator, OrchestratorConfig, OrchestratorResult
-from quest_ai_runner.core import StreamSink
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_DONE, EVENT_EXPLANATION, EVENT_RESULT
+from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import (
+    EXPLAIN_PROMPT, EXPLANATION_VERSION, MAX_ITEMS_PER_KIND, METRIC_KEYS, METRIC_RULE, TurnTrace, build_payload, has_renderable_content,
+    is_eligible, metric_rule, render_metrics, render_record_for_prompt, render_used, trace_from_result)
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Mode, Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
 
 from .conftest import StubProvider, StubRetrieval
 from .test_goal_metrics_flow import TASK, Worker, deep_plan, world  # noqa: F401  (world is a fixture)
@@ -309,7 +296,7 @@ def test_evolvable_structure_is_optional_and_cleaned():
 
 
 def test_evolvable_structure_alone_is_renderable():
-    from quest_ai_runner.core.answer_explanation import has_renderable_content
+    from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import has_renderable_content
     assert has_renderable_content({"used": {}, "evolvable_structure": {"ideal": "x"}})
 
 

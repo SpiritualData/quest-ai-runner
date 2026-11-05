@@ -3,12 +3,7 @@
 All offline and deterministic — the guard takes an injected sampler, so no test depends on the
 actual host's memory or load.
 """
-from quest_ai_runner.resources import (
-    ResourceGuard,
-    ResourceLimits,
-    ResourceSnapshot,
-    sample_resources,
-)
+from quest_ai_runner.the_body.host.resources import ResourceGuard, ResourceLimits, ResourceSnapshot, sample_resources
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -186,8 +181,8 @@ def test_sample_resources_returns_a_snapshot_without_raising():
 
 
 def _poller(client, provider, guard):
-    from quest_ai_runner.config import RunnerConfig
-    from quest_ai_runner.runner.poller import Poller
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
         retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider,

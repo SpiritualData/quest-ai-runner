@@ -10,11 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner.quest_goal_sync import (
-    GOALS_FILE_NAME,
-    parse_goal_edits,
-    pull_quest_goals,
-)
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_goal_sync import GOALS_FILE_NAME, parse_goal_edits, pull_quest_goals
 
 QUEST_ID = "quest_c18a9d1409ff"
 

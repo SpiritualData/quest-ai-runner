@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner import lane_supervisor as sup
-from quest_ai_runner.runner.lane_env_file import parse_env_text
+from quest_ai_runner.the_consciousness.request_intake import lane_supervisor as sup
+from quest_ai_runner.the_body.configuration.lane_env_file import parse_env_text
 
 
 @pytest.fixture

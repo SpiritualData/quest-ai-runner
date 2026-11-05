@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))
-from quest_ai_runner import usage  # noqa: E402
+from quest_ai_runner.the_world.model_plumbing.spend import usage  # noqa: E402
 
 
 def default_log():

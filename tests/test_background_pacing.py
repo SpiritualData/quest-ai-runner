@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import List
 
-from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.the_body.internal_context.card_store import background_pacing
-from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from hubofhubs.api import background_pacing
+from hubofhubs.api import Pacer
 
 
 class FakeClock:
@@ -71,7 +71,7 @@ def test_the_prewarm_is_paced(tmp_path, monkeypatch):
         made.append(real(*args, **kwargs))
         return made[-1]
 
-    monkeypatch.setattr("quest_ai_runner.adapters.context_store_bootstrap.Pacer", record)
+    monkeypatch.setattr("quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_store_bootstrap.Pacer", record)
     store = FileContextStore(str(tmp_path), auto_bootstrap=False)
     store._repo.write("c0", {"id": "c0", "name": "Topic", "keywords": ["alpha"]})
     store.prewarm()

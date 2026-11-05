@@ -6,7 +6,7 @@ PAID = True
 import os
 
 from assist_a_terminal_session import arms
-from quest_ai_runner import cli_quest
+from quest_ai_runner.the_consciousness.terminal import cli_quest
 
 MODEL_ENV = "QAR_EVAL_LIVE_MODEL"
 DEFAULT_MODEL = "claude-haiku-5-5"

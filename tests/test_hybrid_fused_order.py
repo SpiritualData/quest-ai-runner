@@ -1,7 +1,7 @@
 """The hybrid assembler lists the union of both arms best first (reciprocal-rank fusion), not keyword
 cards then vector cards sorted by id."""
-from quest_ai_runner.select_context.hybrid_context_assembler import fused_card_order
-from hubofhubs.the_body.internal_context.context import AssembledContext
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import fused_card_order
+from hubofhubs.api import AssembledContext
 
 
 def keyword(*ids):

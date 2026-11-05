@@ -2,8 +2,8 @@
 stand in for the network and the model only; every decision between them is made by live runner code."""
 from datetime import datetime, timedelta, timezone
 
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.adapters_values import Escalation, Observation
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_body.internal_context.adapters_values import Escalation, Observation
 
 
 def iso(moment):

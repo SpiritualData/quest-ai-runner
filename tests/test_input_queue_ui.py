@@ -23,10 +23,10 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from quest_ai_runner.core.inbox import InMemoryInbox
-from quest_ai_runner.core.orchestrator import OrchestratorResult
-from quest_ai_runner.textual_ui import ActivityBar, PromptTextArea, QuestAITerminal
-from quest_ai_runner.textual_ui_widgets import _BUSY_PLACEHOLDER
+from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.the_consciousness.terminal.textual_ui import ActivityBar, PromptTextArea, QuestAITerminal
+from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import _BUSY_PLACEHOLDER
 
 
 def _stub_session(inbox: InMemoryInbox) -> SimpleNamespace:

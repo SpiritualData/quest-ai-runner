@@ -21,16 +21,16 @@ from esoi import scaffold
 
 from esoi.metric_meter import AFTER, BEFORE, EVERY_MOMENT
 from esoi.metric_results import NOT_RECORDED_LINE, MetricResult
-from quest_ai_runner.config import build_orchestrator
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode
-from quest_ai_runner.critical_thinking.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
-from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
-from quest_ai_runner.core.orchestrator_turn import _Emitter
-from quest_ai_runner.core.resolve import default_name, names, resolve
-from quest_ai_runner.core.tools import ToolContext, ToolResult, ToolSpec, build_tool_registry
+from quest_ai_runner.the_body.configuration.config import build_orchestrator
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode
+from quest_ai_runner.the_intelligence.critical_thinking.goal_iteration import DoctrineOnly, SliceAndWriteback, SliceOnly
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import NUDGE_BRIEF
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import _Emitter
+from quest_ai_runner.the_self.assembler.resolve import default_name, names, resolve
+from quest_ai_runner.the_world.tools.tools import ToolContext, ToolResult, ToolSpec, build_tool_registry
 
 from .conftest import StubProvider, StubRetrieval
 from .test_fast_edit_ladder import _cfg, _orch

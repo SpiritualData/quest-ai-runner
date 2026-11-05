@@ -17,12 +17,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hubofhubs.the_body.internal_context.context import AssembledContext, ContextAssembler, VectorHit, VectorStore
-from hubofhubs.the_body.internal_context.context import VectorStoreBase
-from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
-from quest_ai_runner.select_context import vector_context_assembler as vca
-from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
-from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
+from hubofhubs.api import AssembledContext, ContextAssembler, VectorHit, VectorStore
+from hubofhubs.api import VectorStoreBase
+from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
+from quest_ai_runner.the_intelligence.subconscious.context_retriever import vector_context_assembler as vca
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
 
 
 # ---------------------------------------------------------------------------
@@ -851,7 +851,7 @@ class TestHybridRecordForwarding:
 
     def test_hybrid_record_with_real_vector_assembler_upserts(self):
         """Integration: HybridContextAssembler.record reaches a real VectorContextAssembler."""
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
         store = FakeVectorStore()
         vec_asm = VectorContextAssembler(store, confidence_min_score=0.0)
@@ -987,7 +987,7 @@ class TestHybridContextAssembler:
     def test_with_real_file_context_store_and_fake_vector_store(self, tmp_path):
         """Integration test: HybridContextAssembler fusing a real FileContextStore
         (over a tiny temp repo) and a FakeVectorStore."""
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
         # Tiny repo.
         repo = tmp_path / "repo"
@@ -1322,7 +1322,7 @@ class TestCapacityBound:
         coll = list(store._data.values())[0]
         remaining_ids = list(coll.keys())
         # The association for "oldest task alpha" should have been evicted.
-        from quest_ai_runner.select_context.vector_context_assembler import task_slug
+        from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import task_slug
         oldest_id = f"assoc:{task_slug('oldest task alpha')}"
         assert oldest_id not in remaining_ids, (
             f"oldest association should have been evicted; remaining: {remaining_ids}"
@@ -1389,7 +1389,7 @@ class TestQdrantVectorStoreSmoke:
         """When qdrant-client is not installed, the constructor raises ImportError."""
         qdrant_client = pytest.importorskip("qdrant_client")
         # If we reach here, qdrant_client is installed; run a smoke test instead.
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
         def fake_embedder(texts: List[str]) -> List[List[float]]:
             return [[0.1] * 4 for _ in texts]
@@ -1411,7 +1411,7 @@ class TestQdrantVectorStoreSmoke:
             pytest.skip("qdrant-client is installed; skipping import-error test")
         except ImportError:
             pass
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
         with pytest.raises(ImportError, match="quest-ai-runner\\[qdrant\\]"):
             QdrantVectorStore(path="/tmp/test")
 
@@ -1428,7 +1428,7 @@ class TestFileContextStoreExportForEmbedding:
 
         Bootstrap is LLM-driven, so we wire a fake provider that returns a 'billing' topic
         card pinning billing.py with a billing/invoice summary."""
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
         repo = tmp_path / "repo"
         repo.mkdir()
         (repo / "billing.py").write_text(
@@ -1526,7 +1526,7 @@ class TestFileContextStoreExportForEmbedding:
         assert fp1 == fp2, "fingerprints should be stable for unchanged files"
 
     def test_empty_store_returns_empty_list(self, tmp_path):
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
         cards_dir = tmp_path / "empty_cards"
         store = FileContextStore(str(cards_dir), auto_bootstrap=False)
         items = store.export_for_embedding()
@@ -1534,7 +1534,7 @@ class TestFileContextStoreExportForEmbedding:
 
     def test_never_raises_on_corrupt_state(self, tmp_path):
         """export_for_embedding must return [] rather than raising on any error."""
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
         # Point at a non-existent path for cards_dir and no repo_root.
         store = FileContextStore(
             str(tmp_path / "nonexistent_cards"),
@@ -1658,7 +1658,7 @@ class TestVectorContextAssemblerSeedSource:
 
     def test_seed_with_real_file_context_store(self, tmp_path):
         """Integration: FileContextStore.export_for_embedding wired as seed_source."""
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
         # Build a tiny repo.
         repo = tmp_path / "repo"
@@ -1715,8 +1715,8 @@ class TestResolveContextAssemblerSeedSourceWiring:
 
     def test_hybrid_vector_arm_has_seed_source_wired(self, tmp_path):
         """When vector_store is set, the resolved vector arm has seed_source wired."""
-        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler, _AUTO_CONTEXT
-        from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_context_assembler, _AUTO_CONTEXT
+        from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
 
         # Build a minimal config with a vector store but no model_provider.
         vec_store = FakeVectorStore()
@@ -1734,7 +1734,7 @@ class TestResolveContextAssemblerSeedSourceWiring:
 
         # Pre-bootstrap the card store synchronously (simulates a prior bootstrap run).
         # Bootstrap is LLM-driven, so wire a fake provider that returns a topic for main.py.
-        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
         provider = MagicMock()
         provider.list_models.return_value = []
         provider.answer.return_value = json.dumps([{
@@ -1763,7 +1763,7 @@ class TestResolveContextAssemblerSeedSourceWiring:
         assembler = resolve_context_assembler(cfg)
         # resolve_context_assembler now returns a CompositeContextAssembler wrapping
         # [HybridContextAssembler, TurnContextStore]. Unwrap to find the hybrid arm.
-        from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
+        from hubofhubs.api import CompositeContextAssembler
         assert isinstance(assembler, CompositeContextAssembler), (
             f"expected CompositeContextAssembler, got {type(assembler)!r}"
         )
@@ -1822,7 +1822,7 @@ class TestMakeVoyageEmbedder:
         va_stub.Client = _FakeClient
         sys.modules["voyageai"] = va_stub
         try:
-            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import make_voyage_embedder
             fn = make_voyage_embedder(model="voyage-3-lite", input_type="document")
             assert callable(fn)
         finally:
@@ -1851,7 +1851,7 @@ class TestMakeVoyageEmbedder:
         va_stub.Client = _FakeClient
         sys.modules["voyageai"] = va_stub
         try:
-            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import make_voyage_embedder
             fn = make_voyage_embedder(model="voyage-3-lite", input_type="query")
             result = fn(["what is billing?"])
             assert len(calls) == 1
@@ -1886,7 +1886,7 @@ class TestMakeVoyageEmbedder:
         sys.modules["voyageai"] = va_stub
         try:
             import os
-            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import make_voyage_embedder
             os.environ["VOYAGE_MODEL"] = "voyage-env-model"
             try:
                 fn = make_voyage_embedder(input_type="document")
@@ -1923,7 +1923,7 @@ class TestMakeVoyageEmbedder:
         # Ensure VOYAGE_MODEL is not set.
         os.environ.pop("VOYAGE_MODEL", None)
         try:
-            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import make_voyage_embedder
             fn = make_voyage_embedder(input_type="document")
             fn(["text"])
             assert calls[0]["model"] == "voyage-3-lite"
@@ -1940,7 +1940,7 @@ class TestMakeVoyageEmbedder:
         original = sys.modules.get("voyageai", _SENTINEL := object())
         sys.modules["voyageai"] = None  # type: ignore[assignment]
         try:
-            import quest_ai_runner.subconscious.qdrant_vector_store as _mod
+            import quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store as _mod
             importlib.reload(_mod)
             with pytest.raises(ImportError, match="pip install voyageai"):
                 _mod.make_voyage_embedder(input_type="document")
@@ -1971,7 +1971,7 @@ class TestQdrantVectorStoreQueryEmbedder:
             query_calls.append(texts)
             return [[0.9, 0.8, 0.7, 0.6] for _ in texts]
 
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2000,7 +2000,7 @@ class TestQdrantVectorStoreQueryEmbedder:
             query_calls.append(texts)
             return [[0.9, 0.8, 0.7, 0.6] for _ in texts]
 
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2023,7 +2023,7 @@ class TestQdrantVectorStoreQueryEmbedder:
             all_calls.append(texts)
             return [[0.5, 0.5, 0.5, 0.5] for _ in texts]
 
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2424,8 +2424,8 @@ class TestVectorBackendEnvSwitch:
 
     def resolve(self, tmp_path, monkeypatch, backend_value, qdrant_cls):
         """Run resolve_context_assembler with a patched QdrantVectorStore class."""
-        import quest_ai_runner.subconscious.qdrant_vector_store as adapters_mod
-        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+        import quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store as adapters_mod
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_context_assembler
 
         for var in self.CLEAR_ENV:
             monkeypatch.delenv(var, raising=False)
@@ -2480,7 +2480,7 @@ class TestVectorBackendEnvSwitch:
             f"{[r.getMessage() for r in qdrant_records]}"
         )
         # And the resolved assembler has no vector (hybrid) arm.
-        from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
+        from hubofhubs.api import CompositeContextAssembler
         assert isinstance(assembler, CompositeContextAssembler)
         assert not any(
             isinstance(a, HybridContextAssembler) for a in assembler._assemblers
@@ -2549,8 +2549,8 @@ class TestAutoBuiltQdrantDeclaresRealVectorSize:
 
     def _resolve_with_embedder_backend(self, tmp_path, monkeypatch, embedder_backend,
                                        qdrant_cls, *, voyage_size_env=None):
-        import quest_ai_runner.subconscious.qdrant_vector_store as adapters_mod
-        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+        import quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store as adapters_mod
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_context_assembler
 
         for var in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",
                     "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID", "QAR_TEAM_ID",
@@ -2655,7 +2655,7 @@ class TestBackgroundSeed:
 # ---------------------------------------------------------------------------
 # NEW: CARD_SEED_SCOPE -- the seed pass writes cards under their own scope, never scope=None,
 # so the per-scope capacity accounting used by record()'s association eviction can never reach
-# them. See quest_ai_runner/core/vector_scopes.py for the full rationale.
+# them. See quest_ai_runner/the_body/internal_context/card_store/vector_scopes.py for the full rationale.
 # ---------------------------------------------------------------------------
 
 class _ScopeRecordingStore(VectorStoreBase):
@@ -2912,7 +2912,7 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
 
     def test_visibility_filter_admits_the_seed_digest_under_an_unrelated_scope(self):
         pytest.importorskip("qdrant_client")
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore, scope_hash
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore, scope_hash
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2937,7 +2937,7 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
         pytest.importorskip("qdrant_client")
         from qdrant_client.models import IsEmptyCondition
 
-        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(

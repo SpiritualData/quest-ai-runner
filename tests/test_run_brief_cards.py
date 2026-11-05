@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from hubofhubs.the_body.internal_context.card_store import card_origin
-from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
 
 BRIEF = ("Act as Someone.\n\nQuest outcome: ship the widgets\n\nStanding instructions for this quest. "
          "Nobody has written a brief yet.\n\nWork the widgets request above in full.")

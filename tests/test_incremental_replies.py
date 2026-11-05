@@ -8,16 +8,16 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Dict, List
 
-from hubofhubs.the_body.internal_context.run_store.tool_ledger import ToolOutcome
-from hubofhubs.the_world.tools.deep import DeepResult
-from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT
-from quest_ai_runner.core.adapters_sinks import StreamSink
-from quest_ai_runner.core.ask_policy import (
+from hubofhubs.api import ToolOutcome
+from hubofhubs.api import DeepResult
+from hubofhubs.api import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import (
     Assignee, ask_dedupe_key, blocks_on_person, file_ask, resolve_assignee, stop_reason_of)
-from quest_ai_runner.core.interim_policy import (
+from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import (
     InterimLedger, InterimState, decide, done_text, interim_event_data, interim_text_of, progress_signature)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_done_evidence import ANALYSIS, LOOKUP, Provider, Runner
@@ -290,7 +290,7 @@ def test_a_flagged_claim_or_a_verdict_without_the_request_level_gap_sends_no_int
 
 
 def test_why_only_you_is_written_from_the_assignee_never_from_the_verifier_reason():
-    from quest_ai_runner.core.ask_policy import Assignee, why_only_you_of
+    from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import Assignee, why_only_you_of
     people = [{"user_id": "u2", "name": "Bram"}]
     assert why_only_you_of("needs_person", Assignee("u2", "member"), people) == "Only Bram can answer this."
     assert why_only_you_of("needs_person", Assignee("u1", "asker"), people) == ""
@@ -306,7 +306,7 @@ def test_why_only_you_is_written_from_the_assignee_never_from_the_verifier_reaso
 
 
 def test_a_final_never_carries_the_machine_folder_the_worker_wrote_in():
-    from quest_ai_runner.core.path_pass import relativize
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.path_pass import relativize
     root = "/srv/qar/run-7"
     assert relativize(f"I read {root}/.quest-context/club.json and {root}/notes.md.", [root]) == "I read .quest-context/club.json and notes.md."
     assert relativize(f"saved in {root}", [root]) == "saved in the working folder"
@@ -357,7 +357,7 @@ def test_a_figure_or_name_the_stored_text_does_not_hold_stops_the_message():
 
 
 def test_figures_from_the_request_or_the_receipts_are_allowed():
-    from quest_ai_runner.core.interim_policy import ungrounded_terms
+    from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import ungrounded_terms
     allowed = "Compile six studies\nOpened 2 pages"
     assert ungrounded_terms("Six were asked for and 2 pages were opened. Next, more will be opened.", allowed) == []
     assert set(ungrounded_terms("Seven were found, 9 pages, by Okafor.", allowed)) == {"Seven", "9", "Okafor"}
@@ -397,7 +397,7 @@ def test_an_ask_to_someone_who_is_not_a_participant_goes_to_the_asker_instead():
 
 
 def test_the_ask_text_tells_the_asker_who_was_asked_and_that_the_answer_comes_back_to_them():
-    from quest_ai_runner.core.ask_policy import ask_text
+    from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_text
     text = ask_text("- Made 2 other tool calls", "May the deposit be released?", "Bram")
     assert "Bram" in text and "May the deposit be released?" in text and "answer" in text and "you" in text.lower()
     assert "—" not in text

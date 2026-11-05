@@ -6,7 +6,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.runner.personas import PersonaRegistry, PersonaResolverConfig, build_persona_resolver
+from quest_ai_runner.the_consciousness.representatives.personas import PersonaRegistry, PersonaResolverConfig, build_persona_resolver
 
 
 def build(meter):  # noqa: ARG001

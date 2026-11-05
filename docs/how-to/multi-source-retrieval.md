@@ -5,13 +5,10 @@ By default, `quest-ai-runner` takes a single `RetrievalAdapter` that grounds on 
 ## Quick Start
 
 ```python
-from quest_ai_runner.adapters import (
-    FilesAdapter,
-    CachedDbAdapter,
-    ClaudeConversationsAdapter,
-    CompositeRetrievalAdapter,
-)
-from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.adapters.__init__ import CachedDbAdapter, CompositeRetrievalAdapter
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 
 # Compose multiple sources
 corpus_root = "/path/to/corpus"

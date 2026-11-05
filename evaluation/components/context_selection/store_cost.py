@@ -7,7 +7,7 @@ card store is a scarce, shared thing (every card is embedded, uploaded and read)
 them in the one number, and an arm that keeps no cards (a text search) pays nothing. The charge is recorded as ``cost_usd`` of the row.
 """
 import common
-from hubofhubs.the_body.internal_context.card_store.card_limit import DEFAULT_MAX_CARDS
+from hubofhubs.api import DEFAULT_MAX_CARDS
 
 
 def cost_budget():

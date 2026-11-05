@@ -1,7 +1,7 @@
 """QAR's terminal words and rules equal the Quest app's: its English pack and its `workTrace.ts`.
 
 Moved here from the hub (which is generic and owns no app's words). QAR registers the Quest wording over the hub's defaults in
-`quest_ai_runner/terminal_words.py`; this compares the words in force with the pack.
+`quest_ai_runner/the_consciousness/terminal/terminal_words.py`; this compares the words in force with the pack.
 
 Needs the sibling `quest-frontend` checkout (the layout of the SpiritualData repository) and, for the rules, `node` and the
 checkout's own TypeScript compiler. Without them each test is skipped with the reason; with them a changed sentence or rule in the
@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from hubofhubs.the_consciousness.terminal import strings, trail
+from hubofhubs.api import strings, trail
 
-import quest_ai_runner.terminal_words  # noqa: F401  (registers the Quest wording)
+import quest_ai_runner.the_consciousness.terminal.terminal_words  # noqa: F401  (registers the Quest wording)
 
 FRONTEND = Path(__file__).resolve().parents[2] / "quest-frontend"
 PACKS = FRONTEND / "src" / "i18n" / "locales" / "en"

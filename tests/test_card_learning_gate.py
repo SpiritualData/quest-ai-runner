@@ -6,26 +6,20 @@ period although the turn's generated program ran a write that matched no documen
 a "definitive summary" of a person's project although the turn's reads had returned no match and the
 answer was invented.
 
-These tests pin the structural gate (``quest_ai_runner.core.card_learning``) and its use by the
+These tests pin the structural gate (``quest_ai_runner.the_intelligence.subconscious.context_retriever.card_learning``) and its use by the
 orchestrator's updater: receipt-backed learning is kept, a claim with no observation behind it is
 dropped, an unverified turn teaches nothing, and a runner that cannot report observations behaves
 exactly as before. Nothing here (and nothing in the gate) reads the WORDS of a model's output.
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.the_body.internal_context.context import AssembledContext
-from hubofhubs.the_world.tools.deep import DeepResult
-from quest_ai_runner.core.card_learning import (
-    NO_OBSERVATIONS_TEXT,
-    narrow_edits_to_removals,
-    read_observation_lines,
-    render_observations_block,
-    turn_observations,
-    turn_teaches_new_facts,
-)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.auxiliary_prompts import CARD_UPDATE_NOTHING_LEARNABLE
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from hubofhubs.api import AssembledContext
+from hubofhubs.api import DeepResult
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_learning import (
+    NO_OBSERVATIONS_TEXT, narrow_edits_to_removals, read_observation_lines, render_observations_block, turn_observations, turn_teaches_new_facts)
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import CARD_UPDATE_NOTHING_LEARNABLE
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 

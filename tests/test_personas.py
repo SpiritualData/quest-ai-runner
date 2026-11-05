@@ -13,16 +13,8 @@ import json
 
 import pytest
 
-from quest_ai_runner.runner.personas import (
-    DEFAULT_ASSIGNMENT_FIELDS,
-    PersonaEntry,
-    PersonaRegistry,
-    PersonaResolverConfig,
-    build_persona_resolver,
-    card_activation,
-    slugify,
-    unique_slug,
-)
+from quest_ai_runner.the_consciousness.representatives.personas import (
+    DEFAULT_ASSIGNMENT_FIELDS, PersonaEntry, PersonaRegistry, PersonaResolverConfig, build_persona_resolver, card_activation, slugify, unique_slug)
 
 
 class RecordingProvider:
@@ -590,7 +582,7 @@ def test_persona_card_is_found_even_when_the_store_dwarfs_the_scan_cap(tmp_path,
     thousand cards a persona's card that sorted past the cap was never read. Activation stopped
     working with no error, and whether it worked depended on the names of UNRELATED cards.
     """
-    from quest_ai_runner.runner import personas
+    from quest_ai_runner.the_consciousness.representatives import personas
 
     cards = tmp_path / "cards"
     cards.mkdir()
@@ -614,8 +606,8 @@ def test_persona_card_is_found_even_when_the_store_dwarfs_the_scan_cap(tmp_path,
 def test_seeded_skill_file_survives_repeated_pull_of_itself_as_persona(tmp_path):
     """The seeded SKILL.md already holds empty managed blocks; a profile whose persona is that
     whole file must not make repeated pulls nest or grow it."""
-    from quest_ai_runner.runner.personas import seed_skill_file
-    from quest_ai_runner.runner.rep_sync import pull_rep_to_skill
+    from quest_ai_runner.the_consciousness.representatives.personas import seed_skill_file
+    from quest_ai_runner.the_consciousness.representatives.rep_sync import pull_rep_to_skill
 
     skill_dir = tmp_path / "zed"
     seed_skill_file(skill_dir, "zed", "Zed")

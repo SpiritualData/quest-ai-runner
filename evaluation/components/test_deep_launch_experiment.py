@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402,F401  (puts the repository on the path)
 from deep_runner.launch_experiment import decide  # noqa: E402
 
-from quest_ai_runner.core.deep_launch import DeepLaunchSettings  # noqa: E402
+from quest_ai_runner.the_body.configuration.deep_launch import DeepLaunchSettings  # noqa: E402
 
 
 def runs(arm, met_flags, tokens_each):

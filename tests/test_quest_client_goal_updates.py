@@ -15,8 +15,8 @@ reps.py: a fake ``_request`` captures/answers the call, no network, no real ids.
 """
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
-from quest_ai_runner.runner.quest_client_support import QuestWriteError
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError
 
 
 def client_capturing_call():
@@ -321,7 +321,7 @@ def _client_counting_fanout(goal_count, *, rate_limit_after=None):
 
 
 def test_fallback_fanout_is_capped_on_a_quest_with_many_goals():
-    from quest_ai_runner.runner.quest_client_support import GOAL_UPDATE_FANOUT_CAP
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import GOAL_UPDATE_FANOUT_CAP
     client, calls = _client_counting_fanout(GOAL_UPDATE_FANOUT_CAP + 50)
     grouped = client.list_quest_goal_updates("quest_test1")
     assert len(calls) == GOAL_UPDATE_FANOUT_CAP

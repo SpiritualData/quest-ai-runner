@@ -1,5 +1,5 @@
 """``QuestClient.list_quest_notes`` pages the notes endpoint and never asks for an unbounded list."""
-from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
 
 
 class _Recorder(QuestClient):

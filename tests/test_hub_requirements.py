@@ -14,8 +14,9 @@ from pathlib import Path
 import pytest
 from esoi.requirements import Entry, env
 
-from quest_ai_runner import cli_doctor, hub_lock_health, hub_requirements
-from quest_ai_runner.hub_requirements import Report
+from quest_ai_runner.the_consciousness.terminal import cli_doctor
+from quest_ai_runner.the_self.assembler import hub_lock_health, hub_requirements
+from quest_ai_runner.the_self.assembler.hub_requirements import Report
 
 ROOT = Path(__file__).resolve().parent.parent
 SECRET = "not-a-real-key-value-123"
@@ -72,7 +73,7 @@ def test_startup_notice_never_raises(monkeypatch):
 
 
 def test_session_hands_the_notice_to_the_startup_notifier(monkeypatch):
-    from quest_ai_runner import interactive_session
+    from quest_ai_runner.the_consciousness.terminal import interactive_session
     monkeypatch.setattr(hub_requirements, "startup_notice", lambda *a, **k: "1 required setup item(s) unmet; run `quest-ai-runner doctor` for the fix.")
     assert "doctor" in interactive_session._hub_requirements_notice()
     shown = []
@@ -140,7 +141,7 @@ def test_doctor_reports_a_blocked_lock_with_its_exit_code(monkeypatch, capsys, t
 def test_env_example_block_is_the_hubs_and_no_hub_variable_is_repeated_outside_it():
     text = (ROOT / ".env.example").read_text()
     assert hub_requirements.block_of(text) == hub_requirements.render_block(), \
-        "run: python -m quest_ai_runner.hub_requirements --write-env-example .env.example"
+        "run: python -m quest_ai_runner requirements --write-env-example .env.example"
     outside = text.replace(hub_requirements.block_of(text), "")
     for name in hub_requirements.hub_env_names():
         assert not any(line.split("=", 1)[0].strip().lstrip("# ").strip() == name and "=" in line for line in outside.splitlines()), \

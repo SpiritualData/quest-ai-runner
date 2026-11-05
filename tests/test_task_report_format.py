@@ -5,12 +5,9 @@ tell the person what was done and give numbered steps they can follow to test it
 only when something is unfinished, forbid em dashes, and still hand the model only the run's real
 RESULT to ground on. The interactive after-deep reply keeps its own prompt.
 """
-from quest_ai_runner.core.auxiliary_prompts import (
-    SYNTHESIZE_AFTER_DEEP_PROMPT,
-    SYNTHESIZE_TASK_REPORT_PROMPT,
-)
-from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import SYNTHESIZE_AFTER_DEEP_PROMPT, SYNTHESIZE_TASK_REPORT_PROMPT
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 
