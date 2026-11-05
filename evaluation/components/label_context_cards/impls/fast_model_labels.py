@@ -8,7 +8,7 @@ it can run; what the shipped wiring does with a real provider is pinned by the o
 always pass ``--max-calls``."""
 PAID = True
 from quest_ai_runner.adapters import context_card_updater
-from quest_ai_runner.remember_and_recall import card_metadata_generator
+from quest_ai_runner.subconscious import card_metadata_generator
 from label_context_cards import arms
 import live_arm
 

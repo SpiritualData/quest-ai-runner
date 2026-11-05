@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 from quest_ai_runner.adapters import ClaudeConversationsAdapter, FilesAdapter
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
 
 

@@ -30,7 +30,7 @@ from quest_ai_runner.core.prompt_budget import (PRIORITY_HISTORY, PRIORITY_REQUE
                                                 count_blocks, estimate_tokens, fit_sections)
 from quest_ai_runner.core.turn_context_store import TurnContextStore
 from quest_ai_runner.runner.autopilot import compose_batch_text
-from quest_ai_runner.think_critically.autopilot_briefs import render_last_run_output
+from quest_ai_runner.critical_thinking.autopilot_briefs import render_last_run_output
 from quest_ai_runner.core.managed_blocks import BLOCK_END, BLOCK_START
 from quest_ai_runner.runner.context_updates import parse_manifest
 from quest_ai_runner.runner.context_update_receipts import usage_receipt_gate

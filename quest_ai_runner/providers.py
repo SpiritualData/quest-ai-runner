@@ -1,5 +1,5 @@
 """QAR's wiring of the hub's model providers (``hubofhubs.models``). The vendor arms (anthropic, gemini, openai, deepseek) and the
-router are the hub's own, built by the hub assembly in ``hub.py`` (``hub.make_provider`` picks a vendor by name); ``routed`` is QAR's one ``call-a-model`` arm, the hub's router with QAR's prefix
+router are the hub's own, built by the hub assembly in ``hub.py`` (``hub.make_provider`` picks a vendor by name); ``routed`` is QAR's one ``vendor-model-caller`` arm, the hub's router with QAR's prefix
 table, usage limit message and spend tagging.
 ``MODEL_PREFIXES`` routes a model id to a provider name: the hub's table plus ``QAR_OPENAI_MODEL_PREFIXES`` for an OpenAI-compatible endpoint's ids.
 """
@@ -72,21 +72,21 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
              "credit_value": (env.get("QAR_ANTHROPIC_CREDIT_VALUE") or "").strip(), "currency": "USD", "period": "monthly"}]
 
 
-@solution("call-a-model", kind="event", entry="answer",
+@solution("vendor-model-caller", kind="event", entry="answer",
           example={"messages": [{"role": "user", "content": "Reply with the single word: ok"}], "model": "claude-haiku"})
 @typing.runtime_checkable
 class RoutedModelCalling(ModelCalling, typing.Protocol):
-    """The model seat as QAR fills it: the hub's ``call-a-model`` interface (plan, answer, list models) over the router below, which
+    """The model seat as QAR fills it: the hub's ``vendor-model-caller`` interface (plan, answer, list models) over the router below, which
     sends each model id to the vendor that serves it. A consumer's own provider satisfies it the same way."""
 
 
-@implementation("call-a-model", "multi_provider")
+@implementation("vendor-model-caller", "multi_provider")
 def routed(primary: Any = None, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
            fallback_models: Sequence[str] = ()) -> MultiProvider:
     """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, spend tagging by the registered
     prompt spec each call was rendered from (``justify-model-calls``: ``PromptSpec.render`` tags the call, ``spec_of`` reads the tag),
     and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``). With no
-    ``primary`` the router is built over the hub's default ``call-a-model`` arm, the Claude Code subscription (``claude``)."""
+    ``primary`` the router is built over the hub's default ``vendor-model-caller`` arm, the Claude Code subscription (``claude``)."""
     if primary is None:
         primary = ClaudeCliProvider()
     return MultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES,

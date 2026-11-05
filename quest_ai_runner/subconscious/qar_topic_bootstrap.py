@@ -3,7 +3,7 @@
 ``FileContextStore.bootstrap`` asks a model to name the areas of the files it has not carded and to write one topic card for each
 area, then folds the result into the cards the store already holds. That pass (``adapters/context_topic_cards``) is what this arm
 returns, unchanged: it is QAR's own selection for the seat, so a card is a topic that groups information from several files, never a
-file index. The model is a constructor need (the ``call-a-model`` seat), as in the hub's ``llm_topic_cards``; every build spends calls.
+file index. The model is a constructor need (the ``vendor-model-caller`` seat), as in the hub's ``llm_topic_cards``; every build spends calls.
 
 What stays in the bootstrap and is not this arm's business: where the cards are written, who they belong to (origin stamps and scope
 tags), the card limit, the per-folder ceilings, the folder gate and the upload to the Quest backend.

@@ -1,5 +1,5 @@
 """The standard tool ``search_scientific_literature``: published research papers, found through the hub's OpenAlex arm
-(``hubofhubs.science.openalex``, an implementation of the ``know-the-world`` seat; extra ``science``).
+(``hubofhubs.science.openalex``, an implementation of the ``the-science`` seat; extra ``science``).
 
 Offered only when ``OPENALEX_API_KEY`` is set (OpenAlex gives a free key; the hub arm's docs say what it costs and how to get
 one). Without it the tool is not in the catalog and the planner is told, on a request about papers, that it cannot search the

@@ -5,7 +5,7 @@ model calls."""
 
 
 def pick(solution, name):
-    if solution != "call-a-model":
+    if solution != "vendor-model-caller":
         return {"cls": None, "error": "KeyError"}
     if name == "anthropic":
         return {"cls": "AnthropicProvider", "error": None}

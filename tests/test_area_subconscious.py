@@ -1,4 +1,4 @@
-"""The remember-and-recall area: its ids answer offline by the strict definition, and the arm recalls over the card store it is handed."""
+"""The the-subconscious area: its ids answer offline by the strict definition, and the arm recalls over the card store it is handed."""
 import pytest
 from esoi.entry import Pending, targets
 from hubofhubs.the_body.internal_context.card_store.card import Card
@@ -7,7 +7,7 @@ from hubofhubs.the_body.internal_context.card_store.cardstore import LocalCardSt
 import quest_ai_runner
 from quest_ai_runner.core.planner_context import CardRecall
 
-AREA_IDS = ("remember-and-recall", "card-store")
+AREA_IDS = ("the-subconscious", "card-store")
 
 
 def strict_outcome(solution_id):
@@ -27,7 +27,7 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 def test_the_area_pends_on_the_quest_keys_only():
     with pytest.raises(Pending) as caught:
-        quest_ai_runner.run("remember-and-recall", "rust release", environ={})
+        quest_ai_runner.run("the-subconscious", "rust release", environ={})
     text = " ".join(caught.value.lines)
     assert "QUEST_API_KEY" in text and "QUEST_BASE_URL" in text
 
@@ -38,5 +38,7 @@ def test_the_arm_recalls_the_cards_of_the_store_it_is_handed():
     memory = quest_ai_runner.run(CardRecall, environ={}, provided={"card-store": cards})
     assert [card.id for card in memory.recall("book outline")] == ["goal-1"]
     assert memory.recall("nothing like this") == []
+    prepared = memory.prepare("book outline")
+    assert [card.id for card in prepared["cards"]] == ["goal-1"] and {step["solution"] for step in prepared["steps"]} == {"the-intuition", "context-retriever"}
     assembled = memory.assemble("book outline")
     assert assembled.card_ids == ["goal-1"] and "Finish the book outline" in assembled.context_view

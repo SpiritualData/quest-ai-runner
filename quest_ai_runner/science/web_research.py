@@ -1,7 +1,7 @@
 """web_research -- QAR's one-call constructor over the hub's WebResearchAdapter.
 
 The adapter and its helpers moved to the hub package (``hubofhubs.websearch.research``, ``.fetch``, ``.limiter``); the hub
-reads no environment, so what stays here is QAR's: the ``search-the-web`` / ``know-the-world`` implementation rows, the
+reads no environment, so what stays here is QAR's: the ``search-the-web`` / ``the-science`` implementation rows, the
 ``QAR_WEB_*`` tuning names, and the Gemini ``url_context`` fallback for pages that resist direct extraction. Names the old
 module defined or re-exported now import from ``hubofhubs.websearch`` directly (CHANGELOG).
 """
@@ -23,7 +23,7 @@ logger = logging.getLogger("quest-ai-runner.web-research")
 @solution("search-the-web", kind="event", entry="search", example="latest Rust release")
 @typing.runtime_checkable
 class WebSearching(WorldKnowing, typing.Protocol):
-    """The hub's ``know-the-world`` lines (``describe``, ``search``, ``fetch``) over the live web: snippet-first search through a
+    """The hub's ``the-science`` lines (``describe``, ``search``, ``fetch``) over the live web: snippet-first search through a
     search backend and a focused read of one page."""
 
 

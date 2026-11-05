@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import quest_ai_runner.remember_and_recall.qdrant_vector_store as qdrant_store_module
+import quest_ai_runner.subconscious.qdrant_vector_store as qdrant_store_module
 from quest_ai_runner import config as config_mod
 from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
@@ -42,7 +42,7 @@ def local_vector(monkeypatch):
     monkeypatch.setattr(qdrant_store_module, "QdrantVectorStore", store_cls)
     monkeypatch.setattr("quest_ai_runner.config_assembler._bootstrap_if_needed", lambda *a, **k: None)
     embedder = MagicMock(name="make_voyage_embedder")
-    import quest_ai_runner.remember_and_recall.qdrant_vector_store as qvs
+    import quest_ai_runner.subconscious.qdrant_vector_store as qvs
     monkeypatch.setattr(qvs, "make_voyage_embedder", embedder)
     return store_cls, embedder
 

@@ -48,14 +48,14 @@ def test_owner_titles_in_a_shared_thread_are_a_leak():
 
 
 def test_overstated_counts_are_caught():
-    events = [project({"step_id": "web", "solution_id": "search-backend", "kind": "sources", "label_key": "workTrace.web",
+    events = [project({"step_id": "web", "solution_id": "web-search", "kind": "sources", "label_key": "workTrace.web",
                        "state": "done", "counts": {"found": 9, "read": 5}}, trace_id="t").to_dict()]
     problems = check_turn(CALLS, events)
     assert any("counts.read=5" in p for p in problems) and any("counts.found=9" in p for p in problems)
 
 
 def test_a_step_left_running_and_a_url_in_a_label_are_caught():
-    running = project({"step_id": "web", "solution_id": "search-backend", "kind": "sources", "label_key": "workTrace.web",
+    running = project({"step_id": "web", "solution_id": "web-search", "kind": "sources", "label_key": "workTrace.web",
                        "state": "running", "counts": {"found": 1}}, trace_id="t").to_dict()
     assert any("still running" in p for p in check_turn(CALLS, [running]))
     dirty = project({"step_id": "papers", "solution_id": "x", "kind": "papers", "label_key": "workTrace.p", "state": "done",
@@ -71,7 +71,7 @@ def test_score_is_the_share_of_passing_turns():
 
 
 def records_event(*refs):
-    return project({"step_id": "records", "solution_id": "context-assembler", "kind": "records", "label_key": "workTrace.records.looking",
+    return project({"step_id": "records", "solution_id": "context-retriever", "kind": "records", "label_key": "workTrace.records.looking",
                     "state": "done", "counts": {"found": len(refs), "read": len(refs)},
                     "items": [{"ref": r, "label": f"Plan {r}"} for r in refs]}, trace_id="t").to_dict()
 
@@ -91,7 +91,7 @@ def test_a_records_step_when_no_card_was_used_is_caught_and_no_step_passes():
 
 def test_papers_read_may_not_exceed_the_works_the_reply_cited():
     calls = [{"kind": "papers", "total": 31, "works": [{"cited": True}, {"cited": False}, {"cited": False}]}]
-    event = project({"step_id": "papers", "solution_id": "know-the-world", "kind": "papers", "label_key": "workTrace.papers.searching",
+    event = project({"step_id": "papers", "solution_id": "the-science", "kind": "papers", "label_key": "workTrace.papers.searching",
                      "state": "done", "counts": {"found": 31, "read": 3}}, trace_id="t").to_dict()
     assert any("counts.read=3 but the run only did 1" in p for p in check_turn(calls, [event]))
     event["counts"]["read"] = 1
@@ -99,7 +99,7 @@ def test_papers_read_may_not_exceed_the_works_the_reply_cited():
 
 
 def web_event(items, found=5, read=0):
-    return project({"step_id": "web", "solution_id": "search-backend", "kind": "sources", "label_key": "workTrace.web.reading", "state": "done",
+    return project({"step_id": "web", "solution_id": "web-search", "kind": "sources", "label_key": "workTrace.web.reading", "state": "done",
                     "counts": {"found": found, "read": read}, "items": items}, trace_id="t").to_dict()
 
 
@@ -116,7 +116,7 @@ def test_a_site_the_reply_does_not_cite_is_caught_and_a_no_page_opened_state_pas
 
 
 def records_titled(label, ref="c1"):
-    return project({"step_id": "records", "solution_id": "context-assembler", "kind": "records", "label_key": "workTrace.records.looking",
+    return project({"step_id": "records", "solution_id": "context-retriever", "kind": "records", "label_key": "workTrace.records.looking",
                     "state": "done", "counts": {"found": 1, "read": 1}, "items": [{"ref": ref, "label": label}]}, trace_id="t").to_dict()
 
 
@@ -144,7 +144,7 @@ PRIVATE_REC = {"ref": "quest-mine", "label": "My secret goal", "kind": "quest", 
 
 
 def records_events(items):
-    return [project({"step_id": "records", "solution_id": "context-assembler", "kind": "records", "label_key": "workTrace.records.looking",
+    return [project({"step_id": "records", "solution_id": "context-retriever", "kind": "records", "label_key": "workTrace.records.looking",
                      "state": "done", "counts": {"found": len(items), "read": len(items)}, "items": items}, trace_id="t1").to_dict()]
 
 

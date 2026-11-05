@@ -35,7 +35,7 @@ def open_vector_store(url: Optional[str], path: Optional[str], prefix: str,
     """
     if not url and not path:
         return None
-    from .remember_and_recall.qdrant_vector_store import QdrantVectorStore
+    from .subconscious.qdrant_vector_store import QdrantVectorStore
     store = QdrantVectorStore(url=url or None, path=path or None, collection_prefix=prefix,
                               embedder=lambda texts: [[0.0] for _ in texts], vector_size=vector_size or 1)
     if not vector_size:
@@ -136,7 +136,7 @@ def run_upload(args) -> int:
     """``context upload``: plan, then (with ``--apply``) send. Exit 1 on any problem or failed card."""
     from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
     from .adapters.card_store_upload import apply_upload, plan_upload
-    from .remember_and_recall.qdrant_vector_store import embedder_id_from_env
+    from .subconscious.qdrant_vector_store import embedder_id_from_env
     from .adapters.quest_api_card_repository import (
         QuestApiCardRepository, QuestCardApiError, quest_card_settings_from_env)
 
@@ -197,7 +197,7 @@ def run_upload(args) -> int:
 def vector_location_from_args(args):
     """``(record, problem)`` for ``store-info --vector-location``; the size is detected on a server."""
     from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
-    from .remember_and_recall.qdrant_vector_store import embedder_id_from_env
+    from .subconscious.qdrant_vector_store import embedder_id_from_env
     location = (args.vector_location or "").strip()
     if not location:
         return None, "--vector-location needs a server URL or 'embedded'"

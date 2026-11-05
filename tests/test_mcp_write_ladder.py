@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec
 from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
 from hubofhubs.the_world.tools.deep import WriteResult
-from quest_ai_runner.act_as_the_body.mcp_write_adapter import MCPWriteAdapter
+from quest_ai_runner.body.mcp_write_adapter import MCPWriteAdapter
 from quest_ai_runner.config import RunnerConfig, build_orchestrator, resolve_mcp_write_runners
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, PlanDecision

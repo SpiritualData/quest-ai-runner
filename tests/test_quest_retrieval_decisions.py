@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.act_as_the_body.quest_retrieval_adapter import QuestRetrievalAdapter
+from quest_ai_runner.body.quest_retrieval_adapter import QuestRetrievalAdapter
 from quest_ai_runner.runner.quest_client import QuestClient
 
 

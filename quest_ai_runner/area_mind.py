@@ -1,29 +1,31 @@
-"""``reason-and-answer``: every step of a request acting on what the request has established so far, at the cost of the fast tier.
+"""``the-mind``: every step of a request acting on what the request has established so far, at the cost of the fast tier.
 
-The area arm ``rebuilt_per_step`` takes the area's members as typed seats and offers the area's one line, ``reason(prompt, tier)``:
-the prompt asked of the model the tier chooser measured best for the tier (the hub's ``reason-and-answer`` interface). The members
-are ``call-a-model`` and ``choose-a-model-tier`` (used by ``reason``), and the parts of one step of the loop: the prompt it assembles
-(``assemble-a-prompt``), the turn it answers (``answer-a-turn``, ``answer-end-to-end``), the operations it replays
-(``replay-known-operations``), the classification of its message (``core-ml-tasks``), the interim message
-it may send (``reply-in-steps``) and the trail it shows (``show-the-ais-work``). Members the line does not need are built on first use.
+QAR's area arm ``rebuilt_per_step`` is the Mind for one request, run by QAR's own loop (plan, gather, re-plan, answer or hand deep work on),
+and offers the hub's one line, ``think(request, ...)``: the mapping with ``text``, ``results`` (one per piece handed to a deep worker),
+``pieces`` and ``steps`` the hub's Mind returns. QAR's loop reads the representative's authority, the guidance and the quest's cards from
+its own configuration, so ``think`` takes the hub's other inputs only to keep the hub's signature; the model asked at a tier is Model
+Plumbing's ``ask`` (the hub's ``via_vendor`` arm over QAR's vendor caller and tier chooser), no longer a line of the Mind.
+The members are the parts of one step of the loop: the prompt it assembles (``assemble-a-prompt``), the turn it answers
+(``answer-a-turn``, ``answer-end-to-end``), the operations it replays (``replay-known-operations``), the classification of its message
+(``core-ml-tasks``), the interim message it may send (``reply-in-steps``) and the trail it shows (``show-the-ais-work``). Members the line
+does not need are built on first use.
 """
 from __future__ import annotations
 
 import typing
-from typing import Any, List, Mapping, Optional, Sequence
+from typing import Any, Callable, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
 from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 from hubofhubs.the_intelligence.mind.interface import Reasoning
 
-from .core.interim_policy import InterimDecision, InterimPolicy, InterimState
 from .core.model_registry import HUB_TIER_OF, RegistryTierSelection
+from .core.interim_policy import InterimDecision, InterimPolicy, InterimState
 from .core.recipes import Recipe, RecipeStore
 from .core.work_trace import WorkShowing
 from .loop_wiring import GoalAnswer, orchestrator_over
 from .message_routing import route_message
-from .providers import RoutedModelCalling
 
 
 class PromptCapture:
@@ -152,28 +154,37 @@ class RouterLabels:
         return str(route_message(self.model, message)["route"])
 
 
-@solution("reason-and-answer", kind="event", entry="reason", example={"prompt": "Reply with the single word: ok", "tier": "fast"})
+@solution("the-mind", kind="event", entry="think", example={"request": "What should I work on first this week?"})
 @typing.runtime_checkable
 class StepReasoning(Reasoning, typing.Protocol):
-    """The hub's ``reason-and-answer`` interface: a prompt asked of the model at a measured tier, and the part of a step of the loop."""
+    """The hub's ``the-mind`` interface: one request thought through, and the part of a step of the loop."""
 
 
-@implementation("reason-and-answer", "rebuilt_per_step")
+@implementation("the-mind", "rebuilt_per_step")
 class RebuiltPerStep:
     """Each step is a fresh planner call built from the template, the cached head and context layers and the newest observations.
-    ``reason`` asks the model chosen for the tier (a tier the chooser does not list is passed on as the model name); the other
-    methods hand a message to the member that owns that part of a step."""
+    ``think`` runs one turn of that loop (its model is a need of the arm, so a missing model program is a pending need, not an error in the middle of a turn) and returns the hub's Mind mapping; the other methods hand a message to the member that owns that
+    part of a step."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, model: RoutedModelCalling, tiers: RegistryTierSelection, prompts: Lazy[PromptAssembling], turns: Lazy[TurnAnswering],
-                 replays: Lazy[OperationReplaying], labels: Lazy[MlTasks], whole: Lazy[EndToEnd], steps: Lazy[InterimPolicy],
-                 work: Lazy[WorkShowing]) -> None:
-        self.model, self.tiers, self.prompts, self.turns = model, tiers, prompts, turns
+    def __init__(self, prompts: Lazy[PromptAssembling], tiers: Lazy[RegistryTierSelection], turns: TurnAnswering, replays: Lazy[OperationReplaying],
+                 labels: Lazy[MlTasks], whole: Lazy[EndToEnd], steps: Lazy[InterimPolicy], work: Lazy[WorkShowing]) -> None:
+        self.prompts, self.tiers, self.turns = prompts, tiers, turns
         self.replays, self.labels, self.whole, self.steps, self.work = replays, labels, whole, steps, work
 
-    def reason(self, prompt: str, tier: str = "") -> str:
-        arm = (self.tiers.choose().get(HUB_TIER_OF.get(tier, tier)) or {}).get("arm") if tier else None
-        return self.model.answer([{"role": "user", "content": prompt}], model=arm[1] if arm else tier)
+    def think(self, request: str, authority: Optional[Mapping[str, Any]] = None, target: Optional[Mapping[str, Any]] = None,
+              guidance: Optional[Mapping[str, Any]] = None, profile: Optional[Any] = None, prepared: Optional[Mapping[str, Any]] = None,
+              unmet: Optional[Mapping[str, Any]] = None, outside: Optional[Mapping[str, Any]] = None, budget: Optional[Any] = None,
+              cancelled: Optional[Callable[[], bool]] = None) -> Mapping[str, Any]:
+        answer = self.turns.turn(request)
+        return {"text": answer.text, "results": [{"piece": goal, "worker": "delegated-agent-sessions"} for goal in answer.ran],
+                "pieces": list(answer.ran), "steps": answer.steps, "kind": answer.kind, "exit_reason": answer.exit_reason,
+                "question": answer.question}
+
+    def starts_on(self, tier: str) -> str:
+        """The model a step of the loop starts on for a tier: the one the tier chooser measured best for it (a tier it does not list comes back as given)."""
+        arm = (self.tiers.choose().get(HUB_TIER_OF.get(tier, tier)) or {}).get("arm")
+        return arm[1] if arm else tier
 
     def step_prompt(self, message: str) -> str:
         return self.prompts.assemble(message)

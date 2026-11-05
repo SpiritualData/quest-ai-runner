@@ -5,7 +5,7 @@ are counted (a reply and, unless a code check already failed, a judge call per c
 esoi/metric-run-policy.md: one case, three, ten, then the set, and always pass ``--max-calls``."""
 PAID = True
 from intent_grounding import arms
-from quest_ai_runner.think_critically.autopilot_briefs import INTENT_FRAME_PREAMBLE
+from quest_ai_runner.critical_thinking.autopilot_briefs import INTENT_FRAME_PREAMBLE
 
 
 def build(meter):

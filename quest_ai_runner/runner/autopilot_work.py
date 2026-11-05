@@ -16,7 +16,7 @@ from .autopilot_defaults import (
     log,
 )
 from .autopilot_result import AutopilotResult, _task_label
-from ..think_critically.autopilot_briefs import _batch_title, compose_batch_text, propose_next_goal
+from ..critical_thinking.autopilot_briefs import _batch_title, compose_batch_text, propose_next_goal
 from .autopilot_periods import goal_period_for_scope
 
 

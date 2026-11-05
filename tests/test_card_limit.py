@@ -108,7 +108,7 @@ class TestTheKnob:
     def test_the_runner_builds_its_store_with_the_limit_from_the_environment(self, tmp_path, monkeypatch, env, expected):
         """The 1,000 default belongs to the runner (its builder), not to the library under it."""
         from unittest.mock import MagicMock
-        import quest_ai_runner.remember_and_recall.qdrant_vector_store as qdrant_module
+        import quest_ai_runner.subconscious.qdrant_vector_store as qdrant_module
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
         for name in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID",
                      "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL", "QDRANT_URL", "QAR_EMBEDDER_BACKEND",

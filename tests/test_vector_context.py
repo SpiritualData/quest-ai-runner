@@ -1389,7 +1389,7 @@ class TestQdrantVectorStoreSmoke:
         """When qdrant-client is not installed, the constructor raises ImportError."""
         qdrant_client = pytest.importorskip("qdrant_client")
         # If we reach here, qdrant_client is installed; run a smoke test instead.
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
         def fake_embedder(texts: List[str]) -> List[List[float]]:
             return [[0.1] * 4 for _ in texts]
@@ -1411,7 +1411,7 @@ class TestQdrantVectorStoreSmoke:
             pytest.skip("qdrant-client is installed; skipping import-error test")
         except ImportError:
             pass
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
         with pytest.raises(ImportError, match="quest-ai-runner\\[qdrant\\]"):
             QdrantVectorStore(path="/tmp/test")
 
@@ -1822,7 +1822,7 @@ class TestMakeVoyageEmbedder:
         va_stub.Client = _FakeClient
         sys.modules["voyageai"] = va_stub
         try:
-            from quest_ai_runner.remember_and_recall.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
             fn = make_voyage_embedder(model="voyage-3-lite", input_type="document")
             assert callable(fn)
         finally:
@@ -1851,7 +1851,7 @@ class TestMakeVoyageEmbedder:
         va_stub.Client = _FakeClient
         sys.modules["voyageai"] = va_stub
         try:
-            from quest_ai_runner.remember_and_recall.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
             fn = make_voyage_embedder(model="voyage-3-lite", input_type="query")
             result = fn(["what is billing?"])
             assert len(calls) == 1
@@ -1886,7 +1886,7 @@ class TestMakeVoyageEmbedder:
         sys.modules["voyageai"] = va_stub
         try:
             import os
-            from quest_ai_runner.remember_and_recall.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
             os.environ["VOYAGE_MODEL"] = "voyage-env-model"
             try:
                 fn = make_voyage_embedder(input_type="document")
@@ -1923,7 +1923,7 @@ class TestMakeVoyageEmbedder:
         # Ensure VOYAGE_MODEL is not set.
         os.environ.pop("VOYAGE_MODEL", None)
         try:
-            from quest_ai_runner.remember_and_recall.qdrant_vector_store import make_voyage_embedder
+            from quest_ai_runner.subconscious.qdrant_vector_store import make_voyage_embedder
             fn = make_voyage_embedder(input_type="document")
             fn(["text"])
             assert calls[0]["model"] == "voyage-3-lite"
@@ -1940,7 +1940,7 @@ class TestMakeVoyageEmbedder:
         original = sys.modules.get("voyageai", _SENTINEL := object())
         sys.modules["voyageai"] = None  # type: ignore[assignment]
         try:
-            import quest_ai_runner.remember_and_recall.qdrant_vector_store as _mod
+            import quest_ai_runner.subconscious.qdrant_vector_store as _mod
             importlib.reload(_mod)
             with pytest.raises(ImportError, match="pip install voyageai"):
                 _mod.make_voyage_embedder(input_type="document")
@@ -1971,7 +1971,7 @@ class TestQdrantVectorStoreQueryEmbedder:
             query_calls.append(texts)
             return [[0.9, 0.8, 0.7, 0.6] for _ in texts]
 
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2000,7 +2000,7 @@ class TestQdrantVectorStoreQueryEmbedder:
             query_calls.append(texts)
             return [[0.9, 0.8, 0.7, 0.6] for _ in texts]
 
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2023,7 +2023,7 @@ class TestQdrantVectorStoreQueryEmbedder:
             all_calls.append(texts)
             return [[0.5, 0.5, 0.5, 0.5] for _ in texts]
 
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2424,7 +2424,7 @@ class TestVectorBackendEnvSwitch:
 
     def resolve(self, tmp_path, monkeypatch, backend_value, qdrant_cls):
         """Run resolve_context_assembler with a patched QdrantVectorStore class."""
-        import quest_ai_runner.remember_and_recall.qdrant_vector_store as adapters_mod  # the module the selection table resolves from
+        import quest_ai_runner.subconscious.qdrant_vector_store as adapters_mod
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
 
         for var in self.CLEAR_ENV:
@@ -2549,7 +2549,7 @@ class TestAutoBuiltQdrantDeclaresRealVectorSize:
 
     def _resolve_with_embedder_backend(self, tmp_path, monkeypatch, embedder_backend,
                                        qdrant_cls, *, voyage_size_env=None):
-        import quest_ai_runner.remember_and_recall.qdrant_vector_store as adapters_mod  # the module the selection table resolves from
+        import quest_ai_runner.subconscious.qdrant_vector_store as adapters_mod
         from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
 
         for var in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",
@@ -2912,10 +2912,7 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
 
     def test_visibility_filter_admits_the_seed_digest_under_an_unrelated_scope(self):
         pytest.importorskip("qdrant_client")
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import (
-            QdrantVectorStore,
-            scope_hash,
-        )
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore, scope_hash
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(
@@ -2940,7 +2937,7 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
         pytest.importorskip("qdrant_client")
         from qdrant_client.models import IsEmptyCondition
 
-        from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+        from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
         with tempfile.TemporaryDirectory() as td:
             store = QdrantVectorStore(

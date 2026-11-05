@@ -1,10 +1,10 @@
-"""CURRENT: the production ``FilesWriter`` (``act_as_the_body/files_writer.py``) driven on a scratch tree. The
+"""CURRENT: the production ``FilesWriter`` (``body/files_writer.py``) driven on a scratch tree. The
 only fakes are the temp directories themselves. Zero model calls, zero network."""
 import os
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.act_as_the_body.files_writer import FilesWriter
+from quest_ai_runner.body.files_writer import FilesWriter
 
 SENTINEL = "OUTSIDE-ORIGINAL"
 

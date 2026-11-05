@@ -12,7 +12,7 @@ text before the first colon is used as the dedup key.
 """
 from __future__ import annotations
 
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.core.adapters_values import Observation
 
 

@@ -1,8 +1,8 @@
 """The whole runner as one function: a message in, what the runner answered and what ran out.
 
 ``do-grounded-work`` is the solution the repository exists for. ``GoalAgent.answer(message)`` runs the orchestrator's bounded loop (plan, gather,
-re-plan, answer or hand deep work on) over the three things it cannot do without: a model to ask (``call-a-model``), the cards it
-remembers (``card-store`` through ``remember-and-recall``) and the Quest account it works in (``access-quest-operations``). Each is
+re-plan, answer or hand deep work on) over the three things it cannot do without: a model to ask (``vendor-model-caller``), the cards it
+remembers (``card-store`` through ``the-subconscious``) and the Quest account it works in (``access-quest-operations``). Each is
 built by the selected arm of its seat, so ``quest_ai_runner.run("quest-ai-runner", message)`` needs nothing passed: a seat that
 lacks a key or a program raises ``Pending`` naming it, and a caller overrides only the seat that differs.
 """
@@ -15,18 +15,18 @@ from esoi import implementation, solution
 from esoi.assemble import Lazy
 from hubofhubs.the_body.internal_context.card_store.interface import CardStore
 
-from .area_reason_and_answer import StepReasoning
+from .area_mind import StepReasoning
 from .core.planner_context import CardRecall
 from .config import RunnerConfig, build_orchestrator
 from .loop_wiring import GoalAnswer
 from .message_routing import RequestTakingIn
-from .area_act_as_the_body import BodyActing
+from .area_body import BodyActing
 from .hold_the_intents.area import IntentHolding
-from .keep_it_generic.area import KeepingGeneric
-from .know_the_world.area import KnowingTheWorld
+from .integrity.area import KeepingGeneric
+from .science.area import KnowingTheWorld
 from .select_context.area import ContextChoosing
-from .think_critically.area import MetricHolding
-from .watch_for_risk.area import RunWatching
+from .critical_thinking.area import MetricHolding
+from .nervous_system.area import RunWatching
 from .providers import RoutedModelCalling
 from .runner.quest_client import QuestOperations
 

@@ -3,12 +3,12 @@
 These satisfy the ports in ``quest_ai_runner.core.adapters_*`` (and ``hubofhubs.ports``); a consumer wires the ones it
 needs into a ``RunnerConfig``. This package is the import path for the adapters that more than one area, or the generic
 core, uses (``from quest_ai_runner.adapters import FilesAdapter``). An adapter that only one area uses lives in that area's
-folder (``quest_ai_runner/<intent id>/``: ``know_the_world`` for web research, ``select_context`` for the context assemblers,
-``act_as_the_body`` for the retrieval adapters, the writer, the ACP runner and the Quest, Notion and Drive sources,
-``remember_and_recall`` for the Qdrant stores, the file card cache, the hub card store and the label generator) and is imported
+folder (``quest_ai_runner/<intent id>/``: ``science`` for web research, ``select_context`` for the context assemblers,
+``body`` for the retrieval adapters, the writer, the ACP runner and the Quest, Notion and Drive sources,
+``subconscious`` for the Qdrant stores, the file card cache, the hub card store and the label generator) and is imported
 from there. Each class says what it is in its own module docstring, and ``esoi/COMPONENTS.md`` lists them by role. The fast-edit
 and MCP-operation deep runners and the MCP protocol client are the hub's (``hubofhubs.act``). The optional extra ``qdrant`` is needed
-only by the Qdrant stores in ``remember_and_recall``.
+only by the Qdrant stores in ``subconscious``.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.

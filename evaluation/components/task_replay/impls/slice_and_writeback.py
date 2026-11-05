@@ -3,7 +3,7 @@ after by the runner's meters, the metric tool offered and its gate on) through t
 spending model calls; they go through the Claude CLI on the subscription, so no API dollars. Run it by decision, staged,
 with --max-calls and under the heavy-job lock."""
 PAID = True
-from quest_ai_runner.think_critically.goal_iteration import SliceAndWriteback
+from quest_ai_runner.critical_thinking.goal_iteration import SliceAndWriteback
 from task_replay import replay
 
 

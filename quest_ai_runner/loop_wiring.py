@@ -1,7 +1,7 @@
 """What every part that runs the orchestrator's loop shares: the answer a turn returns, a context assembler that holds nothing, and
 the one place a ``RunnerConfig`` over a model becomes an orchestrator.
 
-``goal_agent`` (the whole runner) and the area modules (``area_reason_and_answer``, ``area_remember_and_recall``,
+``goal_agent`` (the whole runner) and the area modules (``area_mind``, ``area_remember_and_recall``,
 ``area_take_in_the_world``) build the loop through ``orchestrator_over``, so no part writes its own wiring of the orchestrator.
 """
 from __future__ import annotations

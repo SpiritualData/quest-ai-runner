@@ -23,7 +23,7 @@ def registered(solution_id, name, target):
 
 
 def web_search():
-    from quest_ai_runner.know_the_world.web_search_backends import select_search_backend
+    from quest_ai_runner.science.web_search_backends import select_search_backend
     with registered("search-the-web", "fakehub", "hub_of_hubs.fake_hub:FakeSearch"):
         got = select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "fakehub", "FAKEHUB_URL": "http://hub.invalid"})
     return got is not None and type(got).__name__ == "FakeSearch", "selected by QAR_WEB_SEARCH_BACKEND"
@@ -81,7 +81,7 @@ def world_hub():
     """The world is ONE connection to an aggregator: the shipped preset loads as exactly one MCP server, no per-app entry."""
     from quest_ai_runner.config import RunnerConfig
     import hubofhubs
-    cfg = RunnerConfig.from_file(Path(hubofhubs.__file__).resolve().parent / "examples" / "lane-world-hub.toml")
+    cfg = RunnerConfig.from_file(Path(hubofhubs.__file__).resolve().parents[1] / "docs" / "reference" / "lane-world-hub.toml")
     ok = [s.alias for s in cfg.mcp_servers] == ["world-hub"] and cfg.mcp_servers[0].transport == "http"
     return ok, "one aggregator entry in the hub's example lane config, no per-app entries"
 

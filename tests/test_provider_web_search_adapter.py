@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
 from quest_ai_runner.core.adapters_values import Observation
 
 

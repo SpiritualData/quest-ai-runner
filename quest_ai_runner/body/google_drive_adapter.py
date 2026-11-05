@@ -21,7 +21,7 @@ Wire it into a CompositeRetrievalAdapter alongside the local corpus::
 
     from quest_ai_runner.adapters import CompositeRetrievalAdapter, FilesAdapter, GoogleDriveAdapter
     from quest_ai_runner.adapters.google_chat_adapter import service_account_token_provider
-    from quest_ai_runner.act_as_the_body.google_drive_adapter import DEFAULT_DRIVE_SCOPES
+    from quest_ai_runner.body.google_drive_adapter import DEFAULT_DRIVE_SCOPES
 
     drive = GoogleDriveAdapter(
         token_provider=service_account_token_provider(

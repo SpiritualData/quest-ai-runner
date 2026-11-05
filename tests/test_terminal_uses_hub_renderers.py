@@ -35,5 +35,5 @@ def test_qar_defines_none_of_the_hub_renderers():
 
 def test_the_terminal_imports_the_hub_renderers():
     text = (PACKAGE / "textual_ui_trail.py").read_text()
-    assert "from hubofhubs.terminal import" in text
-    assert "from hubofhubs.terminal import" in (PACKAGE / "textual_ui_blocks.py").read_text()
+    assert "from hubofhubs.the_consciousness.terminal import" in text
+    assert "from hubofhubs.the_consciousness.terminal import" in (PACKAGE / "textual_ui_blocks.py").read_text()

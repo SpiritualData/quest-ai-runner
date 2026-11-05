@@ -1,10 +1,13 @@
-"""``act-as-the-body``: the host's data model is the AI's own consistent state, read when it is asked about and read back after a change.
+"""``the-body``: the host's data model is the AI's own consistent state, read when it is asked about and read back after a change.
 
-The area arm ``card_and_reads`` takes the area's members as typed seats and offers the area's one line, ``read(rel_path)``: the part of
-a source the host's retrieval adapter returns, as it is now. The members are the cards a quest keeps (``persist-cards``), the host's
-reads (``gather-evidence``, the retrieval adapter), the Quest account (``access-quest-operations``) and the operations on it (``operate-a-quest``), the
-changes the AI makes to files (``write-files``), what it claims it can reach (``claim-reach``), the queued tasks it runs
-(``run-queued-tasks``) and the goals it takes over from a person (``hand-off-a-goal``). Members the line does not need are built on first use.
+QAR's area arm ``card_and_reads`` is the hub's Body for Quest and offers the hub's two lines, ``describe(person)`` (where the system's data
+lives, where its requests come from and which enduring integrations it may use: the hub's Internal Context, Intake Sources and Hands,
+each built on first use) and ``record_run(run)`` (the run record, kept in the run store, never in the cards), beside QAR's own line,
+``read(rel_path)``: the part of a source the host's retrieval adapter returns, as it is now. The members are the cards a quest keeps
+(``persist-cards``), the host's reads (``gather-evidence``, the retrieval adapter), the Quest account (``access-quest-operations``) and the
+operations on it (``operate-a-quest``), the changes the AI makes to files (``write-files``), what it claims it can reach
+(``claim-reach``), the queued tasks it runs (``run-queued-tasks``) and the goals it takes over from a person (``hand-off-a-goal``).
+Members the line does not need are built on first use.
 """
 from __future__ import annotations
 
@@ -14,6 +17,11 @@ from typing import Any, Dict, List, Mapping, Optional
 from esoi import implementation, solution
 from esoi.assemble import Lazy
 from esoi.requirements import api, env
+from hubofhubs.the_body.flow import BodyComposition
+from hubofhubs.the_body.hands.interface import Connecting
+from hubofhubs.the_body.intake_sources.interface import IntakeSourcing
+from hubofhubs.the_body.interface import FormAndContext
+from hubofhubs.the_body.internal_context.interface import InternalContexting
 from hubofhubs.the_world.tools.deep import FileWriter
 from hubofhubs.the_body.internal_context.card_store.card_repository import CardRepository
 from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
@@ -145,25 +153,35 @@ class ModelJudge:
                                current_state=str(goal.get("current_state") or ""), preferences=str(goal.get("preferences") or ""))
 
 
-@solution("act-as-the-body", kind="event", entry="read", example="NOTES.md")
+@solution("the-body", kind="event", entry="describe", example="")
 @typing.runtime_checkable
-class BodyActing(typing.Protocol):
-    """Reads the part of a source the host holds as it is now, and carries out and reads back the changes the AI makes to it."""
+class BodyActing(FormAndContext, typing.Protocol):
+    """The hub's ``the-body`` interface (describe the system's form, keep the run record), and QAR's line that reads the part of a source
+    the host holds as it is now."""
 
     def read(self, rel_path: str) -> Any: ...
 
 
-@implementation("act-as-the-body", "card_and_reads")
+@implementation("the-body", "card_and_reads")
 class CardAndReads:
-    """A card per quest grounds each turn and the planner reads live through the host's retrieval adapter when it wants more. ``read``
-    returns the part of a source as it is now; the other methods hand a request to the member that owns that part of the body."""
+    """A card per quest grounds each turn and the planner reads live through the host's retrieval adapter when it wants more. ``describe``
+    and ``record_run`` are the hub's Body composition over its Internal Context, Intake Sources and Hands; ``read`` returns the part of a
+    source as it is now; the other methods hand a request to the member that owns that part of the body."""
     REQUIRES = ()     # the seats it is handed
 
     def __init__(self, cards: Lazy[CardPersisting], evidence: Lazy[RetrievalAdapter], operations: Lazy[QuestOperating],
                  reach: Lazy[ReachClaiming], files: Lazy[FileWriting], quest: QuestOperations, queue: Lazy[QueueRunning],
-                 handoff: Lazy[GoalHandingOff]) -> None:
+                 handoff: Lazy[GoalHandingOff], internal: Lazy[InternalContexting], intake: Lazy[IntakeSourcing],
+                 hands: Lazy[Connecting]) -> None:
         self.cards, self.evidence, self.operations, self.reach = cards, evidence, operations, reach
         self.files, self.quest, self.queue, self.handoff = files, quest, queue, handoff
+        self.form = BodyComposition(internal, intake, hands)
+
+    def describe(self, person: str = "") -> Mapping[str, Any]:
+        return self.form.describe(person)
+
+    def record_run(self, run: Mapping[str, Any]) -> str:
+        return self.form.record_run(run)
 
     def read(self, rel_path: str) -> Any:
         return self.evidence.read_section(rel_path)

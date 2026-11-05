@@ -1,4 +1,4 @@
-"""Offline tests for ``MCPWriteAdapter`` (``act_as_the_body/mcp_write_adapter.py``).
+"""Offline tests for ``MCPWriteAdapter`` (``body/mcp_write_adapter.py``).
 
 Fully offline: no real ``mcp`` package, no subprocess, no network. Mirrors
 ``test_mcp_retrieval_adapter.py``'s rigor and structure for the WRITE side: a ``FakeMCPClient``
@@ -27,7 +27,7 @@ import pytest
 
 from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec, MCPToolResult
 from hubofhubs.the_world.tools.deep import OperationWriter, WriteResult
-from quest_ai_runner.act_as_the_body.mcp_write_adapter import MCPWriteAdapter
+from quest_ai_runner.body.mcp_write_adapter import MCPWriteAdapter
 
 
 # ---------------------------------------------------------------------------------------------

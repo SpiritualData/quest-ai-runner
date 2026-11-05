@@ -49,7 +49,7 @@ def wire_providers(cfg: Any) -> None:
 def wire_web_research(cfg: Any) -> None:
     # Fast, token-efficient LIVE WEB access (``core.adapters_retrieval.WebResearch``): built once here from
     # env (backend auto-selection, snippet-first search, bounded page fetch, cache; see
-    # ``know_the_world/web_research.py``), reached by the planner through its OWN read keys
+    # ``science/web_research.py``), reached by the planner through its OWN read keys
     # (``{"web": ...}``, ``{"web_page": ...}``) — never folded into ``cfg.retrieval``/
     # ``CompositeRetrievalAdapter``, because that composite BROADCASTS every grep/query to every
     # member adapter, which would fire a paid, slow web search on an ordinary corpus grep or DB
@@ -58,7 +58,7 @@ def wire_web_research(cfg: Any) -> None:
     _web_disabled = (os.getenv("WEB_SEARCH_ENABLED") or "").strip().lower() in ("false", "0", "off", "no")
     if cfg.web_research is None and not _web_disabled:
         try:
-            from .know_the_world.web_research import build_web_research_from_env
+            from .science.web_research import build_web_research_from_env
             cfg.web_research = build_web_research_from_env(os.environ, provider=cfg.model_provider)
             if cfg.web_research is not None:
                 _log.info("Web research adapter wired: %s", cfg.web_research.describe())
@@ -68,7 +68,7 @@ def wire_web_research(cfg: Any) -> None:
             _log.debug("web_research not wired: %s", e)
 
     # LEGACY fold-in, reached ONLY when the fast path above left ``cfg.web_research`` unset (the
-    # ``know_the_world.web_research`` module is missing, or it found no usable backend) — so a
+    # ``science.web_research`` module is missing, or it found no usable backend) — so a
     # deployment without the newer module never regresses to no web capability at all. Unless
     # web search is explicitly disabled (WEB_SEARCH_ENABLED=false), wire a
     # ProviderWebSearchAdapter when the model provider supports NATIVE web search (Anthropic
@@ -84,8 +84,8 @@ def wire_web_research(cfg: Any) -> None:
                 web_tier = (os.getenv("WEB_SEARCH_TIER") or "balanced").strip() or "balanced"
                 web_model = _wreg.resolve_tier(web_tier)
                 if web_model and supports(web_model):
-                    from .know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
-                    from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+                    from .science.provider_web_search_adapter import ProviderWebSearchAdapter
+                    from .body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
                     try:
                         _wmax = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
                     except ValueError:
@@ -109,12 +109,12 @@ def wire_web_research(cfg: Any) -> None:
 def wire_mcp_and_channels(cfg: Any) -> None:
     # Generic MCP (Model Context Protocol) servers -- fold each configured MCPServerSpec into the
     # retrieval stack as its own namespaced MCPRetrievalAdapter (read-only foundation phase; see
-    # adapters/mcp_client.py + act_as_the_body/mcp_retrieval_adapter.py). Same fold-into-composite pattern
+    # adapters/mcp_client.py + body/mcp_retrieval_adapter.py). Same fold-into-composite pattern
     # as the native web-search wiring just above, not a parallel mechanism.
     if cfg.mcp_servers:
         try:
-            from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
-            from .act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter as _MCPRA
+            from .body.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+            from .body.mcp_retrieval_adapter import MCPRetrievalAdapter as _MCPRA
 
             mcp_adapters = [
                 _MCPRA(alias=spec.alias, spec=spec, allowed_tools=spec.allowed_tools)

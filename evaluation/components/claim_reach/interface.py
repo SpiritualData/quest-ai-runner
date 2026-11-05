@@ -1,4 +1,4 @@
-"""The act-in-the-world function. Every solution is ONE function: the end-to-end turn of ``end_to_end/interface.py``.
+"""The claim-reach function. Every solution is ONE function: the end-to-end turn of ``end_to_end/interface.py``.
 
     turn(case: dict) -> dict      (the case is an ``end_to_end`` case, loaded by id; nothing is copied)
 

@@ -1,7 +1,7 @@
 """web_search_backends -- QAR's names and selection over the hub's search backends.
 
 The backends themselves moved to the hub package (``hubofhubs.websearch.backends`` and ``.gemini``); the hub's
-``search-backend`` seat holds them. This module keeps what is QAR's: the ``search-the-web`` implementation rows (each class
+``web-search`` seat holds them. This module keeps what is QAR's: the ``search-the-web`` implementation rows (each class
 below is the hub's, declared under QAR's solution so ``resolve("search-the-web", name)`` and the records are unchanged), the
 ``QAR_*`` setting names, the process environment as the default, and the Gemini key lookup. Names the old module defined
 stay importable from here (CHANGELOG).

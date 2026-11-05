@@ -33,13 +33,13 @@ from esoi import scaffold
 from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditRunner
 from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
 from hubofhubs.the_world.tools.deep import WriteResult
-from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
-from quest_ai_runner.act_as_the_body.files_writer import FilesWriter
+from quest_ai_runner.body import acp_deep_runner as acp
+from quest_ai_runner.body.files_writer import FilesWriter
 from hubofhubs.the_world.tools.delegated_agent_sessions import stream_runner as hub_stream
-from quest_ai_runner.act_as_the_body import goal_runner_stream
+from quest_ai_runner.body import goal_runner_stream
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.act_as_the_body.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.body.goal_runner_stream import StreamJsonGoalRunner
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import PlanDecision
 from quest_ai_runner.core.tools import ToolContext, build_tool_registry

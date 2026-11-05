@@ -2,7 +2,7 @@
 
 * planner: the real ``Orchestrator._plan`` on the offline orchestrator, with the model provider replaced by a
   capture that records the prompt and returns nothing (the harness latch stays: no deep runner, no Quest).
-* autopilot_batch: ``think_critically.autopilot_briefs.compose_batch_text`` (fitted to ``AUTOPILOT_BRIEF_TOKEN_BUDGET``).
+* autopilot_batch: ``critical_thinking.autopilot_briefs.compose_batch_text`` (fitted to ``AUTOPILOT_BRIEF_TOKEN_BUDGET``).
 * context_update_bundle: ``ContextUpdates.as_prompt_block``.
 * deep_prompt: ``core.goal_runner_contract.compose_goal_prompt`` (fitted by ``core.prompt_budget``).
 Zero model calls.
@@ -35,7 +35,7 @@ def build(meter, profile="full"):
                        turn_facts=facts)
             return cap.prompt
         if point == "autopilot_batch":
-            from quest_ai_runner.think_critically.autopilot_briefs import compose_batch_text
+            from quest_ai_runner.critical_thinking.autopilot_briefs import compose_batch_text
             return compose_batch_text(**inputs)
         if point == "context_update_bundle":
             return inputs["bundle"].as_prompt_block()

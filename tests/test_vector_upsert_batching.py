@@ -8,7 +8,7 @@ needing a real model.
 """
 import pytest
 
-from quest_ai_runner.remember_and_recall import qdrant_vector_store as qvs
+from quest_ai_runner.subconscious import qdrant_vector_store as qvs
 
 
 class FakeQdrant:

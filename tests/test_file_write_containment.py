@@ -19,7 +19,7 @@ import os
 import pytest
 
 from quest_ai_runner.adapters.files_adapter import FilesAdapter, resolve_in_tree
-from quest_ai_runner.act_as_the_body.files_writer import FilesWriter
+from quest_ai_runner.body.files_writer import FilesWriter
 
 
 @pytest.fixture

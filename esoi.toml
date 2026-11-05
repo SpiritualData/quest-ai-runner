@@ -3,7 +3,7 @@ package = "quest_ai_runner"
 # An area folder (quest_ai_runner/<intent id>/, listed here once it holds code) sits above core and adapters, at the rank of runner: core and
 # adapters never import an area folder, so the brain stays free of Quest; an area folder's modules import core, adapters and runner, and are
 # imported by the runner and the configuration. A file in an area folder is checked as that area, whatever layer its component row names.
-layers = ["core", "adapters", ["runner", "keep_it_generic", "know_the_world", "watch_for_risk", "take_in_the_world", "think_critically", "select_context", "act_as_the_body", "hold_the_intents", "remember_and_recall"], "config", ["cli", "tools"]]
+layers = ["core", "adapters", ["runner", "integrity", "science", "nervous_system", "take_in_the_world", "critical_thinking", "select_context", "body", "hold_the_intents", "subconscious"], "config", ["cli", "tools"]]
 other_layers = ["prompts", "docs", "evaluation", "examples", "scripts", "tests"]
 max_lines = 1500
 # Where the maintainers keep the skill that defines the intent template; absent elsewhere, then S27 is skipped
@@ -194,7 +194,7 @@ coverage = 1.0
 # The floors of each area (a sub-intent): the measured precision and coverage of its edges, host edges included (the area's implementation
 # uses every root of the area). Edges that show no code are named by `python3 -m esoi.coherence`.
 # 5 of 7: run-deep-work and write-through-mcp are parts of the area that the area's composition does not type.
-[rules.S38.floors.act_as_the_body]
+[rules.S38.floors.body]
 precision = 0.714
 coverage = 1.0
 
@@ -205,17 +205,17 @@ coverage = 1.0
 # No checkable edge: none of the five solutions has a module in the package (their code is the esoi library's records and checks, the
 # files under evaluation/ and the tests), so the area's edges to its host have no code to show and coverage is 0.0. The selector
 # (select-an-implementation) was moved to take_in_the_world, where configure-a-lane imports it, after its edge here named no code.
-[rules.S38.floors.keep_it_generic]
+[rules.S38.floors.integrity]
 precision = 0.0
 coverage = 0.0
 
-[rules.S38.floors.know_the_world]
+[rules.S38.floors.science]
 precision = 1.0
 coverage = 1.0
 
 # 11 of 11: narrate-a-turn and explain-an-answer are used by answer-end-to-end, whose orchestrator imports both, so they are recorded
 # under it and are no longer roots; show-progress is shown by the component that owns its module (the library's E4 evidence).
-[rules.S38.floors.reason_and_answer]
+[rules.S38.floors.mind]
 precision = 1.0
 coverage = 1.0
 
@@ -223,7 +223,7 @@ coverage = 1.0
 # (a hub seat), so its edges to label-context-cards, repair-a-card-store, cards-from-files, detect-stale-cards and bound-card-growth show no
 # code: those five solutions use no other solution in code and are listed as the window's roots only because the hierarchy rule asks the
 # host to use every root. Coverage 0.667: detect-stale-cards, bound-card-growth and choose-what-to-index have no module in the package.
-[rules.S38.floors.remember_and_recall]
+[rules.S38.floors.subconscious]
 precision = 0.333
 coverage = 0.667
 
@@ -240,11 +240,11 @@ precision = 0.875
 coverage = 0.667
 
 # 7 of 8: spec-selection is a part of the area that no typed seat composes.
-[rules.S38.floors.think_critically]
+[rules.S38.floors.critical_thinking]
 precision = 0.875
 coverage = 1.0
 
-[rules.S38.floors.watch_for_risk]
+[rules.S38.floors.nervous_system]
 precision = 1.0
 coverage = 1.0
 

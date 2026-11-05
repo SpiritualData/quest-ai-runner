@@ -1,7 +1,7 @@
 """QAR's arm of the hub's cards-from-files seat is its own topic bootstrap, and the seat resolves to it."""
 from quest_ai_runner import hub
 from quest_ai_runner.adapters.context_topic_cards import _llm_topic_cards
-from quest_ai_runner.remember_and_recall.qar_topic_bootstrap import QarTopicBootstrap
+from quest_ai_runner.subconscious.qar_topic_bootstrap import QarTopicBootstrap
 from tests.fake_topic_provider import TopicProvider, write_corpus
 
 

@@ -2,7 +2,9 @@
 and a cycle or an unmet need fails with a named error. Test-only arms, typed with the hub's Protocols; offline, no model call."""
 import pytest
 from esoi.assemble import AssemblyConfig, AssemblyError
-from hubofhubs.seats import CardStore, ContextAssembling, SearchBackend
+from hubofhubs.the_body.internal_context.card_store.interface import CardStore
+from hubofhubs.the_intelligence.subconscious.context_retriever.interface import ContextRetrieval
+from hubofhubs.the_world.tools.web_search.interface import SearchBackend
 
 import quest_ai_runner.hub as qar_hub
 
@@ -23,9 +25,9 @@ class DictRepository:
     def exists(self, card_id):
         return False
 
-DEPENDENT = "context-assembler"
+DEPENDENT = "context-retriever"
 ARM = "test-needs-a-card-store"
-CYCLE_STORE = "test-store-needs-an-assembler"
+CYCLE_STORE = "test-store-needs-a-retriever"
 UNMET_STORE = "test-store-needs-a-search"
 
 
@@ -34,9 +36,9 @@ class NeedsAStore:
         self.store = store
 
 
-class StoreNeedsAnAssembler:
-    def __init__(self, assembler: ContextAssembling, repository=None):
-        self.assembler = assembler
+class StoreNeedsARetriever:
+    def __init__(self, retriever: ContextRetrieval, repository=None):
+        self.retriever = retriever
 
 
 class StoreNeedsASearch:
@@ -47,7 +49,7 @@ class StoreNeedsASearch:
 @pytest.fixture(autouse=True)
 def arms():
     child = qar_hub.child()
-    for solution, name, target in ((DEPENDENT, ARM, NeedsAStore), (qar_hub.CARD_STORE, CYCLE_STORE, StoreNeedsAnAssembler),
+    for solution, name, target in ((DEPENDENT, ARM, NeedsAStore), (qar_hub.CARD_STORE, CYCLE_STORE, StoreNeedsARetriever),
                                    (qar_hub.CARD_STORE, UNMET_STORE, StoreNeedsASearch)):
         child.register(solution, name, target, replace=True)
 
@@ -57,9 +59,9 @@ def build(selections, repository=None):
                                                    options={qar_hub.CARD_STORE: {"repository": repository or DictRepository()}}))
 
 
-def test_the_dependent_seat_receives_qars_card_store_by_default():
+def test_the_dependent_seat_receives_qars_card_store_when_its_repository_arm_is_selected():
     repository = DictRepository()
-    system = build({DEPENDENT: ARM}, repository)
+    system = build({DEPENDENT: ARM, qar_hub.CARD_STORE: qar_hub.CARD_REPOSITORY}, repository)
     assert type(system[DEPENDENT].store).__name__ == "CardRepositoryStore" and system[DEPENDENT].store.repository is repository
     assert system[DEPENDENT].store is system[qar_hub.CARD_STORE]
 
@@ -71,13 +73,13 @@ def test_swapping_the_card_store_arm_reaches_the_dependent_seat():
 
 
 def test_a_cycle_between_seats_is_named():
-    with pytest.raises(AssemblyError, match="dependency cycle: .*card-store.*context-assembler.*card-store|dependency cycle: .*context-assembler.*card-store.*context-assembler"):
+    with pytest.raises(AssemblyError, match="dependency cycle: .*card-store.*context-retriever.*card-store|dependency cycle: .*context-retriever.*card-store.*context-retriever"):
         build({DEPENDENT: ARM, qar_hub.CARD_STORE: CYCLE_STORE})
 
 
 def test_a_need_is_met_by_the_needed_seats_selected_arm():
     system = build({DEPENDENT: ARM, qar_hub.CARD_STORE: UNMET_STORE})
-    assert type(system[qar_hub.CARD_STORE].search).__name__ == type(system["search-backend"]).__name__
+    assert type(system[qar_hub.CARD_STORE].search).__name__ == type(system["web-search"]).__name__
 
 
 def test_providing_the_missing_seat_resolves_the_need():
@@ -85,5 +87,5 @@ def test_providing_the_missing_seat_resolves_the_need():
         def search(self, query, max_results=5):
             return []
     search = Search()
-    system = qar_hub.child().assemble(AssemblyConfig(solutions=(qar_hub.CARD_STORE,), selections={qar_hub.CARD_STORE: UNMET_STORE}), {"search-backend": search})
+    system = qar_hub.child().assemble(AssemblyConfig(solutions=(qar_hub.CARD_STORE,), selections={qar_hub.CARD_STORE: UNMET_STORE}), {"web-search": search})
     assert system[qar_hub.CARD_STORE].search is search

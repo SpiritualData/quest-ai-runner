@@ -20,18 +20,10 @@ import urllib.error
 
 import pytest
 
-from quest_ai_runner.act_as_the_body import notion_adapter as notion_module
-from quest_ai_runner.act_as_the_body.notion_adapter import (
-    NOTION_VERSION,
-    NotionAdapter,
-    NotionError,
-    build_notion_filter,
-    dashed,
-    env_token_provider,
-    file_token_provider,
-    normalize_id,
-    static_token_provider,
-)
+from quest_ai_runner.body import notion_adapter as notion_module
+from quest_ai_runner.body.notion_adapter import (
+    NOTION_VERSION, NotionAdapter, NotionError, build_notion_filter, dashed, env_token_provider, file_token_provider, normalize_id,
+    static_token_provider)
 from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
 
 from .notion_fake import (

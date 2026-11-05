@@ -5,10 +5,11 @@ of the hub: ``child()`` is an ``esoi`` Assembler for scope ``quest_ai_runner`` w
 first: what the caller passes, QAR's own ``selected`` arms (the ``solutions.csv`` files of the records tree in a checkout, ``esoi_selection.json`` in an
 installed copy), then the hub's defaults. QAR states only what differs from the hub, and each difference carries the ids of QAR's
 own problems, ideals or metrics in ``esoi/overrides.csv`` (rule S35). The differences are the ``card-store`` seat and the
-``call-a-model`` seat, whose selected arm is QAR's router (``providers.routed``: the hub's MultiProvider with QAR's prefix table,
+``vendor-model-caller`` seat, whose selected arm is QAR's router (``providers.routed``: the hub's MultiProvider with QAR's prefix table,
 limit message and spend tagging); the vendor arms under it are the hub's own, built by ``make_provider`` below.
 
-The model call and the web search backend are external seats the hub never provides, so QAR passes those in ``provided``.
+QAR provides its own router for the ``vendor-model-caller`` seat and its own search member for ``web-search``, so it passes those in
+``provided`` (the hub's default arms of both are not used by QAR).
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ import hubofhubs
 from esoi.assemble import Assembler, Assembly, AssemblyConfig
 
 from .adapters import context_card_builder
-from .remember_and_recall.hub_card_store import CardRepositoryStore
+from .subconscious.hub_card_store import CardRepositoryStore
 
 SCOPE = "quest_ai_runner"
 CARD_STORE = "card-store"
@@ -36,7 +37,7 @@ def child() -> Assembler:
     """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
     root = PACKAGE_DIR.parent
     records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_reason_and_answer", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_act_as_the_body", "quest_ai_runner.think_critically.area", "quest_ai_runner.watch_for_risk.area", "quest_ai_runner.hold_the_intents.area", "quest_ai_runner.adapters.guidance_card_manager", "quest_ai_runner.keep_it_generic.area", "quest_ai_runner.know_the_world.area", "quest_ai_runner.select_context.area", "quest_ai_runner.select_context.retrieval_assembler", "quest_ai_runner.remember_and_recall.qar_topic_bootstrap"))
+    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.goal_agent", "quest_ai_runner.message_routing", "quest_ai_runner.area_mind", "quest_ai_runner.area_take_in_the_world", "quest_ai_runner.area_body", "quest_ai_runner.critical_thinking.area", "quest_ai_runner.nervous_system.area", "quest_ai_runner.hold_the_intents.area", "quest_ai_runner.adapters.guidance_card_manager", "quest_ai_runner.integrity.area", "quest_ai_runner.science.area", "quest_ai_runner.select_context.area", "quest_ai_runner.select_context.retrieval_assembler", "quest_ai_runner.subconscious.qar_topic_bootstrap"))
 
 
 def register_with_hub() -> None:
@@ -89,7 +90,7 @@ def cards_from_files(provider, model=None):
     return arm(**kwargs)
 
 
-CALL_A_MODEL = "call-a-model"
+CALL_A_MODEL = "vendor-model-caller"
 VENDOR_KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "gemini": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
 THINKING_FLAGS = {"anthropic": "QAR_ANTHROPIC_THINKING", "deepseek": "DEEPSEEK_THINKING"}
 
@@ -99,7 +100,7 @@ def flag(environ: Mapping[str, str], variable: str) -> bool:
 
 
 def make_provider(name: str, environ: Optional[Mapping[str, str]] = None) -> Any:
-    """The hub's ``call-a-model`` arm ``name`` (anthropic, gemini, openai or deepseek), built by the hub assembly from ``environ``
+    """The hub's ``vendor-model-caller`` arm ``name`` (anthropic, gemini, openai or deepseek), built by the hub assembly from ``environ``
     (default: the process environment): the arm's own ``ENVIRON`` fills the key and endpoint, so QAR states only what is its own:
     the thinking flags, and ``env_name``, which makes a missing key name its variable. A vendor with no key still comes back, and
     fails when first used, as before."""

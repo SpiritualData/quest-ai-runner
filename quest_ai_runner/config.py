@@ -196,7 +196,7 @@ class RunnerConfig:
     # --- adapters (consumer chooses which) ---
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
     # Generic MCP (Model Context Protocol) servers to fold into the retrieval stack -- READ-ONLY
-    # foundation phase (see hubofhubs.act.mcp_client + act_as_the_body/mcp_retrieval_adapter.py). Each spec
+    # foundation phase (see hubofhubs.act.mcp_client + body/mcp_retrieval_adapter.py). Each spec
     # becomes its own namespaced MCPRetrievalAdapter, folded into cfg.retrieval via
     # CompositeRetrievalAdapter by build_orchestrator -- the same fold-in mechanism the native web
     # search adapter uses, not a parallel one. Needs the optional [mcp] extra only if this list is
@@ -208,7 +208,7 @@ class RunnerConfig:
     # ``retrieval``/``CompositeRetrievalAdapter``, because that composite broadcasts every
     # grep/query to every member adapter, which would fire a paid, slow web search on an ordinary
     # corpus grep. Leave unset (the default) and ``build_orchestrator`` auto-builds one from env
-    # via ``know_the_world.web_research.build_web_research_from_env`` (unless ``WEB_SEARCH_ENABLED=false``
+    # via ``science.web_research.build_web_research_from_env`` (unless ``WEB_SEARCH_ENABLED=false``
     # or no backend is configured, both of which leave this ``None``). Set it explicitly to supply
     # a custom ``WebResearch`` (or a test fake); ``build_orchestrator`` never overwrites an
     # already-set value.
@@ -237,7 +237,7 @@ class RunnerConfig:
     # Left None (the default), nothing in this library can modify a file: every reference
     # RetrievalAdapter is read-only, and a deep run can only change files by going through the
     # deep worker's own subprocess sandbox. Wiring a ``FileWriter`` here (the reference
-    # implementation is ``act_as_the_body.files_writer.FilesWriter``) is the deliberate act of granting
+    # implementation is ``body.files_writer.FilesWriter``) is the deliberate act of granting
     # write access, and it does exactly one thing: it puts an in-process ``FastEditRunner`` at the
     # front of the deep-runner ladder, so a bounded edit can be landed in one model call instead of
     # spawning a full agent, escalating to the normal deep worker whenever that is not enough.
@@ -687,7 +687,7 @@ class RunnerConfig:
     # ``drive_comments`` above. Left None, ``inbound_mail`` contributes nothing until a deployment
     # wires this (directly, or declaratively via ``inbound_mail_auth``).
     inbound_mail: Any = None
-    # The Notion and Google Chat channels as live adapters (``act_as_the_body.notion_adapter.NotionAdapter``,
+    # The Notion and Google Chat channels as live adapters (``body.notion_adapter.NotionAdapter``,
     # ``adapters.google_chat_adapter.GoogleChatAdapter``), or None. Supplied directly in Python, or
     # built from the ``notion`` / ``google_chat`` blocks above. ONE object serves both uses: it is
     # folded into the retrieval stack (so a run can read, grep and query it) and handed to the

@@ -132,7 +132,7 @@ class WebResearch(Protocol):
     ``{"web_page": ...}``), dispatched by ``Orchestrator._exec_one_read`` before the retrieval
     adapter is even consulted.
 
-    A reference implementation lives in ``know_the_world/web_research.py``
+    A reference implementation lives in ``science/web_research.py``
     (``build_web_research_from_env`` builds one from env: backend auto-selection, a snippet-first
     search, bounded page-extract fetch, and a cache). Never raises; a failure degrades to an
     ``Observation(kind="error", ...)``.

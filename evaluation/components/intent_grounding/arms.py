@@ -17,7 +17,7 @@ sys.path.insert(0, str(CHAT))
 import judge as chat_judge  # noqa: E402
 import world_spec as WORLD  # noqa: E402
 
-from quest_ai_runner.think_critically.autopilot_briefs import INTENT_FRAME_PREAMBLE  # noqa: E402,F401
+from quest_ai_runner.critical_thinking.autopilot_briefs import INTENT_FRAME_PREAMBLE  # noqa: E402,F401
 
 chat_judge.OTHER_ACCOUNT_DATA.update(built=True, section="")   # the judge is never sent to a dev Quest from here
 

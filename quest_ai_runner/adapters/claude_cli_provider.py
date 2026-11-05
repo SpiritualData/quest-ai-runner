@@ -23,7 +23,7 @@ def cli_model(model: Optional[str]) -> Optional[str]:
     return hub.cli_model(model, newest_claude_id)
 
 
-@implementation("call-a-model", "claude_cli")
+@implementation("vendor-model-caller", "claude_cli")
 class ClaudeCliProvider(hub.ClaudeCliProvider):
     """The hub's ``claude_cli`` arm with QAR's usage-limit state, live model lookup and environment settings bound."""
 

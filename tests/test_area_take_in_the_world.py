@@ -65,7 +65,7 @@ class FakeChannel:
 
 
 def area_over(provider, **provided):
-    return quest_ai_runner.run(RequestTakingIn, environ={}, provided={"call-a-model": provider, **provided})
+    return quest_ai_runner.run(RequestTakingIn, environ={}, provided={"vendor-model-caller": provider, **provided})
 
 
 def test_take_in_routes_the_message_and_names_the_sources_that_feed_its_context():

@@ -299,7 +299,7 @@ def _fuse_vector_arm(cfg: RunnerConfig, keyword: Any) -> Any:
     try:
         from .select_context.hybrid_context_assembler import HybridContextAssembler
         from .select_context.vector_context_assembler import VectorContextAssembler
-        from .remember_and_recall.qdrant_vector_store import QdrantVectorStore, make_voyage_embedder
+        from .subconscious.qdrant_vector_store import QdrantVectorStore, make_voyage_embedder
 
         store = QdrantVectorStore(
             url=str(spec.get("url") or "http://localhost:6333"),

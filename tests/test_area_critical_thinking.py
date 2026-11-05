@@ -1,11 +1,11 @@
-"""The think-critically area: its members answer offline by the strict definition, and the arm holds a request to its metric and hands over the rest."""
+"""The critical-thinking area: its members answer offline by the strict definition, and the arm holds a request to its metric and hands over the rest."""
 import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.think_critically.area import MetricHolding, hold_case
+from quest_ai_runner.critical_thinking.area import MetricHolding, hold_case
 
-AREA_IDS = ("think-critically", "iterate-by-spec", "spec-selection", "judge-a-decision", "guard-a-reply", "ground-in-intent",
+AREA_IDS = ("critical-thinking", "iterate-by-spec", "spec-selection", "judge-a-decision", "guard-a-reply", "ground-in-intent",
             "detect-a-stalled-run", "draft-a-metric", "gate-an-autopilot-pass")
 
 
@@ -25,7 +25,7 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_key_return_a_value_offline():
-    for solution_id in ("think-critically", "iterate-by-spec", "judge-a-decision", "guard-a-reply", "spec-selection"):
+    for solution_id in ("critical-thinking", "iterate-by-spec", "judge-a-decision", "guard-a-reply", "spec-selection"):
         assert strict_outcome(solution_id) == "ok"
 
 

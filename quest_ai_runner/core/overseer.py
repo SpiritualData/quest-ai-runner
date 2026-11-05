@@ -1,29 +1,25 @@
-"""Overseer: a minimal-intervention watcher for the Orchestrator run loop, on the hub's watch-for-risk seat.
+"""Overseer: a minimal-intervention watcher for the Orchestrator run loop, a helper of the hub's Delegation.
 
 The idea (product owner): a HIGH-QUALITY model, reading very few tokens and writing very few, watches a run the way a
 human consciousness watches their own body walk. Most of the time it says nothing; occasionally it sends ONE tiny signal
 that causes a large downstream course correction.
 
-The engine is generic and lives in the hub package (``hubofhubs.risk``: the digest builder, the five signals, the
-safe-default parse, the ``watch-for-risk`` seat). This module is QAR's side of it: the PROMPT (the consent rules and
-wording, data this library owns) and its prompt spec stay here, and the seat is assembled once, at import, through
-``hubofhubs.assemble`` with that prompt passed in as ``render``. ``build_digest`` and ``oversee`` keep their old import path
-and signatures. Any internal failure degrades to the safe default ``OverseerSignal("proceed", degraded=True)``.
+The engine is generic and lives in the hub package (``hubofhubs.the_intelligence.mind.delegation.overseer.risk``: the five signals,
+the safe-default parse and ``RunOverseer``; the digest builder is the Nervous System's ``digest`` module). This module is QAR's side of
+it: the PROMPT (the consent rules and wording, data this library owns) and its prompt spec stay here, and ``RunOverseer`` is built once,
+at import, with that prompt passed in as ``render``. ``build_digest`` and ``oversee`` keep their import path and signatures. Any
+internal failure degrades to the safe default ``OverseerSignal("proceed", degraded=True)``.
 
-The five signals (``proceed``, ``redirect``, ``answer_now``, ``escalate_deep``, ``escalate_human``) are defined in
-``hubofhubs.risk``; their meaning for this library is in ``OVERSEER_PROMPT`` below. See ``docs/explanation/overseer.md``.
+The five signals (``proceed``, ``redirect``, ``answer_now``, ``escalate_deep``, ``escalate_human``) are defined beside ``RunOverseer``;
+their meaning for this library is in ``OVERSEER_PROMPT`` below. See ``docs/explanation/overseer.md``.
 """
 from __future__ import annotations
 
 from typing import Any
 
-import hubofhubs
-from hubofhubs.the_intelligence.mind.delegation.overseer.risk import OVERSEE_TOOL, OverseerSignal  # noqa: F401  (re-exported: the old import path)
+from hubofhubs.the_intelligence.mind.delegation.overseer.risk import OVERSEE_TOOL, OverseerSignal, RunOverseer  # noqa: F401  (OVERSEE_TOOL, OverseerSignal re-exported)
 
 from .prompt_specs import declare, render_prompt
-
-SEAT = "watch-for-risk"
-ARM = "overseer"
 
 OVERSEER_PROMPT = """\
 You are a minimal-intervention OVERSEER watching an AI assistant work through a request, the way a
@@ -125,14 +121,13 @@ def render_overseer_prompt(digest: str) -> str:
     return render_prompt("watch-a-run.overseer", digest=digest)
 
 
-# Built once, at import (startup), then frozen: nothing resolves at call time.
-WATCHING = hubofhubs.assemble(hubofhubs.AssemblyConfig(
-    solutions=(SEAT,), selections={SEAT: ARM}, options={SEAT: {"render": render_overseer_prompt}}))
-WATCHER = WATCHING[SEAT]
+# Built once, at import (startup), then frozen: nothing resolves at call time. The five-way verdict is the hub's RunOverseer, a helper of
+# Delegation (it is no arm of the Nervous System, which sends one RiskSignal), given QAR's prompt as data.
+WATCHER = RunOverseer(render_overseer_prompt)
 
 
 def build_digest(**fields: Any) -> str:
-    """The compact, capped run digest (keyword arguments as ``hubofhubs.risk.build_digest``). Never raises."""
+    """The compact, capped run digest (keyword arguments as the Nervous System's ``build_digest``). Never raises."""
     return WATCHER.digest(**fields)
 
 
@@ -142,5 +137,5 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
 
 
 OVERSEER_SPEC = declare(
-    "watch-a-run.overseer", solution="watch-for-risk", metric="metric-watch-a-run",
+    "watch-a-run.overseer", solution="nervous-system", metric="metric-watch-a-run",
     tier="caller", cache_layer="none", template=OVERSEER_PROMPT, output_schema=OVERSEE_TOOL)

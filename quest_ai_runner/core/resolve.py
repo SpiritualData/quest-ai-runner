@@ -1,6 +1,6 @@
 """Selection by name: turn ``(solution_id, name)`` into the implementation the code declares.
 
-    cls = resolve("call-a-model", "gemini")                    # an explicit name
+    cls = resolve("vendor-model-caller", "gemini")                    # an explicit name
     cls = resolve("run-deep-work", overrides=cfg.selections)   # a per-solution override dict, else the default
     cls = resolve("search-the-web")                            # the project default
 

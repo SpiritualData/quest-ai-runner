@@ -155,7 +155,7 @@ def test_files_adapter_discovery():
 # CachedDbAdapter discovery
 # ---------------------------------------------------------------------------
 
-from quest_ai_runner.act_as_the_body.cached_db_adapter import CachedDbAdapter
+from quest_ai_runner.body.cached_db_adapter import CachedDbAdapter
 
 
 def _make_db(rows_by_coll=None, *, sources=None, operations=None, describe=None):

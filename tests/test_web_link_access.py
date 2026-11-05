@@ -14,7 +14,7 @@ from hubofhubs.the_world.tools.web_search import research as wr
 from hubofhubs.the_world.tools.web_search.cache import WebCache
 from hubofhubs.the_world.tools.web_search.link_access import ALL_REASONS, REASON_MESSAGES, extract_pdf_text, link_not_read_error, rewrite_for_export
 from hubofhubs.the_world.tools.web_search.fetch import FetchedPage, PageFetchError, UnsupportedContentTypeError, default_page_fetcher
-from quest_ai_runner.know_the_world.web_research import WebResearchAdapter
+from quest_ai_runner.science.web_research import WebResearchAdapter
 from quest_ai_runner.core import orchestrator as orch
 
 ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"

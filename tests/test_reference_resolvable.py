@@ -15,10 +15,10 @@ These tests pin that: two adapters that SHOULD support it do, one that clearly s
 discovers exactly the resolvable ones (including through a composite). All offline.
 """
 from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.adapters.files_adapter import FilesAdapter
 from quest_ai_runner.adapters.google_chat_adapter import GoogleChatAdapter
-from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
 from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
 
 

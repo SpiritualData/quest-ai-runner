@@ -1,4 +1,4 @@
-"""Offline tests for ``MCPRetrievalAdapter`` (``act_as_the_body/mcp_retrieval_adapter.py``).
+"""Offline tests for ``MCPRetrievalAdapter`` (``body/mcp_retrieval_adapter.py``).
 
 Fully offline: no real ``mcp`` package, no subprocess, no network. ``MCPRetrievalAdapter`` talks to
 an ``MCPClient`` through a small, entirely synchronous surface (``list_tools`` / ``list_resources``
@@ -29,9 +29,9 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPResourceResult, MCPServerSpec, MCPToolResult
-from quest_ai_runner.act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter
+from quest_ai_runner.body.mcp_retrieval_adapter import MCPRetrievalAdapter
 from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 
 

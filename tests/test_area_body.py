@@ -1,14 +1,14 @@
-"""The act-as-the-body area: its members answer offline by the strict definition, and the arm reads, writes and hands over what it holds."""
+"""The the-body area: its members answer offline by the strict definition, and the arm reads, writes and hands over what it holds."""
 import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.area_act_as_the_body import BodyActing
+from quest_ai_runner.area_body import BodyActing
 from quest_ai_runner.adapters.files_adapter import FilesAdapter
-from quest_ai_runner.act_as_the_body.files_writer import FilesWriter
+from quest_ai_runner.body.files_writer import FilesWriter
 from tests.conftest import StubProvider
 
-AREA_IDS = ("act-as-the-body", "persist-cards", "write-files", "operate-a-quest", "claim-reach", "run-queued-tasks",
+AREA_IDS = ("the-body", "persist-cards", "write-files", "operate-a-quest", "claim-reach", "run-queued-tasks",
             "hand-off-a-goal", "access-quest-operations")
 
 
@@ -88,7 +88,7 @@ class ScriptedModel(StubProvider):
 
 def area_over(tmp_path, provider):
     provided = {"access-quest-operations": Account(), "gather-evidence": Reader(str(tmp_path)), "persist-cards": Cards(),
-                "write-files": FilesWriter(str(tmp_path), backups_enabled=False), "call-a-model": provider}
+                "write-files": FilesWriter(str(tmp_path), backups_enabled=False), "vendor-model-caller": provider}
     return quest_ai_runner.run(BodyActing, environ={}, provided=provided)
 
 

@@ -54,9 +54,11 @@ dependencies = [
     "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@main#subdirectory=implementations/python",
     # The hub of hubs: the registry of AI-intelligence hubs, the seats (Protocols) and the assembly that wires them. QAR is
     # Quest's connector and the production consumer: quest_ai_runner/hub.py imports it at startup and registers QAR's parts.
-    # Required, not an extra, on the same `@main` URL string as quest-backend. Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the
-    # sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
-    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@main",
+    # Required, not an extra. TEMPORARY: the hub's `develop` branch, because the restructured hub (five containers, all code beneath the
+    # solution it implements) is not on `main` yet. Re-pin to a release tag in the coordinated release window, in every consumer at once.
+    # Its own dependency is `esoi` (bare), met by the esoi line above. Dev and tests may use the sibling checkout
+    # `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
+    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@develop",
 ]
 
 [project.optional-dependencies]

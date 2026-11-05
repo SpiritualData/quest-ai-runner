@@ -52,7 +52,7 @@ def test_web_search_and_page_read_use_counts_and_domains_only():
     trace.web_started()
     trace.web_page_read("https://down.example.net/p", Observation(kind="error", error="timeout"))
     step = sink.latest()["web"]
-    assert step["kind"] == "sources" and step["solution_id"] == "search-backend" and step["state"] == "done"
+    assert step["kind"] == "sources" and step["solution_id"] == "web-search" and step["state"] == "done"
     assert step["counts"] == {"found": 2, "read": 1, "failed": 1}
     assert [i["ref"] for i in step["items"]] == ["news.example.com", "example.org"]
     blob = json.dumps([e.data for e in sink.events])

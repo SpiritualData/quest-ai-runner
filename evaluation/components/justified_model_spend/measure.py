@@ -117,7 +117,7 @@ if __name__ == "__main__":
              "spec_selection": {"*": "spec-selection.batch-judge"}, "overseer_signals": {"*": "watch-a-run.overseer"},
              "hand_off_a_goal": {"assignee": "hand-off-a-goal.assignee", "doability": "hand-off-a-goal.doability"},
              "draft_a_metric": {"*": "draft-a-metric.value"},
-             "judge_live_decisions": {"quest_rank": "judge-a-decision.quest-ranking", "reach": "act-in-the-world.reach-judge"},
+             "judge_live_decisions": {"quest_rank": "judge-a-decision.quest-ranking", "reach": "claim-reach.reach-judge"},
              "label_context_cards": {"retrieve": "label-context-cards.metadata", "place": "label-context-cards.categorize-files"}}
     try:
         measure(known.component, known.impl, rest, kinds.get(known.component, {}), known.min_calls)

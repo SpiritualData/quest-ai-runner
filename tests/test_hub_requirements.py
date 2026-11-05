@@ -22,7 +22,7 @@ SECRET = "not-a-real-key-value-123"
 
 
 def unmet_entries(*, required: bool = True):
-    return ([Entry(env("QAR_TEST_MISSING_KEY", secret=True, required=required), ("call-a-model:test",))], {})
+    return ([Entry(env("QAR_TEST_MISSING_KEY", secret=True, required=required), ("vendor-model-caller:test",))], {})
 
 
 def test_report_lists_unmet_with_remedy_and_never_a_value(monkeypatch):

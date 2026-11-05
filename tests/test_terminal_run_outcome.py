@@ -569,7 +569,7 @@ def test_the_runners_set_the_structured_launch_problem_from_the_process_outcome(
     denied = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(not_executable)))
     assert denied.run_goal(goal="g", brief="g").launch_problem == LAUNCH_PERMISSION_DENIED
     # The live-session runner reports the same two causes the same way.
-    from quest_ai_runner.act_as_the_body.goal_runner_stream import StreamJsonGoalRunner
+    from quest_ai_runner.body.goal_runner_stream import StreamJsonGoalRunner
     stream_missing = StreamJsonGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(tmp_path / "no-such")))
     assert stream_missing.run_goal(goal="g", brief="g").launch_problem == LAUNCH_MISSING_PROGRAM
     stream_denied = StreamJsonGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=str(not_executable)))

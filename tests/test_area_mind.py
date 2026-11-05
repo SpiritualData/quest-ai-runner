@@ -1,14 +1,14 @@
-"""The reason-and-answer area: its members answer offline by the strict definition, and the composition arm runs over them."""
+"""The Mind area: its members answer offline by the strict definition, and the composition arm runs over them."""
 import pytest
 from esoi.entry import Pending
 
 import quest_ai_runner
-from quest_ai_runner.area_reason_and_answer import StepReasoning
+from quest_ai_runner.area_mind import StepReasoning
 from quest_ai_runner.core.interim_policy import EXAMPLE_STATE
 from quest_ai_runner.loop_wiring import GoalAnswer
 from tests.conftest import StubProvider
 
-AREA_IDS = ("reason-and-answer", "call-a-model", "choose-a-model-tier", "assemble-a-prompt", "answer-a-turn", "answer-end-to-end",
+AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "assemble-a-prompt", "answer-a-turn", "answer-end-to-end",
             "replay-known-operations", "core-ml-tasks", "route-a-message", "reply-in-steps", "show-the-ais-work")
 
 
@@ -32,13 +32,13 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_model_return_a_value_offline():
-    for solution_id in ("choose-a-model-tier", "assemble-a-prompt", "replay-known-operations", "reply-in-steps", "show-the-ais-work"):
+    for solution_id in ("model-tier-chooser", "assemble-a-prompt", "replay-known-operations", "reply-in-steps", "show-the-ais-work"):
         assert strict_outcome(solution_id) == "ok"
 
 
 def test_the_area_pends_on_the_model_program_only():
     with pytest.raises(Pending) as caught:
-        quest_ai_runner.run("reason-and-answer", {"prompt": "Reply with the single word: ok", "tier": "fast"}, environ={})
+        quest_ai_runner.run("the-mind", {"request": "What should I work on first this week?"}, environ={})
     assert {reason.kind for reason in caught.value.reasons} == {"install"}
 
 
@@ -65,16 +65,28 @@ def scripted(*decisions):
     return ScriptedModel(list(decisions) or [{"action": "answer", "rationale": "known", "model_tier": "sonnet"}], answer_text="Start with the outline.")
 
 
-def test_reason_asks_the_model_chosen_for_the_tier():
+def test_think_runs_one_turn_of_the_loop_and_returns_the_minds_mapping():
     provider = scripted()
-    text = quest_ai_runner.run("reason-and-answer", {"prompt": "Reply with the single word: ok", "tier": "fast"}, environ={},
-                               provided={"call-a-model": provider})
+    got = quest_ai_runner.run("the-mind", {"request": "What should I work on first this week?"}, environ={}, provided={"vendor-model-caller": provider})
+    assert "Start with the outline." in got["text"] and got["pieces"] == [] and got["results"] == [] and got["kind"] == "answer"
+    assert provider.answer_calls >= 1
+
+
+def test_the_model_asked_at_a_tier_is_model_plumbings_ask_over_qars_vendor_caller_and_tier_chooser():
+    provider = scripted()
+    text = quest_ai_runner.run("model-plumbing", {"prompt": "Reply with the single word: ok", "tier": "cheap"}, environ={},
+                               provided={"vendor-model-caller": provider})
     assert "Start with the outline." in text and provider.answer_calls == 1
+
+
+def test_a_step_starts_on_the_model_the_tier_chooser_measured_best_for_the_tier():
+    area = quest_ai_runner.run(StepReasoning, environ={}, provided={"vendor-model-caller": scripted()})
+    assert area.starts_on("fast") and area.starts_on("not-a-tier") == "not-a-tier"
 
 
 def test_the_composition_hands_each_part_of_a_step_to_its_member():
     provider = scripted({"action": "answer", "rationale": "known", "model_tier": "sonnet"})
-    area = quest_ai_runner.run(StepReasoning, environ={}, provided={"call-a-model": provider})
+    area = quest_ai_runner.run(StepReasoning, environ={}, provided={"vendor-model-caller": provider})
     assert "PLANNER" in area.step_prompt("What should I work on first this week?")
     assert area.classify("What should I work on first this week?") == "answer"
     assert area.interim(EXAMPLE_STATE).send is True
@@ -86,6 +98,6 @@ def test_the_composition_hands_each_part_of_a_step_to_its_member():
 
 def test_a_turn_and_the_shipped_path_return_the_loop_whole():
     provider = scripted()
-    area = quest_ai_runner.run(StepReasoning, environ={}, provided={"call-a-model": provider})
+    area = quest_ai_runner.run(StepReasoning, environ={}, provided={"vendor-model-caller": provider})
     for answer in (area.turn("What should I work on first this week?"), area.end_to_end("What should I work on first this week?")):
         assert isinstance(answer, GoalAnswer) and answer.kind == "answer" and "Start with the outline." in answer.text

@@ -7,12 +7,12 @@ here, so existing imports keep working.
 """
 import re
 import typing
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
 from hubofhubs.the_body.internal_context.card_store.card import Card
 from hubofhubs.the_body.internal_context.context import AssembledContext
-from hubofhubs.the_body.internal_context.card_store.interface import CardStore
+from hubofhubs.the_body.internal_context.interface import InternalContexting
 from hubofhubs.the_intelligence.subconscious.interface import Remembering
 from hubofhubs.the_intelligence.critical_thinking.response_quality.link_detect import MAX_LISTED_LINKS, links_in_message
 from .planner_prompt import DECLINED_PROPOSALS_NOTE
@@ -511,25 +511,33 @@ def gathered_content(gathered: List[Any]) -> List[Any]:
     return [o for o in (gathered or []) if not (isinstance(o, dict) and o.get("planner_only"))]
 
 
-@solution("remember-and-recall", kind="event", entry="recall", example="rust release")
+@solution("the-subconscious", kind="event", entry="recall", example="rust release")
 @typing.runtime_checkable
 class CardRecall(Remembering, typing.Protocol):
-    """What a request recalls: the hub's ``remember-and-recall`` interface (``recall``), which the loop also reads as its context
+    """What a request recalls: the hub's ``the-subconscious`` interface (``recall``), which the loop also reads as its context
     assembler (``assemble`` and ``record``)."""
 
 
-@implementation("remember-and-recall", "recency_window")
+@implementation("the-subconscious", "recency_window")
 class RecencyWindow:
-    """What a request recalls: the cards of the card store (``card-store``, taken as the hub's ``CardStore`` seat, since ``core`` imports
-    no area) that match its words, shown as the planner's context
-    view. ``recall`` answers a query with the matching cards; ``assemble`` renders the same cards as the pre-flight context the
-    loop reads; ``record`` has nothing to write back because the cards live in the store."""
+    """What a request recalls: the cards that match its words, read only through the hub's Internal Context (``internal-context``, taken as
+    the hub's ``InternalContexting`` seat, since ``core`` imports no area), which keeps them in QAR's card store, shown as the planner's
+    context view. ``recall`` answers a query with the matching cards; ``prepare`` is what the Mind is handed for a request: the same cards,
+    with a step for each part this arm does not run (Intuition has no arm yet, and choosing among files and cards is the loop's own
+    ``choose-the-context``); ``assemble`` renders the cards as the pre-flight context the loop reads; ``record`` has nothing to write back
+    because the cards live in the store."""
 
-    def __init__(self, cards: CardStore) -> None:
-        self.cards = cards
+    def __init__(self, internal: InternalContexting) -> None:
+        self.internal = internal
 
     def recall(self, query: str, limit: int = 5) -> Sequence[Card]:
-        return list(self.cards.search(query, limit))
+        return list(self.internal.read(query, limit))
+
+    def prepare(self, request: str, files: Optional[Mapping[str, str]] = None, budget_tokens: int = 4000) -> Mapping[str, Any]:
+        return {"cards": list(self.recall(request)), "offered": [], "pieces": [],
+                "steps": [{"solution": "the-intuition", "status": "pending", "reason": "no arm yet"},
+                          {"solution": "context-retriever", "status": "skipped",
+                           "reason": "this arm recalls kept cards; the files and cards a planner reads are chosen by choose-the-context"}]}
 
     def assemble(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event: Optional[Any] = None) -> AssembledContext:
         try:

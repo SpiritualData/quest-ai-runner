@@ -43,31 +43,31 @@ def test_every_declared_implementation_imports():
 
 
 def test_default_is_used_when_nothing_asks_for_another():
-    assert chosen_name("call-a-model") == default_name("call-a-model") == "multi_provider"
-    assert resolve("call-a-model").__name__ == "routed"
+    assert chosen_name("vendor-model-caller") == default_name("vendor-model-caller") == "multi_provider"
+    assert resolve("vendor-model-caller").__name__ == "routed"
 
 
 def test_precedence_is_name_then_override_then_default():
-    over = {"call-a-model": "claude_cli"}
-    assert resolve("call-a-model", overrides=over).__name__ == "ClaudeCliProvider"
-    assert resolve("call-a-model", "multi_provider", overrides=over).__name__ == "routed"
-    assert resolve("call-a-model", overrides={}).__name__ == "routed"
-    assert chosen_name("call-a-model", "  Claude_CLI ") == "claude_cli"
+    over = {"vendor-model-caller": "claude_cli"}
+    assert resolve("vendor-model-caller", overrides=over).__name__ == "ClaudeCliProvider"
+    assert resolve("vendor-model-caller", "multi_provider", overrides=over).__name__ == "routed"
+    assert resolve("vendor-model-caller", overrides={}).__name__ == "routed"
+    assert chosen_name("vendor-model-caller", "  Claude_CLI ") == "claude_cli"
 
 
 def test_the_environment_and_a_context_block_select_below_a_name(monkeypatch):
-    monkeypatch.setenv(runtime.env_name("call-a-model", resolve_mod.SCOPE), "claude_cli")
-    assert resolve("call-a-model").__name__ == "ClaudeCliProvider"
-    assert resolve("call-a-model", "multi_provider").__name__ == "routed"
-    monkeypatch.delenv(runtime.env_name("call-a-model", resolve_mod.SCOPE))
-    with runtime.override("call-a-model", "claude_cli", scope=resolve_mod.SCOPE):
-        assert resolve("call-a-model").__name__ == "ClaudeCliProvider"
+    monkeypatch.setenv(runtime.env_name("vendor-model-caller", resolve_mod.SCOPE), "claude_cli")
+    assert resolve("vendor-model-caller").__name__ == "ClaudeCliProvider"
+    assert resolve("vendor-model-caller", "multi_provider").__name__ == "routed"
+    monkeypatch.delenv(runtime.env_name("vendor-model-caller", resolve_mod.SCOPE))
+    with runtime.override("vendor-model-caller", "claude_cli", scope=resolve_mod.SCOPE):
+        assert resolve("vendor-model-caller").__name__ == "ClaudeCliProvider"
 
 
 def test_unknown_names_fail_loudly_with_the_choices():
     with pytest.raises(ValueError, match="choices: .*claude_cli"):
-        resolve("call-a-model", "nope")
-    with pytest.raises(ValueError, match="no implementation is selected.*call-a-model"):
+        resolve("vendor-model-caller", "nope")
+    with pytest.raises(ValueError, match="no implementation is selected.*vendor-model-caller"):
         resolve("not-a-solution")
 
 
@@ -75,10 +75,10 @@ def test_an_unknown_solution_with_a_name_lists_the_solutions_that_can_be_chosen(
     """A typo in the solution id is the likelier typo: the error says what exists instead of 'choices: none'."""
     for call in (lambda: resolve("not-a-solution", "x"), lambda: chosen_name("not-a-solution", "x"),
                  lambda: resolve("not-a-solution", overrides={"not-a-solution": "x"})):
-        with pytest.raises(ValueError, match=r"unknown solution 'not-a-solution'.*call-a-model.*run-deep-work"):
+        with pytest.raises(ValueError, match=r"unknown solution 'not-a-solution'.*run-deep-work.*vendor-model-caller"):
             call()
     with pytest.raises(ValueError, match="choices: .*claude_cli"):
-        resolve("call-a-model", "nope")
+        resolve("vendor-model-caller", "nope")
 
 
 def test_a_config_class_comes_with_runners_that_take_one():
@@ -88,7 +88,7 @@ def test_a_config_class_comes_with_runners_that_take_one():
 
 
 def test_register_adds_an_implementation_of_the_consumers_own():
-    register("search-the-web", "mine", "quest_ai_runner.know_the_world.web_search_backends:BraveBackend")
+    register("search-the-web", "mine", "quest_ai_runner.science.web_search_backends:BraveBackend")
     assert "mine" in names("search-the-web")
     assert resolve("search-the-web", "mine").__name__ == "BraveBackend"
     assert default_name("search-the-web") == "web_research"
@@ -99,9 +99,9 @@ def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_librar
     entry = runtime.entry_for("write-files", None, resolve_mod.SCOPE)
     saved = dict(entry.implementations)
     try:
-        register("write-files", "files", "quest_ai_runner.know_the_world.web_search_backends:BraveBackend")
+        register("write-files", "files", "quest_ai_runner.science.web_search_backends:BraveBackend")
         assert resolve("write-files", "files").__name__ == "BraveBackend"
-        import quest_ai_runner.act_as_the_body.files_writer  # noqa: F401  (the library's own declaration steps aside)
+        import quest_ai_runner.body.files_writer
         assert resolve("write-files", "files").__name__ == "BraveBackend"
     finally:
         entry.implementations.clear()
@@ -128,7 +128,7 @@ def test_model_provider_follows_the_declarations(monkeypatch):
 
 
 def test_search_backend_class_comes_from_the_declarations():
-    from quest_ai_runner.know_the_world.web_search_backends import BraveBackend, SerperBackend, select_search_backend
+    from quest_ai_runner.science.web_search_backends import BraveBackend, SerperBackend, select_search_backend
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper", "SERPER_API_KEY": "k"}), SerperBackend)
     assert isinstance(select_search_backend({"QAR_WEB_SEARCH_BACKEND": "brave", "BRAVE_API_KEY": "k"}), BraveBackend)
     assert select_search_backend({"QAR_WEB_SEARCH_BACKEND": "serper"}) is None      # key missing
@@ -201,7 +201,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
     code = (
         "import quest_ai_runner.core.resolve as r\n"
         f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
-        "assert r.default_name('call-a-model') == 'multi_provider'\n"
+        "assert r.default_name('vendor-model-caller') == 'multi_provider'\n"
         "assert r.resolve('search-the-web').__name__ == 'WebResearchAdapter'\n"
         "assert r.resolve('cache-cards').__name__ == 'FileCardCache'\n"
         "assert r.resolve('run-deep-work', 'acp').__name__ == 'AcpDeepRunner'\n"

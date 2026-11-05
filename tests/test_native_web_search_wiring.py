@@ -2,7 +2,7 @@
 
 Historically this was THE default: when the model provider reported supports_web_search(), a
 ProviderWebSearchAdapter was folded into the retrieval stack automatically. Since the fast
-WebResearch path landed (``cfg.web_research``, ``know_the_world/web_research.py``), that composite
+WebResearch path landed (``cfg.web_research``, ``science/web_research.py``), that composite
 fold-in is only a FALLBACK, reached only when ``build_web_research_from_env`` could not build an
 adapter (no backend key/config present at all). These tests isolate every backend-selection env
 var (search-provider keys, Gemini keys, QAR_WEB_SEARCH_BACKEND/_PROVIDER_MODEL) so the fast path
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from tests.conftest import StubProvider, StubRetrieval, StubEscalation
 from quest_ai_runner.config import RunnerConfig, build_orchestrator, derive_capabilities
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
 
 #: Every env var ``select_search_backend``/``build_web_research_from_env`` reads to decide a
 #: backend is available. Cleared in every test here so an ambient host key (e.g. a real

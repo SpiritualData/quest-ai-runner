@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .adapters import ClaudeConversationsAdapter, FilesAdapter
-from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from .body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from esoi import implementation, solution
 from hubofhubs.the_world.model_plumbing.model import ModelProvider
 from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
@@ -323,7 +323,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
 
     # Live web search is NOT folded in here: broadcasting it through CompositeRetrievalAdapter
     # would fire a paid, slow web search on every ordinary corpus grep/query. ``build_orchestrator``
-    # wires ``cfg.web_research`` separately (see ``know_the_world/web_research.build_web_research_from_env``),
+    # wires ``cfg.web_research`` separately (see ``science/web_research.build_web_research_from_env``),
     # reached only by the planner's own {"web": ...}/{"web_page": ...} read keys.
 
     # Add conversation search unless explicitly disabled. Two separate adapters:

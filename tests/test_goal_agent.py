@@ -53,16 +53,16 @@ def test_the_runner_answers_over_the_seats_it_is_given():
     cards = quest_ai_runner.run("card-store", arms={"card-store": "local_card_store"}, environ={})
     cards.add(Card(id="goal-1", text="Finish the book outline by Friday", tags=("book",)))
     answer = quest_ai_runner.run("quest-ai-runner", "What should I work on first this week?", environ={},
-                                 provided={"call-a-model": provider, "card-store": cards, "access-quest-operations": QuestStub()})
+                                 provided={"vendor-model-caller": provider, "card-store": cards, "access-quest-operations": QuestStub()})
     assert isinstance(answer, GoalAnswer) and answer.kind == "answer"
     assert "Start with the outline." in answer.text
     assert provider.answer_calls >= 1
 
 
 def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_solutions():
-    """The edges do-grounded-work -> call-a-model and -> remember-and-recall are typed needs on the composition: the model seat is
-    call-a-model's own interface (a subtype of the hub's, so a plain hub provider still fills it) and the recall seat is
-    remember-and-recall's own."""
+    """The edges do-grounded-work -> vendor-model-caller and -> the-subconscious are typed needs on the composition: the model seat is
+    vendor-model-caller's own interface (a subtype of the hub's, so a plain hub provider still fills it) and the recall seat is
+    the-subconscious's own."""
     import typing
     from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
     from hubofhubs.the_intelligence.subconscious.interface import Remembering
@@ -74,8 +74,9 @@ def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_s
     assert hints["memory"] is CardRecall and issubclass(CardRecall, Remembering)
 
 
-def test_the_step_reasoning_arm_takes_its_model_by_call_a_models_own_interface():
+def test_the_step_reasoning_arm_asks_no_model_of_its_own():
+    """The model asked at a tier is Model Plumbing's ``ask``; the Mind arm holds the parts of one step of the loop and the tier chooser."""
     import typing
-    from quest_ai_runner.area_reason_and_answer import RebuiltPerStep
-    from quest_ai_runner.providers import RoutedModelCalling
-    assert typing.get_type_hints(RebuiltPerStep.__init__)["model"] is RoutedModelCalling
+    from quest_ai_runner.area_mind import RebuiltPerStep
+    hints = typing.get_type_hints(RebuiltPerStep.__init__)
+    assert "model" not in hints and "tiers" in hints and not hasattr(RebuiltPerStep, "reason") and hasattr(RebuiltPerStep, "think")

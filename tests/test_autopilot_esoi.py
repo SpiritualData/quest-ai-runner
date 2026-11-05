@@ -1,6 +1,6 @@
 """The runner picks the Solution an autopilot run iterates and puts it in the brief (runner/autopilot_esoi.py)."""
 from quest_ai_runner.runner import autopilot_esoi as esoi
-from quest_ai_runner.think_critically.autopilot_briefs import compose_batch_text
+from quest_ai_runner.critical_thinking.autopilot_briefs import compose_batch_text
 
 
 def sol(rid, name, metrics=None, milestones="M1 do it"):

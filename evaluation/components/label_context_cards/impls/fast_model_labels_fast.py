@@ -4,7 +4,7 @@ and placement as ``fast_model_labels`` over a Gemini flash-lite model, so the do
 case, then the set, with ``--max-calls``."""
 PAID = True
 from quest_ai_runner.adapters import context_card_updater
-from quest_ai_runner.remember_and_recall import card_metadata_generator
+from quest_ai_runner.subconscious import card_metadata_generator
 from label_context_cards import arms
 import live_arm
 

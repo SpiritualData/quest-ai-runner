@@ -1,4 +1,4 @@
-"""Offline tests for evolve_by_metric, core_ml_tasks, know_the_world, act_in_the_world and think_critically: the case files are well
+"""Offline tests for evolve_by_metric, core_ml_tasks, know_the_world, claim_reach and think_critically: the case files are well
 formed, a scripted ideal (each case's own label replayed) passes every case, the floor and the live arm score as the records say,
 and the broken baseline fails. Each scorer is validated here before any row is recorded. No model call, no network.
 Run: .venv/bin/python3 -m pytest evaluation/components/test_world_components.py -q -p no:cacheprovider"""
@@ -27,7 +27,7 @@ def arm(name, spec):
 
 
 def test_case_files_have_unique_ids():
-    for name in ("evolve_by_metric", "core_ml_tasks", "know_the_world", "act_in_the_world", "think_critically"):
+    for name in ("evolve_by_metric", "core_ml_tasks", "know_the_world", "claim_reach", "think_critically"):
         found = cases(name)
         assert len({c["id"] for c in found}) == len(found) >= 8
 
@@ -65,17 +65,17 @@ def test_think_critically_live_arm_holds_deep_runs_and_nothing_else():
     assert not score.score_case(live, by_id["TCR-06"])["ok"]   # a chat turn passes through nothing
 
 
-def test_act_in_the_world_ideal_floor_and_broken_separate():
-    n = len(cases("act_in_the_world"))
-    live = passed("act_in_the_world", arm("act_in_the_world", "scripted_ideal"))
-    floor = passed("act_in_the_world", arm("act_in_the_world", "rules_only"))
-    broken = passed("act_in_the_world", arm("act_in_the_world", "act_in_the_world.broken.act_on_everything:build"))
+def test_claim_reach_ideal_floor_and_broken_separate():
+    n = len(cases("claim_reach"))
+    live = passed("claim_reach", arm("claim_reach", "scripted_ideal"))
+    floor = passed("claim_reach", arm("claim_reach", "rules_only"))
+    broken = passed("claim_reach", arm("claim_reach", "claim_reach.broken.act_on_everything:build"))
     assert live == n and floor < live and broken < floor
 
 
-def test_act_in_the_world_ids_point_at_end_to_end_cases():
+def test_claim_reach_ids_point_at_end_to_end_cases():
     known = {c["id"] for c in common.load_cases("end_to_end")}
-    assert all(c["source"] in known for c in cases("act_in_the_world"))
+    assert all(c["source"] in known for c in cases("claim_reach"))
 
 
 def test_know_the_world_ideal_live_floor_and_broken_separate():

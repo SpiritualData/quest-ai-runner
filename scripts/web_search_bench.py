@@ -262,7 +262,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("error: no queries to run (file had none under \"search\", or --queries was empty)", file=sys.stderr)
         return 2
 
-    from quest_ai_runner.know_the_world.web_research import build_web_research_from_env
+    from quest_ai_runner.science.web_research import build_web_research_from_env
 
     adapter = build_web_research_from_env()
     if adapter is None:

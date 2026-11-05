@@ -28,7 +28,7 @@ from .autopilot_periods import (
     select_period_goals,
 )
 from .autopilot_result import AutopilotResult
-from ..think_critically.autopilot_briefs import next_steps_from_pass, render_last_run_output, select_last_run_output
+from ..critical_thinking.autopilot_briefs import next_steps_from_pass, render_last_run_output, select_last_run_output
 
 
 class PassContextMixin:

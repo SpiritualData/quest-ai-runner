@@ -9,7 +9,7 @@ from pathlib import Path
 
 from quest_ai_runner.adapters import context_card_builder
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from quest_ai_runner.remember_and_recall.qar_topic_bootstrap import QarTopicBootstrap
+from quest_ai_runner.subconscious.qar_topic_bootstrap import QarTopicBootstrap
 from tests.fake_topic_provider import TopicProvider, write_corpus
 
 VOLATILE = {"mtime", "created_at", "last_verified_at", "origin", "completed_at", "store_id", "first_bootstrap_completed_at", "index_hash"}

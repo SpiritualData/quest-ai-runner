@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from quest_ai_runner.adapters import ClaudeConversationsAdapter, FilesAdapter
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
 
 
 def test_claude_conversation_detection():

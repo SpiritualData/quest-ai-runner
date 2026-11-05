@@ -427,14 +427,14 @@ class ModelRegistry:
         return self.top_models()[t]
 
 
-@solution("choose-a-model-tier", kind="event", entry="choose", example={"available": ["anthropic"]})
+@solution("model-tier-chooser", kind="event", entry="choose", example={"available": ["anthropic"]})
 @typing.runtime_checkable
 class RegistryTierSelection(TierSelection, typing.Protocol):
-    """QAR's tier chooser: the hub's ``choose-a-model-tier`` interface with QAR's bars (``TIER_MIN_CASES`` and ``TIER_MIN_PASS_RATE``)
+    """QAR's tier chooser: the hub's ``model-tier-chooser`` interface with QAR's bars (``TIER_MIN_CASES`` and ``TIER_MIN_PASS_RATE``)
     as its defaults, so a measured pick has to clear them before it replaces the live model list."""
 
 
-@implementation("choose-a-model-tier", "model_registry")
+@implementation("model-tier-chooser", "model_registry")
 class RegistryTiers:
     """The hub's tier selector asked with QAR's bars. ``choose`` returns ``{hub tier: {arm, reason, scored}}`` for the providers
     given; ``measured_picks`` is the same answer reduced to QAR's tiers, which ``ModelRegistry.selected`` applies to the live list."""

@@ -13,8 +13,8 @@ from hubofhubs.the_world.tools.web_search.cache import WebCache
 from hubofhubs.the_world.tools.web_search.fetch import UnsupportedContentTypeError, canonicalize_url
 from hubofhubs.the_world.tools.web_search.limiter import DailyLimiter
 from hubofhubs.the_world.tools.web_search.page_extract import estimate_tokens
-from quest_ai_runner.know_the_world.web_research import WebResearchAdapter, build_web_research_from_env
-from quest_ai_runner.know_the_world.web_search_backends import SearchBackendError, SearchHit, SearchResponse
+from quest_ai_runner.science.web_research import WebResearchAdapter, build_web_research_from_env
+from quest_ai_runner.science.web_search_backends import SearchBackendError, SearchHit, SearchResponse
 
 
 class FakeBackend:

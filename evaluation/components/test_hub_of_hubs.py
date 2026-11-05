@@ -29,7 +29,7 @@ def test_the_generated_doc_is_current():
 
 
 def test_doc_stays_bounded():
-    assert len((REPO / "docs" / "hub-of-hubs.md").read_text().splitlines()) <= 120
+    assert len((REPO / "docs" / "explanation" / "hub-of-hubs.md").read_text().splitlines()) <= 120
 
 
 def test_every_area_and_seat_has_every_check_that_applies_to_it_as_a_case():
@@ -121,7 +121,7 @@ def test_a_fake_hub_needs_configuration_and_no_core_edit():
 
 def test_the_world_is_one_aggregator_connection_with_no_per_app_entry():
     import hubofhubs
-    text = (Path(hubofhubs.__file__).parent / "examples" / "lane-world-hub.toml").read_text()
+    text = (Path(hubofhubs.__file__).resolve().parents[1] / "docs" / "reference" / "lane-world-hub.toml").read_text()
     assert text.count("[[mcp_servers]]") == 1 and "token_env" in text
     assert probes.world_hub()[0]
 

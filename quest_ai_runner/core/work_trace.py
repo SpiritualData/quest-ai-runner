@@ -34,11 +34,11 @@ from hubofhubs.the_consciousness.terminal.trace import WorkTrace, domain_of
 
 STEP_WEB, STEP_PAPERS, STEP_RECORDS, STEP_LINKS = "web", "papers", "records", "links"
 SOLUTION_WEB, SOLUTION_PAPERS, SOLUTION_RECORDS, SOLUTION_LINKS = (
-    "search-backend", "know-the-world", "context-assembler", "watch-for-risk")
+    "web-search", "the-science", "context-retriever", "nervous-system")
 LABEL_WEB, LABEL_PAPERS, LABEL_RECORDS, LABEL_LINKS = (
     "workTrace.web.reading", "workTrace.papers.searching", "workTrace.records.looking", "workTrace.links.checking")
 #: The answering step is only a liveness signal ("Putting the answer together"): its own kind, so no summary counts it.
-STEP_ANSWER, SOLUTION_ANSWER, LABEL_ANSWER = "answer", "call-a-model", "workTrace.answer.composing"
+STEP_ANSWER, SOLUTION_ANSWER, LABEL_ANSWER = "answer", "vendor-model-caller", "workTrace.answer.composing"
 SCHOLARLY_TOOL ="search_scientific_literature"
 RECORD_KINDS = ("quest", "reflection", "goal", "note")
 #: A conversation-history card is not one of the person's records.

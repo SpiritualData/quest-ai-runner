@@ -72,7 +72,7 @@ def production_inputs(point, index, sweep):
                     experiments=prose(740, 900), asked=prose(750, int(1500 * f)))
     if point == "deep_prompt":
         auto = production_inputs("autopilot_batch", index, sweep)
-        from quest_ai_runner.think_critically.autopilot_briefs import compose_batch_text
+        from quest_ai_runner.critical_thinking.autopilot_briefs import compose_batch_text
         brief = compose_batch_text(**auto)
         # standing preamble: doctrine, persona block, a few past-turn excerpts clipped to 600 chars,
         # vector and keyword hits (a few K), as the context engine renders them today
@@ -106,7 +106,7 @@ def build_inputs(case):
         quoted = ("Earlier pass result.\n\n" + block + "\n\n" + prose(600, 2000)) if big else prose(600, 2000)
         # the 16 quoted blocks of the incident: past runs nested one inside the next
         past = [_task(i, quoted) for i in range(16 if big else 1)]
-        from quest_ai_runner.think_critically.autopilot_briefs import render_last_run_output, select_last_run_output
+        from quest_ai_runner.critical_thinking.autopilot_briefs import render_last_run_output, select_last_run_output
         last = render_last_run_output(select_last_run_output(past))
         adopted = [dict(id=f"a{i}", text=("Do the weekly review.\n\n" + block) if big else "Do the weekly review.")
                    for i in range(6 if big else 1)]

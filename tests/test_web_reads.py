@@ -1,5 +1,5 @@
 """Fast, token-efficient LIVE WEB reads (part B of the feature; part A is
-``know_the_world/web_research.py`` and friends).
+``science/web_research.py`` and friends).
 
 This covers the GENERIC wiring and dispatch on the ``core``/``config`` side: the ``WebResearch``
 read keys (``{"web": ...}``, ``{"web_page": ...}``), the planner's WEB block and decide-schema
@@ -8,7 +8,7 @@ classification, the reach judge's web-aware "world" wording, and ``build_orchest
 ``cfg.web_research`` instead of folding a web-search adapter into the retrieval composite.
 
 Fully offline: a FAKE ``WebResearch`` object (matching the interface in
-``core/adapters_retrieval.WebResearch`` / ``know_the_world/web_research.WebResearchAdapter``), never the real
+``core/adapters_retrieval.WebResearch`` / ``science/web_research.WebResearchAdapter``), never the real
 backends (those are part A's own tests: ``test_web_search_backends.py``,
 ``test_web_cache.py``, ``test_web_page_extract.py``).
 """
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Union
 
-from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.know_the_world.provider_web_search_adapter import ProviderWebSearchAdapter
+from quest_ai_runner.body.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.science.provider_web_search_adapter import ProviderWebSearchAdapter
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.adapters_sinks import StreamSink
@@ -388,7 +388,7 @@ def test_build_orchestrator_wires_web_research_from_env_and_skips_legacy_fold_in
         return built
 
     monkeypatch.setattr(
-        "quest_ai_runner.know_the_world.web_research.build_web_research_from_env", fake_builder)
+        "quest_ai_runner.science.web_research.build_web_research_from_env", fake_builder)
     cfg = _runner_cfg()
     orch = build_orchestrator(cfg)
     assert cfg.web_research is built
@@ -407,7 +407,7 @@ def test_build_orchestrator_respects_an_already_set_web_research(monkeypatch):
         raise AssertionError("build_web_research_from_env must not be called when already set")
 
     monkeypatch.setattr(
-        "quest_ai_runner.know_the_world.web_research.build_web_research_from_env", fake_builder)
+        "quest_ai_runner.science.web_research.build_web_research_from_env", fake_builder)
     cfg = _runner_cfg(web_research=mine)
     orch = build_orchestrator(cfg)
     assert orch.web is mine

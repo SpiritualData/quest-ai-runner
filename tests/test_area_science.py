@@ -1,9 +1,9 @@
-"""The know-the-world area: its ids answer offline by the strict definition, and the area hands each line to the web member."""
+"""The the-science area: its ids answer offline by the strict definition, and the area hands each line to the web member."""
 import pytest
 from esoi.entry import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.know_the_world.area import KnowingTheWorld
+from quest_ai_runner.science.area import KnowingTheWorld
 
 
 def strict_outcome(solution_id):
@@ -14,7 +14,7 @@ def strict_outcome(solution_id):
     return "pending"
 
 
-@pytest.mark.parametrize("solution_id", ("know-the-world", "search-the-web"))
+@pytest.mark.parametrize("solution_id", ("the-science", "search-the-web"))
 def test_each_id_of_the_area_pends_on_the_search_key_offline(solution_id):
     assert strict_outcome(solution_id) == "pending"
 

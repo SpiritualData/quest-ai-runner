@@ -1,6 +1,6 @@
 """Offline tests for the single-case arms that run a REAL edge instead of a stand-in: a real child process for the deep runner, a real MCP
 server process for write-through-mcp and the OpenClaw channel, the installed console script for the terminal, and the live-model arm of
-act-in-the-world (never run here). Each real arm must pass its component's whole case set, and a broken variant must fail where the
+claim-reach (never run here). Each real arm must pass its component's whole case set, and a broken variant must fail where the
 real edge is the only thing that can tell. No model call, no network. Run:
 .venv/bin/python3 -m pytest evaluation/components/test_real_single_case_arms.py -q -p no:cacheprovider"""
 import json
@@ -100,9 +100,9 @@ def test_real_console_script_exits_with_a_real_code_and_prints_to_a_real_stream(
     assert bad["exit"] != 0   # broken baseline: a command that does not exist must not exit zero
 
 
-def test_live_model_arm_of_act_in_the_world_is_paid_and_scored_by_the_components_rule():
-    path = HERE / "act_in_the_world" / "impls" / "live_model.py"
+def test_live_model_arm_of_claim_reach_is_paid_and_scored_by_the_components_rule():
+    path = HERE / "claim_reach" / "impls" / "live_model.py"
     assert harness.declares_paid(path)
     assert harness.declares_paid(HERE / "end_to_end" / "impls" / "qar_live.py")
-    from act_in_the_world import score
-    assert score.score_case.__module__ == "act_in_the_world.score"
+    from claim_reach import score
+    assert score.score_case.__module__ == "claim_reach.score"

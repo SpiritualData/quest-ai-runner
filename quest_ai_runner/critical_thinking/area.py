@@ -1,12 +1,13 @@
-"""``think-critically``: every request is held to the metric that serves it, and what is said is held to what is known.
+"""``critical-thinking``: every request is held to the metric that serves it, and what is said is held to what is known.
 
-The area arm ``deep_runs_only`` takes the area's members as typed seats and offers the area's one line, ``hold(case)``: the metric rows
-the code kept for one request after the flow ran, by the code that holds a deep goal to its metric (``GoalMetrics`` over an in-memory
-ledger and the case's true readings). The members are the way a goal iterates by its specification (``iterate-by-spec``, with the
-records ``spec-selection`` picks), the judges of narrow questions (``judge-a-decision``), the guard of a reply (``guard-a-reply``), the
-grounding of work in the person's intent (``ground-in-intent``), the check that a run is stalled (``detect-a-stalled-run``), the draft of
-a missing metric (``draft-a-metric``) and the gates of a background pass (``gate-an-autopilot-pass``). Members the line does not need are
-built on first use.
+The area arm ``deep_runs_only`` takes the area's members as typed seats and offers the hub's two lines, ``translate(request)`` (the target a
+request is held to: the metric the spec slice names for it) and ``evaluate(request, ...)`` (what the code kept after the flow ran), beside
+QAR's own line ``hold(case)``: the metric rows the code kept for one request, by the code that holds a deep goal to its metric
+(``GoalMetrics`` over an in-memory ledger and the case's true readings). The members are the way a goal iterates by its specification
+(``iterate-by-spec``, with the records ``spec-selection`` picks), the judges of narrow questions (``judge-a-decision``), the guard of a reply
+(``guard-a-reply``), the grounding of work in the person's intent (``ground-in-intent``), the check that a run is stalled
+(``detect-a-stalled-run``), the draft of a missing metric (``draft-a-metric``) and the gates of a background pass (``gate-an-autopilot-pass``).
+Members the line does not need are built on first use.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from esoi.metric_meter import AFTER, BEFORE
 from esoi.spec_slice import SpecSlice
 from hubofhubs.the_self.assembler import arm_needs as needs
 from hubofhubs.the_intelligence.critical_thinking.goal_completion import sufficiency
+from hubofhubs.the_intelligence.critical_thinking.interface import CriticalThinking
 from hubofhubs.the_intelligence.critical_thinking.response_quality.link_detect import links_in_message
 from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import LinkGuard, LinkPolicy
 from hubofhubs.the_world.tools.delegated_agent_sessions.contract import DEEP_REVIEW_PROMPT, SubprocessConfig, parse_deep_review
@@ -224,16 +226,17 @@ class LivePass:
         return {"outcome": "ran", "text": ""}
 
 
-@solution("think-critically", kind="event", entry="hold",
-          example={"kind": "deep", "has_metric": True, "changed": True, "before": 0.4, "after": 0.6})
+@solution("critical-thinking", kind="event", entry="evaluate",
+          example={"request": "Ship the launch note", "outcome": {"kind": "deep", "has_metric": True, "changed": True, "before": 0.4, "after": 0.6}})
 @typing.runtime_checkable
-class MetricHolding(typing.Protocol):
-    """Holds a request to the metric that serves it: the rows of its reading before and after that the code kept, whether a change ended with none."""
+class MetricHolding(CriticalThinking, typing.Protocol):
+    """The hub's ``critical-thinking`` interface (translate a request into a target, evaluate the outcome against it) and QAR's line that holds
+    a request to the metric that serves it: the rows of its reading before and after that the code kept, whether a change ended with none."""
 
     def hold(self, case: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
 
-@implementation("think-critically", "deep_runs_only")
+@implementation("critical-thinking", "deep_runs_only")
 class DeepRunsOnly:
     """Around every deep goal the slice is found, the metric is read before and after by the runner's meters and the rows go to the ledger;
     a changed run with nothing on record is marked missing. ``hold`` returns that record for one request; the other methods hand a question
@@ -247,6 +250,23 @@ class DeepRunsOnly:
 
     def hold(self, case: Mapping[str, Any]) -> Mapping[str, Any]:
         return hold_case(case)
+
+    def translate(self, request: str, parent: Optional[Mapping[str, Any]] = None) -> Mapping[str, Any]:
+        """The target a request is held to: the metric of the spec slice found for it, or none when no specification serves it."""
+        found = self.iteration.slice_for(request, None)
+        target = {"solution_id": found.solution_id, "metric_id": found.metric_id, "metric_name": found.metric_name} if found else None
+        return {"target": target, "steps": []}
+
+    def evaluate(self, request: str, response: str = "", target: Optional[Mapping[str, Any]] = None, evidence: str = "",
+                 representative: Optional[Mapping[str, Any]] = None, guidance: Optional[Mapping[str, Any]] = None,
+                 priorities: Optional[Mapping[str, Any]] = None, outcome: Optional[Any] = None) -> Mapping[str, Any]:
+        """What the code kept after the flow ran, when ``outcome`` is the case of the run (see ``hold``): the metric rows, and a finding when a
+        change ended with none. A reply is guarded in the reply path (``guard-a-reply``), so no finding about it is made here."""
+        if not isinstance(outcome, Mapping):
+            return {"profile": "quest-ai-runner", "goal": None, "findings": [], "steps": []}
+        held = hold_case(outcome)
+        findings = ["a change landed with no metric reading on record"] if held["missing"] else []
+        return {"profile": "quest-ai-runner", "goal": {"met": not held["missing"], "rows": held["rows"]}, "findings": findings, "steps": []}
 
     def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
         return self.iteration.slice_for(request, working_dir)

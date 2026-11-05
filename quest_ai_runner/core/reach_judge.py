@@ -222,7 +222,7 @@ def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000
     blank line the unchanged, web-off rendering has always had.
     """
     return render_prompt(
-        "act-in-the-world.reach-judge",
+        "claim-reach.reach-judge",
         reach_summary=reach_summary.strip(), message=clip_keeping_ends(message or "", max_message_chars),
         web_note=("\n" + WEB_REACH_NOTE + "\n") if web_configured else "")
 
@@ -277,5 +277,5 @@ def parse_judge_text(text: Any) -> Optional[Dict[str, Any]]:
 
 
 REACH_JUDGE_SPEC = declare(
-    "act-in-the-world.reach-judge", solution="claim-reach", metric="metric-claim-reach",
+    "claim-reach.reach-judge", solution="claim-reach", metric="metric-claim-reach",
     tier="caller", cache_layer="none", template=REACH_JUDGE_PROMPT)

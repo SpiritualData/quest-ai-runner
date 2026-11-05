@@ -9,7 +9,7 @@ existed that could go and read it.
 """
 from datetime import datetime, timezone
 
-from quest_ai_runner.act_as_the_body.quest_retrieval_adapter import QuestRetrievalAdapter
+from quest_ai_runner.body.quest_retrieval_adapter import QuestRetrievalAdapter
 from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
 from quest_ai_runner.runner.reflections import ReflectionContext, collect_reflections
 

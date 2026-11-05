@@ -6,7 +6,7 @@ import json
 import pytest
 
 from quest_ai_runner.adapters.files_server import NOT_ALLOWED, FileOperations
-from quest_ai_runner.act_as_the_body.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.body.remote_files_adapter import RemoteFilesAdapter
 
 
 @pytest.fixture()

@@ -188,7 +188,7 @@ def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
         return []
     runners: List[Any] = []
     try:
-        from .act_as_the_body.mcp_write_adapter import MCPWriteAdapter
+        from .body.mcp_write_adapter import MCPWriteAdapter
         from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
 
         registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)

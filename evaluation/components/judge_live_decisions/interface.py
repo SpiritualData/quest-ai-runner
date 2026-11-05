@@ -1,4 +1,4 @@
-"""The live-judge function (the model-decided half of ``judge-a-decision`` and the reach judge of ``act-in-the-world``).
+"""The live-judge function (the model-decided half of ``judge-a-decision`` and the reach judge of ``claim-reach``).
 Every solution is ONE function:
 
     judge(kind: str, args: dict) -> dict

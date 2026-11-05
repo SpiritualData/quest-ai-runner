@@ -1,4 +1,4 @@
-"""Offline tests for the ACP deep runner (``act_as_the_body/acp_deep_runner.py``).
+"""Offline tests for the ACP deep runner (``body/acp_deep_runner.py``).
 
 Fully offline by construction: the optional ``agent-client-protocol`` package is never imported,
 no Node process is spawned, no Claude auth is touched, and nothing goes near a socket. The adapter
@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hubofhubs.the_world.tools.delegated_agent_sessions import acp_runner as hub_acp_runner
-from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
+from quest_ai_runner.body import acp_deep_runner as acp
 from hubofhubs.the_world.tools.delegated_agent_sessions import acp_config
 from hubofhubs.the_world.tools.deep import DeepRunner
 from hubofhubs.the_world.tools.events import EVENT_EXEC
