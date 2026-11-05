@@ -75,3 +75,4 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | the-intelligence-diagram | `the-intelligence-diagram` | the_intelligence | The generated solution diagram of Intelligence | the-intelligence |
 | the-consciousness-ways-in | `the-consciousness-ways-in` | the_consciousness | The ways a request comes in, handed to one router | quest-requests, take-in-the-world |
 | the-consciousness-prioritization | `the-consciousness-prioritization` | the_consciousness | QAR's code for prioritization (the consciousness) | prioritization |
+| the-consciousness-interface | `the-consciousness-interface` | the_consciousness | The interfaces of Quest Consciousness and Hand Off A Goal | quest-consciousness, hand-off-a-goal |

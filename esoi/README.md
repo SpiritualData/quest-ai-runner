@@ -45,7 +45,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Quest Body | `quest-body` | `quest_ai_runner.run("quest-body", 'quest-id')` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
 | Intelligence | `the-intelligence` | no entry declared | `composition` | none yet |
 | World | `the-world` | no entry declared | `composition` | none yet |
-| Quest Consciousness | `quest-consciousness` | no entry declared | `composition` | Quest Consciousness on Quest cases |
+| Quest Consciousness | `quest-consciousness` | `quest_ai_runner.run("quest-consciousness", 'team-1')` | `composition` | Quest Consciousness on Quest cases |
 
 ## Solutions from a library
 

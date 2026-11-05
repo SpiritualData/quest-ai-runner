@@ -46,10 +46,10 @@ Let each Quest user grow with an AI aligned to them.
 
 - Out of scope: How each of those does its job.
 - Delegates to: quest-requests, quest-representatives, quest-decision-requests, intent-evolution, feedback-learning
-- Entry call: no entry declared
+- Entry call: `quest_ai_runner.run("quest-consciousness", 'team-1')`
 - Selected implementation: `composition`
 - Metric: Quest Consciousness on Quest cases
-- Implemented by: [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py)
+- Implemented by: [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py), [`quest_ai_runner/the_consciousness/interface.py`](the_consciousness/interface.py)
 
 ## One level below
 

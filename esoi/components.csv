@@ -69,3 +69,4 @@ the-consciousness-diagram,the_consciousness,quest_ai_runner/the_consciousness/di
 the-intelligence-diagram,the_intelligence,quest_ai_runner/the_intelligence/diagram.md,The generated solution diagram of Intelligence,the-intelligence
 the-consciousness-ways-in,the_consciousness,quest_ai_runner/the_consciousness/ways_in.py,"The ways a request comes in, handed to one router",quest-requests;take-in-the-world
 the-consciousness-prioritization,the_consciousness,quest_ai_runner/the_consciousness/prioritization/*.py,QAR's code for prioritization (the consciousness),prioritization
+the-consciousness-interface,the_consciousness,quest_ai_runner/the_consciousness/interface.py,The interfaces of Quest Consciousness and Hand Off A Goal,quest-consciousness;hand-off-a-goal
