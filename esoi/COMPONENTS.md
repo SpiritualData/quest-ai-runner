@@ -67,3 +67,11 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | the-consciousness-container | `the-consciousness-container` | the_consciousness | The the consciousness container of QAR | quest-self |
 | package-folders | `package-folders` | the_self | Folders of QAR that hold only sub-folders | quest-self |
 | the-consciousness-intent-evolution | `the-consciousness-intent-evolution` | the_consciousness | QAR's code for intent evolution (the consciousness) | intent-evolution |
+| the-consciousness-flow | `the-consciousness-flow` | the_consciousness | The composition of Quest Consciousness | quest-consciousness |
+| the-intelligence-flow | `the-intelligence-flow` | the_intelligence | The composition of Intelligence | the-intelligence |
+| the-world-flow | `the-world-flow` | the_world | The composition of World | the-world |
+| the-body-diagram | `the-body-diagram` | the_body | The generated solution diagram of Quest Body | quest-body |
+| the-intelligence-diagram | `the-intelligence-diagram` | the_intelligence | The generated solution diagram of Intelligence | the-intelligence |
+| the-intelligence-objectives-diagram | `the-intelligence-objectives-diagram` | the_intelligence | The generated solution diagram of Quest Intents | quest-intents |
+| the-intelligence-subconscious-diagram | `the-intelligence-subconscious-diagram` | the_intelligence | The generated solution diagram of Subconscious | the-subconscious |
+| the-consciousness-ways-in | `the-consciousness-ways-in` | the_consciousness | The ways a request comes in, handed to one router | quest-requests |

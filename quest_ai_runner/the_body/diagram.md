@@ -10,12 +10,9 @@ An arrow runs from the solution that provides to the solution that builds on it;
 flowchart LR
     s0["Delegated Agent Sessions<br/><i>delegated-agent-sessions</i>"]
     s1["File Editing<br/><i>file-editing</i>"]
-    s2["Quest Body<br/><i>quest-body</i>"]
-    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s0 --> s3
-    s1 --> s3
-    s2 --> s3
-    s2 --> s4
-    s4 -->|"The change made and the state read back"| s3
+    s2["Quest Account Truth<br/><i>quest-account-truth</i>"]
+    s3["Quest Change Executor<br/><i>quest-change-executor</i>"]
+    s0 --> s2
+    s1 --> s2
+    s3 -->|"The change made and the state read back"| s2
 ```

@@ -26,7 +26,7 @@ flowchart LR
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
 | Intuition | `the-intuition` | `quest_ai_runner.run("the-intuition", 'quest-id')` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
-| Long-Term Memory | `long-term-memory` | `quest_ai_runner.run("long-term-memory", 'quest-id')` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases, Warm-start accuracy with no cross-work-item leakage |
+| Long-Term Memory | `long-term-memory` | `quest_ai_runner.run("long-term-memory", ...)` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases, Warm-start accuracy with no cross-work-item leakage |
 | Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Repeat-correction recall and precision over feedback sequences, Correction carry-through over the feedback-loop cases |
 | Quest Representatives | `quest-representatives` | `quest_ai_runner.run("quest-representatives", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Hand-offs a person keeps per unit of cost and time, Representative choice accuracy and thread consistency |
 

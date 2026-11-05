@@ -14,12 +14,7 @@ Quest Consciousness is where the assistant adapts to the person it works for and
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Quest Consciousness | `quest-consciousness` | no entry declared | none selected | Quest Consciousness on Quest cases |
 | Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | none selected | Intent evolution: the most likely option or a checkable experiment |
-
-## Solutions from a library
-
-- [Consciousness](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-consciousness`): The humans who interact with the system: AI Representatives act for a person, Prioritization turns the person's priorities into ESOI, Judgment Calls decide when to ask that person, and Feedback Learning applies the person's feedback to specs and metrics. Specializes the library `hub`.
 
 ## Problems and ideals
 
@@ -60,7 +55,6 @@ Quest Consciousness is where the assistant adapts to the person it works for and
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Quest Consciousness | `quest-consciousness` | none selected | Quest Consciousness on Quest cases |
 | Intent Evolution | `intent-evolution` | none selected | Intent evolution: the most likely option or a checkable experiment |
 
 ### Implementations
@@ -70,6 +64,7 @@ Quest Consciousness is where the assistant adapts to the person it works for and
 | Task poller and claimer | `quest-requests:poller` | [quest_ai_runner/the_consciousness/request_intake/poller.py](request_intake/poller.py) |  |
 | Single-task executor | `quest-requests:executor` | [quest_ai_runner/the_consciousness/request_intake/executor.py](request_intake/executor.py) |  |
 | Shared lane entry point | `quest-requests:lane` | [quest_ai_runner/the_consciousness/request_intake/lane.py](request_intake/lane.py) |  |
+| Channels, terminal and package as ways in | `quest-requests:ways_in` | [quest_ai_runner/the_consciousness/ways_in.py](ways_in.py) | [request_intake](request_intake/README.md) |
 | Configured persona resolver | `quest-requests:personas` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
 
 ### Metrics

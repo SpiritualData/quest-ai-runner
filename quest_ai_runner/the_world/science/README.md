@@ -14,7 +14,7 @@ Science answers what lies beyond a person's own material from public research, w
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Web Search | `web-search` | `quest_ai_runner.run("web-search", 'latest Rust release')` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
+| Web Search | `web-search` | `quest_ai_runner.run("web-search", 'latest Rust release')` | Gemini grounded search backend (`gemini`) | Right-passage rate and search spend over public factual questions |
 
 ## Solutions from a library
 
@@ -38,13 +38,13 @@ Science answers what lies beyond a person's own material from public research, w
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Web Search | `web-search` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
+| Web Search | `web-search` | Gemini grounded search backend (`gemini`) | Right-passage rate and search spend over public factual questions |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Snippet-first research with page extraction | `web-search:web_research` | [quest_ai_runner/the_world/tools/web_search/web_research.py](../tools/web_search/web_research.py) |  |
+| Snippet-first research with page extraction | `the-science:web_research` | [quest_ai_runner/the_world/tools/web_search/web_research.py](../tools/web_search/web_research.py) |  |
 | Model-native search | `web-search:provider_web_search` | [quest_ai_runner/the_world/tools/web_search/provider_web_search_adapter.py](../tools/web_search/provider_web_search_adapter.py) |  |
 | Pluggable search backends with fallback | `web-search:serper` | [quest_ai_runner/the_world/tools/web_search/web_search_backends.py](../tools/web_search/web_search_backends.py) |  |
 | Brave search backend | `web-search:brave` | [quest_ai_runner/the_world/tools/web_search/web_search_backends.py](../tools/web_search/web_search_backends.py) |  |

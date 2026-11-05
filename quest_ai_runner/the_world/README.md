@@ -4,7 +4,7 @@ The AI system optimally learns and interacts with the world outside of it.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Models, search backends and tools change faster than the assistant does, so reaching them through one measured path lets the best one run as they move.
+This sub-intent arises as the implementation `the-world:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Models, search backends and tools change faster than the assistant does, so reaching them through one measured path lets the best one run as they move.
 
 ## How the solutions fit together
 

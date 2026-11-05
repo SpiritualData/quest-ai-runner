@@ -28,13 +28,20 @@ flowchart LR
     s9["Tools<br/><i>the-tools</i>"]
     s10["Quest Context<br/><i>quest-context</i>"]
     s11["Quest Requests<br/><i>quest-requests</i>"]
+    s12["Quest Self<br/><i>quest-self</i>"]
+    s13["Quest Body<br/><i>quest-body</i>"]
     s0 --> s11
+    s0 --> s12
     s1 --> s9
     s1 --> s11
+    s2 --> s12
     s3 --> s0
     s3 --> s2
     s3 --> s9
     s3 --> s11
+    s3 --> s12
+    s4 --> s12
+    s5 --> s12
     s6 --> s2
     s6 --> s5
     s7 --> s0
@@ -43,19 +50,26 @@ flowchart LR
     s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
     s10 -->|"Evidence from the person's own sources, with where each item came from"| s11
     s11 -->|"The request taken in once and its outcome reported"| s5
+    s11 -->|"The request taken in once and its outcome reported"| s12
+    s12 -->|"The assistant's answer and the changes it made"| s9
+    s13 --> s8
+    s13 --> s11
+    s13 --> s12
 ```
 
 ## Intelligence (`the-intelligence`)
 
 - Entry call: no entry declared
-- Selected implementation: none selected
+- Selected implementation: `composition`
 - Metric: none yet
+- Implemented by: [`quest_ai_runner/the_intelligence/flow.py`](the_intelligence/flow.py)
 
 ## World (`the-world`)
 
 - Entry call: no entry declared
-- Selected implementation: none selected
+- Selected implementation: `composition`
 - Metric: none yet
+- Implemented by: [`quest_ai_runner/the_world/flow.py`](the_world/flow.py)
 
 ## Critical Thinking (`critical-thinking`)
 
@@ -76,7 +90,7 @@ flowchart LR
 - Entry call: `quest_ai_runner.run("response-quality", 'See https://example.org/a for details.')`
 - Selected implementation: Production guard engines under test (`qar_guards`)
 - Metric: Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies
-- Implemented by: [`evaluation/components/esoi_judge/impls/model_judge.py`](../evaluation/components/esoi_judge/impls/model_judge.py), [`evaluation/components/esoi_judge/impls/regex_only.py`](../evaluation/components/esoi_judge/impls/regex_only.py), [`quest_ai_runner/prompts/evolvable_structure.md`](prompts/evolvable_structure.md), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/goal_iteration.py`](the_intelligence/critical_thinking/goal_iteration.py), [`quest_ai_runner/the_intelligence/critical_thinking/interface.py`](the_intelligence/critical_thinking/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/response_quality/__init__.py`](the_intelligence/critical_thinking/response_quality/__init__.py) and 51 more
+- Implemented by: [`evaluation/components/esoi_judge/impls/model_judge.py`](../evaluation/components/esoi_judge/impls/model_judge.py), [`evaluation/components/esoi_judge/impls/regex_only.py`](../evaluation/components/esoi_judge/impls/regex_only.py), [`quest_ai_runner/prompts/evolvable_structure.md`](prompts/evolvable_structure.md), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/goal_iteration.py`](the_intelligence/critical_thinking/goal_iteration.py), [`quest_ai_runner/the_intelligence/critical_thinking/interface.py`](the_intelligence/critical_thinking/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/response_quality/__init__.py`](the_intelligence/critical_thinking/response_quality/__init__.py) and 50 more
 
 ## Higher Mind (`higher-mind`)
 
@@ -86,7 +100,7 @@ flowchart LR
 
 ## Guidance (`guidance`)
 
-- Entry call: `quest_ai_runner.run("guidance", 'What should I work on first this week?')`
+- Entry call: `quest_ai_runner.run("guidance", 'quest-id')`
 - Selected implementation: Computed frame in the prompt (`frame-line`)
 - Metric: Intent-grounded pass rate, Two-sided long-term guidance
 - Implemented by: [`quest_ai_runner/the_body/hands/quest_operations/tools_quest_intents.py`](the_body/hands/quest_operations/tools_quest_intents.py), [`quest_ai_runner/the_body/internal_context/quest/client/quest_client_intents.py`](the_body/internal_context/quest/client/quest_client_intents.py), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/__init__.py`](the_intelligence/critical_thinking/esoi_application/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py`](the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py`](the_intelligence/critical_thinking/esoi_application/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/repo_specs.py`](the_intelligence/critical_thinking/esoi_application/repo_specs.py) and 67 more
@@ -114,7 +128,34 @@ Take every request made in Quest in once, through the same AI, and report its ou
 - Entry call: `quest_ai_runner.run("quest-requests", 'team-1')`
 - Selected implementation: Offline lifecycle harness (`qar_runner`)
 - Metric: Task lifecycle correctness over offline cases, Exactly-once mid-run delivery per run, and how fast it is seen, Answer pass rate gained per image described, Ways in that pass their own metric
-- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 161 more
+- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 162 more
+
+## Quest Self (`quest-self`)
+
+Make each Quest user meet one whole assistant whose parts agree, so that a part passing its own test cannot hide a failure that the person finds out about.
+
+- Entry call: `quest_ai_runner.run("quest-self", 'What should I work on first this week?')`
+- Selected implementation: quest-ai-runner library (`library`)
+- Metric: Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 1030 more
+
+## Quest Body (`quest-body`)
+
+Give the assistant one declared place where a person's Quest data lives and where requests come from.
+
+- Entry call: `quest_ai_runner.run("quest-body", 'quest-id')`
+- Selected implementation: Quest HTTP client from the environment (`quest_client`)
+- Metric: Parity of Quest operations across access points
+- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/internal_context/quest/__init__.py`](the_body/internal_context/quest/__init__.py), [`quest_ai_runner/the_body/internal_context/quest/cached_db_adapter.py`](the_body/internal_context/quest/cached_db_adapter.py), [`quest_ai_runner/the_body/internal_context/quest/interface.py`](the_body/internal_context/quest/interface.py), [`quest_ai_runner/the_body/internal_context/quest/quest_retrieval_adapter.py`](the_body/internal_context/quest/quest_retrieval_adapter.py)
+
+## Quest Consciousness (`quest-consciousness`)
+
+Let each Quest user grow with an AI aligned to them.
+
+- Entry call: no entry declared
+- Selected implementation: `composition`
+- Metric: Quest Consciousness on Quest cases
+- Implemented by: [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py)
 
 ## Diagram
 
@@ -126,14 +167,33 @@ flowchart LR
     s1["Goal Completion<br/><i>goal-completion</i>"]
     s2["Response Quality<br/><i>response-quality</i>"]
     s3["guidance"]
-    s4["Quest Context<br/><i>quest-context</i>"]
-    s5["Quest Requests<br/><i>quest-requests</i>"]
+    s4["Tools<br/><i>the-tools</i>"]
+    s5["Quest Context<br/><i>quest-context</i>"]
+    s6["Quest Requests<br/><i>quest-requests</i>"]
+    s7["Quest Self<br/><i>quest-self</i>"]
+    s8["Quest Body<br/><i>quest-body</i>"]
+    s0 --> s7
     s1 --> s0
     s2 --> s0
     s3 --> s0
-    s4 -->|"Evidence from the person's own sources, with where each item came from"| s5
-    s5 -->|"The request taken in once and its outcome reported"| s0
+    s5 -->|"Evidence from the person's own sources, with where each item came from"| s6
+    s6 -->|"The request taken in once and its outcome reported"| s0
+    s6 -->|"The request taken in once and its outcome reported"| s7
+    s7 -->|"The assistant's answer and the changes it made"| s4
+    s8 --> s3
+    s8 --> s6
+    s8 --> s7
 ```
+
+## Implementations
+
+| Implementation | Handle | Code | Selected |
+|---|---|---|---|
+| quest-ai-runner library | `quest-self:library` | [`quest_ai_runner/the_self/respond.py`](the_self/respond.py) | selected |
+| Quest HTTP client from the environment | `quest-body:quest_client` | [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py) | selected |
+| Composition | `quest-consciousness:composition` | [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py) | selected |
+| Composition | `the-intelligence:composition` | [`quest_ai_runner/the_intelligence/flow.py`](the_intelligence/flow.py) | selected |
+| Composition | `the-world:composition` | [`quest_ai_runner/the_world/flow.py`](the_world/flow.py) | selected |
 
 ## Metrics
 
@@ -142,6 +202,7 @@ flowchart LR
 - Retrieval recall of the right document over handbook questions (`metric-gather-evidence`): leader `composite`, 19 of 21 cases
 - Combined world score (`metric-claim-reach`): leader `scripted_ideal`, 12 of 12 cases
 - Ways in that pass their own metric (`metric-take-in-the-world`)
+- Parity of Quest operations across access points (`metric-quest-operations-parity`)
 
 ## Problems
 
@@ -149,6 +210,7 @@ flowchart LR
 - Unreliable Help With The App (`prob-app-help-unreliable`): Questions about how to use Quest, or what its AI can do for the person, are answered from guesses instead of the product's documentation and actual reach: the AI describes a capability it does not have, or says it cannot do something it can.
 - Lost Or Unreported Tasks (`QP1`): Quest tasks attached to goals can be lost, run twice, or end without an outcome the person sees.
 - Different Answers On Different Surfaces (`QP4`): The same request can get a different answer depending on the Quest surface it came from.
+- Different Science Evidence In Two Chats (`prob-science-search-duplicates-research-chat`): One science question can get different evidence in Quest chat than in Quest's research chat.
 
 ## Ideals
 
@@ -157,6 +219,7 @@ flowchart LR
 - Right Representative (`ideal-right-rep`): Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
 - Dependable Delivery (`ideal-dependable-delivery`): What is handed to the system arrives once, in order, and is accounted for.
 - Same Assistant Everywhere (`QI4`): A person gets the same assistant, with the same answer to the same request, on every Quest surface.
+- Consistent Science Evidence (`ideal-science-through-one-search`): A science question gets the same evidence, weighed the same way, in Quest chat and in the research chat.
 
 ## Where to go next
 

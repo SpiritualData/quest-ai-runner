@@ -14,7 +14,7 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Planner | `planner` | `quest_ai_runner.run("planner", 'Add a note that the launch moves to Friday')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Fast-path hit rate and parity with the planner-only path, Accuracy of core ML tasks over labelled cases |
+| Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Fast-path hit rate and parity with the planner-only path, Accuracy of core ML tasks over labelled cases |
 
 ## Solutions from a library
 

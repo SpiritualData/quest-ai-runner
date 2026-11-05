@@ -14,13 +14,11 @@ Quest Self keeps the parts of the assistant working as one whole for each Quest 
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Model Plumbing | `model-plumbing` | no entry declared | Registered prompt specs with an enforcement test (today) (`spec_registry`) | Cost, budget and resource-guard correctness, Justified share of model spend, Justified model spend |
-| Quest Self | `quest-self` | `quest_ai_runner.run("quest-self", 'What should I work on first this week?')` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
+| Model Plumbing | `model-plumbing` | no entry declared | Via vendor (`via_vendor`) | Cost, budget and resource-guard correctness, Justified share of model spend, Justified model spend |
 
 ## Solutions from a library
 
 - [Model Plumbing](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/README.md) (`model-plumbing`): The one measured path every part uses to ask a model: the Model Tier Chooser picks the model for a tier and the Vendor Model Caller reaches the vendor and steps to the next provider when one fails. Adopted from the library `hub`.
-- [The Self](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-self`): Keeps the five kinds of part working as one whole: the Assembler builds them and reports the coverage, Integrity keeps the whole honest and generic and audits the run record, and Role Understanding says what each part is for. Specializes the library `hub`.
 
 ## Metrics and their leaders
 
@@ -50,16 +48,16 @@ Quest Self keeps the parts of the assistant working as one whole for each Quest 
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Model Plumbing | `model-plumbing` | Registered prompt specs with an enforcement test (today) (`spec_registry`) | Cost, budget and resource-guard correctness, Justified share of model spend, Justified model spend |
-| Quest Self | `quest-self` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
+| Model Plumbing | `model-plumbing` | Via vendor (`via_vendor`) | Cost, budget and resource-guard correctness, Justified share of model spend, Justified model spend |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](respond.py) | [the_self](the_self/README.md) |
 | Standing instruction alone (floor) | `critical-thinking:instruction_only` | [quest_ai_runner/the_self/integrity/prompts/standing_instructions.py](integrity/prompts/standing_instructions.py) |  |
 | Registered prompt specs with an enforcement test (today) | `model-plumbing:spec_registry` | [quest_ai_runner/the_self/integrity/prompts/prompt_specs.py](integrity/prompts/prompt_specs.py) |  |
+| Via vendor | `model-plumbing:via_vendor` |  |  |
+| Apply the evolvable-structure library | `system-integrity:structure-library` | [quest_ai_runner/the_self/area_integrity.py](area_integrity.py) | [integrity](integrity/README.md) |
 
 ### Metrics
 

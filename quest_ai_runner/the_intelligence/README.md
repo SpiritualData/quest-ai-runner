@@ -4,7 +4,7 @@ AI requests are handled in the best way possible, given all relevant information
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Which request deserves which handling changes as models and the person's intents change, so each part of handling a request is a swappable solution with its own measure.
+This sub-intent arises as the implementation `the-intelligence:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Which request deserves which handling changes as models and the person's intents change, so each part of handling a request is a swappable solution with its own measure.
 
 ## How the solutions fit together
 
@@ -95,11 +95,9 @@ flowchart LR
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
 | Digest-driven overseer | `nervous-system:overseer` | [quest_ai_runner/the_intelligence/nervous_system/area.py](nervous_system/area.py) | [nervous_system](nervous_system/README.md) |
-| Apply the evolvable-structure library | `system-integrity:structure-library` | [quest_ai_runner/the_intelligence/critical_thinking/response_quality/area.py](critical_thinking/response_quality/area.py) | [integrity](integrity/README.md) |
 | Rebuilt prompt per step with a referenced context (today) | `the-mind:rebuilt_per_step` | [quest_ai_runner/the_intelligence/mind/area_mind.py](mind/area_mind.py) | [mind](mind/README.md) |
 | Separate stores read at the start of a request (today) | `quest-intents:separate_stores` | [quest_ai_runner/the_intelligence/higher_mind/objectives/area.py](higher_mind/objectives/area.py) | [objectives](objectives/README.md) |
 | Code-enforced before and after on deep runs only (today) | `critical-thinking:deep_runs_only` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](critical_thinking/area.py) | [critical_thinking](critical_thinking/README.md) |
-| Channels, terminal and package as ways in | `quest-requests:ways_in` | [quest_ai_runner/the_intelligence/mind/planner/area_take_in_the_world.py](mind/planner/area_take_in_the_world.py) | [request_intake](request_intake/README.md) |
 | Rebuilt prompt per step with the context re-sent from cache | `the-mind:rebuilt_full_context` | [quest_ai_runner/the_intelligence/mind/planner/orchestrator_planning.py](mind/planner/orchestrator_planning.py) |  |
 | Start-of-run card filter and a recency window (today) | `the-subconscious:recency_window` | [quest_ai_runner/the_intelligence/mind/context_intake/planner_context.py](mind/context_intake/planner_context.py) | [subconscious](subconscious/README.md) |
 | No overseer (configuration off) | `nervous-system:no_overseer` | [quest_ai_runner/the_intelligence/mind/orchestrator_types.py](mind/orchestrator_types.py) |  |
