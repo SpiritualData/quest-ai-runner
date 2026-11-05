@@ -34,7 +34,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     _run_goal_accepts_working_dir, run_goal_accepts_cancel_check, run_goal_accepts_control, run_goal_accepts_gathered_observations,
     run_goal_accepts_is_subgoal, run_goal_accepts_requester_user_id)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import (
-    _future_context_channel, _normalize_future_context, _strip_future_context, ellipsize, sentence)
+    future_context_channel, normalize_future_context, _strip_future_context, ellipsize, sentence)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import TurnCardCache, _Emitter
 from quest_ai_runner.the_intelligence.mind.delegation.requester import requester_from_meta
 from hubofhubs.api import (
@@ -509,11 +509,11 @@ class DeepRunMixin:
             # is active, EVERY runner is asked for future context (a code generator knows the most
             # reusable facts of all: the entities, ids, and schema it touched), but a strict-format
             # runner is asked for it OUT OF BAND so its payload stays a valid payload. This is the ask
-            # side; ``_normalize_future_context`` below is the guarantee side.
+            # side; ``normalize_future_context`` below is the guarantee side.
             if card_update_active:
                 brief = brief + (
                     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
-                    if _future_context_channel(terminal_runner) == FUTURE_CONTEXT_VIA_FIELD
+                    if future_context_channel(terminal_runner) == FUTURE_CONTEXT_VIA_FIELD
                     else DEEP_FUTURE_CONTEXT_INSTRUCTION
                 )
 
@@ -685,7 +685,7 @@ class DeepRunMixin:
                         # own cancel_check is throttled and may not read True yet: the loop below
                         # must stop at once (no verifier call, no retry), never run on a stale False.
                         stopped_on_request.set()
-                    return _normalize_future_context(done)
+                    return normalize_future_context(done)
                 except Exception as e:  # noqa: BLE001
                     log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
                     return DeepResult(met=False, error=type(e).__name__)

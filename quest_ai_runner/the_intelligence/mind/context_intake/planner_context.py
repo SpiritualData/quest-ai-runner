@@ -6,14 +6,12 @@ decides what to do with the answer stays in the orchestrator. ``orchestrator`` r
 here, so existing imports keep working.
 """
 import re
-import typing
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
 from hubofhubs.api import Card
 from hubofhubs.api import AssembledContext
 from hubofhubs.api import InternalContexting
-from hubofhubs.api import Remembering
 from hubofhubs.api import MAX_LISTED_LINKS, links_in_message
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DECLINED_PROPOSALS_NOTE
 
@@ -510,12 +508,6 @@ def gathered_content(gathered: List[Any]) -> List[Any]:
     """``gathered`` without ``planner_only`` notes: what the turn actually read."""
     return [o for o in (gathered or []) if not (isinstance(o, dict) and o.get("planner_only"))]
 
-
-@solution("the-subconscious", kind="event", entry="recall", example="rust release")
-@typing.runtime_checkable
-class CardRecall(Remembering, typing.Protocol):
-    """What a request recalls: the hub's ``the-subconscious`` interface (``recall``), which the loop also reads as its context
-    assembler (``assemble`` and ``record``)."""
 
 
 @implementation("the-subconscious", "recency_window")

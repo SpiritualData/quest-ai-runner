@@ -11,29 +11,32 @@ Members the line does not need are built on first use.
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, Dict, List, Mapping, Optional
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import Lazy
 from esoi import requirements
 from hubofhubs.api import BodyComposition
 from hubofhubs.api import Connecting
 from hubofhubs.api import IntakeSourcing
-from hubofhubs.api import FormAndContext
 from hubofhubs.api import InternalContexting
-from hubofhubs.api import FileWriter
-from hubofhubs.api import CardRepository
 from hubofhubs.api import ModelCalling
 
 from quest_ai_runner.the_body.configuration.config import RunnerConfig
 from quest_ai_runner.the_body.internal_context.interface import RetrievalAdapter
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestOperations
-from quest_ai_runner.the_self.loop_wiring import GoalAnswer, NoContext, goal_answer, orchestrator_over
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.the_body.internal_context.quest.interface import QuestOperations
+from quest_ai_runner.the_self.loop_wiring import NoContext, goal_answer, orchestrator_over
+from quest_ai_runner.the_self.interface import GoalAnswer
 from quest_ai_runner.the_intelligence.mind.planner.message_routing import route_message
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import RoutedModelCalling
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.interface import RoutedModelCalling
 from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import choose_assignee, make_judge
 from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+from quest_ai_runner.the_body.hands.quest_operations.interface import GoalHandingOff, QuestOperating
+from quest_ai_runner.the_consciousness.request_intake.interface import QueueRunning
+from quest_ai_runner.the_body.internal_context.card_store.interface import CardPersisting
+from quest_ai_runner.the_world.tools.file_editing.interface import FileWriting
+from quest_ai_runner.the_body.hands.quest_operations.interface import ReachClaiming
 
 
 @implementation("access-quest-operations", "quest_client")
@@ -46,25 +49,6 @@ quest_client.REQUIRES = (requirements.api("Quest", key=requirements.env("QUEST_A
                          requirements.env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
                          requirements.env("QUEST_TEAM_ID", option="team_id", required=False))
 
-
-@solution("persist-cards", kind="store", entry="read", example="card-1")
-@typing.runtime_checkable
-class CardPersisting(CardRepository, typing.Protocol):
-    """The cards a quest keeps, written and read back whole (the hub's card repository interface)."""
-
-
-@solution("write-files", kind="event", entry="read_file", example="NOTES.md")
-@typing.runtime_checkable
-class FileWriting(FileWriter, typing.Protocol):
-    """Changes the text files under one root and keeps what it replaced; a file outside the root is refused."""
-
-
-@solution("operate-a-quest", kind="event", entry="operate", example="Add a goal to ship the launch note by Friday")
-@typing.runtime_checkable
-class QuestOperating(typing.Protocol):
-    """Carries out what a person asks of their quest (a goal, a habit, a note, an outcome) with the Quest tools and reports what was done."""
-
-    def operate(self, message: str, quest_id: str = "") -> GoalAnswer: ...
 
 
 def quest_config(model: Any, quest: Any) -> RunnerConfig:
@@ -86,14 +70,6 @@ class OrchestratorOperating:
         return goal_answer(build_orchestrator(quest_config(self.model, self.quest)).run(message, quest_id=quest_id or None))
 
 
-@solution("claim-reach", kind="event", entry="claim", example="Send the launch note to the whole team")
-@typing.runtime_checkable
-class ReachClaiming(typing.Protocol):
-    """Says where a request is carried out: inside the readable sources, by a tool, or outside them by deep work (``answer``, ``tool``,
-    ``deep``, ``confirm`` or ``clarify``), from what the host's effectors say they allow."""
-
-    def claim(self, message: str) -> Mapping[str, Any]: ...
-
 
 @implementation("claim-reach", "coding_agent_prompt_reach")
 class PromptReach:
@@ -106,13 +82,6 @@ class PromptReach:
     def claim(self, message: str) -> Mapping[str, Any]:
         return route_message(self.model, message)
 
-
-@solution("run-queued-tasks", kind="event", entry="scan", example="team-1")
-@typing.runtime_checkable
-class QueueRunning(typing.Protocol):
-    """Takes the tasks queued for a team, runs each one and reports what happened; returns the ids it handled."""
-
-    def scan(self, team_id: str = "") -> List[str]: ...
 
 
 @implementation("run-queued-tasks", "qar_runner")
@@ -130,14 +99,6 @@ class QarRunner:
         return Poller(config, state_path=None, client=self.quest).run_once()
 
 
-@solution("hand-off-a-goal", kind="event", entry="assign",
-          example={"outcome": "Ship the launch", "title": "Draft the launch note", "description": "", "members": []})
-@typing.runtime_checkable
-class GoalHandingOff(typing.Protocol):
-    """Decides which person of a quest a new goal belongs to and whether an AI can do it itself: ``{"assignee", "ai_can_do"}``."""
-
-    def assign(self, goal: Mapping[str, Any]) -> Mapping[str, Any]: ...
-
 
 @implementation("hand-off-a-goal", "model_judge")
 class ModelJudge:
@@ -152,14 +113,6 @@ class ModelJudge:
                                title=str(goal.get("title") or ""), description=str(goal.get("description") or ""),
                                current_state=str(goal.get("current_state") or ""), preferences=str(goal.get("preferences") or ""))
 
-
-@solution("the-body", kind="event", entry="describe", example="")
-@typing.runtime_checkable
-class BodyActing(FormAndContext, typing.Protocol):
-    """The hub's ``the-body`` interface (describe the system's form, keep the run record), and QAR's line that reads the part of a source
-    the host holds as it is now."""
-
-    def read(self, rel_path: str) -> Any: ...
 
 
 @implementation("the-body", "card_and_reads")

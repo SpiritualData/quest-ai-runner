@@ -10,21 +10,14 @@ tags), the card limit, the per-folder ceilings, the folder gate and the upload t
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, List, Mapping, Optional, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from hubofhubs.api import changed_cards
-from hubofhubs.api import CardsFromFiles
 from hubofhubs.api import ModelCalling
 
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_topic_cards import _llm_topic_cards
 
-
-@solution("cards-from-files", kind="event", entry="build", example={"root": ".", "files": [], "existing": {}})
-@typing.runtime_checkable
-class CardBuilding(CardsFromFiles, typing.Protocol):
-    """The hub's ``cards-from-files`` interface (``build`` and ``changed``) in QAR's scope, where QAR's records select the arm."""
 
 
 @implementation("cards-from-files", "qar_topic_bootstrap", scope="quest_ai_runner")

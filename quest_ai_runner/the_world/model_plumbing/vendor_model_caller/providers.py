@@ -6,15 +6,13 @@ table, usage limit message and spend tagging.
 from __future__ import annotations
 
 import os
-import typing
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from hubofhubs.api import arm_needs as needs
 from hubofhubs.api import ClaudeCliProvider
 from hubofhubs.api import MODEL_PREFIX_PROVIDERS, provider_name_for_model
 from hubofhubs.api import MultiProvider
-from hubofhubs.api import ModelCalling
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import DEFAULT_FALLBACK_TOP, configured_providers
 from quest_ai_runner.the_world.model_plumbing.spend.usage import active_spec, limit_message
@@ -71,13 +69,6 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
     return [{"provider": "anthropic", "balance": "", "allowance": str(allowance),
              "credit_value": (env.get("QAR_ANTHROPIC_CREDIT_VALUE") or "").strip(), "currency": "USD", "period": "monthly"}]
 
-
-@solution("vendor-model-caller", kind="event", entry="answer",
-          example={"messages": [{"role": "user", "content": "Reply with the single word: ok"}], "model": "claude-haiku"})
-@typing.runtime_checkable
-class RoutedModelCalling(ModelCalling, typing.Protocol):
-    """The model seat as QAR fills it: the hub's ``vendor-model-caller`` interface (plan, answer, list models) over the router below, which
-    sends each model id to the vendor that serves it. A consumer's own provider satisfies it the same way."""
 
 
 @implementation("vendor-model-caller", "multi_provider")

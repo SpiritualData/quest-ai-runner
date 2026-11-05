@@ -10,34 +10,21 @@ from __future__ import annotations
 
 import contextlib
 import io
-import typing
-from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import Lazy
 
-from quest_ai_runner.the_body.configuration.cli_config import TerminalHelping
+from quest_ai_runner.the_consciousness.terminal.interface import TerminalHelping
 from quest_ai_runner.the_consciousness.request_intake.interface import ChannelTransport
 from quest_ai_runner.the_intelligence.mind.context_intake.attachments import AttachmentPreparing
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InputInbox
-from quest_ai_runner.the_intelligence.mind.planner.message_routing import MessageRouting, RequestTakingIn
-from quest_ai_runner.the_body.intake_sources.context_updates import ContextFeeding
+from quest_ai_runner.the_intelligence.mind.delegation.interface import InputInbox
+from quest_ai_runner.the_intelligence.mind.planner.interface import MessageRouting
+from quest_ai_runner.the_consciousness.request_intake.interface import RequestTakingIn
+from quest_ai_runner.the_body.intake_sources.interface import ContextFeeding
+from quest_ai_runner.the_consciousness.terminal.interface import PublicSurface
+from quest_ai_runner.the_consciousness.terminal.interface import TerminalOperating, TerminalRun
 
-
-@dataclass(frozen=True)
-class TerminalRun:
-    """What one command of the terminal did: its exit code and everything it printed."""
-    code: int
-    output: str
-
-
-@solution("operate-from-a-terminal", kind="event", entry="operate", example=["--help"])
-@typing.runtime_checkable
-class TerminalOperating(typing.Protocol):
-    """Runs one command of ``quest-ai-runner`` as the shell would, and returns what it did."""
-
-    def operate(self, argv: Sequence[str], entry: str = "qar") -> TerminalRun: ...
 
 
 @implementation("operate-from-a-terminal", "cli_commands")
@@ -58,13 +45,6 @@ class CliCommands:
                 code = stop.code if isinstance(stop.code, int) else (0 if stop.code is None else 1)
         return TerminalRun(code=int(code or 0), output=buffer.getvalue())
 
-
-@solution("expose-the-public-api", kind="event", entry="front_door", example="run")
-@typing.runtime_checkable
-class PublicSurface(typing.Protocol):
-    """Names what the package offers a consumer and hands over the front door asked for (``run``, ``load_config``, ``load_client``)."""
-
-    def front_door(self, name: str) -> Any: ...
 
 
 @implementation("expose-the-public-api", "package_front_doors")

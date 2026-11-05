@@ -49,12 +49,11 @@ a failure.
 """
 from __future__ import annotations
 
-import typing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 
 from quest_ai_runner.the_body.intake_sources.context_update_types import (
     CACHE_TTL_SECONDS, ContextUpdate, DEFAULT_ALWAYS, FIRST_LOOK_DAYS, MAX_OPEN_PER_SOURCE, MAX_UPDATES, OPEN_ITEM_MAX_AGE_DAYS, SourceGap,
@@ -146,15 +145,6 @@ def consumer_spec_resolver(
 
     return _resolve
 
-
-@solution("feed-context-sources", kind="event", entry="collect", example={"quest_id": "quest-id"})
-@typing.runtime_checkable
-class ContextFeeding(typing.Protocol):
-    """What changed on a card since it was last looked at, gathered from every channel the card watches into one bundle."""
-
-    def collect(self, card: Dict[str, Any], *, card_id: str = "", card_kind: str = "quest", since: Optional[datetime] = None,
-                card_label: str = "", sources: Optional[Sequence[str]] = None,
-                options: Optional[Dict[str, Dict[str, Any]]] = None) -> ContextUpdates: ...
 
 
 class UpdateEngine:

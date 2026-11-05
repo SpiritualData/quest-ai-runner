@@ -11,20 +11,13 @@ and keywords, like the hub's own default store; QAR's ranked selection stays in 
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, Dict, List, Optional
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import requirements
 from hubofhubs.api import Card
 from hubofhubs.api import CardStore
 
-
-@solution("card-store", kind="store", entry="search", example="rust release")
-@typing.runtime_checkable
-class CardKeeping(CardStore, typing.Protocol):
-    """The hub's ``card-store`` interface (add, get, search, delete, count) over QAR's card persistence: a store the Quest card API or a
-    local folder holds, which the arms below present as hub cards."""
 
 
 @implementation("card-store", "qar-card-repository", scope="quest_ai_runner")

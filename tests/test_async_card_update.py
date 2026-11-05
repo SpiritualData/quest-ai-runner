@@ -20,8 +20,8 @@ from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry 
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import DEEP_FUTURE_CONTEXT_INSTRUCTION
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY
 from quest_ai_runner.the_intelligence.mind.orchestrator import (
-    FUTURE_CONTEXT_DELIMITER, Orchestrator, OrchestratorConfig, _card_update_store, _strip_future_context)
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, _parse_future_context
+    FUTURE_CONTEXT_DELIMITER, Orchestrator, OrchestratorConfig, _strip_future_context)
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, _parse_future_context, card_update_store
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _normalize_card_edits, _proposed_card_text
 
 from .conftest import StubRetrieval
@@ -61,7 +61,7 @@ class RecordingCardStore:
 
 
 class _Composite:
-    """A minimal composite wrapper exposing ``_assemblers`` (the shape _card_update_store unwraps)."""
+    """A minimal composite wrapper exposing ``_assemblers`` (the shape card_update_store unwraps)."""
 
     def __init__(self, assemblers: List[Any]):
         self._assemblers = assemblers
@@ -232,17 +232,17 @@ def test_future_context_for_display_merges_multiple_results():
 def test_card_update_store_detects_direct_and_wrapped():
     store = RecordingCardStore()
     # Direct
-    assert _card_update_store(store) is store
+    assert card_update_store(store) is store
     # Wrapped in a composite -> unwrapped
-    assert _card_update_store(_Composite([store])) is store
+    assert card_update_store(_Composite([store])) is store
     # An assembler with no card-update API -> None
     class _Plain:
         def assemble(self, t, *, meta=None):
             return AssembledContext()
         def record(self, t, o):
             return None
-    assert _card_update_store(_Plain()) is None
-    assert _card_update_store(None) is None
+    assert card_update_store(_Plain()) is None
+    assert card_update_store(None) is None
 
 
 # --------------------------------------------------------------------------- updater applies edits
@@ -565,8 +565,8 @@ def test_normalize_card_edits_rejects_junk():
 import ast
 
 from hubofhubs.api import FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
-from quest_ai_runner.the_intelligence.mind.orchestrator import (
-    DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, _deep_future_context, _future_context_channel, _normalize_future_context)
+from quest_ai_runner.the_intelligence.mind.orchestrator import DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import deep_future_context, future_context_channel, normalize_future_context
 
 # What a code-generating deep runner produces: a payload that must parse as Python, and NOTHING else.
 _GENERATED_CODE = (
@@ -618,15 +618,15 @@ def _wait_for_updater(store, tries: int = 100) -> None:
 def test_channel_defaults_to_output_for_any_undeclared_runner():
     # Duck-typed runners are the common case: anything that does not declare a channel is prose, and
     # gets exactly today's behaviour.
-    assert _future_context_channel(_Runner("x")) == FUTURE_CONTEXT_VIA_OUTPUT
-    assert _future_context_channel(None) == FUTURE_CONTEXT_VIA_OUTPUT
-    assert _future_context_channel(object()) == FUTURE_CONTEXT_VIA_OUTPUT
+    assert future_context_channel(_Runner("x")) == FUTURE_CONTEXT_VIA_OUTPUT
+    assert future_context_channel(None) == FUTURE_CONTEXT_VIA_OUTPUT
+    assert future_context_channel(object()) == FUTURE_CONTEXT_VIA_OUTPUT
     # A runner that declares nonsense is treated as prose rather than breaking the run.
     class _Weird:
         future_context_channel = "sideways"
-    assert _future_context_channel(_Weird()) == FUTURE_CONTEXT_VIA_OUTPUT
+    assert future_context_channel(_Weird()) == FUTURE_CONTEXT_VIA_OUTPUT
     # And a strict-format runner is honoured.
-    assert _future_context_channel(_CodeRunner()) == FUTURE_CONTEXT_VIA_FIELD
+    assert future_context_channel(_CodeRunner()) == FUTURE_CONTEXT_VIA_FIELD
 
 
 # --------------------------------------------------------------------------- the ask (per channel)
@@ -752,26 +752,26 @@ def test_a_worker_that_appends_the_block_to_code_anyway_is_cleaned_centrally():
 
 
 def test_normalize_moves_the_section_out_of_a_prose_output():
-    res = _normalize_future_context(DeepResult(met=True, output=_WORKER_OUTPUT))
+    res = normalize_future_context(DeepResult(met=True, output=_WORKER_OUTPUT))
     assert FUTURE_CONTEXT_DELIMITER not in res.output
     assert "I implemented the thing and verified it." in res.output
     assert "col-123" in res.future_context
 
 
 def test_normalize_leaves_a_clean_field_result_untouched():
-    res = _normalize_future_context(
+    res = normalize_future_context(
         DeepResult(met=True, output=_GENERATED_CODE, future_context=_CODE_FUTURE_CONTEXT))
     assert res.output == _GENERATED_CODE          # payload byte-for-byte unchanged
     assert res.future_context == _CODE_FUTURE_CONTEXT
 
 
 def test_normalize_is_inert_when_there_is_nothing_to_move():
-    res = _normalize_future_context(DeepResult(met=True, output="plain result"))
+    res = normalize_future_context(DeepResult(met=True, output="plain result"))
     assert res.output == "plain result"
     assert res.future_context == ""
     # A deferred hand-off receipt (the reserved queue-runner path) carries no section and must pass
     # through untouched: the goal loop trusts ``met``/``deferred`` and must still see its sentinel.
-    receipt = _normalize_future_context(
+    receipt = normalize_future_context(
         DeepResult(met=True, output="task #7 launched", deferred=True))
     assert receipt.output == "task #7 launched"
     assert receipt.deferred is True
@@ -780,12 +780,12 @@ def test_normalize_is_inert_when_there_is_nothing_to_move():
 
 def test_deep_future_context_prefers_the_field_and_falls_back_to_parsing():
     # The field is authoritative once normalized...
-    assert "col-77" in _deep_future_context(
+    assert "col-77" in deep_future_context(
         DeepResult(met=True, output=_GENERATED_CODE, future_context=_CODE_FUTURE_CONTEXT))
     # ...and a DeepResult built OUTSIDE the seam (an older runner, a queued result reflected back)
     # still teaches the cards, via the in-output parse.
-    assert "col-123" in _deep_future_context(DeepResult(met=True, output=_WORKER_OUTPUT))
-    assert _deep_future_context(DeepResult(met=True, output="nothing here")) == ""
+    assert "col-123" in deep_future_context(DeepResult(met=True, output=_WORKER_OUTPUT))
+    assert deep_future_context(DeepResult(met=True, output="nothing here")) == ""
 
 
 # --------------------------------------------------------------------------- per-runner routing

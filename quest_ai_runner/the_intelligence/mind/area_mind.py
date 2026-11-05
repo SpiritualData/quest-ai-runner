@@ -12,20 +12,22 @@ does not need are built on first use.
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, Callable, List, Mapping, Optional, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import Lazy
 from hubofhubs.api import ModelCalling
-from hubofhubs.api import Reasoning
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import HUB_TIER_OF, RegistryTierSelection
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import HUB_TIER_OF
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.interface import RegistryTierSelection
 from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import InterimDecision, InterimPolicy, InterimState
 from quest_ai_runner.the_intelligence.mind.planner.recipes import Recipe, RecipeStore
 from quest_ai_runner.the_intelligence.mind.response_writer.work_trace import WorkShowing
-from quest_ai_runner.the_self.loop_wiring import GoalAnswer, orchestrator_over
+from quest_ai_runner.the_self.loop_wiring import orchestrator_over
+from quest_ai_runner.the_self.interface import GoalAnswer
 from quest_ai_runner.the_intelligence.mind.planner.message_routing import route_message
+from quest_ai_runner.the_intelligence.mind.planner.interface import OperationReplaying, PromptAssembling
+from quest_ai_runner.the_intelligence.mind.interface import EndToEnd, MlTasks, TurnAnswering
 
 
 class PromptCapture:
@@ -44,13 +46,6 @@ class PromptCapture:
     def list_models(self) -> List[str]:
         return []
 
-
-@solution("assemble-a-prompt", kind="event", entry="assemble", example="What should I work on first this week?")
-@typing.runtime_checkable
-class PromptAssembling(typing.Protocol):
-    """Writes the prompt a step of the loop sends for a message: the planner's view of it, as text."""
-
-    def assemble(self, message: str) -> str: ...
 
 
 @implementation("assemble-a-prompt", "planner_prompt")
@@ -71,13 +66,6 @@ def turn_of(model: Any, message: str) -> GoalAnswer:
                       ran=tuple(result.goals), question=result.question or "", steps=result.steps)
 
 
-@solution("answer-a-turn", kind="event", entry="turn", example="What should I work on first this week?")
-@typing.runtime_checkable
-class TurnAnswering(typing.Protocol):
-    """Answers one chat turn: the loop plans, gathers, re-plans and answers, hands deep work on or asks to confirm."""
-
-    def turn(self, message: str) -> GoalAnswer: ...
-
 
 @implementation("answer-a-turn", "orchestrator_turn")
 class OrchestratorTurn:
@@ -91,13 +79,6 @@ class OrchestratorTurn:
         return turn_of(self.model, message)
 
 
-@solution("answer-end-to-end", kind="event", entry="answer", example="What should I work on first this week?")
-@typing.runtime_checkable
-class EndToEnd(typing.Protocol):
-    """The path as shipped, from a message to the finished answer in one call: what the end-to-end metric measures."""
-
-    def answer(self, message: str) -> GoalAnswer: ...
-
 
 @implementation("answer-end-to-end", "shipped_path")
 class ShippedPath:
@@ -110,13 +91,6 @@ class ShippedPath:
     def answer(self, message: str) -> GoalAnswer:
         return turn_of(self.model, message)
 
-
-@solution("replay-known-operations", kind="event", entry="match", example="Add a note that the launch moves to Friday")
-@typing.runtime_checkable
-class OperationReplaying(typing.Protocol):
-    """Finds the operations learned from earlier requests that a new request repeats, best first, each with its similarity."""
-
-    def match(self, request: str) -> Sequence[Any]: ...
 
 
 @implementation("replay-known-operations", "stored_recipes")
@@ -134,13 +108,6 @@ class StoredRecipes:
         return self.store.learn(request, tool, dict(args))
 
 
-@solution("core-ml-tasks", kind="event", entry="classify", example="Save a note that the launch moves to Friday.")
-@typing.runtime_checkable
-class MlTasks(typing.Protocol):
-    """Classifies a request for the tasks the loop treats as machine learning problems; today, which route it takes."""
-
-    def classify(self, message: str) -> str: ...
-
 
 @implementation("core-ml-tasks", "router_labels")
 class RouterLabels:
@@ -153,11 +120,6 @@ class RouterLabels:
     def classify(self, message: str) -> str:
         return str(route_message(self.model, message)["route"])
 
-
-@solution("the-mind", kind="event", entry="think", example={"request": "What should I work on first this week?"})
-@typing.runtime_checkable
-class StepReasoning(Reasoning, typing.Protocol):
-    """The hub's ``the-mind`` interface: one request thought through, and the part of a step of the loop."""
 
 
 @implementation("the-mind", "rebuilt_per_step")

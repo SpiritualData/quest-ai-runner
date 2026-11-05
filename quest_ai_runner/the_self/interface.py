@@ -12,6 +12,10 @@ from hubofhubs.api import ModelProviderBase  # noqa: F401  (moved to the hub; sa
 from hubofhubs.api import RetrievalAdapterBase  # noqa: F401  (moved to the hub; same class, old import path)
 
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
+from dataclasses import dataclass, field
+from typing import Tuple
+import typing
+from esoi import solution
 
 
 class GuidanceProviderBase(abc.ABC):
@@ -60,3 +64,23 @@ class EscalationSinkBase(abc.ABC):
     def withdraw_decision(self, decision_id: str) -> bool:
         """Optional: withdraw one open row (kept as history). Default: cannot, False."""
         return False
+
+
+@dataclass(frozen=True)
+class GoalAnswer:
+    """What a turn of the runner returned: the reply text, how the loop ended and what ran."""
+    text: str
+    kind: str                         # "answer", "deep", "confirm" or "cancelled"
+    exit_reason: str = ""
+    ran: Tuple[str, ...] = field(default_factory=tuple)    # the goals handed to a deep worker, in order
+    question: str = ""                # what the runner asks the person, when kind is "confirm"
+    steps: int = 0
+    parts: Tuple[Tuple[str, str], ...] = field(default_factory=tuple)    # the flow's parts in order, each with where it ran
+
+
+@solution("do-grounded-work", kind="event", entry="answer", example="What should I work on first this week?")
+@typing.runtime_checkable
+class GoalAgent(typing.Protocol):
+    """Answers a person's message from their own quests and cards, and does the work they ask for."""
+
+    def answer(self, message: str) -> GoalAnswer: ...

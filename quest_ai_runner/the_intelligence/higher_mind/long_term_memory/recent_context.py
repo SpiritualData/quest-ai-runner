@@ -79,13 +79,14 @@ import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, Tuple, Union
 
-from esoi import implementation, solution
+from esoi import implementation
 from hubofhubs.api import parse_date_bound, timestamp_in_range
 from hubofhubs.api import keywords_from_text
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import quest_fence_allow, scope_tags_from_keys
 from hubofhubs.api import match_umask
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import RecentContextStore
 
 log = logging.getLogger("quest-ai-runner.recent_context")
 
@@ -201,20 +202,6 @@ def ts_in_time_range(ts: str, time_range: Optional[Dict[str, Any]]) -> bool:
     except Exception:  # noqa: BLE001 -- an unparseable timestamp is kept, never dropped
         return True
 
-
-@solution("recall-recent-context", kind="event", entry="load", example="quest-id")
-@runtime_checkable
-class RecentContextStore(Protocol):
-    """Scoped, per-card-and-item persistence of recently selected context. NEVER raises."""
-
-    def record(
-        self, scope_keys: Union[str, List[str]], cards: List[Dict[str, Any]], user_text: str
-    ) -> None:
-        """Persist this turn's selected ``cards`` under EVERY key in ``scope_keys``. Best-effort."""
-
-    def load(self, scope_keys: Union[str, List[str]]) -> List[Dict[str, Any]]:
-        """Return recent card records merged across ``scope_keys``, deduped by card id with
-        narrower-scope-wins precedence (conv > quest > global)."""
 
 
 def _compact_locator(locator: Optional[Dict[str, Any]], itype: str) -> Dict[str, Any]:

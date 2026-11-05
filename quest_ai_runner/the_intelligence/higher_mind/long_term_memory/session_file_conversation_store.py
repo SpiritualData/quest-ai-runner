@@ -38,14 +38,13 @@ from __future__ import annotations
 
 import json
 import time
-import typing
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from hubofhubs.api import ConversationContext, ConversationStore
 
-from esoi import implementation, solution
+from esoi import implementation
 from quest_ai_runner.the_body.configuration.walk_settings import conversation_scan_skip_dirs
 from hubofhubs.api import (
     conversation_digest, conversation_messages, conversation_timestamp, is_claude_conversation, nl_terms, parse_date_bound,
@@ -70,13 +69,6 @@ _RECENCY_FLOOR_CONVS = 2
 # How many parsed conversations to keep in the in-memory LRU (validated by (mtime, size)).
 _CONV_CACHE_SIZE = 16
 
-
-@solution("remember-conversations", kind="event", entry="current_slice",
-          example={"conv_id": "conversation-id", "query": "what did we decide about the launch?"})
-@typing.runtime_checkable
-class ConversationRemembering(ConversationStore, typing.Protocol):
-    """The hub's conversation-history interface (``current_slice`` of this conversation, ``related_slices`` of the others) over the
-    conversations a person already had: a short follow-up is read against them, and no method raises."""
 
 
 @implementation("remember-conversations", "session_file")

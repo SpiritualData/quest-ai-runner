@@ -8,24 +8,17 @@ The five-way verdict QAR's loop acts on (``proceed``, ``redirect``, ``answer_now
 """
 from __future__ import annotations
 
-import typing
 from typing import Any
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import Lazy
 from hubofhubs.api import OverseerSignal, to_risk_signal
-from hubofhubs.api import RiskWatching
 
 from quest_ai_runner.the_intelligence.mind.delegation import overseer
 from quest_ai_runner.the_consciousness.judgment_calls.interface import EscalationSink
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import RoutedModelCalling
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.interface import RoutedModelCalling
 
-
-@solution("nervous-system", kind="event", entry="watch", example="delete the old backup folder")
-@typing.runtime_checkable
-class RunWatching(RiskWatching, typing.Protocol):
-    """The hub's ``nervous-system`` interface: a digest of one step of a run in, at most one risk signal out. It never raises."""
 
 
 @implementation("nervous-system", "overseer")

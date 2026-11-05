@@ -5,10 +5,11 @@ Split out of ``adapters.py`` by definition; that module re-exports every name he
 from __future__ import annotations
 
 import abc
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from dataclasses import dataclass, field
 
 from esoi import solution
+import typing
+from typing import Any, Dict, List, Mapping, Optional, Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
@@ -129,3 +130,19 @@ class ChannelTransportBase(abc.ABC):
     def close(self) -> None:
         """No-op default. Override for a transport that holds a connection/process."""
         return None
+
+
+@solution("run-queued-tasks", kind="event", entry="scan", example="team-1")
+@typing.runtime_checkable
+class QueueRunning(typing.Protocol):
+    """Takes the tasks queued for a team, runs each one and reports what happened; returns the ids it handled."""
+
+    def scan(self, team_id: str = "") -> List[str]: ...
+
+
+@solution("take-in-the-world", kind="event", entry="take_in", example="Save a note that the launch moves to Friday.")
+@typing.runtime_checkable
+class RequestTakingIn(typing.Protocol):
+    """Accepts one request and describes it: where it goes and which channels its context is fed from."""
+
+    def take_in(self, message: str) -> Mapping[str, Any]: ...

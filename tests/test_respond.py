@@ -5,7 +5,7 @@ from hubofhubs.api import Card
 from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
-from quest_ai_runner.the_self.loop_wiring import GoalAnswer
+from quest_ai_runner.the_self.interface import GoalAnswer
 from tests.conftest import StubProvider
 
 
@@ -66,10 +66,10 @@ def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_s
     import typing
     from hubofhubs.api import ModelCalling
     from hubofhubs.api import Remembering
-    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import CardRecall
-    from quest_ai_runner.the_self.goal_agent import QuestAiRunnerLibrary
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import RoutedModelCalling
-    hints = typing.get_type_hints(QuestAiRunnerLibrary.__init__)
+    from quest_ai_runner.the_intelligence.subconscious.interface import CardRecall
+    from quest_ai_runner.the_self.respond import Respond
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.interface import RoutedModelCalling
+    hints = typing.get_type_hints(Respond.__init__)
     assert hints["model"] is RoutedModelCalling and issubclass(RoutedModelCalling, ModelCalling)
     assert hints["memory"] is CardRecall and issubclass(CardRecall, Remembering)
 
@@ -80,3 +80,15 @@ def test_the_step_reasoning_arm_asks_no_model_of_its_own():
     from quest_ai_runner.the_intelligence.mind.area_mind import RebuiltPerStep
     hints = typing.get_type_hints(RebuiltPerStep.__init__)
     assert "model" not in hints and "tiers" in hints and not hasattr(RebuiltPerStep, "reason") and hasattr(RebuiltPerStep, "think")
+
+
+def test_the_flow_names_its_parts_in_the_order_of_the_intent_paragraph():
+    """``respond`` is the flow: the parts serve a request in this order, and the answer says where each ran."""
+    from quest_ai_runner.the_self.respond import FLOW, LOOP, OWN
+    assert [part.solution for part in FLOW] == ["take-in-the-world", "hold-the-intents", "choose-the-context", "the-mind", "nervous-system", "critical-thinking"]
+    assert {part.runs for part in FLOW} == {LOOP, OWN}
+    provider = ScriptedModel([{"action": "answer", "rationale": "known", "model_tier": "sonnet"}], answer_text="Start with the outline.")
+    cards = quest_ai_runner.run("card-store", arms={"card-store": "local_card_store"}, environ={})
+    answer = quest_ai_runner.run("quest-ai-runner", "What should I work on first this week?", environ={},
+                                 provided={"vendor-model-caller": provider, "card-store": cards, "access-quest-operations": QuestStub()})
+    assert [solution for solution, _ in answer.parts] == [part.solution for part in FLOW]

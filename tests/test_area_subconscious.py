@@ -5,7 +5,7 @@ from hubofhubs.api import Card
 from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import CardRecall
+from quest_ai_runner.the_intelligence.subconscious.interface import CardRecall
 
 AREA_IDS = ("the-subconscious", "card-store")
 

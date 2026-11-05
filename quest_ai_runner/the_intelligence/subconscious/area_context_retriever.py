@@ -9,23 +9,15 @@ runs, and how it is built from the environment, stay the lane's configuration (`
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, Dict, List, Optional, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import Lazy
 from hubofhubs.api import AssembledContext, ContextAssembler, VectorStore
 from hubofhubs.api import ReferenceResolver
 
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search import search_cards_and_specs
 
-
-@solution("choose-the-context", kind="event", entry="choose", example="What should I work on first this week?")
-@typing.runtime_checkable
-class ContextChoosing(typing.Protocol):
-    """The context a request needs, chosen from the person's own cards, files and conversations."""
-
-    def choose(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, assembler: Optional[ContextAssembler] = None) -> AssembledContext: ...
 
 
 @implementation("choose-the-context", "per_lane_assembly")

@@ -303,7 +303,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "library": "quest_ai_runner.the_self.goal_agent"
+   "library": "quest_ai_runner.the_self.respond"
   }
  },
  "draft-a-metric": {

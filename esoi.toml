@@ -177,7 +177,7 @@ enabled = true
 [rules.S38]
 enabled = true
 # The limit on how many solutions one implementation uses is raised from 9 to 12, for one reason: the top intent's one implementation,
-# do-grounded-work:library, takes the model, the Quest account and nine areas as typed seats (goal_agent.py), and the code composes no
+# do-grounded-work:library, takes the model, the Quest account and nine areas as typed seats (respond.py), and the code composes no
 # grouping of them (the areas are siblings, none builds on another), so grouping them in the records would state a layer the code does
 # not have. No other intent uses more than three. The esoi library reads max_fan_out as one value for the repository (there is no per-intent
 # key in `[rules.S38.floors.<intent>]`), so the limit is this one value, to be lowered with the library change that allows it per intent.

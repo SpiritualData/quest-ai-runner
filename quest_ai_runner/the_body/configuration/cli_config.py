@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import shutil
-import typing
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -179,14 +178,6 @@ def judge_goal(provider, model, goal):
         log.warning("goal %s not judged: %s", goal.get("id"), e)
         return None
 
-
-@solution("assist-a-terminal-session", kind="event", entry="judge_goal",
-          example={"name": "Draft the launch note", "description": "Write two paragraphs from the quest's notes."})
-@typing.runtime_checkable
-class TerminalHelping(typing.Protocol):
-    """The small judgements the terminal commands lean on: whether a goal is work an AI can finish."""
-
-    def judge_goal(self, goal: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
 
 
 @implementation("assist-a-terminal-session", "fast_model_helpers")

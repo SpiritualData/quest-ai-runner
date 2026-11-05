@@ -7,7 +7,6 @@ derivation, the reply voice and the post-work synthesis prompts. The planner's o
 (``from quest_ai_runner.the_intelligence.mind.orchestrator import VERIFY_GOAL_PROMPT``) keep working; the functions
 that fill these templates stay in ``orchestrator.py``.
 """
-import typing
 from typing import Any, Dict
 
 from esoi import implementation, solution
@@ -1166,13 +1165,6 @@ PREFLIGHT_PLAN_SPEC = declare(
     "preflight.plan-sufficiency", solution="do-grounded-work", metric="QME2", tier="balanced", cache_layer="tail",
     template=PREFLIGHT_PLAN_PROMPT, output_schema=PREFLIGHT_PLAN_TOOL)
 
-
-@solution("guide-toward-the-long-term-goal", kind="event", entry="directive", example="What should I work on first this week?")
-@typing.runtime_checkable
-class LongTermGuiding(typing.Protocol):
-    """Points a reply at the quest's next milestone and its current reading, or holds back: the directive a reply is written under."""
-
-    def directive(self, message: str) -> str: ...
 
 
 @implementation("guide-toward-the-long-term-goal", "guided_v2")

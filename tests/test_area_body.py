@@ -3,7 +3,7 @@ import pytest
 from esoi import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.the_body.area_body import BodyActing
+from quest_ai_runner.the_body.interface import BodyActing
 from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
 from tests.conftest import StubProvider

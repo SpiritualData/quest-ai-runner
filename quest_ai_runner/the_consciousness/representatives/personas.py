@@ -51,7 +51,6 @@ import json
 import logging
 import threading
 import re
-import typing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
@@ -701,13 +700,6 @@ EXPLICIT_ASK_SPEC = declare(
     "select-a-rep.explicit-ask", solution="select-a-rep", metric="metric-select-a-rep",
     tier="fast", cache_layer="none", template=JUDGE_PROMPT)
 
-
-@solution("select-a-rep", kind="event", entry="resolve", example={"assignee_rep_id": "rep-1"})
-@typing.runtime_checkable
-class RepSelecting(typing.Protocol):
-    """Chooses the one AI representative a task is for: the persona id and its skill folder, or nothing when the task names none."""
-
-    def resolve(self, task: Mapping[str, Any]) -> Optional[Tuple[str, str]]: ...
 
 
 @implementation("select-a-rep", "persona_resolver_precedence")

@@ -11,7 +11,6 @@ Members the line does not need are built on first use.
 """
 from __future__ import annotations
 
-import typing
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
@@ -22,21 +21,26 @@ from esoi import AFTER, BEFORE
 from esoi import SpecSlice
 from hubofhubs.api import arm_needs as needs
 from hubofhubs.api import sufficiency
-from hubofhubs.api import CriticalThinking
 from hubofhubs.api import links_in_message
 from hubofhubs.api import LinkGuard, LinkPolicy
 from hubofhubs.api import DEEP_REVIEW_PROMPT, SubprocessConfig, parse_deep_review
 from hubofhubs.api import SubprocessGoalRunner
 from hubofhubs.api import ModelCalling
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestOperations
+from quest_ai_runner.the_body.internal_context.quest.interface import QuestOperations
 from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_judge
 from quest_ai_runner.the_intelligence.mind.planner import reach_judge
-from quest_ai_runner.the_intelligence.critical_thinking.goal_iteration import GoalIteration
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.interface import GoalIteration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import select_specs
 from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.metric_draft import MetricDraft
+from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import IntentGrounding
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.interface import MetricDrafting
+from quest_ai_runner.the_intelligence.critical_thinking.goal_completion.interface import DecisionJudging
+from quest_ai_runner.the_intelligence.critical_thinking.response_quality.interface import ReplyGuarding
+from quest_ai_runner.the_intelligence.mind.delegation.interface import StallDetecting
+from quest_ai_runner.the_intelligence.proactivity.interface import PassGating
 
 
 SpecSelecting = select_specs.__wrapped__    # the function that declares the spec-selection solution, as the type of its seat
@@ -95,16 +99,6 @@ def hold_case(case: Mapping[str, Any]) -> Dict[str, Any]:
     return {"rows": rows, "missing": bool(result.metric_missing), "proposed": False, "response": ""}
 
 
-@solution("judge-a-decision", kind="event", entry="reach_verdict", example='{"reach": "inside", "reason": "the note is in the card"}')
-@typing.runtime_checkable
-class DecisionJudging(typing.Protocol):
-    """Settles a narrow question from a model's raw answer: the reach of a request, the quests an item belongs to, the cards still abridged."""
-
-    def reach_verdict(self, raw: str) -> Optional[Dict[str, Any]]: ...
-    def rank(self, items: Sequence[Any], quests: Sequence[Any], call: Callable[[str, Any], str], home_quest_id: Optional[str] = None,
-             fallback_order: Optional[Sequence[str]] = None) -> Any: ...
-    def unfetched(self, cards: Sequence[Any], executed: Sequence[Any]) -> List[str]: ...
-
 
 @implementation("judge-a-decision", "qar_judges")
 class QarJudges:
@@ -122,14 +116,6 @@ class QarJudges:
         return [item.label for item in sufficiency.unfetched_abridged(sufficiency.collect_abridged_items(list(cards)), list(executed))]
 
 
-@solution("guard-a-reply", kind="event", entry="links", example="See https://example.org/a for details.")
-@typing.runtime_checkable
-class ReplyGuarding(typing.Protocol):
-    """Stops an unsafe reply: finds the links in a text and checks each one, so a link that does not resolve never reaches the person."""
-
-    def links(self, text: str) -> List[Any]: ...
-    def sanitize(self, text: str, policy: Mapping[str, Any], fetcher: Callable[[str, float], Any]) -> Any: ...
-
 
 @implementation("guard-a-reply", "qar_guards")
 class QarGuards:
@@ -142,13 +128,6 @@ class QarGuards:
     def sanitize(self, text: str, policy: Mapping[str, Any], fetcher: Callable[[str, float], Any]) -> Any:
         return LinkGuard(LinkPolicy.from_dict(dict(policy)), fetcher=fetcher).sanitize(text)
 
-
-@solution("ground-in-intent", kind="event", entry="frame", example="quest-id")
-@typing.runtime_checkable
-class IntentGrounding(typing.Protocol):
-    """Ties work to its purpose: the frame of the person's intent a quest sits under, from the ids Quest holds."""
-
-    def frame(self, quest_id: str) -> Optional[Mapping[str, Any]]: ...
 
 
 @implementation("ground-in-intent", "frame-line")
@@ -163,13 +142,6 @@ class FrameLine:
         return self.quest.get_intent_frame(quest_id)
 
 
-@solution("detect-a-stalled-run", kind="event", entry="review", example={"elapsed": "12 minutes", "idle": "9 minutes", "tail": "(no output)"})
-@typing.runtime_checkable
-class StallDetecting(typing.Protocol):
-    """Tells a stuck run from a slow one: from the elapsed time, the idle time and the tail of the session, whether the worker should still run."""
-
-    def review(self, elapsed: str, idle: str, tail: str) -> Mapping[str, Any]: ...
-
 
 @implementation("detect-a-stalled-run", "live_reviewer")
 class LiveReviewer:
@@ -181,13 +153,6 @@ class LiveReviewer:
         verdict = parse_deep_review(runner.call_reviewer_cli(DEEP_REVIEW_PROMPT.format(elapsed=elapsed, idle=idle, tail=tail)))
         return {"stop": None, "reason": "unreadable verdict"} if verdict is None else {"stop": verdict[0], "reason": verdict[1]}
 
-
-@solution("draft-a-metric", kind="event", entry="draft", example={"task_text": "Propose this week's value", "card": {}, "context_view": ""})
-@typing.runtime_checkable
-class MetricDrafting(typing.Protocol):
-    """Drafts a missing metric value from the quest's own data for its owner to confirm; one light model call, capped."""
-
-    def draft(self, task_text: str, card: Mapping[str, Any], context_view: str = "") -> Any: ...
 
 
 @implementation("draft-a-metric", "capped_model_draft")
@@ -201,13 +166,6 @@ class CappedModelDraft:
     def draft(self, task_text: str, card: Mapping[str, Any], context_view: str = "") -> Any:
         return MetricDraft(self.quest, self.model, "fast").decide(task_text, card, context_view)
 
-
-@solution("gate-an-autopilot-pass", kind="event", entry="gate", example="quest-id")
-@typing.runtime_checkable
-class PassGating(typing.Protocol):
-    """Keeps background work inside its hours and budget: whether a quest's pass is skipped, and why, or passes every gate to the work."""
-
-    def gate(self, quest_id: str, now: str = "") -> Mapping[str, Any]: ...
 
 
 @implementation("gate-an-autopilot-pass", "live_pass")
@@ -226,15 +184,6 @@ class LivePass:
             return {"outcome": "skipped", "text": result.skipped[0]["reason"]}
         return {"outcome": "ran", "text": ""}
 
-
-@solution("critical-thinking", kind="event", entry="evaluate",
-          example={"request": "Ship the launch note", "outcome": {"kind": "deep", "has_metric": True, "changed": True, "before": 0.4, "after": 0.6}})
-@typing.runtime_checkable
-class MetricHolding(CriticalThinking, typing.Protocol):
-    """The hub's ``critical-thinking`` interface (translate a request into a target, evaluate the outcome against it) and QAR's line that holds
-    a request to the metric that serves it: the rows of its reading before and after that the code kept, whether a change ended with none."""
-
-    def hold(self, case: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
 
 @implementation("critical-thinking", "deep_runs_only")

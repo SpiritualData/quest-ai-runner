@@ -16,12 +16,10 @@ from __future__ import annotations
 
 import logging
 import re
-import typing
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from hubofhubs.api import tiers as hub_tiers
-from hubofhubs.api import TierSelection
 from hubofhubs.api import newest_in_family, split_tokens
 from hubofhubs.api import ModelProvider
 
@@ -426,12 +424,6 @@ class ModelRegistry:
             t = "balanced"
         return self.top_models()[t]
 
-
-@solution("model-tier-chooser", kind="event", entry="choose", example={"available": ["anthropic"]})
-@typing.runtime_checkable
-class RegistryTierSelection(TierSelection, typing.Protocol):
-    """QAR's tier chooser: the hub's ``model-tier-chooser`` interface with QAR's bars (``TIER_MIN_CASES`` and ``TIER_MIN_PASS_RATE``)
-    as its defaults, so a measured pick has to clear them before it replaces the live model list."""
 
 
 @implementation("model-tier-chooser", "model_registry")

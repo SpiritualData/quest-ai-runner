@@ -3,7 +3,7 @@ import pytest
 from esoi import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.the_world.tools.web_search.area import KnowingTheWorld
+from quest_ai_runner.the_world.science.interface import KnowingTheWorld
 
 
 def strict_outcome(solution_id):

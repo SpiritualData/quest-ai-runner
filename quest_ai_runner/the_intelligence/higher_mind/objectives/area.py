@@ -10,27 +10,19 @@ use, so a line that does not read one never asks for it.
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, Mapping, Optional, Tuple
 
-from esoi import implementation, solution
+from esoi import implementation
 from esoi import Lazy
 
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import ConversationRemembering
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import ConversationRemembering
 from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceProvider
-from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_store import PredictionStore
-from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import LongTermGuiding
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import RecentContextStore
+from quest_ai_runner.the_intelligence.subconscious.intuition.interface import PredictionStore
+from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import LongTermGuiding
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import RecentContextStore
 from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import FeedbackKeeping
-from quest_ai_runner.the_consciousness.representatives.personas import RepSelecting
+from quest_ai_runner.the_consciousness.representatives.interface import RepSelecting
 
-
-@solution("hold-the-intents", kind="event", entry="hold", example={"quest_id": "quest-id", "message": "What should I work on first this week?"})
-@typing.runtime_checkable
-class IntentHolding(typing.Protocol):
-    """What is already known for a request: the recent cards, the guidance that applies, what is still owed and the predictions."""
-
-    def hold(self, quest_id: str, message: str = "") -> Mapping[str, Any]: ...
 
 
 @implementation("hold-the-intents", "separate_stores")

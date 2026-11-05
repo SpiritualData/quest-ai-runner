@@ -38,7 +38,7 @@ from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import Guid
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_body.internal_context.interface import RetrievalAdapter
 from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation import Anticipator
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InputInbox
+from quest_ai_runner.the_intelligence.mind.delegation.interface import InputInbox
 from quest_ai_runner.the_self.assembler.resolve import resolve
 from quest_ai_runner.the_world.tools.tools import ToolRegistry
 
@@ -58,7 +58,7 @@ from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import (
     VERIFY_GOAL_TOOL, VERIFY_GOAL_PROMPT, VERIFY_DONE_EVIDENCE_NOTE, PREFLIGHT_PLAN_PROMPT, PREFLIGHT_PLAN_TOOL, MODE_RELEASE_TOOL,
     MODE_RELEASE_PROMPT, FUTURE_CONTEXT_DELIMITER, DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, QUEST_DATA_WRITE_SURFACE_INSTRUCTION, REPLY_VOICE_SYSTEM)
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import RecentContextStore
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import RecentContextStore
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, DEFERRED_DEEP_INLINE_SEMANTICS, DEFERRED_DEEP_QUEUED_SEMANTICS,
     PLANNER_DECISION_RUBRIC, PLANNER_PROFILES, PLANNER_PROMPT, PLANNER_PROMPT_COMPACT)
@@ -69,9 +69,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool impo
     DECIDE_TOOL, DECIDE_TOOL_WITH_MODE_SIGNAL, DEFERRED_RUNNER_KEY, decide_tool_for, planner_prompt_defaults, render_planner_prompt)
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import (
     apply_quest_data_ladder_guard, normalize_decision, parse_goal_condition_reply)
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import (
-    _card_update_store, _deep_future_context, _future_context_channel, _normalize_future_context, _strip_future_context, sentence,
-    unconfirmed_no_change_text)
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _strip_future_context, sentence, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import (
     _grounding_block, _oversee_worth_a_look, _project_card_metadata_for_event, _project_sources_for_event, grounding_answer_tail)
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (

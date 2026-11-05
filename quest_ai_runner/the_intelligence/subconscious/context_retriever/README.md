@@ -25,7 +25,7 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Context card selector | `select-context` | no entry declared | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Context card selector | `select-context` | `quest_ai_runner.run("select-context", 'What should I work on first this week?')` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
 | Fail-safe card reference resolver | `resolve-references` | no entry declared | Registry of built-in and host resolvers (`note`) | Pointer-resolution safety over offline cases |
 | Unified card and specification search | `search-cards-and-specs` | no entry declared | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 | Semantic vector index | `index-by-meaning` | no entry declared | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |

@@ -16,7 +16,7 @@ from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_learni
 from hubofhubs.api import STEP_SUMMARIZE, answer_with_reasoning, plan_with_step
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import _extract_json
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _card_update_store, _deep_future_context
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import card_update_store, deep_future_context
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _normalize_card_edits, _proposed_card_text
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import _Emitter
@@ -39,7 +39,7 @@ class CardsMixin:
         try:
             return bool(self.cfg.async_card_update
                         and self.provider is not None
-                        and _card_update_store(self.context_assembler) is not None)
+                        and card_update_store(self.context_assembler) is not None)
         except Exception:  # noqa: BLE001
             return False
 
@@ -98,7 +98,7 @@ class CardsMixin:
         model returns.
         """
         try:
-            store = _card_update_store(self.context_assembler)
+            store = card_update_store(self.context_assembler)
             if store is None or self.provider is None or not self.cfg.async_card_update:
                 return 0
             user_id = (ctx_meta or {}).get("user_id")
@@ -384,7 +384,7 @@ class CardsMixin:
         """Build the updater's input bundle from a finished deep result and kick off the async card
         updater. The request is the user's goal/condition; ``executed`` is the brief + each deep
         result's output; the FUTURE-CONTEXT bullets come from each result's ``future_context`` field
-        (filled at the runner seam by ``_normalize_future_context``, from EITHER channel). Inert when
+        (filled at the runner seam by ``normalize_future_context``, from EITHER channel). Inert when
         the updater is not active or nothing executed. Never raises.
 
         WHAT THE TURN MAY TEACH is decided here, from structured facts only (see
@@ -407,7 +407,7 @@ class CardsMixin:
             if outputs:
                 executed_parts.append("RESULT:\n" + "\n\n".join(outputs))
             future = "\n".join(
-                fc for fc in (_deep_future_context(d) for d in results) if fc
+                fc for fc in (deep_future_context(d) for d in results) if fc
             )
             self._update_cards_after_deep_async(
                 request=request,

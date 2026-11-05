@@ -3,7 +3,7 @@ import pytest
 from esoi import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.nervous_system.area import RunWatching
+from quest_ai_runner.the_intelligence.nervous_system.interface import RunWatching
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
 from tests.conftest import StubProvider
 

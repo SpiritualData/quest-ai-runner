@@ -30,6 +30,26 @@ SCOPE = "quest_ai_runner"
 CARD_STORE = "card-store"
 CARD_REPOSITORY = "qar-card-repository"  # the name of QAR's arm; QAR's records select it, this only names it for tests and logs
 PACKAGE_DIR = Path(__file__).resolve().parents[2]
+SELF_DECLARING = ("quest_ai_runner.the_self.respond",
+                  "quest_ai_runner.the_intelligence.mind.planner.message_routing",
+                  "quest_ai_runner.the_intelligence.mind.area_mind",
+                  "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world",
+                  "quest_ai_runner.the_body.area_body",
+                  "quest_ai_runner.the_intelligence.critical_thinking.area",
+                  "quest_ai_runner.the_intelligence.nervous_system.area",
+                  "quest_ai_runner.the_intelligence.higher_mind.objectives.area",
+                  "quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager",
+                  "quest_ai_runner.the_intelligence.critical_thinking.response_quality.area",
+                  "quest_ai_runner.the_world.tools.web_search.area",
+                  "quest_ai_runner.the_intelligence.subconscious.area_context_retriever",
+                  "quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler",
+                  "quest_ai_runner.the_intelligence.subconscious.cards_from_files.qar_topic_bootstrap")
+
+
+def declaring_modules() -> tuple:
+    """Every module of QAR that declares a solution: each solution's ``interface.py`` beside its code, and the few modules that declare one in the file that does its work."""
+    interfaces = sorted("quest_ai_runner." + ".".join(p.relative_to(PACKAGE_DIR).with_suffix("").parts) for p in PACKAGE_DIR.rglob("interface.py"))
+    return (*interfaces, *SELF_DECLARING)
 
 
 @functools.lru_cache(maxsize=1)
@@ -37,7 +57,7 @@ def child() -> Assembler:
     """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
     root = PACKAGE_DIR.parent
     records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=("quest_ai_runner.the_self.goal_agent", "quest_ai_runner.the_intelligence.mind.planner.message_routing", "quest_ai_runner.the_intelligence.mind.area_mind", "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world", "quest_ai_runner.the_body.area_body", "quest_ai_runner.the_intelligence.critical_thinking.area", "quest_ai_runner.the_intelligence.nervous_system.area", "quest_ai_runner.the_intelligence.higher_mind.objectives.area", "quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager", "quest_ai_runner.the_intelligence.critical_thinking.response_quality.area", "quest_ai_runner.the_world.tools.web_search.area", "quest_ai_runner.the_intelligence.subconscious.area_context_retriever", "quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler", "quest_ai_runner.the_intelligence.subconscious.cards_from_files.qar_topic_bootstrap"))
+    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=declaring_modules())
 
 
 def register_with_hub() -> None:

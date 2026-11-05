@@ -2,7 +2,7 @@
 import quest_ai_runner
 from esoi import targets
 
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.area import KeepingGeneric
+from quest_ai_runner.the_self.integrity.interface import KeepingGeneric
 
 
 def test_the_id_of_the_area_answers_offline():

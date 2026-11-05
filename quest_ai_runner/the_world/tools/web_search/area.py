@@ -7,19 +7,12 @@ snippet-first adapter under QAR's tuning (``science/web_research.py``), unchange
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, List, Optional, Union
 
-from esoi import implementation, solution
-from hubofhubs.api import WorldKnowing
+from esoi import implementation
 
 from quest_ai_runner.the_world.tools.web_search.web_research import WebSearching
 
-
-@solution("the-science", kind="event", entry="search", example="meditation and attention")
-@typing.runtime_checkable
-class KnowingTheWorld(WorldKnowing, typing.Protocol):
-    """The hub's ``the-science`` interface: what the world says now, as observations a reader can cite."""
 
 
 @implementation("the-science", "web_with_support_check")

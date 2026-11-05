@@ -4,10 +4,11 @@ Split out of ``adapters.py`` by definition; that module re-exports every name he
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from dataclasses import dataclass, field
 
 from esoi import solution
+import typing
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
@@ -73,3 +74,11 @@ class GuidanceProvider(Protocol):
     ) -> "List[GuidanceCard]":
         """Top-``k`` cards (WITH bodies) most relevant to ``user_message``; may return [].
         ``meta`` carries the caller's scope (e.g. user/team/quest ids). Never raises."""
+
+
+@solution("guide-toward-the-long-term-goal", kind="event", entry="directive", example="What should I work on first this week?")
+@typing.runtime_checkable
+class LongTermGuiding(typing.Protocol):
+    """Points a reply at the quest's next milestone and its current reading, or holds back: the directive a reply is written under."""
+
+    def directive(self, message: str) -> str: ...

@@ -6,10 +6,9 @@ route as a classification label.
 """
 from __future__ import annotations
 
-import typing
 from typing import Any, Dict, Mapping
 
-from esoi import implementation, solution
+from esoi import implementation
 from hubofhubs.api import ModelCalling
 
 from quest_ai_runner.the_self.loop_wiring import orchestrator_over
@@ -30,13 +29,6 @@ def route_message(model: Any, message: str) -> Dict[str, Any]:
     return route_of(orchestrator_over(model, deep_runner=None)._plan(message, "", "", []))
 
 
-@solution("route-a-message", kind="event", entry="route", example="Save a note that the launch moves to Friday.")
-@typing.runtime_checkable
-class MessageRouting(typing.Protocol):
-    """Decides where one message goes, as data: ``{"route", "tool", "calls", "raw"}``."""
-
-    def route(self, message: str) -> Mapping[str, Any]: ...
-
 
 @implementation("route-a-message", "planner_route")
 class PlannerRoute:
@@ -50,9 +42,3 @@ class PlannerRoute:
         return route_message(self.model, message)
 
 
-@solution("take-in-the-world", kind="event", entry="take_in", example="Save a note that the launch moves to Friday.")
-@typing.runtime_checkable
-class RequestTakingIn(typing.Protocol):
-    """Accepts one request and describes it: where it goes and which channels its context is fed from."""
-
-    def take_in(self, message: str) -> Mapping[str, Any]: ...

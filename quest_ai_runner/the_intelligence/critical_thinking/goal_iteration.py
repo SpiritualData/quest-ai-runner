@@ -27,7 +27,7 @@ An arm is only what the goal loop hands the ``esoi.iteration.MetricIteration`` i
 """
 from __future__ import annotations
 
-from typing import Optional, Protocol, Sequence
+from typing import Optional, Sequence
 
 from esoi import implementation, solution
 from esoi import MetricMeter, meters_from_names
@@ -36,17 +36,6 @@ from esoi import RepoSliceSource, SliceSource, SpecSlice
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs
 from quest_ai_runner.the_body.configuration.runtime_settings import core_settings, process_environment
 
-
-@solution("iterate-by-spec", kind="event", entry="slice_for", example="Tidy the card store")
-class GoalIteration(Protocol):
-    """What the code adds around one deep goal: a slice source (None for none) and the meters that read its metric."""
-    name: str
-    measures: bool
-    source: Optional[SliceSource]
-    meters: Sequence[MetricMeter]
-
-    def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
-        """The slice of the specification the goal serves, or None when the arm gives the brief none."""
 
 
 @implementation("iterate-by-spec", "generic-doctrine")

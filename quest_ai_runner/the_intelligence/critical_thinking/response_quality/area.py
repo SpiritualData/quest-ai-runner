@@ -9,24 +9,16 @@ the entry point to the selector is ``core/resolve.py``.
 """
 from __future__ import annotations
 
-import typing
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from esoi import implementation, solution
+from esoi import implementation
 from hubofhubs.api import scan
 from hubofhubs.api import PromptsAsData, config_share
-from hubofhubs.api import Genericity
 from hubofhubs.api import Staying
 
 PACKAGE_DIR = Path(__file__).resolve().parents[3]
 
-
-@solution("system-integrity", kind="event", entry="audit", example=["examplevendor"])
-@typing.runtime_checkable
-class KeepingGeneric(Genericity, typing.Protocol):
-    """The hub's ``system-integrity`` interface: the vendor-name branches in QAR's own brain for the terms given, how stale the hub's
-    research is and how much of the hub connects by configuration, and the check of a run record."""
 
 
 @implementation("system-integrity", "structure-library")

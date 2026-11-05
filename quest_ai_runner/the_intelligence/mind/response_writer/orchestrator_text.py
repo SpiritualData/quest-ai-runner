@@ -105,7 +105,7 @@ def _parse_future_context(output: Optional[str]) -> str:
         return ""
 
 
-def _future_context_channel(runner: Any) -> str:
+def future_context_channel(runner: Any) -> str:
     """Which FUTURE-CONTEXT channel this deep runner declares (see adapters.FUTURE_CONTEXT_VIA_*).
 
     Read with ``getattr`` so DUCK-TYPED runners (the common case; most consumers never subclass
@@ -120,7 +120,7 @@ def _future_context_channel(runner: Any) -> str:
         return FUTURE_CONTEXT_VIA_OUTPUT
 
 
-def _normalize_future_context(res: DeepResult) -> DeepResult:
+def normalize_future_context(res: DeepResult) -> DeepResult:
     """ONE seam, applied to EVERY DeepResult the moment a runner returns it: move the worker's
     FUTURE-CONTEXT bullets OUT of ``output`` and into ``future_context``.
 
@@ -152,11 +152,11 @@ def _normalize_future_context(res: DeepResult) -> DeepResult:
     return res
 
 
-def _deep_future_context(result: Any) -> str:
+def deep_future_context(result: Any) -> str:
     """The FUTURE-CONTEXT bullets of one deep result, from the structured field with a fallback to
     parsing the output.
 
-    The field is authoritative (``_normalize_future_context`` fills it at the runner seam). The
+    The field is authoritative (``normalize_future_context`` fills it at the runner seam). The
     parse fallback covers a DeepResult built OUTSIDE that seam (e.g. a consumer that constructs one
     directly, or an older runner reflected back through a queue), so the card updater keeps learning
     in those paths too. Never raises.
@@ -178,7 +178,7 @@ def _strip_future_context(output: Optional[str]) -> str:
     ``_parse_future_context``, which reads from that same point) and trims trailing whitespace.
     Returns the output unchanged when the delimiter is absent.
 
-    It is applied ONCE, at the runner seam, by ``_normalize_future_context`` -- so ``DeepResult.output``
+    It is applied ONCE, at the runner seam, by ``normalize_future_context`` -- so ``DeepResult.output``
     is already clean everywhere downstream. The remaining calls on the emit paths are a deliberate
     belt-and-braces net for a DeepResult that never passed through that seam. Never raises.
     """
@@ -236,7 +236,7 @@ def _future_context_for_display(results: Any) -> str:
     try:
         parts: List[str] = []
         for d in (results or []):
-            section = _deep_future_context(d)
+            section = deep_future_context(d)
             if not section:
                 continue
             # Drop pure "(none)" placeholders; keep real bullets verbatim.
@@ -249,7 +249,7 @@ def _future_context_for_display(results: Any) -> str:
         return ""
 
 
-def _card_update_store(assembler: Any) -> Optional[Any]:
+def card_update_store(assembler: Any) -> Optional[Any]:
     """Return the underlying card store that exposes the card-update API, or None. Never raises.
 
     GENERIC capability detection (no hardcoded ``FileContextStore`` type check): an object is

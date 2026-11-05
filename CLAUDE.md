@@ -16,9 +16,16 @@ are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR ke
   hub's Planner). A solution's records (`solutions.csv`, `implementations.csv`, `metrics.csv`, generated `README.md`) sit in the folder of its code.
   Quest is the interface: the Quest API client and card stores are Body arms, quests and goals are Objectives under Higher Mind, the task queue
   and terminal are Request Intake and Terminal under the Consciousness. There are no layer folders (`core/`, `adapters/`, `runner/` are gone).
-- **One front door.** `quest_ai_runner.run("<id>", input)` runs any solution (beside `hubofhubs.run`); `quest_ai_runner/api.py` lists the stable names a
-  host application (the Quest backend) imports, so a module can move without breaking it; `python -m quest_ai_runner <cli|tools|lane|requirements>` is
-  the one stable command line (deep workers and lane scripts call it, never a module path).
+- **Interfaces first, one front door.** A solution declares its interface once, in the `interface.py` beside its code (five Protocols still sit in their implementation files because a value type or sibling port moves with them: `reply-in-steps`, `show-the-ais-work`, `describe-an-attachment`, `search-the-web`, `store-feedback`; a Protocol with `@solution(id, entry=...)`; an override of a
+  hub solution extends the hub's Protocol and never redeclares it), and its role (purpose, `out_of_scope`, `delegates_to`) in its `solutions.csv` row. `quest_ai_runner.run("<id>", input)` runs any
+  solution through the entry its interface declares (beside `hubofhubs.run`); `quest_ai_runner/api.py` is the only surface a host application (the Quest backend) imports: `run` and the few
+  names it implements or reads, grouped by solution, never underscore-prefixed, never a capability probe (the interface is the contract). A name is added there only when a consumer outside
+  this repository imports it. `python -m quest_ai_runner <cli|tools|lane|requirements>` is the one stable command line (deep workers and lane scripts call it, never a module path).
+- **The flow is code.** `quest_ai_runner/the_self/respond.py` is the flow of one request (Request intake, Higher mind, Subconscious, Mind, Nervous System, Critical Thinking); the Mind's
+  orchestrator loop is the selected arm and hosts most parts until a hub arm of that part wins by metric. The intent paragraph in `esoi/intent.csv` states the same order.
+- **Autopilot is the hub's.** WHEN standing work starts is the hub's Proactivity solution and WHAT matters first is the hub's Prioritization solution (both reached with `quest_ai_runner.run`); QAR
+  supplies only the Quest-specific parts, Quest as the source of events (`feed-context-sources`) and of priorities (`hold-the-intents`), and the run-or-skip gate (`gate-an-autopilot-pass`, which
+  delegates to both). New autopilot logic goes to those two hub solutions first; see `docs/explanation/hub-of-hubs.md`.
 - **The hub only through `hubofhubs.api` and `hubofhubs.run`.** Never import a hub internal path; a missing name is
   added to the hub's `api.py` first.
 - The orchestrator loop (`the_intelligence/mind/orchestrator*.py`, split by role into mixins) is the one arm of the hub's Mind that QAR selects today;
