@@ -14,7 +14,7 @@ One row per integration point. Columns (extra columns such as `tracking_status`,
 | `integration_id` | unique id |
 | `solution_id` | the consumer's own solution this point belongs to (needed with `--solutions`/`--results`) |
 | `module`, `symbol` | the consumer's dotted module and its class or function |
-| `qar_solution_id` | a `solution_id` from QAR's records (the `solutions.csv` files of the tree, read with `esoi.intents.read_tree`), or empty |
+| `qar_solution_id` | a `solution_id` from QAR's records (the `solutions.csv` files of the tree, read with `esoi.read_tree`), or empty |
 | `qar_port` | for an implementation: the Protocol class it claims (`RetrievalAdapter`, `EscalationSink`, ...) |
 | `qar_symbol` | for a call or config row: the `quest_ai_runner.module:Name` the consumer uses |
 | `kind` | `implementation` (a consumer class for a QAR port), `config` (config passed to a QAR object), `call` (the consumer calls a QAR symbol), `duplicate` (library plumbing copied or patched in the consumer: must name the action that removes it) |

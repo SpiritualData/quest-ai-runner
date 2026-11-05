@@ -1,6 +1,6 @@
 """The metric record as QAR wires it: the ledger folder, the cap pinned to the explanation, and the tool a worker records with.
 
-The row, the ledger file and the reconciling are the esoi library's (``esoi.metric_results``) and are tested there. What is
+The row, the ledger file and the reconciling are the esoi library's (``esoi.optimization.keep_metric_record.metric_results``) and are tested there. What is
 QAR's own is where the ledger lives (``QAR_METRIC_LEDGER_DIR``), that the payload cap equals the answer explanation's, and the
 tool that refuses what is not a result. Offline: no model, no network.
 """

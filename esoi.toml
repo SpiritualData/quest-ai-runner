@@ -165,7 +165,7 @@ file = "../ai-hub-of-hubs-structure/esoi/evidence.csv"
 "Claude Code CLI (claude -p stream-json)" = "stream_json"
 
 # Opt-in rules: S36 network, S37 entry, S38 coherence, S39 ratchet.
-# A floor is a measurement: each one below is the value `python3 -m esoi.coherence` reports for that intent now, with the reason beside it.
+# A floor is a measurement: each one below is the value `python3 -m esoi.structure.structure_check.coherence` reports for that intent now, with the reason beside it.
 # Earlier floors of 1.0 (and select_context 0.667) had been set on docstring sentences that named the ids; E2 counts executable code only,
 # so those were above what the code shows and are lowered here. A floor rises when a composition is typed in code, and is never set above a measurement.
 [rules.S36]
@@ -191,7 +191,7 @@ precision = 1.0
 coverage = 1.0
 
 # The floors of each area (a sub-intent): the measured precision and coverage of its edges, host edges included (the area's implementation
-# uses every root of the area). Edges that show no code are named by `python3 -m esoi.coherence`.
+# uses every root of the area). Edges that show no code are named by `python3 -m esoi.structure.structure_check.coherence`.
 # 5 of 7: run-deep-work and write-through-mcp are parts of the area that the area's composition does not type.
 [rules.S38.floors.body]
 precision = 0.714

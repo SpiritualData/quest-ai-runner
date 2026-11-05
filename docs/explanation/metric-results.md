@@ -1,6 +1,6 @@
 # The metric record of a deep goal
 
-**Code:** the esoi library holds the row, the ledger, the payload, the slice and the meters (`esoi.metric_results`,
+**Code:** the esoi library holds the row, the ledger, the payload, the slice and the meters (`esoi.optimization.keep_metric_record.metric_results`,
 `esoi.spec_slice`, `esoi.metric_meter`, `esoi.iteration`; the guide is `docs/how-to/measure-before-and-after.md` in the esoi
 repository). QAR holds `core/goal_metrics.py` (the flow around a goal: the gate and the nudge), `core/tools_metric_results.py`
 (the tool and the ledger folder), `critical_thinking/goal_iteration.py` (the arms) and `core/repo_specs.py` (`slice_root`, which repository a
