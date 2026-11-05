@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Memory only, no research (floor) | `know-the-world:memory_only` | [`evaluation/components/know_the_world/impls/memory_only.py`](memory_only.py) |  |
+| Memory only, no research (floor) | `the-science:memory_only` | [`evaluation/components/know_the_world/impls/memory_only.py`](memory_only.py) |  |
 
 ## Where to go next
 

@@ -10,5 +10,5 @@
 
 ## Where to go next
 
-- Owning intent: [Remembering and recalling the person's own knowledge](../../../../quest_ai_runner/remember_and_recall/README.md)
+- Owning intent: [Subconscious](../../../../quest_ai_runner/subconscious/README.md)
 - Repository: [top README](../../../../README.md)

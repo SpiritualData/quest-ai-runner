@@ -17,7 +17,7 @@ persona, decision routing) to the generic library. Everything flows through a si
 ```python
 import os
 
-from hubofhubs.models.anthropic import AnthropicProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
 from quest_ai_runner.adapters import FilesAdapter
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
@@ -282,8 +282,8 @@ Your provider can wrap any SDK. Because the library's `core` never imports a pro
 you can add your own logging, analytics, or cost-triage inside the adapter without touching the
 brain. **The core ships with zero non-stdlib dependencies and never imports your LLM wrapper.**
 The vendor providers (`AnthropicProvider`, `GeminiProvider`, `OpenAIProvider`, `DeepSeekProvider`) and the `MultiProvider` router
-are the hub's (`hubofhubs.models`, per-vendor extras, settings as arguments); `quest_ai_runner/providers.py` builds them from the
-environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is the hub's `claude_cli` arm (`hubofhubs.models.claude_cli`); `quest_ai_runner/adapters/` binds QAR's usage limit and settings to it.
+are the hub's (`hubofhubs.the_world.model_plumbing.vendor_model_caller`, per-vendor extras, settings as arguments); `quest_ai_runner/providers.py` builds them from the
+environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is the hub's `claude_cli` arm (`hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli`); `quest_ai_runner/adapters/` binds QAR's usage limit and settings to it.
 
 A minimal wrapper example:
 

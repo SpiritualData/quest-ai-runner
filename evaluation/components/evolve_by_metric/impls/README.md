@@ -6,8 +6,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Evolvable-structure library decides (live) | `keep-it-generic:structure_library` | [`evaluation/components/evolve_by_metric/impls/structure_library.py`](structure_library.py) |  |
-| Keep the selection as written (floor) | `keep-it-generic:keep_current` | [`evaluation/components/evolve_by_metric/impls/keep_current.py`](keep_current.py) |  |
+| Evolvable-structure library decides (live) | `system-integrity:structure_library` | [`evaluation/components/evolve_by_metric/impls/structure_library.py`](structure_library.py) |  |
+| Keep the selection as written (floor) | `system-integrity:keep_current` | [`evaluation/components/evolve_by_metric/impls/keep_current.py`](keep_current.py) |  |
 
 ## Where to go next
 

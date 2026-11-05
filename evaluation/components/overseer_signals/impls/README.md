@@ -6,8 +6,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| No-judgement digest probe | `watch-for-risk:digest_probe` | [`evaluation/components/overseer_signals/impls/digest_probe.py`](digest_probe.py) |  |
-| Live overseer model arm | `watch-for-risk:live_model` | [`evaluation/components/overseer_signals/impls/live_model.py`](live_model.py) |  |
+| No-judgement digest probe | `nervous-system:digest_probe` | [`evaluation/components/overseer_signals/impls/digest_probe.py`](digest_probe.py) |  |
+| Live overseer model arm | `nervous-system:live_model` | [`evaluation/components/overseer_signals/impls/live_model.py`](live_model.py) |  |
 
 ## Where to go next
 

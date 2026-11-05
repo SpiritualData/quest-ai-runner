@@ -17,7 +17,7 @@ interactive Claude Code session.
 
 ## 2. What exists today (read from code)
 
-**Claude Code session resume (deep runs).** The hub stream runner (`hubofhubs/deep/stream_runner.py`) launches
+**Claude Code session resume (deep runs).** The hub stream runner (`hubofhubs/the_world/tools/delegated_agent_sessions/stream_runner.py`) launches
 `--session-id <new>` or `--resume <id>`; a pause is an interrupt ending the run as `DeepResult.paused` with its
 `session_id`. Turn-limit continuation is in `deep-run-continuation.md`. A task may carry `resume_session_id`; resume is best
 effort (an unknown id exits 1 and the runner starts cold), and `session_replay_tokens` skips a resume that would overflow
@@ -30,12 +30,12 @@ pruned session, or an answer turn (no session) gets nothing.
 **Context engine.** `core/recent_context.py` (`FileRecentContextStore`: scopes `conv:`, `quest:`, `global`; 8 turns and 24
 cards per conversation; 14-day prune; lexical relevance gate; item usage memory) is used at every entry point and per
 subgoal on the task path. `core/turn_context_store.py` makes past turns into cards. `TurnCardCache`
-(`hubofhubs/orchestrate/turn.py`) caches assembly for one turn and dies with it. History is lossless and relevance-selected.
+(`hubofhubs/the_intelligence/mind/delegation/overseer/turn.py`) caches assembly for one turn and dies with it. History is lossless and relevance-selected.
 This remembers WHAT WAS DISCUSSED; it holds no plan, partial output or tool results.
 
 **Stream reconnect, events, caches.** Backend `stream_registry.py` (`InFlightStreamRegistry`, keyed by conversation, user,
 message hash, short TTL) re-attaches a retry to a running stream: a dropped socket, not a return an hour later. Trail events
-come from `core/work_trace.py` (`TurnTrace`), are projected by `hubofhubs/ports/trace.py` (`project`: bounded text, URLs to
+come from `core/work_trace.py` (`TurnTrace`), are projected by `hubofhubs/the_consciousness/terminal/trace.py` (`project`: bounded text, URLs to
 domains, `viewer_may_see_titles`) and persisted by the backend; interims and asks are built behind a flag. The terminal's
 `_DeepRunTracker` (`interactive_session_tracker.py`) is an in-memory view model only. Caches: hub `WebCache` (LRU 512
 entries, per-entry TTL, disk tier: entry-count bounded, no byte budget, no user namespace), `CachedDbAdapter`, the hub
@@ -227,7 +227,7 @@ hub `ports/working_state.py`, `orchestrate/working_state_lru.py`; QAR `core/work
 pause; cold brief builder. Files: QAR `runner/executor_pauses.py`, `runner/executor.py`, `core/orchestrator_deep_run.py`,
 new `core/resume.py`; backend lease field and the resume endpoint.
 **Phase 3:** tool-result cache (byte budget, user namespace, by-id replay) under the hub web and paper tools; check 3. Files:
-hub `websearch/cache.py`; QAR `know_the_world/web_search_backends.py`.
+hub `websearch/cache.py`; QAR `science/web_search_backends.py`.
 **Phase 4:** chat answer turns and terminal checkpoint and resume; frontend Resume and Replay controls, Paused Trail state,
 the cold line (all locales). Files: quest-frontend Trail components and chat adapter, backend stream endpoint, QAR
 `interactive_session_persist.py`, `interactive_session_tracker.py`.

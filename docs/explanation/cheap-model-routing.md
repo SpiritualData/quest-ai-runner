@@ -332,7 +332,7 @@ The backend does not send `work_types` yet; until it does only `env_id` triggers
 
 `planner_prompt_profile = "situational"` assembles the planner prompt per turn from only the rules that apply
 (`PLANNER_RULES` in `core/planner_prompt.py`, the situation in `core/planner_doctrine.py`, the generic assembler in the hub's
-`hubofhubs.doctrine`). Each rule is a section of the full prompt, wording unchanged, plus a condition over structured facts:
+`hubofhubs.the_intelligence.mind.context_intake.doctrine`). Each rule is a section of the full prompt, wording unchanged, plus a condition over structured facts:
 `mode` (normal, brainstorm, hold_off), `deep_available`, `run_in_progress`, `reach` (the reach judge's verdict),
 `tools_offered`, `asks_change` and `has_material`. `asks_change` is the reach judge's boolean on the person's own message
 (the same one small call, run before the first plan) or the planner's `user_intent` "act" from an earlier step; either one

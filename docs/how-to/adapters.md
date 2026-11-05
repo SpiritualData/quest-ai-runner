@@ -1,6 +1,6 @@
 # How to implement adapters
 
-The brain depends only on **four interfaces**, defined in the `quest_ai_runner.core.adapters_*` modules (`ModelProvider` and `ContextAssembler` in `hubofhubs.ports`). A
+The brain depends only on **four interfaces**, defined in the `quest_ai_runner.core.adapters_*` modules (`ModelProvider` in `hubofhubs.the_world.model_plumbing.model` and `ContextAssembler` in `hubofhubs.the_body.internal_context.context`). A
 consumer supplies concrete implementations via `RunnerConfig`. They are `typing.Protocol`s, so you
 can satisfy them structurally (just match the methods) or subclass the provided ABCs
 (`RetrievalAdapterBase`, etc.).
@@ -43,7 +43,7 @@ Two first-class context channels, both generic, both off unless configured, both
 
 | | `NotionAdapter` | `GoogleChatAdapter` |
 |---|---|---|
-| module | `act_as_the_body/notion_adapter.py` | `adapters/google_chat_adapter.py` |
+| module | `body/notion_adapter.py` | `adapters/google_chat_adapter.py` |
 | reads | configured databases (`database_ids`: alias to id): rows, pages, block text | configured spaces (`space_names`): threads and messages |
 | auth | injected `token_provider` (`env_token_provider("NAME")`, `file_token_provider(path)`, `static_token_provider(t)`) | injected; `service_account_token_provider` for a Workspace |
 | HTTP | stdlib `urllib`, `Notion-Version` pinned (`NOTION_VERSION`) | stdlib `urllib` |
@@ -119,7 +119,7 @@ class MyProvider:
         ...
 ```
 
-The reference `AnthropicProvider` wraps the Anthropic SDK; it is the hub's (`hubofhubs.models.anthropic`, extra
+The reference `AnthropicProvider` wraps the Anthropic SDK; it is the hub's (`hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic`, extra
 `hubofhubs[anthropic]`) and takes its key as an argument. Swap in any provider (OpenAI, a local model, a deterministic stub for tests) by matching this
 shape: see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
 
@@ -128,7 +128,7 @@ shape: see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
 Runs deep, goal-driven work to a checkable done-standard.
 
 ```python
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 
 class MyDeepRunner:
     def run_goal(self, *, goal, brief, model=None, max_turns=None) -> DeepResult:
@@ -252,7 +252,7 @@ is the solution's `selected` in its `solutions.csv`;
 ```python
 from quest_ai_runner.core.resolve import resolve, register
 
-resolve("call-a-model", "gemini")                      # an explicit name
+resolve("vendor-model-caller", "gemini")                      # an explicit name
 resolve("run-deep-work", overrides=cfg.selections)     # RunnerConfig.selections, else the project default
 register("search-the-web", "mine", "my_pkg.search:MyBackend")   # your own implementation, no core edit
 ```
@@ -284,7 +284,7 @@ See [writing-a-consumer.md](writing-a-consumer.md) for the full config and
 
 ## DeepSeek provider
 
-`DeepSeekProvider` (`hubofhubs.models.openai`) is the OpenAI adapter pointed at the
+`DeepSeekProvider` (`hubofhubs.the_world.model_plumbing.vendor_model_caller.openai`) is the OpenAI adapter pointed at the
 OpenAI-compatible DeepSeek API. `quest_ai_runner/providers.py` registers it only when `DEEPSEEK_API_KEY` is set, and model
 ids starting with `deepseek` route to it (orchestrator and `MultiProvider`). `DEEPSEEK_BASE_URL`
 overrides the default `https://api.deepseek.com`. Thinking is off by default (the API default is

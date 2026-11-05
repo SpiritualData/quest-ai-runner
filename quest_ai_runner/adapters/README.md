@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Keyless command-line provider | `call-a-model:claude_cli` | [`quest_ai_runner/adapters/claude_cli_provider.py`](claude_cli_provider.py) |  |
+| Keyless command-line provider | `vendor-model-caller:claude_cli` | [`quest_ai_runner/adapters/claude_cli_provider.py`](claude_cli_provider.py) |  |
 | MCP gateway bridge transport | `talk-over-a-channel:openclaw` | [`quest_ai_runner/adapters/openclaw_channel.py`](openclaw_channel.py) | selected |
 
 ## Where to go next

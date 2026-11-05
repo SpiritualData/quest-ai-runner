@@ -9,5 +9,5 @@
 
 ## Where to go next
 
-- Owning intent: [Thinking critically by metric](../../../../quest_ai_runner/think_critically/README.md)
+- Owning intent: [Critical Thinking](../../../../quest_ai_runner/critical_thinking/README.md)
 - Repository: [top README](../../../../README.md)

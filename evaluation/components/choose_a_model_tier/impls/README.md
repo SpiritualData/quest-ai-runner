@@ -1,12 +1,14 @@
-# Arms in impls
+# impls
 
-*ESOI arms kept in `evaluation/components/choose_a_model_tier/impls`, generated from the records of the intents that own them by `esoi readmes`. Edit those records, not this page.*
+*ESOI records kept beside the code in `evaluation/components/choose_a_model_tier/impls`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
+
+## Implementations
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Live selection evaluation arm | `choose-a-model-tier:qar_selection` | [`evaluation/components/choose_a_model_tier/impls/qar_selection.py`](qar_selection.py) |  |
+| Live selection evaluation arm | `model-tier-chooser:qar_selection` | [`evaluation/components/choose_a_model_tier/impls/qar_selection.py`](qar_selection.py) |  |
 
 ## Where to go next
 
-- Owning intent: [Reasoning and answering each step of a request](../../../../quest_ai_runner/reason_and_answer/README.md)
+- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
 - Repository: [top README](../../../../README.md)

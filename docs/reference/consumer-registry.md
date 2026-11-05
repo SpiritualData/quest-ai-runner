@@ -53,5 +53,5 @@ that lives outside the library.
 
 Shared helpers belong in the library. Two a consumer would otherwise copy:
 `quest_ai_runner.take_in_the_world.async_bridge` (`run_coro_sync`, `run_detached`: one persistent background loop for
-sync adapter code calling async I/O) and `hubofhubs.act.signature_probe` (`accepted_keywords`,
+sync adapter code calling async I/O) and `hubofhubs.the_world.model_plumbing.signature_probe` (`accepted_keywords`,
 `accepted_fields`, `filter_keywords`: drop keywords an older installed library lacks).

@@ -13,8 +13,8 @@ flowchart LR
     s2["Layered lane configuration loader<br/><i>configure-a-lane</i>"]
     s3["Documentation coverage and voice check<br/><i>explain-qar</i>"]
     s4["Implementation selection<br/><i>select-an-implementation</i>"]
-    s0 -->|"A configured client or runner config, results of bridged..."| s1
-    s0 -->|"A configured client or runner config, results of bridged..."| s3
-    s2 -->|"A populated runner configuration object, or a..."| s0
-    s4 -->|"The implementation that serves a solution, chosen by name..."| s2
+    s0 -->|"A configured client or runner config, results of bridged calls, parsed edit blocks and applied edits"| s1
+    s0 -->|"A configured client or runner config, results of bridged calls, parsed edit blocks and applied edits"| s3
+    s2 -->|"A populated runner configuration object, or a configuration-file error naming the offending key; tuning values come back as one typed settings value"| s0
+    s4 -->|"The implementation that serves a solution, chosen by name, configuration or default"| s2
 ```

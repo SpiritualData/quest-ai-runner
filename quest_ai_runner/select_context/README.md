@@ -18,7 +18,7 @@ An arrow runs from the solution that provides to the solution that builds on it;
 flowchart LR
     s0["Context card selector<br/><i>select-context</i>"]
     s1["Semantic vector index<br/><i>index-by-meaning</i>"]
-    s1 -->|"Ranked hits with id, score, text and payload for search..."| s0
+    s1 -->|"Ranked hits with id, score, text and payload for search; counts for sync and count; the number deleted for eviction"| s0
 ```
 
 ## Solutions at a glance
@@ -35,7 +35,7 @@ flowchart LR
 **Problems**
 
 - An agent asked to answer or work from a person's own material has to find the relevant part of it first. (`prob-context-rediscovered-each-run`)
-- A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model... (`prob-two-searches-for-one-context`)
+- A run's context comes from two retrieval pipelines that repeat the same stages separately: context card selection (keyword IDF, vector search, weighted reciprocal-rank fusion, then a cheap-model filter and consolidation) and ESOI record selection (field-weighted TF-IDF, an optional vector search, reciprocal-rank fusion, then a gated cheap-model choice). (`prob-two-searches-for-one-context`)
 
 **Ideals**
 
@@ -107,7 +107,7 @@ flowchart LR
 | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | `search-cards-and-specs:solutions_and_problems_with_links` | [quest_ai_runner/core/unified_search.py](../core/unified_search.py) |  |
 | The hub's per-file card arm | `select-context:hub_per_file_symbols` | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
 | One card per folder, from the hub's card helpers | `select-context:hub_folder_cards` | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
-| Qdrant-backed vector store | `index-by-meaning:qdrant` | [quest_ai_runner/remember_and_recall/qdrant_vector_store.py](../remember_and_recall/qdrant_vector_store.py) |  |
+| Qdrant-backed vector store | `index-by-meaning:qdrant` | [quest_ai_runner/subconscious/qdrant_vector_store.py](../subconscious/qdrant_vector_store.py) |  |
 | BM25 over unit bodies (hub) | `select-context:hub_bm25_body` | [evaluation/components/context_selection/impls/hub_bm25_body.py](../../evaluation/components/context_selection/impls/hub_bm25_body.py) |  |
 | Fielded BM25 over title, path and body (hub) | `select-context:hub_bm25_fielded` | [evaluation/components/context_selection/impls/hub_bm25_fielded.py](../../evaluation/components/context_selection/impls/hub_bm25_fielded.py) |  |
 | BM25 over whole files (hub) | `select-context:hub_bm25_whole_files` | [evaluation/components/context_selection/impls/hub_bm25_whole_files.py](../../evaluation/components/context_selection/impls/hub_bm25_whole_files.py) |  |

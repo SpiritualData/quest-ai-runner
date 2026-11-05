@@ -144,7 +144,7 @@ and, after a merge, `merged_from` (on the wide store) or `merged_into` (on the s
 only the bootstrap keys and carries these through; it never moves a recorded root.
 
 **Mount instead of copy.** With `QAR_CARD_MOUNT=mount` a corpus that contains (or sits inside) other
-stores reads them in place and read-only (`hubofhubs.recall.card_store_mounts`):
+stores reads them in place and read-only (`hubofhubs.the_body.internal_context.card_store.card_store_mounts`):
 
 - A mounted card appears as `"<store_id>:<card_id>"`. Its paths are resolved against the two real
   roots at read time (`rebase_path`), so an ancestor's `lane/a.py` is the reader's `a.py`, and a path
@@ -440,7 +440,7 @@ the limit and counted. The limit never trims a store by itself: the [tidy](#tidy
   exchange the regenerable cards for learned ones for good. The card is admitted and counted as kept above the
   limit, and the report says so. The limit never trims a store it finds above it; only the tidy of provable
   duplicates (see below) or the cleanup script removes anything from it;
-- the folder's lock (`.store.lock`, `hubofhubs.recall.card_store_lock`) is shared by every process that changes
+- the folder's lock (`.store.lock`, `hubofhubs.the_body.internal_context.card_store.card_store_lock`) is shared by every process that changes
   the folder (the lanes, a terminal chat, a tidy), so four writers at the limit still end at the limit and
   every move is counted once. Nothing done while it is held is proportional to the size of the store: the
   count is a listing of file names, remembered until the folder changes; the cold cards that may move are
@@ -548,7 +548,7 @@ ids, 2,116 about nested repositories the folder review excludes, 1,062 duplicate
 tidies through the `CardRepository` port itself (`adapters/card_store_tidy.py`), the same way on a local folder,
 the Quest backend and Qdrant.
 
-**What it removes.** The plan is `plan_cards` (`hubofhubs.recall.card_store_tidy_plan`), the rules that were
+**What it removes.** The plan is `plan_cards` (`hubofhubs.the_body.internal_context.card_store.card_store_tidy_plan`), the rules that were
 `scripts/quarantine_cards.py` and that the script now imports: a card stored under a vector point id (its notes
 join the card it names), a compounded copy that has a surviving card with the same or more files, a card with
 more than half of its files under folders the folder review excludes for good, a surplus card pinning the same
@@ -746,7 +746,7 @@ into local cards), the error is logged, and the identity is retried on the next 
 
 `CardCache` (`adapters/quest_api_card_repository.py`) is the interface for an offline listing cache and
 write outbox (`load_listing`, `store_listing`, `enqueue_write`, `pending_writes`). The default is
-`FileCardCache` (`remember_and_recall/card_cache_file.py`), chosen through the `cache-cards` row of the selection
+`FileCardCache` (`subconscious/card_cache_file.py`), chosen through the `cache-cards` row of the selection
 table (`RunnerConfig.selections`, `null` for none): two atomic JSON files per lane under
 `<cards_dir>/.api-card-cache/<lane>/`. When the backend cannot be reached on a cold start, the repository
 serves the stored listing (the error stays loud and counted) and does a full refresh on the next

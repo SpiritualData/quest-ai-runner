@@ -1,10 +1,10 @@
-# Reasoning and answering each step of a request
+# Mind
 
 Every step of a person's request acts on everything the request has established so far, so a reply rests on the work done for it and the person can follow that work, at the cost of the fast tier.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `reason-and-answer:rebuilt_per_step` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: The loop's prompt can be rebuilt for each step from a template, cached head and context layers, the newest observations in full and older ones in one line, so a step's input stays small while the final answer still sees everything. That opens questions the parent solution does not ask: how much of the earlier steps a planner must see to keep continuity (from the second step the selected arm replaces the transcript with a short note that refers to step one, and its continuity is unmeasured), how a person is kept informed while a turn works (a first line, interim replies, the trail of what was done) without paying a model call for every line, and how a request that worked before skips the loop by replaying its known steps.
+This sub-intent arises as the implementation `the-mind:rebuilt_per_step` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: The loop's prompt can be rebuilt for each step from a template, cached head and context layers, the newest observations in full and older ones in one line, so a step's input stays small while the final answer still sees everything. That opens questions the parent solution does not ask: how much of the earlier steps a planner must see to keep continuity (from the second step the selected arm replaces the transcript with a short note that refers to step one, and its continuity is unmeasured), how a person is kept informed while a turn works (a first line, interim replies, the trail of what was done) without paying a model call for every line, and how a request that worked before skips the loop by replaying its known steps.
 
 ## How the solutions fit together
 
@@ -31,7 +31,6 @@ flowchart LR
 | Mode-aware progress surfacing | `show-progress` | no entry declared | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
 | Learned-operation fast path | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
 | Budgeted prompt assembler | `assemble-a-prompt` | `quest_ai_runner.run("assemble-a-prompt", 'What should I work on first this week?')` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
-| Cost-ordered model tier selector with outage and allowance recovery | `choose-a-model-tier` | `quest_ai_runner.run("choose-a-model-tier", {'available': ['anthropic']})` | Live tier registry (`model_registry`) | Model tier selection and limit-recognition correctness |
 | Core ML tasks | `core-ml-tasks` | `quest_ai_runner.run("core-ml-tasks", 'Save a note that the launch moves to Friday.')` | The route as the classification label (`router_labels`) | Accuracy of core ML tasks over labelled cases |
 | First-beat narration | `narrate-a-turn` | no entry declared | One cheap model call per turn writes the beat (today) (`model_beat`) | Supported first beats within the time and cost the turn allows |
 | How-I-got-this explanation | `explain-an-answer` | no entry declared | One model call writes the explanation from the trace (today) (`model_explanation`) | Faithful explanations per unit of cost and time |
@@ -47,8 +46,8 @@ flowchart LR
 - A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them. (`prob-progress-unreadable`)
 - One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes. (`prob-vendor-outage-halts-work`)
 - Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). (`prob-core-ml-tasks-unspecified`)
-- Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's... (`prob-quest-answer-not-tied-to-my-goal`)
-- Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a... (`prob-assistant-not-jarvis-from-the-users-seat`)
+- Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it assumes a circumstance the person never gave. (`prob-quest-answer-not-tied-to-my-goal`)
+- Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out. (`prob-assistant-not-jarvis-from-the-users-seat`)
 - A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do. (`prob-unmet-turn-leaves-person-guessing`)
 - A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves. (`prob-answer-reasoning-unseen`)
 - A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known. (`prob-known-operation-planned-again`)
@@ -59,7 +58,7 @@ flowchart LR
 - Legible Progress (`ideal-legible-progress`): The person sees what they need and no more, for the mode they are in.
 - Measured Core ML (`ideal-measured-core-ml`): Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
 - Goal-Fitted Answer (`ideal-quest-answer-fits-my-goal`): When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
-- Capable From The User's Seat (`ideal-jarvis-from-the-users-seat`): The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says...
+- Capable From The User's Seat (`ideal-jarvis-from-the-users-seat`): The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says only what it did.
 - Present And Prompt (`ideal-jarvis-j01-always-there-and-fast`): The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
 - Known Context (`ideal-jarvis-j02-knows-my-context`): The assistant already knows the person's own quests, goals and what they have said, and uses it without being told again.
 - Well-Timed Nudges (`ideal-jarvis-j03-nudges-at-the-right-moment`): The assistant speaks up on its own when something needs the person, at a moment that helps, and stays quiet when it does not.
@@ -73,13 +72,13 @@ flowchart LR
 - Surfaced-event policy by mode (`metric-show-progress`): leader `progress_sinks`, 14 of 14 cases
 - Fast-path hit rate and parity with the planner-only path (`metric-replay-known-operations`): leader `planner_only_offline`, 30 of 30 cases
 - Prompt size against budget and duplicated-block count (`metric-assemble-a-prompt`): leader `live`, 28 of 29 cases
-- Model tier selection and limit-recognition correctness (`metric-choose-a-model-tier`): leader `qar_selection`, 42 of 42 cases
 - Accuracy of core ML tasks over labelled cases (`metric-core-ml-tasks`): leader `labelled_rows`, 3 of 11 cases
 - Supported first beats within the time and cost the turn allows (`metric-narrate-a-turn`): leader `model_beat`, 12 of 13 cases
 - Faithful explanations per unit of cost and time (`metric-explain-an-answer`): leader `model_explanation`, 9 of 10 cases
 - Whole-path turns right on a small mixed set (`metric-answer-end-to-end`): leader `reference_script`, 13 of 13 cases
 - Quest answers that name the person's goal and circumstance and fit features to them (`metric-quest-answer-tied-to-goal-and-circumstance`): leader `reference_script`, 13 of 13 cases
-- and 7 more: all 17 are in [metrics](#metrics) of the full record below
+- Day-with-Jarvis turns right end to end (`metric-jarvis-ness`): leader `reference_script`, 13 of 13 cases
+- and 6 more: all 16 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -135,7 +134,6 @@ flowchart LR
 | Mode-aware progress surfacing | `show-progress` | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
 | Learned-operation fast path | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
 | Budgeted prompt assembler | `assemble-a-prompt` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
-| Cost-ordered model tier selector with outage and allowance recovery | `choose-a-model-tier` | Live tier registry (`model_registry`) | Model tier selection and limit-recognition correctness |
 | Core ML tasks | `core-ml-tasks` | The route as the classification label (`router_labels`) | Accuracy of core ML tasks over labelled cases |
 | First-beat narration | `narrate-a-turn` | One cheap model call per turn writes the beat (today) (`model_beat`) | Supported first beats within the time and cost the turn allows |
 | How-I-got-this explanation | `explain-an-answer` | One model call writes the explanation from the trace (today) (`model_explanation`) | Faithful explanations per unit of cost and time |
@@ -156,10 +154,6 @@ flowchart LR
 | Offline recipe replay arm | `replay-known-operations:recipe_replay_offline` | [evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py](../../evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py) |  |
 | Offline planner-only baseline | `replay-known-operations:planner_only_offline` | [evaluation/components/recipe_fast_path/impls/planner_only_offline.py](../../evaluation/components/recipe_fast_path/impls/planner_only_offline.py) |  |
 | Live assembly-point driver | `assemble-a-prompt:live` | [evaluation/components/prompt_size/impls/live.py](../../evaluation/components/prompt_size/impls/live.py) |  |
-| Difficulty-to-rung starter | `choose-a-model-tier:deep_model_selection` | [quest_ai_runner/core/deep_model_selection.py](../core/deep_model_selection.py) |  |
-| Live tier registry | `choose-a-model-tier:model_registry` | [quest_ai_runner/core/model_registry.py](../core/model_registry.py) |  |
-| Subscription allowance limit detector | `choose-a-model-tier:usage_limit` | [quest_ai_runner/core/usage_limit.py](../core/usage_limit.py) |  |
-| Live selection evaluation arm | `choose-a-model-tier:qar_selection` | [evaluation/components/choose_a_model_tier/impls/qar_selection.py](../../evaluation/components/choose_a_model_tier/impls/qar_selection.py) |  |
 | Milestone sink | `show-progress:milestone` | [quest_ai_runner/core/adapters_sinks.py](../core/adapters_sinks.py) |  |
 | Classify through the message router alternatives | `core-ml-tasks:message-route-family` | evaluation/components/classification/impls |  |
 | Route with the registry of examples, by model tier | `core-ml-tasks:registry-conditioned-routing` |  |  |
@@ -186,11 +180,11 @@ flowchart LR
 | An interim on every unmet attempt (spam baseline) | `reply-in-steps:every_attempt` | [evaluation/components/interim_reply/impls/every_attempt.py](../../evaluation/components/interim_reply/impls/every_attempt.py) |  |
 | The structural gate of core/interim_policy.py | `reply-in-steps:gated` | [quest_ai_runner/core/interim_policy.py](../core/interim_policy.py) |  |
 | The terminal draws the Trail from the hub's renderers | `show-the-ais-work:terminal_trail` | [quest_ai_runner/textual_ui_trail.py](../textual_ui_trail.py) |  |
-| The planner prompt written by the real loop | `assemble-a-prompt:planner_prompt` | [quest_ai_runner/area_reason_and_answer.py](../area_reason_and_answer.py) |  |
-| One turn of the orchestrator over the model | `answer-a-turn:orchestrator_turn` | [quest_ai_runner/area_reason_and_answer.py](../area_reason_and_answer.py) |  |
-| The shipped path as one call | `answer-end-to-end:shipped_path` | [quest_ai_runner/area_reason_and_answer.py](../area_reason_and_answer.py) |  |
-| The recipe store of the loop | `replay-known-operations:stored_recipes` | [quest_ai_runner/area_reason_and_answer.py](../area_reason_and_answer.py) |  |
-| The route as the classification label | `core-ml-tasks:router_labels` | [quest_ai_runner/area_reason_and_answer.py](../area_reason_and_answer.py) |  |
+| The planner prompt written by the real loop | `assemble-a-prompt:planner_prompt` | [quest_ai_runner/area_mind.py](../area_mind.py) |  |
+| One turn of the orchestrator over the model | `answer-a-turn:orchestrator_turn` | [quest_ai_runner/area_mind.py](../area_mind.py) |  |
+| The shipped path as one call | `answer-end-to-end:shipped_path` | [quest_ai_runner/area_mind.py](../area_mind.py) |  |
+| The recipe store of the loop | `replay-known-operations:stored_recipes` | [quest_ai_runner/area_mind.py](../area_mind.py) |  |
+| The route as the classification label | `core-ml-tasks:router_labels` | [quest_ai_runner/area_mind.py](../area_mind.py) |  |
 
 ### Metrics
 
@@ -198,7 +192,6 @@ flowchart LR
 - Surfaced-event policy by mode (`metric-show-progress`): `esoi run show_progress --impl progress_sinks`
 - Fast-path hit rate and parity with the planner-only path (`metric-replay-known-operations`): `esoi run recipe_fast_path --impl recipe_replay_offline`
 - Prompt size against budget and duplicated-block count (`metric-assemble-a-prompt`): `esoi run prompt_size --impl live`
-- Model tier selection and limit-recognition correctness (`metric-choose-a-model-tier`): `esoi run choose_a_model_tier --impl qar_selection`
 - Accuracy of core ML tasks over labelled cases (`metric-core-ml-tasks`): `esoi run core_ml_tasks --impl labelled_rows; esoi run classification --impl qar_planner`
 - Supported first beats within the time and cost the turn allows (`metric-narrate-a-turn`): `esoi run narrate_a_turn --impl model_beat`
 - Faithful explanations per unit of cost and time (`metric-explain-an-answer`): `esoi run explain_an_answer --impl model_explanation`

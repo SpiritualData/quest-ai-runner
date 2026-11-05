@@ -32,7 +32,7 @@ optional wall-clock cap.
 
 ## The control channel
 
-`hubofhubs.ports.control` defines `RunControl`, handed to one call of `run_goal(..., control=...)`:
+`hubofhubs.the_world.tools.delegated_agent_sessions.control` defines `RunControl`, handed to one call of `run_goal(..., control=...)`:
 
 | Field | Meaning |
 |---|---|

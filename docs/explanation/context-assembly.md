@@ -193,7 +193,7 @@ description or summary, each content item's `why` and note text, keywords), so t
   digest. It is a function of the origin alone (`origin_store`, `origin_id`, `origin_root`), so a card
   that reaches a store by two routes (straight from its store, or through a store between) is one id,
   an id never grows by hop, and a store never imports a card whose origin is itself, whichever way it
-  came back and whatever happened to its `imported_from` on the way (`hubofhubs.recall.card_origin`). Copies
+  came back and whatever happened to its `imported_from` on the way (`hubofhubs.the_body.internal_context.card_store.card_origin`). Copies
   made before origins were kept were `<namespace>--<id in the store it was read from>`, which stacked a
   prefix per hop; they are no longer offered, so the next refresh moves them out
   (`_quarantine/superseded-import/`).
@@ -263,7 +263,7 @@ runner opens it, and the card limit). What holds it, in the order a card meets t
 
 Growth paths still open (two reviews, 2026-10-22) are listed in the `bootstrap_guards` implementation of
 `bound-card-growth`, and the repair's open weaknesses in the `repository_tidy` implementation of
-`repair-a-card-store`, both in the `implementations.csv` records (`quest_ai_runner/remember_and_recall/`), where the next fix is chosen from.
+`repair-a-card-store`, both in the `implementations.csv` records (`quest_ai_runner/subconscious/`), where the next fix is chosen from.
 
 ### ESOI records as cards (planned)
 
@@ -317,7 +317,7 @@ should go and get the rest. Two things had gone wrong, and only one of them was 
 summary and full content **rendered identically** in the context view, so nothing told it which was
 which; and nothing checked the plan it returned.
 
-Both are closed in `hubofhubs.critique.sufficiency` (the hub), keyed on data the item declares about
+Both are closed in `hubofhubs.the_intelligence.critical_thinking.goal_completion.sufficiency` (the hub), keyed on data the item declares about
 itself, never on words the model wrote (hard rule #3). A content item whose stored text is an
 abridged stand-in says so on its locator, and names the read spec that fetches the real thing:
 
@@ -338,7 +338,7 @@ Then:
 - a plan that would terminate in `answer` while one of those fetches has **not run this turn** is
   turned into one `read` step that runs it, and the loop re-plans with the full text in GATHERED
   (`OrchestratorConfig.full_read_before_answer`, on by default). "Has it run" is judged against the
-  read specs that actually executed, the same way `hubofhubs.act.execution_record.ExecutionRecord` judges an answer's
+  read specs that actually executed, the same way `hubofhubs.the_body.internal_context.run_store.execution_record.ExecutionRecord` judges an answer's
   completion claims against what actually executed. It fires at most **once** per turn.
 
 Inert unless an item declares `full_ref`: no declaration means nothing to fetch, no notice, and a
@@ -599,7 +599,7 @@ def _last_transcript(self) -> str:
 
 ### CompositeContextAssembler
 
-`hubofhubs.recall.composite_assembler.CompositeContextAssembler` wraps multiple
+`hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler.CompositeContextAssembler` wraps multiple
 `ContextAssembler` instances into one. It calls each on `assemble()` (concatenating non-empty
 `context_view` strings with a double newline separator), merges `card_ids` and `stale` lists,
 and calls each on `record()` best-effort (never raises). This is how turn cards compose with
@@ -607,7 +607,7 @@ file cards or any other assembler:
 
 ```python
 from quest_ai_runner.core.turn_context_store import TurnContextStore
-from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 file_store = FileContextStore(cards_dir=".quest-context/cards")
@@ -804,7 +804,7 @@ wait rather than a silent one:
   subgoals each still assemble for their own focus.
 - A search the turn has stopped waiting for keeps running, because its index is what makes the next
   turn fast. It does not starve the rest of the process: past the soft deadline the keyword index
-  build calls a `Pacer` (`hubofhubs.recall.background_pacing`), a real 2 ms pause after each 30 ms of work.
+  build calls a `Pacer` (`hubofhubs.the_body.internal_context.card_store.background_pacing`), a real 2 ms pause after each 30 ms of work.
   The prewarm and the vector seed export use the same pacer. (`time.sleep(0)` does not work: with a
   busy thread beside it, a thread's 3,000 blocking calls took 7.4 s with `sleep(0)` every 200 items
   and 8.1 s without, against 35 ms with the pause.)
@@ -832,7 +832,7 @@ reaches every arm that reads or writes a card/hit:
 
 - **Recent-context** (`core/recent_context.py`, above): fences at both `record()` and `load()`.
 - **Vector card arm** (`select_context/vector_context_assembler.py`'s `VectorContextAssembler`, backed by
-  `remember_and_recall/qdrant_card_repository.py`'s `QdrantCardVectorStore`): a hit's own `scope_tags` payload
+  `subconscious/qdrant_card_repository.py`'s `QdrantCardVectorStore`): a hit's own `scope_tags` payload
   field (passed through from the stored card) is checked against `meta["scope_tags"]` AFTER the
   vector search returns, before ranking/rendering -- a post-filter on the hit, never the store's own
   `scope` payload filter (that stays an exact-match tenant partition, e.g. per-user isolation).
@@ -868,7 +868,7 @@ user_message --> STEP 1: Understand input --> goal_condition --> STEP 2: select 
                   (pulls conversation context, only as needed)   (assemble + retrieval off the goal)
 ```
 
-**`ConversationStore` (a storage-agnostic adapter, `hubofhubs.ports.context`).** Conversation history lives in
+**`ConversationStore` (a storage-agnostic adapter, `hubofhubs.the_body.internal_context.context`).** Conversation history lives in
 different places for different consumers (local Claude session JSON under `~/.claude/sessions`; a
 Mongo collection in a server). The store hides that behind two methods, both of which NEVER raise:
 - `current_slice(conv_id, query, *, recent_turns=4, max_chars)`: a relevant slice of THE current

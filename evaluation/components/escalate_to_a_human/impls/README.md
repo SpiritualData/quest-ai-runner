@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Watching every run for risk](../../../../quest_ai_runner/watch_for_risk/README.md)
+- Owning intent: [Nervous System](../../../../quest_ai_runner/nervous_system/README.md)
 - Repository: [top README](../../../../README.md)

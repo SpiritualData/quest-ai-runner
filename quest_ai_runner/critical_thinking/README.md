@@ -1,14 +1,14 @@
-# Thinking critically by metric
+# Critical Thinking
 
 Everything the AI does for a person's goals is held to the metric that serves it, and what it says is held to what is known.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `think-critically:deep_runs_only` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: A deep run can be held to the metric that serves its goal, and so can every other request, which is wider than the parent solution asks. That opens questions of its own: slicing the specification a task concerns before the run and writing back what the run learned, choosing the records an input concerns by lexical, vector and gated search, settling a narrow question with one guarded model call and a safe default, stopping unverified links and recognising repeated requests, telling a stuck run from a slow one, drafting a metric for a task that has none, and keeping background work to the days, hours and budget a person set.
+This sub-intent arises as the implementation `critical-thinking:deep_runs_only` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: A deep run can be held to the metric that serves its goal, and so can every other request, which is wider than the parent solution asks. That opens questions of its own: slicing the specification a task concerns before the run and writing back what the run learned, choosing the records an input concerns by lexical, vector and gated search, settling a narrow question with one guarded model call and a safe default, stopping unverified links and recognising repeated requests, telling a stuck run from a slow one, drafting a metric for a task that has none, and keeping background work to the days, hours and budget a person set.
 
 ## How the solutions fit together
 
-Critical thinking holds deep runs to their metric through Specification slice and write-back on the records Intent specification selection picks, settles narrow questions through Guarded model-verdict judge, stops unsafe replies through Reply safety and anticipation guards, ties work to its purpose through Intent frame for quest-scoped prompts, tells a stuck run from a slow one through Run liveness reviewer, drafts a missing metric through Metric drafting for a task, and keeps background work inside its hours and budget through Autopilot run-or-skip gate.
+Critical Thinking holds deep runs to their metric through Specification slice and write-back on the records Intent specification selection picks, settles narrow questions through Guarded model-verdict judge, stops unsafe replies through Reply safety and anticipation guards, ties work to its purpose through Intent frame for quest-scoped prompts, tells a stuck run from a slow one through Run liveness reviewer, drafts a missing metric through Metric drafting for a task, and keeps background work inside its hours and budget through Autopilot run-or-skip gate.
 
 ## Solutions at a glance
 
@@ -27,12 +27,12 @@ Critical thinking holds deep runs to their metric through Specification slice an
 
 **Problems**
 
-- Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still... (`prob-deep-work-wanders`)
+- Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still making progress. (`prob-deep-work-wanders`)
 - Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due. (`prob-autopilot-works-when-unwanted`)
-- People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between... (`prob-same-ask-repeats-cost`)
-- A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes... (`prob-narrow-verdicts-unreliable`)
-- Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and... (`prob-work-misses-its-why`)
-- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads... (`prob-intent-specs-not-found-for-input`)
+- People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between people. (`prob-same-ask-repeats-cost`)
+- A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn. (`prob-narrow-verdicts-unreliable`)
+- Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed. (`prob-work-misses-its-why`)
+- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention. (`prob-intent-specs-not-found-for-input`)
 - Whether a run improved anything is recorded only in part and only for a while. (`prob-run-improvement-unchecked`)
 
 **Ideals**
@@ -99,24 +99,24 @@ Critical thinking holds deep runs to their metric through Specification slice an
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
 | Production liveness review in the goal runner | `detect-a-stalled-run:goal_runner` | [quest_ai_runner/core/goal_runner.py](../core/goal_runner.py) |  |
-| Live model reviewer arm | `detect-a-stalled-run:live_reviewer` | [quest_ai_runner/think_critically/area.py](area.py) |  |
+| Live model reviewer arm | `detect-a-stalled-run:live_reviewer` | [quest_ai_runner/critical_thinking/area.py](area.py) |  |
 | Keyword and threshold rule floor | `detect-a-stalled-run:rule_floor` | [evaluation/components/deep_review/impls/rule_floor.py](../../evaluation/components/deep_review/impls/rule_floor.py) |  |
-| Production judges under a scripted provider | `judge-a-decision:qar_judges` | [quest_ai_runner/think_critically/area.py](area.py) |  |
-| Production guard engines under test | `guard-a-reply:qar_guards` | [quest_ai_runner/think_critically/area.py](area.py) |  |
-| Eligibility gate mixin | `gate-an-autopilot-pass:autopilot_gates` | [quest_ai_runner/think_critically/autopilot_gates.py](autopilot_gates.py) |  |
-| Scripted-client gate evaluation arm | `gate-an-autopilot-pass:live_pass` | [quest_ai_runner/think_critically/area.py](area.py) |  |
-| Prompts without the intent frame | `ground-in-intent:none` | [quest_ai_runner/think_critically/autopilot_briefs.py](autopilot_briefs.py) |  |
-| Computed frame in the prompt | `ground-in-intent:frame-line` | [quest_ai_runner/think_critically/area.py](area.py) |  |
-| Frame plus intent card and record drill-down | `ground-in-intent:frame-card-drilldown` | [quest_ai_runner/think_critically/quest_client_intents.py](quest_client_intents.py) |  |
+| Production judges under a scripted provider | `judge-a-decision:qar_judges` | [quest_ai_runner/critical_thinking/area.py](area.py) |  |
+| Production guard engines under test | `guard-a-reply:qar_guards` | [quest_ai_runner/critical_thinking/area.py](area.py) |  |
+| Eligibility gate mixin | `gate-an-autopilot-pass:autopilot_gates` | [quest_ai_runner/critical_thinking/autopilot_gates.py](autopilot_gates.py) |  |
+| Scripted-client gate evaluation arm | `gate-an-autopilot-pass:live_pass` | [quest_ai_runner/critical_thinking/area.py](area.py) |  |
+| Prompts without the intent frame | `ground-in-intent:none` | [quest_ai_runner/critical_thinking/autopilot_briefs.py](autopilot_briefs.py) |  |
+| Computed frame in the prompt | `ground-in-intent:frame-line` | [quest_ai_runner/critical_thinking/area.py](area.py) |  |
+| Frame plus intent card and record drill-down | `ground-in-intent:frame-card-drilldown` | [quest_ai_runner/critical_thinking/quest_client_intents.py](quest_client_intents.py) |  |
 | Frame plus a lazily generated quest specification | `ground-in-intent:frame-lazy-spec` | [quest_ai_runner/core/tools_quest_intents.py](../core/tools_quest_intents.py) |  |
-| Generic method in the standing instructions | `iterate-by-spec:generic-doctrine` | [quest_ai_runner/think_critically/goal_iteration.py](goal_iteration.py) |  |
-| Slice of the specification before the task | `iterate-by-spec:slice-only` | [quest_ai_runner/think_critically/goal_iteration.py](goal_iteration.py) |  |
-| Slice before and write-back after | `iterate-by-spec:slice-and-writeback` | [quest_ai_runner/think_critically/goal_iteration.py](goal_iteration.py) |  |
+| Generic method in the standing instructions | `iterate-by-spec:generic-doctrine` | [quest_ai_runner/critical_thinking/goal_iteration.py](goal_iteration.py) |  |
+| Slice of the specification before the task | `iterate-by-spec:slice-only` | [quest_ai_runner/critical_thinking/goal_iteration.py](goal_iteration.py) |  |
+| Slice before and write-back after | `iterate-by-spec:slice-and-writeback` | [quest_ai_runner/critical_thinking/goal_iteration.py](goal_iteration.py) |  |
 | Lexical TF-IDF, optional vector search, parallel batched model judging | `spec-selection:lexical-vector-llm` | [quest_ai_runner/core/spec_selection.py](../core/spec_selection.py) |  |
 | Lexical top few only | `spec-selection:lexical-only` | [quest_ai_runner/core/spec_selection.py](../core/spec_selection.py) |  |
 | Lexical vector gated | `spec-selection:lexical-vector-gated` | [quest_ai_runner/core/spec_selection.py](../core/spec_selection.py) |  |
 | Slice before and write-back onto each record (planned) | `iterate-by-spec:writeback-on-the-record` |  |  |
-| Capped model draft per task (today) | `draft-a-metric:capped_model_draft` | [quest_ai_runner/think_critically/area.py](area.py) |  |
+| Capped model draft per task (today) | `draft-a-metric:capped_model_draft` | [quest_ai_runner/critical_thinking/area.py](area.py) |  |
 | Ask the owner to write it (floor, proposed) | `draft-a-metric:ask_owner` | [evaluation/components/draft_a_metric/impls/ask_owner.py](../../evaluation/components/draft_a_metric/impls/ask_owner.py) |  |
 | No-call floor of the quest ranker and reach judge | `judge-a-decision:no_call_floor` | [evaluation/components/judge_live_decisions/impls/no_call_floor.py](../../evaluation/components/judge_live_decisions/impls/no_call_floor.py) |  |
 | Live quest ranker and reach judge on a small model | `judge-a-decision:live_judges` | [evaluation/components/judge_live_decisions/impls/live_judges.py](../../evaluation/components/judge_live_decisions/impls/live_judges.py) |  |

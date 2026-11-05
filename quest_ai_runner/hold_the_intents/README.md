@@ -18,7 +18,7 @@ An arrow runs from the solution that provides to the solution that builds on it;
 flowchart LR
     s0["Feedback-to-guidance loop<br/><i>guide-by-feedback</i>"]
     s1["Representative selection<br/><i>select-a-rep</i>"]
-    s0 -->|"A list of guidance cards with bodies for the..."| s1
+    s0 -->|"A list of guidance cards with bodies for the applicable-guidance block; a catalog and single card reads on demand"| s1
 ```
 
 ## Solutions at a glance
@@ -39,8 +39,8 @@ flowchart LR
 
 - People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears. (`prob-corrections-repeat`)
 - Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI. (`prob-private-data-crosses-scope`)
-- Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task... (`prob-wrong-or-inconsistent-rep`)
-- The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply... (`prob-long-term-goal-goes-quiet`)
+- Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. (`prob-wrong-or-inconsistent-rep`)
+- The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset. (`prob-long-term-goal-goes-quiet`)
 
 **Ideals**
 
@@ -73,7 +73,7 @@ flowchart LR
 
 - People give the same correction again and again because the AI does not keep what they said, or keeps it but does not apply it where it bears. (`prob-corrections-repeat`)
 - Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI. (`prob-private-data-crosses-scope`)
-- Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is... (`prob-wrong-or-inconsistent-rep`)
+- Which AI representative handles a message, a queued task or an autopilot pass is decided in three places by three rules (the host's chat classifier among a quest's assigned representatives, the task runner's precedence of assignment field, explicit ask and domain cards, and the autopilot roster by day), with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative. (`prob-wrong-or-inconsistent-rep`)
 - The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; the opposite fix, a plug for the goal in every reply, nags, hijacks a simple question or lands on a person who is in a hurry or upset. (`prob-long-term-goal-goes-quiet`)
 
 ### Ideals

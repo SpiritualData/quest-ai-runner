@@ -21,10 +21,10 @@ flowchart LR
     s2["Layered lane configuration loader<br/><i>configure-a-lane</i>"]
     s3["Documentation coverage and voice check<br/><i>explain-qar</i>"]
     s4["Implementation selection<br/><i>select-an-implementation</i>"]
-    s0 -->|"A configured client or runner config, results of bridged..."| s1
-    s0 -->|"A configured client or runner config, results of bridged..."| s3
-    s2 -->|"A populated runner configuration object, or a..."| s0
-    s4 -->|"The implementation that serves a solution, chosen by name..."| s2
+    s0 -->|"A configured client or runner config, results of bridged calls, parsed edit blocks and applied edits"| s1
+    s0 -->|"A configured client or runner config, results of bridged calls, parsed edit blocks and applied edits"| s3
+    s2 -->|"A populated runner configuration object, or a configuration-file error naming the offending key; tuning values come back as one typed settings value"| s0
+    s4 -->|"The implementation that serves a solution, chosen by name, configuration or default"| s2
 ```
 
 ## Solutions at a glance
@@ -47,10 +47,10 @@ flowchart LR
 
 **Problems**
 
-- Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no... (`prob-reply-misses-the-account`)
+- Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no source supports. (`prob-reply-misses-the-account`)
 - A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said. (`prob-follow-up-loses-thread`)
 - A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error. (`prob-integration-is-trial-and-error`)
-- The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the... (`prob-harness-weaker-than-a-coding-agent`)
+- The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the coding agent completes the work, while sending every request to the coding agent pays its slow, token-heavy context search each time. (`prob-harness-weaker-than-a-coding-agent`)
 
 **Ideals**
 

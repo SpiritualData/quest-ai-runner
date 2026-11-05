@@ -81,13 +81,13 @@ specific to Quest:
 
 | QAR solution | Hub seat and package |
 |---|---|
-| `call-a-model` | model providers, prefix router, retry and outage helpers (`hubofhubs.models`) |
-| `select-context`, `index-by-meaning` | Qdrant vectors, BM25, hybrid assembler (`hubofhubs.recall`) |
-| `think-critically` | link guard and sufficiency gate (`hubofhubs.critique`) |
-| `run-deep-work` | one-shot, stream-json and ACP runners (`hubofhubs.deep`) |
-| `search-the-web` | search backends, cache, fetch, extraction (`hubofhubs.websearch`) |
-| `know-the-world` | scholarly search (`hubofhubs.science`) |
-| `watch-for-risk` | the overseer engine (`hubofhubs.risk`) |
+| `vendor-model-caller` | model providers, prefix router, retry and outage helpers (`hubofhubs.the_world.model_plumbing.vendor_model_caller`) |
+| `select-context`, `index-by-meaning` | Qdrant vectors, BM25, hybrid assembler (`hubofhubs.the_intelligence.subconscious.context_retriever`) |
+| `critical-thinking` | link guard and sufficiency gate (`hubofhubs.the_intelligence.critical_thinking`) |
+| `run-deep-work` | one-shot, stream-json and ACP runners (`hubofhubs.the_world.tools.delegated_agent_sessions`) |
+| `search-the-web` | search backends, cache, fetch, extraction (`hubofhubs.the_world.tools.web_search`) |
+| `the-science` | scholarly search (`hubofhubs.the_world.science`) |
+| `nervous-system` | the overseer engine (`hubofhubs.the_intelligence.mind.delegation.overseer.risk`) |
 
 `esoi/hub_seats.csv` records which QAR solution fills which hub area, with the vendor names and code
 paths. The hub's scorer reads it, and `esoi run hub_of_hubs --impl registry_scan` measures the
@@ -163,7 +163,7 @@ quest-ai-runner chat --continue     # reopen the latest conversation
 
 ```python
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from hubofhubs.models.anthropic import AnthropicProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
 from quest_ai_runner.adapters import FilesAdapter
 
 cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/docs"),

@@ -25,7 +25,7 @@ a model key (`ANTHROPIC_API_KEY`) and a folder of files.
 import os
 
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
-from hubofhubs.models.anthropic import AnthropicProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
 from quest_ai_runner.adapters import FilesAdapter
 
 cfg = RunnerConfig(

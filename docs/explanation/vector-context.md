@@ -2,10 +2,10 @@
 
 > Status: design-of-record for the vector search capability added alongside
 > the existing keyword/IDF ``FileContextStore``.  Implemented behind the
-> ``VectorStore`` Protocol (defined in ``hubofhubs.ports.context``) so the core stays
+> ``VectorStore`` Protocol (defined in ``hubofhubs.the_body.internal_context.context``) so the core stays
 > dependency-free.  Heavy deps (qdrant-client, fastembed) live behind the
 > optional ``[qdrant]`` extra. The store, the assemblers and the BM25 arm are the hub's
-> (``hubofhubs.recall``); the modules named below are QAR's thin bindings of them
+> (``hubofhubs.the_intelligence.subconscious.context_retriever``); the modules named below are QAR's thin bindings of them
 > (prefix, seed scope, environment names, prompts), at the same import paths.
 
 ---
@@ -70,7 +70,7 @@ state lives on the local filesystem.  No server is needed; no Docker, no
 cloud account.
 
 ```python
-from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
 # Default: state under <cwd>/.quest-context/qdrant
 store = QdrantVectorStore()
@@ -136,12 +136,12 @@ store = QdrantVectorStore(embedder=my_embedder, vector_size=1536)
 ## Custom VectorStore (fully pluggable)
 
 You do not have to use Qdrant at all.  Any class that satisfies the
-``VectorStore`` Protocol (defined in ``hubofhubs.ports.context``)
+``VectorStore`` Protocol (defined in ``hubofhubs.the_body.internal_context.context``)
 works as a drop-in:
 
 ```python
-from hubofhubs.ports.context import VectorHit
-from hubofhubs.ports.context import VectorStoreBase
+from hubofhubs.the_body.internal_context.context import VectorHit
+from hubofhubs.the_body.internal_context.context import VectorStoreBase
 
 class MyStore(VectorStoreBase):
     def search(self, query, *, scope=None, top_k=8):
@@ -280,7 +280,7 @@ results:
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
 from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore
+from quest_ai_runner.subconscious.qdrant_vector_store import QdrantVectorStore
 
 keyword_asm = FileContextStore(".quest-context/cards", repo_root=".")
 vector_asm  = VectorContextAssembler(QdrantVectorStore())
@@ -372,7 +372,7 @@ scores, wire ``QdrantVectorStore`` with **two separate Voyage embedders**, one
 per role:
 
 ```python
-from quest_ai_runner.remember_and_recall.qdrant_vector_store import (
+from quest_ai_runner.subconscious.qdrant_vector_store import (
     QdrantVectorStore,
     make_voyage_embedder,
 )

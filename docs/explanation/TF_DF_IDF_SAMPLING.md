@@ -182,7 +182,7 @@ context = adapter.query({
 
 ### Shared Utilities
 ```python
-from hubofhubs.recall.text_sampling import (
+from hubofhubs.the_body.internal_context.card_store.text_sampling import (
     extract_terms,
     select_representatives,
 )
@@ -266,7 +266,7 @@ A: ~62% on bootstrap + ~27% per conversation query on a typical codebase. Exact 
 ## See Also
 
 - `docs/explanation/BOOTSTRAP_TOKEN_SAVINGS.md`: Detailed token analysis
-- `hubofhubs.recall.text_sampling` (the hub's `ai-hub-of-hubs-structure/hubofhubs/recall/text_sampling.py`): Implementation
+- `hubofhubs.the_body.internal_context.card_store.text_sampling` (the hub's `ai-hub-of-hubs-structure/hubofhubs/recall/text_sampling.py`): Implementation
 - `tests/test_bootstrap_token_savings.py`: Benchmarks
 - `FileContextStore`: Stage 1 & 2 optimizations
 - `ClaudeConversationsAdapter`: Conversation sampling

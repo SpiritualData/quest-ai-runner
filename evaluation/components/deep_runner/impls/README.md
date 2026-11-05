@@ -9,5 +9,5 @@
 
 ## Where to go next
 
-- Owning intent: [Acting in the person's account as the AI's own body](../../../../quest_ai_runner/act_as_the_body/README.md)
+- Owning intent: [Body](../../../../quest_ai_runner/body/README.md)
 - Repository: [top README](../../../../README.md)

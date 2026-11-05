@@ -1,14 +1,14 @@
-# Keeping every part generic and measured
+# Integrity
 
 Every part of QAR stays specified as a solution with alternatives and a metric, so the best implementation runs as the state of the art moves and no vendor is built into the brain.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `keep-it-generic:structure-library` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: A repository that specifies every part as a solution with alternatives and a metric lets the best implementation run as models and tools change. That is a space beyond the engine the top intent describes: the structure check and the selector belong to the esoi library, but QAR measures whether its assistant behaves by the structure, scores how much of its wiring is configuration and not code, keeps its tests runnable offline and its public code free of secrets, and loads one configuration per lane.
+This sub-intent arises as the implementation `system-integrity:structure-library` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: A repository that specifies every part as a solution with alternatives and a metric lets the best implementation run as models and tools change. That is a space beyond the engine the top intent describes: the structure check and the selector belong to the esoi library, but QAR measures whether its assistant behaves by the structure, scores how much of its wiring is configuration and not code, keeps its tests runnable offline and its public code free of secrets, and loads one configuration per lane.
 
 ## How the solutions fit together
 
-Evolve by metric keeps every part specified as a solution with measured alternatives. It finds what a change touches through Problem-linked tags that identify solutions. It measures whether the assistant acts by ESOI through Standing-instruction behaviour layer and Behaviour-grading judge. It wires the selected arms per lane through Layered lane configuration loader. It keeps the test suite and the public code trustworthy through Offline test collection and Public-repository hygiene scanner, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
+Integrity keeps every part specified as a solution with measured alternatives. It finds what a change touches through Problem-linked tags that identify solutions. It measures whether the assistant acts by ESOI through Standing-instruction behaviour layer and Behaviour-grading judge. It wires the selected arms per lane through Layered lane configuration loader. It keeps the test suite and the public code trustworthy through Offline test collection and Public-repository hygiene scanner, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
 ## Solutions at a glance
 

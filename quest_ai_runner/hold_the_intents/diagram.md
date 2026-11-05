@@ -10,5 +10,5 @@ An arrow runs from the solution that provides to the solution that builds on it;
 flowchart LR
     s0["Feedback-to-guidance loop<br/><i>guide-by-feedback</i>"]
     s1["Representative selection<br/><i>select-a-rep</i>"]
-    s0 -->|"A list of guidance cards with bodies for the..."| s1
+    s0 -->|"A list of guidance cards with bodies for the applicable-guidance block; a catalog and single card reads on demand"| s1
 ```

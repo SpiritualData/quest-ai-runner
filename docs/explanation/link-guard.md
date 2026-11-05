@@ -4,7 +4,7 @@ A model writes a URL that reads perfectly and does not exist. That is not a rare
 language models do when a plausible address is easier to produce than a real one. The cost lands on
 the reader, who taps it, gets nothing, and then stops trusting the links that *were* real.
 
-The link guard (`hubofhubs.critique.link_guard`, in the hub) closes that. Every terminal reply is scanned
+The link guard (`hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard`, in the hub) closes that. Every terminal reply is scanned
 before it is emitted, and no link that could not be verified reaches the reader.
 
 ## Where it runs

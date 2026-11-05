@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Single flat provider floor | `call-a-model:single_provider` | [`evaluation/components/model_providers/impls/single_provider.py`](single_provider.py) |  |
+| Single flat provider floor | `vendor-model-caller:single_provider` | [`evaluation/components/model_providers/impls/single_provider.py`](single_provider.py) |  |
 
 ## Where to go next
 

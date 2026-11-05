@@ -10,5 +10,5 @@ An arrow runs from the solution that provides to the solution that builds on it;
 flowchart LR
     s0["Context card selector<br/><i>select-context</i>"]
     s1["Semantic vector index<br/><i>index-by-meaning</i>"]
-    s1 -->|"Ranked hits with id, score, text and payload for search..."| s0
+    s1 -->|"Ranked hits with id, score, text and payload for search; counts for sync and count; the number deleted for eviction"| s0
 ```

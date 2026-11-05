@@ -1,10 +1,10 @@
-# Remembering and recalling the person's own knowledge
+# Subconscious
 
 A request recalls the part of the person's own knowledge its goal needs, from cards that are current with their sources, found by meaning and proportionate in size, and never from anyone else's.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `remember-and-recall:recency_window` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: The cards a person's work leaves behind are copies of what lives elsewhere, so the store itself raises questions the parent solution does not ask: when a card has drifted from its source file, how an assistant keeps serving the last known listing while a backend is down and replays the writes that failed, how a store is kept proportionate to its sources instead of inflating with copies from a backups folder, which folders a corpus may index at all, and how a card is found by meaning when the person asks in other words. Each has alternatives that can be measured against each other.
+This sub-intent arises as the implementation `the-subconscious:recency_window` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: The cards a person's work leaves behind are copies of what lives elsewhere, so the store itself raises questions the parent solution does not ask: when a card has drifted from its source file, how an assistant keeps serving the last known listing while a backend is down and replays the writes that failed, how a store is kept proportionate to its sources instead of inflating with copies from a backups folder, which folders a corpus may index at all, and how a card is found by meaning when the person asks in other words. Each has alternatives that can be measured against each other.
 
 ## How the solutions fit together
 
@@ -21,9 +21,9 @@ flowchart LR
     s2["Card store repair<br/><i>repair-a-card-store</i>"]
     s3["Index scope decision<br/><i>choose-what-to-index</i>"]
     s4["Hub card store<br/><i>card-store</i>"]
-    s0 -->|"Load-all returns a mapping of id to card, read returns a..."| s4
-    s1 -->|"The stored listing with its update time, or none, and the..."| s0
-    s3 -->|"A FolderGate: the set of corpus-relative folders no card..."| s2
+    s0 -->|"Load-all returns a mapping of id to card, read returns a card or nothing, write and delete return success flags, and revision returns a change stamp used to invalidate caches"| s4
+    s1 -->|"The stored listing with its update time, or none, and the queued writes oldest first"| s0
+    s3 -->|"A FolderGate: the set of corpus-relative folders no card source may read, and of those the risk-flagged ones that could not be reviewed, with why; every card source asks it, so its complement is the set of folders and stores allowed to produce or import cards"| s2
 ```
 
 ## Solutions at a glance
@@ -44,7 +44,7 @@ flowchart LR
 
 **Problems**
 
-- Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops... (`prob-context-drifts-from-its-source`)
+- Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops writes. (`prob-context-drifts-from-its-source`)
 - The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it. (`prob-relevant-card-not-found`)
 - A card store grows far past the distinct content of its corpus. (`prob-card-store-inflates`)
 - A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. (`prob-index-walks-into-copies`)
@@ -54,7 +54,7 @@ flowchart LR
 - Current Knowledge (`ideal-current-knowledge`): What the AI reads still matches the source it came from, and outages are loud but harmless.
 - Findable Knowledge (`ideal-findable-knowledge`): The knowledge that bears on a question is found whatever words it uses.
 - Proportionate Card Store (`ideal-proportionate-store`): A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
-- Proportionate Index Scope (`ideal-proportionate-index-scope`): The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the...
+- Proportionate Index Scope (`ideal-proportionate-index-scope`): The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
 
 ## Metrics and their leaders
 
@@ -110,12 +110,12 @@ flowchart LR
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
 | Atomic JSON file repository | `persist-cards:filesystem` | [quest_ai_runner/config_assembler.py](../config_assembler.py) |  |
-| Vector database repository | `persist-cards:qdrant` | [quest_ai_runner/remember_and_recall/qdrant_card_repository.py](qdrant_card_repository.py) |  |
+| Vector database repository | `persist-cards:qdrant` | [quest_ai_runner/subconscious/qdrant_card_repository.py](qdrant_card_repository.py) |  |
 | Hosted card API repository | `persist-cards:quest_api` | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
 | Content-hash fingerprint check | `detect-stale-cards:store_sha256` | [evaluation/components/staleness/impls/store_sha256.py](../../evaluation/components/staleness/impls/store_sha256.py) |  |
 | Timestamp-and-size baseline | `detect-stale-cards:mtime_size` | [evaluation/components/staleness/impls/mtime_size.py](../../evaluation/components/staleness/impls/mtime_size.py) |  |
 | Card repository with a cache seam and a null cache | `cache-cards:null` | [quest_ai_runner/adapters/quest_api_card_repository.py](../adapters/quest_api_card_repository.py) |  |
-| Durable file cache | `cache-cards:file` | [quest_ai_runner/remember_and_recall/card_cache_file.py](card_cache_file.py) |  |
+| Durable file cache | `cache-cards:file` | [quest_ai_runner/subconscious/card_cache_file.py](card_cache_file.py) |  |
 | No-op cache (shipped default of the seam) | `cache-cards:null_cache` | [evaluation/components/cache_cards/impls/null_cache.py](../../evaluation/components/cache_cards/impls/null_cache.py) |  |
 | In-process memory cache | `cache-cards:memory_cache` | [evaluation/components/cache_cards/impls/memory_cache.py](../../evaluation/components/cache_cards/impls/memory_cache.py) |  |
 | Durable file cache under outage scenarios | `cache-cards:file_cache` | [evaluation/components/cache_cards/impls/file_cache.py](../../evaluation/components/cache_cards/impls/file_cache.py) |  |
@@ -128,11 +128,11 @@ flowchart LR
 | Repository tidy | `repair-a-card-store:repository_tidy` | [quest_ai_runner/adapters/card_store_tidy.py](../adapters/card_store_tidy.py) |  |
 | Tidy at open of a local folder | `repair-a-card-store:local_folder_tidy` | [quest_ai_runner/adapters/context_store_heal.py](../adapters/context_store_heal.py) |  |
 | Store as copy mode leaves it | `repair-a-card-store:no_cleanup` | [evaluation/components/card_growth/impls/no_cleanup.py](../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
-| Fast-tier model writes metadata and categories (today) | `label-context-cards:fast_model_labels` | [quest_ai_runner/remember_and_recall/card_metadata_generator.py](card_metadata_generator.py) |  |
+| Fast-tier model writes metadata and categories (today) | `label-context-cards:fast_model_labels` | [quest_ai_runner/subconscious/card_metadata_generator.py](card_metadata_generator.py) |  |
 | Path and title rules, no model call (floor, proposed) | `label-context-cards:path_rules` | [evaluation/components/label_context_cards/impls/path_rules.py](../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
-| QAR card repository | `card-store:qar-card-repository` | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
-| Quest backend card API from the environment | `card-store:quest-api-cards` | [quest_ai_runner/remember_and_recall/hub_card_store.py](hub_card_store.py) |  |
-| QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/remember_and_recall/qar_topic_bootstrap.py](qar_topic_bootstrap.py) |  |
+| QAR card repository | `card-store:qar-card-repository` | [quest_ai_runner/subconscious/hub_card_store.py](hub_card_store.py) |  |
+| Quest backend card API from the environment | `card-store:quest-api-cards` | [quest_ai_runner/subconscious/hub_card_store.py](hub_card_store.py) |  |
+| QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/subconscious/qar_topic_bootstrap.py](qar_topic_bootstrap.py) |  |
 
 ### Metrics
 

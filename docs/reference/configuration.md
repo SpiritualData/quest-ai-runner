@@ -13,14 +13,14 @@ the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for call-a-model. | `cli_chat.py`, `textual_ui_helpers.py` | `README.md`, `.env.example`, `docs/how-to/acp-deep-runner.md` +6 |
+| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for vendor-model-caller. | `cli_chat.py`, `textual_ui_helpers.py` | `README.md`, `.env.example`, `docs/how-to/acp-deep-runner.md` +6 |
 | `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `adapters/claude_live_models.py`, `config_core_settings.py` | - |
-| `DEEPSEEK_API_KEY` | DeepSeek API key; declared by the hub for call-a-model. | `config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md` |
+| `DEEPSEEK_API_KEY` | DeepSeek API key; declared by the hub for vendor-model-caller. | `config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md` |
 | `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `core/repo_specs.py` | - |
-| `GOOGLE_API_KEY` | Gemini API key; declared by the hub for call-a-model. | `cli_chat.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/web-search.md` |
+| `GOOGLE_API_KEY` | Gemini API key; declared by the hub for vendor-model-caller. | `cli_chat.py`, `textual_ui_helpers.py` | `.env.example`, `docs/how-to/web-search.md` |
 | `HF_HUB_OFFLINE` | Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls. | `core/repo_specs.py` | - |
 | `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `cli.py` | - |
-| `OPENAI_API_KEY` | Fills the 'api_key' option of call-a-model:openai; declared by the hub. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `textual_ui_helpers.py` | `.env.example` |
+| `OPENAI_API_KEY` | Fills the 'api_key' option of vendor-model-caller:openai; declared by the hub. | `adapters/qdrant_embedders.py`, `cli_chat.py`, `textual_ui_helpers.py` | `.env.example` |
 | `OPENALEX_API_KEY` | OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers. | `core/tools_science.py` | `docs/how-to/tools.md` |
 | `OPENALEX_MAILTO` | Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's). | `core/tools_science.py` | `docs/how-to/tools.md` |
 | `QAR_ACP_AGENT_COMMAND` |  | `adapters/acp_deep_runner_protocol.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/acp-deep-runner.md` |
@@ -71,7 +71,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS` |  | `cli_config.py` | `docs/how-to/context-updates.md` |
 | `QAR_CONTEXT_UPDATES_STATE_PATH` |  | `cli_config.py` | `docs/how-to/context-updates.md` |
 | `QAR_CONVERSATION_SEARCH` | false/0/off disables searching past conversations as context. | `cli_config.py` | - |
-| `QAR_CORPUS_ROOT` |  | `act_as_the_body/files_writer.py`, `cli_cards.py`, `cli_chat.py` +3 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
+| `QAR_CORPUS_ROOT` |  | `body/files_writer.py`, `cli_cards.py`, `cli_chat.py` +3 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
 | `QAR_DAILY_TOKEN_LIMIT` |  | `usage.py` | `.env.example` |
 | `QAR_DAILY_USAGE_PATH` |  | `interactive_session_status.py`, `usage.py` | `.env.example` |
 | `QAR_DECISION_ASSIGNEE` |  | `cli_config.py`, `config_environment.py` | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/adapters.md` +2 |
@@ -115,7 +115,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_FILES_PORT` |  | `cli_serve_files.py` | `docs/how-to/file-server.md` |
 | `QAR_FILES_ROOT` |  | `cli_serve_files.py` | `docs/how-to/file-server.md` |
 | `QAR_FILES_TOKEN` |  | `cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILE_BACKUP_DIR` |  | `act_as_the_body/files_writer.py` | `docs/how-to/fast-edit-runner.md` |
+| `QAR_FILE_BACKUP_DIR` |  | `body/files_writer.py` | `docs/how-to/fast-edit-runner.md` |
 | `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `adapters/card_store_settings.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_GOAL_MAX_ATTEMPTS` | Max attempts of the goal loop (OrchestratorConfig.goal_max_attempts). | `cli_config.py` | - |
 | `QAR_GOAL_TOKEN_BUDGET` | Token budget of the goal loop (OrchestratorConfig.goal_token_budget). | `cli_config.py` | - |
@@ -221,23 +221,23 @@ the docs and `.env.example` that describe what it does.
 | `QAR_VERIFY_TIER` |  | `cli_config.py` | `.env.example` |
 | `QAR_WAIT_CHANNEL` |  | `cli_config.py` | `docs/reference/quest-api-contract.md` |
 | `QAR_WAIT_TIMEOUT_SECONDS` | Seconds each long-poll GET asks the backend to wait (sets RunnerConfig.wait_timeout_seconds). | `cli_config.py` | - |
-| `QAR_WEB_CACHE_DIR` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_TTL_SECONDS` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `know_the_world/web_search_backends.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_BACKEND` |  | `know_the_world/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_MODEL` |  | `know_the_world/web_research.py`, `know_the_world/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `know_the_world/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_TTL_SECONDS` |  | `know_the_world/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_CACHE_DIR` |  | `science/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `science/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `science/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_TTL_SECONDS` |  | `science/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `science/web_search_backends.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_BACKEND` |  | `science/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `science/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_MODEL` |  | `science/web_research.py`, `science/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `science/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_TTL_SECONDS` |  | `science/web_research.py` | `docs/how-to/web-search.md` |
 | `QDRANT_URL` | Plain Qdrant URL, the last fallback after QAR_QDRANT_URL. | `config_assembler.py` | - |
-| `QUEST_API_KEY` | Quest API key; declared by the hub for card-store. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
-| `QUEST_API_URL` | Fills the 'base_url' option of card-store:quest-api-cards; declared by the hub. | `adapters/quest_context_adapter.py`, `config_resolvers.py`, `core/tools.py` +3 | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md` +1 |
-| `QUEST_BASE_URL` | Fills the 'base_url' option of card-store:quest-api-cards; declared by the hub. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
+| `QUEST_API_KEY` | Quest API key; declared by the hub for access-quest-operations, card-store. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
+| `QUEST_API_URL` | Fills the 'base_url' option of card-store:quest-api-cards, access-quest-operations:quest_client; declared by the hub. | `adapters/quest_context_adapter.py`, `config_resolvers.py`, `core/tools.py` +3 | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md` +1 |
+| `QUEST_BASE_URL` | Fills the 'base_url' option of card-store:quest-api-cards, access-quest-operations:quest_client; declared by the hub. | `adapters/quest_context_adapter.py`, `bootstrap_email.py`, `cli_config.py` +7 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
 | `QUEST_CLAIM_TEAMS` | Comma-separated team ids an owner-scoped lane may claim tasks from (RunnerConfig.claim_teams). | `cli_config.py` | - |
 | `QUEST_ORG_ID` |  | `cli_config.py` | `.env.example`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
-| `QUEST_TEAM_ID` |  | `bootstrap_email.py`, `cli_config.py`, `cli_quest.py` +3 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +5 |
+| `QUEST_TEAM_ID` | Fills the 'team_id' option of access-quest-operations:quest_client; declared by the hub. | `bootstrap_email.py`, `cli_config.py`, `cli_quest.py` +3 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +5 |
 | `QUEST_TEAM_IDS` |  | `cli_config.py`, `interactive_session_quests.py` | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` +1 |
 | `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `config_assembler.py`, `config_context_index.py` | - |
 | `VOYAGE_MODEL` |  | `adapters/qdrant_embedders.py` | `docs/explanation/vector-context.md` |

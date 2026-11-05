@@ -1,6 +1,6 @@
 # Live work trace: showing the AI's work to the person, as it happens
 
-Status: the contract (hub `hubofhubs.ports.trace`), the QAR emit (`quest_ai_runner/core/work_trace.py`), the backend forward and persist
+Status: the contract (hub `hubofhubs.the_consciousness.terminal.trace`), the QAR emit (`quest_ai_runner/core/work_trace.py`), the backend forward and persist
 and the frontend Trail are built. Real turns on the Claude Code subscription (web, the person's own records, scholarly papers, a
 shared thread) were run on 2026-11-01 and the arms are measured by `metric-work-trace-experience` (solution `show-the-ais-work`; see
 "First real runs" at the end). Background-task cards and other locales are not built. Working name for the feature in the app: "Trail".
@@ -17,7 +17,7 @@ user-facing channel that shows that work live, builds confidence, and feels like
 How a run reaches the app (verified by reading code, not by running it):
 
 - QAR emits `ProgressEvent` objects (`type`, `text`, `step`, `data`) through a `ProgressSink`
-  (`hubofhubs/ports/deep.py`, type constants in `hubofhubs/ports/events.py`). `StreamSink`
+  (`hubofhubs/the_world/tools/deep.py`, type constants in `hubofhubs/the_world/tools/events.py`). `StreamSink`
   (`quest_ai_runner/core/adapters_sinks.py`) forwards all of them live; `MilestoneSink` keeps only
   the "surfacing" types for background runs.
 - The backend chat stream (`quest-backend/app/api/endpoints/quest_ai/conversations.py`) turns each
@@ -57,7 +57,7 @@ WorkTraceEvent {
   v: 1
   trace_id:    string        // the turn id; one trace per turn
   step_id:     string        // stable per unit of work, so updates replace in place
-  solution_id: string        // the hub seat id, e.g. "search-backend", "know-the-world"
+  solution_id: string        // the hub seat id, e.g. "web-search", "the-science"
   kind:        "sources" | "papers" | "records" | "check" | "action" | "notice"
                              // the presentation family; the UI picks a treatment from this
   label_key:   string        // i18n key, e.g. "workTrace.web.reading". Never display text.
@@ -93,8 +93,8 @@ field cannot leak by accident. It also trims labels to 80 chars and strips newli
 
 Where it is emitted (the seam, not each arm):
 
-- New constant `EVENT_WORK_TRACE = "work_trace"` in `hubofhubs/ports/events.py`, LIVE only (like
-  `exec`, it is not in `SURFACING_EVENTS`), plus a small `hubofhubs/ports/trace.py` holding the
+- New constant `EVENT_WORK_TRACE = "work_trace"` in `hubofhubs/the_world/tools/events.py`, LIVE only (like
+  `exec`, it is not in `SURFACING_EVENTS`), plus a small `hubofhubs/the_consciousness/terminal/trace.py` holding the
   dataclass, the allowlist projector and a validator. This keeps the contract public and reusable.
 - QAR emits at the tool-registry seam, where every hub call already passes (and where the tool
   ledger records results). Derive events from the structural result of the call, not from model
@@ -115,7 +115,7 @@ Where it is emitted (the seam, not each arm):
 
 Contract changes: none to the field names. Additions that are not fields: the wire frame, the opt-in and the persisted shape.
 
-- Hub: `hubofhubs.ports.trace` (`WorkTraceEvent`, `project`, `validate`, `WorkTrace`), `EVENT_WORK_TRACE`, and the JSON schema
+- Hub: `hubofhubs.the_consciousness.terminal.trace` (`WorkTraceEvent`, `project`, `validate`, `WorkTrace`), `EVENT_WORK_TRACE`, and the JSON schema
   `docs/reference/work-trace-event.schema.json` in the hub. `kind` and `solution_id` are validated as well-formed slugs, not
   against a closed list, so an unknown one still reaches the screen as a generic row. A `counts.failed` count is allowed.
 - QAR opt-in: `context_meta["work_trace"] = {"audience": "owner" | "shared"}` (optional `trace_id`). Without it nothing is
@@ -138,9 +138,9 @@ Contract changes: none to the field names. Additions that are not fields: the wi
   These are overlap tests of known stored text against the reply, never keyword lists over the reply's wording. The numbers (four, three, two,
   five characters) are parameters, not tuned values. Sites: only a site the reply names (its exact host, with or without `www.`; a parent or sibling host does not count) is listed beside the
   opened pages; a search that opened and cited nothing ends as a found count with no list, and the screen shows no settled line for it (`counts.read` is 0, `items` is empty; section 9). A site the reply cites stays as a `found` item and the line says "Searched the web and cited a.org", never "read". `work_trace_check` enforces both when it is given the reply.
-- Steps QAR emits (one `step_id` per turn each): `web` (seat `search-backend`, kind `sources`, key `workTrace.web.reading`),
-  `papers` (`know-the-world`, `papers`, `workTrace.papers.searching`), `records` (`context-assembler`, `records`,
-  `workTrace.records.looking`), `links` (`watch-for-risk`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
+- Steps QAR emits (one `step_id` per turn each): `web` (seat `web-search`, kind `sources`, key `workTrace.web.reading`),
+  `papers` (`the-science`, `papers`, `workTrace.papers.searching`), `records` (`context-retriever`, `records`,
+  `workTrace.records.looking`), `links` (`nervous-system`, `check`, `workTrace.links.checking`, `affects_user` true when a link was
   removed). Counts: `web.found` is results listed, `web.read` is pages fetched; `papers.found` is the total matches, `papers.read`
   is works whose abstract the run took; `links.checked` and `links.failed` (removed or unverifiable).
 - SSE frame to the app: `data: {"event": "work_trace", "data": <WorkTraceEvent>}`, on the Quest AI chat, ad-hoc and group
@@ -189,14 +189,14 @@ Per solution treatment (all collapsed into the summary, each distinct when expan
 
 | Solution (seat) | Kind | While running | Expanded, after |
 |---|---|---|---|
-| Web (`search-backend`) | sources | Domain chips arrive one by one; the counter ticks "Reading 6 sites". | List of domains with page titles; a site that could not be reached is marked once, in muted text. |
-| Scholarly (`know-the-world`) | papers | Two numbers: "Found 31, checking abstracts of 3". Titles fade in as read. | Citation lines: title, "Author et al., 2021". Papers with an abstract taken first, found-only after. |
-| Your Quest (`context-assembler`, `card-store`) | records | "Looking through records", no title, no number, for every viewer. | "From your Quest": the person's own quest and reflection titles with a small type icon, shown FIRST because this is Quest's edge. Owner-only titles; counts ("Used N records") in shared threads and wherever the viewer may not see titles. |
-| Link guard (`watch-for-risk` link check, `critique/link_guard`) | check | Appears after the draft while the check runs (the running step is sent when the check starts, only for an answer that has links): the live line says "Checking the links". | Only when the answer has links: "Checked 6 links". If it removed one: "Left out 1 link I could not verify". |
-| Answering (`call-a-model`) | answer | A liveness step only: sent running when the reply starts being written, but only if the turn already did visible work (a search, papers, records); an instant answer sends nothing. The live line says "Putting the answer together" until the first answer text arrives (lowest priority: any other running step speaks first). | Nothing, ever. Its kind is not one a summary counts, so it adds no clause, count or row. It is closed when the draft exists, the link check starts, or the turn ends, fails or is cancelled, and a consumer should leave it out of the summary it stores and of what it forwards to other viewers. |
-| Failover (`call-a-model`) | notice | Nothing. | Shown only if `affects_user`: "Switched to a backup model, this took a little longer." Never in the summary counts. |
-| Overseer / consent (`watch-for-risk`) | check | Nothing. | Only when it stopped something: "Paused 1 step for your OK" (links to the existing approval card). Otherwise silent. |
-| Act (`act-in-the-world`) | action | Existing approval and undo UI stays the owner. | "Changed 2 things in your quest" with their titles, only as a pointer to what already shows. |
+| Web (`web-search`) | sources | Domain chips arrive one by one; the counter ticks "Reading 6 sites". | List of domains with page titles; a site that could not be reached is marked once, in muted text. |
+| Scholarly (`the-science`) | papers | Two numbers: "Found 31, checking abstracts of 3". Titles fade in as read. | Citation lines: title, "Author et al., 2021". Papers with an abstract taken first, found-only after. |
+| Your Quest (`context-retriever`, `card-store`) | records | "Looking through records", no title, no number, for every viewer. | "From your Quest": the person's own quest and reflection titles with a small type icon, shown FIRST because this is Quest's edge. Owner-only titles; counts ("Used N records") in shared threads and wherever the viewer may not see titles. |
+| Link guard (`nervous-system` link check, `critique/link_guard`) | check | Appears after the draft while the check runs (the running step is sent when the check starts, only for an answer that has links): the live line says "Checking the links". | Only when the answer has links: "Checked 6 links". If it removed one: "Left out 1 link I could not verify". |
+| Answering (`vendor-model-caller`) | answer | A liveness step only: sent running when the reply starts being written, but only if the turn already did visible work (a search, papers, records); an instant answer sends nothing. The live line says "Putting the answer together" until the first answer text arrives (lowest priority: any other running step speaks first). | Nothing, ever. Its kind is not one a summary counts, so it adds no clause, count or row. It is closed when the draft exists, the link check starts, or the turn ends, fails or is cancelled, and a consumer should leave it out of the summary it stores and of what it forwards to other viewers. |
+| Failover (`vendor-model-caller`) | notice | Nothing. | Shown only if `affects_user`: "Switched to a backup model, this took a little longer." Never in the summary counts. |
+| Overseer / consent (`nervous-system`) | check | Nothing. | Only when it stopped something: "Paused 1 step for your OK" (links to the existing approval card). Otherwise silent. |
+| Act (`delegated-agent-sessions`, `file-editing`, `connected-system-operations`) | action | Existing approval and undo UI stays the owner. | "Changed 2 things in your quest" with their titles, only as a pointer to what already shows. |
 | Model call, tier choice | none | Not shown. They add nothing for the person. | Not shown. |
 
 Deep runs already have `ExecTexture`; the Trail does not replace it.
@@ -242,7 +242,7 @@ Phase 0 (not part of this build): frontend slice using frames that already exist
   Check the `frontend` tmux window for errors. Ship only if it replaces `ContextCardsDisplay` cleanly.
 
 Phase 1: contract in the hub (public repo `ai-hub-of-hubs-structure`).
-- Files: `hubofhubs/ports/trace.py`, `hubofhubs/ports/events.py` (new constant), a JSON schema
+- Files: `hubofhubs/the_consciousness/terminal/trace.py`, `hubofhubs/the_world/tools/events.py` (new constant), a JSON schema
   under `docs/reference/`, tests with fake solutions: projector drops every field not on the
   allowlist, caps items, strips URLs to domains, rejects bad `state`.
 

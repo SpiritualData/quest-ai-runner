@@ -8,5 +8,5 @@
 
 ## Where to go next
 
-- Owning intent: [Keeping every part generic and measured](../../../../quest_ai_runner/keep_it_generic/README.md)
+- Owning intent: [Integrity](../../../../quest_ai_runner/integrity/README.md)
 - Repository: [top README](../../../../README.md)
