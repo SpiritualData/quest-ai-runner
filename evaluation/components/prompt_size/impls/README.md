@@ -4,8 +4,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Live assembly-point driver | `assemble-a-prompt:live` | [`evaluation/components/prompt_size/impls/live.py`](live.py) |  |
-| Planner prompt with only the rules that apply to the turn | `assemble-a-prompt:situational` | [`evaluation/components/prompt_size/impls/situational.py`](situational.py) |  |
+| Live assembly-point driver | `context-intake:live` | [`evaluation/components/prompt_size/impls/live.py`](live.py) |  |
+| Planner prompt with only the rules that apply to the turn | `context-intake:situational` | [`evaluation/components/prompt_size/impls/situational.py`](situational.py) |  |
 
 ## Where to go next
 

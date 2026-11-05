@@ -4,9 +4,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| In-memory reference store | `persist-predictions:memory_store` | [`evaluation/components/persist_predictions/impls/memory_store.py`](memory_store.py) |  |
+| In-memory reference store | `the-intuition:memory_store` | [`evaluation/components/persist_predictions/impls/memory_store.py`](memory_store.py) |  |
 
 ## Where to go next
 
-- Owning intent: [Holding the intents across quests](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
+- Owning intent: [Quest Intents](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
 - Repository: [top README](../../../../README.md)

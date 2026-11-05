@@ -6,9 +6,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Fake-gateway conformance arm | `talk-over-a-channel:openclaw_bridge` | [`evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py`](openclaw_bridge.py) |  |
+| Fake-gateway conformance arm | `intake-sources:openclaw_bridge` | [`evaluation/components/talk_over_a_channel/impls/openclaw_bridge.py`](openclaw_bridge.py) |  |
 
 ## Where to go next
 
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [Quest AI Runner](../../../../esoi/README.md)
 - Repository: [top README](../../../../README.md)

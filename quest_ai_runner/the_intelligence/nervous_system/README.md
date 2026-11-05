@@ -4,17 +4,17 @@ The AI system watches every run and brings in a person only where only a person 
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `nervous-system:overseer` of its parent intent [`quest-ai-runner`](../../../esoi/README.md). Opportunities: A run can be watched at a fraction of the cost of the work it watches: a small model reads a digest of the run and sends one signal (proceed, redirect, answer now, escalate to deep work, escalate to a person). That opens ground the parent solution does not cover: which risks deserve a response of their own instead of one uniform treatment, which questions about a run a plain check can answer without a model, and how a step only a person may take is put before the right person with the work held until they answer.
+This sub-intent arises as the implementation `nervous-system:overseer` of its parent intent [`the_intelligence`](../README.md). Opportunities: A run can be watched at a fraction of the cost of the work it watches: a small model reads a digest of the run and sends one signal (proceed, redirect, answer now, escalate to deep work, escalate to a person). That opens ground the parent solution does not cover: which risks deserve a response of their own instead of one uniform treatment, which questions about a run a plain check can answer without a model, and how a step only a person may take is put before the right person with the work held until they answer.
 
 ## How the solutions fit together
 
-Nervous System asks the model through Tiered model provider layer to oversee a run and brings a step only a person may take to that person through Human decision escalation channel. Human decision escalation channel files each decision in the Quest account through Quest account access.
+Nervous System watches every run and acts when only a person can decide. Quest Decision Requests carries that decision to the teammate it belongs to, holds the ask on the quest until it is answered and never takes the step without them.
 
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Quest Decision Requests | `quest-decision-requests` | no entry declared | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
+| Quest Decision Requests | `quest-decision-requests` | `quest_ai_runner.run("quest-decision-requests")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 
 ## Solutions from a library
 
@@ -36,7 +36,7 @@ Nervous System asks the model through Tiered model provider layer to oversee a r
 
 ## Where to go next
 
-- Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
+- Parent intent: [Intelligence](../README.md)
 - Repository: [top README](../../../README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 

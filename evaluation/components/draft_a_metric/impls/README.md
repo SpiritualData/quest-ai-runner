@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Ask the owner to write it (floor, proposed) | `draft-a-metric:ask_owner` | [`evaluation/components/draft_a_metric/impls/ask_owner.py`](ask_owner.py) |  |
+| Ask the owner to write it (floor, proposed) | `metric-translation:ask_owner` | [`evaluation/components/draft_a_metric/impls/ask_owner.py`](ask_owner.py) |  |
 
 ## Where to go next
 

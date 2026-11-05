@@ -6,10 +6,10 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Hysteresis resource guard | `justify-model-calls:resources` | [`quest_ai_runner/the_body/host/resources.py`](resources.py) |  |
+| Hysteresis resource guard | `model-plumbing:resources` | [`quest_ai_runner/the_body/host/resources.py`](resources.py) |  |
 
 ## Where to go next
 
-- Up: [quest_ai_runner/the_body](../README.md)
-- Intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
+- Up: [quest_ai_runner](../../README.md)
+- Intent: [Quest Body](../README.md)
 - Repository: [top README](../../../README.md)

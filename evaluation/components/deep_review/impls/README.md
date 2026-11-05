@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Keyword and threshold rule floor | `run-deep-work:rule_floor` | [`evaluation/components/deep_review/impls/rule_floor.py`](rule_floor.py) |  |
+| Keyword and threshold rule floor | `delegated-agent-sessions:rule_floor` | [`evaluation/components/deep_review/impls/rule_floor.py`](rule_floor.py) |  |
 
 ## Where to go next
 

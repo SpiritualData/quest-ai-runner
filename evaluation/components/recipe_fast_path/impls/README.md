@@ -4,10 +4,10 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Live planner-only baseline | `route-a-message:planner_only` | [`evaluation/components/recipe_fast_path/impls/planner_only.py`](planner_only.py) |  |
-| Offline planner-only baseline | `route-a-message:planner_only_offline` | [`evaluation/components/recipe_fast_path/impls/planner_only_offline.py`](planner_only_offline.py) |  |
-| Live recipe replay arm | `route-a-message:recipe_replay` | [`evaluation/components/recipe_fast_path/impls/recipe_replay.py`](recipe_replay.py) |  |
-| Offline recipe replay arm | `route-a-message:recipe_replay_offline` | [`evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py`](recipe_replay_offline.py) |  |
+| Live planner-only baseline | `planner:planner_only` | [`evaluation/components/recipe_fast_path/impls/planner_only.py`](planner_only.py) |  |
+| Offline planner-only baseline | `planner:planner_only_offline` | [`evaluation/components/recipe_fast_path/impls/planner_only_offline.py`](planner_only_offline.py) |  |
+| Live recipe replay arm | `planner:recipe_replay` | [`evaluation/components/recipe_fast_path/impls/recipe_replay.py`](recipe_replay.py) |  |
+| Offline recipe replay arm | `planner:recipe_replay_offline` | [`evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py`](recipe_replay_offline.py) |  |
 
 ## Where to go next
 

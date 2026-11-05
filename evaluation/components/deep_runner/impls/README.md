@@ -6,10 +6,10 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Subprocess runner scenarios | `run-deep-work:subprocess_runner` | [`evaluation/components/deep_runner/impls/subprocess_runner.py`](subprocess_runner.py) |  |
-| Agent-protocol runner scenarios | `run-deep-work:acp_runner` | [`evaluation/components/deep_runner/impls/acp_runner.py`](acp_runner.py) |  |
+| Subprocess runner scenarios | `delegated-agent-sessions:subprocess_runner` | [`evaluation/components/deep_runner/impls/subprocess_runner.py`](subprocess_runner.py) |  |
+| Agent-protocol runner scenarios | `delegated-agent-sessions:acp_runner` | [`evaluation/components/deep_runner/impls/acp_runner.py`](acp_runner.py) |  |
 
 ## Where to go next
 
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [Quest AI Runner](../../../../esoi/README.md)
 - Repository: [top README](../../../../README.md)

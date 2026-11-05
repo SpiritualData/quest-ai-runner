@@ -4,9 +4,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Agent without hint | `select-context:cold_claude` | [`evaluation/components/claude_code_ab/impls/cold_claude.py`](cold_claude.py) |  |
-| Offline warm-hint builder | `select-context:idf_hint` | [`evaluation/components/claude_code_ab/impls/idf_hint.py`](idf_hint.py) |  |
-| Agent with hint | `select-context:warm_claude` | [`evaluation/components/claude_code_ab/impls/warm_claude.py`](warm_claude.py) |  |
+| Agent without hint | `context-retriever:cold_claude` | [`evaluation/components/claude_code_ab/impls/cold_claude.py`](cold_claude.py) |  |
+| Offline warm-hint builder | `context-retriever:idf_hint` | [`evaluation/components/claude_code_ab/impls/idf_hint.py`](idf_hint.py) |  |
+| Agent with hint | `context-retriever:warm_claude` | [`evaluation/components/claude_code_ab/impls/warm_claude.py`](warm_claude.py) |  |
 
 ## Where to go next
 

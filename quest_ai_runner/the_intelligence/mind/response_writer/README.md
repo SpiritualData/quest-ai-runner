@@ -12,6 +12,6 @@
 
 ## Where to go next
 
-- Up: [quest_ai_runner/the_intelligence](../../README.md)
+- Up: [quest_ai_runner](../../../README.md)
 - Intent: [Mind](../README.md)
 - Repository: [top README](../../../../README.md)

@@ -10,6 +10,6 @@
 
 ## Where to go next
 
-- Up: [quest_ai_runner/the_consciousness](../README.md)
-- Intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
+- Up: [quest_ai_runner](../../README.md)
+- Intent: [Quest Consciousness](../README.md)
 - Repository: [top README](../../../README.md)

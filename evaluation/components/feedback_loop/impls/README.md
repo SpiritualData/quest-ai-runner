@@ -4,11 +4,11 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Show-everything baseline | `store-feedback:dump_all` | [`evaluation/components/feedback_loop/impls/dump_all.py`](dump_all.py) |  |
-| Live ledger and provider arm | `store-feedback:ledger_guidance` | [`evaluation/components/feedback_loop/impls/ledger_guidance.py`](ledger_guidance.py) |  |
-| No-feedback floor | `store-feedback:no_memory` | [`evaluation/components/feedback_loop/impls/no_memory.py`](no_memory.py) |  |
+| Show-everything baseline | `feedback-learning:dump_all` | [`evaluation/components/feedback_loop/impls/dump_all.py`](dump_all.py) |  |
+| Live ledger and provider arm | `feedback-learning:ledger_guidance` | [`evaluation/components/feedback_loop/impls/ledger_guidance.py`](ledger_guidance.py) |  |
+| No-feedback floor | `feedback-learning:no_memory` | [`evaluation/components/feedback_loop/impls/no_memory.py`](no_memory.py) |  |
 
 ## Where to go next
 
-- Owning intent: [Holding the intents across quests](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
+- Owning intent: [Quest Intents](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
 - Repository: [top README](../../../../README.md)

@@ -6,10 +6,10 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Contained backed-up writer | `write-files:files` | [`quest_ai_runner/the_world/tools/file_editing/files_writer.py`](files_writer.py) |  |
+| Contained backed-up writer | `file-editing:files` | [`quest_ai_runner/the_world/tools/file_editing/files_writer.py`](files_writer.py) | selected |
 
 ## Where to go next
 
 - Up: [quest_ai_runner](../../../README.md)
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [World](../../README.md)
 - Repository: [top README](../../../../README.md)

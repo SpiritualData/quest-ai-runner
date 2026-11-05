@@ -1,76 +1,78 @@
-# the_consciousness
+# Quest Consciousness
 
-*ESOI records kept beside the code in `quest_ai_runner/the_consciousness`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
+Each Quest user grows with an AI aligned to them.
 
-Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.
+*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-These are the solutions of [Grounded AI that advances people's goals](../../esoi/README.md).
+This sub-intent arises as the implementation `quest-consciousness:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Aligning an AI to a person is half of helping them; the other half is helping the person's own intents move, which no part of the hub's Consciousness does for them.
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one flow, and the Grounded goal agent is that flow. It takes the request in through Request intake, says what the person is working toward through Higher mind and chooses the context the request needs through Context choice. It reasons step by step through Mind, acts on the account through Body and Quest account access, and answers questions beyond the person's own material through Science. It has every run watched through Nervous System and holds the work to the metric that serves it through Critical Thinking. It asks the model through the Tiered model provider layer and stays comparable by metric through Integrity. It recalls what a request needs through Subconscious. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind starts each step on the model tier it picks through Cost-ordered model tier selector with outage and allowance recovery. Nervous System has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport. Body changes the quest as the person asks through Quest change executor and writes files inside one folder through Bounded reversible file writer. Body reads from the sources the person's work lives in through Multi-source evidence retriever and hands a new goal to the right owner through Goal assignee and doability judge. Body does heavy work through Bounded autonomous work runner, makes one named change on an outside tool server through Allowlisted operation writer and claims only the reach that World grants. Quest change executor reaches the account through Quest account access and decides through Tiered model provider layer. Goal assignee and doability judge asks the model whether a goal is doable through Tiered model provider layer. World reaches a person through Live messaging channel transport and judges through Tiered model provider layer.
+Quest Consciousness is where the assistant adapts to the person it works for and helps them move toward their intents. Quest Requests takes in what the person asks, from every Quest surface, once. Quest Representatives gives each request to the representative that fits it. Quest Decision Requests carries a decision that only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected so it guides later work. Intent Evolution then suggests the option most likely to work for the person's intents, or an experiment when the best option is not yet known.
 
-## Overview diagram
+## Solutions at a glance
 
-An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Quest Consciousness | `quest-consciousness` | no entry declared | none selected | Quest Consciousness on Quest cases |
+| Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | none selected | Intent evolution: the most likely option or a checkable experiment |
 
-```mermaid
-flowchart LR
-    s0["Quest Context<br/><i>quest-context</i>"]
-    s1["Quest Requests<br/><i>quest-requests</i>"]
-    s2["Quest Body<br/><i>quest-body</i>"]
-    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s5["Quest Intents<br/><i>quest-intents</i>"]
-    s6["Quest Self<br/><i>quest-self</i>"]
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s6
-    s2 --> s1
-    s2 --> s3
-    s2 --> s4
-    s2 --> s6
-    s3 -->|"The reply with its account claims checked"| s6
-    s4 -->|"The change made and the state read back"| s3
-    s5 -->|"The quest the message serves and the intent frame for the work"| s6
-```
+## Solutions from a library
 
-## Quest Consciousness (`quest-consciousness`)
+- [Consciousness](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-consciousness`): The humans who interact with the system: AI Representatives act for a person, Prioritization turns the person's priorities into ESOI, Judgment Calls decide when to ask that person, and Feedback Learning applies the person's feedback to specs and metrics. Specializes the library `hub`.
 
-Let each Quest user grow with an AI aligned to them.
+## Problems and ideals
 
-- Entry call: no entry declared
-- Selected implementation: none selected
-- Metric: none yet
-
-## Intent Evolution (`intent-evolution`)
-
-Help each Quest user discover what works for their intents.
-
-- Entry call: no entry declared
-- Selected implementation: none selected
-- Metric: none yet
-
-## Implementations
-
-| Implementation | Handle | Code | Selected |
-|---|---|---|---|
-| Task poller and claimer | `quest-requests:poller` | [`quest_ai_runner/the_consciousness/request_intake/poller.py`](request_intake/poller.py) |  |
-| Single-task executor | `quest-requests:executor` | [`quest_ai_runner/the_consciousness/request_intake/executor.py`](request_intake/executor.py) |  |
-| Shared lane entry point | `quest-requests:lane` | [`quest_ai_runner/the_consciousness/request_intake/lane.py`](request_intake/lane.py) |  |
-
-## Problems
+**Problems**
 
 - Advice Without A Way To Check It (`prob-experiments-not-proposed`): Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose an experiment that would settle it, though the app has an Experiments feature built for that.
 
-## Ideals
+**Ideals**
 
 - Most-Likely Path (`ideal-most-likely-path`): Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
 
+## Metrics and their leaders
+
+- Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`)
+- Quest Consciousness on Quest cases (`metric-quest-consciousness`)
+
 ## Where to go next
 
-- Up: [quest_ai_runner](../README.md)
-- Intent: [Grounded AI that advances people's goals](../../esoi/README.md)
-- Down: [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
+- Sub-intent: [Quest Requests](request_intake/README.md) (Every request made in Quest is taken in once by the same AI.)
+- Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
+- Records beside the code: [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+
+---
+
+## The full record
+
+### Problems
+
+- Advice Without A Way To Check It (`prob-experiments-not-proposed`): Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose an experiment that would settle it, though the app has an Experiments feature built for that.
+
+### Ideals
+
+- Most-Likely Path (`ideal-most-likely-path`): Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
+
+### Solutions
+
+| Solution | Handle | Selected | Metric |
+|---|---|---|---|
+| Quest Consciousness | `quest-consciousness` | none selected | Quest Consciousness on Quest cases |
+| Intent Evolution | `intent-evolution` | none selected | Intent evolution: the most likely option or a checkable experiment |
+
+### Implementations
+
+| Implementation | Handle | Where | Sub-intent |
+|---|---|---|---|
+| Task poller and claimer | `quest-requests:poller` | [quest_ai_runner/the_consciousness/request_intake/poller.py](request_intake/poller.py) |  |
+| Single-task executor | `quest-requests:executor` | [quest_ai_runner/the_consciousness/request_intake/executor.py](request_intake/executor.py) |  |
+| Shared lane entry point | `quest-requests:lane` | [quest_ai_runner/the_consciousness/request_intake/lane.py](request_intake/lane.py) |  |
+| Configured persona resolver | `quest-requests:personas` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
+
+### Metrics
+
+- Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`): `none`
+- Quest Consciousness on Quest cases (`metric-quest-consciousness`): `none`

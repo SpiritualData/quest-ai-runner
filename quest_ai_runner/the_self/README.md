@@ -1,59 +1,28 @@
 # Quest Self
 
-*ESOI records kept beside the code in `quest_ai_runner/the_self`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
+Each Quest user meets one whole assistant.
 
-Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.
+*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-These are the solutions of [Grounded AI that advances people's goals](../../esoi/README.md).
+This sub-intent arises as the implementation `quest-self:library` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: A person's day with their assistant is judged as they meet it, which no single part can show, so the whole assistant has its own measure of how capable it feels from the user's seat.
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one flow, and the Grounded goal agent is that flow. It takes the request in through Request intake, says what the person is working toward through Higher mind and chooses the context the request needs through Context choice. It reasons step by step through Mind, acts on the account through Body and Quest account access, and answers questions beyond the person's own material through Science. It has every run watched through Nervous System and holds the work to the metric that serves it through Critical Thinking. It asks the model through the Tiered model provider layer and stays comparable by metric through Integrity. It recalls what a request needs through Subconscious. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind starts each step on the model tier it picks through Cost-ordered model tier selector with outage and allowance recovery. Nervous System has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport. Body changes the quest as the person asks through Quest change executor and writes files inside one folder through Bounded reversible file writer. Body reads from the sources the person's work lives in through Multi-source evidence retriever and hands a new goal to the right owner through Goal assignee and doability judge. Body does heavy work through Bounded autonomous work runner, makes one named change on an outside tool server through Allowlisted operation writer and claims only the reach that World grants. Quest change executor reaches the account through Quest account access and decides through Tiered model provider layer. Goal assignee and doability judge asks the model whether a goal is doable through Tiered model provider layer. World reaches a person through Live messaging channel transport and judges through Tiered model provider layer.
+Quest Self keeps the parts of the assistant working as one whole for each Quest user. To answer a request it takes the request in through Quest Requests, learns what the person is working toward through Quest Intents, chooses the context the request needs through Context Retriever, reasons through Mind, acts on the account through Quest Body and answers beyond the person's own material through Science. Nervous System watches the run before anything irreversible is handed on and Critical Thinking holds the work to its measure. Model Plumbing is how every part asks a model, so each call is justified and its cost is known.
 
-## Overview diagram
+## Solutions at a glance
 
-An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Model Plumbing | `model-plumbing` | no entry declared | Registered prompt specs with an enforcement test (today) (`spec_registry`) | Cost, budget and resource-guard correctness, Justified share of model spend, Justified model spend |
+| Quest Self | `quest-self` | `quest_ai_runner.run("quest-self", 'What should I work on first this week?')` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 
-```mermaid
-flowchart LR
-    s0["Quest Context<br/><i>quest-context</i>"]
-    s1["Quest Requests<br/><i>quest-requests</i>"]
-    s2["Quest Body<br/><i>quest-body</i>"]
-    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s5["Quest Intents<br/><i>quest-intents</i>"]
-    s6["Quest Self<br/><i>quest-self</i>"]
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s6
-    s2 --> s1
-    s2 --> s3
-    s2 --> s4
-    s2 --> s6
-    s3 -->|"The reply with its account claims checked"| s6
-    s4 -->|"The change made and the state read back"| s3
-    s5 -->|"The quest the message serves and the intent frame for the work"| s6
-```
+## Solutions from a library
 
-## Quest Self (`quest-self`)
+- [Model Plumbing](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/README.md) (`model-plumbing`): The one measured path every part uses to ask a model: the Model Tier Chooser picks the model for a tier and the Vendor Model Caller reaches the vendor and steps to the next provider when one fails. Adopted from the library `hub`.
+- [The Self](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-self`): Keeps the five kinds of part working as one whole: the Assembler builds them and reports the coverage, Integrity keeps the whole honest and generic and audits the run record, and Role Understanding says what each part is for. Specializes the library `hub`.
 
-Make each Quest user meet one whole assistant whose parts agree, so that a part passing its own test cannot hide a failure that the person finds out about.
-
-- Entry call: no entry declared
-- Selected implementation: quest-ai-runner library (`library`)
-- Metric: Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score
-- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../../evaluation/components/act_as_the_body/score.py) and 1037 more
-
-## Implementations
-
-| Implementation | Handle | Code | Selected |
-|---|---|---|---|
-| quest-ai-runner library | `quest-self:library` | [`quest_ai_runner/the_self/respond.py`](respond.py) | selected |
-| Standing instruction alone (floor) | `critical-thinking:instruction_only` | [`quest_ai_runner/the_self/integrity/prompts/standing_instructions.py`](integrity/prompts/standing_instructions.py) |  |
-| Registered prompt specs with an enforcement test (today) | `justify-model-calls:spec_registry` | [`quest_ai_runner/the_self/integrity/prompts/prompt_specs.py`](integrity/prompts/prompt_specs.py) |  |
-
-## Metrics
+## Metrics and their leaders
 
 - Passing chat turns per dollar (`QME1`): leader `reference_replies`, 331 of 331 cases
 - Delegated tasks meeting their standard (`QME2`)
@@ -68,6 +37,39 @@ Make each Quest user meet one whole assistant whose parts agree, so that a part 
 
 ## Where to go next
 
-- Up: [quest_ai_runner](../README.md)
-- Intent: [Grounded AI that advances people's goals](../../esoi/README.md)
+- Sub-intent: [Integrity](integrity/README.md) (Every part of QAR is a specified solution whose best implementation runs as the state of the art moves.)
+- Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+
+---
+
+## The full record
+
+### Solutions
+
+| Solution | Handle | Selected | Metric |
+|---|---|---|---|
+| Model Plumbing | `model-plumbing` | Registered prompt specs with an enforcement test (today) (`spec_registry`) | Cost, budget and resource-guard correctness, Justified share of model spend, Justified model spend |
+| Quest Self | `quest-self` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
+
+### Implementations
+
+| Implementation | Handle | Where | Sub-intent |
+|---|---|---|---|
+| quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](respond.py) | [the_self](the_self/README.md) |
+| Standing instruction alone (floor) | `critical-thinking:instruction_only` | [quest_ai_runner/the_self/integrity/prompts/standing_instructions.py](integrity/prompts/standing_instructions.py) |  |
+| Registered prompt specs with an enforcement test (today) | `model-plumbing:spec_registry` | [quest_ai_runner/the_self/integrity/prompts/prompt_specs.py](integrity/prompts/prompt_specs.py) |  |
+
+### Metrics
+
+- Passing chat turns per dollar (`QME1`): `esoi run chat_quality --impl dev_quest_chat --sample 10 --max-calls 300`
+- Delegated tasks meeting their standard (`QME2`): `none`
+- Exact and consented changes (`QME3`): `none`
+- Data kept in scope (`QME4`): `none`
+- Engine reuse (`QME5`): `none`
+- Measured coverage (`QME6`): `none`
+- QAR overall score (`metric-qar-overall`): `esoi run qar_overall --impl recorded_rows`
+- Justified share of model spend (`metric-justified-model-spend`): `esoi run justified_model_spend --impl spec_registry_ablation`
+- Justified model spend (`QME8`): `esoi run justified_model_spend --impl spec_registry_ablation`
+- Cost, budget and resource-guard correctness (`metric-track-usage-and-cost`): `esoi run track_usage_and_cost --impl qar_usage`

@@ -11,6 +11,6 @@
 
 ## Where to go next
 
-- Up: [quest_ai_runner/the_body](../../README.md)
-- Intent: [Body](../README.md)
+- Up: [quest_ai_runner](../../../README.md)
+- Intent: [Quest Account Truth](../README.md)
 - Repository: [top README](../../../../README.md)

@@ -12,5 +12,5 @@
 ## Where to go next
 
 - Up: [quest_ai_runner](../../../README.md)
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [World](../../README.md)
 - Repository: [top README](../../../../README.md)

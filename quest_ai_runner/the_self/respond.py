@@ -23,6 +23,7 @@ from hubofhubs.api import CardStore
 from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 from quest_ai_runner.the_body.interface import BodyActing
 from quest_ai_runner.the_body.internal_context.quest.interface import QuestOperations
+from quest_ai_runner.the_consciousness.intent_evolution.interface import IntentEvolving
 from quest_ai_runner.the_consciousness.request_intake.interface import QueueRunning
 from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
 from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import IntentHolding
@@ -38,6 +39,7 @@ from quest_ai_runner.the_world.science.interface import KnowingTheWorld
 
 LOOP = "in the Mind's loop"
 OWN = "its own call"
+PENDING = "no arm yet"   # the interface and its place in the flow exist; the first arm is built after its free rated stage
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ FLOW: Tuple[Part, ...] = (
     Part("the-mind", "reasons step by step over the request and its context, with Body acting and Science answering beyond the person's own material", OWN),
     Part("nervous-system", "watches the run for risk before anything irreversible is handed on", LOOP),
     Part("critical-thinking", "holds the work to the metric that serves it and answers a regression", LOOP),
+    Part("intent-evolution", "suggests the option most likely to work for the person's intents, or an experiment when the best option is unknown", PENDING),
 )
 
 
@@ -66,10 +69,11 @@ class Respond:
     def __init__(self, model: RoutedModelCalling, cards: CardStore, memory: CardRecall, quest: QuestOperations,
                  reasoning: Lazy[StepReasoning], taking_in: Lazy[QueueRunning], body: Lazy[BodyActing], critic: Lazy[MetricHolding],
                  risk: Lazy[RunWatching], intents: Lazy[IntentHolding],
-                 generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld], context: Lazy[ContextSelecting]) -> None:
+                 generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld], context: Lazy[ContextSelecting],
+                 evolution: Lazy[IntentEvolving]) -> None:
         self.model, self.cards, self.memory, self.quest, self.reasoning, self.taking_in = model, cards, memory, quest, reasoning, taking_in
         self.body, self.critic, self.risk, self.intents, self.generic, self.world = body, critic, risk, intents, generic, world
-        self.context = context
+        self.context, self.evolution = context, evolution
 
     def config(self) -> RunnerConfig:
         """The runner's configuration over the seats: the model, the cards as the context assembler, the Quest account."""

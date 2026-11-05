@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| MCP gateway bridge transport | `talk-over-a-channel:openclaw` | [`quest_ai_runner/the_world/tools/connected_system_operations/openclaw_channel.py`](openclaw_channel.py) |  |
+| MCP gateway bridge transport | `intake-sources:openclaw` | [`quest_ai_runner/the_world/tools/connected_system_operations/openclaw_channel.py`](openclaw_channel.py) | selected |
 | Parallel multi-source composite | `quest-context:composite` | [`quest_ai_runner/the_world/tools/connected_system_operations/composite_retrieval_adapter.py`](composite_retrieval_adapter.py) | selected |
 | MCP server reader | `quest-context:mcp` | [`quest_ai_runner/the_world/tools/connected_system_operations/mcp_retrieval_adapter.py`](mcp_retrieval_adapter.py) |  |
 | Notion database reader | `quest-context:notion` | [`quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py`](notion_adapter.py) |  |
@@ -17,5 +17,5 @@
 ## Where to go next
 
 - Up: [quest_ai_runner](../../../README.md)
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [World](../../README.md)
 - Repository: [top README](../../../../README.md)

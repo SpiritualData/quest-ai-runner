@@ -6,9 +6,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Live usage evaluation arm | `justify-model-calls:qar_usage` | [`evaluation/components/track_usage_and_cost/impls/qar_usage.py`](qar_usage.py) |  |
+| Live usage evaluation arm | `model-plumbing:qar_usage` | [`evaluation/components/track_usage_and_cost/impls/qar_usage.py`](qar_usage.py) |  |
 
 ## Where to go next
 
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [Quest AI Runner](../../../../esoi/README.md)
 - Repository: [top README](../../../../README.md)

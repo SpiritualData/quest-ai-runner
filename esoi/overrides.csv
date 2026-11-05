@@ -20,3 +20,5 @@ planner,metric-route-a-message
 metric-translation,metric-draft-a-metric
 context-intake,metric-assemble-a-prompt
 web-search,metric-search-the-web
+goal-completion,metric-judge-a-decision
+response-quality,metric-guard-a-reply

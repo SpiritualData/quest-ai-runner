@@ -2,13 +2,13 @@
 
 *ESOI records kept beside the code in `quest_ai_runner`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
 
-Goals keep moving between a person's sessions, because the work they delegated gets done to the standard they wrote, and every answer and action rests on the person's own goals, material and preferences, and never on another person's.
+A Quest user's AI system continuously evolves to help the user continuously evolve towards their intents.
 
-These are the solutions of [Grounded AI that advances people's goals](../esoi/README.md).
+These are the solutions of [Quest AI Runner](../esoi/README.md).
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one flow, and the Grounded goal agent is that flow. It takes the request in through Request intake, says what the person is working toward through Higher mind and chooses the context the request needs through Context choice. It reasons step by step through Mind, acts on the account through Body and Quest account access, and answers questions beyond the person's own material through Science. It has every run watched through Nervous System and holds the work to the metric that serves it through Critical Thinking. It asks the model through the Tiered model provider layer and stays comparable by metric through Integrity. It recalls what a request needs through Subconscious. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind starts each step on the model tier it picks through Cost-ordered model tier selector with outage and allowance recovery. Nervous System has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport. Body changes the quest as the person asks through Quest change executor and writes files inside one folder through Bounded reversible file writer. Body reads from the sources the person's work lives in through Multi-source evidence retriever and hands a new goal to the right owner through Goal assignee and doability judge. Body does heavy work through Bounded autonomous work runner, makes one named change on an outside tool server through Allowlisted operation writer and claims only the reach that World grants. Quest change executor reaches the account through Quest account access and decides through Tiered model provider layer. Goal assignee and doability judge asks the model whether a goal is doable through Tiered model provider layer. World reaches a person through Live messaging channel transport and judges through Tiered model provider layer.
+Quest AI Runner turns what a Quest user asks into work that moves their intents, and Quest Self is the one assistant that does it. Quest Self asks Quest Consciousness who is asking and what they are growing toward, reads their account and their own material through Quest Body, reasons about the request through Intelligence and reaches what lies outside through World. Quest Consciousness takes each request in through Quest Requests, hands it to the representative that fits through Quest Representatives, asks a person only for what is theirs through Quest Decision Requests, learns from feedback through Feedback Learning and proposes what is most likely to work for their intents through Intent Evolution. Quest Body keeps the person's Quest data in Quest Context, changes it exactly as asked through Quest Change Executor and keeps what is said about an account true through Quest Account Truth. Intelligence plans each request through Mind, recalls what it needs through Subconscious, keeps the long view through Higher Mind with Guidance and Quest Intents, and holds the work to a measure through Critical Thinking with Goal Completion and Response Quality. World asks models through Model Plumbing with Model Tier Chooser and Vendor Model Caller, uses outside tools through Tools with Delegated Agent Sessions and File Editing, and answers from public research through Science. Nervous System watches every run, Intake Sources brings requests in from where people work and Integrity keeps every part a specified solution that is measured.
 
 ## Overview diagram
 
@@ -16,31 +16,93 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Quest Context<br/><i>quest-context</i>"]
-    s1["Quest Requests<br/><i>quest-requests</i>"]
-    s2["Quest Body<br/><i>quest-body</i>"]
-    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s5["Quest Intents<br/><i>quest-intents</i>"]
-    s6["Quest Self<br/><i>quest-self</i>"]
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s6
-    s2 --> s1
-    s2 --> s3
-    s2 --> s4
-    s2 --> s6
-    s3 -->|"The reply with its account claims checked"| s6
-    s4 -->|"The change made and the state read back"| s3
-    s5 -->|"The quest the message serves and the intent frame for the work"| s6
+    s0["Integrity<br/><i>system-integrity</i>"]
+    s1["Intake Sources<br/><i>intake-sources</i>"]
+    s2["Nervous System<br/><i>nervous-system</i>"]
+    s3["Vendor Model Caller<br/><i>vendor-model-caller</i>"]
+    s4["Science<br/><i>the-science</i>"]
+    s5["Critical Thinking<br/><i>critical-thinking</i>"]
+    s6["Goal Completion<br/><i>goal-completion</i>"]
+    s7["Response Quality<br/><i>response-quality</i>"]
+    s8["guidance"]
+    s9["Tools<br/><i>the-tools</i>"]
+    s10["Quest Context<br/><i>quest-context</i>"]
+    s11["Quest Requests<br/><i>quest-requests</i>"]
+    s0 --> s11
+    s1 --> s9
+    s1 --> s11
+    s3 --> s0
+    s3 --> s2
+    s3 --> s9
+    s3 --> s11
+    s6 --> s2
+    s6 --> s5
+    s7 --> s0
+    s7 --> s5
+    s8 --> s5
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s11
+    s11 -->|"The request taken in once and its outcome reported"| s5
 ```
+
+## Intelligence (`the-intelligence`)
+
+- Entry call: no entry declared
+- Selected implementation: none selected
+- Metric: none yet
+
+## World (`the-world`)
+
+- Entry call: no entry declared
+- Selected implementation: none selected
+- Metric: none yet
+
+## Critical Thinking (`critical-thinking`)
+
+- Entry call: `quest_ai_runner.run("critical-thinking", ...)`
+- Selected implementation: Code-enforced before and after on deep runs only (today) (`deep_runs_only`)
+- Metric: Requests held to their ESOI metric by code
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 922 more
+
+## Goal Completion (`goal-completion`)
+
+- Entry call: `quest_ai_runner.run("goal-completion", ...)`
+- Selected implementation: Production judges under a scripted provider (`qar_judges`)
+- Metric: Judge deterministic-half correctness with a scripted provider
+- Implemented by: [`evaluation/components/judge_live_decisions/impls/live_judges.py`](../evaluation/components/judge_live_decisions/impls/live_judges.py), [`evaluation/components/judge_live_decisions/impls/no_call_floor.py`](../evaluation/components/judge_live_decisions/impls/no_call_floor.py), [`quest_ai_runner/the_consciousness/judgment_calls/__init__.py`](the_consciousness/judgment_calls/__init__.py), [`quest_ai_runner/the_consciousness/judgment_calls/ask_policy.py`](the_consciousness/judgment_calls/ask_policy.py), [`quest_ai_runner/the_consciousness/judgment_calls/executor_pauses.py`](the_consciousness/judgment_calls/executor_pauses.py), [`quest_ai_runner/the_consciousness/judgment_calls/interface.py`](the_consciousness/judgment_calls/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py) and 65 more
+
+## Response Quality (`response-quality`)
+
+- Entry call: `quest_ai_runner.run("response-quality", 'See https://example.org/a for details.')`
+- Selected implementation: Production guard engines under test (`qar_guards`)
+- Metric: Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies
+- Implemented by: [`evaluation/components/esoi_judge/impls/model_judge.py`](../evaluation/components/esoi_judge/impls/model_judge.py), [`evaluation/components/esoi_judge/impls/regex_only.py`](../evaluation/components/esoi_judge/impls/regex_only.py), [`quest_ai_runner/prompts/evolvable_structure.md`](prompts/evolvable_structure.md), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/goal_iteration.py`](the_intelligence/critical_thinking/goal_iteration.py), [`quest_ai_runner/the_intelligence/critical_thinking/interface.py`](the_intelligence/critical_thinking/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/response_quality/__init__.py`](the_intelligence/critical_thinking/response_quality/__init__.py) and 51 more
+
+## Higher Mind (`higher-mind`)
+
+- Entry call: no entry declared
+- Selected implementation: none selected
+- Metric: none yet
+
+## Guidance (`guidance`)
+
+- Entry call: `quest_ai_runner.run("guidance", 'What should I work on first this week?')`
+- Selected implementation: Computed frame in the prompt (`frame-line`)
+- Metric: Intent-grounded pass rate, Two-sided long-term guidance
+- Implemented by: [`quest_ai_runner/the_body/hands/quest_operations/tools_quest_intents.py`](the_body/hands/quest_operations/tools_quest_intents.py), [`quest_ai_runner/the_body/internal_context/quest/client/quest_client_intents.py`](the_body/internal_context/quest/client/quest_client_intents.py), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/__init__.py`](the_intelligence/critical_thinking/esoi_application/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py`](the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py`](the_intelligence/critical_thinking/esoi_application/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/repo_specs.py`](the_intelligence/critical_thinking/esoi_application/repo_specs.py) and 67 more
+
+## Tools (`the-tools`)
+
+- Entry call: `quest_ai_runner.run("the-tools", 'Send the launch note to the whole team')`
+- Selected implementation: Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`)
+- Metric: Combined world score
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 923 more
 
 ## Quest Context (`quest-context`)
 
 Give every request the person's own Quest material and nobody else's.
 
-- Entry call: no entry declared
+- Entry call: `quest_ai_runner.run("quest-context", 'NOTES.md')`
 - Selected implementation: Parallel multi-source composite (`composite`)
 - Metric: Retrieval recall of the right document over handbook questions, Update-offering correctness over synthetic quest channels, Pointer-resolution safety over offline cases
 - Implemented by: [`evaluation/components/feed_context_sources/impls/update_engine.py`](../evaluation/components/feed_context_sources/impls/update_engine.py), [`evaluation/components/resolve_references/impls/card_resolvers.py`](../evaluation/components/resolve_references/impls/card_resolvers.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py) and 119 more
@@ -49,7 +111,7 @@ Give every request the person's own Quest material and nobody else's.
 
 Take every request made in Quest in once, through the same AI, and report its outcome to the person.
 
-- Entry call: no entry declared
+- Entry call: `quest_ai_runner.run("quest-requests", 'team-1')`
 - Selected implementation: Offline lifecycle harness (`qar_runner`)
 - Metric: Task lifecycle correctness over offline cases, Exactly-once mid-run delivery per run, and how fast it is seen, Answer pass rate gained per image described, Ways in that pass their own metric
 - Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 161 more
@@ -60,24 +122,17 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Quest Context<br/><i>quest-context</i>"]
-    s1["Quest Requests<br/><i>quest-requests</i>"]
-    s2["Quest Body<br/><i>quest-body</i>"]
-    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s5["Quest Intents<br/><i>quest-intents</i>"]
-    s6["Quest Self<br/><i>quest-self</i>"]
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s6
-    s2 --> s1
-    s2 --> s3
-    s2 --> s4
-    s2 --> s6
-    s3 -->|"The reply with its account claims checked"| s6
-    s4 -->|"The change made and the state read back"| s3
-    s5 -->|"The quest the message serves and the intent frame for the work"| s6
+    s0["Critical Thinking<br/><i>critical-thinking</i>"]
+    s1["Goal Completion<br/><i>goal-completion</i>"]
+    s2["Response Quality<br/><i>response-quality</i>"]
+    s3["guidance"]
+    s4["Quest Context<br/><i>quest-context</i>"]
+    s5["Quest Requests<br/><i>quest-requests</i>"]
+    s1 --> s0
+    s2 --> s0
+    s3 --> s0
+    s4 -->|"Evidence from the person's own sources, with where each item came from"| s5
+    s5 -->|"The request taken in once and its outcome reported"| s0
 ```
 
 ## Metrics
@@ -105,11 +160,14 @@ flowchart LR
 
 ## Where to go next
 
-- Intent: [Grounded AI that advances people's goals](../esoi/README.md)
-- Down: [quest_ai_runner/the_body](the_body/README.md)
-- Down: [quest_ai_runner/the_consciousness](the_consciousness/README.md)
-- Down: [quest_ai_runner/the_intelligence](the_intelligence/README.md)
-- Down: [quest_ai_runner/the_self](the_self/README.md)
+- Intent: [Quest AI Runner](../esoi/README.md)
+- Down: [quest_ai_runner/the_body/configuration](the_body/configuration/README.md)
+- Down: [quest_ai_runner/the_body/host](the_body/host/README.md)
+- Down: [quest_ai_runner/the_consciousness/representatives](the_consciousness/representatives/README.md)
+- Down: [quest_ai_runner/the_body/internal_context/quest](the_body/internal_context/quest/README.md)
+- Down: [quest_ai_runner/the_intelligence/critical_thinking/esoi_application](the_intelligence/critical_thinking/esoi_application/README.md)
+- Down: [quest_ai_runner/the_intelligence/mind/response_writer](the_intelligence/mind/response_writer/README.md)
+- Down: [quest_ai_runner/the_intelligence/subconscious/cards_from_files](the_intelligence/subconscious/cards_from_files/README.md)
 - Down: [quest_ai_runner/the_world/model_plumbing/model_tier_chooser](the_world/model_plumbing/model_tier_chooser/README.md)
 - Down: [quest_ai_runner/the_world/model_plumbing/spend](the_world/model_plumbing/spend/README.md)
 - Down: [quest_ai_runner/the_world/model_plumbing/vendor_model_caller](the_world/model_plumbing/vendor_model_caller/README.md)

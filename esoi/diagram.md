@@ -1,29 +1,38 @@
 These are ESOI records rendered as a diagram (evolvable structure that optimizes intent). This page is generated from the solutions' outputs and the implementations' `uses_solution_ids` by `esoi diagram`; edit those records, not this page.
 
-# Solution diagram: Grounded AI that advances people's goals
+# Solution diagram: Quest AI Runner
 
-quest-ai-runner turns a person's request or queued task into grounded work in one flow, and the Grounded goal agent is that flow. It takes the request in through Request intake, says what the person is working toward through Higher mind and chooses the context the request needs through Context choice. It reasons step by step through Mind, acts on the account through Body and Quest account access, and answers questions beyond the person's own material through Science. It has every run watched through Nervous System and holds the work to the metric that serves it through Critical Thinking. It asks the model through the Tiered model provider layer and stays comparable by metric through Integrity. It recalls what a request needs through Subconscious. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind starts each step on the model tier it picks through Cost-ordered model tier selector with outage and allowance recovery. Nervous System has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport. Body changes the quest as the person asks through Quest change executor and writes files inside one folder through Bounded reversible file writer. Body reads from the sources the person's work lives in through Multi-source evidence retriever and hands a new goal to the right owner through Goal assignee and doability judge. Body does heavy work through Bounded autonomous work runner, makes one named change on an outside tool server through Allowlisted operation writer and claims only the reach that World grants. Quest change executor reaches the account through Quest account access and decides through Tiered model provider layer. Goal assignee and doability judge asks the model whether a goal is doable through Tiered model provider layer. World reaches a person through Live messaging channel transport and judges through Tiered model provider layer.
+Quest AI Runner turns what a Quest user asks into work that moves their intents, and Quest Self is the one assistant that does it. Quest Self asks Quest Consciousness who is asking and what they are growing toward, reads their account and their own material through Quest Body, reasons about the request through Intelligence and reaches what lies outside through World. Quest Consciousness takes each request in through Quest Requests, hands it to the representative that fits through Quest Representatives, asks a person only for what is theirs through Quest Decision Requests, learns from feedback through Feedback Learning and proposes what is most likely to work for their intents through Intent Evolution. Quest Body keeps the person's Quest data in Quest Context, changes it exactly as asked through Quest Change Executor and keeps what is said about an account true through Quest Account Truth. Intelligence plans each request through Mind, recalls what it needs through Subconscious, keeps the long view through Higher Mind with Guidance and Quest Intents, and holds the work to a measure through Critical Thinking with Goal Completion and Response Quality. World asks models through Model Plumbing with Model Tier Chooser and Vendor Model Caller, uses outside tools through Tools with Delegated Agent Sessions and File Editing, and answers from public research through Science. Nervous System watches every run, Intake Sources brings requests in from where people work and Integrity keeps every part a specified solution that is measured.
 
 An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
 
 ```mermaid
 flowchart LR
-    s0["Quest Context<br/><i>quest-context</i>"]
-    s1["Quest Requests<br/><i>quest-requests</i>"]
-    s2["Quest Body<br/><i>quest-body</i>"]
-    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s5["Quest Intents<br/><i>quest-intents</i>"]
-    s6["Quest Self<br/><i>quest-self</i>"]
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
-    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s3
-    s1 -->|"The request taken in once and its outcome reported"| s6
-    s2 --> s1
-    s2 --> s3
-    s2 --> s4
-    s2 --> s6
-    s3 -->|"The reply with its account claims checked"| s6
-    s4 -->|"The change made and the state read back"| s3
-    s5 -->|"The quest the message serves and the intent frame for the work"| s6
+    s0["Integrity<br/><i>system-integrity</i>"]
+    s1["Intake Sources<br/><i>intake-sources</i>"]
+    s2["Nervous System<br/><i>nervous-system</i>"]
+    s3["Vendor Model Caller<br/><i>vendor-model-caller</i>"]
+    s4["Science<br/><i>the-science</i>"]
+    s5["Critical Thinking<br/><i>critical-thinking</i>"]
+    s6["Goal Completion<br/><i>goal-completion</i>"]
+    s7["Response Quality<br/><i>response-quality</i>"]
+    s8["guidance"]
+    s9["Tools<br/><i>the-tools</i>"]
+    s10["Quest Context<br/><i>quest-context</i>"]
+    s11["Quest Requests<br/><i>quest-requests</i>"]
+    s0 --> s11
+    s1 --> s9
+    s1 --> s11
+    s3 --> s0
+    s3 --> s2
+    s3 --> s9
+    s3 --> s11
+    s6 --> s2
+    s6 --> s5
+    s7 --> s0
+    s7 --> s5
+    s8 --> s5
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s11
+    s11 -->|"The request taken in once and its outcome reported"| s5
 ```

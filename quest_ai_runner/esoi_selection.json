@@ -40,6 +40,22 @@
    "subconscious": {
     "arm": "recency_window",
     "root": "the-subconscious"
+   },
+   "the_body": {
+    "arm": "",
+    "root": "quest-account-truth"
+   },
+   "the_consciousness": {
+    "arm": "composition",
+    "root": "quest-consciousness"
+   },
+   "the_self": {
+    "arm": "library",
+    "root": "quest-self"
+   },
+   "the_world": {
+    "arm": "",
+    "root": "model-tier-chooser"
    }
   },
   "scopes": {

@@ -6,10 +6,10 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Web research with the answer's support check (today) | `the-science:web_with_support_check` | [`quest_ai_runner/the_world/tools/web_search/area.py`](area.py) |  |
+| Web research with the answer's support check (today) | `the-science:web_with_support_check` | [`quest_ai_runner/the_world/tools/web_search/area.py`](area.py) | selected |
 
 ## Where to go next
 
 - Up: [quest_ai_runner](../../../README.md)
-- Intent: [Grounded AI that advances people's goals](../../../../esoi/README.md)
+- Intent: [World](../../README.md)
 - Repository: [top README](../../../../README.md)

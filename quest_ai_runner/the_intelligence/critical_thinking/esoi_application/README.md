@@ -6,9 +6,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Lexical TF-IDF, optional vector search, parallel batched model judging | `select-context:lexical-vector-llm` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
-| Lexical top few only | `select-context:lexical-only` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
-| Lexical vector gated | `select-context:lexical-vector-gated` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
+| Lexical TF-IDF, optional vector search, parallel batched model judging | `context-retriever:lexical-vector-llm` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
+| Lexical top few only | `context-retriever:lexical-only` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
+| Lexical vector gated | `context-retriever:lexical-vector-gated` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
 
 ## Metrics
 
@@ -16,6 +16,6 @@
 
 ## Where to go next
 
-- Up: [quest_ai_runner/the_intelligence](../../README.md)
+- Up: [quest_ai_runner](../../../README.md)
 - Intent: [Critical Thinking](../README.md)
 - Repository: [top README](../../../../README.md)

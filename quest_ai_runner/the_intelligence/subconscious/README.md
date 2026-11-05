@@ -4,11 +4,29 @@ The AI optimally recalls the part of the person's own knowledge that each reques
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `the-subconscious:recency_window` of its parent intent [`quest-ai-runner`](../../../esoi/README.md). Opportunities: The cards a person's work leaves behind are copies of what lives elsewhere, so the store itself raises questions the parent solution does not ask: when a card has drifted from its source file, how an assistant keeps serving the last known listing while a backend is down and replays the writes that failed, how a store is kept proportionate to its sources instead of inflating with copies from a backups folder, which folders a corpus may index at all, and how a card is found by meaning when the person asks in other words. Each has alternatives that can be measured against each other.
+This sub-intent arises as the implementation `the-subconscious:recency_window` of its parent intent [`the_intelligence`](../README.md). Opportunities: The cards a person's work leaves behind are copies of what lives elsewhere, so the store itself raises questions the parent solution does not ask: when a card has drifted from its source file, how an assistant keeps serving the last known listing while a backend is down and replays the writes that failed, how a store is kept proportionate to its sources instead of inflating with copies from a backups folder, which folders a corpus may index at all, and how a card is found by meaning when the person asks in other words. Each has alternatives that can be measured against each other.
 
 ## How the solutions fit together
 
-Subconscious recalls the cards that match a request through Hub card store. Hub card store keeps the cards through Context card persistence backend, and Context card persistence backend serves the last known listing while a backend is down with Offline card cache and write outbox. Card store repair decides which sources deserve a card by asking Index scope decision before it rewrites anything. The remaining parts of the area do not use one another in code, so they are grouped here by purpose, the care of a card store that stays current, proportionate and findable. Source-change staleness detector reports the cards that have drifted from their source file. Card store growth prevention keeps a store proportionate to its sources. Card categories and metadata gives each card its labels. QAR topic cards for a folder proposes the topic cards a lane indexes. Context choice chooses what a planner reads before it plans, and the context retriever area describes it in full.
+Subconscious finds and prepares what a request needs before the Mind asks. Cards From Files builds topic cards from a person's own files and history, and Card Store keeps those cards in Quest, so that no card is made for every file.
+
+## Diagram
+
+An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+
+```mermaid
+flowchart LR
+    s0["Card Store<br/><i>card-store</i>"]
+    s1["Cards From Files<br/><i>cards-from-files</i>"]
+    s1 --> s0
+```
+
+## Solutions at a glance
+
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Card Store | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | Quest backend card API from the environment (`quest-api-cards`) | Card repository conformance across backends, Staleness detection precision and recall over mutation cases, Outage resilience of the card repository, Cards per source-file group and duplicate share after a repair of an inflated store |
+| Cards From Files | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
 
 ## Solutions from a library
 
@@ -28,14 +46,22 @@ Subconscious recalls the cards that match a request through Hub card store. Hub 
 ## Where to go next
 
 - Sub-intent: [Selecting the context a planner reads](context_retriever/README.md) (The planner reads the material the request concerns, however the request is worded.)
-- Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
+- Parent intent: [Intelligence](../README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/the_intelligence/subconscious/cards_from_files](cards_from_files/README.md)
 - Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Diagram page: [diagram.md](diagram.md)
 
 ---
 
 ## The full record
+
+### Solutions
+
+| Solution | Handle | Selected | Metric |
+|---|---|---|---|
+| Card Store | `card-store` | Quest backend card API from the environment (`quest-api-cards`) | Card repository conformance across backends, Staleness detection precision and recall over mutation cases, Outage resilience of the card repository, Cards per source-file group and duplicate share after a repair of an inflated store |
+| Cards From Files | `cards-from-files` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
 
 ### Implementations
 
@@ -63,7 +89,7 @@ Subconscious recalls the cards that match a request through Hub card store. Hub 
 | Path and title rules, no model call (floor, proposed) | `cards-from-files:path_rules` | [evaluation/components/label_context_cards/impls/path_rules.py](../../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
 | QAR card repository | `card-store:qar-card-repository` | [quest_ai_runner/the_body/internal_context/card_store/hub_card_store.py](../../the_body/internal_context/card_store/hub_card_store.py) |  |
 | Quest backend card API from the environment | `card-store:quest-api-cards` | [quest_ai_runner/the_body/internal_context/card_store/hub_card_store.py](../../the_body/internal_context/card_store/hub_card_store.py) |  |
-| Per-lane assembly of the context members (today) | `select-context:per_lane_assembly` | [quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py](area_context_retriever.py) | [context_retriever](context_retriever/README.md) |
+| Per-lane assembly of the context members (today) | `context-retriever:per_lane_assembly` | [quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py](area_context_retriever.py) | [context_retriever](context_retriever/README.md) |
 | Fast-tier model writes metadata and categories (today) | `cards-from-files:fast_model_labels` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/card_metadata_generator.py](cards_from_files/card_metadata_generator.py) |  |
 | QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/qar_topic_bootstrap.py](cards_from_files/qar_topic_bootstrap.py) |  |
 

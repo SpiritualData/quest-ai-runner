@@ -1,19 +1,24 @@
-# Taking in requests from anywhere
+# Quest Requests
 
-A person or program reaches the runner from wherever they work and is understood the same way.
+Every request made in Quest is taken in once by the same AI.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `quest-requests:ways_in` of its parent intent [`quest-ai-runner`](../../../esoi/README.md). Opportunities: A runner is reached from many places and each has its own failure and cost, which the parent solution measures one by one and none together: a short chat message must not pay for a long run, an image has to be described before it can ground an answer, input that arrives while a run works must be heard at the next decision, a terminal session needs helper calls that cost a fraction of a cent, and a developer needs a package that installs and runs on an empty environment, learned from documents and examples that are kept true.
+This sub-intent arises as the implementation `quest-requests:ways_in` of its parent intent [`the_consciousness`](../README.md). Opportunities: A runner is reached from many places and each has its own failure and cost, which the parent solution measures one by one and none together: a short chat message must not pay for a long run, an image has to be described before it can ground an answer, input that arrives while a run works must be heard at the next decision, a terminal session needs helper calls that cost a fraction of a cent, and a developer needs a package that installs and runs on an empty environment, learned from documents and examples that are kept true.
 
 ## How the solutions fit together
 
-Request intake lets a person or a program reach the runner from wherever they work and be understood the same way, and ways_in is its arm. Cost-aware message router matches each message to the handling it needs, from a direct answer to a long run. Image description for grounding turns an image the person attached into text that can ground the answer. Incremental context-update feed brings what changed in a work item since the last turn. Conversation-keyed mid-run input inbox lets a person change direction or stop a run that is already working. Non-interactive command-line surface runs the tools from the command line with predictable output and exit codes. Terminal helper calls makes the small model calls a terminal session needs. Public package surface contract gives a program a stable package to import and configure. It hands over load_config, the front door that builds the lane's one configuration through Layered lane configuration loader. Documentation coverage and voice check documents the package through Public package surface contract so that a newcomer can learn it from complete documents. Runnable example set shows how to use the package through Public package surface contract in small examples that run on an empty environment. Layered lane configuration loader gives whoever runs a lane one configuration, built from its file and its environment in a fixed order, so every lane is set up the same way. It turns each selection the file or the environment names into the arm that runs through Implementation selection.
+Quest Requests takes a request in from a chat turn, a queued task or a live channel and gives every surface the same understanding of it. Planner decides where the request goes, whether to answer it, use a tool, hand it to deep work, confirm it with the person or ask for clarity, and replays a request that worked before at a fraction of the cost.
+
+## Solutions at a glance
+
+| Solution | Handle | Entry call | Selected implementation | Metric |
+|---|---|---|---|---|
+| Planner | `planner` | `quest_ai_runner.run("planner", 'Add a note that the launch moves to Friday')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Fast-path hit rate and parity with the planner-only path, Accuracy of core ML tasks over labelled cases |
 
 ## Solutions from a library
 
-- [Assembler](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_self/README.md) (`select-an-implementation`): Builds every seat from its selected arm and reports which seats are built and, for each that is not, the line that says exactly what to pass or set. Adopted from the library `hub`.
-- [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`route-a-message`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Adopted from the library `hub`.
+- [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`planner`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Adopted from the library `hub`.
 
 ## Metrics and their leaders
 
@@ -27,11 +32,10 @@ Request intake lets a person or a program reach the runner from wherever they wo
 - Documentation coverage and voice conformance (`metric-explain-qar`): leader `shipped_docs`, 466 of 469 cases
 - Answer pass rate gained per image described (`metric-describe-an-attachment`): leader `skip_images`, 2 of 10 cases
 - Correct terminal helper verdicts within the wait a person accepts (`metric-assist-a-terminal-session`): leader `fast_model_helpers`, 30 of 32 cases
-- and 1 more: all 11 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
-- Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
+- Parent intent: [Quest Consciousness](../README.md)
 - Repository: [top README](../../../README.md)
 - Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
@@ -39,12 +43,18 @@ Request intake lets a person or a program reach the runner from wherever they wo
 
 ## The full record
 
+### Solutions
+
+| Solution | Handle | Selected | Metric |
+|---|---|---|---|
+| Planner | `planner` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Fast-path hit rate and parity with the planner-only path, Accuracy of core ML tasks over labelled cases |
+
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Full planner decision | `route-a-message:qar_planner` | [evaluation/components/classification/impls/qar_planner.py](../../../evaluation/components/classification/impls/qar_planner.py) |  |
-| Keyword rules floor | `route-a-message:keyword_rules` | [evaluation/components/classification/impls/keyword_rules.py](../../../evaluation/components/classification/impls/keyword_rules.py) |  |
+| Full planner decision | `planner:qar_planner` | [evaluation/components/classification/impls/qar_planner.py](../../../evaluation/components/classification/impls/qar_planner.py) |  |
+| Keyword rules floor | `planner:keyword_rules` | [evaluation/components/classification/impls/keyword_rules.py](../../../evaluation/components/classification/impls/keyword_rules.py) |  |
 | Source interface with shared channel flags | `quest-context:base` | [quest_ai_runner/the_body/intake_sources/context_sources_base.py](../../the_body/intake_sources/context_sources_base.py) |  |
 | Live engine over fake quest channels | `quest-context:update_engine` | [evaluation/components/feed_context_sources/impls/update_engine.py](../../../evaluation/components/feed_context_sources/impls/update_engine.py) |  |
 | In-memory thread-safe inbox | `quest-requests:in_memory` | [quest_ai_runner/the_intelligence/mind/delegation/inbox.py](../../the_intelligence/mind/delegation/inbox.py) |  |
@@ -72,12 +82,10 @@ Request intake lets a person or a program reach the runner from wherever they wo
 | No description, the image is named only (proposed) | `quest-requests:skip_images` |  |  |
 | Fast-tier model calls in the terminal (today) | `system-integrity:fast_model_helpers` | [quest_ai_runner/the_body/configuration/cli_config.py](../../the_body/configuration/cli_config.py) |  |
 | Rules only, no model call (floor, proposed) | `system-integrity:rules_only` |  |  |
-| The loop planner decides the route | `route-a-message:planner_route` | [quest_ai_runner/the_intelligence/mind/planner/message_routing.py](../../the_intelligence/mind/planner/message_routing.py) |  |
+| The loop planner decides the route | `planner:planner_route` | [quest_ai_runner/the_intelligence/mind/planner/message_routing.py](../../the_intelligence/mind/planner/message_routing.py) |  |
 | The update engine over its built-in channels | `quest-context:quest_channels` | [quest_ai_runner/the_body/intake_sources/context_updates.py](../../the_body/intake_sources/context_updates.py) |  |
 | The command dispatcher run in process | `system-integrity:cli_commands` | [quest_ai_runner/the_intelligence/mind/planner/area_take_in_the_world.py](../../the_intelligence/mind/planner/area_take_in_the_world.py) |  |
 | The names in the package __all__ | `system-integrity:package_front_doors` | [quest_ai_runner/the_intelligence/mind/planner/area_take_in_the_world.py](../../the_intelligence/mind/planner/area_take_in_the_world.py) |  |
-| Implementation resolver | `select-an-implementation:resolve` | [quest_ai_runner/the_self/assembler/resolve.py](../../the_self/assembler/resolve.py) |  |
-| Live resolver driver | `select-an-implementation:live_resolver` | [evaluation/components/select_an_implementation/impls/live_resolver.py](../../../evaluation/components/select_an_implementation/impls/live_resolver.py) |  |
 
 ### Metrics
 
@@ -91,4 +99,3 @@ Request intake lets a person or a program reach the runner from wherever they wo
 - Documentation coverage and voice conformance (`metric-explain-qar`): `esoi run explain_qar --impl shipped_docs`
 - Answer pass rate gained per image described (`metric-describe-an-attachment`): `esoi run describe_an_attachment --impl vision_description`
 - Correct terminal helper verdicts within the wait a person accepts (`metric-assist-a-terminal-session`): `esoi run assist_a_terminal_session --impl fast_model_helpers_live; esoi run assist_a_terminal_session --impl fast_model_helpers`
-- Implementation selection (`metric-select-an-implementation`): `esoi run select_an_implementation --impl live_resolver`
