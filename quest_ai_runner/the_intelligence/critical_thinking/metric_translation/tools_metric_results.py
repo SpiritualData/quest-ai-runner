@@ -18,9 +18,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
 
-from esoi.metric_results import (SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger, MetricResult, payload_of,
-                                 render_line)
-from esoi.spec_slice import describe_metric
+from esoi import SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger, MetricResult, payload_of, render_line
+from esoi import describe_metric
 from hubofhubs.api import default_directory
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import root_for

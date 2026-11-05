@@ -146,7 +146,7 @@ def repo_tag_table(root: Path) -> search_lib.TagTable:
     def labels(cell: Optional[str]) -> Tuple[str, ...]:
         """A solution's ``tags`` cell is a JSON list of {tag, risk_ids}; the esoi library reads it (older ``;`` labels also read)."""
         try:
-            from esoi.fields import parse_tags
+            from esoi import parse_tags
             return tuple(t["tag"] for t in parse_tags(cell) if t["tag"])
         except ImportError:   # a library that predates esoi.fields
             return split(cell)

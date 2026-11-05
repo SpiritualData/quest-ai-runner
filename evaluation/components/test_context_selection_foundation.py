@@ -5,7 +5,7 @@ import types
 import common  # noqa: F401  (puts the components folder on sys.path)
 from context_selection import foundation_adapter, private_cases
 from esoi import access, config as esoi_config, foundation
-from esoi.harness import CallMeter
+from esoi import CallMeter
 
 CONFIG = esoi_config.load(common.REPO)
 

@@ -6,7 +6,7 @@ default is a declared implementation, and ``esoi.runtime.snapshot`` against the 
 import json
 
 import common
-from esoi import leaderboard, runtime
+from esoi import leaderboard, selection
 
 from quest_ai_runner.the_self.assembler import resolve
 
@@ -57,7 +57,7 @@ def build(meter):  # noqa: ARG001
             return {"disagreeing": sorted(s for s, name in args["records"].items() if args["snapshot"].get(s) != name)}
         if kind == "repo_drift":
             shipped = json.loads((common.REPO / "quest_ai_runner" / "esoi_selection.json").read_text(encoding="utf-8"))
-            fresh = runtime.snapshot(common.CONFIG)
+            fresh = selection.snapshot(common.CONFIG)
             bad = {s for s in set(shipped) | set(fresh) if shipped.get(s) != fresh.get(s)}
             bad |= {s for s, entry in shipped.items() if entry.get("default") in entry.get("modules", {}) and picked(s) != entry["default"]}
             return {"disagreeing": sorted(bad), "checked": len(shipped)}

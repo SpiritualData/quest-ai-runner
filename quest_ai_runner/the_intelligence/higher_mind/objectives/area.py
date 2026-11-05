@@ -14,7 +14,7 @@ import typing
 from typing import Any, Mapping, Optional, Tuple
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
+from esoi import Lazy
 
 from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import ConversationRemembering
 from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceProvider

@@ -12,12 +12,12 @@ SCOPE = "quest_ai_runner"
 @contextmanager
 def registered(solution_id, name, target):
     """Register ``name`` for ``solution_id`` in the live registry for the block, then take it out again."""
-    from esoi import runtime
-    runtime.register(solution_id, name, target, scope=SCOPE, replace=True)
+    from esoi import selection
+    selection.register(solution_id, name, target, scope=SCOPE, replace=True)
     try:
         yield
     finally:
-        entry = runtime.entry_for(solution_id, None, SCOPE)
+        entry = selection.entry_for(solution_id, None, SCOPE)
         entry.implementations.pop(name, None)
         entry.replaced.discard(name)
 

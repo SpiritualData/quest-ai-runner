@@ -23,7 +23,7 @@ def tag_labels(cell) -> list:
     ``{"tag", "risk_ids"}``; the older ``;``-separated labels also read). A library that predates ``esoi.fields`` falls back to
     the same two forms."""
     try:
-        from esoi.fields import parse_tags
+        from esoi import parse_tags
         return [t["tag"] for t in parse_tags(cell) if t["tag"]]
     except ImportError:
         import json

@@ -12,7 +12,7 @@ import typing
 from typing import Any
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
+from esoi import Lazy
 from hubofhubs.api import CardStore
 
 from quest_ai_runner.the_intelligence.mind.area_mind import StepReasoning

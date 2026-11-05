@@ -1,6 +1,6 @@
 """The hold-the-intents area: its members answer offline by the strict definition, and the area reads its stores for one request."""
 import pytest
-from esoi.entry import Pending, targets
+from esoi import Pending, targets
 
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.higher_mind.objectives.area import IntentHolding

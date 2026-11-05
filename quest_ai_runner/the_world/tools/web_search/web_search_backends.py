@@ -12,7 +12,7 @@ import logging
 import os
 from typing import Any, List, Mapping, Optional
 
-from esoi import implementation, runtime
+from esoi import implementation, selection
 from hubofhubs.api import SearchBackendError, SearchHit, SearchResponse  # noqa: F401
 from hubofhubs.api import SearchBackend  # noqa: F401
 from hubofhubs.api import backends as hub_backends
@@ -70,7 +70,7 @@ def register_file_specs(env: Mapping[str, str]) -> List[str]:
     ``search-the-web``; returns their names. A bad file registers nothing: web search never fails the turn."""
     classes = load_file_specs(env.get(QAR_KEYS.apis_file) or "")
     for name, backend_class in classes.items():
-        runtime.register("search-the-web", name, backend_class, scope=SCOPE, replace=True)
+        selection.register("search-the-web", name, backend_class, scope=SCOPE, replace=True)
     return list(classes)
 
 

@@ -1,7 +1,7 @@
 """Seats that need another seat are wired through QAR's child of the hub: swapping the card-store arm reaches a dependent seat,
 and a cycle or an unmet need fails with a named error. Test-only arms, typed with the hub's Protocols; offline, no model call."""
 import pytest
-from esoi.assemble import AssemblyConfig, AssemblyError
+from esoi import AssemblyConfig, AssemblyError
 from hubofhubs.api import CardStore
 from hubofhubs.api import ContextRetrieval
 from hubofhubs.api import SearchBackend

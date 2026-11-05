@@ -1,6 +1,6 @@
 """The whole runner as one function: ``quest_ai_runner.run("quest-ai-runner", message)`` and the seats it is built from."""
 import pytest
-from esoi.entry import Pending
+from esoi import Pending
 from hubofhubs.api import Card
 from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 

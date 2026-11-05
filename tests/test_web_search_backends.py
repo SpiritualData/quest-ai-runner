@@ -462,7 +462,7 @@ def test_select_provider_native_requires_model_and_support():
 
 
 def test_a_registered_backend_is_selected_by_name_with_no_branch_in_the_module():
-    from esoi import runtime
+    from esoi import selection
 
     class Hub:
         name = "hub"
@@ -471,13 +471,13 @@ def test_a_registered_backend_is_selected_by_name_with_no_branch_in_the_module()
         def from_env(cls, env):
             return cls() if env.get("HUB_URL") else None
 
-    runtime.register("search-the-web", "newhub", Hub, scope="quest_ai_runner", replace=True)
+    selectionon.register("search-the-web", "newhub", Hub, scope="quest_ai_runner", replace=True)
     try:
         got = select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "newhub", "HUB_URL": "http://hub.invalid"})
         assert isinstance(got, Hub)
         assert select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "newhub"}) is None   # not configured: off, loudly logged
     finally:
-        entry = runtime.entry_for("search-the-web", None, "quest_ai_runner")
+        entry = selectionon.entry_for("search-the-web", None, "quest_ai_runner")
         entry.implementations.pop("newhub", None)
         entry.replaced.discard("newhub")
 
@@ -494,7 +494,7 @@ def test_shipped_hosted_apis_are_data_entries_run_by_one_backend():
 
 def test_a_search_api_described_in_a_file_is_selected_with_no_code(tmp_path):
     import json
-    from esoi import runtime
+    from esoi import selection
     from quest_ai_runner.the_world.tools.web_search.web_search_backends import select_search_backend
     spec = [{"name": "acmesearch", "method": "GET", "url": "https://search.invalid/v2", "key_env": ["ACME_KEY"],
              "headers": {"Authorization": "Token {key}"}, "send": "params",
@@ -516,7 +516,7 @@ def test_a_search_api_described_in_a_file_is_selected_with_no_code(tmp_path):
         backend.http = fake_http
         got = backend.search("meaning", max_results=3)
     finally:
-        entry = runtime.entry_for("search-the-web", None, "quest_ai_runner")
+        entry = selectionon.entry_for("search-the-web", None, "quest_ai_runner")
         entry.implementations.pop("acmesearch", None)
         entry.replaced.discard("acmesearch")
     assert seen["method"] == "GET" and seen["params"] == {"term": "meaning", "limit": 3}

@@ -30,8 +30,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from esoi.iteration import MetricIteration
-from esoi.metric_results import MAX_METRICS, MetricLedger, MetricResult, payload_of, render_line
+from esoi import MetricIteration
+from esoi import MAX_METRICS, MetricLedger, MetricResult, payload_of, render_line
 from hubofhubs.api import ToolOutcome, changed_something
 
 from quest_ai_runner.the_body.configuration.runtime_settings import core_settings, process_environment

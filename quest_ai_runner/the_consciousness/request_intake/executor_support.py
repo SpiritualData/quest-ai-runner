@@ -8,7 +8,7 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass
 
-from esoi.metric_results import MAX_METRICS
+from esoi import MAX_METRICS
 
 from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
 from hubofhubs.api import ProgressEvent

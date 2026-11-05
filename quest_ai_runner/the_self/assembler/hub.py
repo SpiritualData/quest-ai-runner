@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 import hubofhubs
-from esoi.assemble import Assembler, Assembly, AssemblyConfig
+from esoi import Assembler, Assembly, AssemblyConfig
 
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_card_builder
 from quest_ai_runner.the_body.internal_context.card_store.hub_card_store import CardRepositoryStore

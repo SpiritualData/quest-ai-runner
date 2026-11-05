@@ -6,12 +6,12 @@ claims, a core module importing an adapter, an oversized module or a stale gener
 """
 from pathlib import Path
 
-import esoi.check
-import esoi.config
+import esoi
+from esoi.structure.structure_check import check as esoi_check
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_repo_structure_has_no_violations():
-    problems = esoi.check.check(esoi.config.load(ROOT))
+    problems = esoi_check.check(esoi.config.load(ROOT))
     assert problems == [], "\n".join(problems)

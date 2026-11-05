@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Optional
 import pytest
 from esoi import scaffold
 
-from esoi.metric_meter import AFTER, BEFORE, EVERY_MOMENT
-from esoi.metric_results import NOT_RECORDED_LINE, MetricResult
+from esoi import AFTER, BEFORE, EVERY_MOMENT
+from esoi import NOT_RECORDED_LINE, MetricResult
 from quest_ai_runner.the_body.configuration.config import build_orchestrator
 from hubofhubs.api import DeepResult
 from hubofhubs.api import EVENT_MILESTONE, EVENT_RESULT, EVENT_STATUS, Mode

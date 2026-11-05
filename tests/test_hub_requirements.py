@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from esoi.requirements import Entry, env
+from esoi import requirements
 
 from quest_ai_runner.the_consciousness.terminal import cli_doctor
 from quest_ai_runner.the_self.assembler import hub_lock_health, hub_requirements
@@ -23,7 +23,7 @@ SECRET = "not-a-real-key-value-123"
 
 
 def unmet_entries(*, required: bool = True):
-    return ([Entry(env("QAR_TEST_MISSING_KEY", secret=True, required=required), ("vendor-model-caller:test",))], {})
+    return ([requirements.Entry(requirements.env("QAR_TEST_MISSING_KEY", secret=True, required=required), ("vendor-model-caller:test",))], {})
 
 
 def test_report_lists_unmet_with_remedy_and_never_a_value(monkeypatch):

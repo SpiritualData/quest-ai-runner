@@ -1,6 +1,6 @@
 """The the-science area: its ids answer offline by the strict definition, and the area hands each line to the web member."""
 import pytest
-from esoi.entry import Pending, targets
+from esoi import Pending, targets
 
 import quest_ai_runner
 from quest_ai_runner.the_world.tools.web_search.area import KnowingTheWorld

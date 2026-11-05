@@ -17,9 +17,9 @@ from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
-from esoi.metric_meter import AFTER, BEFORE
-from esoi.spec_slice import SpecSlice
+from esoi import Lazy
+from esoi import AFTER, BEFORE
+from esoi import SpecSlice
 from hubofhubs.api import arm_needs as needs
 from hubofhubs.api import sufficiency
 from hubofhubs.api import CriticalThinking

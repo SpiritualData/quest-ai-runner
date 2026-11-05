@@ -31,7 +31,7 @@ from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.chat_conversa
 from hubofhubs.api import EVENT_CONTEXT, EVENT_EXEC, EVENT_MILESTONE, EVENT_PLAN, EVENT_STATUS
 from quest_ai_runner.the_consciousness.terminal.textual_ui import ActivityBar, QuestAITerminal, _RichLogHandler
 from quest_ai_runner.the_consciousness.terminal import textual_ui_widgets
-from esoi.metric_results import NOT_RECORDED_LINE
+from esoi import NOT_RECORDED_LINE
 from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
     METRIC_LINES_SHOWN, context_block_lines, ellipsize, metric_lines, metric_number, union_entries)
 from quest_ai_runner.the_consciousness.terminal.interactive_session_tracker import format_elapsed

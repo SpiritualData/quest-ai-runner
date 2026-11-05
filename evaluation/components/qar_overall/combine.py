@@ -33,9 +33,9 @@ from pathlib import Path
 
 import common
 from esoi import leaderboard
-from esoi.harness import load_cases, own_code_paths
-from esoi.registry import first_arm, load as load_registry
-from esoi.tables import ids
+from esoi import load_cases, own_code_paths
+from esoi import first_arm, registry
+from esoi import split_ids as ids
 
 CONFIG = common.CONFIG
 WEIGHTS_KEY = "metric-qar-overall"   # keyed by the metric, not the component: the harness's accuracy/cost/time balance
@@ -55,7 +55,7 @@ def settings(config=CONFIG):
 
 
 def metric_rows(config=CONFIG):
-    return {m["metric_id"]: m for m in load_registry(config).metrics}
+    return {m["metric_id"]: m for m in registry.load(config).metrics}
 
 
 def submetric_weights(sub_ids, config=CONFIG):
@@ -119,7 +119,7 @@ def dependency_patterns(component):
     component measures, the ``filepath`` of those solutions' implementations, the component's own folder under
     ``evaluation/components/`` and the shared top-level helpers there. A solution that no components.csv row lists declares
     nothing, so its rows keep the conservative rule (a change to any measured code makes them stale)."""
-    reg = load_registry(CONFIG)
+    reg = registry.load(CONFIG)
     mine = {r["solution_id"] for r in reg.solutions if component in measured_components(r.get("metric_command", ""))}
     if not mine:
         return None
@@ -310,7 +310,7 @@ def honest_choice(comp, arm_history, tier):
 def structure_reading(rule, choose_current=current):
     """QME6 and QME7, read from the records and the results log: per measured solution, its selected arm's latest row is
     current and no rival beats it. do-grounded-work itself is left out (its own metric would count itself)."""
-    reg = load_registry(CONFIG)
+    reg = registry.load(CONFIG)
     log = history()
     per_case = leaderboard.per_case_rows(CONFIG)
     policy_of = leaderboard.policies(CONFIG, reg, per_case)

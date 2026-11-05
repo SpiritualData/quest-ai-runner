@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
+from esoi import Lazy
 
 from quest_ai_runner.the_body.configuration.cli_config import TerminalHelping
 from quest_ai_runner.the_consciousness.request_intake.interface import ChannelTransport

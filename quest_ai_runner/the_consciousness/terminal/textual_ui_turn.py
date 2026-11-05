@@ -14,7 +14,7 @@ from quest_ai_runner.the_consciousness.terminal.interactive_session_tracker impo
 from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import (
     DECISION_COMING_STATUS, _AWAITING_DECISION_PLACEHOLDER, _BUSY_PLACEHOLDER, _READY_PLACEHOLDER)
 from quest_ai_runner.the_consciousness.terminal.textual_ui_prompt import PromptTextArea
-from esoi.metric_results import without_line
+from esoi import without_line
 from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
     HangingText, _build_shallow_context_bullets, context_block_lines, indented_line, metric_groups, person_line, plural, working_notes_in)
 from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import (

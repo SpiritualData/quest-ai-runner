@@ -1,6 +1,6 @@
 """The nervous-system area: its members answer offline by the strict definition, and the overseer reads a digest and hands a step to a person."""
 import pytest
-from esoi.entry import Pending, targets
+from esoi import Pending, targets
 
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.nervous_system.area import RunWatching

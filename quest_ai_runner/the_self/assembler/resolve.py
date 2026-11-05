@@ -27,7 +27,7 @@ from __future__ import annotations
 import importlib
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from esoi import runtime
+from esoi import selection
 
 SCOPE = "quest_ai_runner"
 
@@ -42,35 +42,35 @@ def asked_name(solution_id: str, name: Optional[str], overrides: Optional[Mappin
 def explain_unknown_solution(solution_id: str, error: ValueError) -> ValueError:
     """``error`` unchanged when the solution exists. For a solution id nothing declares, esoi says ``choices: none``; say instead which
     solutions can be chosen (its own message for a call with no name lists them), so a typo in the id points at the right one."""
-    if runtime.names(solution_id, scope=SCOPE) or "choices: none" not in str(error):
+    if selection.names(solution_id, scope=SCOPE) or "choices: none" not in str(error):
         return error
     try:
-        runtime.choose(solution_id, scope=SCOPE)
-    except runtime.SelectionError as listing:
+        selection.choose(solution_id, scope=SCOPE)
+    except selection.SelectionError as listing:
         text = str(listing)
         marker = "solutions that have implementations: "
         if marker in text:
-            return runtime.SelectionError(f"unknown solution {solution_id!r}; {marker}{text.split(marker, 1)[1]}")
+            return selection.SelectionError(f"unknown solution {solution_id!r}; {marker}{text.split(marker, 1)[1]}")
     return error
 
 
 def default_name(solution_id: str) -> str:
     """The implementation used when nothing asks for another."""
     try:
-        return runtime.choose(solution_id, scope=SCOPE).name
+        return selection.choose(solution_id, scope=SCOPE).name
     except ValueError as error:
         raise explain_unknown_solution(solution_id, error) from error
 
 
 def names(solution_id: str) -> List[str]:
     """Every selectable implementation name for a solution, sorted."""
-    return runtime.names(solution_id, scope=SCOPE)
+    return selection.names(solution_id, scope=SCOPE)
 
 
 def chosen_name(solution_id: str, name: Optional[str] = None, overrides: Optional[Mapping[str, str]] = None) -> str:
     """The implementation name that ``resolve`` would use (explicit, then override, then default)."""
     try:
-        return runtime.choose(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE).name
+        return selection.choose(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE).name
     except ValueError as error:
         raise explain_unknown_solution(solution_id, error) from error
 
@@ -78,7 +78,7 @@ def chosen_name(solution_id: str, name: Optional[str] = None, overrides: Optiona
 def resolve(solution_id: str, name: Optional[str] = None, *, overrides: Optional[Mapping[str, str]] = None) -> Any:
     """The class or factory for the chosen implementation of ``solution_id`` (not an instance)."""
     try:
-        return runtime.resolve(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE)
+        return selection.resolve(solution_id, asked_name(solution_id, name, overrides), scope=SCOPE)
     except ValueError as error:
         raise explain_unknown_solution(solution_id, error) from error
 
@@ -97,6 +97,6 @@ def register(solution_id: str, name: str, target: str, *, config: Optional[str] 
     """Add an implementation (``"pkg.module:Attr"``) of the consumer's own to a solution of this library, replacing the
     library's under the same name if there is one. To make it the default, name it in a ``selections`` entry,
     ``ESOI_SELECT_`` or ``[selection]`` in ``esoi.toml``."""
-    runtime.register(solution_id, name, target, scope=SCOPE, replace=True)
+    selection.register(solution_id, name, target, scope=SCOPE, replace=True)
     if config:
         CONFIG_REFS[(solution_id, name.strip().lower())] = config

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from esoi import requirements as esoi_requirements
-from esoi.assemble import AssemblyError
+from esoi import AssemblyError
 
 from quest_ai_runner.the_self.assembler import hub
 

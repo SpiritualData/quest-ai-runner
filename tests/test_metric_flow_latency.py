@@ -13,7 +13,7 @@ import time
 import pytest
 
 from esoi import spec_index
-from esoi import spec_slice
+from esoi.optimization.keep_metric_record import spec_slice
 from hubofhubs.api import Mode
 from quest_ai_runner.the_intelligence.critical_thinking.goal_iteration import SliceAndWriteback
 from quest_ai_runner.the_intelligence.mind.orchestrator import PlanDecision

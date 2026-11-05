@@ -16,7 +16,7 @@ import typing
 from typing import Any, Callable, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
+from esoi import Lazy
 from hubofhubs.api import ModelCalling
 from hubofhubs.api import Reasoning
 

@@ -11,10 +11,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-import esoi.config
-import esoi.hermetic
+import esoi
+import esoi
 from esoi import harness
-from esoi.harness import BudgetExceeded, CallMeter, stratified_sample  # noqa: F401  (re-exported)
+from esoi import BudgetExceeded, CallMeter, stratified_sample  # noqa: F401  (re-exported)
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]

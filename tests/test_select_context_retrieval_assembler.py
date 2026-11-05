@@ -36,6 +36,6 @@ def test_record_is_a_no_op_and_both_arms_are_context_assemblers():
 
 def test_the_seat_builds_its_default_selection():
     from quest_ai_runner.the_self.assembler import hub
-    from esoi.assemble import AssemblyConfig
+    from esoi import AssemblyConfig
     built = hub.child().assemble(AssemblyConfig(solutions=("select-context",)))
     assert isinstance(built["select-context"], ContextAssembler)

@@ -7,7 +7,7 @@ tool that refuses what is not a result. Offline: no model, no network.
 import os
 
 import pytest
-from esoi.metric_results import MAX_METRICS, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger
+from esoi import MAX_METRICS, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger
 
 from quest_ai_runner.the_intelligence.mind.response_writer import answer_explanation
 from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry

@@ -5,7 +5,7 @@ The grader call is tagged ``eval.judge`` so that ``justified_model_spend`` never
 and it is metered like every other call so an arm's call, token and time totals include it. Keyless: the provider drops the
 API key from the environment, so the run costs no API dollars; the dollar figures it reports are list-price equivalents."""
 import common  # noqa: F401  (puts the repository on the path)
-from esoi.harness import BudgetExceeded
+from esoi import BudgetExceeded
 from quest_ai_runner.the_world.model_plumbing.spend import usage
 from hubofhubs.api import extract_json_object
 from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider

@@ -12,7 +12,7 @@ import typing
 from typing import Any
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
+from esoi import Lazy
 from hubofhubs.api import OverseerSignal, to_risk_signal
 from hubofhubs.api import RiskWatching
 

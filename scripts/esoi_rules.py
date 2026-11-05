@@ -14,7 +14,7 @@ from pathlib import Path
 
 import env_vars
 from esoi import cascade
-from esoi.rules.base import Context, RuleGroup
+from esoi import RuleContext as Context, RuleGroup
 from esoi_tags import (TAG_PROCEDURE, main, read_tags, solution_tags, solutions_sharing, split,  # noqa: F401
                        tag_notes, tag_problems, tags_of)
 

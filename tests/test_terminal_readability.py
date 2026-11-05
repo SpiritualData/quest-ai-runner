@@ -394,7 +394,7 @@ FITS_BESIDE_THE_CLOCK = 52
 
 def fixed_start_statuses():
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import start_status_text
-    from esoi.iteration import READING_STATUS
+    from esoi import READING_STATUS
     from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import NUDGE_STATUS
     ladder = {"start_model": "sonnet", "ladder": ["sonnet", "opus"], "difficulty": "simple"}
     pinned = {"start_model": "opus", "ladder": ["opus"]}

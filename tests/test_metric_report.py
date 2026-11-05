@@ -6,7 +6,7 @@ carries them passes them on as the progress post's ``data``. A client or a test 
 ``result_data`` is called exactly as before, and a run with no metric facts reports exactly as before.
 """
 from hubofhubs.api import DeepResult, ProgressEvent
-from esoi.metric_results import MAX_METRICS, MetricResult, payload_of, reconcile
+from esoi import MAX_METRICS, MetricResult, payload_of, reconcile
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 from quest_ai_runner.the_consciousness.request_intake.executor_support import _TaskProgressSink

@@ -15,8 +15,8 @@ import typing
 from typing import Any, Dict, List, Mapping, Optional
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
-from esoi.requirements import api, env
+from esoi import Lazy
+from esoi import requirements
 from hubofhubs.api import BodyComposition
 from hubofhubs.api import Connecting
 from hubofhubs.api import IntakeSourcing
@@ -42,9 +42,9 @@ def quest_client(base_url: str, api_key: str, team_id: str = "") -> QuestClient:
     return QuestClient(base_url=base_url, api_key=api_key, team_id=team_id or None)
 
 
-quest_client.REQUIRES = (api("Quest", key=env("QUEST_API_KEY", option="api_key", secret=True)),
-                         env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
-                         env("QUEST_TEAM_ID", option="team_id", required=False))
+quest_client.REQUIRES = (requirements.api("Quest", key=requirements.env("QUEST_API_KEY", option="api_key", secret=True)),
+                         requirements.env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
+                         requirements.env("QUEST_TEAM_ID", option="team_id", required=False))
 
 
 @solution("persist-cards", kind="store", entry="read", example="card-1")

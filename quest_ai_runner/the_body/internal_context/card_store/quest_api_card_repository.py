@@ -48,7 +48,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from esoi import implementation
-from esoi.requirements import api, env
+from esoi import requirements
 from hubofhubs.api import card_origin
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.card_shape_guard import refusal as card_shape_refusal
 
@@ -348,9 +348,9 @@ class QuestApiCardRepository:
         A ``CardCache`` (default ``NullCardCache``; ``FileCardCache`` is durable).
     """
 
-    REQUIRES = (api("Quest", key=env("QUEST_API_KEY", option="api_key", secret=True)),
-                env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
-                env("QUEST_TEAM_ID", option="team_id", required=False))
+    REQUIRES = (requirements.api("Quest", key=requirements.env("QUEST_API_KEY", option="api_key", secret=True)),
+                requirements.env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)),
+                requirements.env("QUEST_TEAM_ID", option="team_id", required=False))
 
     def __init__(
         self,

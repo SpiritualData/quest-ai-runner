@@ -10,8 +10,9 @@ import re
 from pathlib import Path
 
 import pytest
+import esoi
 from esoi import config as esoi_config
-from esoi import declarations, runtime
+from esoi import declarations, selection
 
 from quest_ai_runner.the_self.assembler import resolve as resolve_mod
 from quest_ai_runner.the_self.assembler.resolve import chosen_name, default_name, names, register, resolve, resolve_config
@@ -25,7 +26,7 @@ DECLARED = declarations.scan(CONFIG, declarations.code_files(CONFIG))
 @pytest.fixture(autouse=True)
 def clean_registrations():
     def drop():
-        scope = runtime.REGISTRY.get((resolve_mod.SCOPE, "search-the-web"))
+        scope = selection.REGISTRY.get((resolve_mod.SCOPE, "search-the-web"))
         if scope is not None:
             scope.implementations.pop("mine", None)
         resolve_mod.CONFIG_REFS.clear()
@@ -56,11 +57,11 @@ def test_precedence_is_name_then_override_then_default():
 
 
 def test_the_environment_and_a_context_block_select_below_a_name(monkeypatch):
-    monkeypatch.setenv(runtime.env_name("vendor-model-caller", resolve_mod.SCOPE), "claude_cli")
+    monkeypatch.setenv(selection.env_name("vendor-model-caller", resolve_mod.SCOPE), "claude_cli")
     assert resolve("vendor-model-caller").__name__ == "ClaudeCliProvider"
     assert resolve("vendor-model-caller", "multi_provider").__name__ == "routed"
-    monkeypatch.delenv(runtime.env_name("vendor-model-caller", resolve_mod.SCOPE))
-    with runtime.override("vendor-model-caller", "claude_cli", scope=resolve_mod.SCOPE):
+    monkeypatch.delenv(selection.env_name("vendor-model-caller", resolve_mod.SCOPE))
+    with selection.override("vendor-model-caller", "claude_cli", scope=resolve_mod.SCOPE):
         assert resolve("vendor-model-caller").__name__ == "ClaudeCliProvider"
 
 
@@ -96,7 +97,7 @@ def test_register_adds_an_implementation_of_the_consumers_own():
 
 
 def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_library_loads_later():
-    entry = runtime.entry_for("write-files", None, resolve_mod.SCOPE)
+    entry = selection.entry_for("write-files", None, resolve_mod.SCOPE)
     saved = dict(entry.implementations)
     try:
         register("write-files", "files", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
@@ -196,7 +197,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
     stray.write_text('structure_dir = "nowhere"\n')
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    esoi_home = str(Path(runtime.__file__).resolve().parent.parent)
+    esoi_home = str(Path(esoi.__file__).resolve().parent.parent)
     hub_home = str(ROOT.parent / "ai-hub-of-hubs-structure")   # the required hub, as a sibling checkout (not pip-installed here)
     code = (
         "import quest_ai_runner.the_self.assembler.resolve as r\n"

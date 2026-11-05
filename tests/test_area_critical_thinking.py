@@ -1,6 +1,6 @@
 """The critical-thinking area: its members answer offline by the strict definition, and the arm holds a request to its metric and hands over the rest."""
 import pytest
-from esoi.entry import Pending, targets
+from esoi import Pending, targets
 
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.critical_thinking.area import MetricHolding, hold_case

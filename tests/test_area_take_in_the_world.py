@@ -1,6 +1,6 @@
 """The take-in-the-world area: its members answer offline by the strict definition, and the arm routes and hands over what comes in."""
 import pytest
-from esoi.entry import Pending, targets
+from esoi import Pending, targets
 
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world import RequestTakingIn

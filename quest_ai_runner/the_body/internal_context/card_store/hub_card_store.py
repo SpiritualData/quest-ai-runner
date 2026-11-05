@@ -15,7 +15,7 @@ import typing
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation, solution
-from esoi.requirements import api, env
+from esoi import requirements
 from hubofhubs.api import Card
 from hubofhubs.api import CardStore
 
@@ -76,8 +76,8 @@ class QuestApiCards(CardRepositoryStore):
     """Keeps hub ``Card`` objects in the Quest backend's card API: the repository every Quest deployment keeps its cards in, reached
     at ``QUEST_BASE_URL`` (or ``QUEST_API_URL``) with ``QUEST_API_KEY``, so the seat needs nothing passed once those are set."""
 
-    REQUIRES = (api("Quest", key=env("QUEST_API_KEY", option="api_key", secret=True)),
-                env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)))
+    REQUIRES = (requirements.api("Quest", key=requirements.env("QUEST_API_KEY", option="api_key", secret=True)),
+                requirements.env("QUEST_BASE_URL", option="base_url", also=("QUEST_API_URL",)))
 
     def __init__(self, base_url: str, api_key: str) -> None:
         from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository

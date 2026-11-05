@@ -30,8 +30,8 @@ from __future__ import annotations
 from typing import Optional, Protocol, Sequence
 
 from esoi import implementation, solution
-from esoi.metric_meter import MetricMeter, meters_from_names
-from esoi.spec_slice import RepoSliceSource, SliceSource, SpecSlice
+from esoi import MetricMeter, meters_from_names
+from esoi import RepoSliceSource, SliceSource, SpecSlice
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs
 from quest_ai_runner.the_body.configuration.runtime_settings import core_settings, process_environment

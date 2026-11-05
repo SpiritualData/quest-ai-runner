@@ -1,6 +1,6 @@
 """The system-integrity area: its id answers offline by the strict definition, and the audit reads QAR's brain and the hub's research."""
 import quest_ai_runner
-from esoi.entry import targets
+from esoi import targets
 
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.area import KeepingGeneric
 

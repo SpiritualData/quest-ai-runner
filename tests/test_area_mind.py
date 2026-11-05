@@ -1,6 +1,6 @@
 """The Mind area: its members answer offline by the strict definition, and the composition arm runs over them."""
 import pytest
-from esoi.entry import Pending
+from esoi import Pending
 
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.mind.area_mind import StepReasoning
@@ -15,7 +15,7 @@ AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "assemble-a
 
 
 def strict_outcome(solution_id):
-    from esoi.entry import targets
+    from esoi import targets
     example = {sid: example for sid, level, kind, example in targets(quest_ai_runner.assembler())}[solution_id]
     try:
         quest_ai_runner.run(solution_id, example, environ={})

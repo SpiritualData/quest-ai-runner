@@ -1,6 +1,6 @@
 """The the-subconscious area: its ids answer offline by the strict definition, and the arm recalls over the card store it is handed."""
 import pytest
-from esoi.entry import Pending, targets
+from esoi import Pending, targets
 from hubofhubs.api import Card
 from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 

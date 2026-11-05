@@ -61,7 +61,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from esoi.requirements import binary, env
+from esoi import requirements
 from hubofhubs.api import MCPClient, MCPServerSpec, MCPToolResult
 
 from quest_ai_runner.the_consciousness.request_intake.interface import ChannelTransportBase, InboundBatch, InboundMessage, OutboundReply, SendResult
@@ -352,8 +352,8 @@ class OpenClawFromEnvironment:
     the ``openclaw`` program on the path. ``OpenClawChannel`` above is the transport; this arm hands the three calls of a
     ``ChannelTransport`` to it, so a caller that already holds a config builds ``OpenClawChannel`` itself."""
 
-    REQUIRES = (env("QAR_OPENCLAW_TOKEN_FILE", option="token_file"),
-                binary("openclaw", "install the OpenClaw command-line program (it runs `openclaw mcp serve`)"))
+    REQUIRES = (requirements.env("QAR_OPENCLAW_TOKEN_FILE", option="token_file"),
+                requirements.binary("openclaw", "install the OpenClaw command-line program (it runs `openclaw mcp serve`)"))
 
     def __init__(self, token_file: str, command: str = "openclaw", channel: str = "openclaw") -> None:
         self.channel = channel

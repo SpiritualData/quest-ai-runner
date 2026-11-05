@@ -13,7 +13,7 @@ import typing
 from typing import Any, Dict, List, Optional, Sequence
 
 from esoi import implementation, solution
-from esoi.assemble import Lazy
+from esoi import Lazy
 from hubofhubs.api import AssembledContext, ContextAssembler, VectorStore
 from hubofhubs.api import ReferenceResolver
 

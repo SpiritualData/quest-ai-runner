@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Optional
 
 from esoi import implementation
-from esoi.requirements import env
+from esoi import requirements
 from hubofhubs.api import FileWriterBase, WriteResult
 from quest_ai_runner.the_world.tools.file_reading.files_adapter import _BINARY_EXTS, resolve_in_tree
 
@@ -72,7 +72,7 @@ class FilesWriter(FileWriterBase):
             files that already exist sets this False.
     """
 
-    REQUIRES = (env("QAR_CORPUS_ROOT", option="root"),)
+    REQUIRES = (requirements.env("QAR_CORPUS_ROOT", option="root"),)
 
     def __init__(self, root: str, *,
                  backup_dir: Optional[str] = None,

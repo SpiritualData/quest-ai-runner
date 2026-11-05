@@ -7,7 +7,7 @@ from pathlib import Path
 import common  # noqa: F401  (puts the components folder on sys.path)
 from context_selection import private_cases, score
 from context_selection.impls import blind_grep, idf_docstrings
-from esoi.harness import CallMeter
+from esoi import CallMeter
 
 
 def cand(item_id, kind, text, label):

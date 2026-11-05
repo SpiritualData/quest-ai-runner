@@ -38,7 +38,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import common  # noqa: E402
-from esoi.registry import first_arm, load as load_registry  # noqa: E402
+from esoi import first_arm, registry  # noqa: E402
 from qar_overall import combine  # noqa: E402
 
 ROOT = Path(common.CONFIG.root)
@@ -200,7 +200,7 @@ def latest_results_commit_time():
 def collect(now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     log = combine.history()
-    reg = load_registry(common.CONFIG)
+    reg = registry.load(common.CONFIG)
     data = dict(generated=now.strftime("%Y-%m-%d %H:%M"), generated_iso=now.isoformat(timespec="seconds"),
                 commit=combine.head(), today=now.date().isoformat())
     data.update(submetric_facts(log))
