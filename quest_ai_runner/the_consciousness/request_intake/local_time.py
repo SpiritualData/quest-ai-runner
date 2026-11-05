@@ -6,7 +6,7 @@ small functions here instead of touching ``zoneinfo``/``datetime`` tz arithmetic
 degradation rule stays enforced in exactly one place: an unreadable or missing zone name NEVER
 raises and NEVER silently substitutes UTC (a runner in, say, US/Pacific would have every existing
 schedule move by 7-8 hours). It degrades to the runner's own local clock, which is the same
-fallback ``_due_now_locally`` already used before any of this existed.
+fallback ``tasks_due_now`` already used before any of this existed.
 
 See ``quest_autopilot_design.md``'s autopilot spec (section A4) for why UTC is never the fallback,
 and C1 for this module's exact contract.
@@ -59,7 +59,7 @@ def now_in_zone(name: Optional[str], now: Optional[datetime] = None) -> datetime
     convention this repo already uses for a naive stored timestamp -- see ``autopilot._parse_dt``).
 
     Returns an AWARE datetime in ``name`` when the zone resolves. When it does not, the result is
-    expressed on the RUNNER'S OWN clock -- the same value ``_due_now_locally`` used everywhere
+    expressed on the RUNNER'S OWN clock -- the same value ``tasks_due_now`` used everywhere
     before per-quest timezones existed.
 
     That last part is the whole point of the fallback and it is easy to get wrong: returning an
@@ -93,7 +93,7 @@ def scheduled_moment(date_str: str, time_str: Optional[str],
     Returns an AWARE datetime when ``name`` resolves, a NAIVE one when it does not (the local
     fallback -- comparable directly against a naive ``datetime.now()``), or ``None`` when
     ``date_str``/``time_str`` cannot be parsed at all. An empty ``time_str`` means midnight,
-    matching ``_due_now_locally``'s existing convention.
+    matching ``tasks_due_now``'s existing convention.
     """
     text = str(date_str or "").strip()
     if not text:

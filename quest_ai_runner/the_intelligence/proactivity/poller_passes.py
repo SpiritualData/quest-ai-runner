@@ -238,7 +238,7 @@ class PassesMixin:
 
         Only a per-quest pass occurrence (``task_kind == "autopilot"`` carrying a ``goal_id``)
         gets one, via that quest's own ``run_timezone``. Every other task -- the team pass, and
-        ordinary work -- returns ``None`` so ``_due_now_locally`` keeps today's naive-local
+        ordinary work -- returns ``None`` so ``tasks_due_now`` keeps today's naive-local
         comparison for them: an ``assistant_task`` carries no timezone of its own, and inventing
         one for a non-pass task is a separate feature, out of scope here.
         """
@@ -290,7 +290,7 @@ class PassesMixin:
         if trigger == REQUESTED:
             return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
         expected_date = today if trigger else today + timedelta(days=1)
-        allowed_days = _quest_pass_days(entry, expected_date)
+        allowed_days = _quest_pass_days(entry)
         if allowed_days:
             expected_date = _next_allowed_date(expected_date, allowed_days)
         return expected_date.isoformat(), run_time
@@ -639,8 +639,7 @@ class PassesMixin:
     def _create_quest_pass(self, quest_id: str, entry: Dict[str, Any], expected_date: str,
                            expected_time: str) -> None:
         env_id = entry.get("env_id") or self.cfg.env_id or None
-        recurrence = _quest_pass_recurrence(entry, expected_time,
-                                            date.fromisoformat(expected_date))
+        recurrence = _quest_pass_recurrence(entry, expected_time)
         created = self.client.create_task(
             "Autopilot pass for this quest: work its current-scope goals and its standing "
             "instructions.",
@@ -749,8 +748,7 @@ class PassesMixin:
         current_recurrence = occurrence.get("recurrence")
         if not isinstance(current_recurrence, dict):
             current_recurrence = {}
-        expected_recurrence = _quest_pass_recurrence(entry, expected_time,
-                                                      date.fromisoformat(expected_date))
+        expected_recurrence = _quest_pass_recurrence(entry, expected_time)
 
         diffs: Dict[str, Any] = {}
         if current_date != expected_date:

@@ -8,14 +8,13 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone
-from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import persona_entries_on_duty
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_LEGACY_SOURCE, AUTOPILOT_WORK_KIND, OPEN_TASK_STATUSES, TASK_STATUSES_FOR_COUNT, log)
 from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import _parse_dt
 from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import PendingWork, pending_work_for
 from quest_ai_runner.the_intelligence.proactivity.autopilot_result import AutopilotResult
 from quest_ai_runner.the_intelligence.proactivity.quest_asks_brief import fetch_asks
-from quest_ai_runner.the_intelligence.proactivity.quest_schedule import REQUESTED, due_trigger, new_ask_since
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import REQUESTED, due_trigger, new_ask_since, roster_day_open
 
 
 class GatesMixin:
@@ -192,8 +191,7 @@ class GatesMixin:
         #
         # A quest with NO roster is untouched here: it set no days, so there is nothing to follow.
         quest_now = self._quest_now(autopilot_cfg)
-        if (autopilot_cfg.get("personas")
-                and not persona_entries_on_duty(autopilot_cfg, quest_now)):
+        if not roster_day_open(autopilot_cfg, self._now()):
             return (f"no character on this quest's roster is rostered for "
                     f"{quest_now.strftime('%A')}")
         if self._backpressure and self._has_backpressure(quest_id):

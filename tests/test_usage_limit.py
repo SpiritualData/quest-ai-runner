@@ -379,11 +379,11 @@ def test_a_task_released_by_its_owner_goes_through_the_pause(tmp_path):
 
 
 def test_start_at_tasks_are_due_whatever_the_runner_clock(tmp_path):
-    from quest_ai_runner.the_consciousness.request_intake.poller import _due_now_locally
+    from quest_ai_runner.the_consciousness.request_intake.poller import tasks_due_now
 
     task = {"task_id": "t", "scheduled_date": "2999-01-01", "scheduled_time": "09:00",
             "start_at": "2026-09-25T16:00:00Z"}
-    due, deferred = _due_now_locally([task])
+    due, deferred = tasks_due_now([task])
     assert due == [task] and deferred == []
 
 

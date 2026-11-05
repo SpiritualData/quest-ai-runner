@@ -6,10 +6,10 @@ schedules (``autopilot.cadence``, ``last_pass_at``, ``run_requested_at``, ``run_
 mean as events (``quest_events.QuestEvents``, an adapter of Intake Sources).
 """
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 import quest_ai_runner
-from hubofhubs.api import attach_events
+from hubofhubs.api import WINDOW_DAYS, Window, attach_events
 
 from quest_ai_runner.the_body.intake_sources.quest_events import QuestEvents, SOURCE
 
@@ -44,3 +44,24 @@ def new_ask_since(asks: Sequence[Mapping[str, Any]], last_pass_at: Optional[str]
     schedule = {"name": REACTIVE, "request": "autopilot pass", "event_source": SOURCE, "last_run": last_pass_at or ""}
     events = QuestEvents(asks).pull(SOURCE, limit=len(asks))
     return bool(due(attach_events([schedule], events), now))
+
+
+def roster_days(autopilot_cfg: Mapping[str, Any]) -> Optional[Tuple[str, ...]]:
+    """The days of the week (the hub's ``WINDOW_DAYS`` names) on which a quest's roster has someone on duty, or ``None`` when it does not restrict the days: no
+    roster, or an entry with no ``days`` (on duty every day). A rostered character who works only some days narrows the quest to the union of those days."""
+    personas = autopilot_cfg.get("personas") or []
+    if not personas or any(not persona.get("days") for persona in personas):
+        return None
+    kept = {str(day).strip().lower()[:3] for persona in personas for day in persona["days"]}
+    days = tuple(day for day in WINDOW_DAYS if day in kept)
+    return days if days and len(days) < len(WINDOW_DAYS) else None
+
+
+def roster_day_open(autopilot_cfg: Mapping[str, Any], now: datetime) -> bool:
+    """Whether today, in the quest's own zone, is a day its roster keeps: the hub's Proactivity asked about a ``window`` of the roster's days (open from midnight
+    for the whole day), so the day rule is the hub's and no weekday arithmetic is repeated here."""
+    days = roster_days(autopilot_cfg)
+    if days is None:
+        return True
+    window = {"days": list(days), "run_time": "00:00", "time_zone": str(autopilot_cfg.get("run_timezone") or ""), "grace_minutes": 1440}
+    return bool(due([{"name": "roster", "request": "roster day", "window": window, "last_run": ""}], now))

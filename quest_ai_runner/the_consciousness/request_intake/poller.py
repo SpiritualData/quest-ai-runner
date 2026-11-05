@@ -61,7 +61,7 @@ from quest_ai_runner.the_body.internal_context.quest.client.quest_client import 
 # use) so `from quest_ai_runner.the_consciousness.request_intake.poller import StateStore` keeps working unchanged.
 from quest_ai_runner.the_body.internal_context.run_store.state_store import StateStore
 
-from quest_ai_runner.the_intelligence.proactivity.poller_schedule import CLAIM_RETRY_COOLDOWN_SECONDS, _due_now_locally, _task_signature, dispatch_order, log
+from quest_ai_runner.the_intelligence.proactivity.poller_schedule import CLAIM_RETRY_COOLDOWN_SECONDS, tasks_due_now, _task_signature, dispatch_order, log
 from quest_ai_runner.the_intelligence.proactivity.poller_passes import PassesMixin
 from quest_ai_runner.the_consciousness.request_intake.poller_sync import SyncMixin
 
@@ -274,7 +274,7 @@ class Poller(PassesMixin, SyncMixin):
         # per-quest autopilot pass (``_pass_timezone_for``; the schedule snapshot it reads was
         # already refreshed above, by ``_ensure_autopilot_pass``, before this call).
         due = [t for t in due if self._claimable_team(t)]
-        due, deferred = _due_now_locally(due, tz_for=self._pass_timezone_for)
+        due, deferred = tasks_due_now(due, tz_for=self._pass_timezone_for)
         if deferred:
             held = ", ".join(self._deferred_task_desc(t) for t in deferred)
             # The dispatch loop scans every few seconds: say it once per change, not per tick.

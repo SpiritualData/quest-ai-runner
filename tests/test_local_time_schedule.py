@@ -7,7 +7,7 @@ the day, silent about the hour. Anywhere west of UTC that superset opens early. 
 brief ran at 17:17 the day before, twice (2026-08-12 and 08-13), each time writing itself against
 the wrong day and consuming the occurrence its real morning slot needed.
 
-``_due_now_locally`` narrows that superset in the runner, where the wall clock the schedule was
+``tasks_due_now`` narrows that superset in the runner, where the wall clock the schedule was
 written against is actually known. These tests pin both halves: nothing fires early, and nothing
 gets stranded.
 """
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.the_consciousness.request_intake.poller import _due_now_locally
+from quest_ai_runner.the_consciousness.request_intake.poller import tasks_due_now
 
 from .test_context_request_fast_lane import _poller_with_assembler
 from .test_runner import MockQuestClient
@@ -33,7 +33,7 @@ def test_morning_task_is_held_until_its_local_time():
     now = datetime(2026, 8, 13, 17, 3)          # 17:03 local == 00:03 UTC the next day
     tomorrow_brief = {"task_id": "brief", **_at(datetime(2026, 8, 14, 6, 30))}
 
-    due, deferred = _due_now_locally([tomorrow_brief], now=now)
+    due, deferred = tasks_due_now([tomorrow_brief], now=now)
 
     assert due == []
     assert deferred == [tomorrow_brief]
@@ -43,7 +43,7 @@ def test_task_fires_once_its_local_time_arrives():
     now = datetime(2026, 8, 14, 6, 30)
     brief = {"task_id": "brief", **_at(datetime(2026, 8, 14, 6, 30))}
 
-    due, deferred = _due_now_locally([brief], now=now)
+    due, deferred = tasks_due_now([brief], now=now)
 
     assert due == [brief]
     assert deferred == []
@@ -54,7 +54,7 @@ def test_unscheduled_task_is_always_due():
     now = datetime(2026, 8, 13, 17, 3)
     task = {"task_id": "delegated", "scheduled_date": None, "scheduled_time": None}
 
-    due, _ = _due_now_locally([task], now=now)
+    due, _ = tasks_due_now([task], now=now)
 
     assert due == [task]
 
@@ -64,7 +64,7 @@ def test_missing_time_means_midnight_so_an_older_task_still_runs():
     dated_only = {"task_id": "dated", "scheduled_date": "2026-08-13", "scheduled_time": None}
     yesterday = {"task_id": "old", "scheduled_date": "2026-08-12", "scheduled_time": None}
 
-    due, deferred = _due_now_locally([dated_only, yesterday], now=now)
+    due, deferred = tasks_due_now([dated_only, yesterday], now=now)
 
     assert due == [dated_only, yesterday]
     assert deferred == []
@@ -75,7 +75,7 @@ def test_unreadable_schedule_is_treated_as_due_not_stranded(caplog):
     now = datetime(2026, 8, 13, 17, 3)
     garbled = {"task_id": "garbled", "scheduled_date": "next tuesday", "scheduled_time": "??"}
 
-    due, deferred = _due_now_locally([garbled], now=now)
+    due, deferred = tasks_due_now([garbled], now=now)
 
     assert due == [garbled]
     assert deferred == []
@@ -88,7 +88,7 @@ def test_mixed_batch_splits_on_the_clock_not_the_date():
     morning = {"task_id": "morning", **_at(datetime(2026, 8, 14, 6, 30))}
     evening = {"task_id": "evening", **_at(datetime(2026, 8, 14, 21, 0))}
 
-    due, deferred = _due_now_locally([morning, evening], now=now)
+    due, deferred = tasks_due_now([morning, evening], now=now)
 
     assert due == [morning]
     assert deferred == [evening]
@@ -134,7 +134,7 @@ def test_tz_for_none_leaves_every_existing_case_untouched():
     now = datetime(2026, 8, 13, 17, 3)
     tomorrow_brief = {"task_id": "brief", **_at(datetime(2026, 8, 14, 6, 30))}
 
-    due, deferred = _due_now_locally([tomorrow_brief], now=now, tz_for=None)
+    due, deferred = tasks_due_now([tomorrow_brief], now=now, tz_for=None)
 
     assert due == []
     assert deferred == [tomorrow_brief]
@@ -151,13 +151,13 @@ def test_tz_for_compares_in_the_quests_own_zone_at_a_frozen_instant():
 
     # 2026-08-14T11:00:00Z == 2026-08-14T04:00:00-07:00 (PDT) -- not yet due.
     before = datetime(2026, 8, 14, 11, 0, tzinfo=timezone.utc)
-    due, deferred = _due_now_locally([task], now=before, tz_for=tz_for)
+    due, deferred = tasks_due_now([task], now=before, tz_for=tz_for)
     assert due == []
     assert deferred == [task]
 
     # 2026-08-14T14:00:00Z == 2026-08-14T07:00:00-07:00 (PDT) -- due.
     after = datetime(2026, 8, 14, 14, 0, tzinfo=timezone.utc)
-    due, deferred = _due_now_locally([task], now=after, tz_for=tz_for)
+    due, deferred = tasks_due_now([task], now=after, tz_for=tz_for)
     assert due == [task]
     assert deferred == []
 
@@ -172,7 +172,7 @@ def test_tz_for_only_affects_the_task_it_resolves_a_zone_for():
     def tz_for(t):
         return "America/Los_Angeles" if t.get("task_id") == "zoned" else None
 
-    due, deferred = _due_now_locally([zoned, plain], now=now, tz_for=tz_for)
+    due, deferred = tasks_due_now([zoned, plain], now=now, tz_for=tz_for)
 
     assert plain in due            # untouched by tz_for returning None for it
     assert zoned in deferred       # 23:00 PDT has not arrived yet
@@ -189,7 +189,7 @@ def test_unknown_zone_name_degrades_to_the_naive_local_comparison_and_never_rais
         return "Nowhere/DueNowLocallyTest"
 
     with caplog.at_level("WARNING"):
-        due, deferred = _due_now_locally([task], now=now, tz_for=tz_for)
+        due, deferred = tasks_due_now([task], now=now, tz_for=tz_for)
 
     assert due == [task]
     assert deferred == []

@@ -63,18 +63,18 @@ def install_local_time_due_gate(log: logging.Logger) -> None:
     ``due_before`` filter is date-granular and a task scheduled for, say, 06:30 tomorrow would
     otherwise go "due" the moment UTC rolls over — 17:00 today, west of UTC. The fallback stood
     down automatically whenever ``quest_ai_runner.the_consciousness.request_intake.poller`` already carried its own
-    ``_due_now_locally`` filter, which is the real, tested fix and now ships unconditionally with
+    ``tasks_due_now`` filter, which is the real, tested fix and now ships unconditionally with
     every ``Poller`` (see ``runner/poller.py`` and ``runner/local_time.py``).
 
     Now that this driver lives IN the library, that stand-down condition can never be false: this
-    module and ``runner/poller.py`` are always the same install, so ``_due_now_locally`` is always
+    module and ``runner/poller.py`` are always the same install, so ``tasks_due_now`` is always
     present by construction. Carrying the monkey-patch here would be dead code masquerading as a
     safety net — worse than deleting it outright, because a future reader could believe it still
     does something. So the behavior itself was dropped (see ``CHANGELOG.md``, Unreleased); this
     function stays only as a harmless, logged no-op for a caller that still names it by hand.
     """
     log.debug("local-time due gate: handled natively by quest_ai_runner.the_consciousness.request_intake.poller "
-              "(_due_now_locally / runner/local_time.py); no lane-level fallback is needed")
+              "(tasks_due_now / runner/local_time.py); no lane-level fallback is needed")
 
 
 def build_arg_parser(prog: str, description: str) -> argparse.ArgumentParser:

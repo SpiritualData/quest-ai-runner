@@ -7,14 +7,14 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import quest_ai_runner
-from hubofhubs.api import ordered_ids
+from hubofhubs.api import WINDOW_DAYS, ordered_ids
 
-from quest_ai_runner.the_intelligence.proactivity.autopilot import _parse_dt, persona_entries_on_duty
-from quest_ai_runner.the_intelligence.proactivity.quest_schedule import run_pending
-from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone, scheduled_moment, today_in_zone
+from quest_ai_runner.the_intelligence.proactivity.autopilot import _parse_dt
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import roster_days, run_pending
+from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone, today_in_zone
 
 
 log = logging.getLogger("quest-ai-runner.poller")
@@ -22,43 +22,22 @@ log = logging.getLogger("quest-ai-runner.poller")
 
 # How long dispatch leaves a task alone after its claim fails (see ``_submit_to_pool``).
 CLAIM_RETRY_COOLDOWN_SECONDS = 600.0
+MINUTES_PER_DAY = 1440
 
 
-_DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+def _quest_pass_days(autopilot_cfg: Dict[str, Any]) -> Optional[List[str]]:
+    """The weekdays this quest's own pass series should ever fire on (``Mon``..``Sun``), or ``None`` for every day.
 
-
-def _quest_pass_days(autopilot_cfg: Dict[str, Any], reference: date) -> Optional[List[str]]:
-    """The weekdays this quest's own pass series should ever fire on, or ``None`` for every day.
-
-    Mirrors ``AutopilotPass._gate_quest``'s day rule exactly, by calling the exact predicate the
-    gate itself uses (``persona_entries_on_duty``) once per weekday instead of restating its
-    logic: a roster with no entries, or with any entry that is on duty on every probed day (no
-    ``days`` restriction), passes the gate every day, so the series stays daily. Only when the
-    roster excludes at least one day is there anything to restrict -- scheduling the series to
-    fire only on the days it could possibly do something is what keeps a "nothing to do"
-    occurrence from ever being created, instead of being created and then reporting a skip (see
-    ``_create_quest_pass``).
-
-    ``reference`` only anchors the 7-day probe to a real calendar (for correct DST/weekday
-    arithmetic); any date works since a full week is walked either way.
+    The roster's days are the hub's ``window`` days (``quest_schedule.roster_days``), the same days the gate asks the hub's Proactivity about, so the series
+    never fires on a day the gate would skip: no "nothing to do" occurrence is created only to report a skip (see ``_create_quest_pass``).
     """
-    if not (autopilot_cfg.get("personas") or []):
-        return None
-    on_duty: List[str] = []
-    for offset in range(7):
-        probe = reference + timedelta(days=offset)
-        if persona_entries_on_duty(autopilot_cfg, probe):
-            on_duty.append(probe.strftime("%a"))
-    if len(on_duty) >= 7:
-        return None  # on duty every day -- no restriction to apply
-    days = set(on_duty)
-    return [d for d in _DAY_ORDER if d in days] or None
+    days = roster_days(autopilot_cfg)
+    return [day.title() for day in days] if days else None
 
 
 def _next_allowed_date(start: date, allowed_days: List[str]) -> date:
-    """The first date on/after ``start`` whose weekday is in ``allowed_days`` (``_DAY_ORDER``
-    abbreviations, matching Python's Monday=0..Sunday=6 ``date.weekday()``)."""
-    allowed_idx = {_DAY_ORDER.index(d) for d in allowed_days if d in _DAY_ORDER}
+    """The first date on/after ``start`` whose weekday is in ``allowed_days`` (``Mon``..``Sun``, matching Python's Monday=0..Sunday=6 ``date.weekday()``)."""
+    allowed_idx = {WINDOW_DAYS.index(d.lower()[:3]) for d in allowed_days if d.lower()[:3] in WINDOW_DAYS}
     for offset in range(7):
         candidate = start + timedelta(days=offset)
         if candidate.weekday() in allowed_idx:
@@ -66,14 +45,13 @@ def _next_allowed_date(start: date, allowed_days: List[str]) -> date:
     return start  # unreachable: allowed_days is never empty when this is called
 
 
-def _quest_pass_recurrence(entry: Dict[str, Any], expected_time: str,
-                           reference: date) -> Dict[str, Any]:
+def _quest_pass_recurrence(entry: Dict[str, Any], expected_time: str) -> Dict[str, Any]:
     """The ``recurrence`` a quest's own pass series should carry: ``weekly`` restricted to the
     roster's on-duty days when ``_quest_pass_days`` finds a restriction, else the unrestricted
     ``daily`` every quest had before the day rule existed. This is the one place that decides the
     SHAPE of the series, used both to create it and to retune it, so the two can never disagree.
     """
-    allowed_days = _quest_pass_days(entry, reference)
+    allowed_days = _quest_pass_days(entry)
     if allowed_days:
         return {"frequency": "weekly", "days": allowed_days, "time": expected_time}
     return {"frequency": "daily", "time": expected_time}
@@ -170,68 +148,67 @@ def _task_signature(task: Dict[str, Any]) -> str:
     return f"{tid}:{task.get('status', 'queued')}:{marker}"
 
 
-def _due_now_locally(tasks: List[Dict[str, Any]],
-                     now: Optional[datetime] = None,
-                     tz_for: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
-                     ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def tasks_due_now(tasks: List[Dict[str, Any]],
+                  now: Optional[datetime] = None,
+                  tz_for: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
+                  ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Split discovered tasks into (due, not-yet-due) by LOCAL wall clock.
 
     Discovery asks the backend for `due_before=<ISO now, UTC>`, but the backend compares only the
     DATE portion of that timestamp against `scheduled_date` and never looks at `scheduled_time`
     (see quest-backend `assistant_task_storage.list_tasks`). Its answer is therefore a SUPERSET:
-    correct to the day, silent about the hour. West of UTC that superset opens early -- a task set
+    correct to the day, silent about the hour. West of UTC that superset opens early: a task set
     for 06:30 becomes "due" the moment UTC midnight passes, which is 17:00 the PREVIOUS afternoon
-    in US/Pacific. A daily morning brief then runs the evening before, is written against the wrong
-    day, and burns the occurrence its real slot needed. (Seen 2026-08-12/13 on the personal lane:
-    a 06:30 brief ran at 17:17 the day before, twice.)
+    in US/Pacific (seen 2026-08-12/13 on the personal lane: a 06:30 brief ran at 17:17 the day
+    before, twice).
 
     So narrow the superset here, where the runner knows the wall clock the schedule was written
-    against. A task is due once local `scheduled_date` + `scheduled_time` has arrived; a missing
-    time means midnight, and an unscheduled task ("do it now", the chat-delegated case) is always
-    due. Holding one back is lossless: it stays `queued` and surfaces on a later scan.
+    against. The time of day is the hub's Proactivity (``quest_ai_runner.run("proactivity")``):
+    a task dated today is a schedule whose ``window`` is that weekday, its ``scheduled_time`` and
+    the task's zone, open for the rest of the day. What stays here is the Quest-shaped part: a task
+    with no date, or a ``start_at`` instant the backend already held it until, is due; a task dated
+    before today is due (it stays queued, so holding one back would strand it); a task dated after
+    today is not yet due; an unreadable schedule is treated as due, never stranded. A missing time
+    means midnight.
 
-    Timezone, for a task `tz_for` returns nothing for: the runner's own local time, which is the
-    tz a person authoring "06:30" means when no zone was ever stated. Byte-for-byte the original
-    behaviour -- `tz_for` left `None`, or returning `None` for a given task, changes nothing here.
-
-    `tz_for`, when given, maps a task to an IANA zone name (a per-quest autopilot pass's own
-    `run_timezone` -- see `Poller._pass_timezone_for`). For a task it resolves one for, the
-    comparison happens in THAT zone instead (`local_time.scheduled_moment`/`now_in_zone`), which
-    is what fixes the same early-firing bug for a quest whose owner is not in the runner host's
-    own timezone. An unresolvable zone name degrades to the same naive local comparison every
-    other task gets (never raises, logs once via `local_time.resolve_zone`).
+    The zone is `tz_for(task)` (a per-quest autopilot pass's own `run_timezone`); a task it returns
+    nothing for, or an unresolvable zone, is read on the runner's own clock, never UTC.
     """
-    legacy_now = now or datetime.now()
-    due: List[Dict[str, Any]] = []
-    deferred: List[Dict[str, Any]] = []
-    for task in tasks:
-        # A task carrying an explicit ``start_at`` (a UTC instant) was already held by the backend
-        # until that instant: discovery only returns it once it has arrived. It is due, whatever
-        # this runner's own clock makes of its local-date schedule.
+    verdict: Dict[int, bool] = {}
+    todays: Dict[str, List[tuple]] = {}
+    for index, task in enumerate(tasks):
         if str(task.get("start_at") or "").strip():
-            due.append(task)
+            verdict[index] = True
             continue
-        date = str(task.get("scheduled_date") or "").strip()
-        if not date:
-            due.append(task)
+        day_text = str(task.get("scheduled_date") or "").strip()
+        if not day_text:
+            verdict[index] = True
             continue
         clock = str(task.get("scheduled_time") or "00:00").strip()[:5]
-        zone_name = tz_for(task) if tz_for else None
-        if zone_name:
-            scheduled = scheduled_moment(date, clock, zone_name)
-            if scheduled is not None and scheduled.tzinfo is not None:
-                moment = now_in_zone(zone_name, now)
-                (due if scheduled <= moment else deferred).append(task)
-                continue
-            # The zone itself did not resolve (scheduled_moment fell back to naive, or failed to
-            # parse at all) -- fall through to the same legacy comparison every other task gets.
         try:
-            scheduled = datetime.strptime(f"{date} {clock}", "%Y-%m-%d %H:%M")
+            day = date.fromisoformat(day_text)
+            time.fromisoformat(clock)
         except ValueError:
-            # An unparseable schedule must never strand a task: fall back to the backend's answer.
-            log.warning("task %s has an unreadable schedule (%r %r) — treating it as due",
-                        task.get("task_id") or task.get("id"), date, clock)
-            due.append(task)
+            log.warning("task %s has an unreadable schedule (%r %r), treating it as due",
+                        task.get("task_id") or task.get("id"), day_text, clock)
+            verdict[index] = True
             continue
-        (due if scheduled <= legacy_now else deferred).append(task)
+        zone = (tz_for(task) if tz_for else None) or ""
+        today = today_in_zone(zone, now)
+        if day != today:
+            verdict[index] = day < today
+            continue
+        instant = now_in_zone(zone, now)
+        if instant.tzinfo is None:
+            instant = instant.astimezone()
+        schedule = {"name": str(index), "request": str(task.get("task_id") or task.get("id") or index),
+                    "window": {"days": [WINDOW_DAYS[day.weekday()]], "run_time": clock, "time_zone": zone, "grace_minutes": MINUTES_PER_DAY},
+                    "last_run": ""}
+        todays.setdefault(instant.isoformat(), []).append((index, schedule))
+    for moment, entries in todays.items():
+        answer = quest_ai_runner.run("proactivity", {"schedules": [schedule for _, schedule in entries], "now": moment})
+        open_now = {int(trigger["schedule"]) for trigger in answer}
+        verdict.update({index: index in open_now for index, _ in entries})
+    due = [task for index, task in enumerate(tasks) if verdict[index]]
+    deferred = [task for index, task in enumerate(tasks) if not verdict[index]]
     return due, deferred
