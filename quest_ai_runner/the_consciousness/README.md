@@ -81,7 +81,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`)
 - Quest Consciousness on Quest cases (`metric-quest-consciousness`)
-- Quest's work in the order Quest's rules give (`metric-order-quest-work`): leader `quest_ordering`, 46 of 54 cases
+- Quest's work in the order Quest's rules give (`metric-order-quest-work`): leader `quest_ordering`, 55 of 55 cases
 
 ## Where to go next
 

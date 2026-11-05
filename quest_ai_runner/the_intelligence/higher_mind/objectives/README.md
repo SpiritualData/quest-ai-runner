@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-intents:separate_stores` of 
 
 ## How the solutions fit together
 
-Quest Intents keeps the person's quests as the standing view every request is read against. Long-Term Memory keeps what was said across conversations and says what bears on a request. Recall Recent Context hands the next turn the cards its last turns already found. Guidance ties the work to its purpose by framing the intent a quest sits under. Guide Toward The Long-Term Goal points a reply at the quest's next milestone without nagging.
+Quest Intents keeps the person's quests as the standing view every request is read against, and its view hands the person's goals to Prioritization as the milestones of their solutions so they come in the order that matters. Long-Term Memory keeps what was said across conversations and says what bears on a request. Recall Recent Context hands the next turn the cards its last turns already found. Guidance ties the work to its purpose by framing the intent a quest sits under. Guide Toward The Long-Term Goal points a reply at the quest's next milestone without nagging.
 
 ## One level below
 
