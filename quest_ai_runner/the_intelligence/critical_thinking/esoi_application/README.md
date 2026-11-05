@@ -2,7 +2,7 @@
 
 *ESOI records kept beside the code in `quest_ai_runner/the_intelligence/critical_thinking/esoi_application`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
 
-Everything the AI does for a person's goals is held to the metric that serves it, and what it says is held to what is known.
+Everything the AI does and says is continuously held to the metric that serves the person's goals.
 
 These are the solutions of [Critical Thinking](../README.md).
 

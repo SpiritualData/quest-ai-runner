@@ -10,5 +10,5 @@
 
 ## Where to go next
 
-- Owning intent: [Subconscious](../../../../quest_ai_runner/the_intelligence/subconscious/context_retriever/README.md)
+- Owning intent: [Selecting the context a planner reads](../../../../quest_ai_runner/the_intelligence/subconscious/context_retriever/README.md)
 - Repository: [top README](../../../../README.md)

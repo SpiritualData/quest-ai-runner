@@ -1,6 +1,6 @@
 # Science
 
-What a request needs to know beyond the person's own material comes from the world with its source, so the person can weigh it.
+What a request needs from beyond the person's own material comes from the world, with its source.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 

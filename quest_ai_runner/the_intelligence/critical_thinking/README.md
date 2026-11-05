@@ -1,6 +1,6 @@
 # Critical Thinking
 
-Everything the AI does for a person's goals is held to the metric that serves it, and what it says is held to what is known.
+Everything the AI does and says is continuously held to the metric that serves the person's goals.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 

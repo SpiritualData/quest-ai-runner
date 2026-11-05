@@ -8,7 +8,7 @@ These are the solutions of [Grounded AI that advances people's goals](../../esoi
 
 ## How the solutions fit together
 
-quest-ai-runner turns a person's request or queued task into grounded work in one loop, and the Grounded goal agent is that loop. It asks the model through the Tiered model provider layer, works in the person's Quest account through Quest account access and takes in requests through Request intake. It reasons step by step through Mind, recalls what a request needs through Subconscious and acts on the account through Body. It holds its work to the metric that serves it through Critical Thinking, has every run watched through Nervous System and keeps the long view across turns through Higher mind. It stays comparable by metric through Integrity, answers questions beyond the person's own material through Science and chooses what a planner reads through Context choice. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind starts each step on the model tier it picks through Cost-ordered model tier selector with outage and allowance recovery. Nervous System has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport.
+quest-ai-runner turns a person's request or queued task into grounded work in one loop, and the Grounded goal agent is that loop. It asks the model through the Tiered model provider layer, works in the person's Quest account through Quest account access and takes in requests through Request intake. It reasons step by step through Mind, recalls what a request needs through Subconscious and acts on the account through Body. It holds its work to the metric that serves it through Critical Thinking, has every run watched through Nervous System and keeps the long view across turns through Higher mind. It stays comparable by metric through Integrity, answers questions beyond the person's own material through Science and chooses what a planner reads through Context choice. Subconscious recalls the cards that match a request through Hub card store. Tiered model provider layer accounts for every call through Cost estimation, daily budget and host load guard. Mind starts each step on the model tier it picks through Cost-ordered model tier selector with outage and allowance recovery. Nervous System has the model oversee a run through Tiered model provider layer. Queued-task runner claims, runs and reports a queued task, asking the model through Tiered model provider layer and working in the account through Quest account access. It writes each prompt as a registered spec with an owner and a metric through Justified model calls. Body reads and changes the quest through Context card persistence backend, Quest account access and Queued-task runner. Higher mind saves what it learned through Context card persistence backend. Request intake hears from a live channel through Live messaging channel transport. Body changes the quest as the person asks through Quest change executor and writes files inside one folder through Bounded reversible file writer. Body reads from the sources the person's work lives in through Multi-source evidence retriever and hands a new goal to the right owner through Goal assignee and doability judge. Body does heavy work through Bounded autonomous work runner, makes one named change on an outside tool server through Allowlisted operation writer and claims only the reach that World grants. Quest change executor reaches the account through Quest account access and decides through Tiered model provider layer. Goal assignee and doability judge asks the model whether a goal is doable through Tiered model provider layer. World reaches a person through Live messaging channel transport and judges through Tiered model provider layer.
 
 ## Overview diagram
 
@@ -36,11 +36,10 @@ flowchart LR
     s17["Mind<br/><i>the-mind</i>"]
     s18["Higher mind<br/><i>hold-the-intents</i>"]
     s19["Request intake<br/><i>take-in-the-world</i>"]
-    s20["Context choice<br/><i>choose-the-context</i>"]
-    s21["Subconscious<br/><i>the-subconscious</i>"]
-    s22["Grounded goal agent<br/><i>do-grounded-work</i>"]
-    s23["Justified model calls<br/><i>justify-model-calls</i>"]
-    s24["Cost-ordered model tier selector with outage and allowance recovery<br/><i>model-tier-chooser</i>"]
+    s20["Subconscious<br/><i>the-subconscious</i>"]
+    s21["Grounded goal agent<br/><i>do-grounded-work</i>"]
+    s22["Justified model calls<br/><i>justify-model-calls</i>"]
+    s23["Cost-ordered model tier selector with outage and allowance recovery<br/><i>model-tier-chooser</i>"]
     s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s2
     s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s6
     s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s9
@@ -48,16 +47,16 @@ flowchart LR
     s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s14
     s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s17
     s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s18
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s22
+    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s21
     s1 -->|"An inbound batch (messages with ids, chat references, text and attachments, a healthy flag and any error) and a send result with success and message id"| s13
     s1 -->|"An inbound batch (messages with ids, chat references, text and attachments, a healthy flag and any error) and a send result with success and message id"| s19
-    s2 -->|"For a flagged case: the risk category, the response applied and its signal (proceed, redirect with a hint, answer now, escalate to deep execution, escalate to a person), with a reason and a degraded flag"| s22
+    s2 -->|"For a flagged case: the risk category, the response applied and its signal (proceed, redirect with a hint, answer now, escalate to deep execution, escalate to a person), with a reason and a degraded flag"| s21
     s3 -->|"A price per million input tokens, a bootstrap cost estimate with the provider and model used, a running total with an over-limit flag and status line, and a paused or not verdict"| s0
-    s4 -->|"Checked records, recorded metric results and the selected implementation for each solution"| s22
-    s5 -->|"Findings, each with its source, an evidence-strength label and the passage that supports it"| s22
+    s4 -->|"Checked records, recorded metric results and the selected implementation for each solution"| s21
+    s5 -->|"Findings, each with its source, an evidence-strength label and the passage that supports it"| s21
     s6 -->|"A reported status on each task (with result text or decision id), updated folder sync files, and logs"| s7
     s6 -->|"A reported status on each task (with result text or decision id), updated folder sync files, and logs"| s15
-    s7 -->|"Per request: the metric applied with its reading before and after, or the reason none applies, or a proposed metric; and for a regression or a missing metric, the response taken"| s22
+    s7 -->|"Per request: the metric applied with its reading before and after, or the reason none applies, or a proposed metric; and for a regression or a missing metric, the response taken"| s21
     s8 -->|"Observation values carrying text, a path or source label, and a kind, with error observations in place of exceptions"| s5
     s8 -->|"Observation values carrying text, a path or source label, and a kind, with error observations in place of exceptions"| s15
     s9 -->|"The resulting quest state and a reply that reports what was done"| s7
@@ -70,22 +69,21 @@ flowchart LR
     s12 -->|"A write result with success, error and an audit detail of the tool, arguments and whether it executed; a list of writable operations with schemas"| s15
     s13 -->|"A reach verdict for the request (inside, outside, in the world now, or not reachable, with why), and receipts for outside acts (what ran, where, its id)"| s15
     s14 -->|"The text or verdict the call returns"| s15
-    s15 -->|"A current state view for the request's scope with the time each part was read, and after a change the read-back objects"| s22
+    s15 -->|"A current state view for the request's scope with the time each part was read, and after a change the read-back objects"| s21
     s16 -->|"The result of one Quest operation"| s6
     s16 -->|"The result of one Quest operation"| s9
     s16 -->|"The result of one Quest operation"| s15
-    s16 -->|"The result of one Quest operation"| s22
+    s16 -->|"The result of one Quest operation"| s21
     s17 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s15
-    s17 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s22
+    s17 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s21
+    s18 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s20
     s18 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s21
-    s18 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s22
-    s19 -->|"One routed turn with its context sources"| s22
-    s20 -->|"The assembled context, the ids of the cards it drew on, a resolved reference, a ranked list of cards and records, or the cards nearest a query by meaning"| s22
-    s21 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s17
-    s21 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s22
-    s23 -->|"A per-prompt table and the share of average model spend that is justified"| s6
-    s24 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s2
-    s24 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s17
+    s19 -->|"One routed turn with its context sources"| s21
+    s20 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s17
+    s20 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s21
+    s22 -->|"A per-prompt table and the share of average model spend that is justified"| s6
+    s23 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s2
+    s23 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s17
 ```
 
 ## Quest change executor (`operate-a-quest`)
@@ -104,7 +102,7 @@ Lets a person hand off open-ended or heavy work and get back a checked result wi
 - Entry call: no entry declared
 - Selected implementation: Subprocess goal runner (`subprocess`)
 - Metric: Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met
-- Implemented by: [`evaluation/components/deep_run/impls/goal_contract.py`](../../evaluation/components/deep_run/impls/goal_contract.py), [`evaluation/components/deep_runner/impls/acp_runner.py`](../../evaluation/components/deep_runner/impls/acp_runner.py), [`evaluation/components/deep_runner/impls/subprocess_runner.py`](../../evaluation/components/deep_runner/impls/subprocess_runner.py), [`quest_ai_runner/the_body/configuration/__init__.py`](configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](configuration/config.py) and 65 more
+- Implemented by: [`evaluation/components/deep_run/impls/goal_contract.py`](../../evaluation/components/deep_run/impls/goal_contract.py), [`evaluation/components/deep_runner/impls/acp_runner.py`](../../evaluation/components/deep_runner/impls/acp_runner.py), [`evaluation/components/deep_runner/impls/subprocess_runner.py`](../../evaluation/components/deep_runner/impls/subprocess_runner.py), [`quest_ai_runner/the_body/configuration/__init__.py`](configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](configuration/config.py) and 64 more
 
 ## Bounded reversible file writer (`write-files`)
 
@@ -113,7 +111,7 @@ Help an automated agent make the file changes a person asked for, inside one fol
 - Entry call: `quest_ai_runner.run("write-files", 'NOTES.md')`
 - Selected implementation: Contained backed-up writer (`files`)
 - Metric: Write boundary and reversibility over the scratch-tree cases
-- Implemented by: [`evaluation/components/write_files/impls/bounded_writer.py`](../../evaluation/components/write_files/impls/bounded_writer.py), [`quest_ai_runner/the_body/configuration/__init__.py`](configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](configuration/config_context_index.py) and 56 more
+- Implemented by: [`evaluation/components/write_files/impls/bounded_writer.py`](../../evaluation/components/write_files/impls/bounded_writer.py), [`quest_ai_runner/the_body/configuration/__init__.py`](configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](configuration/config_context_index.py) and 55 more
 
 ## Allowlisted operation writer (`write-through-mcp`)
 
@@ -122,7 +120,7 @@ Carry out one named change on an external tool server, and only when an explicit
 - Entry call: no entry declared
 - Selected implementation: MCP operation writer (`mcp`)
 - Metric: Allowlist enforcement and exactly-once execution
-- Implemented by: [`evaluation/components/write_through_mcp/impls/allowlist_writer.py`](../../evaluation/components/write_through_mcp/impls/allowlist_writer.py), [`quest_ai_runner/the_body/configuration/__init__.py`](configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](configuration/config_context_index.py) and 56 more
+- Implemented by: [`evaluation/components/write_through_mcp/impls/allowlist_writer.py`](../../evaluation/components/write_through_mcp/impls/allowlist_writer.py), [`quest_ai_runner/the_body/configuration/__init__.py`](configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](configuration/config_context_index.py) and 55 more
 
 ## World (`claim-reach`)
 

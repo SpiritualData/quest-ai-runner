@@ -1,6 +1,6 @@
 # Nervous System
 
-Every run is watched through cheap checks, and a step only a person may take reaches that person with enough detail to decide.
+The AI system watches every run and brings in a person only where only a person can decide.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 

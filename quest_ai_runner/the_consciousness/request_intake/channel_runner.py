@@ -30,9 +30,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Optional
 
-from quest_ai_runner.the_body.configuration.config_wiring import build_orchestrator
+from quest_ai_runner.the_body.configuration import config as runner_config
 
-if TYPE_CHECKING:  # typing only: the runner takes its builders from .config_wiring, never from config
+if TYPE_CHECKING:  # typing only
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
 from quest_ai_runner.the_consciousness.request_intake.interface import ChannelTransport, InboundBatch, InboundMessage
 from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
@@ -94,7 +94,7 @@ class ChannelRunner:
 
     def _orch(self) -> Any:
         if self._orchestrator is None:
-            self._orchestrator = build_orchestrator(self.cfg)
+            self._orchestrator = runner_config.build_orchestrator(self.cfg)
         return self._orchestrator
 
     # --- one receive -> dispatch pass ---------------------------------------------------------

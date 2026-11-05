@@ -1,6 +1,6 @@
 # Integrity
 
-Every part of QAR stays specified as a solution with alternatives and a metric, so the best implementation runs as the state of the art moves and no vendor is built into the brain.
+Every part of QAR is a specified solution whose best implementation runs as the state of the art moves.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 

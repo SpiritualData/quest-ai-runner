@@ -2,7 +2,7 @@
 
 *ESOI records kept beside the code in `quest_ai_runner/the_intelligence/mind/response_writer`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
 
-Every step of a person's request acts on everything the request has established so far, so a reply rests on the work done for it and the person can follow that work, at the cost of the fast tier.
+Every request is answered from everything its work has established so far, in the best way possible.
 
 These are the solutions of [Mind](../README.md).
 

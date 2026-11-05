@@ -1,6 +1,6 @@
 # Holding the intents across quests
 
-Each AI representative starts every request from the standing view of the quests it is assigned and the intents above them, so a correction is made once and a thread is never restated.
+Each AI representative continuously acts from the standing view of the person's quests and intents.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 

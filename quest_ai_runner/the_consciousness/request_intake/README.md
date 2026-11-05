@@ -1,6 +1,6 @@
 # Taking in requests from anywhere
 
-A person or a program reaches the runner from wherever they work, by a message, a terminal, a live channel or the package itself, and is understood the same way.
+A person or program reaches the runner from wherever they work and is understood the same way.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 

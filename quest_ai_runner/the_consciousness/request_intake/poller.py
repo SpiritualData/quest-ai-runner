@@ -26,12 +26,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
-from quest_ai_runner.the_body.configuration.config_wiring import (
-    build_orchestrator, derive_capabilities, resolve_rep_sync_resolver, resolve_tool_registry)
+from quest_ai_runner.the_body.configuration import config as runner_config   # the one place the brain is built: runner_config.build_orchestrator
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 from quest_ai_runner.the_body.host.resources import ResourceGuard, ResourceLimits
-if TYPE_CHECKING:  # typing only: the runner takes its builders from .config_wiring, never from config
+if TYPE_CHECKING:  # typing only
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
 from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import make_judge
@@ -135,7 +134,7 @@ class Poller(PassesMixin, SyncMixin):
         # rep_sync_resolver from declarative config when the consumer did not already wire one by
         # hand. Same in-place write-back style build_orchestrator uses for deep_runner — a consumer
         # or test that reads config.rep_sync_resolver after construction sees the resolved callable.
-        config.rep_sync_resolver = resolve_rep_sync_resolver(config, quest_client=self.client)
+        config.rep_sync_resolver = runner_config.resolve_rep_sync_resolver(config, quest_client=self.client)
         self.state = StateStore(state_path)
         # The lane's Claude usage-limit note lives beside its state file, so a lane restarted
         # mid-pause keeps honouring the reset instead of re-discovering the limit task by task.
@@ -182,7 +181,7 @@ class Poller(PassesMixin, SyncMixin):
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude
         # Code's WebSearch/WebFetch). Computed once at construction (the adapter wiring is fixed
         # for the poller's lifetime).
-        self._capabilities = derive_capabilities(config)
+        self._capabilities = runner_config.derive_capabilities(config)
         # In-process claim guard: prevents the background scan and the fast lane (wait channel /
         # fallback poll, see run_forever) from BOTH claiming and running the SAME task when they
         # observe it in the same short window before either has PATCHed it off 'queued'. This is
@@ -196,7 +195,7 @@ class Poller(PassesMixin, SyncMixin):
 
     def _orch(self):
         if self._orchestrator is None:
-            self._orchestrator = build_orchestrator(self.cfg)
+            self._orchestrator = runner_config.build_orchestrator(self.cfg)
         return self._orchestrator
 
     # --- one scan ------------------------------------------------------------
@@ -435,7 +434,7 @@ class Poller(PassesMixin, SyncMixin):
         """Run the single tool or connector operation a workflow step asked for and report the outcome."""
         from quest_ai_runner.the_body.hands.quest_operations.requested_action import run_requested_action
         try:
-            outcome = run_requested_action(task, resolve_tool_registry(self.cfg), self.cfg.mcp_servers, self.client)
+            outcome = run_requested_action(task, runner_config.resolve_tool_registry(self.cfg), self.cfg.mcp_servers, self.client)
         except Exception as e:  # noqa: BLE001 -- an action that crashes is a failed task, never a lost one
             log.error("requested action for task %s crashed", task_id, exc_info=True)
             outcome = None
@@ -470,7 +469,7 @@ class Poller(PassesMixin, SyncMixin):
             return
         actions = getattr(self, "catalog_actions", None)
         if actions is None or time.monotonic() - getattr(self, "catalog_built_at", 0.0) > 3600:
-            actions = self.catalog_actions = build_actions(resolve_tool_registry(self.cfg), self.cfg.mcp_servers)
+            actions = self.catalog_actions = build_actions(runner_config.resolve_tool_registry(self.cfg), self.cfg.mcp_servers)
             self.catalog_built_at = time.monotonic()
         publisher.publish(self.client, targets, actions, env_id=self.cfg.env_id, label=self.cfg.runner_label)
 
@@ -481,7 +480,7 @@ class Poller(PassesMixin, SyncMixin):
             return
         self.tool_listing_attached = True
         try:
-            registry = resolve_tool_registry(self.cfg)
+            registry = runner_config.resolve_tool_registry(self.cfg)
             if registry is not None:
                 self.client.available_tools = registry.public_listing()
         except Exception:  # noqa: BLE001 -- reporting tools must never break a heartbeat
