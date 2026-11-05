@@ -48,7 +48,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | none selected | Intent evolution: the most likely option or a checkable experiment |
 | Hand Off A Goal | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
-| Prioritization | `prioritization` | no entry declared | none selected | none yet |
+| Prioritization | `prioritization` | no entry declared | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
 | Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ## Solutions from a library
@@ -79,13 +79,14 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`)
 - Quest Consciousness on Quest cases (`metric-quest-consciousness`)
+- Quest's work in the order Quest's rules give (`metric-order-quest-work`): leader `quest_ordering`, 28 of 28 cases
 
 ## Where to go next
 
 - Sub-intent: [Quest Requests](request_intake/README.md)
 - Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
-- Records beside the code: [quest_ai_runner/the_consciousness/feedback_learning](feedback_learning/README.md), [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
+- Records beside the code: [quest_ai_runner/the_consciousness/feedback_learning](feedback_learning/README.md), [quest_ai_runner/the_consciousness/prioritization](prioritization/README.md), [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
@@ -117,7 +118,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Intent Evolution | `intent-evolution` | none selected | Intent evolution: the most likely option or a checkable experiment |
 | Hand Off A Goal | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
-| Prioritization | `prioritization` | none selected | none yet |
+| Prioritization | `prioritization` | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
 | Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ### Implementations
@@ -141,6 +142,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../the_body/internal_context/quest/client/quest_client.py) |  |
 | Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
 | File-backed feedback ledger | `feedback-learning:ledger` | [quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py](feedback_learning/feedback_ledger.py) |  |
+| Quest ordering | `prioritization:quest_ordering` | [quest_ai_runner/the_consciousness/prioritization/quest_ordering.py](prioritization/quest_ordering.py) |  |
 | Configured persona resolver | `quest-requests:personas` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
 | Persona resolver precedence for queued tasks (today) | `quest-representatives:persona_resolver_precedence` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
 
@@ -148,6 +150,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`): `none`
 - Quest Consciousness on Quest cases (`metric-quest-consciousness`): `none`
+- Quest's work in the order Quest's rules give (`metric-order-quest-work`): `esoi run order_quest_work --impl quest_ordering; esoi run order_quest_work --impl hub_stated_fields; esoi run order_quest_work --impl hub_as_given`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

@@ -234,11 +234,11 @@ def runner_clock_is_utc_unless_a_test_says_otherwise(monkeypatch, hermetic_qar_e
     """Pin the RUNNER'S OWN local clock to UTC for the suite.
 
     ``local_time`` degrades to the runner's local clock (never UTC) whenever a zone is missing or
-    unresolvable, and ``cadence_due`` compares calendar days. Both therefore read the host's
+    unresolvable, and the hub's Proactivity compares calendar days. Both therefore read the host's
     timezone, which would make a batch of date-boundary assertions pass in California and fail in
     Tokyo. Pinning ``TZ`` here makes the fallback deterministic and, more usefully, makes it
     VISIBLE: a test about the fallback sets its own ``TZ`` (see
-    ``test_cadence_due_without_tz_uses_the_runner_clock``) instead of silently inheriting one.
+    ``test_cadence_due_without_tz_uses_the_runner_clock_not_utc``) instead of silently inheriting one.
     """
     monkeypatch.setenv("TZ", "UTC")
     time.tzset()

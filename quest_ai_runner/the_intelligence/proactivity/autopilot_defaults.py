@@ -50,10 +50,6 @@ AUTOPILOT_TASK_SOURCE = "chat"
 AUTOPILOT_LEGACY_SOURCE = "autopilot"
 
 
-# Cadence name -> minimum days between passes for a given quest. An unrecognized cadence string
-# falls back to "weekly" rather than erroring, so a bad/unknown value never wedges a quest either
-# always-due or never-due.
-_CADENCE_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
 
 
 # A previous autopilot task in any of these states is still "open" -- its quest is under

@@ -7,9 +7,13 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from quest_ai_runner.the_intelligence.proactivity.autopilot import _parse_dt, persona_entries_on_duty, run_requested
+import quest_ai_runner
+from hubofhubs.api import ordered_ids
+
+from quest_ai_runner.the_intelligence.proactivity.autopilot import _parse_dt, persona_entries_on_duty
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import run_pending
 from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone, scheduled_moment, today_in_zone
 
 
@@ -135,9 +139,24 @@ def _run_request_signature(quest_id: str, entry: Dict[str, Any]) -> str:
     Stored in the lane's ordinary ``StateStore``, the same place a task's signature lives, so it
     survives a restart and needs no new storage.
     """
-    if not quest_id or not run_requested(entry):
+    if not quest_id or not run_pending(entry):
         return ""
     return f"autopilot-run-request:{quest_id}:{entry.get('run_requested_at')}"
+
+
+# What a task is to the dispatcher, first first: a task a person pressed "Start now" on, then a task a person is waiting on, then any other.
+DISPATCH_KINDS = ("start-requested", "real-time", "task")
+
+
+def dispatch_order(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The tasks in the order the hub's Prioritization gives them (Quest's ordering arm), with the kinds of ``DISPATCH_KINDS`` as the order of kinds and the
+    oldest first within a kind: priority, not a separate lane."""
+    if len(tasks) < 2:
+        return list(tasks)
+    candidates = [{"id": str(index), "kind": ("start-requested" if task.get("start_requested_at") else "real-time" if task.get("real_time") else "task"),
+                   "asked_at": str(task.get("created_at") or "")} for index, task in enumerate(tasks)]
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "stated": {"kind_order": list(DISPATCH_KINDS)}, "now": datetime.now(timezone.utc).isoformat()})
+    return [tasks[int(place)] for place in ordered_ids(answer["ordered"])]
 
 
 def _task_signature(task: Dict[str, Any]) -> str:

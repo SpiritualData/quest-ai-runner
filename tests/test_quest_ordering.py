@@ -59,3 +59,20 @@ def test_quest_events_are_the_asks_as_events_at_the_time_they_were_made():
     events = adapter.pull(SOURCE, limit=10)
     assert [e["at"] for e in events] == ["2026-07-01T00:00:00Z", OLDEST] and events[0]["person"] == "ana"
     assert adapter.pull("elsewhere") == [] and len(adapter.pull(SOURCE, limit=1)) == 1
+
+
+def test_dispatch_puts_a_start_now_task_first_then_a_task_someone_waits_on_then_the_oldest():
+    from quest_ai_runner.the_intelligence.proactivity.poller_schedule import dispatch_order
+    tasks = [{"id": "new", "created_at": "2026-07-12T08:00:00Z"}, {"id": "old", "created_at": "2026-07-01T08:00:00Z"},
+             {"id": "waiting", "real_time": True, "created_at": "2026-07-11T08:00:00Z"}, {"id": "now", "start_requested_at": "2026-07-12T08:30:00Z", "created_at": "2026-07-12T08:10:00Z"}]
+    assert [t["id"] for t in dispatch_order(tasks)] == ["now", "waiting", "old", "new"]
+    assert dispatch_order([]) == [] and dispatch_order(tasks[:1]) == tasks[:1]
+
+
+def test_the_ladder_lists_goals_nearest_deadline_first_through_prioritization():
+    from datetime import datetime, timezone
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import current_goal_ladder
+    payload = {"period_groups": [{"time_scope": "month", "period": "2026_07", "goals": [{"id": "late", "name": "late", "deadline": "2026-07-30"}, {"id": "none", "name": "none"},
+                                                                                         {"id": "soon", "name": "soon", "deadline": "2026-07-14"}]}]}
+    rung = current_goal_ladder(payload, datetime(2026, 7, 12, 9, tzinfo=timezone.utc))[0]
+    assert [g["id"] for g in rung["goals"]] == ["soon", "late", "none"]

@@ -61,7 +61,7 @@ from quest_ai_runner.the_body.internal_context.quest.client.quest_client import 
 # use) so `from quest_ai_runner.the_consciousness.request_intake.poller import StateStore` keeps working unchanged.
 from quest_ai_runner.the_body.internal_context.run_store.state_store import StateStore
 
-from quest_ai_runner.the_intelligence.proactivity.poller_schedule import CLAIM_RETRY_COOLDOWN_SECONDS, _due_now_locally, _task_signature, log
+from quest_ai_runner.the_intelligence.proactivity.poller_schedule import CLAIM_RETRY_COOLDOWN_SECONDS, _due_now_locally, _task_signature, dispatch_order, log
 from quest_ai_runner.the_intelligence.proactivity.poller_passes import PassesMixin
 from quest_ai_runner.the_consciousness.request_intake.poller_sync import SyncMixin
 
@@ -284,10 +284,8 @@ class Poller(PassesMixin, SyncMixin):
                          len(deferred), held)
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
-        # Priority, not a separate lane: a task a person pressed "Start now" on goes first, then a
-        # task a person is waiting on, then oldest first.
-        fresh.sort(key=lambda t: (not t.get("start_requested_at"), not t.get("real_time"),
-                                  str(t.get("created_at") or "")))
+        # Priority, not a separate lane, and the hub's Prioritization decides it (``dispatch_order``).
+        fresh = dispatch_order(fresh)
         if pool is not None:
             return self._submit_to_pool(pool, fresh)
         if not fresh:

@@ -149,8 +149,10 @@ import quest_ai_runner
 quest_ai_runner.run("quest-ai-runner", "What should I work on first this week?")      # the whole flow (the_self/respond.py)
 quest_ai_runner.run("select-context", "What should I work on first this week?")       # the context a request reads
 quest_ai_runner.run("proactivity", {"schedules": [...], "now": "2026-07-12T09:00:00Z"})  # when standing work is due (the hub's Proactivity)
-quest_ai_runner.run("prioritization", {"person": "", "request": "..."})               # what matters first (the hub's Prioritization)
+quest_ai_runner.run("prioritization", {"person": "", "request": "..."})               # what matters first (the hub's Prioritization, answered by Quest's ordering arm)
 ```
+
+A host decides what is due and what comes first through these two lines and no code of its own: a schedule is `{"name", "request", "cadence", "zone", "last_run", "run_requested_at"}` (and `"event_source"` plus its pulled `events` for a reactive one), a candidate of Prioritization is `{"id", "kind", ...}` with the fields Quest's data carries (`rank`, `rank_by_person`, `owner`, `horizon`, `deadline`, `asked_at`). No name is added to `quest_ai_runner.api` for them: `run` is the whole surface.
 
 Every solution declares its interface in one `interface.py` beside its code, with the entry `run` calls. A host application imports only from `quest_ai_runner.api`, which lists the names a consumer outside this repository needs (ports it implements, constants, value objects), grouped by the solution they belong to, and `run`. Under Quest Autopilot it exports the markers autopilot tasks carry (`PROPOSAL_TEXT_PREFIX`, `AUTOPILOT_PASS_KIND`, `AUTOPILOT_WORK_KIND`) and the bundled default instructions a host seeds a quest and a persona with (`BUNDLED_DEFAULT_QUEST_INSTRUCTIONS`, `BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS`).
 

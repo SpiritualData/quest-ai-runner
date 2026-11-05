@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `the-intelligence:composition` of i
 
 ## How the solutions fit together
 
-Intelligence turns one request into a response. Quest Intents says which of the person's quests the request serves and what the work is for. Subconscious prepares what the request needs before it is asked for. Mind thinks the request through step by step. Nervous System watches the run and brings in a person only where only a person can decide. Critical Thinking holds the work to the measure that serves the person's goals, and hands work nobody asked for to Quest Autopilot, which starts it only when the person allows. Proactivity says what standing work is due, from the schedule a quest states and the events Quest reports, and Quest Autopilot asks it before it starts anything.
+Intelligence turns one request into a response. Quest Intents says which of the person's quests the request serves and what the work is for. Subconscious prepares what the request needs before it is asked for. Mind thinks the request through step by step. Nervous System watches the run and brings in a person only where only a person can decide. Critical Thinking holds the work to the measure that serves the person's goals, and hands work nobody asked for to Quest Autopilot, which starts it only when the person allows. Quest Autopilot asks Proactivity what standing work is due, from the schedule a quest states and the events Quest reports.
 
 ## Diagram
 
@@ -21,9 +21,11 @@ flowchart LR
     s2["Critical Thinking<br/><i>critical-thinking</i>"]
     s3["Quest Autopilot<br/><i>quest-autopilot</i>"]
     s4["Quest Intents<br/><i>quest-intents</i>"]
+    s5["proactivity"]
     s0 -->|"The cards and files a request needs, ready before it is asked for"| s1
     s3 -->|"Run or skip, with the reason"| s2
     s4 -->|"The quest the message serves and the intent frame for the work"| s0
+    s5 -->|"The triggers that are due now, each with why it is due"| s3
 ```
 
 ## One level below

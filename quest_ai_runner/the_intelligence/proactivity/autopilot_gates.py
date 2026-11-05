@@ -11,10 +11,11 @@ from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_z
 from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import persona_entries_on_duty
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_LEGACY_SOURCE, AUTOPILOT_WORK_KIND, OPEN_TASK_STATUSES, TASK_STATUSES_FOR_COUNT, log)
-from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import _parse_dt, has_new_ask_since, run_requested
-from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import PendingWork, pass_due, pending_work_for
+from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import _parse_dt
+from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import PendingWork, pending_work_for
 from quest_ai_runner.the_intelligence.proactivity.autopilot_result import AutopilotResult
 from quest_ai_runner.the_intelligence.proactivity.quest_asks_brief import fetch_asks
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import REQUESTED, due_trigger, new_ask_since
 
 
 class GatesMixin:
@@ -123,7 +124,7 @@ class GatesMixin:
         here the same way the schedule reads it is what makes that promise true.
 
         Falls back to the runner's local clock when the zone is missing or unresolvable, which is
-        ``now_in_zone``'s documented behaviour and matches ``cadence_due``'s ``tz=`` fallback.
+        ``now_in_zone``'s documented behaviour and matches the zone fallback of the hub's Proactivity.
         """
         return now_in_zone(autopilot_cfg.get("run_timezone"), self._now())
 
@@ -145,32 +146,30 @@ class GatesMixin:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes.
 
         ``pending`` is the quest's pending work as the caller read it (``_pending_work``). Pending
-        items make the quest due once per day (``pass_due``) and, like a "Run now", stand in for
+        items make the quest due once per day (``due_trigger``) and, like a "Run now", stand in for
         REACTIVE mode's new-ask test: they are something to check in about.
         """
         pending_count = pending.count if pending else 0
         autopilot_cfg = quest.get("autopilot") or {}
-        # tz= the quest's own run_timezone; absent one, cadence_due falls back to the runner's
-        # local clock (never UTC). This is the SAME predicate the poller's schedule-correction
-        # sweep reads (A3 of the autopilot spec), so the schedule and this gate can never disagree
-        # about whether today's occurrence is due.
+        # WHEN is the hub's Proactivity (``quest_schedule.due_trigger``): the quest's cadence as a calendar period in its own run_timezone (absent one, the
+        # runner's local clock, never UTC), a pending "Run now" request, pending work making it daily. The poller's schedule-correction sweep asks the same
+        # question the same way (A3 of the autopilot spec), so the schedule and this gate can never disagree about whether today's occurrence is due.
         #
         # A pending "Run now" request satisfies the cadence gate on its own. Without that, the
         # button would be a no-op on exactly the day someone is most likely to press it (the quest
         # already ran and they want another pass), and a no-op that reports success is the silent
         # failure this codebase bans.
-        if (not pass_due(autopilot_cfg, self._now(), autopilot_cfg.get("run_timezone"),
-                         pending_count)
-                and not run_requested(autopilot_cfg)):
+        trigger = due_trigger(autopilot_cfg, self._now(), autopilot_cfg.get("run_timezone"), pending_count)
+        if not trigger:
             return "cadence not due yet"
         # REACTIVE mode's own gate: the cadence/run_time above says WHEN this quest is allowed to
         # check in, this says whether there is anything to check in ABOUT. Skipped entirely by an
-        # explicit "Run now" (run_requested), the same override cadence itself already respects --
+        # explicit "Run now" (the ``requested`` trigger), the same override cadence itself already respects --
         # a person pressing the button gets a run regardless of whether Autopilot thinks anything
-        # is new. See ``has_new_ask_since`` for why this reads the asks ledger rather than notes
+        # is new. See ``new_ask_since`` for why this reads the asks ledger rather than notes
         # directly: an ask can arrive through any touchpoint the ledger captures, not only a note.
         if (str(autopilot_cfg.get("mode") or "off") == "reactive"
-                and not run_requested(autopilot_cfg) and pending_count == 0):
+                and trigger != REQUESTED and pending_count == 0):
             asks = self.quest_asks(quest_id)
             # ``None`` means the READ failed (see ``QuestClient.list_asks``), not that nothing is
             # new -- a transient backend blip or an expired key must never be read as "no new ask
@@ -179,7 +178,7 @@ class GatesMixin:
             if asks is None:
                 log.warning("autopilot: could not read asks for quest %s; reactive gate failing "
                             "open (running the pass)", quest_id)
-            elif not has_new_ask_since(asks, autopilot_cfg.get("last_pass_at")):
+            elif not new_ask_since(asks, autopilot_cfg.get("last_pass_at"), self._now()):
                 return "reactive: no new ask since the last pass"
         # THE DAY RULE, as a gate. With a roster configured, a day nobody was rostered for is a day
         # this quest does no work at all -- config plus clock only, which is why it sits here with

@@ -6,7 +6,8 @@ sentence when nothing is pending. Real file reads, a fake Quest client; no Drive
 from datetime import datetime, timezone
 
 from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
-from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import count_pending_rows, pass_due, pending_work_for
+from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import count_pending_rows, pending_work_for
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import due_trigger
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 
@@ -34,12 +35,12 @@ def test_relative_file_resolves_under_quest_folder_and_unreadable_is_none(tmp_pa
     assert pending_work_for("q1", {"q1": {"file": "gone.md"}}, {"q1": str(tmp_path)}) is None
 
 
-def test_pass_due_only_daily_when_pending():
+def test_a_quest_is_due_daily_only_when_pending():
     cfg = {"cadence": "weekly", "last_pass_at": "2026-07-11T09:00:00Z"}   # yesterday
-    assert pass_due(cfg, _now(), None, 0) is False
-    assert pass_due(cfg, _now(), None, 3) is True
+    assert due_trigger(cfg, _now(), None, 0) == ""
+    assert due_trigger(cfg, _now(), None, 3) == "period"
     ran_today = {"cadence": "weekly", "last_pass_at": "2026-07-12T01:00:00Z"}
-    assert pass_due(ran_today, _now(), None, 3) is False                    # never twice a day
+    assert due_trigger(ran_today, _now(), None, 3) == ""                    # never twice a day
 
 
 def _run(tmp_path, backlog):
@@ -69,7 +70,7 @@ def test_nothing_pending_leaves_the_cadence_gate_in_charge(tmp_path):
 
 
 def test_schedule_creates_todays_pass_for_a_weekly_quest_with_pending_work(tmp_path):
-    """The schedule and the gate read the same ``pass_due``: a weekly quest that ran yesterday is
+    """The schedule and the gate read the same ``due_trigger``: a weekly quest that ran yesterday is
     scheduled for today (not tomorrow) while its pending file has rows, from the real snapshot."""
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
     from quest_ai_runner.the_consciousness.request_intake.poller import Poller

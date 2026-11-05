@@ -8,7 +8,7 @@ Part of [Intelligence](../README.md)
 
 | Implementation | Handle | Purpose | Code | Selected |
 |---|---|---|---|---|
-| Eligibility gate mixin | `quest-autopilot:autopilot_gates` | Methods on the autopilot pass that test, in order, daily budget, cadence in the quest's zone, Run now, reactive trigger, roster day and backpressure, and read open asks, so a quest is skipped with a reason before any goal is read. | [`quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py`](autopilot_gates.py) |  |
+| Eligibility gate mixin | `quest-autopilot:autopilot_gates` | Methods on the autopilot pass that decide, in order, daily budget, whether the quest is due (asked of the hub's Proactivity: its cadence in its zone, a Run now, a reactive trigger from the asks Quest events report), roster day and backpressure, and read open asks, so a quest is skipped with a reason before any goal is read. | [`quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py`](autopilot_gates.py) |  |
 
 ## Where to go next
 

@@ -1,4 +1,6 @@
-"""Autopilot timing: cadence, period keys and bounds, the goal ladder.
+"""Autopilot timing: period keys and bounds, the goal ladder.
+
+Whether a pass is due is the hub's Proactivity (``quest_schedule.py``) and the order of goals is the hub's Prioritization.
 
 Split out of ``autopilot.py`` by definition; that module re-exports every name here.
 """
@@ -7,9 +9,14 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
+import quest_ai_runner
+from hubofhubs.api import ordered_ids
+
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client import _PERIOD_RE as _GOAL_PERIOD_RE
-from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone
-from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import DEFAULT_LADDER_PER_SCOPE, _CADENCE_DAYS, _SCOPE_ORDER, _goal_name
+from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import DEFAULT_LADDER_PER_SCOPE, _SCOPE_ORDER, _goal_name
+
+# A ladder rung is named by Quest's period scope; Prioritization's goal horizons are named the way a person says them ("today", not "day").
+_LADDER_HORIZONS = {"day": "today", "week": "week", "month": "month", "quarter": "quarter", "year": "year"}
 
 
 def _truthy(value: Any) -> bool:
@@ -36,99 +43,6 @@ def _parse_dt(raw: Any) -> Optional[datetime]:
         return dt
     except ValueError:
         return None
-
-
-def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime, tz: Optional[str] = None) -> bool:
-    """Whether a quest's cadence gate is DUE (True) or should skip this pass (False).
-
-    Compared as CALENDAR periods, not elapsed time: "daily" means a pass has not run yet TODAY,
-    not that 24 hours have elapsed. The elapsed-time reading silently loses days. The pass task
-    fires at a fixed wall-clock time, so if one pass runs late (a backed-up queue, a restart, a
-    manual run at noon), the next morning's pass is still inside the 24-hour window and skips
-    entirely -- and a "daily" quest quietly becomes every-other-day. Real case: a first pass ran at
-    16:11 and the following 06:00 pass would have been gated out.
-
-    Never run before (no ``last_pass_at``) is always due. An unparsable timestamp fails OPEN to
-    due -- a corrupt/missing stamp must never permanently wedge a quest as "not due yet".
-
-    ``tz`` (a quest's own ``run_timezone``) is the zone BOTH ``last_pass_at`` and ``now`` are
-    compared in. This is not a nicety: a 22:00 America/Los_Angeles run stamps ``last_pass_at`` at
-    about 05:00 UTC the NEXT UTC day. Compared as UTC days, the following day's pass looks like it
-    already ran "today" and the brief is skipped.
-
-    A missing or unresolvable ``tz`` degrades to the RUNNER'S OWN clock via
-    ``local_time.now_in_zone``, never to UTC -- the one degradation rule this repo has, stated in
-    ``local_time``'s module docstring and in the autopilot spec (A4). It used to degrade to UTC
-    here instead, and that cost a real brief: this quest set no ``run_timezone``, an evening
-    catch-up pass on a US/Pacific runner stamped 03:26Z the next UTC day, and the following
-    morning's pass was gated out as "already ran today". A calendar-day comparison against a zone
-    nobody lives in is not a safe default, so there is no longer a branch offering one.
-    """
-    last_pass = autopilot_cfg.get("last_pass_at")
-    if not last_pass:
-        return True
-    parsed = _parse_dt(last_pass)
-    if parsed is None:
-        return True
-    cadence = str(autopilot_cfg.get("cadence") or "weekly").strip().lower()
-    if cadence not in _CADENCE_DAYS:
-        cadence = "weekly"
-    then = now_in_zone(tz, parsed)
-    here = now_in_zone(tz, now)
-    if cadence == "daily":
-        return then.date() < here.date()
-    if cadence == "weekly":
-        return then.isocalendar()[:2] < here.isocalendar()[:2]
-    return (then.year, then.month) < (here.year, here.month)
-
-
-def run_requested(autopilot_cfg: Dict[str, Any]) -> bool:
-    """Whether a "Run now" request is PENDING for this quest.
-
-    Pending means ``run_requested_at`` is newer than ``last_pass_at`` -- the request has not yet
-    been answered by a pass. That comparison is the whole mechanism, and it is why the request
-    needs no separate clear: a finished pass stamps ``last_pass_at``, which makes the request older
-    and therefore spent. Nothing has to remember to reset a flag, so there is no state that can be
-    left stuck ON (a pass that runs forever) or stuck OFF (a request silently dropped).
-
-    Compared as INSTANTS in UTC, deliberately unlike ``cadence_due``'s calendar-day comparison:
-    "is this request newer than that pass" is a question about moments, so no timezone enters into
-    it. An unparsable ``run_requested_at`` is not pending (a corrupt stamp must not wedge a quest
-    into passing forever), while an unparsable ``last_pass_at`` leaves a real request pending --
-    both fail toward the behaviour the user last actually asked for.
-    """
-    requested = _parse_dt(autopilot_cfg.get("run_requested_at"))
-    if requested is None:
-        return False
-    last_pass = _parse_dt(autopilot_cfg.get("last_pass_at"))
-    return last_pass is None or requested > last_pass
-
-
-def has_new_ask_since(asks: List[Dict[str, Any]], last_pass_at: Optional[str]) -> bool:
-    """Whether any of ``asks`` (a quest's rows from ``QuestClient.list_asks``) landed AFTER
-    ``last_pass_at`` -- the whole predicate REACTIVE mode gates on (see ``_gate_quest``).
-
-    Never run before (no ``last_pass_at``) means anything at all counts as new: a reactive quest
-    that has never passed has nothing to compare against, and reads its first ask as due rather
-    than silently waiting for a second one to arrive.
-
-    Deliberately keyed on ``occurred_at`` (when the ask was actually made), not on the ledger's
-    bookkeeping fields (``state``, an internal update timestamp): the trigger this answers is "did
-    someone ask something new", and a person editing an old ask's classification or a run marking
-    one accepted is not that event. An ask with no parseable ``occurred_at`` is skipped rather than
-    treated as either always-new or never-new -- a malformed row must not itself decide the gate.
-
-    Pure and dependency-free like ``cadence_due``/``run_requested`` above, for the same reason:
-    directly unit-testable with no client or clock to fake.
-    """
-    since = _parse_dt(last_pass_at)
-    if since is None:
-        return bool(asks)
-    for ask in asks:
-        occurred = _parse_dt(ask.get("occurred_at"))
-        if occurred is not None and occurred > since:
-            return True
-    return False
 
 
 def _current_period_key(scope: str, now: datetime) -> Optional[str]:
@@ -269,14 +183,16 @@ def current_scope_label(goals_payload: Dict[str, Any], now: datetime) -> str:
     return "unscoped"
 
 
-def _ladder_order_key(goal: Dict[str, Any]) -> Tuple[int, str]:
-    """Sort key for one ladder rung: nearest deadline first, undated last.
+def _ordered_goals(goals: List[Dict[str, Any]], scope: str, now: datetime) -> List[Dict[str, Any]]:
+    """One rung's goals in the order the hub's Prioritization gives them (Quest's ordering arm): nearest deadline first, undated last.
 
-    Payload order breaks every tie, since ``sorted`` is stable -- so a horizon whose goals carry no
-    deadlines at all is listed exactly as the person's own plan lists them.
+    The order is not decided here. The payload's own order breaks every tie, so a horizon whose goals carry no deadlines at all is listed exactly as the
+    person's own plan lists them.
     """
-    deadline = str(goal.get("deadline") or "").strip()
-    return (0, deadline) if deadline else (1, "")
+    candidates = [{"id": str(index), "kind": "goal", "horizon": _LADDER_HORIZONS.get(scope, ""), "deadline": str(goal.get("deadline") or "").strip()}
+                  for index, goal in enumerate(goals)]
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "now": now.isoformat()})
+    return [goals[int(place)] for place in ordered_ids(answer["ordered"])]
 
 
 def current_goal_ladder(goals_payload: Dict[str, Any], now: datetime,
@@ -322,7 +238,7 @@ def current_goal_ladder(goals_payload: Dict[str, Any], now: datetime,
         rung = by_scope.get(scope)
         if not rung or not rung["goals"]:
             continue  # a horizon with nothing current is omitted, not shown as empty
-        ordered = sorted(rung["goals"], key=_ladder_order_key)
+        ordered = _ordered_goals(rung["goals"], scope, now)
         shown = ordered[:limit]
         ladder.append({
             "scope": scope,

@@ -18,7 +18,11 @@ from __future__ import annotations
 
 import ast
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+
+import quest_ai_runner
+from hubofhubs.api import ordered_ids
 
 log = logging.getLogger("quest_ai_runner.autopilot")
 
@@ -58,11 +62,11 @@ def solutions_of(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def pick_solution(records: List[Dict[str, Any]]) -> Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]]:
     """``(solution, metric or None, why)`` for the Solution this run iterates, or None when there is no Solution.
 
-    A Solution with a milestone comes before one without (a milestone is the next priority to work, and a bare
-    strategy line is not one). Within that: a Solution with no Metric record (measuring it is the work), then one whose
-    Metric reads 'not yet measured', then the Metric measured longest ago. Ties keep the specification's own order."""
+    The order is the hub's Prioritization (Quest's ordering arm), asked with what each Solution carries: a Solution with a milestone comes before one without
+    (a milestone is the next priority to work, and a bare strategy line is not one); within that, a Solution with no Metric record comes first (measuring it is
+    the work), then one whose Metric reads 'not yet measured', then the Metric measured longest ago. Ties keep the specification's own order."""
     metrics = {r["recordId"]: r for r in records if r.get("type") == "metric" and r.get("recordId")}
-    ranked = []
+    candidates, found = [], []
     for index, sol in enumerate(solutions_of(records)):
         fields = sol.get("fields") or {}
         linked = [metrics[i] for i in _ids(fields.get("metric_ids")) if i in metrics]
@@ -74,11 +78,18 @@ def pick_solution(records: List[Dict[str, Any]]) -> Optional[Tuple[Dict[str, Any
         why = ("it has no Metric yet, so defining and measuring one is the work" if metric is None
                else "its Metric was never measured" if stamp == NEVER
                else f"its Metric was last measured {stamp[:10]}, the longest ago")
-        ranked.append(((not has_milestone, metric is not None, stamp, index), sol, metric, why))
-    if not ranked:
+        candidate = {"id": str(index), "kind": "solution-with-milestone" if has_milestone else "solution"}
+        if metric is None or stamp == NEVER:
+            candidate["rank"] = 0 if metric is None else 1
+        else:
+            candidate["last_nudged_at"] = stamp
+        candidates.append(candidate)
+        found.append((sol, metric, why))
+    if not candidates:
         return None
-    _, sol, metric, why = min(ranked, key=lambda row: row[0])
-    return sol, metric, why
+    stated = {"kind_order": ["solution-with-milestone", "solution"]}
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "stated": stated, "now": datetime.now(timezone.utc).isoformat()})
+    return found[int(ordered_ids(answer["ordered"])[0])]
 
 
 def _gaps(records: List[Dict[str, Any]]) -> List[str]:

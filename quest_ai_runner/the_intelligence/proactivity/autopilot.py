@@ -7,7 +7,7 @@ normal deep-run path). Each pass:
   1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in
      ``suggest``/``act``/``reactive``).
   2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, REACTIVE mode's own
-     "is there anything new to react to" check (see ``has_new_ask_since``), the roster's day
+     "is there anything new to react to" check (see ``quest_schedule.new_ask_since``), the roster's day
      rule (a quest whose roster names nobody for today does nothing at all today), and -- only
      where the deployment opts into backpressure -- an open autopilot-created task or an
      unresolved HOLD decision already sitting on the quest. By default neither of the last two
@@ -88,7 +88,7 @@ from quest_ai_runner.the_intelligence.mind.context_intake.reflections import Ref
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_PASS_KIND, DEFAULT_TEAM_DAILY_BUDGET, MAX_INSTRUCTIONS_CHARS, OPEN_TASK_STATUSES, log)
 from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import (
-    _parse_dt, current_goal_ladder, current_scope_label, has_new_ask_since, run_requested)
+    _parse_dt, current_goal_ladder, current_scope_label)
 from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import (
     PERSONA_HELD, default_persona_instructions_for, default_quest_instructions_for, persona_entries_on_duty, persona_instructions_for,
     resolve_persona, split_held_for_another_day)

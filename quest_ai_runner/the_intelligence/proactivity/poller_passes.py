@@ -9,8 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from datetime import date, timedelta
 
-from quest_ai_runner.the_intelligence.proactivity.autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, run_requested
-from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import pass_due, pending_work_for
+from quest_ai_runner.the_intelligence.proactivity.autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES
+from quest_ai_runner.the_intelligence.proactivity.autopilot_pending import pending_work_for
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import REQUESTED, due_trigger
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.bootstrap_reporter import (
     check_should_send_monthly_report, generate_bootstrap_report, get_corpus_stats, mark_report_sent)
@@ -199,7 +200,7 @@ class PassesMixin:
                 # ``_quest_pass_days``). Not read anywhere else in the snapshot today.
                 "personas": autopilot_cfg.get("personas") or [],
                 # Pending work the lane's config names for this quest (0 when none): the schedule
-                # reads it through the same ``pass_due`` the pass's own gate does.
+                # reads it through the same ``due_trigger`` the pass's own gate does.
                 "pending_work": (lambda p: p.count if p else 0)(pending_work_for(
                     quest_id, getattr(self.cfg, "autopilot_pending_work", None),
                     self.cfg.quest_folder_map)),
@@ -252,14 +253,14 @@ class PassesMixin:
     def _expected_quest_occurrence(self, entry: Dict[str, Any], *,
                                    honour_run_request: bool = True) -> Tuple[str, str]:
         """The catch-up formula (autopilot spec A3): ``today_in_tz`` if the quest's cadence is
-        due, else tomorrow -- computed from the exact SAME predicate ``cadence_due`` uses inside
-        the pass itself, so the schedule and the gate can never disagree. A late run therefore
+        due, else tomorrow -- computed from the exact SAME question the pass's own gate asks the hub's
+        Proactivity (``quest_schedule.due_trigger``), so the schedule and the gate can never disagree. A late run therefore
         never consumes the next day's occurrence (the corrected date comes from the clock and
         ``last_pass_at``, never from the previous occurrence's own date) and never produces two
-        briefs (once a pass has run today, this returns tomorrow, and ``cadence_due`` is a second,
+        briefs (once a pass has run today, this returns tomorrow, and the gate's own question is a second,
         independent guard inside the pass).
 
-        A pending "Run now" request (``run_requested``) overrides both halves: the date is today,
+        A pending "Run now" request (the ``requested`` trigger) overrides both halves: the date is today,
         and the time is pulled back to the current local time when ``run_time`` is still ahead of
         it, so the occurrence is due the moment the runner next looks instead of at a run_time
         that may be hours away (or already gone, which needs no pulling back). This is the whole
@@ -285,10 +286,10 @@ class PassesMixin:
         run_time = entry.get("run_time") or "00:00"
         now = self._now()
         today = today_in_zone(zone, now)
-        if honour_run_request and run_requested(entry):
+        trigger = due_trigger(entry, now, zone, int(entry.get("pending_work") or 0), honour_run_request=honour_run_request)
+        if trigger == REQUESTED:
             return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
-        expected_date = (today if pass_due(entry, now, zone, int(entry.get("pending_work") or 0))
-                         else today + timedelta(days=1))
+        expected_date = today if trigger else today + timedelta(days=1)
         allowed_days = _quest_pass_days(entry, expected_date)
         if allowed_days:
             expected_date = _next_allowed_date(expected_date, allowed_days)
@@ -568,8 +569,8 @@ class PassesMixin:
 
         # A pending "Run now" is honoured exactly ONCE, and this is the only place that decides it.
         #
-        # INCIDENT (2026-09-21, 410 passes on one quest in 19 hours). ``run_requested``'s contract
-        # is that the request clears itself: "a finished pass stamps last_pass_at, which makes the
+        # INCIDENT (2026-09-21, 410 passes on one quest in 19 hours). a Run now request's contract
+        # (``quest_schedule.run_pending``) is that the request clears itself: "a finished pass stamps last_pass_at, which makes the
         # request older and therefore spent... there is no state that can be left stuck ON (a pass
         # that runs forever)". That is false for every path where the pass runs and SKIPS: a
         # gate-skipped quest returns before ``_update_pass_bookkeeping`` ever runs (see

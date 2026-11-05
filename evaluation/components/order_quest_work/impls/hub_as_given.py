@@ -1,4 +1,4 @@
-"""The hub's ``as_given`` arm of Prioritization, answering Quest's cases: the order given, the bound both ordering arms have to beat. Zero model calls."""
+"""ALTERNATIVE: the hub's ``as_given`` arm of Prioritization, answering Quest's cases: the order given, the bound both ordering arms have to beat. Zero model calls."""
 from hubofhubs.api import AssemblyConfig, assemble
 
 FOUNDATION_ARMS = {"hub_cases": "as_given"}

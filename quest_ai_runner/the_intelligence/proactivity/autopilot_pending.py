@@ -10,7 +10,7 @@ Drive client and the file's writer already computes exactly the pending set.
 File contract: a Markdown table (header row, separator row, one row per pending item). Anything
 else, including a sentence saying nothing is pending, counts as zero.
 
-Pending work makes a quest due at most once per day (see ``pass_due``): the count is a reason to
+Pending work makes a quest due at most once per day (``quest_schedule.due_trigger`` writes it as a daily schedule for the hub's Proactivity): the count is a reason to
 look, not a licence to loop while the work waits to be done.
 """
 from __future__ import annotations
@@ -22,7 +22,6 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import log
-from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import cadence_due
 
 _SEPARATOR_CELL = re.compile(r"^:?-{1,}:?$")
 
@@ -80,15 +79,3 @@ def pending_work_for(quest_id: str, specs: Optional[Dict[str, Any]],
         return None
     return PendingWork(count=count, label=str(spec.get("label") or "items awaiting work"),
                        source=path)
-
-
-def pass_due(autopilot_cfg: Dict[str, Any], now: datetime, tz: Optional[str],
-             pending: int = 0) -> bool:
-    """``cadence_due``, except that pending work makes the quest due once per day at least.
-
-    One predicate for the gate inside the pass and the schedule that decides which day to create
-    the pass for, so the two cannot disagree (the same promise ``cadence_due`` already keeps).
-    """
-    if pending > 0:
-        autopilot_cfg = {**autopilot_cfg, "cadence": "daily"}
-    return cadence_due(autopilot_cfg, now, tz=tz)

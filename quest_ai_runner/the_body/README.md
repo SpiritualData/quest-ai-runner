@@ -115,6 +115,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Chat conversation reader | `quest-context:google_chat` | [quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py](../the_world/tools/connected_system_operations/google_chat_adapter.py) |  |
 | Local file tree reader | `quest-context:files` | [quest_ai_runner/the_world/tools/file_reading/files_adapter.py](../the_world/tools/file_reading/files_adapter.py) |  |
 | Remote file server reader | `quest-context:remote_files_adapter` | [quest_ai_runner/the_world/tools/file_reading/remote_files_adapter.py](../the_world/tools/file_reading/remote_files_adapter.py) |  |
+| Quest events | `intake-sources:quest_events` | [quest_ai_runner/the_body/intake_sources/quest_events.py](intake_sources/quest_events.py) |  |
 | Registry of built-in and host resolvers | `quest-context:note` | [quest_ai_runner/the_body/configuration/config_assembler.py](configuration/config_assembler.py) |  |
 
 ### Metrics

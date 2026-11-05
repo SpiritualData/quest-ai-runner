@@ -554,7 +554,7 @@ def test_every_team_is_served_by_one_owner_scoped_read_per_scan():
 # --- a pending "Run now" is served ONCE (2026-09-21 incident) --------------------------------------
 #
 # 410 "Autopilot pass" series on ONE quest in 19 hours, one every ~2.6 minutes, each a real deep
-# run. ``run_requested`` promises the request clears itself ("a finished pass stamps last_pass_at,
+# run. ``quest_schedule.run_pending`` promises the request clears itself ("a finished pass stamps last_pass_at,
 # which makes the request older and therefore spent... there is no state that can be left stuck ON
 # (a pass that runs forever)"). It does not hold for a pass that runs and SKIPS: a gate-skipped
 # quest returns before any bookkeeping, so last_pass_at never moves and the request stays pending

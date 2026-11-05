@@ -1,4 +1,4 @@
-"""The hub's own ``stated_fields`` arm of Prioritization, answering Quest's cases: the alternative the Quest arm has to beat. It reads only the fields any
+"""ALTERNATIVE: the hub's own ``stated_fields`` arm of Prioritization, answering Quest's cases: the alternative the Quest arm has to beat. It reads only the fields any
 data carries, so a rule only Quest's data has (a person's rank map, a goal's horizon) is not found. Zero model calls."""
 from hubofhubs.api import AssemblyConfig, assemble
 

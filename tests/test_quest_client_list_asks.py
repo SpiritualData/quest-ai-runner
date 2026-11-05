@@ -1,4 +1,4 @@
-"""QuestClient.list_asks -- feeds Autopilot's REACTIVE-mode gate (see has_new_ask_since /
+"""QuestClient.list_asks -- feeds Autopilot's REACTIVE-mode gate (see quest_schedule.new_ask_since /
 _gate_quest in runner/autopilot.py): whether a quest has anything new to react to since its last
 pass. Must never raise. A failed read returns ``None``, kept distinct from a successful read of
 nothing (``[]``), so the gate can fail OPEN (run the pass) rather than reading a transient error

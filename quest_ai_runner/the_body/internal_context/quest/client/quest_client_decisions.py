@@ -252,7 +252,7 @@ class DecisionsMixin:
 
     def list_asks(self, *, quest_id: str, limit: int = 50) -> Optional[List[Dict[str, Any]]]:
         """GET /api/asks?quest_id=... -- every tracked ask on this quest, for Autopilot's
-        REACTIVE-mode gate (see ``autopilot.has_new_ask_since``): a quest in that mode makes its
+        REACTIVE-mode gate (see ``quest_schedule.new_ask_since``): a quest in that mode makes its
         scheduled pass only when something has actually been asked of it since the last one.
 
         ``mine_only=false`` on purpose: the gate needs to see EVERY ask on the quest, not only

@@ -18,6 +18,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
+import quest_ai_runner
+from hubofhubs.api import ordered_ids
+
 from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import _parse_dt
 from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import (
     AWAITING_ACCEPTANCE, AWAITING_ANSWER, BLOCKED, IN_FORCE, IN_PROGRESS, KIND_STANDING, KIND_UNKNOWN, OPEN_STATES)
@@ -178,6 +181,15 @@ def capped(lines: Iterable[str], limit: int) -> List[str]:
     return rows[:limit] + ([f"- +{len(rows) - limit} more"] if len(rows) > limit else [])
 
 
+def oldest_first(rows: List[Dict[str, Any]], now: datetime) -> List[Dict[str, Any]]:
+    """The open asks in the order the hub's Prioritization gives them (Quest's ordering arm): the oldest ask first."""
+    if len(rows) < 2:
+        return list(rows)
+    candidates = [{"id": str(index), "kind": "ask", "asked_at": str(row.get("occurred_at") or row.get("first_seen_at") or "")} for index, row in enumerate(rows)]
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "now": now.isoformat()})
+    return [rows[int(place)] for place in ordered_ids(answer["ordered"])]
+
+
 def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
                        decisions: Optional[List[Dict[str, Any]]] = None, *,
                        now: Optional[datetime] = None,
@@ -190,8 +202,7 @@ def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
     if asks is None:
         return ""
     when = now or datetime.now(timezone.utc)
-    owed = sorted((r for r in asks if is_owed(r)),
-                  key=lambda r: str(r.get("occurred_at") or r.get("first_seen_at") or ""))
+    owed = oldest_first([r for r in asks if is_owed(r)], when)
     rules = [r for r in asks if r.get("kind") == KIND_STANDING and r.get("state") == IN_FORCE]
     if not owed and not rules:
         return ""

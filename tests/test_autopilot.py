@@ -16,9 +16,16 @@ from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_WORK_KIND, BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS, DEFAULT_ASSISTANT_REP_ID)
 from quest_ai_runner.the_intelligence.proactivity.autopilot import (
     DEFAULT_TEAM_DAILY_BUDGET, AutopilotPass, current_scope_label, default_persona_instructions_for, default_quest_instructions_for,
-    has_new_ask_since, run_requested, compose_batch_text, persona_instructions_for, resolve_persona)
+    compose_batch_text, persona_instructions_for, resolve_persona)
 from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import PERSONA_HELD, personas_on_duty, resolve_task_persona
-from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import cadence_due
+from quest_ai_runner.the_intelligence.proactivity.quest_schedule import due_trigger, new_ask_since, run_pending
+
+
+def is_due(autopilot_cfg, now, tz=None):
+    """Whether the hub's Proactivity says the quest's pass is due for these settings."""
+    return bool(due_trigger(autopilot_cfg, now, tz))
+
+
 # The client's OWN period formats, so the fake below accepts exactly what the real one accepts
 # instead of a shape invented here (the five quest-backend's period_utils parses).
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client import _PERIOD_RE
@@ -255,17 +262,17 @@ def test_budget_gate_ignores_tasks_created_on_a_different_day():
 # --- gate: cadence -----------------------------------------------------------------------------
 
 def test_cadence_due_true_when_never_run():
-    assert cadence_due({}, NOW) is True
+    assert is_due({}, NOW) is True
 
 
 def test_cadence_due_false_within_the_same_week():
     autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-10T09:00:00Z"}  # same ISO week
-    assert cadence_due(autopilot_cfg, NOW) is False
+    assert is_due(autopilot_cfg, NOW) is False
 
 
 def test_cadence_due_true_in_a_later_week():
     autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-01T09:00:00Z"}  # W27, NOW is W28
-    assert cadence_due(autopilot_cfg, NOW) is True
+    assert is_due(autopilot_cfg, NOW) is True
 
 
 def test_cadence_is_calendar_based_not_elapsed_time():
@@ -276,24 +283,24 @@ def test_cadence_is_calendar_based_not_elapsed_time():
     24-hour window, so it skips, and a daily quest quietly becomes every-other-day. The real case
     that surfaced this: a pass ran at 16:11 and the following 06:00 pass was gated out."""
     late_yesterday = {"cadence": "daily", "last_pass_at": "2026-07-11T16:11:00Z"}
-    assert cadence_due(late_yesterday, NOW) is True        # 16.8 hours elapsed, but a NEW DAY
-    assert cadence_due({"cadence": "daily", "last_pass_at": "2026-07-12T08:00:00Z"}, NOW) is False
+    assert is_due(late_yesterday, NOW) is True        # 16.8 hours elapsed, but a NEW DAY
+    assert is_due({"cadence": "daily", "last_pass_at": "2026-07-12T08:00:00Z"}, NOW) is False
     # Monthly is likewise once per calendar month, not every 30 days.
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-06-20T09:00:00Z"}, NOW) is True
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-07-01T09:00:00Z"}, NOW) is False
+    assert is_due({"cadence": "monthly", "last_pass_at": "2026-06-20T09:00:00Z"}, NOW) is True
+    assert is_due({"cadence": "monthly", "last_pass_at": "2026-07-01T09:00:00Z"}, NOW) is False
 
 
 def test_cadence_across_a_year_boundary():
     """Comparing (year, month) or the ISO (year, week) pair, never the bare month or week number,
     which would read December as later than the following January and wedge the quest for a year."""
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2025-12-31T09:00:00Z"},
+    assert is_due({"cadence": "monthly", "last_pass_at": "2025-12-31T09:00:00Z"},
                        datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)) is True
-    assert cadence_due({"cadence": "weekly", "last_pass_at": "2025-12-29T09:00:00Z"},
+    assert is_due({"cadence": "weekly", "last_pass_at": "2025-12-29T09:00:00Z"},
                        datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)) is True
 
 
 def test_cadence_unparsable_timestamp_fails_open_to_due():
-    assert cadence_due({"cadence": "weekly", "last_pass_at": "not-a-date"}, NOW) is True
+    assert is_due({"cadence": "weekly", "last_pass_at": "not-a-date"}, NOW) is True
 
 
 def test_cadence_due_with_tz_reads_the_evening_run_in_its_own_local_day():
@@ -306,7 +313,7 @@ def test_cadence_due_with_tz_reads_the_evening_run_in_its_own_local_day():
     """
     autopilot_cfg = {"cadence": "daily", "last_pass_at": "2026-08-21T05:00:00Z"}
     now = datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc)  # 2026-08-21T13:00 America/Los_Angeles
-    assert cadence_due(autopilot_cfg, now, tz="America/Los_Angeles") is True
+    assert is_due(autopilot_cfg, now, tz="America/Los_Angeles") is True
 
 
 def test_cadence_due_without_tz_uses_the_runner_clock_not_utc(monkeypatch):
@@ -322,11 +329,11 @@ def test_cadence_due_without_tz_uses_the_runner_clock_not_utc(monkeypatch):
     now = datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc)
     monkeypatch.setenv("TZ", "America/Los_Angeles")
     time.tzset()
-    assert cadence_due(autopilot_cfg, now, tz=None) is True
+    assert is_due(autopilot_cfg, now, tz=None) is True
     # ...and an unresolvable zone name degrades down the same path rather than to UTC. (The name
     # is unique to this test on purpose: local_time's warn-once set is process-global, so reusing
     # another test's bad name would swallow the warning it asserts on.)
-    assert cadence_due(autopilot_cfg, now, tz="Not/ACadenceZone") is True
+    assert is_due(autopilot_cfg, now, tz="Not/ACadenceZone") is True
 
 
 def test_gate_skips_quest_whose_cadence_is_not_due():
@@ -340,34 +347,34 @@ def test_gate_skips_quest_whose_cadence_is_not_due():
                                "reason": "cadence not due yet"}]
 
 
-# --- has_new_ask_since (pure) ------------------------------------------------------------------
+# --- new_ask_since (the reactive trigger, the hub's Proactivity over Quest's events) ------------------------------------------------------------------
 
-def test_has_new_ask_since_true_when_never_run_and_something_exists():
-    assert has_new_ask_since([{"occurred_at": "2026-01-01T00:00:00Z"}], None) is True
-
-
-def test_has_new_ask_since_false_when_never_run_and_nothing_exists():
-    assert has_new_ask_since([], None) is False
+def test_new_ask_since_true_when_never_run_and_something_exists():
+    assert new_ask_since([{"occurred_at": "2026-01-01T00:00:00Z"}], None) is True
 
 
-def test_has_new_ask_since_true_for_an_ask_after_the_last_pass():
+def test_new_ask_since_false_when_never_run_and_nothing_exists():
+    assert new_ask_since([], None) is False
+
+
+def test_new_ask_since_true_for_an_ask_after_the_last_pass():
     asks = [{"occurred_at": "2026-07-05T00:00:00Z"}]
-    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is True
+    assert new_ask_since(asks, "2026-07-01T00:00:00Z") is True
 
 
-def test_has_new_ask_since_false_for_an_ask_before_the_last_pass():
+def test_new_ask_since_false_for_an_ask_before_the_last_pass():
     asks = [{"occurred_at": "2026-06-20T00:00:00Z"}]
-    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is False
+    assert new_ask_since(asks, "2026-07-01T00:00:00Z") is False
 
 
-def test_has_new_ask_since_ignores_an_ask_with_no_parseable_timestamp():
+def test_new_ask_since_ignores_an_ask_with_no_parseable_timestamp():
     asks = [{"occurred_at": None}, {"occurred_at": "not a date"}]
-    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is False
+    assert new_ask_since(asks, "2026-07-01T00:00:00Z") is False
 
 
-def test_has_new_ask_since_true_when_any_one_of_several_is_new():
+def test_new_ask_since_true_when_any_one_of_several_is_new():
     asks = [{"occurred_at": "2026-06-01T00:00:00Z"}, {"occurred_at": "2026-07-10T00:00:00Z"}]
-    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is True
+    assert new_ask_since(asks, "2026-07-01T00:00:00Z") is True
 
 
 # --- gate: reactive mode ----------------------------------------------------------------------
@@ -2021,16 +2028,16 @@ def test_run_requested_is_pending_only_while_newer_than_the_last_pass():
     flag needs someone to reset it, and whoever forgets leaves the quest either passing forever or
     silently ignoring the button.
     """
-    assert run_requested({}) is False
-    assert run_requested({"run_requested_at": "2026-07-12T09:00:00Z"}) is True   # never run
-    assert run_requested({"run_requested_at": "2026-07-12T09:00:00Z",
+    assert run_pending({}) is False
+    assert run_pending({"run_requested_at": "2026-07-12T09:00:00Z"}) is True   # never run
+    assert run_pending({"run_requested_at": "2026-07-12T09:00:00Z",
                           "last_pass_at": "2026-07-12T08:00:00Z"}) is True       # after the pass
-    assert run_requested({"run_requested_at": "2026-07-12T08:00:00Z",
+    assert run_pending({"run_requested_at": "2026-07-12T08:00:00Z",
                           "last_pass_at": "2026-07-12T09:00:00Z"}) is False      # already answered
     # A corrupt request stamp is not pending: it must not wedge the quest into passing forever.
-    assert run_requested({"run_requested_at": "not-a-date"}) is False
+    assert run_pending({"run_requested_at": "not-a-date"}) is False
     # A corrupt last_pass_at leaves a REAL request pending -- fail toward what the user asked for.
-    assert run_requested({"run_requested_at": "2026-07-12T09:00:00Z",
+    assert run_pending({"run_requested_at": "2026-07-12T09:00:00Z",
                           "last_pass_at": "not-a-date"}) is True
 
 
