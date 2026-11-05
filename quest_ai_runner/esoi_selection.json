@@ -298,7 +298,7 @@
   }
  },
  "model-plumbing": {
-  "default": "spec_registry",
+  "default": "via_vendor",
   "evidence": {
    "detail": "no rival implementation was measured on the same cases",
    "p": null,
@@ -568,6 +568,7 @@
    "verdict": "WIN"
   },
   "modules": {
+   "web_research": "quest_ai_runner.the_world.tools.web_search.web_research",
    "web_with_support_check": "quest_ai_runner.the_world.tools.web_search.area"
   }
  },
@@ -607,7 +608,7 @@
   }
  },
  "web-search": {
-  "default": "web_research",
+  "default": "gemini",
   "evidence": {
    "detail": "no rival implementation was measured on the same cases",
    "p": null,
@@ -620,8 +621,7 @@
    "provider_web_search": "quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter",
    "searxng": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
    "serper": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
-   "tavily": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
-   "web_research": "quest_ai_runner.the_world.tools.web_search.web_research"
+   "tavily": "quest_ai_runner.the_world.tools.web_search.web_search_backends"
   }
  }
 }

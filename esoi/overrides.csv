@@ -15,10 +15,8 @@ context-retriever,QP2;metric-choose-the-context
 intake-sources,metric-talk-over-a-channel
 delegated-agent-sessions,metric-run-deep-work
 file-editing,metric-write-files
-model-plumbing,metric-justified-model-spend
 planner,metric-route-a-message
 metric-translation,metric-draft-a-metric
 context-intake,metric-assemble-a-prompt
-web-search,metric-search-the-web
 goal-completion,metric-judge-a-decision
 response-quality,metric-guard-a-reply

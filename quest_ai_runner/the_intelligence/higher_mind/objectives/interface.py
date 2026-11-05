@@ -14,6 +14,7 @@ class IntentHolding(typing.Protocol):
     def hold(self, quest_id: str, message: str = "") -> Mapping[str, Any]: ...
 
 
+@solution("guidance", kind="event", entry="frame", example="quest-id")
 @typing.runtime_checkable
 class IntentGrounding(typing.Protocol):
     """Ties work to its purpose: the frame of the person's intent a quest sits under, from the ids Quest holds."""

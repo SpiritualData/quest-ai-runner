@@ -6,7 +6,7 @@ each built on first use) and ``record_run(run)`` (the run record, kept in the ru
 ``read(rel_path)``: the part of a source the host's retrieval adapter returns, as it is now. The members are the cards a quest keeps
 (``persist-cards``), the host's reads (``gather-evidence``, the retrieval adapter), the Quest account (``access-quest-operations``) and the
 operations on it (``operate-a-quest``), the changes the AI makes to files (``write-files``), what it claims it can reach
-(``claim-reach``), the queued tasks it runs (``run-queued-tasks``) and the goals it takes over from a person (``hand-off-a-goal``).
+(``claim-reach``), and the queued tasks it runs (``run-queued-tasks``).
 Members the line does not need are built on first use.
 """
 from __future__ import annotations
@@ -32,9 +32,9 @@ from quest_ai_runner.the_intelligence.mind.planner.message_routing import route_
 from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.interface import RoutedModelCalling
 from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import choose_assignee, make_judge
 from quest_ai_runner.the_consciousness.request_intake.poller import Poller
-from quest_ai_runner.the_body.hands.quest_operations.interface import GoalHandingOff, QuestOperating
+from quest_ai_runner.the_body.hands.quest_operations.interface import QuestOperating
 from quest_ai_runner.the_consciousness.request_intake.interface import QueueRunning
-from quest_ai_runner.the_body.internal_context.card_store.interface import CardPersisting
+from quest_ai_runner.the_body.internal_context.card_store.interface import CardKeeping
 from quest_ai_runner.the_world.tools.file_editing.interface import FileWriting
 from quest_ai_runner.the_body.hands.quest_operations.interface import ReachClaiming
 
@@ -122,12 +122,12 @@ class CardAndReads:
     source as it is now; the other methods hand a request to the member that owns that part of the body."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, cards: Lazy[CardPersisting], evidence: Lazy[RetrievalAdapter], operations: Lazy[QuestOperating],
+    def __init__(self, cards: Lazy[CardKeeping], evidence: Lazy[RetrievalAdapter], operations: Lazy[QuestOperating],
                  reach: Lazy[ReachClaiming], files: Lazy[FileWriting], quest: QuestOperations, queue: Lazy[QueueRunning],
-                 handoff: Lazy[GoalHandingOff], internal: Lazy[InternalContexting], intake: Lazy[IntakeSourcing],
+                 internal: Lazy[InternalContexting], intake: Lazy[IntakeSourcing],
                  hands: Lazy[Connecting]) -> None:
         self.cards, self.evidence, self.operations, self.reach = cards, evidence, operations, reach
-        self.files, self.quest, self.queue, self.handoff = files, quest, queue, handoff
+        self.files, self.quest, self.queue = files, quest, queue
         self.form = BodyComposition(internal, intake, hands)
 
     def describe(self, person: str = "") -> Mapping[str, Any]:
@@ -140,7 +140,7 @@ class CardAndReads:
         return self.evidence.read_section(rel_path)
 
     def card(self, card_id: str) -> Optional[Dict[str, Any]]:
-        return self.cards.read(card_id)
+        return self.cards.get(card_id)
 
     def goals(self, quest_id: str) -> Any:
         return self.quest.list_quest_goals(quest_id)
@@ -156,6 +156,3 @@ class CardAndReads:
 
     def run_queue(self, team_id: str = "") -> List[str]:
         return self.queue.scan(team_id)
-
-    def assign(self, goal: Mapping[str, Any]) -> Mapping[str, Any]:
-        return self.handoff.assign(goal)

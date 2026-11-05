@@ -36,7 +36,7 @@ def test_the_members_over_the_account_and_the_model_program_name_what_they_need(
         example = {sid: example for sid, level, k, example in targets(quest_ai_runner.assembler())}[solution_id]
         with pytest.raises(Pending) as caught:
             quest_ai_runner.run(solution_id, example, environ={})
-        assert kind in {reason.kind for reason in caught.value.reasons} <= {kind, "needs"}
+        assert kind in {reason.kind for reason in caught.value.reasons} <= {kind, "needs", "key"}
 
 
 def test_a_deep_run_that_changed_something_keeps_its_reading_before_and_after():

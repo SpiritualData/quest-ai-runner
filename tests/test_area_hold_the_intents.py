@@ -5,8 +5,7 @@ from esoi import Pending, targets
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import IntentHolding
 
-AREA_IDS = ("quest-intents", "long-term-memory", "long-term-memory", "feedback-learning", "feedback-learning",
-            "the-intuition", "quest-representatives", "guidance")
+AREA_IDS = ("quest-intents", "long-term-memory", "feedback-learning", "the-intuition", "quest-representatives")
 
 
 def strict_outcome(solution_id):
@@ -94,14 +93,9 @@ class Conversations:
 
 def test_the_area_reads_each_store_for_one_request_and_hands_the_other_lines_to_their_members():
     area = quest_ai_runner.run(IntentHolding, environ={}, provided={
-        "long-term-memory": Recent(), "feedback-learning": Guidance(), "feedback-learning": Ledger(),
-        "the-intuition": Predictions(), "quest-representatives": Reps(), "guidance": Directive(),
-        "long-term-memory": Conversations()})
+        "long-term-memory": Conversations(), "feedback-learning": Ledger(), "the-intuition": Predictions(), "quest-representatives": Reps()})
     held = area.hold("quest-1", "plan the week")
-    assert held["recent"][0]["scope"] == "quest-1"
-    assert held["guidance"] == ["applies to: plan the week (3)"]
     assert held["owed"] == ["owed"] and held["standing"] == ["always cite the source"]
     assert held["predictions"] == ["next: weekly review"]
     assert area.rep({"assignee_rep_id": "rep-1"}) == ("rep-1", "skills/rep")
-    assert area.directive("hello") == "name the next milestone"
     assert area.conversation("c1", "what next") == "c1: what next"

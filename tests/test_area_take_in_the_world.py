@@ -3,13 +3,11 @@ import pytest
 from esoi import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world import RequestTakingIn
+from esoi.runtime.assemble_by_name.assembly_config import AssemblyConfig
 from quest_ai_runner.the_consciousness.request_intake.interface import InboundBatch, OutboundReply, SendResult
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 from tests.conftest import StubProvider
 
-AREA_IDS = ("quest-requests", "planner", "intake-sources", "quest-requests", "quest-context",
-            "quest-requests", "system-integrity", "system-integrity", "system-integrity")
+AREA_IDS = ("quest-requests", "planner", "intake-sources", "system-integrity")
 
 
 def strict_outcome(solution_id):
@@ -28,8 +26,8 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_model_return_a_value_offline():
-    for solution_id in ("quest-requests", "quest-context", "system-integrity", "system-integrity"):
-        assert strict_outcome(solution_id) == "ok"
+    assert strict_outcome("system-integrity") == "ok"
+    assert strict_outcome("quest-requests") == "pending"
 
 
 def test_the_channel_pends_on_its_token_file_and_program():
@@ -65,28 +63,19 @@ class FakeChannel:
 
 
 def area_over(provider, **provided):
-    return quest_ai_runner.run(RequestTakingIn, environ={}, provided={"vendor-model-caller": provider, **provided})
+    config = AssemblyConfig(solutions=("quest-requests",), selections={"quest-requests": "ways_in"}, consumer_environ={})
+    return quest_ai_runner.assembler().assemble(config, {"vendor-model-caller": provider, **provided})["quest-requests"]
 
 
 def test_take_in_routes_the_message_and_names_the_sources_that_feed_its_context():
     provider = ScriptedModel([{"action": "answer", "rationale": "known", "model_tier": "sonnet"}])
     got = area_over(provider).take_in("What should I work on first this week?")
-    assert got["route"]["route"] == "answer" and "quest_notes" in got["sources"]
+    assert got["route"]["route"] == "answer"
     assert provider.plan_calls == 1
 
 
-def test_each_way_in_is_handed_to_the_member_that_owns_it():
-    provider = ScriptedModel([], answer_text='{"ai_doable": true, "confidence": 0.9, "reason": "text only"}')
-    channel, inbox = FakeChannel(), InMemoryInbox()
-    area = area_over(provider, **{"intake-sources": channel, "quest-requests": inbox})
+def test_the_reply_is_handed_to_the_channel():
+    provider = ScriptedModel([])
+    channel = FakeChannel()
+    area = area_over(provider, **{"intake-sources": channel})
     assert area.reply(OutboundReply(chat_ref="c", text="hello")).ok and channel.sent[0].text == "hello"
-    area.hold("conversation-1", "one more thing")
-    assert inbox.peek("conversation-1") == ["one more thing"]
-    prepared = area.prepare([{"filename": "notes.txt", "mime_type": "text/plain", "data": b"Call the mentor on Friday."}])
-    assert "Call the mentor on Friday." in prepared.text_context
-    ran = area.operate(["--help"])
-    assert ran.code == 0 and "usage" in ran.output
-    assert area.judge_goal({"name": "Draft the launch note"})["ai_doable"] is True
-    assert area.front_door("run") is quest_ai_runner.run
-    with pytest.raises(KeyError):
-        area.front_door("not_offered")

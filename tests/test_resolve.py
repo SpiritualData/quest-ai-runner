@@ -92,7 +92,7 @@ def test_register_adds_an_implementation_of_the_consumers_own():
     register("web-search", "mine", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
     assert "mine" in names("web-search")
     assert resolve("web-search", "mine").__name__ == "BraveBackend"
-    assert default_name("web-search") == "web_research"
+    assert default_name("web-search") == "gemini"
     assert resolve("web-search", overrides={"web-search": "mine"}).__name__ == "BraveBackend"
 
 
@@ -203,7 +203,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
         "import quest_ai_runner.the_self.assembler.resolve as r\n"
         f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
         "assert r.default_name('vendor-model-caller') == 'multi_provider'\n"
-        "assert r.resolve('web-search').__name__ == 'WebResearchAdapter'\n"
+        "assert r.resolve('the-science', 'web_research').__name__ == 'WebResearchAdapter'\n"
         "assert r.resolve('card-store', 'file').__name__ == 'FileCardCache'\n"
         "assert r.resolve('delegated-agent-sessions', 'acp').__name__ == 'AcpDeepRunner'\n"
     )

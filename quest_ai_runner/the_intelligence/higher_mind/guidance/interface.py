@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from esoi import solution
 import typing
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
@@ -75,7 +74,6 @@ class GuidanceProvider(Protocol):
         ``meta`` carries the caller's scope (e.g. user/team/quest ids). Never raises."""
 
 
-@solution("guidance", kind="event", entry="directive", example="What should I work on first this week?")
 @typing.runtime_checkable
 class LongTermGuiding(typing.Protocol):
     """Points a reply at the quest's next milestone and its current reading, or holds back: the directive a reply is written under."""

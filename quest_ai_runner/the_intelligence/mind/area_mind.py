@@ -17,17 +17,16 @@ from typing import Any, Callable, List, Mapping, Optional, Sequence
 from esoi import implementation
 from esoi import Lazy
 from hubofhubs.api import ModelCalling
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.interface import RoutedModelCalling
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import HUB_TIER_OF
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.interface import RegistryTierSelection
-from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import InterimDecision, InterimPolicy, InterimState
 from quest_ai_runner.the_intelligence.mind.planner.recipes import Recipe, RecipeStore
 from quest_ai_runner.the_intelligence.mind.response_writer.work_trace import WorkShowing
 from quest_ai_runner.the_self.loop_wiring import orchestrator_over
 from quest_ai_runner.the_self.interface import GoalAnswer
 from quest_ai_runner.the_intelligence.mind.planner.message_routing import route_message
-from quest_ai_runner.the_intelligence.mind.planner.interface import OperationReplaying, PromptAssembling
-from quest_ai_runner.the_intelligence.mind.interface import EndToEnd, MlTasks, TurnAnswering
+from quest_ai_runner.the_intelligence.mind.planner.interface import PromptAssembling
 
 
 class PromptCapture:
@@ -129,16 +128,15 @@ class RebuiltPerStep:
     part of a step."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, prompts: Lazy[PromptAssembling], tiers: Lazy[RegistryTierSelection], turns: TurnAnswering, replays: Lazy[OperationReplaying],
-                 labels: Lazy[MlTasks], whole: Lazy[EndToEnd], steps: Lazy[InterimPolicy], work: Lazy[WorkShowing]) -> None:
-        self.prompts, self.tiers, self.turns = prompts, tiers, turns
-        self.replays, self.labels, self.whole, self.steps, self.work = replays, labels, whole, steps, work
+    def __init__(self, provider: RoutedModelCalling, prompts: Lazy[PromptAssembling], tiers: Lazy[RegistryTierSelection],
+                 work: Lazy[WorkShowing]) -> None:
+        self.provider, self.prompts, self.tiers, self.work = provider, prompts, tiers, work
 
     def think(self, request: str, authority: Optional[Mapping[str, Any]] = None, target: Optional[Mapping[str, Any]] = None,
               guidance: Optional[Mapping[str, Any]] = None, profile: Optional[Any] = None, prepared: Optional[Mapping[str, Any]] = None,
               unmet: Optional[Mapping[str, Any]] = None, outside: Optional[Mapping[str, Any]] = None, budget: Optional[Any] = None,
               cancelled: Optional[Callable[[], bool]] = None) -> Mapping[str, Any]:
-        answer = self.turns.turn(request)
+        answer = turn_of(self.provider, request)
         return {"text": answer.text, "results": [{"piece": goal, "worker": "delegated-agent-sessions"} for goal in answer.ran],
                 "pieces": list(answer.ran), "steps": answer.steps, "kind": answer.kind, "exit_reason": answer.exit_reason,
                 "question": answer.question}
@@ -150,21 +148,6 @@ class RebuiltPerStep:
 
     def step_prompt(self, message: str) -> str:
         return self.prompts.assemble(message)
-
-    def turn(self, message: str) -> GoalAnswer:
-        return self.turns.turn(message)
-
-    def end_to_end(self, message: str) -> GoalAnswer:
-        return self.whole.answer(message)
-
-    def replayable(self, request: str) -> Sequence[Any]:
-        return self.replays.match(request)
-
-    def classify(self, message: str) -> str:
-        return self.labels.classify(message)
-
-    def interim(self, state: InterimState) -> InterimDecision:
-        return self.steps.decide(state)
 
     def trail(self, emit: Any, context_meta: Optional[Mapping[str, Any]]) -> Any:
         return self.work.start(emit, context_meta)

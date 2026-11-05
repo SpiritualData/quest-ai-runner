@@ -7,7 +7,6 @@ from esoi import solution
 from hubofhubs.api import ConversationStore
 
 
-@solution("long-term-memory", kind="event", entry="load", example="quest-id")
 @runtime_checkable
 class RecentContextStore(Protocol):
     """Scoped, per-card-and-item persistence of recently selected context. NEVER raises."""
@@ -22,6 +21,8 @@ class RecentContextStore(Protocol):
         narrower-scope-wins precedence (conv > quest > global)."""
 
 
+@solution("long-term-memory", kind="event", entry="current_slice",
+          example={"conv_id": "conversation-id", "query": "what did we decide about the launch?"})
 @typing.runtime_checkable
 class ConversationRemembering(ConversationStore, typing.Protocol):
     """The hub's conversation-history interface (``current_slice`` of this conversation, ``related_slices`` of the others) over the

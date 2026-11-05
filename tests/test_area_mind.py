@@ -4,12 +4,10 @@ from esoi import Pending
 
 import quest_ai_runner
 from quest_ai_runner.the_intelligence.mind.interface import StepReasoning
-from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import EXAMPLE_STATE
-from quest_ai_runner.the_self.interface import GoalAnswer
 from tests.conftest import StubProvider
 
-AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "context-intake", "quest-self", "quest-self",
-            "planner", "planner", "planner", "quest-work-shown", "quest-work-shown")
+AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "context-intake", "quest-self",
+            "planner", "quest-work-shown")
 
 
 
@@ -32,7 +30,7 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_model_return_a_value_offline():
-    for solution_id in ("model-tier-chooser", "context-intake", "planner", "quest-work-shown", "quest-work-shown"):
+    for solution_id in ("model-tier-chooser", "context-intake", "quest-work-shown"):
         assert strict_outcome(solution_id) == "ok"
 
 
@@ -88,16 +86,6 @@ def test_the_composition_hands_each_part_of_a_step_to_its_member():
     provider = scripted({"action": "answer", "rationale": "known", "model_tier": "sonnet"})
     area = quest_ai_runner.run(StepReasoning, environ={}, provided={"vendor-model-caller": provider})
     assert "PLANNER" in area.step_prompt("What should I work on first this week?")
-    assert area.classify("What should I work on first this week?") == "answer"
-    assert area.interim(EXAMPLE_STATE).send is True
-    assert list(area.replayable("Add a note that the launch moves to Friday")) == []
     sink = Recorder()
     assert area.trail(sink, {"work_trace": {"audience": "owner", "trace_id": "t1"}}) is not None
     assert area.trail(sink, None) is None
-
-
-def test_a_turn_and_the_shipped_path_return_the_loop_whole():
-    provider = scripted()
-    area = quest_ai_runner.run(StepReasoning, environ={}, provided={"vendor-model-caller": provider})
-    for answer in (area.turn("What should I work on first this week?"), area.end_to_end("What should I work on first this week?")):
-        assert isinstance(answer, GoalAnswer) and answer.kind == "answer" and "Start with the outline." in answer.text

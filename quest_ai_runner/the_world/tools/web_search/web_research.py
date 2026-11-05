@@ -27,7 +27,7 @@ class WebSearching(WorldKnowing, typing.Protocol):
     search backend and a focused read of one page."""
 
 
-@implementation("web-search", "web_research")
+@implementation("the-science", "web_research")
 class WebResearchAdapter(hub_research.WebResearchAdapter):
     """The hub's snippet-first search and focused page fetch, declared under QAR's solutions."""
 
