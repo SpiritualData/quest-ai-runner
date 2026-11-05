@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-consciousness:composition` o
 
 ## How the solutions fit together
 
-Quest Consciousness keeps the assistant aligned with the person it serves and helps their own intents move. Quest Requests takes each request in once, from every Quest surface. Quest Representatives resolves the representative a task is for from what Quest Requests took in. Hand Off A Goal says who a new goal belongs to and whether an AI can carry it. Quest Decision Requests carries a decision only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected. Guide By Feedback shows the corrections that apply on the turns where they matter. Prioritization puts the work that competes for attention in order for the person, in three uses with Quest's own rules: the standing work to start, the asks to put to the person and the person's goals at three levels (solution milestones, a quest's period goals, each one milestone of a solution, and the day's tasks). Intent Evolution suggests the option most likely to work for their intents.
+Quest Consciousness keeps the assistant aligned with the person it serves and helps their own intents move. Quest Requests takes each request in once, from every Quest surface. Quest Representatives resolves the representative a task is for from what Quest Requests took in. Hand Off A Goal says who a new goal belongs to and whether an AI can carry it. Quest Decision Requests carries a decision only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected. Guide By Feedback shows the corrections that apply on the turns where they matter. Prioritization puts the work that competes for attention in order for the person: Quest's arm calls the hub's for everything generic and adds only Quest's own rules, in three uses: the standing work to start, the asks to put to the person and the person's goals at three levels (solution milestones, a quest's period goals, each one milestone of a solution, and the day's tasks). Intent Evolution suggests the option most likely to work for their intents.
 
 ## Diagram
 
@@ -79,7 +79,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`)
 - Quest Consciousness on Quest cases (`metric-quest-consciousness`)
-- Quest's work in the order Quest's rules give (`metric-order-quest-work`): leader `quest_ordering`, 28 of 28 cases
+- Quest's work in the order Quest's rules give (`metric-order-quest-work`): leader `quest_ordering`, 46 of 54 cases
 
 ## Where to go next
 
