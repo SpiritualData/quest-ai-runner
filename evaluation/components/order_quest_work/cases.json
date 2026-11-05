@@ -1,0 +1,812 @@
+[
+ {
+  "id": "quest-cap-keeps-highest-priority",
+  "kind": "quest-list",
+  "origin": "rule: ranked quests keep their place, so a cap of fifty keeps the highest priority",
+  "source": "quest-backend tests/test_quest_ranking_all.py",
+  "args": {
+   "person": "u",
+   "candidates": [
+    {
+     "id": "q0",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 0
+    },
+    {
+     "id": "q1",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 1
+    },
+    {
+     "id": "q2",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 2
+    },
+    {
+     "id": "q3",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 3
+    },
+    {
+     "id": "q4",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 4
+    },
+    {
+     "id": "q5",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 5
+    },
+    {
+     "id": "q6",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 6
+    },
+    {
+     "id": "q7",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 7
+    },
+    {
+     "id": "q8",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 8
+    },
+    {
+     "id": "q9",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 9
+    },
+    {
+     "id": "q10",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 10
+    },
+    {
+     "id": "q11",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 11
+    },
+    {
+     "id": "q12",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 12
+    },
+    {
+     "id": "q13",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 13
+    },
+    {
+     "id": "q14",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 14
+    },
+    {
+     "id": "q15",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 15
+    },
+    {
+     "id": "q16",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 16
+    },
+    {
+     "id": "q17",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 17
+    },
+    {
+     "id": "q18",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 18
+    },
+    {
+     "id": "q19",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 19
+    },
+    {
+     "id": "q20",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 20
+    },
+    {
+     "id": "q21",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 21
+    },
+    {
+     "id": "q22",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 22
+    },
+    {
+     "id": "q23",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 23
+    },
+    {
+     "id": "q24",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 24
+    },
+    {
+     "id": "q25",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 25
+    },
+    {
+     "id": "q26",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 26
+    },
+    {
+     "id": "q27",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 27
+    },
+    {
+     "id": "q28",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 28
+    },
+    {
+     "id": "q29",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 29
+    },
+    {
+     "id": "q30",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 30
+    },
+    {
+     "id": "q31",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 31
+    },
+    {
+     "id": "q32",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 32
+    },
+    {
+     "id": "q33",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 33
+    },
+    {
+     "id": "q34",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 34
+    },
+    {
+     "id": "q35",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 35
+    },
+    {
+     "id": "q36",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 36
+    },
+    {
+     "id": "q37",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 37
+    },
+    {
+     "id": "q38",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 38
+    },
+    {
+     "id": "q39",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 39
+    },
+    {
+     "id": "q40",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 40
+    },
+    {
+     "id": "q41",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 41
+    },
+    {
+     "id": "q42",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 42
+    },
+    {
+     "id": "q43",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 43
+    },
+    {
+     "id": "q44",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 44
+    },
+    {
+     "id": "q45",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 45
+    },
+    {
+     "id": "q46",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 46
+    },
+    {
+     "id": "q47",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 47
+    },
+    {
+     "id": "q48",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 48
+    },
+    {
+     "id": "q49",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 49
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "q0",
+   "q1",
+   "q2",
+   "q3",
+   "q4",
+   "q5",
+   "q6",
+   "q7",
+   "q8",
+   "q9",
+   "q10",
+   "q11",
+   "q12",
+   "q13",
+   "q14",
+   "q15",
+   "q16",
+   "q17",
+   "q18",
+   "q19",
+   "q20",
+   "q21",
+   "q22",
+   "q23",
+   "q24",
+   "q25",
+   "q26",
+   "q27",
+   "q28",
+   "q29",
+   "q30",
+   "q31",
+   "q32",
+   "q33",
+   "q34",
+   "q35",
+   "q36",
+   "q37",
+   "q38",
+   "q39",
+   "q40",
+   "q41",
+   "q42",
+   "q43",
+   "q44",
+   "q45",
+   "q46",
+   "q47",
+   "q48",
+   "q49"
+  ]
+ },
+ {
+  "id": "quest-member-ranks-team-quest-above-own",
+  "kind": "quest-list",
+  "origin": "rule: a person's own entry in priority_by_user decides, whoever created the quest",
+  "source": "quest-backend tests/business/test_accessible_quests.py",
+  "args": {
+   "person": "member",
+   "candidates": [
+    {
+     "id": "member-quest",
+     "kind": "quest",
+     "owner": "member",
+     "rank_by_person": {
+      "member": 1
+     }
+    },
+    {
+     "id": "team-quest",
+     "kind": "quest",
+     "owner": "creator",
+     "rank_by_person": {
+      "member": 0
+     }
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "team-quest",
+   "member-quest"
+  ]
+ },
+ {
+  "id": "quest-unranked-after-ranked",
+  "kind": "quest-list",
+  "origin": "rule: ranked ascending first (0 is highest), unranked after in the order given",
+  "source": "quest-backend order_quests_by_user_priority",
+  "args": {
+   "person": "u",
+   "candidates": [
+    {
+     "id": "u1",
+     "kind": "quest",
+     "owner": "u"
+    },
+    {
+     "id": "r2",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 2
+    },
+    {
+     "id": "r0",
+     "kind": "quest",
+     "owner": "u",
+     "rank": 0
+    },
+    {
+     "id": "u2",
+     "kind": "quest",
+     "owner": "u"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "r0",
+   "r2",
+   "u1",
+   "u2"
+  ]
+ },
+ {
+  "id": "quest-legacy-rank-is-the-creators-only",
+  "kind": "quest-list",
+  "origin": "rule: the legacy priority of the quest model counts only for the quest's creator",
+  "source": "quest-backend order_quests_by_user_priority (field priority)",
+  "args": {
+   "person": "p",
+   "candidates": [
+    {
+     "id": "other-creators",
+     "kind": "quest",
+     "owner": "o",
+     "rank": 0
+    },
+    {
+     "id": "mine",
+     "kind": "quest",
+     "owner": "p",
+     "rank": 3
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "mine",
+   "other-creators"
+  ]
+ },
+ {
+  "id": "quest-own-entry-beats-legacy-rank",
+  "kind": "quest-list",
+  "origin": "rule: a person's own priority_by_user entry wins over the legacy priority",
+  "source": "quest-backend order_quests_by_user_priority (field priority_by_user)",
+  "args": {
+   "person": "p",
+   "candidates": [
+    {
+     "id": "y",
+     "kind": "quest",
+     "owner": "o",
+     "rank": 0,
+     "rank_by_person": {
+      "p": 5
+     }
+    },
+    {
+     "id": "x",
+     "kind": "quest",
+     "owner": "p",
+     "rank": 3
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "x",
+   "y"
+  ]
+ },
+ {
+  "id": "quest-work-asks-then-horizons-then-ideas",
+  "kind": "work-order",
+  "origin": "rule: open asks first, then goals of the shorter horizon, then the system's own ideas",
+  "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "i1",
+     "kind": "idea"
+    },
+    {
+     "id": "g-year",
+     "kind": "goal",
+     "horizon": "year"
+    },
+    {
+     "id": "g-today",
+     "kind": "goal",
+     "horizon": "today"
+    },
+    {
+     "id": "a1",
+     "kind": "ask"
+    },
+    {
+     "id": "g-week",
+     "kind": "goal",
+     "horizon": "week"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "a1",
+   "g-today",
+   "g-week",
+   "g-year",
+   "i1"
+  ]
+ },
+ {
+  "id": "quest-work-asks-keep-the-order-given",
+  "kind": "work-order",
+  "origin": "rule: asks keep the order they were given in",
+  "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-today",
+     "kind": "goal",
+     "horizon": "today"
+    },
+    {
+     "id": "a1",
+     "kind": "ask"
+    },
+    {
+     "id": "a2",
+     "kind": "ask"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "a1",
+   "a2",
+   "g-today"
+  ]
+ },
+ {
+  "id": "quest-work-month-before-quarter",
+  "kind": "work-order",
+  "origin": "rule: a month goal comes before a quarter goal",
+  "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-quarter",
+     "kind": "goal",
+     "horizon": "quarter"
+    },
+    {
+     "id": "g-month",
+     "kind": "goal",
+     "horizon": "month"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "g-month",
+   "g-quarter"
+  ]
+ },
+ {
+  "id": "quest-work-a-goal-before-an-idea",
+  "kind": "work-order",
+  "origin": "rule: a goal comes before an idea",
+  "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "i1",
+     "kind": "idea"
+    },
+    {
+     "id": "g-quarter",
+     "kind": "goal",
+     "horizon": "quarter"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "g-quarter",
+   "i1"
+  ]
+ },
+ {
+  "id": "quest-work-horizon-before-deadline",
+  "kind": "work-order",
+  "origin": "rule: the shorter horizon comes before the earlier deadline",
+  "source": "quest-ai-runner goal ladder (autopilot_periods)",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-week-late",
+     "kind": "goal",
+     "horizon": "week",
+     "deadline": "2026-07-18"
+    },
+    {
+     "id": "g-today",
+     "kind": "goal",
+     "horizon": "today",
+     "deadline": "2026-07-13"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "g-today",
+   "g-week-late"
+  ]
+ },
+ {
+  "id": "quest-ladder-nearest-deadline-first",
+  "kind": "goal-ladder",
+  "origin": "rule: inside a horizon the nearest deadline comes first",
+  "source": "quest-ai-runner tests/test_autopilot_goal_ladder.py",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "m20",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-20"
+    },
+    {
+     "id": "m19",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-19"
+    },
+    {
+     "id": "m18",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-18"
+    },
+    {
+     "id": "m17",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-17"
+    },
+    {
+     "id": "m16",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-16"
+    },
+    {
+     "id": "m15",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-15"
+    },
+    {
+     "id": "m14",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-14"
+    },
+    {
+     "id": "m13",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-13"
+    },
+    {
+     "id": "m12",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-12"
+    },
+    {
+     "id": "m11",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-11"
+    },
+    {
+     "id": "m10",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-10"
+    },
+    {
+     "id": "m9",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-09"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "m9",
+   "m10",
+   "m11",
+   "m12",
+   "m13",
+   "m14",
+   "m15",
+   "m16",
+   "m17",
+   "m18",
+   "m19",
+   "m20"
+  ]
+ },
+ {
+  "id": "quest-ladder-undated-last-in-plan-order",
+  "kind": "goal-ladder",
+  "origin": "rule: inside a horizon undated goals come last, in the order of the plan",
+  "source": "quest-ai-runner tests/test_autopilot_goal_ladder.py",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "m1",
+     "kind": "goal",
+     "horizon": "month"
+    },
+    {
+     "id": "m2",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-30"
+    },
+    {
+     "id": "m3",
+     "kind": "goal",
+     "horizon": "month"
+    },
+    {
+     "id": "m4",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-14"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "m4",
+   "m2",
+   "m1",
+   "m3"
+  ]
+ },
+ {
+  "id": "quest-asks-oldest-first",
+  "kind": "open-asks",
+  "origin": "rule: open asks come oldest first",
+  "source": "quest-ai-runner tests/test_quest_asks_brief.py",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "k_new",
+     "kind": "ask",
+     "asked_at": "2026-10-15T09:00:00Z"
+    },
+    {
+     "id": "k_open",
+     "kind": "ask",
+     "asked_at": "2026-10-12T12:00:00Z"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "k_open",
+   "k_new"
+  ]
+ }
+]

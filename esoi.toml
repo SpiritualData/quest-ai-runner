@@ -243,3 +243,18 @@ coverage = 1.0
 
 [rules.S39]
 enabled = true
+
+# Quest's ordering of its own work (metric-order-quest-work): ordering is a few comparisons in code that runs before every unasked pass, so one ordering is
+# worth at most a tenth of a cent and one second, the budgets of the hub's prioritization metric. The weights are the library's defaults and were fixed
+# before any arm was scored on these cases. The number BUILDS ON the hub's prioritization metric: the hub's invented, neutral cases carry half of it and
+# Quest's thirteen own cases (evaluation/components/order_quest_work/cases.json, each tagged with the Quest test or rule it came from) carry the rest.
+[balance.order_quest_work]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.001
+seconds_per_case = 1
+
+[builds_on.order_quest_work.hub_cases]
+repo = "../ai-hub-of-hubs-structure"
+component = "prioritization"
+share = 0.50
+arm_prefix = "hub_"
