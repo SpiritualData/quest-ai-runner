@@ -1,6 +1,10 @@
 {
  "@intents": {
   "intents": {
+   "context_retriever": {
+    "arm": "per_lane_assembly",
+    "root": "choose-the-context"
+   },
    "critical_thinking": {
     "arm": "deep_runs_only",
     "root": "critical-thinking"
@@ -8,6 +12,10 @@
    "integrity": {
     "arm": "structure-library",
     "root": "system-integrity"
+   },
+   "internal_context": {
+    "arm": "card_and_reads",
+    "root": "the-body"
    },
    "mind": {
     "arm": "rebuilt_per_step",
@@ -788,8 +796,8 @@
  "select-context": {
   "default": "blind_grep",
   "evidence": {
-   "detail": "beaten by hub_abstaining_hybrid, hub_bm25_body, hub_bm25_fielded, hub_dense_bge_small, hub_feature_rerank, hub_feature_rerank_no_priors, hub_hybrid_rrf, hub_learned_rerank: hub_abstaining_hybrid is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.06e-10, 185 of 185 cases disagree); blind_grep is better than hub_abstaining_learned (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=7.6e-07, 185 of 185 cases disagree); hub_bm25_body is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.62e-20, 185 of 185 cases disagree); hub_bm25_fielded is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.25e-18, 185 of 185 cases disagree); blind_grep is better than hub_bm25_whole_files (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.28e-06, 185 of 185 cases disagree); hub_dense_bge_small is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=5.7e-16, 185 of 185 cases disagree); hub_feature_rerank is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=5.61e-19, 185 of 185 cases disagree); hub_feature_rerank_no_priors is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=5.61e-19, 185 of 185 cases disagree); blind_grep leads hub_folder_cards (hub_folder_cards 0.348 against blind_grep 0.616; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.303, 185 of 185 cases disagree); hub_hybrid_rrf is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0159, 185 of 185 cases disagree); hub_learned_rerank is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.82e-11, 185 of 185 cases disagree); blind_grep is better than hub_lsi (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2e-15, 185 of 185 cases disagree); blind_grep is better than hub_per_file_symbols (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=6.66e-15, 185 of 185 cases disagree); blind_grep is better than hybrid_union (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.07e-17, 185 of 185 cases disagree); blind_grep is better than idf_docstrings (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.07e-17, 185 of 185 cases disagree); blind_grep is better than solutions_and_problems_with_links (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.62e-20, 185 of 185 cases disagree); blind_grep is better than vector_bge_small (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.05e-25, 185 of 185 cases disagree)",
-   "p": 0.0,
+   "detail": "beaten by hub_abstaining_hybrid, hub_bm25_body, hub_bm25_fielded, hub_dense_bge_small, hub_feature_rerank, hub_feature_rerank_no_priors, hub_hybrid_rrf, hub_learned_rerank: best guess, not yet significant: hub_abstaining_hybrid 0.645 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_abstaining_learned 0.575 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_bm25_body 0.66 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_bm25_fielded 0.691 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_bm25_whole_files 0.527 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_dense_bge_small 0.66 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_feature_rerank 0.728 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_feature_rerank_no_priors 0.721 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_folder_cards 0.348 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_hybrid_rrf 0.715 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_learned_rerank 0.63 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_lsi 0.607 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_per_file_symbols 0.43 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hybrid_union 0.503 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: idf_docstrings 0.503 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: solutions_and_problems_with_links 0.417 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: vector_bge_small 0.375 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
    "verdict": "LOSS"
   },
   "modules": {
