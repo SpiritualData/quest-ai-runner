@@ -109,3 +109,15 @@ Reading of the hub's scorer on QAR:
 - arm gaps (adopt or coexist areas no arm covers; research to build or connect, not missing bindings): 34 of 42
 - score: 0.821
 <!-- hub-table:end -->
+
+## Why the two anticipation drivers are not one entry through Proactivity
+
+Quest has two drivers of anticipation: the runner's `Anticipator` (a file store; it observes each turn and plans the context for the next ask) and the backend's
+twin (a database store, the chips shown in the chat and a warm precompute). They already share one pure learner and one store Protocol, and differ only in where
+the predictions are kept, so there is nothing left to unify between them in this repository.
+
+Neither is a job of the hub's Proactivity. Proactivity answers when standing work starts: a calendar period, a window of days and time of day, a requested run
+or an event. Anticipation answers what the person is likely to ask next, so that information is already in mind when they do ask, which is the hub's Intuition
+(`the-intuition`). The learner's time-of-day and day-of-week patterns predict an ask, they do not start work, and nothing it learns is acted on unasked. A learned
+schedule that started standing work would be a new Proactivity arm that reads the learner's patterns as events; it is not built, because no case shows a
+standing pass that a learned time beats the quest's stated one.
