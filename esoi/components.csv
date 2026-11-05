@@ -61,3 +61,11 @@ the-world-container,the_world,quest_ai_runner/the_world/__init__.py,The the worl
 the-consciousness-container,the_consciousness,quest_ai_runner/the_consciousness/__init__.py,The the consciousness container of QAR,quest-self
 package-folders,the_self,quest_ai_runner/the_body/hands/__init__.py;quest_ai_runner/the_intelligence/higher_mind/__init__.py;quest_ai_runner/the_intelligence/subconscious/__init__.py;quest_ai_runner/the_self/integrity/__init__.py;quest_ai_runner/the_world/model_plumbing/__init__.py;quest_ai_runner/the_body/area_body.py;quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py;quest_ai_runner/the_body/interface.py;quest_ai_runner/the_intelligence/subconscious/interface.py;quest_ai_runner/the_self/integrity/interface.py,Folders of QAR that hold only sub-folders,quest-self
 the-consciousness-intent-evolution,the_consciousness,quest_ai_runner/the_consciousness/intent_evolution/*.py,QAR's code for intent evolution (the consciousness),intent-evolution
+the-consciousness-flow,the_consciousness,quest_ai_runner/the_consciousness/flow.py,The composition of Quest Consciousness,quest-consciousness
+the-intelligence-flow,the_intelligence,quest_ai_runner/the_intelligence/flow.py,The composition of Intelligence,the-intelligence
+the-world-flow,the_world,quest_ai_runner/the_world/flow.py,The composition of World,the-world
+the-body-diagram,the_body,quest_ai_runner/the_body/diagram.md,The generated solution diagram of Quest Body,quest-body
+the-intelligence-diagram,the_intelligence,quest_ai_runner/the_intelligence/diagram.md,The generated solution diagram of Intelligence,the-intelligence
+the-intelligence-objectives-diagram,the_intelligence,quest_ai_runner/the_intelligence/higher_mind/objectives/diagram.md,The generated solution diagram of Quest Intents,quest-intents
+the-intelligence-subconscious-diagram,the_intelligence,quest_ai_runner/the_intelligence/subconscious/diagram.md,The generated solution diagram of Subconscious,the-subconscious
+the-consciousness-ways-in,the_consciousness,quest_ai_runner/the_consciousness/ways_in.py,"The ways a request comes in, handed to one router",quest-requests

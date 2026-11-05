@@ -17,7 +17,7 @@ from hubofhubs.api import scan
 from hubofhubs.api import PromptsAsData, config_share
 from hubofhubs.api import Staying
 
-PACKAGE_DIR = Path(__file__).resolve().parents[3]
+PACKAGE_DIR = Path(__file__).resolve().parents[1]
 
 
 

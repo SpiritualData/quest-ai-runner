@@ -46,12 +46,16 @@
     "root": "quest-account-truth"
    },
    "the_consciousness": {
+    "arm": "",
+    "root": "intent-evolution"
+   },
+   "the_intelligence": {
     "arm": "composition",
-    "root": "quest-consciousness"
+    "root": "the-intelligence"
    },
    "the_self": {
-    "arm": "library",
-    "root": "quest-self"
+    "arm": "",
+    "root": "model-plumbing"
    },
    "the_world": {
     "arm": "",
@@ -390,6 +394,12 @@
    "qar_orchestrator": "quest_ai_runner.the_body.area_body"
   }
  },
+ "quest-consciousness": {
+  "default": "composition",
+  "modules": {
+   "composition": "quest_ai_runner.the_consciousness.flow"
+  }
+ },
  "quest-context": {
   "default": "composite",
   "evidence": {
@@ -462,7 +472,7 @@
    "qar_runner": "quest_ai_runner.the_body.area_body",
    "quest_folder_sync": "quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync",
    "vision_description": "quest_ai_runner.the_intelligence.mind.context_intake.attachments",
-   "ways_in": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world"
+   "ways_in": "quest_ai_runner.the_consciousness.ways_in"
   }
  },
  "quest-self": {
@@ -533,8 +543,14 @@
    "package_front_doors": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world",
    "runtime_settings": "quest_ai_runner.the_body.configuration.runtime_settings",
    "store_cli": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.store_cli",
-   "structure-library": "quest_ai_runner.the_intelligence.critical_thinking.response_quality.area",
+   "structure-library": "quest_ai_runner.the_self.area_integrity",
    "tag_list_with_check": "scripts.esoi_tags"
+  }
+ },
+ "the-intelligence": {
+  "default": "composition",
+  "modules": {
+   "composition": "quest_ai_runner.the_intelligence.flow"
   }
  },
  "the-intuition": {
@@ -593,6 +609,12 @@
   "modules": {
    "coding_agent_prompt_reach": "quest_ai_runner.the_body.area_body",
    "coding_agent_reach_judge": "quest_ai_runner.the_intelligence.mind.planner.reach_judge"
+  }
+ },
+ "the-world": {
+  "default": "composition",
+  "modules": {
+   "composition": "quest_ai_runner.the_world.flow"
   }
  },
  "vendor-model-caller": {
