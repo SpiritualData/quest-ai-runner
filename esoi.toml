@@ -145,6 +145,12 @@ QI6 = "Cost and quality known before they surprise anyone: spend is a real const
 [parent]
 records = "../ai-hub-of-hubs-structure"
 
+# Solutions the hub defines are adopted by reference (`adopts` = @hub/<solution id> in a solutions.csv row) and the parts of them that need
+# Quest's data are specialized (`specializes`); see docs/how-to/adopt-a-solution-from-a-library.md in the esoi repository.
+[adopts.hub]
+repo = "../ai-hub-of-hubs-structure"
+url = "https://github.com/SpiritualData/ai-hub-of-hubs-structure/"
+
 [records]
 template_version = 4
 # Each solution's records live once, in the folder that holds its code (docs/reference/records-beside-code.md in the esoi repository).
