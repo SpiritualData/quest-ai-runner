@@ -556,7 +556,7 @@
    "any_of": {
     "ids": [
      [
-      "choose-a-model-tier",
+      "model-tier-chooser",
       "prob-big-model-for-easy-work",
       "prob-vendor-outage-halts-work",
       "prob-spend-surprises",
@@ -971,7 +971,7 @@
       "metric-route-a-message"
      ],
      [
-      "choose-a-model-tier",
+      "model-tier-chooser",
       "prob-big-model-for-easy-work",
       "prob-vendor-outage-halts-work",
       "prob-spend-surprises",

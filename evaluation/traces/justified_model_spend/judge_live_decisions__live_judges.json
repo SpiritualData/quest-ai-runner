@@ -58,7 +58,7 @@
    "cost_usd": 0.0003445999999999998,
    "critical_path": true,
    "seconds": 2.3757321320008487,
-   "spec_id": "act-in-the-world.reach-judge",
+   "spec_id": "claim-reach.reach-judge",
    "tokens_in": 1639,
    "tokens_out": 34,
    "turn": 7
@@ -67,7 +67,7 @@
    "cost_usd": 0.00034659999999999986,
    "critical_path": true,
    "seconds": 2.314288444991689,
-   "spec_id": "act-in-the-world.reach-judge",
+   "spec_id": "claim-reach.reach-judge",
    "tokens_in": 1639,
    "tokens_out": 38,
    "turn": 8
@@ -76,7 +76,7 @@
    "cost_usd": 0.00045949999999999984,
    "critical_path": true,
    "seconds": 3.1386688000056893,
-   "spec_id": "act-in-the-world.reach-judge",
+   "spec_id": "claim-reach.reach-judge",
    "tokens_in": 1646,
    "tokens_out": 261,
    "turn": 9
@@ -85,7 +85,7 @@
    "cost_usd": 0.00039289999999999985,
    "critical_path": true,
    "seconds": 2.2243526650127023,
-   "spec_id": "act-in-the-world.reach-judge",
+   "spec_id": "claim-reach.reach-judge",
    "tokens_in": 1643,
    "tokens_out": 129,
    "turn": 10
@@ -94,7 +94,7 @@
    "cost_usd": 0.0003449999999999998,
    "critical_path": true,
    "seconds": 2.297891318972688,
-   "spec_id": "act-in-the-world.reach-judge",
+   "spec_id": "claim-reach.reach-judge",
    "tokens_in": 1641,
    "tokens_out": 34,
    "turn": 11
@@ -103,7 +103,7 @@
    "cost_usd": 0.00034360000000000033,
    "critical_path": true,
    "seconds": 1.7961629479541443,
-   "spec_id": "act-in-the-world.reach-judge",
+   "spec_id": "claim-reach.reach-judge",
    "tokens_in": 1634,
    "tokens_out": 34,
    "turn": 12

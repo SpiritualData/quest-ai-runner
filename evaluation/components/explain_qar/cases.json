@@ -927,9 +927,9 @@
   "id": "DOC-067",
   "area": "links",
   "kind": "links",
-  "description": "evaluation/components/act_in_the_world/README.md: every relative link resolves",
+  "description": "evaluation/components/claim_reach/README.md: every relative link resolves",
   "args": {
-   "file": "evaluation/components/act_in_the_world/README.md"
+   "file": "evaluation/components/claim_reach/README.md"
   },
   "expect": {
    "eq": {
@@ -2075,9 +2075,9 @@
   "id": "DOC-149",
   "area": "em_dash",
   "kind": "em_dash",
-  "description": "evaluation/components/act_in_the_world/README.md: no em dash",
+  "description": "evaluation/components/claim_reach/README.md: no em dash",
   "args": {
-   "file": "evaluation/components/act_in_the_world/README.md"
+   "file": "evaluation/components/claim_reach/README.md"
   },
   "expect": {
    "eq": {

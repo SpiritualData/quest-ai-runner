@@ -3025,11 +3025,11 @@
  },
  {
   "id": "HUB-217",
-  "seat": "act-in-the-world",
-  "kind": "by_config",
-  "description": "act-in-the-world: by_config",
+  "area": "model_quality",
+  "kind": "registered",
+  "description": "model_quality: registered",
   "args": {
-   "seat": "act-in-the-world"
+   "area": "model_quality"
   },
   "expect": {
    "eq": {
@@ -3039,11 +3039,11 @@
  },
  {
   "id": "HUB-218",
-  "seat": "act-in-the-world",
-  "kind": "seam",
-  "description": "act-in-the-world: seam",
+  "area": "model_quality",
+  "kind": "fresh",
+  "description": "model_quality: fresh",
   "args": {
-   "seat": "act-in-the-world"
+   "area": "model_quality"
   },
   "expect": {
    "eq": {
@@ -3053,11 +3053,11 @@
  },
  {
   "id": "HUB-219",
-  "seat": "act-in-the-world",
-  "kind": "selectable",
-  "description": "act-in-the-world: selectable",
+  "area": "model_quality",
+  "kind": "no_reinvented",
+  "description": "model_quality: no_reinvented",
   "args": {
-   "seat": "act-in-the-world"
+   "area": "model_quality"
   },
   "expect": {
    "eq": {
@@ -3067,11 +3067,11 @@
  },
  {
   "id": "HUB-220",
-  "seat": "act-in-the-world",
-  "kind": "core_clean",
-  "description": "act-in-the-world: core_clean",
+  "area": "response_quality",
+  "kind": "registered",
+  "description": "response_quality: registered",
   "args": {
-   "seat": "act-in-the-world"
+   "area": "response_quality"
   },
   "expect": {
    "eq": {
@@ -3081,11 +3081,11 @@
  },
  {
   "id": "HUB-221",
-  "seat": "act-in-the-world",
-  "kind": "fake_hub",
-  "description": "act-in-the-world: fake_hub",
+  "area": "response_quality",
+  "kind": "fresh",
+  "description": "response_quality: fresh",
   "args": {
-   "seat": "act-in-the-world"
+   "area": "response_quality"
   },
   "expect": {
    "eq": {
@@ -3095,11 +3095,11 @@
  },
  {
   "id": "HUB-222",
-  "seat": "take-in-the-world",
-  "kind": "by_config",
-  "description": "take-in-the-world: by_config",
+  "area": "response_quality",
+  "kind": "no_reinvented",
+  "description": "response_quality: no_reinvented",
   "args": {
-   "seat": "take-in-the-world"
+   "area": "response_quality"
   },
   "expect": {
    "eq": {
@@ -3109,11 +3109,11 @@
  },
  {
   "id": "HUB-223",
-  "seat": "take-in-the-world",
-  "kind": "seam",
-  "description": "take-in-the-world: seam",
+  "seat": "delegated-agent-sessions",
+  "kind": "by_config",
+  "description": "delegated-agent-sessions: by_config",
   "args": {
-   "seat": "take-in-the-world"
+   "seat": "delegated-agent-sessions"
   },
   "expect": {
    "eq": {
@@ -3123,11 +3123,11 @@
  },
  {
   "id": "HUB-224",
-  "seat": "take-in-the-world",
-  "kind": "selectable",
-  "description": "take-in-the-world: selectable",
+  "seat": "delegated-agent-sessions",
+  "kind": "seam",
+  "description": "delegated-agent-sessions: seam",
   "args": {
-   "seat": "take-in-the-world"
+   "seat": "delegated-agent-sessions"
   },
   "expect": {
    "eq": {
@@ -3137,11 +3137,11 @@
  },
  {
   "id": "HUB-225",
-  "seat": "take-in-the-world",
-  "kind": "core_clean",
-  "description": "take-in-the-world: core_clean",
+  "seat": "delegated-agent-sessions",
+  "kind": "selectable",
+  "description": "delegated-agent-sessions: selectable",
   "args": {
-   "seat": "take-in-the-world"
+   "seat": "delegated-agent-sessions"
   },
   "expect": {
    "eq": {
@@ -3151,11 +3151,11 @@
  },
  {
   "id": "HUB-226",
-  "seat": "take-in-the-world",
-  "kind": "fake_hub",
-  "description": "take-in-the-world: fake_hub",
+  "seat": "delegated-agent-sessions",
+  "kind": "core_clean",
+  "description": "delegated-agent-sessions: core_clean",
   "args": {
-   "seat": "take-in-the-world"
+   "seat": "delegated-agent-sessions"
   },
   "expect": {
    "eq": {
@@ -3165,11 +3165,11 @@
  },
  {
   "id": "HUB-227",
-  "seat": "think-critically",
-  "kind": "by_config",
-  "description": "think-critically: by_config",
+  "seat": "delegated-agent-sessions",
+  "kind": "fake_hub",
+  "description": "delegated-agent-sessions: fake_hub",
   "args": {
-   "seat": "think-critically"
+   "seat": "delegated-agent-sessions"
   },
   "expect": {
    "eq": {
@@ -3179,11 +3179,11 @@
  },
  {
   "id": "HUB-228",
-  "seat": "think-critically",
-  "kind": "seam",
-  "description": "think-critically: seam",
+  "seat": "connected-system-operations",
+  "kind": "by_config",
+  "description": "connected-system-operations: by_config",
   "args": {
-   "seat": "think-critically"
+   "seat": "connected-system-operations"
   },
   "expect": {
    "eq": {
@@ -3193,11 +3193,11 @@
  },
  {
   "id": "HUB-229",
-  "seat": "think-critically",
-  "kind": "selectable",
-  "description": "think-critically: selectable",
+  "seat": "connected-system-operations",
+  "kind": "seam",
+  "description": "connected-system-operations: seam",
   "args": {
-   "seat": "think-critically"
+   "seat": "connected-system-operations"
   },
   "expect": {
    "eq": {
@@ -3207,11 +3207,11 @@
  },
  {
   "id": "HUB-230",
-  "seat": "think-critically",
-  "kind": "core_clean",
-  "description": "think-critically: core_clean",
+  "seat": "connected-system-operations",
+  "kind": "selectable",
+  "description": "connected-system-operations: selectable",
   "args": {
-   "seat": "think-critically"
+   "seat": "connected-system-operations"
   },
   "expect": {
    "eq": {
@@ -3221,11 +3221,11 @@
  },
  {
   "id": "HUB-231",
-  "seat": "think-critically",
-  "kind": "fake_hub",
-  "description": "think-critically: fake_hub",
+  "seat": "connected-system-operations",
+  "kind": "core_clean",
+  "description": "connected-system-operations: core_clean",
   "args": {
-   "seat": "think-critically"
+   "seat": "connected-system-operations"
   },
   "expect": {
    "eq": {
@@ -3235,11 +3235,11 @@
  },
  {
   "id": "HUB-232",
-  "seat": "watch-for-risk",
-  "kind": "by_config",
-  "description": "watch-for-risk: by_config",
+  "seat": "connected-system-operations",
+  "kind": "fake_hub",
+  "description": "connected-system-operations: fake_hub",
   "args": {
-   "seat": "watch-for-risk"
+   "seat": "connected-system-operations"
   },
   "expect": {
    "eq": {
@@ -3249,11 +3249,11 @@
  },
  {
   "id": "HUB-233",
-  "seat": "watch-for-risk",
-  "kind": "seam",
-  "description": "watch-for-risk: seam",
+  "seat": "file-editing",
+  "kind": "core_clean",
+  "description": "file-editing: core_clean",
   "args": {
-   "seat": "watch-for-risk"
+   "seat": "file-editing"
   },
   "expect": {
    "eq": {
@@ -3263,11 +3263,11 @@
  },
  {
   "id": "HUB-234",
-  "seat": "watch-for-risk",
-  "kind": "selectable",
-  "description": "watch-for-risk: selectable",
+  "seat": "the-world",
+  "kind": "by_config",
+  "description": "the-world: by_config",
   "args": {
-   "seat": "watch-for-risk"
+   "seat": "the-world"
   },
   "expect": {
    "eq": {
@@ -3277,11 +3277,11 @@
  },
  {
   "id": "HUB-235",
-  "seat": "watch-for-risk",
-  "kind": "core_clean",
-  "description": "watch-for-risk: core_clean",
+  "seat": "the-world",
+  "kind": "seam",
+  "description": "the-world: seam",
   "args": {
-   "seat": "watch-for-risk"
+   "seat": "the-world"
   },
   "expect": {
    "eq": {
@@ -3291,11 +3291,11 @@
  },
  {
   "id": "HUB-236",
-  "seat": "watch-for-risk",
-  "kind": "fake_hub",
-  "description": "watch-for-risk: fake_hub",
+  "seat": "the-world",
+  "kind": "selectable",
+  "description": "the-world: selectable",
   "args": {
-   "seat": "watch-for-risk"
+   "seat": "the-world"
   },
   "expect": {
    "eq": {
@@ -3305,11 +3305,11 @@
  },
  {
   "id": "HUB-237",
-  "seat": "know-the-world",
-  "kind": "by_config",
-  "description": "know-the-world: by_config",
+  "seat": "the-world",
+  "kind": "core_clean",
+  "description": "the-world: core_clean",
   "args": {
-   "seat": "know-the-world"
+   "seat": "the-world"
   },
   "expect": {
    "eq": {
@@ -3319,11 +3319,11 @@
  },
  {
   "id": "HUB-238",
-  "seat": "know-the-world",
-  "kind": "seam",
-  "description": "know-the-world: seam",
+  "seat": "the-world",
+  "kind": "fake_hub",
+  "description": "the-world: fake_hub",
   "args": {
-   "seat": "know-the-world"
+   "seat": "the-world"
   },
   "expect": {
    "eq": {
@@ -3333,11 +3333,11 @@
  },
  {
   "id": "HUB-239",
-  "seat": "know-the-world",
-  "kind": "selectable",
-  "description": "know-the-world: selectable",
+  "seat": "response-quality",
+  "kind": "by_config",
+  "description": "response-quality: by_config",
   "args": {
-   "seat": "know-the-world"
+   "seat": "response-quality"
   },
   "expect": {
    "eq": {
@@ -3347,11 +3347,11 @@
  },
  {
   "id": "HUB-240",
-  "seat": "know-the-world",
-  "kind": "core_clean",
-  "description": "know-the-world: core_clean",
+  "seat": "response-quality",
+  "kind": "seam",
+  "description": "response-quality: seam",
   "args": {
-   "seat": "know-the-world"
+   "seat": "response-quality"
   },
   "expect": {
    "eq": {
@@ -3361,11 +3361,11 @@
  },
  {
   "id": "HUB-241",
-  "seat": "know-the-world",
-  "kind": "fake_hub",
-  "description": "know-the-world: fake_hub",
+  "seat": "response-quality",
+  "kind": "selectable",
+  "description": "response-quality: selectable",
   "args": {
-   "seat": "know-the-world"
+   "seat": "response-quality"
   },
   "expect": {
    "eq": {
@@ -3375,11 +3375,11 @@
  },
  {
   "id": "HUB-242",
-  "seat": "hold-the-intents",
-  "kind": "by_config",
-  "description": "hold-the-intents: by_config",
+  "seat": "response-quality",
+  "kind": "core_clean",
+  "description": "response-quality: core_clean",
   "args": {
-   "seat": "hold-the-intents"
+   "seat": "response-quality"
   },
   "expect": {
    "eq": {
@@ -3389,11 +3389,11 @@
  },
  {
   "id": "HUB-243",
-  "seat": "hold-the-intents",
-  "kind": "seam",
-  "description": "hold-the-intents: seam",
+  "seat": "response-quality",
+  "kind": "fake_hub",
+  "description": "response-quality: fake_hub",
   "args": {
-   "seat": "hold-the-intents"
+   "seat": "response-quality"
   },
   "expect": {
    "eq": {
@@ -3403,11 +3403,11 @@
  },
  {
   "id": "HUB-244",
-  "seat": "hold-the-intents",
-  "kind": "selectable",
-  "description": "hold-the-intents: selectable",
+  "seat": "nervous-system",
+  "kind": "by_config",
+  "description": "nervous-system: by_config",
   "args": {
-   "seat": "hold-the-intents"
+   "seat": "nervous-system"
   },
   "expect": {
    "eq": {
@@ -3417,11 +3417,11 @@
  },
  {
   "id": "HUB-245",
-  "seat": "hold-the-intents",
-  "kind": "core_clean",
-  "description": "hold-the-intents: core_clean",
+  "seat": "nervous-system",
+  "kind": "seam",
+  "description": "nervous-system: seam",
   "args": {
-   "seat": "hold-the-intents"
+   "seat": "nervous-system"
   },
   "expect": {
    "eq": {
@@ -3431,11 +3431,11 @@
  },
  {
   "id": "HUB-246",
-  "seat": "hold-the-intents",
-  "kind": "fake_hub",
-  "description": "hold-the-intents: fake_hub",
+  "seat": "nervous-system",
+  "kind": "selectable",
+  "description": "nervous-system: selectable",
   "args": {
-   "seat": "hold-the-intents"
+   "seat": "nervous-system"
   },
   "expect": {
    "eq": {
@@ -3445,11 +3445,11 @@
  },
  {
   "id": "HUB-247",
-  "seat": "stay-current",
-  "kind": "by_config",
-  "description": "stay-current: by_config",
+  "seat": "nervous-system",
+  "kind": "core_clean",
+  "description": "nervous-system: core_clean",
   "args": {
-   "seat": "stay-current"
+   "seat": "nervous-system"
   },
   "expect": {
    "eq": {
@@ -3459,11 +3459,11 @@
  },
  {
   "id": "HUB-248",
-  "seat": "stay-current",
-  "kind": "seam",
-  "description": "stay-current: seam",
+  "seat": "nervous-system",
+  "kind": "fake_hub",
+  "description": "nervous-system: fake_hub",
   "args": {
-   "seat": "stay-current"
+   "seat": "nervous-system"
   },
   "expect": {
    "eq": {
@@ -3473,11 +3473,11 @@
  },
  {
   "id": "HUB-249",
-  "seat": "stay-current",
-  "kind": "selectable",
-  "description": "stay-current: selectable",
+  "seat": "the-science",
+  "kind": "by_config",
+  "description": "the-science: by_config",
   "args": {
-   "seat": "stay-current"
+   "seat": "the-science"
   },
   "expect": {
    "eq": {
@@ -3487,11 +3487,11 @@
  },
  {
   "id": "HUB-250",
-  "seat": "stay-current",
-  "kind": "core_clean",
-  "description": "stay-current: core_clean",
+  "seat": "the-science",
+  "kind": "seam",
+  "description": "the-science: seam",
   "args": {
-   "seat": "stay-current"
+   "seat": "the-science"
   },
   "expect": {
    "eq": {
@@ -3501,11 +3501,11 @@
  },
  {
   "id": "HUB-251",
-  "seat": "stay-current",
-  "kind": "fake_hub",
-  "description": "stay-current: fake_hub",
+  "seat": "the-science",
+  "kind": "selectable",
+  "description": "the-science: selectable",
   "args": {
-   "seat": "stay-current"
+   "seat": "the-science"
   },
   "expect": {
    "eq": {
@@ -3515,11 +3515,11 @@
  },
  {
   "id": "HUB-252",
-  "seat": "keep-it-generic",
-  "kind": "by_config",
-  "description": "keep-it-generic: by_config",
+  "seat": "the-science",
+  "kind": "core_clean",
+  "description": "the-science: core_clean",
   "args": {
-   "seat": "keep-it-generic"
+   "seat": "the-science"
   },
   "expect": {
    "eq": {
@@ -3529,11 +3529,11 @@
  },
  {
   "id": "HUB-253",
-  "seat": "keep-it-generic",
-  "kind": "seam",
-  "description": "keep-it-generic: seam",
+  "seat": "the-science",
+  "kind": "fake_hub",
+  "description": "the-science: fake_hub",
   "args": {
-   "seat": "keep-it-generic"
+   "seat": "the-science"
   },
   "expect": {
    "eq": {
@@ -3543,11 +3543,11 @@
  },
  {
   "id": "HUB-254",
-  "seat": "keep-it-generic",
-  "kind": "selectable",
-  "description": "keep-it-generic: selectable",
+  "seat": "the-mind",
+  "kind": "by_config",
+  "description": "the-mind: by_config",
   "args": {
-   "seat": "keep-it-generic"
+   "seat": "the-mind"
   },
   "expect": {
    "eq": {
@@ -3557,11 +3557,11 @@
  },
  {
   "id": "HUB-255",
-  "seat": "keep-it-generic",
-  "kind": "core_clean",
-  "description": "keep-it-generic: core_clean",
+  "seat": "the-mind",
+  "kind": "seam",
+  "description": "the-mind: seam",
   "args": {
-   "seat": "keep-it-generic"
+   "seat": "the-mind"
   },
   "expect": {
    "eq": {
@@ -3571,11 +3571,11 @@
  },
  {
   "id": "HUB-256",
-  "seat": "keep-it-generic",
-  "kind": "fake_hub",
-  "description": "keep-it-generic: fake_hub",
+  "seat": "the-mind",
+  "kind": "selectable",
+  "description": "the-mind: selectable",
   "args": {
-   "seat": "keep-it-generic"
+   "seat": "the-mind"
   },
   "expect": {
    "eq": {
@@ -3585,11 +3585,11 @@
  },
  {
   "id": "HUB-257",
-  "seat": "reason-and-answer",
-  "kind": "by_config",
-  "description": "reason-and-answer: by_config",
+  "seat": "the-mind",
+  "kind": "core_clean",
+  "description": "the-mind: core_clean",
   "args": {
-   "seat": "reason-and-answer"
+   "seat": "the-mind"
   },
   "expect": {
    "eq": {
@@ -3599,11 +3599,11 @@
  },
  {
   "id": "HUB-258",
-  "seat": "reason-and-answer",
-  "kind": "seam",
-  "description": "reason-and-answer: seam",
+  "seat": "the-mind",
+  "kind": "fake_hub",
+  "description": "the-mind: fake_hub",
   "args": {
-   "seat": "reason-and-answer"
+   "seat": "the-mind"
   },
   "expect": {
    "eq": {
@@ -3613,11 +3613,11 @@
  },
  {
   "id": "HUB-259",
-  "seat": "reason-and-answer",
-  "kind": "selectable",
-  "description": "reason-and-answer: selectable",
+  "seat": "the-learning",
+  "kind": "by_config",
+  "description": "the-learning: by_config",
   "args": {
-   "seat": "reason-and-answer"
+   "seat": "the-learning"
   },
   "expect": {
    "eq": {
@@ -3627,11 +3627,11 @@
  },
  {
   "id": "HUB-260",
-  "seat": "reason-and-answer",
-  "kind": "core_clean",
-  "description": "reason-and-answer: core_clean",
+  "seat": "the-learning",
+  "kind": "seam",
+  "description": "the-learning: seam",
   "args": {
-   "seat": "reason-and-answer"
+   "seat": "the-learning"
   },
   "expect": {
    "eq": {
@@ -3641,11 +3641,11 @@
  },
  {
   "id": "HUB-261",
-  "seat": "reason-and-answer",
-  "kind": "fake_hub",
-  "description": "reason-and-answer: fake_hub",
+  "seat": "the-learning",
+  "kind": "selectable",
+  "description": "the-learning: selectable",
   "args": {
-   "seat": "reason-and-answer"
+   "seat": "the-learning"
   },
   "expect": {
    "eq": {
@@ -3655,11 +3655,11 @@
  },
  {
   "id": "HUB-262",
-  "seat": "assemble-the-whole",
-  "kind": "by_config",
-  "description": "assemble-the-whole: by_config",
+  "seat": "the-learning",
+  "kind": "core_clean",
+  "description": "the-learning: core_clean",
   "args": {
-   "seat": "assemble-the-whole"
+   "seat": "the-learning"
   },
   "expect": {
    "eq": {
@@ -3669,11 +3669,11 @@
  },
  {
   "id": "HUB-263",
-  "seat": "assemble-the-whole",
-  "kind": "seam",
-  "description": "assemble-the-whole: seam",
+  "seat": "the-learning",
+  "kind": "fake_hub",
+  "description": "the-learning: fake_hub",
   "args": {
-   "seat": "assemble-the-whole"
+   "seat": "the-learning"
   },
   "expect": {
    "eq": {
@@ -3683,11 +3683,11 @@
  },
  {
   "id": "HUB-264",
-  "seat": "assemble-the-whole",
-  "kind": "selectable",
-  "description": "assemble-the-whole: selectable",
+  "seat": "system-integrity",
+  "kind": "by_config",
+  "description": "system-integrity: by_config",
   "args": {
-   "seat": "assemble-the-whole"
+   "seat": "system-integrity"
   },
   "expect": {
    "eq": {
@@ -3697,11 +3697,11 @@
  },
  {
   "id": "HUB-265",
-  "seat": "assemble-the-whole",
-  "kind": "core_clean",
-  "description": "assemble-the-whole: core_clean",
+  "seat": "system-integrity",
+  "kind": "seam",
+  "description": "system-integrity: seam",
   "args": {
-   "seat": "assemble-the-whole"
+   "seat": "system-integrity"
   },
   "expect": {
    "eq": {
@@ -3711,11 +3711,11 @@
  },
  {
   "id": "HUB-266",
-  "seat": "assemble-the-whole",
-  "kind": "fake_hub",
-  "description": "assemble-the-whole: fake_hub",
+  "seat": "system-integrity",
+  "kind": "selectable",
+  "description": "system-integrity: selectable",
   "args": {
-   "seat": "assemble-the-whole"
+   "seat": "system-integrity"
   },
   "expect": {
    "eq": {
@@ -3725,11 +3725,11 @@
  },
  {
   "id": "HUB-267",
-  "seat": "remember-and-recall",
-  "kind": "by_config",
-  "description": "remember-and-recall: by_config",
+  "seat": "system-integrity",
+  "kind": "core_clean",
+  "description": "system-integrity: core_clean",
   "args": {
-   "seat": "remember-and-recall"
+   "seat": "system-integrity"
   },
   "expect": {
    "eq": {
@@ -3739,11 +3739,11 @@
  },
  {
   "id": "HUB-268",
-  "seat": "remember-and-recall",
-  "kind": "seam",
-  "description": "remember-and-recall: seam",
+  "seat": "system-integrity",
+  "kind": "fake_hub",
+  "description": "system-integrity: fake_hub",
   "args": {
-   "seat": "remember-and-recall"
+   "seat": "system-integrity"
   },
   "expect": {
    "eq": {
@@ -3753,11 +3753,11 @@
  },
  {
   "id": "HUB-269",
-  "seat": "remember-and-recall",
-  "kind": "selectable",
-  "description": "remember-and-recall: selectable",
+  "seat": "the-assembler",
+  "kind": "by_config",
+  "description": "the-assembler: by_config",
   "args": {
-   "seat": "remember-and-recall"
+   "seat": "the-assembler"
   },
   "expect": {
    "eq": {
@@ -3767,11 +3767,11 @@
  },
  {
   "id": "HUB-270",
-  "seat": "remember-and-recall",
-  "kind": "core_clean",
-  "description": "remember-and-recall: core_clean",
+  "seat": "the-assembler",
+  "kind": "seam",
+  "description": "the-assembler: seam",
   "args": {
-   "seat": "remember-and-recall"
+   "seat": "the-assembler"
   },
   "expect": {
    "eq": {
@@ -3781,11 +3781,109 @@
  },
  {
   "id": "HUB-271",
-  "seat": "remember-and-recall",
-  "kind": "fake_hub",
-  "description": "remember-and-recall: fake_hub",
+  "seat": "the-assembler",
+  "kind": "selectable",
+  "description": "the-assembler: selectable",
   "args": {
-   "seat": "remember-and-recall"
+   "seat": "the-assembler"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-272",
+  "seat": "the-assembler",
+  "kind": "core_clean",
+  "description": "the-assembler: core_clean",
+  "args": {
+   "seat": "the-assembler"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-273",
+  "seat": "the-assembler",
+  "kind": "fake_hub",
+  "description": "the-assembler: fake_hub",
+  "args": {
+   "seat": "the-assembler"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-274",
+  "seat": "the-subconscious",
+  "kind": "by_config",
+  "description": "the-subconscious: by_config",
+  "args": {
+   "seat": "the-subconscious"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-275",
+  "seat": "the-subconscious",
+  "kind": "seam",
+  "description": "the-subconscious: seam",
+  "args": {
+   "seat": "the-subconscious"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-276",
+  "seat": "the-subconscious",
+  "kind": "selectable",
+  "description": "the-subconscious: selectable",
+  "args": {
+   "seat": "the-subconscious"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-277",
+  "seat": "the-subconscious",
+  "kind": "core_clean",
+  "description": "the-subconscious: core_clean",
+  "args": {
+   "seat": "the-subconscious"
+  },
+  "expect": {
+   "eq": {
+    "holds": true
+   }
+  }
+ },
+ {
+  "id": "HUB-278",
+  "seat": "the-subconscious",
+  "kind": "fake_hub",
+  "description": "the-subconscious: fake_hub",
+  "args": {
+   "seat": "the-subconscious"
   },
   "expect": {
    "eq": {

@@ -1,54 +1,53 @@
 {
  "@intents": {
   "intents": {
-   "act_as_the_body": {
+   "body": {
     "arm": "card_and_reads",
-    "root": "act-as-the-body"
+    "root": "the-body"
+   },
+   "critical_thinking": {
+    "arm": "deep_runs_only",
+    "root": "critical-thinking"
    },
    "hold_the_intents": {
     "arm": "separate_stores",
     "root": "hold-the-intents"
    },
-   "keep_it_generic": {
+   "integrity": {
     "arm": "structure-library",
-    "root": "keep-it-generic"
+    "root": "system-integrity"
    },
-   "know_the_world": {
+   "mind": {
+    "arm": "rebuilt_per_step",
+    "root": "the-mind"
+   },
+   "nervous_system": {
     "arm": "",
-    "root": "search-the-web"
+    "root": "escalate-to-a-human"
    },
    "quest-ai-runner": {
     "arm": "",
     "root": "do-grounded-work"
    },
-   "reason_and_answer": {
-    "arm": "rebuilt_per_step",
-    "root": "reason-and-answer"
-   },
-   "remember_and_recall": {
-    "arm": "recency_window",
-    "root": "remember-and-recall"
+   "science": {
+    "arm": "",
+    "root": "search-the-web"
    },
    "select_context": {
-    "arm": "library",
-    "root": "do-grounded-work"
+    "arm": "per_lane_assembly",
+    "root": "choose-the-context"
+   },
+   "subconscious": {
+    "arm": "recency_window",
+    "root": "the-subconscious"
    },
    "take_in_the_world": {
     "arm": "ways_in",
     "root": "take-in-the-world"
-   },
-   "think_critically": {
-    "arm": "deep_runs_only",
-    "root": "think-critically"
-   },
-   "watch_for_risk": {
-    "arm": "",
-    "root": "escalate-to-a-human"
    }
   },
   "scopes": {
    "access-quest-operations": "quest_ai_runner",
-   "act-as-the-body": "quest_ai_runner",
    "answer-a-turn": "quest_ai_runner",
    "answer-end-to-end": "quest_ai_runner",
    "assemble-a-prompt": "quest_ai_runner",
@@ -56,14 +55,14 @@
    "behave-by-esoi": "quest_ai_runner",
    "bound-card-growth": "quest_ai_runner",
    "cache-cards": "quest_ai_runner",
-   "call-a-model": "quest_ai_runner",
    "card-store": "quest_ai_runner",
    "cards-from-files": "quest_ai_runner",
-   "choose-a-model-tier": "quest_ai_runner",
+   "choose-the-context": "quest_ai_runner",
    "choose-what-to-index": "quest_ai_runner",
    "claim-reach": "quest_ai_runner",
    "configure-a-lane": "quest_ai_runner",
    "core-ml-tasks": "quest_ai_runner",
+   "critical-thinking": "quest_ai_runner",
    "describe-an-attachment": "quest_ai_runner",
    "detect-a-stalled-run": "quest_ai_runner",
    "detect-stale-cards": "quest_ai_runner",
@@ -87,20 +86,18 @@
    "judge-a-decision": "quest_ai_runner",
    "judge-esoi-behavior": "quest_ai_runner",
    "justify-model-calls": "quest_ai_runner",
-   "keep-it-generic": "quest_ai_runner",
    "keep-secrets-out": "quest_ai_runner",
-   "know-the-world": "quest_ai_runner",
    "label-context-cards": "quest_ai_runner",
    "learn-by-example": "quest_ai_runner",
+   "model-tier-chooser": "quest_ai_runner",
    "narrate-a-turn": "quest_ai_runner",
+   "nervous-system": "quest_ai_runner",
    "operate-a-quest": "quest_ai_runner",
    "operate-from-a-terminal": "quest_ai_runner",
    "persist-cards": "quest_ai_runner",
    "persist-predictions": "quest_ai_runner",
-   "reason-and-answer": "quest_ai_runner",
    "recall-recent-context": "quest_ai_runner",
    "receive-input-mid-run": "quest_ai_runner",
-   "remember-and-recall": "quest_ai_runner",
    "remember-conversations": "quest_ai_runner",
    "repair-a-card-store": "quest_ai_runner",
    "replay-known-operations": "quest_ai_runner",
@@ -118,13 +115,17 @@
    "show-the-ais-work": "quest_ai_runner",
    "spec-selection": "quest_ai_runner",
    "store-feedback": "quest_ai_runner",
+   "system-integrity": "quest_ai_runner",
    "tag-solutions": "quest_ai_runner",
    "take-in-the-world": "quest_ai_runner",
    "talk-over-a-channel": "quest_ai_runner",
-   "think-critically": "quest_ai_runner",
+   "the-body": "quest_ai_runner",
+   "the-mind": "quest_ai_runner",
+   "the-science": "quest_ai_runner",
+   "the-subconscious": "quest_ai_runner",
    "track-usage-and-cost": "quest_ai_runner",
+   "vendor-model-caller": "quest_ai_runner",
    "verify-offline": "quest_ai_runner",
-   "watch-for-risk": "quest_ai_runner",
    "write-files": "quest_ai_runner",
    "write-through-mcp": "quest_ai_runner"
   }
@@ -132,18 +133,7 @@
  "access-quest-operations": {
   "default": "quest_client",
   "modules": {
-   "quest_client": "quest_ai_runner.area_act_as_the_body"
-  }
- },
- "act-as-the-body": {
-  "default": "card_and_reads",
-  "evidence": {
-   "detail": "no rival implementation was measured on the same cases",
-   "p": null,
-   "verdict": "UNMEASURED"
-  },
-  "modules": {
-   "card_and_reads": "quest_ai_runner.area_act_as_the_body"
+   "quest_client": "quest_ai_runner.area_body"
   }
  },
  "answer-a-turn": {
@@ -154,19 +144,19 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "orchestrator_turn": "quest_ai_runner.area_reason_and_answer"
+   "orchestrator_turn": "quest_ai_runner.area_mind"
   }
  },
  "answer-end-to-end": {
   "default": "shipped_path",
   "evidence": {
-   "detail": "qar_live leads rules_only (rules_only 0.58 against qar_live 0.778; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.754, 10 of 10 cases disagree; one of 2 looks, alpha 0.025)",
-   "p": 0.753906,
+   "detail": "qar_live leads rules_only (rules_only 0.533 against qar_live 0.794; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1, 3 of 3 cases disagree; one of 3 looks, alpha 0.0167)",
+   "p": 1.0,
    "verdict": "WIN"
   },
   "modules": {
    "qar_live": "quest_ai_runner.core.orchestrator",
-   "shipped_path": "quest_ai_runner.area_reason_and_answer"
+   "shipped_path": "quest_ai_runner.area_mind"
   }
  },
  "assemble-a-prompt": {
@@ -177,7 +167,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "planner_prompt": "quest_ai_runner.area_reason_and_answer"
+   "planner_prompt": "quest_ai_runner.area_mind"
   }
  },
  "assist-a-terminal-session": {
@@ -199,27 +189,15 @@
    "verdict": "TIE"
   },
   "modules": {
-   "file": "quest_ai_runner.remember_and_recall.card_cache_file",
+   "file": "quest_ai_runner.subconscious.card_cache_file",
    "null": "quest_ai_runner.adapters.quest_api_card_repository"
-  }
- },
- "call-a-model": {
-  "default": "multi_provider",
-  "evidence": {
-   "detail": "multi_provider is better than single_provider (two-sided exact McNemar test, Holm-adjusted p=1.82e-12, 40 of 56 cases disagree)",
-   "p": 0.0,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
-   "multi_provider": "quest_ai_runner.providers"
   }
  },
  "card-store": {
   "default": "quest-api-cards",
   "modules": {
-   "qar-card-repository": "quest_ai_runner.remember_and_recall.hub_card_store",
-   "quest-api-cards": "quest_ai_runner.remember_and_recall.hub_card_store"
+   "qar-card-repository": "quest_ai_runner.subconscious.hub_card_store",
+   "quest-api-cards": "quest_ai_runner.subconscious.hub_card_store"
   }
  },
  "cards-from-files": {
@@ -230,20 +208,18 @@
    "verdict": "TIE"
   },
   "modules": {
-   "qar_topic_bootstrap": "quest_ai_runner.remember_and_recall.qar_topic_bootstrap"
+   "qar_topic_bootstrap": "quest_ai_runner.subconscious.qar_topic_bootstrap"
   }
  },
- "choose-a-model-tier": {
-  "default": "model_registry",
+ "choose-the-context": {
+  "default": "per_lane_assembly",
   "evidence": {
    "detail": "no rival implementation was measured on the same cases",
    "p": null,
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
-   "model_registry": "quest_ai_runner.core.model_registry",
-   "usage_limit": "quest_ai_runner.core.usage_limit"
+   "per_lane_assembly": "quest_ai_runner.select_context.area"
   }
  },
  "claim-reach": {
@@ -254,7 +230,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "coding_agent_prompt_reach": "quest_ai_runner.area_act_as_the_body",
+   "coding_agent_prompt_reach": "quest_ai_runner.area_body",
    "coding_agent_reach_judge": "quest_ai_runner.core.reach_judge"
   }
  },
@@ -281,7 +257,19 @@
    "verdict": "TIE"
   },
   "modules": {
-   "router_labels": "quest_ai_runner.area_reason_and_answer"
+   "router_labels": "quest_ai_runner.area_mind"
+  }
+ },
+ "critical-thinking": {
+  "default": "deep_runs_only",
+  "evidence": {
+   "detail": "deep_runs_only leads instruction_only (instruction_only 0.2 against deep_runs_only 0.4; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 10 cases disagree)",
+   "p": 0.5,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "deep_runs_only": "quest_ai_runner.critical_thinking.area",
+   "instruction_only": "quest_ai_runner.core.standing_instructions"
   }
  },
  "describe-an-attachment": {
@@ -304,7 +292,7 @@
   },
   "modules": {
    "goal_runner": "quest_ai_runner.core.goal_runner",
-   "live_reviewer": "quest_ai_runner.think_critically.area"
+   "live_reviewer": "quest_ai_runner.critical_thinking.area"
   }
  },
  "do-grounded-work": {
@@ -326,7 +314,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "capped_model_draft": "quest_ai_runner.think_critically.area"
+   "capped_model_draft": "quest_ai_runner.critical_thinking.area"
   }
  },
  "escalate-to-a-human": {
@@ -384,8 +372,8 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "autopilot_gates": "quest_ai_runner.think_critically.autopilot_gates",
-   "live_pass": "quest_ai_runner.think_critically.area"
+   "autopilot_gates": "quest_ai_runner.critical_thinking.autopilot_gates",
+   "live_pass": "quest_ai_runner.critical_thinking.area"
   }
  },
  "gather-evidence": {
@@ -396,15 +384,15 @@
    "verdict": "WIN"
   },
   "modules": {
-   "cached_db": "quest_ai_runner.act_as_the_body.cached_db_adapter",
-   "composite": "quest_ai_runner.act_as_the_body.composite_retrieval_adapter",
+   "cached_db": "quest_ai_runner.body.cached_db_adapter",
+   "composite": "quest_ai_runner.body.composite_retrieval_adapter",
    "files": "quest_ai_runner.adapters.files_adapter",
    "google_chat": "quest_ai_runner.adapters.google_chat_adapter",
-   "google_drive": "quest_ai_runner.act_as_the_body.google_drive_adapter",
-   "mcp": "quest_ai_runner.act_as_the_body.mcp_retrieval_adapter",
-   "notion": "quest_ai_runner.act_as_the_body.notion_adapter",
-   "quest": "quest_ai_runner.act_as_the_body.quest_retrieval_adapter",
-   "remote_files_adapter": "quest_ai_runner.act_as_the_body.remote_files_adapter"
+   "google_drive": "quest_ai_runner.body.google_drive_adapter",
+   "mcp": "quest_ai_runner.body.mcp_retrieval_adapter",
+   "notion": "quest_ai_runner.body.notion_adapter",
+   "quest": "quest_ai_runner.body.quest_retrieval_adapter",
+   "remote_files_adapter": "quest_ai_runner.body.remote_files_adapter"
   }
  },
  "ground-in-intent": {
@@ -415,10 +403,10 @@
    "verdict": "WIN"
   },
   "modules": {
-   "frame-card-drilldown": "quest_ai_runner.think_critically.quest_client_intents",
+   "frame-card-drilldown": "quest_ai_runner.critical_thinking.quest_client_intents",
    "frame-lazy-spec": "quest_ai_runner.core.tools_quest_intents",
-   "frame-line": "quest_ai_runner.think_critically.area",
-   "none": "quest_ai_runner.think_critically.autopilot_briefs"
+   "frame-line": "quest_ai_runner.critical_thinking.area",
+   "none": "quest_ai_runner.critical_thinking.autopilot_briefs"
   }
  },
  "guard-a-reply": {
@@ -429,7 +417,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "qar_guards": "quest_ai_runner.think_critically.area"
+   "qar_guards": "quest_ai_runner.critical_thinking.area"
   }
  },
  "guide-by-feedback": {
@@ -462,7 +450,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "model_judge": "quest_ai_runner.area_act_as_the_body"
+   "model_judge": "quest_ai_runner.area_body"
   }
  },
  "hold-the-intents": {
@@ -484,7 +472,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "qdrant": "quest_ai_runner.remember_and_recall.qdrant_vector_store"
+   "qdrant": "quest_ai_runner.subconscious.qdrant_vector_store"
   }
  },
  "iterate-by-spec": {
@@ -495,9 +483,9 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "generic-doctrine": "quest_ai_runner.think_critically.goal_iteration",
-   "slice-and-writeback": "quest_ai_runner.think_critically.goal_iteration",
-   "slice-only": "quest_ai_runner.think_critically.goal_iteration"
+   "generic-doctrine": "quest_ai_runner.critical_thinking.goal_iteration",
+   "slice-and-writeback": "quest_ai_runner.critical_thinking.goal_iteration",
+   "slice-only": "quest_ai_runner.critical_thinking.goal_iteration"
   }
  },
  "judge-a-decision": {
@@ -508,7 +496,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "qar_judges": "quest_ai_runner.think_critically.area"
+   "qar_judges": "quest_ai_runner.critical_thinking.area"
   }
  },
  "justify-model-calls": {
@@ -522,28 +510,6 @@
    "spec_registry": "quest_ai_runner.core.prompt_specs"
   }
  },
- "keep-it-generic": {
-  "default": "structure-library",
-  "evidence": {
-   "detail": "structure_library leads keep_current (keep_current 0.588 against structure_library 0.765; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.549, 11 of 17 cases disagree)",
-   "p": 0.548828,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "structure-library": "quest_ai_runner.keep_it_generic.area"
-  }
- },
- "know-the-world": {
-  "default": "web_with_support_check",
-  "evidence": {
-   "detail": "web_with_support_check is better than memory_only (two-sided exact McNemar test, Holm-adjusted p=0.00391, 9 of 9 cases disagree)",
-   "p": 0.003906,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "web_with_support_check": "quest_ai_runner.know_the_world.area"
-  }
- },
  "label-context-cards": {
   "default": "fast_model_labels",
   "evidence": {
@@ -552,7 +518,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "fast_model_labels": "quest_ai_runner.remember_and_recall.card_metadata_generator"
+   "fast_model_labels": "quest_ai_runner.subconscious.card_metadata_generator"
   }
  },
  "learn-by-example": {
@@ -567,6 +533,19 @@
    "minimal_lane": "examples.minimal_lane"
   }
  },
+ "model-tier-chooser": {
+  "default": "model_registry",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "deep_model_selection": "quest_ai_runner.core.deep_model_selection",
+   "model_registry": "quest_ai_runner.core.model_registry",
+   "usage_limit": "quest_ai_runner.core.usage_limit"
+  }
+ },
  "narrate-a-turn": {
   "default": "model_beat",
   "evidence": {
@@ -578,6 +557,18 @@
    "model_beat": "quest_ai_runner.core.orchestrator_turn"
   }
  },
+ "nervous-system": {
+  "default": "overseer",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "no_overseer": "quest_ai_runner.core.orchestrator_types",
+   "overseer": "quest_ai_runner.nervous_system.area"
+  }
+ },
  "operate-a-quest": {
   "default": "qar_orchestrator",
   "evidence": {
@@ -586,7 +577,7 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "qar_orchestrator": "quest_ai_runner.area_act_as_the_body"
+   "qar_orchestrator": "quest_ai_runner.area_body"
   }
  },
  "operate-from-a-terminal": {
@@ -614,7 +605,7 @@
   },
   "modules": {
    "filesystem": "quest_ai_runner.config_assembler",
-   "qdrant": "quest_ai_runner.remember_and_recall.qdrant_card_repository",
+   "qdrant": "quest_ai_runner.subconscious.qdrant_card_repository",
    "quest_api": "quest_ai_runner.adapters.quest_api_card_repository"
   }
  },
@@ -627,18 +618,6 @@
   },
   "modules": {
    "file": "quest_ai_runner.core.anticipation_store"
-  }
- },
- "reason-and-answer": {
-  "default": "rebuilt_per_step",
-  "evidence": {
-   "detail": "beaten by rebuilt_full_context: best guess, not yet significant: rebuilt_full_context leads rebuilt_per_step (rebuilt_full_context 1 against rebuilt_per_step 0.857; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.481, rebuilt_full_context passed 14 of 14, rebuilt_per_step 12 of 14); more cases would settle it",
-   "p": 0.481481,
-   "verdict": "LOSS"
-  },
-  "modules": {
-   "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
-   "rebuilt_per_step": "quest_ai_runner.area_reason_and_answer"
   }
  },
  "recall-recent-context": {
@@ -661,17 +640,6 @@
   },
   "modules": {
    "in_memory": "quest_ai_runner.core.inbox"
-  }
- },
- "remember-and-recall": {
-  "default": "recency_window",
-  "evidence": {
-   "detail": "recency_window leads admit_nothing (admit_nothing 0.222 against recency_window 0.444; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.625, 4 of 9 cases disagree)",
-   "p": 0.625,
-   "verdict": "WIN"
-  },
-  "modules": {
-   "recency_window": "quest_ai_runner.core.planner_context"
   }
  },
  "remember-conversations": {
@@ -705,7 +673,7 @@
    "verdict": "TIE"
   },
   "modules": {
-   "stored_recipes": "quest_ai_runner.area_reason_and_answer"
+   "stored_recipes": "quest_ai_runner.area_mind"
   }
  },
  "reply-in-steps": {
@@ -749,11 +717,11 @@
    "verdict": "TIE"
   },
   "modules": {
-   "acp": "quest_ai_runner.act_as_the_body.acp_deep_runner",
+   "acp": "quest_ai_runner.body.acp_deep_runner",
    "fast_edit": "quest_ai_runner.config_resolvers",
    "lean_guarded": "quest_ai_runner.core.deep_launch",
    "mcp_write": "quest_ai_runner.config_resolvers",
-   "stream_json": "quest_ai_runner.act_as_the_body.goal_runner_stream",
+   "stream_json": "quest_ai_runner.body.goal_runner_stream",
    "subprocess": "quest_ai_runner.core.goal_runner"
   }
  },
@@ -769,7 +737,7 @@
    "lane": "quest_ai_runner.runner.lane",
    "personas": "quest_ai_runner.runner.personas",
    "poller": "quest_ai_runner.runner.poller",
-   "qar_runner": "quest_ai_runner.area_act_as_the_body",
+   "qar_runner": "quest_ai_runner.area_body",
    "quest_folder_sync": "quest_ai_runner.runner.quest_folder_sync"
   }
  },
@@ -793,14 +761,14 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "brave": "quest_ai_runner.know_the_world.web_search_backends",
-   "gemini": "quest_ai_runner.know_the_world.web_search_backends",
-   "provider": "quest_ai_runner.know_the_world.web_search_backends",
-   "provider_web_search": "quest_ai_runner.know_the_world.provider_web_search_adapter",
-   "searxng": "quest_ai_runner.know_the_world.web_search_backends",
-   "serper": "quest_ai_runner.know_the_world.web_search_backends",
-   "tavily": "quest_ai_runner.know_the_world.web_search_backends",
-   "web_research": "quest_ai_runner.know_the_world.web_research"
+   "brave": "quest_ai_runner.science.web_search_backends",
+   "gemini": "quest_ai_runner.science.web_search_backends",
+   "provider": "quest_ai_runner.science.web_search_backends",
+   "provider_web_search": "quest_ai_runner.science.provider_web_search_adapter",
+   "searxng": "quest_ai_runner.science.web_search_backends",
+   "serper": "quest_ai_runner.science.web_search_backends",
+   "tavily": "quest_ai_runner.science.web_search_backends",
+   "web_research": "quest_ai_runner.science.web_research"
   }
  },
  "select-a-rep": {
@@ -826,16 +794,18 @@
   }
  },
  "select-context": {
-  "default": "hybrid",
+  "default": "blind_grep",
   "evidence": {
-   "detail": "beaten by blind_grep: blind_grep is better than hybrid_union (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.07e-09, 123 of 123 cases disagree); hybrid_union is better than hub_folder_cards (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0112, 123 of 123 cases disagree); hybrid_union is better than hub_per_file_symbols (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=8.88e-15, 50 of 123 cases disagree); hybrid_union is better than idf_docstrings (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=6.66e-16, 54 of 123 cases disagree); hybrid_union leads solutions_and_problems_with_links (solutions_and_problems_with_links 0.425 against hybrid_union 0.438; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.791, 14 of 123 cases disagree); hybrid_union is better than vector_bge_small (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0151, 18 of 123 cases disagree)",
+   "detail": "beaten by hub_abstaining_hybrid, hub_bm25_body, hub_bm25_fielded, hub_dense_bge_small, hub_feature_rerank, hub_feature_rerank_no_priors, hub_hybrid_rrf, hub_learned_rerank: hub_abstaining_hybrid is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.06e-10, 185 of 185 cases disagree); blind_grep is better than hub_abstaining_learned (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=7.6e-07, 185 of 185 cases disagree); hub_bm25_body is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.62e-20, 185 of 185 cases disagree); hub_bm25_fielded is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.25e-18, 185 of 185 cases disagree); blind_grep is better than hub_bm25_whole_files (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.28e-06, 185 of 185 cases disagree); hub_dense_bge_small is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=5.7e-16, 185 of 185 cases disagree); hub_feature_rerank is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=5.61e-19, 185 of 185 cases disagree); hub_feature_rerank_no_priors is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=5.61e-19, 185 of 185 cases disagree); blind_grep leads hub_folder_cards (hub_folder_cards 0.348 against blind_grep 0.616; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.303, 185 of 185 cases disagree); hub_hybrid_rrf is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0159, 185 of 185 cases disagree); hub_learned_rerank is better than blind_grep (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.82e-11, 185 of 185 cases disagree); blind_grep is better than hub_lsi (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2e-15, 185 of 185 cases disagree); blind_grep is better than hub_per_file_symbols (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=6.66e-15, 185 of 185 cases disagree); blind_grep is better than hybrid_union (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.07e-17, 185 of 185 cases disagree); blind_grep is better than idf_docstrings (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.07e-17, 185 of 185 cases disagree); blind_grep is better than solutions_and_problems_with_links (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=2.62e-20, 185 of 185 cases disagree); blind_grep is better than vector_bge_small (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.05e-25, 185 of 185 cases disagree)",
    "p": 0.0,
    "verdict": "LOSS"
   },
   "modules": {
+   "blind_grep": "quest_ai_runner.select_context.retrieval_assembler",
    "bm25": "quest_ai_runner.select_context.bm25_content_store",
    "composite": "quest_ai_runner.config_assembler",
    "file": "quest_ai_runner.adapters.file_context_store",
+   "hub_feature_rerank": "quest_ai_runner.select_context.retrieval_assembler",
    "hybrid": "quest_ai_runner.select_context.hybrid_context_assembler",
    "rep": "quest_ai_runner.select_context.rep_context_assembler",
    "vector": "quest_ai_runner.select_context.vector_context_assembler"
@@ -889,6 +859,17 @@
    "ledger": "quest_ai_runner.hold_the_intents.feedback_ledger"
   }
  },
+ "system-integrity": {
+  "default": "structure-library",
+  "evidence": {
+   "detail": "structure_library leads keep_current (keep_current 0.588 against structure_library 0.765; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.549, 11 of 17 cases disagree)",
+   "p": 0.548828,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "structure-library": "quest_ai_runner.integrity.area"
+  }
+ },
  "tag-solutions": {
   "default": "tag_list_with_check",
   "evidence": {
@@ -917,16 +898,49 @@
    "openclaw": "quest_ai_runner.adapters.openclaw_channel"
   }
  },
- "think-critically": {
-  "default": "deep_runs_only",
+ "the-body": {
+  "default": "card_and_reads",
   "evidence": {
-   "detail": "deep_runs_only leads instruction_only (instruction_only 0.2 against deep_runs_only 0.4; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 10 cases disagree)",
-   "p": 0.5,
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "card_and_reads": "quest_ai_runner.area_body"
+  }
+ },
+ "the-mind": {
+  "default": "rebuilt_per_step",
+  "evidence": {
+   "detail": "beaten by rebuilt_full_context: best guess, not yet significant: rebuilt_full_context leads rebuilt_per_step (rebuilt_full_context 1 against rebuilt_per_step 0.857; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.481, rebuilt_full_context passed 14 of 14, rebuilt_per_step 12 of 14); more cases would settle it",
+   "p": 0.481481,
+   "verdict": "LOSS"
+  },
+  "modules": {
+   "rebuilt_full_context": "quest_ai_runner.core.orchestrator_planning",
+   "rebuilt_per_step": "quest_ai_runner.area_mind"
+  }
+ },
+ "the-science": {
+  "default": "web_with_support_check",
+  "evidence": {
+   "detail": "web_with_support_check is better than memory_only (two-sided exact McNemar test, Holm-adjusted p=0.00391, 9 of 9 cases disagree)",
+   "p": 0.003906,
    "verdict": "WIN"
   },
   "modules": {
-   "deep_runs_only": "quest_ai_runner.think_critically.area",
-   "instruction_only": "quest_ai_runner.core.standing_instructions"
+   "web_with_support_check": "quest_ai_runner.science.area"
+  }
+ },
+ "the-subconscious": {
+  "default": "recency_window",
+  "evidence": {
+   "detail": "recency_window leads admit_nothing (admit_nothing 0.222 against recency_window 0.444; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.625, 4 of 9 cases disagree)",
+   "p": 0.625,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "recency_window": "quest_ai_runner.core.planner_context"
   }
  },
  "track-usage-and-cost": {
@@ -942,6 +956,18 @@
    "usage": "quest_ai_runner.usage"
   }
  },
+ "vendor-model-caller": {
+  "default": "multi_provider",
+  "evidence": {
+   "detail": "multi_provider is better than single_provider (two-sided exact McNemar test, Holm-adjusted p=1.82e-12, 40 of 56 cases disagree)",
+   "p": 0.0,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "claude_cli": "quest_ai_runner.adapters.claude_cli_provider",
+   "multi_provider": "quest_ai_runner.providers"
+  }
+ },
  "verify-offline": {
   "default": "collect_by_file",
   "evidence": {
@@ -953,18 +979,6 @@
    "conftest": "tests.conftest"
   }
  },
- "watch-for-risk": {
-  "default": "overseer",
-  "evidence": {
-   "detail": "no rival implementation was measured on the same cases",
-   "p": null,
-   "verdict": "UNMEASURED"
-  },
-  "modules": {
-   "no_overseer": "quest_ai_runner.core.orchestrator_types",
-   "overseer": "quest_ai_runner.watch_for_risk.area"
-  }
- },
  "write-files": {
   "default": "files",
   "evidence": {
@@ -973,7 +987,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "files": "quest_ai_runner.act_as_the_body.files_writer"
+   "files": "quest_ai_runner.body.files_writer"
   }
  },
  "write-through-mcp": {
@@ -984,7 +998,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "mcp": "quest_ai_runner.act_as_the_body.mcp_write_adapter"
+   "mcp": "quest_ai_runner.body.mcp_write_adapter"
   }
  }
 }

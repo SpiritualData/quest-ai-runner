@@ -3445,7 +3445,7 @@
    "refs": [
     "replay-known-operations",
     "assemble-a-prompt",
-    "choose-a-model-tier",
+    "model-tier-chooser",
     "track-usage-and-cost",
     "gate-an-autopilot-pass",
     "ideal-predictable-spend",
@@ -3500,8 +3500,8 @@
    "kind": "problem",
    "refs": [
     "route-a-message",
-    "call-a-model",
-    "choose-a-model-tier",
+    "vendor-model-caller",
+    "model-tier-chooser",
     "ideal-proportionate-routing",
     "ideal-right-sized-model",
     "QP6"
@@ -3554,9 +3554,9 @@
    "kind": "problem",
    "refs": [
     "search-the-web",
-    "call-a-model",
+    "vendor-model-caller",
     "cache-cards",
-    "choose-a-model-tier",
+    "model-tier-chooser",
     "ideal-right-sized-model",
     "QP5"
    ],
@@ -5050,8 +5050,8 @@
     "prob-big-model-for-easy-work",
     "prob-vendor-outage-halts-work",
     "QI6",
-    "call-a-model",
-    "choose-a-model-tier"
+    "vendor-model-caller",
+    "model-tier-chooser"
    ],
    "summary": "The cheapest model that can do the task does it, and waiting beats failing.",
    "terms": {
@@ -5530,7 +5530,7 @@
     "operate-a-quest",
     "gather-evidence",
     "search-the-web",
-    "call-a-model",
+    "vendor-model-caller",
     "run-deep-work",
     "detect-a-stalled-run",
     "write-files",
@@ -5562,7 +5562,7 @@
     "run-queued-tasks",
     "configure-a-lane",
     "operate-from-a-terminal",
-    "choose-a-model-tier",
+    "model-tier-chooser",
     "track-usage-and-cost",
     "verify-offline",
     "keep-secrets-out",
@@ -6879,11 +6879,11 @@
   },
   {
    "digest": "9bdf950dcb08",
-   "id": "call-a-model:anthropic",
+   "id": "vendor-model-caller:anthropic",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "The reference provider over the Anthropic SDK: a forced-structured planning call, a normal grounded completion, and a cached latest-first model list. Stable prompt layers become cacheable system blocks. The SDK is imported lazily.",
    "terms": {
@@ -6927,11 +6927,11 @@
   },
   {
    "digest": "ff4f3b24e1f1",
-   "id": "call-a-model:gemini",
+   "id": "vendor-model-caller:gemini",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "A provider over the Google genai SDK offering JSON-forced planning, answering with native system-instruction splitting of prompt layers, and a cached model list, with lazy import.",
    "terms": {
@@ -6970,11 +6970,11 @@
   },
   {
    "digest": "1c7364f7614b",
-   "id": "call-a-model:openai",
+   "id": "vendor-model-caller:openai",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "A provider over the OpenAI SDK with JSON-mode structured planning, ordinary answering and a cached model list, written with hooks so compatible vendors can subclass it.",
    "terms": {
@@ -7007,11 +7007,11 @@
   },
   {
    "digest": "91adb97c0153",
-   "id": "call-a-model:deepseek",
+   "id": "vendor-model-caller:deepseek",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "A thin subclass of the OpenAI-compatible provider pointed at the DeepSeek endpoint, registered only when its key is set, with thinking off by default. Its models are never auto-bucketed into tiers, so a deployment opts in by pinning.",
    "terms": {
@@ -7053,11 +7053,11 @@
   },
   {
    "digest": "87e26268c355",
-   "id": "call-a-model:claude_cli",
+   "id": "vendor-model-caller:claude_cli",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "Drives the local Claude command-line tool in print mode so planning and answering run on the operator's subscription login. Planning asks for only the decision JSON and parses leniently, and the spawned process has API credentials stripped from its environment.",
    "terms": {
@@ -7103,11 +7103,11 @@
   },
   {
    "digest": "17203c3dc991",
-   "id": "call-a-model:multi_provider",
+   "id": "vendor-model-caller:multi_provider",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "Wraps a primary provider and a set of vendor providers, routes each call by model-name prefix, steps down a tier when a quota error occurs, and applies shared retry for transient errors. Callers see one provider.",
    "terms": {
@@ -7152,11 +7152,11 @@
   },
   {
    "digest": "4c5c2d6ce806",
-   "id": "call-a-model:single_provider",
+   "id": "vendor-model-caller:single_provider",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "A baseline in which every model name goes to one provider, a quota error is final, transient errors are not retried, the dry run counts input only and every model has the same price. It is the floor the multi-provider stack must beat.",
    "terms": {
@@ -12121,11 +12121,11 @@
   },
   {
    "digest": "3e13dc82c176",
-   "id": "choose-a-model-tier:deep_model_selection",
+   "id": "model-tier-chooser:deep_model_selection",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "Turns the planner's difficulty rating into a starting rung on the deep-worker ladder, normalising synonyms and unknown ratings and respecting an operator mapping, with no additional model call.",
    "terms": {
@@ -12162,11 +12162,11 @@
   },
   {
    "digest": "76c520d46d75",
-   "id": "choose-a-model-tier:model_registry",
+   "id": "model-tier-chooser:model_registry",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "Maps a tier name to the newest live model id by bucketing a provider's latest-first list by family, caching the result, using a last-known fallback only when the live list is empty, and exposing the next lower tier and vision capability.",
    "terms": {
@@ -12209,11 +12209,11 @@
   },
   {
    "digest": "f6939ed28120",
-   "id": "choose-a-model-tier:model_family",
+   "id": "model-tier-chooser:model_family",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "Resolves a bare family name to the newest live release of that family for any vendor, passing anything that names a pinned release through untouched.",
    "terms": {
@@ -12244,11 +12244,11 @@
   },
   {
    "digest": "684f6aa395d5",
-   "id": "choose-a-model-tier:provider_outage",
+   "id": "model-tier-chooser:provider_outage",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "Classifies an exception as a provider overload or outage, remembers the latest one, and supplies a resume time a few minutes ahead so the executor can requeue the task with a hold reason instead of failing it.",
    "terms": {
@@ -12291,11 +12291,11 @@
   },
   {
    "digest": "d2ac593076ff",
-   "id": "choose-a-model-tier:usage_limit",
+   "id": "model-tier-chooser:usage_limit",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "Detects a subscription usage-limit message in a run's result, parses its reset time and zone, computes a resume time, and records the limit lane-wide with optional persistence so other work waits.",
    "terms": {
@@ -12336,11 +12336,11 @@
   },
   {
    "digest": "743d8f4e1dd3",
-   "id": "choose-a-model-tier:qar_selection",
+   "id": "model-tier-chooser:qar_selection",
    "intent": "quest-ai-runner",
    "kind": "implementation",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "Calls the live selection, family, registry, fallback, outage and limit functions with a provider fake that only lists models. It is the measured arm for the rules above.",
    "terms": {
@@ -14412,7 +14412,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "call-a-model"
+    "vendor-model-caller"
    ],
    "summary": "routing, tier fallback, retry, cost and pricing arithmetic on offline cases (fake and dry-run providers)",
    "terms": {
@@ -16323,7 +16323,7 @@
    "intent": "quest-ai-runner",
    "kind": "metric",
    "refs": [
-    "choose-a-model-tier"
+    "model-tier-chooser"
    ],
    "summary": "offline cases: deep starting rung per difficulty and ladder (synonyms, unknown rating, off-ladder start, operator mapping), family resolution to the newest live id, tier resolution with and without live models and pins, lower-tier fallback, vision capability, outage wording...",
    "terms": {
@@ -17490,7 +17490,7 @@
   },
   {
    "digest": "90d4f38c87cc",
-   "id": "call-a-model",
+   "id": "vendor-model-caller",
    "intent": "quest-ai-runner",
    "kind": "solution",
    "refs": [
@@ -17499,13 +17499,13 @@
     "ideal-right-sized-model",
     "metric-call-a-model",
     "do-grounded-work:library",
-    "call-a-model:anthropic",
-    "call-a-model:gemini",
-    "call-a-model:openai",
-    "call-a-model:deepseek",
-    "call-a-model:claude_cli",
-    "call-a-model:multi_provider",
-    "call-a-model:single_provider"
+    "vendor-model-caller:anthropic",
+    "vendor-model-caller:gemini",
+    "vendor-model-caller:openai",
+    "vendor-model-caller:deepseek",
+    "vendor-model-caller:claude_cli",
+    "vendor-model-caller:multi_provider",
+    "vendor-model-caller:single_provider"
    ],
    "summary": "Use for: running planning and answering calls on the right vendor and tier, retrying transient errors and stepping down a tier on quota exhaustion. Avoid: choosing which task needs which tier (callers decide) and prompt content itself.",
    "terms": {
@@ -20058,7 +20058,7 @@
   },
   {
    "digest": "f4de121c730f",
-   "id": "choose-a-model-tier",
+   "id": "model-tier-chooser",
    "intent": "quest-ai-runner",
    "kind": "solution",
    "refs": [
@@ -20068,12 +20068,12 @@
     "ideal-right-sized-model",
     "metric-choose-a-model-tier",
     "do-grounded-work:library",
-    "choose-a-model-tier:deep_model_selection",
-    "choose-a-model-tier:model_registry",
-    "choose-a-model-tier:model_family",
-    "choose-a-model-tier:provider_outage",
-    "choose-a-model-tier:usage_limit",
-    "choose-a-model-tier:qar_selection"
+    "model-tier-chooser:deep_model_selection",
+    "model-tier-chooser:model_registry",
+    "model-tier-chooser:model_family",
+    "model-tier-chooser:provider_outage",
+    "model-tier-chooser:usage_limit",
+    "model-tier-chooser:qar_selection"
    ],
    "summary": "Use for: choosing which model rung starts a piece of work, resolving a family or tier name to the newest live release, falling back when a tier is exhausted, and recognising provider outages and usage limits so work resumes later. Avoid: judging whether the cheapest model still...",
    "terms": {

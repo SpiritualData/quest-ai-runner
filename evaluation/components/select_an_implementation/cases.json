@@ -4,7 +4,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "anthropic"
   },
   "expect": {
@@ -19,7 +19,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "gemini"
   },
   "expect": {
@@ -34,7 +34,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "openai"
   },
   "expect": {
@@ -49,7 +49,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "deepseek"
   },
   "expect": {
@@ -64,7 +64,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "claude_cli"
   },
   "expect": {
@@ -79,7 +79,7 @@
   "kind": "by_name",
   "area": "name",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "  Gemini "
   },
   "expect": {
@@ -156,9 +156,9 @@
   "kind": "by_override",
   "area": "override",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "overrides": {
-    "call-a-model": "gemini"
+    "vendor-model-caller": "gemini"
    }
   },
   "expect": {
@@ -173,9 +173,9 @@
   "kind": "by_override",
   "area": "override",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "overrides": {
-    "call-a-model": "gemini"
+    "vendor-model-caller": "gemini"
    },
    "name": "openai"
   },
@@ -191,7 +191,7 @@
   "kind": "by_override",
   "area": "override",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "overrides": {}
   },
   "expect": {
@@ -223,7 +223,7 @@
   "kind": "by_override",
   "area": "override",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "overrides": {
     "search-the-web": "brave"
    }
@@ -241,7 +241,7 @@
   "kind": "by_default",
   "area": "default",
   "args": {
-   "solution": "call-a-model"
+   "solution": "vendor-model-caller"
   },
   "expect": {
    "eq": {
@@ -302,7 +302,7 @@
   "kind": "typo",
   "area": "typo",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "name": "antropic"
   },
   "expect": {
@@ -347,9 +347,9 @@
   "kind": "by_override",
   "area": "typo",
   "args": {
-   "solution": "call-a-model",
+   "solution": "vendor-model-caller",
    "overrides": {
-    "call-a-model": "geminii"
+    "vendor-model-caller": "geminii"
    }
   },
   "expect": {

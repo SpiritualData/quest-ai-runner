@@ -338,8 +338,8 @@
  },
  {
   "id": "JMS-RCH",
-  "spec_id": "act-in-the-world.reach-judge",
-  "owner_metric": "metric-act-in-the-world",
+  "spec_id": "claim-reach.reach-judge",
+  "owner_metric": "metric-claim-reach",
   "keep": {
    "component": "judge_live_decisions",
    "impl": "live_judges"
@@ -358,6 +358,6 @@
    "tokens": null
   },
   "budget_source": "quest_ai_runner/core/orchestrator_types.py planner_reach_judge_timeout_seconds (20.0s): planning proceeds without a verdict after that. No dollar or token budget is declared for this prompt, so none is enforced (undeclared, not zero).",
-  "source": "owner metric metric-act-in-the-world (its live arm judge_live_decisions/live_judges); owner cases evaluation/components/judge_live_decisions/cases.json (the reach cases, the same for both arms); the calls are on the Claude Code subscription at the cheapest tier, not the deployment's configured tier"
+  "source": "owner metric metric-claim-reach (its live arm judge_live_decisions/live_judges); owner cases evaluation/components/judge_live_decisions/cases.json (the reach cases, the same for both arms); the calls are on the Claude Code subscription at the cheapest tier, not the deployment's configured tier"
  }
 ]
