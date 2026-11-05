@@ -152,7 +152,7 @@ quest_ai_runner.run("proactivity", {"schedules": [...], "now": "2026-07-12T09:00
 quest_ai_runner.run("prioritization", {"person": "", "request": "..."})               # what matters first (the hub's Prioritization)
 ```
 
-Every solution declares its interface in one `interface.py` beside its code, with the entry `run` calls. A host application imports only from `quest_ai_runner.api`, which lists the names a consumer outside this repository needs (ports it implements, constants, value objects), grouped by the solution they belong to, and `run`.
+Every solution declares its interface in one `interface.py` beside its code, with the entry `run` calls. A host application imports only from `quest_ai_runner.api`, which lists the names a consumer outside this repository needs (ports it implements, constants, value objects), grouped by the solution they belong to, and `run`. Under Quest Autopilot it exports the markers autopilot tasks carry (`PROPOSAL_TEXT_PREFIX`, `AUTOPILOT_PASS_KIND`, `AUTOPILOT_WORK_KIND`) and the bundled default instructions a host seeds a quest and a persona with (`BUNDLED_DEFAULT_QUEST_INSTRUCTIONS`, `BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS`).
 
 The flow of one request is `quest_ai_runner/the_self/respond.py`: Request intake, Higher mind, Subconscious, Mind, Nervous System and Critical Thinking, in that order, with the Mind's orchestrator loop as the selected arm. Autopilot is the hub's Proactivity (when standing work starts) and Prioritization (what matters first); QAR supplies Quest as the source of events and priorities.
 

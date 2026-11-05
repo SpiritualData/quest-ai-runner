@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `critical-thinking:deep_runs_only` 
 
 ## How the solutions fit together
 
-Critical Thinking holds a request to a measure. Metric Translation turns the request into a metric with a target. ESOI Application finds the specifications the request concerns and works to them, so the work is checked against the person's standard. Quest Autopilot decides whether work that nobody asked for may start now, from the person's own days, hours and budget.
+Critical Thinking holds a request to a measure. Metric Translation turns the request into a metric with a target. ESOI Application finds the specifications the request concerns and works to them. Goal Completion judges whether the goal was met and not merely claimed. Response Quality guards what a reply says against what is known.
 
 ## One level below
 
@@ -35,16 +35,6 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Goal Completion](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`goal-completion`): Says whether the goal condition of a request or sub-goal was met, against the done-standard its metric names. Adopted from the library `hub`.
 - [Response Quality](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`response-quality`): Judges a response against a quality profile: a named set of criteria with weights and target values. Adopted from the library `hub`.
 
-## Problems and ideals
-
-**Problems**
-
-- Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
-
-**Ideals**
-
-- Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
-
 ## Metrics and their leaders
 
 - Stop-or-continue verdict accuracy with false stops counted apart (`metric-detect-a-stalled-run`): leader `rule_floor`, 3 of 3 cases
@@ -62,19 +52,11 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Parent intent: [Intelligence](../README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/the_intelligence/critical_thinking/esoi_application](esoi_application/README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
-
-### Problems
-
-- Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
-
-### Ideals
-
-- Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
 
 ### Solutions
 

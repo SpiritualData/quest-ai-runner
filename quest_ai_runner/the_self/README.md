@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-self:library` of its parent 
 
 ## How the solutions fit together
 
-Quest Self keeps the parts of the assistant working as one whole for each Quest user. To answer a request it takes the request in through Quest Requests, learns what the person is working toward through Quest Intents, chooses the context the request needs through Context Retriever, reasons through Mind, acts on the account through Quest Body and answers beyond the person's own material through Science. Nervous System watches the run before anything irreversible is handed on and Critical Thinking holds the work to its measure. Model Plumbing is how every part asks a model, so each call is justified and its cost is known.
+Quest Self keeps every part of the assistant one specified whole, and Integrity is how it does that. Integrity checks that each part is a specified solution with a measured best implementation, so the package, its front door and its configuration stay one measured whole.
 
 ## One level below
 

@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `the-subconscious:recency_window` o
 
 ## How the solutions fit together
 
-Subconscious finds and prepares what a request needs before the Mind asks. Cards From Files builds topic cards from a person's own files and history, and Card Store keeps those cards in Quest, so that no card is made for every file.
+Subconscious has the right part of a person's own knowledge ready before they ask. Intuition remembers what the AI expected to happen so a surprise can be noticed. Cards From Files builds topic cards from a person's own files and history, so no card is made for every file. Choose The Context picks the cards, files and conversations the request concerns.
 
 ## One level below
 

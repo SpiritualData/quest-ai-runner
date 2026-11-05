@@ -1,0 +1,2 @@
+ideal_id,name,principle,state_description,hints_of_measurement,problem_ids,parent_ideal_ids
+ideal-dependable-delivery,Dependable Delivery,"What is handed to the system arrives once, in order, and is accounted for.","A queued task is claimed once and ends reported as done, failed or needing a person; a channel message is delivered once and in order.","Scripted queues and channels show no loss, no duplicate, no early or misrouted run.",QP1,

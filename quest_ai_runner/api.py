@@ -103,7 +103,8 @@ from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateL
 from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
 
 # Proactivity (gate-an-autopilot-pass): the markers autopilot tasks carry, read back by the host
-from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import PROPOSAL_TEXT_PREFIX, AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND
+from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
+    AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS, PROPOSAL_TEXT_PREFIX)
 
 __all__ = [
     "ACCEPTED",
@@ -113,6 +114,8 @@ __all__ = [
     "AWAITING_ANSWER",
     "Anticipator",
     "BLOCKED",
+    "BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS",
+    "BUNDLED_DEFAULT_QUEST_INSTRUCTIONS",
     "CARD_SEED_SCOPE",
     "CONF_FLOOR",
     "CachedDbAdapter",

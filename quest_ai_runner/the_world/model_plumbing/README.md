@@ -4,7 +4,11 @@
 
 Breadcrumb: [Top](../../../esoi/README.md) > [World](../README.md) > Model Plumbing
 
-This sub-intent arises as the implementation `model-plumbing:via_vendor` of its parent intent [`the_world`](../README.md).
+This sub-intent arises as the implementation `model-plumbing:via_vendor` of its parent intent [`the_world`](../README.md). Opportunities: Models change faster than the assistant does, so choosing the tier by measurement and keeping the vendor behind one caller lets a better model run as it appears.
+
+## How the solutions fit together
+
+Model Plumbing asks a model through one path whose model can change unseen. Model Tier Chooser picks the model that earns its cost for each tier. Vendor Model Caller asks the chosen model of its vendor.
 
 ## One level below
 

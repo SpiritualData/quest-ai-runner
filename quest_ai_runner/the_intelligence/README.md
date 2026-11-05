@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `the-intelligence:composition` of i
 
 ## How the solutions fit together
 
-Intelligence turns one request into a response. Quest Intents says which of the person's quests the request serves. Subconscious finds the cards the request needs before it is asked for, from Card Store and Cards From Files, and Context Retriever picks among them. Mind plans the request in steps, through Planner and Context Intake, and Quest Work Shown tells the person what is happening. Critical Thinking holds the work to a measure through Metric Translation, Goal Completion and Response Quality, and Quest Autopilot starts standing work only when the person allows it.
+Intelligence turns one request into a response. Quest Intents says which of the person's quests the request serves and what the work is for. Subconscious prepares what the request needs before it is asked for. Mind thinks the request through step by step. Nervous System watches the run and brings in a person only where only a person can decide. Critical Thinking holds the work to the measure that serves the person's goals, and hands work nobody asked for to Quest Autopilot, which starts it only when the person allows.
 
 ## Diagram
 
@@ -21,7 +21,7 @@ flowchart LR
     s2["Critical Thinking<br/><i>critical-thinking</i>"]
     s3["Quest Autopilot<br/><i>quest-autopilot</i>"]
     s4["Quest Intents<br/><i>quest-intents</i>"]
-    s0 --> s1
+    s0 -->|"The cards and files a request needs, ready before it is asked for"| s1
     s3 -->|"Run or skip, with the reason"| s2
     s4 -->|"The quest the message serves and the intent frame for the work"| s0
 ```
@@ -63,13 +63,13 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Work Cut Off From Its Purpose (`prob-work-misses-its-why`): Replies, experiments and finished work are chosen and judged from the quest alone, not from the top intent and metrics the quest serves, so effort can drift from what the person cares about most and gaps under an intent can go unnoticed.
 - Answers Not Tied To The Person's Goal (`prob-quest-answer-not-tied-to-my-goal`): Asked how Quest could help, what a feature is for, or whether it is worth it, Quest AI can answer with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it can assume a circumstance the person did not give.
-- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
+- Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
 
 **Ideals**
 
 - Purposeful Work (`ideal-purposeful-work`): Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 - Goal-Fitted Answer (`ideal-quest-answer-fits-my-goal`): When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
-- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
+- Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
 
 ## Metrics and their leaders
 
@@ -99,13 +99,13 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Work Cut Off From Its Purpose (`prob-work-misses-its-why`): Replies, experiments and finished work are chosen and judged from the quest alone, not from the top intent and metrics the quest serves, so effort can drift from what the person cares about most and gaps under an intent can go unnoticed.
 - Answers Not Tied To The Person's Goal (`prob-quest-answer-not-tied-to-my-goal`): Asked how Quest could help, what a feature is for, or whether it is worth it, Quest AI can answer with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it can assume a circumstance the person did not give.
-- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
+- Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
 
 ### Ideals
 
 - Purposeful Work (`ideal-purposeful-work`): Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 - Goal-Fitted Answer (`ideal-quest-answer-fits-my-goal`): When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
-- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
+- Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
 
 ### Solutions
 

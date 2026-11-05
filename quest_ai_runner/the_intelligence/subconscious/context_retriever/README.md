@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `choose-the-context:per_lane_assemb
 
 ## How the solutions fit together
 
-Context Retriever picks the cards, files and conversations that bear on a request, however it is worded, by ranking them and keeping what is confident enough.
+Choose The Context gives the request the material a request concerns, however it is worded. Context Retriever ranks the cards, files and conversations and keeps what is confident enough. Index By Meaning finds a card by what it means, so a question phrased differently still reaches it. Spec Selection returns the few specification records that bear on a request. Search Cards And Specs shows the cards and specification records together, and says when no solution covers a problem.
 
 ## One level below
 
@@ -32,6 +32,16 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - [Context Retriever](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`context-retriever`): Cuts a corpus (files, the text of cards, or the turns of a conversation) into units at natural boundaries and returns, for a request, the units that answer it best first within a token budget, or nothing when the request needs no context. Adopted from the library `hub`.
 
+## Problems and ideals
+
+**Problems**
+
+- Unreliable Help With The App (`prob-app-help-unreliable`): Questions about how to use Quest, or what its AI can do for the person, are answered from guesses instead of the product's documentation and actual reach: the AI describes a capability it does not have, or says it cannot do something it can.
+
+**Ideals**
+
+- Self-Explaining App (`ideal-self-explaining-app`): Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
+
 ## Metrics and their leaders
 
 - Context selection ranking accuracy and card-quality outcome (`metric-select-context`): leader `hub_feature_rerank`, 115 of 185 cases
@@ -43,11 +53,19 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Parent intent: [Subconscious](../README.md)
 - Repository: [top README](../../../../README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
+
+### Problems
+
+- Unreliable Help With The App (`prob-app-help-unreliable`): Questions about how to use Quest, or what its AI can do for the person, are answered from guesses instead of the product's documentation and actual reach: the AI describes a capability it does not have, or says it cannot do something it can.
+
+### Ideals
+
+- Self-Explaining App (`ideal-self-explaining-app`): Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
 
 ### Solutions
 

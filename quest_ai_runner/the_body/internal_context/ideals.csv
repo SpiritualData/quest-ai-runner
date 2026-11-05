@@ -1,0 +1,2 @@
+ideal_id,name,principle,state_description,hints_of_measurement,problem_ids,parent_ideal_ids
+ideal-contained-scope,Contained Scope,"Data stays inside the user, team and quest it belongs to, on every read and write path.","No retrieval, cache, recall, store or feed returns another scope's content, and what is stored comes back exactly.",Cross-scope probes return nothing; stored items round-trip; fences hold on each backend.,prob-private-data-crosses-scope,QI2

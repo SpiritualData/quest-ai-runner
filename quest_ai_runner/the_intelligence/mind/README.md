@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `the-mind:rebuilt_per_step` of its 
 
 ## How the solutions fit together
 
-Mind works one request in steps, each step building on what the earlier ones established. Context Intake takes in what was prepared for the request and what workers brought back, as one view. Quest Work Shown tells the person, while the turn runs and after it, what the assistant is doing and what the answer rests on.
+Mind works one request in steps, each building on what the earlier ones established. Context Intake takes in what was prepared for the request and what workers brought back, as one view. Planner decides where the request goes, whether to answer it, use a tool or hand it to deep work. Replay Known Operations repeats a request that worked before without planning it again. Quest Work Shown tells the person what the assistant is doing. Reply In Steps sends an interim message when an attempt has not met the goal. Show Progress chooses what the person sees of a run by how they follow it.
 
 ## One level below
 
@@ -43,13 +43,10 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 **Problems**
 
 - Unreadable Work (`prob-progress-unreadable`): A person cannot see what their AI is doing for them: whether background work is moving, or what an answer rests on.
-- Parts Pass While The Assistant Fails (`prob-assistant-not-jarvis-from-the-users-seat`): Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out.
 
 **Ideals**
 
 - Legible Work (`ideal-legible-progress`): A person can see what their AI is doing for them and what an answer rests on, as much as they need and no more, for the mode they are in.
-- Capable From The User's Seat (`ideal-jarvis-from-the-users-seat`): The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says only what it did.
-- Present And Prompt (`ideal-jarvis-j01-always-there-and-fast`): The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
 
 ## Metrics and their leaders
 
@@ -79,13 +76,10 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 ### Problems
 
 - Unreadable Work (`prob-progress-unreadable`): A person cannot see what their AI is doing for them: whether background work is moving, or what an answer rests on.
-- Parts Pass While The Assistant Fails (`prob-assistant-not-jarvis-from-the-users-seat`): Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out.
 
 ### Ideals
 
 - Legible Work (`ideal-legible-progress`): A person can see what their AI is doing for them and what an answer rests on, as much as they need and no more, for the mode they are in.
-- Capable From The User's Seat (`ideal-jarvis-from-the-users-seat`): The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says only what it did.
-- Present And Prompt (`ideal-jarvis-j01-always-there-and-fast`): The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
 
 ### Solutions
 

@@ -14,14 +14,6 @@ Part of [Intelligence](../README.md)
 
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): leader `quest_decision_sink`, 15 of 15 cases
 
-## Problems
-
-- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
-
-## Ideals
-
-- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
-
 ## Where to go next
 
 - Up: [quest_ai_runner](../../README.md)

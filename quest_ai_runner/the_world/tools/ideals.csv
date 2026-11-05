@@ -1,0 +1,2 @@
+ideal_id,name,principle,state_description,hints_of_measurement,problem_ids,parent_ideal_ids
+ideal-exact-change,Exact Change,"The final state matches the request: everything asked, nothing else, once.","After the AI acts, the quest differs from before in exactly the way the person described, and a retry or a repeat leaves it unchanged.",Compare the data before and after a scripted request with the expected diff; any extra write or missing step is a miss.,prob-unrequested-or-partial-changes,QI3

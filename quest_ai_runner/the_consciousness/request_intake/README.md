@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-requests:poller` of its pare
 
 ## How the solutions fit together
 
-Quest Requests takes a request in from a chat turn, a queued task or a live channel and gives every surface the same understanding of it. Planner decides where the request goes, whether to answer it, use a tool, hand it to deep work, confirm it with the person or ask for clarity, and replays a request that worked before at a fraction of the cost.
+Quest Requests takes every request in once and gives each Quest surface the same understanding of it. Take In The World accepts a request from a chat channel, the terminal or the embedded package and says where it goes. Receive Input Mid Run holds what a person sends while work runs and hands it to the run's next decision exactly once. Describe An Attachment turns an attached image into text the AI can use.
 
 ## One level below
 
@@ -25,6 +25,16 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Take In The World | `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
 | Receive Input Mid Run | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
 | Describe An Attachment | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
+
+## Problems and ideals
+
+**Problems**
+
+- Lost Or Unreported Tasks (`QP1`): Quest tasks attached to goals can be lost, run twice, or end without an outcome the person sees.
+
+**Ideals**
+
+- Dependable Delivery (`ideal-dependable-delivery`): What is handed to the system arrives once, in order, and is accounted for.
 
 ## Metrics and their leaders
 
@@ -43,11 +53,19 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Parent intent: [Quest Consciousness](../README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
+
+### Problems
+
+- Lost Or Unreported Tasks (`QP1`): Quest tasks attached to goals can be lost, run twice, or end without an outcome the person sees.
+
+### Ideals
+
+- Dependable Delivery (`ideal-dependable-delivery`): What is handed to the system arrives once, in order, and is accounted for.
 
 ### Solutions
 

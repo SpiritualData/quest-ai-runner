@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `the-world:composition` of its pare
 
 ## How the solutions fit together
 
-World is how the assistant learns what is outside it and acts on it. Model Plumbing asks a model through one measured path, where Model Tier Chooser picks the model for each tier and Vendor Model Caller asks that vendor. Tools lets the assistant use the tool of each category the person's authority allows, through Web Search, File Editing and Delegated Agent Sessions. Science answers from public research with its sources.
+World is how the assistant learns what lies outside it and acts on it. Model Plumbing asks a model through one measured path. Science answers from public research with its source shown. Tools lets the assistant use the tool of each category the person's authority allows.
 
 ## One level below
 

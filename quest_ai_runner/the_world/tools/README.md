@@ -4,7 +4,11 @@
 
 Breadcrumb: [Top](../../../esoi/README.md) > [World](../README.md) > Tools
 
-This sub-intent arises as the implementation `the-tools:coding_agent_reach_judge` of its parent intent [`the_world`](../README.md).
+This sub-intent arises as the implementation `the-tools:coding_agent_reach_judge` of its parent intent [`the_world`](../README.md). Opportunities: Tools differ in what they can change and how it can be undone, so each category the person allows is reached through its own measured solution and the person's authority bounds it all.
+
+## How the solutions fit together
+
+Tools lets the assistant act only through what the person's authority allows. Delegated Agent Sessions runs a goal in a headless agent within a turn and cost bound. Detect A Stalled Run reads a run's live activity to tell a stuck run from a slow one. File Editing changes files inside one folder and keeps each change reversible. Quest Change Executor changes a quest exactly as the person asked. Write Through MCP writes to an outside tool server only when an allowlist permits it.
 
 ## One level below
 
@@ -32,16 +36,34 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [File Editing](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/tools/README.md) (`file-editing`): Changes a file by instruction and reports what changed. Adopted from the library `hub`.
 - [Connected System Operations](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/tools/README.md) (`quest-change-executor`): Calls an operation of a connected system, such as a write through an MCP server. Specializes the library `hub`.
 
+## Problems and ideals
+
+**Problems**
+
+- Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+
+**Ideals**
+
+- Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+
 ## Where to go next
 
 - Parent intent: [World](../README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/the_world/tools/connected_system_operations](connected_system_operations/README.md), [quest_ai_runner/the_world/tools/delegated_agent_sessions](delegated_agent_sessions/README.md), [quest_ai_runner/the_world/tools/file_editing](file_editing/README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv)
 
 ---
 
 ## The full record
+
+### Problems
+
+- Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+
+### Ideals
+
+- Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
 
 ### Solutions
 

@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-consciousness:composition` o
 
 ## How the solutions fit together
 
-Quest Consciousness is where the assistant adapts to the person it works for and helps them move toward their intents. Quest Requests takes in what the person asks, from every Quest surface, once. Quest Representatives gives each request to the representative that fits it. Quest Decision Requests carries a decision that only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected so it guides later work. Intent Evolution then suggests the option most likely to work for the person's intents, or an experiment when the best option is not yet known.
+Quest Consciousness keeps the assistant aligned with the person it serves and helps their own intents move. Quest Requests takes each request in once, from every Quest surface. Quest Representatives resolves the representative a task is for from what Quest Requests took in. Hand Off A Goal says who a new goal belongs to and whether an AI can carry it. Quest Decision Requests carries a decision only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected. Guide By Feedback shows the corrections that apply on the turns where they matter. Intent Evolution suggests the option most likely to work for their intents.
 
 ## Diagram
 
@@ -22,7 +22,7 @@ flowchart LR
     s3["Feedback Learning<br/><i>feedback-learning</i>"]
     s0 -->|"The request taken in once and its outcome reported"| s1
     s2 -->|"A decision-request on the quest, and its answer when it comes"| s1
-    s3 --> s1
+    s3 -->|"The corrections a person made, kept as standing guidance"| s1
 ```
 
 ## One level below
@@ -61,10 +61,16 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 **Problems**
 
 - Advice Without A Way To Check It (`prob-experiments-not-proposed`): Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose an experiment that would settle it, though the app has an Experiments feature built for that.
+- Wrong Or Inconsistent Representative (`prob-wrong-or-inconsistent-rep`): Which AI representative handles a message, a queued task, a newly assigned goal or an autopilot pass is decided in several places by different rules, with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative.
+- Long-Term Goal Goes Quiet (`prob-long-term-goal-goes-quiet`): The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; a pointer to the goal in every reply nags, hijacks a simple question or lands on a person who is in a hurry or upset.
+- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
 
 **Ideals**
 
 - Most-Likely Path (`ideal-most-likely-path`): Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
+- Right Representative (`ideal-right-rep`): Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
+- Moves Me Forward Without Nagging (`ideal-moves-me-forward`): From the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
+- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
 
 ## Metrics and their leaders
 
@@ -87,10 +93,16 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 ### Problems
 
 - Advice Without A Way To Check It (`prob-experiments-not-proposed`): Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose an experiment that would settle it, though the app has an Experiments feature built for that.
+- Wrong Or Inconsistent Representative (`prob-wrong-or-inconsistent-rep`): Which AI representative handles a message, a queued task, a newly assigned goal or an autopilot pass is decided in several places by different rules, with no shared definition of the right representative, no labelled measure of how often it is right, and no rule that work spawned from a thread keeps that thread's representative.
+- Long-Term Goal Goes Quiet (`prob-long-term-goal-goes-quiet`): The AI answers the request in front of it and lets the person's long-term goal go quiet, so each small task is done without the end in sight; a pointer to the goal in every reply nags, hijacks a simple question or lands on a person who is in a hurry or upset.
+- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
 
 ### Ideals
 
 - Most-Likely Path (`ideal-most-likely-path`): Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
+- Right Representative (`ideal-right-rep`): Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
+- Moves Me Forward Without Nagging (`ideal-moves-me-forward`): From the call: every reply answers what was asked first and, at a natural moment, keeps the person's next milestone in view, at the intent level they are working at.
+- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
 
 ### Solutions
 

@@ -1,0 +1,2 @@
+ideal_id,name,principle,state_description,hints_of_measurement,problem_ids,parent_ideal_ids
+ideal-self-explaining-app,Self-Explaining App,"Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.",A new user asks how to do something and is shown the way; nobody is told the AI cannot do something it can.,Usage questions are recognised and answered correctly from the documentation; claims about what the AI can do in the app are true.,prob-app-help-unreliable,QI2

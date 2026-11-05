@@ -50,10 +50,10 @@ def test_the_cached_index_is_reused_until_a_record_file_changes(repo):
 
 def test_find_without_a_model_is_free_and_the_offline_cli_prints_records(repo, capsys):
     got, index = repo_specs.find("a queued task was lost or run twice", repo)
-    assert got.calls == 0 and "prob-queued-task-falls-through" in got.ids
+    assert got.calls == 0 and "QP1" in got.ids
     assert repo_specs.main(["find", "a queued task was lost or run twice", "--root", str(repo)]) == 0
-    assert "prob-queued-task-falls-through" in capsys.readouterr().out
-    assert repo_specs.main(["related", "prob-queued-task-falls-through", "--root", str(repo)]) == 0
+    assert "QP1" in capsys.readouterr().out
+    assert repo_specs.main(["related", "QP1", "--root", str(repo)]) == 0
     assert repo_specs.main(["show", "no-such", "--root", str(repo)]) == 1
 
 
@@ -65,11 +65,11 @@ def test_the_four_tools_are_offered_only_in_a_repository_and_read_without_writin
     assert set(specs) <= registered
     ctx = ToolContext()
     found = specs["find_specs"].handler({"request": "a queued task was lost or run twice"}, ctx)
-    assert found.ok and "prob-queued-task-falls-through" in found.data["ids"]
-    related = specs["related_specs"].handler({"id": "prob-queued-task-falls-through", "depth": 2}, ctx)
+    assert found.ok and "QP1" in found.data["ids"]
+    related = specs["related_specs"].handler({"id": "QP1", "depth": 2}, ctx)
     assert related.ok and related.data and not specs["related_specs"].handler({"id": "nope"}, ctx).ok
     assert specs["intent_specs"].handler({}, ctx).ok
-    assert "prob-queued-task-falls-through" in specs["show_spec"].handler({"id": "prob-queued-task-falls-through", "tier": 2}, ctx).text
+    assert "QP1" in specs["show_spec"].handler({"id": "QP1", "tier": 2}, ctx).text
     monkeypatch.delenv("QAR_SPEC_ROOT")
     monkeypatch.chdir(repo.parent)
     assert all(build({}) is None for build in builders.values())
@@ -94,7 +94,7 @@ def test_the_brief_hands_the_worker_the_root_so_the_spec_tools_it_names_exist_in
     before = worker_shell(repo, tmp_path, tmp_path_factory, "call", "find_specs", "--kw", request)   # the command as it was taught before
     assert before.returncode == 1 and "unknown tool 'find_specs'" in before.stderr + before.stdout
     after = worker_shell(repo, tmp_path, tmp_path_factory, "--spec-root", str(repo), "call", "find_specs", "--kw", request)
-    assert after.returncode == 0 and "prob-queued-task-falls-through" in after.stdout
+    assert after.returncode == 0 and "QP1" in after.stdout
 
 
 def test_a_brief_names_no_spec_tool_where_there_is_no_repository_to_read_and_adds_no_root_for_other_tools(repo, monkeypatch):

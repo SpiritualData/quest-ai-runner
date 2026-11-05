@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-body:quest_client` of its pa
 
 ## How the solutions fit together
 
-Quest Body is the form of the assistant and the Quest data that belongs to the person. Quest Body reads and writes Quest only through one client and declares the research search the host offers. Quest Context gathers what the person's own quests, notes, decisions and teammates say, and keeps it inside the person's scope. Quest Change Executor changes a quest exactly as the person asked, through Delegated Agent Sessions and File Editing when the work is more than one step. Quest Account Truth makes what the assistant says about an account the account as it is now.
+Quest Body is the form of the assistant and the Quest data that belongs to the person. Quest Body checks every claim about an account through Quest Account Truth, and takes requests in from where people work through Intake Sources. Quest Account Truth reads the account as it stands when the AI speaks, through Quest Context, which keeps each person's own notes, goals and decisions apart from everyone else's.
 
 ## Diagram
 
@@ -48,12 +48,12 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 **Problems**
 
 - Contradictory Account State (`prob-account-state-contradicts`): What the AI says about the person's own account (which quests exist, what changed, whether a change ran) is re-derived each turn from whatever slice it read, and a change it made is not read back, so within one session it can report the same state two ways, repeat a change it already made, or propose again what it said was done.
-- Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+- Help That Does Not Know The Person (`QP2`): A general assistant answers from general knowledge.
 
 **Ideals**
 
 - Consistent Account State (`ideal-consistent-account-state`): What the AI says about the person's own account is true of the account when it says it, every time in a session.
-- Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+- Personally Grounded Help (`QI2`): Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
 
 ## Metrics and their leaders
 
@@ -82,12 +82,12 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 ### Problems
 
 - Contradictory Account State (`prob-account-state-contradicts`): What the AI says about the person's own account (which quests exist, what changed, whether a change ran) is re-derived each turn from whatever slice it read, and a change it made is not read back, so within one session it can report the same state two ways, repeat a change it already made, or propose again what it said was done.
-- Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+- Help That Does Not Know The Person (`QP2`): A general assistant answers from general knowledge.
 
 ### Ideals
 
 - Consistent Account State (`ideal-consistent-account-state`): What the AI says about the person's own account is true of the account when it says it, every time in a session.
-- Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+- Personally Grounded Help (`QI2`): Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
 
 ### Solutions
 

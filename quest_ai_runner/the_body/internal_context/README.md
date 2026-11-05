@@ -4,11 +4,11 @@
 
 Breadcrumb: [Top](../../../esoi/README.md) > [Quest Body](../README.md) > Quest Context
 
-This sub-intent arises as the implementation `quest-context:quest` of its parent intent [`the_body`](../README.md). Opportunities: The Quest account is the AI's own consistent state, which opens questions beyond the parent solution: how the AI states what it can reach (inside the host, outside it, in the world now, or not reachable) and is held to that claim, how heavy work is handed to a deep runner within a fixed turn and cost bound and its result checked, how a file change is kept bounded to one folder and reversible, how one named change on an outside tool server is made only when an allowlist permits it, and who a new goal belongs to and whether an AI representative can take it over.
+This sub-intent arises as the implementation `quest-context:quest` of its parent intent [`the_body`](../README.md). Opportunities: A person's Quest holds more than any one request can read, and each piece belongs to one person, so how it is fed, stored and kept apart is a question the parent solution leaves open.
 
 ## How the solutions fit together
 
-Quest Account Truth reads the account at the time of the reply and sets what the assistant says against it, so a claim about a goal, a decision or a person's settings is checked before it is said.
+Quest Context knows each person's own Quest and nobody else's. Card Store keeps the person's context cards where they must live. Persist Cards writes them to a folder, a vector database or Quest itself. Cache Cards serves the last listing and holds failed writes while a backend is down. Feed Context Sources tells the assistant what is new in a quest since it last looked.
 
 ## One level below
 
@@ -32,16 +32,34 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - [Card Store](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`card-store`): A small store that keeps cards, the hub's own memory unit, and finds them again by words or a tag. Adopted from the library `hub`.
 
+## Problems and ideals
+
+**Problems**
+
+- Private Data Crossing Scope (`prob-private-data-crosses-scope`): Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI.
+
+**Ideals**
+
+- Contained Scope (`ideal-contained-scope`): Data stays inside the user, team and quest it belongs to, on every read and write path.
+
 ## Where to go next
 
 - Parent intent: [Quest Body](../README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/the_body/internal_context/card_store](card_store/README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv)
 
 ---
 
 ## The full record
+
+### Problems
+
+- Private Data Crossing Scope (`prob-private-data-crosses-scope`): Data from one user, team or quest reaches another one's prompt or store, through retrieval, caches, conversation recall, shared stores or the sources fed to the AI.
+
+### Ideals
+
+- Contained Scope (`ideal-contained-scope`): Data stays inside the user, team and quest it belongs to, on every read and write path.
 
 ### Solutions
 
