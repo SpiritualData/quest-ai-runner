@@ -190,6 +190,17 @@ def oldest_first(rows: List[Dict[str, Any]], now: datetime) -> List[Dict[str, An
     return [rows[int(place)] for place in ordered_ids(answer["ordered"])]
 
 
+def waiting_in_order(rows: List[Dict[str, Any]], now: datetime) -> List[Dict[str, Any]]:
+    """The asks waiting on a person in the order the hub's Prioritization gives them (Quest's ordering arm): the overdue and the nearer deadline first, the
+    undated newest first. The section shows only the first ``MAX_WAITING``, so the order decides which ones the run is told about."""
+    if len(rows) < 2:
+        return list(rows)
+    candidates = [{"id": str(index), "kind": "decision", "deadline": str(row.get("deadline") or ""), "created_at": str(row.get("created_at") or "")}
+                  for index, row in enumerate(rows)]
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "now": now.isoformat()})
+    return [rows[int(place)] for place in ordered_ids(answer["ordered"])]
+
+
 def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
                        decisions: Optional[List[Dict[str, Any]]] = None, *,
                        now: Optional[datetime] = None,
@@ -227,6 +238,6 @@ def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
         lines += capped((rule_entry(r) for r in rules), MAX_RULES)
     if decisions:
         lines += ["", "Already waiting on a person (do not raise these again):"]
-        lines += capped((waiting_entry(r) for r in decisions), MAX_WAITING)
+        lines += capped((waiting_entry(r) for r in waiting_in_order(decisions, when)), MAX_WAITING)
     text = "\n".join(lines)
     return text if len(text) <= max_chars else text[:max_chars - 3].rstrip() + "..."

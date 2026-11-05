@@ -1,9 +1,9 @@
 """Scores a Quest ordering arm: do the candidates come back in the order the rule of the case gives them?
 
 ``metric-order-quest-work`` BUILDS ON the hub's ``prioritization`` metric (``esoi.toml`` ``[builds_on.order_quest_work.hub_cases]``): the hub's invented,
-neutral cases, each exercising one generic rule, are the foundation and are not copied here. What stays here is what only Quest can say: the thirteen cases
-that exercise Quest's own data and rules (a quest list with a person's rank map and the creator's legacy rank, the autopilot's order of asks, goals and
-ideas, goal horizons and the goal ladder, open asks oldest first). Each carries its ``source`` (the Quest test or rule it was taken from). One number: the
+neutral cases, each exercising one generic rule, are the foundation and are not copied here. What stays here is what only Quest can say: the cases that exercise Quest's own data and rules, tagged with their use of Prioritization (``use``). Work: the
+autopilot's order of asks, goals and ideas. Asks: open asks oldest first and the asks put to the person (overdue and nearer deadline first, the undated newest
+first). Goals: a quest list with a person's rank map and the creator's legacy rank, goal horizons, the goal ladder, completed goals last. Each carries its ``source`` (the Quest test or rule it was taken from). One number: the
 share of cases whose whole order equals the reviewed order, balanced with cost and time by ``[balance.order_quest_work]`` (weights and budgets fixed before
 any arm was scored). No model call, no network. ``build_cases.py`` rebuilds ``cases.json``."""
 import json

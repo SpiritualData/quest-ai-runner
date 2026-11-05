@@ -3,7 +3,7 @@
 The composition arm ``composition`` takes the Consciousness members as typed seats, built on first use: Quest Requests runs the tasks queued
 for a team, Quest Representatives chooses the representative a task is for, Hand Off A Goal says who a new goal belongs to, Quest Decision
 Requests carries a decision to the person it belongs to, Feedback Learning keeps what the person corrected, Guide By Feedback shows the
-corrections that apply, Prioritization (the hub's, with Quest's ordering arm) puts the work that competes for attention in order and Intent
+corrections that apply, Prioritization (the hub's, with Quest's ordering arm) puts in order the work to start, the asks to put to the person and the person's goals, and Intent
 Evolution suggests what is most likely to work for their intents.
 """
 from __future__ import annotations

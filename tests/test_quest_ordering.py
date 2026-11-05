@@ -16,7 +16,7 @@ def ids(answer):
 
 def test_every_quest_case_comes_back_in_the_reviewed_order():
     arm = QuestOrdering()
-    assert len(CASES) == 13
+    assert len(CASES) == 20
     for case in CASES:
         args = case["args"]
         got = ids(arm.prioritize(person=args["person"], candidates=args["candidates"], stated=args.get("stated"), now=args["now"]))
@@ -76,3 +76,23 @@ def test_the_ladder_lists_goals_nearest_deadline_first_through_prioritization():
                                                                                          {"id": "soon", "name": "soon", "deadline": "2026-07-14"}]}]}
     rung = current_goal_ladder(payload, datetime(2026, 7, 12, 9, tzinfo=timezone.utc))[0]
     assert [g["id"] for g in rung["goals"]] == ["soon", "late", "none"]
+
+
+def test_asks_for_you_come_overdue_first_then_by_deadline_and_the_undated_newest_first():
+    from datetime import datetime, timezone
+    from quest_ai_runner.the_intelligence.proactivity.quest_asks_brief import waiting_in_order
+    rows = [{"summary": "old", "created_at": "2026-07-01T08:00:00Z"}, {"summary": "soon", "created_at": "2026-07-02T08:00:00Z", "deadline": "2026-07-13T09:00:00Z"},
+            {"summary": "new", "created_at": "2026-07-11T08:00:00Z"}, {"summary": "overdue", "created_at": "2026-07-03T08:00:00Z", "deadline": "2026-07-11T09:00:00Z"}]
+    got = waiting_in_order(rows, datetime(2026, 7, 12, 9, tzinfo=timezone.utc))
+    assert [r["summary"] for r in got] == ["overdue", "soon", "new", "old"]
+
+
+def test_every_quest_case_names_its_use_and_all_three_uses_are_measured():
+    assert {case["use"] for case in CASES} == {"work", "asks", "goals"} and len(CASES) == 20
+
+
+def test_goals_are_ordered_at_three_levels_and_the_day_has_no_invented_scheduling():
+    levels = {case["level"] for case in CASES if case["use"] == "goals"}
+    assert levels == {"quest", "milestone", "period", "daily"}
+    daily = [case for case in CASES if case["level"] == "daily"]
+    assert [case["source"] for case in daily] == ["quest-backend api/endpoints/planning.py sort_ai_handled_last"]    # the only rule Quest writes for the day

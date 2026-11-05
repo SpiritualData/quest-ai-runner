@@ -2,6 +2,8 @@
  {
   "id": "quest-cap-keeps-highest-priority",
   "kind": "quest-list",
+  "use": "goals",
+  "level": "quest",
   "origin": "rule: ranked quests keep their place, so a cap of fifty keeps the highest priority",
   "source": "quest-backend tests/test_quest_ranking_all.py",
   "args": {
@@ -366,6 +368,8 @@
  {
   "id": "quest-member-ranks-team-quest-above-own",
   "kind": "quest-list",
+  "use": "goals",
+  "level": "quest",
   "origin": "rule: a person's own entry in priority_by_user decides, whoever created the quest",
   "source": "quest-backend tests/business/test_accessible_quests.py",
   "args": {
@@ -398,6 +402,8 @@
  {
   "id": "quest-unranked-after-ranked",
   "kind": "quest-list",
+  "use": "goals",
+  "level": "quest",
   "origin": "rule: ranked ascending first (0 is highest), unranked after in the order given",
   "source": "quest-backend order_quests_by_user_priority",
   "args": {
@@ -438,6 +444,8 @@
  {
   "id": "quest-legacy-rank-is-the-creators-only",
   "kind": "quest-list",
+  "use": "goals",
+  "level": "quest",
   "origin": "rule: the legacy priority of the quest model counts only for the quest's creator",
   "source": "quest-backend order_quests_by_user_priority (field priority)",
   "args": {
@@ -466,6 +474,8 @@
  {
   "id": "quest-own-entry-beats-legacy-rank",
   "kind": "quest-list",
+  "use": "goals",
+  "level": "quest",
   "origin": "rule: a person's own priority_by_user entry wins over the legacy priority",
   "source": "quest-backend order_quests_by_user_priority (field priority_by_user)",
   "args": {
@@ -497,6 +507,8 @@
  {
   "id": "quest-work-asks-then-horizons-then-ideas",
   "kind": "work-order",
+  "use": "work",
+  "level": "",
   "origin": "rule: open asks first, then goals of the shorter horizon, then the system's own ideas",
   "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
   "args": {
@@ -539,6 +551,8 @@
  {
   "id": "quest-work-asks-keep-the-order-given",
   "kind": "work-order",
+  "use": "work",
+  "level": "",
   "origin": "rule: asks keep the order they were given in",
   "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
   "args": {
@@ -569,6 +583,8 @@
  {
   "id": "quest-work-month-before-quarter",
   "kind": "work-order",
+  "use": "work",
+  "level": "",
   "origin": "rule: a month goal comes before a quarter goal",
   "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
   "args": {
@@ -595,6 +611,8 @@
  {
   "id": "quest-work-a-goal-before-an-idea",
   "kind": "work-order",
+  "use": "work",
+  "level": "",
   "origin": "rule: a goal comes before an idea",
   "source": "quest-backend prompts/autopilot_prompts.py default quest instructions",
   "args": {
@@ -620,6 +638,8 @@
  {
   "id": "quest-work-horizon-before-deadline",
   "kind": "work-order",
+  "use": "work",
+  "level": "",
   "origin": "rule: the shorter horizon comes before the earlier deadline",
   "source": "quest-ai-runner goal ladder (autopilot_periods)",
   "args": {
@@ -648,6 +668,8 @@
  {
   "id": "quest-ladder-nearest-deadline-first",
   "kind": "goal-ladder",
+  "use": "goals",
+  "level": "period",
   "origin": "rule: inside a horizon the nearest deadline comes first",
   "source": "quest-ai-runner tests/test_autopilot_goal_ladder.py",
   "args": {
@@ -746,6 +768,8 @@
  {
   "id": "quest-ladder-undated-last-in-plan-order",
   "kind": "goal-ladder",
+  "use": "goals",
+  "level": "period",
   "origin": "rule: inside a horizon undated goals come last, in the order of the plan",
   "source": "quest-ai-runner tests/test_autopilot_goal_ladder.py",
   "args": {
@@ -786,6 +810,8 @@
  {
   "id": "quest-asks-oldest-first",
   "kind": "open-asks",
+  "use": "asks",
+  "level": "",
   "origin": "rule: open asks come oldest first",
   "source": "quest-ai-runner tests/test_quest_asks_brief.py",
   "args": {
@@ -807,6 +833,262 @@
   "expect": [
    "k_open",
    "k_new"
+  ]
+ },
+ {
+  "id": "quest-asks-for-you-overdue-then-nearest-deadline",
+  "kind": "asks-for-you",
+  "use": "asks",
+  "level": "",
+  "origin": "rule: asks put to the person: the overdue first, then the nearer deadline, an ask with no deadline after every one that has one",
+  "source": "quest-backend business/teams/asks_digest.py sort_for_digest",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "d-none",
+     "kind": "decision",
+     "created_at": "2026-07-10T08:00:00Z"
+    },
+    {
+     "id": "d-soon",
+     "kind": "decision",
+     "created_at": "2026-07-10T08:00:00Z",
+     "deadline": "2026-07-13T09:00:00Z"
+    },
+    {
+     "id": "d-overdue",
+     "kind": "decision",
+     "created_at": "2026-07-09T08:00:00Z",
+     "deadline": "2026-07-11T09:00:00Z"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "d-overdue",
+   "d-soon",
+   "d-none"
+  ]
+ },
+ {
+  "id": "quest-asks-for-you-undated-newest-first",
+  "kind": "asks-for-you",
+  "use": "asks",
+  "level": "",
+  "origin": "rule: asks put to the person with no deadline: the newest first",
+  "source": "quest-backend business/teams/team_operations.py list_open_decisions_for_user",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "d-old",
+     "kind": "decision",
+     "created_at": "2026-07-01T08:00:00Z"
+    },
+    {
+     "id": "d-new",
+     "kind": "decision",
+     "created_at": "2026-07-11T08:00:00Z"
+    },
+    {
+     "id": "d-mid",
+     "kind": "decision",
+     "created_at": "2026-07-05T08:00:00Z"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "d-new",
+   "d-mid",
+   "d-old"
+  ]
+ },
+ {
+  "id": "quest-goals-completed-last",
+  "kind": "goals",
+  "use": "goals",
+  "level": "period",
+  "origin": "rule: the person's goals: open goals by nearest deadline, undated after, a completed goal after every open one",
+  "source": "quest-backend business/quests/my_responsibilities.py goal_sort_key",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-done",
+     "kind": "goal",
+     "completed": true,
+     "deadline": "2026-07-13"
+    },
+    {
+     "id": "g-none",
+     "kind": "goal"
+    },
+    {
+     "id": "g-late",
+     "kind": "goal",
+     "deadline": "2026-07-30"
+    },
+    {
+     "id": "g-soon",
+     "kind": "goal",
+     "deadline": "2026-07-14"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "g-soon",
+   "g-late",
+   "g-none",
+   "g-done"
+  ]
+ },
+ {
+  "id": "quest-milestones-gap-then-unmeasured-then-oldest",
+  "kind": "milestones",
+  "use": "goals",
+  "level": "milestone",
+  "origin": "rule: solutions whose milestone is next: the one with no metric first, then one never measured, then the metric measured longest ago",
+  "source": "quest-ai-runner tests/test_autopilot_esoi.py test_gap_first_then_unmeasured_then_oldest",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "s1",
+     "kind": "solution-with-milestone",
+     "last_nudged_at": "2026-10-26T00:00:00+00:00"
+    },
+    {
+     "id": "s2",
+     "kind": "solution-with-milestone",
+     "last_nudged_at": "2026-10-20T00:00:00+00:00"
+    },
+    {
+     "id": "s3",
+     "kind": "solution-with-milestone",
+     "rank": 0
+    },
+    {
+     "id": "s4",
+     "kind": "solution-with-milestone",
+     "rank": 1
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "s3",
+   "s4",
+   "s2",
+   "s1"
+  ]
+ },
+ {
+  "id": "quest-milestones-with-a-milestone-first",
+  "kind": "milestones",
+  "use": "goals",
+  "level": "milestone",
+  "origin": "rule: a solution with a milestone comes before one without, whatever its metric says",
+  "source": "quest-ai-runner autopilot_esoi.pick_solution (a milestone is the next priority)",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "bare",
+     "kind": "solution",
+     "rank": 0
+    },
+    {
+     "id": "planned",
+     "kind": "solution-with-milestone",
+     "last_nudged_at": "2026-10-26T00:00:00+00:00"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z",
+   "stated": {
+    "kind_order": [
+     "solution-with-milestone",
+     "solution"
+    ]
+   }
+  },
+  "expect": [
+   "planned",
+   "bare"
+  ]
+ },
+ {
+  "id": "quest-period-goal-without-a-metric-orders-as-its-milestone",
+  "kind": "goals",
+  "use": "goals",
+  "level": "period",
+  "origin": "rule: a period goal is the milestone of the solution it is for, one to one, so it orders by horizon and deadline whether or not it has a metric value",
+  "source": "Joshua 2026-11-05 (one to one with solution milestones, a goal may have no metric value); quest-backend models/planning.py spec_solution_id, spec_metric_id and metric_target_value are optional",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-metric",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-20",
+     "solution_id": "s1",
+     "metric_target_value": 10
+    },
+    {
+     "id": "g-no-metric",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-15",
+     "solution_id": "s1"
+    },
+    {
+     "id": "g-no-solution",
+     "kind": "goal",
+     "horizon": "month",
+     "deadline": "2026-07-18"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "g-no-metric",
+   "g-no-solution",
+   "g-metric"
+  ]
+ },
+ {
+  "id": "quest-daily-ai-handled-last",
+  "kind": "daily",
+  "use": "goals",
+  "level": "daily",
+  "origin": "rule: the day's goals: the person's own before a goal their AI rep handles, otherwise in the order given",
+  "source": "quest-backend api/endpoints/planning.py sort_ai_handled_last",
+  "args": {
+   "person": "",
+   "candidates": [
+    {
+     "id": "g-rep",
+     "kind": "goal",
+     "ai_handling": "rep"
+    },
+    {
+     "id": "g-mine-1",
+     "kind": "goal"
+    },
+    {
+     "id": "g-mine-2",
+     "kind": "goal"
+    }
+   ],
+   "now": "2026-07-12T09:00:00Z"
+  },
+  "expect": [
+   "g-mine-1",
+   "g-mine-2",
+   "g-rep"
   ]
  }
 ]

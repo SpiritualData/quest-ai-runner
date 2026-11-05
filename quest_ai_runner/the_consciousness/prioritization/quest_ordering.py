@@ -9,7 +9,18 @@ carry (they were moved here from the hub's code and cases), so this arm competes
   that is not listed sits with the goals), unless the person or the consumer states another ``kind_order``;
 - goals: the shorter ``horizon`` first (today, week, month, quarter, year; none last), after the person's rank and before the deadline, then the nearest
   deadline with undated goals last in the order given;
-- open asks: the oldest ``asked_at`` first.
+- open asks: the oldest ``asked_at`` first;
+- asks put to the person ("asks for you", kind ``decision``): the overdue and the nearer ``deadline`` first, the undated newest first by ``created_at``;
+- one to one: a quest's period goal IS a milestone of the solution (strategy) it is for, linked by Quest's ``spec_solution_id`` (carried here as ``solution_id``).
+  A goal has no ranking of its own: its place is its milestone's, by horizon and deadline, with or without a metric value (``spec_metric_id`` and
+  ``metric_target_value`` are optional, so a goal with none orders the same way);
+- the person's goals, at three levels: solution milestones (the hub's concept: a solution with a milestone before one without, one with no metric first, then
+  the metric measured longest ago, as ``last_nudged_at``), period goals of a quest (horizon, then deadline, as above) and the day's goals, which are tasks
+  (the person's own before a goal their AI rep handles, ``ai_handling == "rep"``); a ``completed`` goal comes after every open one. Only the rules Quest
+  already writes down are here; how the day is scheduled (time blocks, sustained focus) has no ordering rule or case in Quest yet and is not guessed.
+
+These are the three uses of Prioritization in Quest: the standing work the autopilot starts, the asks put to the person (their order; whether to ask at all
+is Judgment Calls') and the person's goals.
 
 What a person stated (``order``, ``deferred``, ``not_before``, ``only_kinds``, ``feedback``) still outranks all of this. The order is Quest's; the shape of the
 answer (each item's place, its weighted milestone) is the hub's, taken from its ``as_given`` arm, so a change to the hub's answer reaches this arm unchanged.
@@ -112,6 +123,14 @@ class QuestOrdering:
             stance = {"sooner": 1, "later": 3}.get(direction, 2)
             if stance != 2:
                 why.append(f"the person's feedback implies {direction}")
+        done = bool(item.get("completed"))
+        if done:
+            why.append("it is completed")
+        if item.get("solution_id"):
+            why.append(f"milestone of solution {item['solution_id']}")
+        handled = item.get("ai_handling") == "rep"
+        if handled:
+            why.append("its AI rep handles it")
         sits = kind if kind in kinds else "goal"
         tier = kinds.index(sits) if sits in kinds else len(kinds)
         why.append(f"kind {kind} is {tier + 1} of {len(kinds)} in the order of kinds")
@@ -135,5 +154,9 @@ class QuestOrdering:
         waiting = len(item.get("waiting") or ())
         if waiting:
             why.append(f"{waiting} waiting")
+        created = moment(item.get("created_at"))
+        if created is not None and deadline is None and asked is None:
+            why.append(f"created {item['created_at']}, newest first")
+        newest = -created.timestamp() if created is not None else 0.0
         nudged = moment(item.get("last_nudged_at")) or EARLIEST
-        return (stance, spot, tier, blocked, rank_key, shorter, deadline or NEVER, asked or NEVER, -waiting, nudged, index), why
+        return (stance, spot, tier, done, handled, blocked, rank_key, shorter, deadline or NEVER, asked or NEVER, newest, -waiting, nudged, index), why
