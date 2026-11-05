@@ -9,15 +9,8 @@ import argparse
 from quest_ai_runner.the_consciousness.terminal.cli_chat import RESUME_PICK
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """The full argparse tree: `chat`, `quest`, `send`, ... `poll`, `channel`, plus the legacy flat poll flags."""
-    parser = argparse.ArgumentParser(prog="quest-ai-runner",
-                                     description="Poll Quest for due AI tasks and execute them.")
-    parser.add_argument("-v", "--verbose", action="count", default=0,
-                        help="increase verbosity: -v for info, -vv for debug")
-    sub = parser.add_subparsers(dest="command")
-
-    # --- chat subcommand: interactive attended session ------------------------
+def add_chat_command(sub) -> None:
+    """The `chat` subcommand."""
     chat_p = sub.add_parser("chat", help="start an interactive session with the brain")
     chat_p.add_argument("rep_positional", nargs="?", default=None, metavar="REP",
                         help="shorthand for --rep NAME (e.g. `qar wadona`); if a "
@@ -52,7 +45,9 @@ def _build_parser() -> argparse.ArgumentParser:
     chat_p.add_argument("--list-conversations", action="store_true",
                         help="list saved chat conversations for this corpus (newest first) and exit")
 
-    # --- quest subcommand: call the Quest API from the shell -------------------
+
+def add_quest_command(sub) -> None:
+    """The `quest` subcommand."""
     quest_p = sub.add_parser(
         "quest", help="call a QuestClient method and print the JSON result",
         description="Call any QuestClient method by name against the configured Quest account "
@@ -77,7 +72,9 @@ def _build_parser() -> argparse.ArgumentParser:
     quest_p.add_argument("--compact", action="store_true",
                          help="one-line JSON instead of indented")
 
-    # --- send subcommand: enqueue a new AI task -------------------------------
+
+def add_send_command(sub) -> None:
+    """The `send` subcommand."""
     send_p = sub.add_parser("send", help="enqueue a new AI task and print its id")
     send_p.add_argument("text", help="the task instruction")
     send_p.add_argument("--team-id", default=None,
@@ -91,14 +88,18 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Do not auto-select context cards from the task text when no "
                              "--card is given.")
 
-    # --- reconcile-plan subcommand: roll a quest's day/week goals forward, turn open asks into goals -----
+
+def add_reconcile_plan_command(sub) -> None:
+    """The `reconcile-plan` subcommand."""
     rec_p = sub.add_parser("reconcile-plan",
                            help="roll unfinished day/week goals forward and add open asks as goals for their assignee")
     rec_p.add_argument("quest_id", help="the quest whose plan to reconcile")
     rec_p.add_argument("--today", default=None, help="the date to treat as today (YYYY-MM-DD); default: today")
     rec_p.add_argument("--write", action="store_true", help="apply the changes (default: dry run, print only)")
 
-    # --- create-goal subcommand: create a real, typed Goal (not an AI task -- see `send`) -----
+
+def add_create_goal_command(sub) -> None:
+    """The `create-goal` subcommand."""
     goal_p = sub.add_parser("create-goal",
                             help="create a real Quest goal (period-scoped, on a quest's plan) and print its id")
     goal_p.add_argument("title", help="the goal's title")
@@ -121,7 +122,9 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="assign the goal to this Quest member's user_id at creation "
                              "(requires --quest-id; refused if they are not a member)")
 
-    # --- bootstrap subcommand: build/refresh the context card store ----------
+
+def add_bootstrap_command(sub) -> None:
+    """The `bootstrap` subcommand."""
     boot_p = sub.add_parser("bootstrap", help="build or refresh the context card store for the corpus")
     boot_p.add_argument("--corpus", default=None, metavar="PATH",
                         help="corpus root (default: QAR_CORPUS_ROOT env var)")
@@ -138,7 +141,9 @@ def _build_parser() -> argparse.ArgumentParser:
                              "inside a skipped directory, and cards that only restate their own "
                              "path) and stop — no model calls, nothing re-analysed")
 
-    # --- paste-context subcommand: save context to a card -----------------------
+
+def add_paste_context_command(sub) -> None:
+    """The `paste-context` subcommand."""
     paste_p = sub.add_parser("paste-context", help="save context to a context card (from args or stdin)")
     paste_p.add_argument("context", nargs="?", default=None,
                          help="context text (if not provided, reads from stdin)")
@@ -151,7 +156,9 @@ def _build_parser() -> argparse.ArgumentParser:
     paste_p.add_argument("--goal-id", default=None,
                          help="optional: quest goal id for metadata")
 
-    # --- search-context subcommand: show what context cards a query would surface --
+
+def add_search_context_command(sub) -> None:
+    """The `search-context` subcommand."""
     sc_p = sub.add_parser("search-context", help="show which context cards a query selects")
     sc_p.add_argument("query", help="the input text to search context for")
     sc_p.add_argument("--corpus", default=None, metavar="PATH",
@@ -161,7 +168,9 @@ def _build_parser() -> argparse.ArgumentParser:
     sc_p.add_argument("--no-llm", action="store_true",
                       help="skip LLM relevance filter, show raw IDF results only")
 
-    # --- context subcommand: what is the context for this quest right now --------
+
+def add_context_command(sub) -> None:
+    """The `context` subcommand."""
     ctx_p = sub.add_parser(
         "context",
         help="show a quest's current context updates (a read: safe, repeatable, no side effects). "
@@ -189,7 +198,9 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="TOML config file (see docs/how-to/writing-a-consumer.md); QAR_CONFIG_FILE "
                             "also works. Environment variables always win over the file.")
 
-    # --- cards subcommand: look at a context card store ----------------------------
+
+def add_cards_command(sub) -> None:
+    """The `cards` subcommand."""
     cards_p = sub.add_parser(
         "cards", help="look at a context card store: `cards report` says what fills it, what its card "
                       "limit (QAR_MAX_CARDS) has done, and how to change the limit; `cards tidy` moves "
@@ -230,7 +241,9 @@ def _build_parser() -> argparse.ArgumentParser:
                              "the *-tidy-manifest.jsonl files in <cards dir>/_quarantine, and for a tidy through "
                              "the repository the *-store-tidy-manifest.jsonl files in <cards dir>/tidy-state"),
 
-    # --- sync-quest-folder subcommand: pull/push a quest <-> a local folder --
+
+def add_sync_quest_folder_command(sub) -> None:
+    """The `sync-quest-folder` subcommand."""
     sync_p = sub.add_parser("sync-quest-folder",
                             help="sync a Quest quest's state/notes with a local folder's QUEST_SYNC.md (and ESOI_SPEC.md)")
     sync_p.add_argument("quest_id", help="the quest id to sync (e.g. quest_1625d9f47a06)")
@@ -241,7 +254,9 @@ def _build_parser() -> argparse.ArgumentParser:
     sync_p.add_argument("--no-spec", action="store_true",
                         help="do not write the quest's specification to ESOI_SPEC.md on a pull")
 
-    # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
+
+def add_doctor_command(sub) -> None:
+    """The `doctor` subcommand."""
     doctor_p = sub.add_parser("doctor", help="check the hub assembly's environment (unmet requirements with their fix) and, "
                                               "when a lock file exists, whether the hub has newer selections")
     doctor_p.add_argument("--json", action="store_true", help="print the report as JSON")
@@ -250,6 +265,9 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="post the update plan as a note on this quest when updates are available (once per plan)")
     doctor_p.add_argument("--state", default=None, metavar="FILE", help="where --note-quest remembers the plan it posted")
 
+
+def add_poll_command(sub) -> None:
+    """The `poll` subcommand."""
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
@@ -258,7 +276,9 @@ def _build_parser() -> argparse.ArgumentParser:
                              "QAR_CONFIG_FILE also works. Environment variables always win over "
                              "a value the file also sets.")
 
-    # --- lane subcommand: supervise a lane with no systemd and no root --------------------------
+
+def add_lane_command(sub) -> None:
+    """The `lane` subcommand."""
     lane_p = sub.add_parser(
         "lane", help="run a lane under the built-in supervisor: start|stop|restart|status|ensure (no systemd, no root)")
     lane_p.add_argument("lane_op", choices=["start", "stop", "restart", "status", "ensure"])
@@ -276,7 +296,9 @@ def _build_parser() -> argparse.ArgumentParser:
     lane_p.add_argument("--exec", dest="exec_command", default=None, metavar="CMD",
                         help="advanced: supervise this command line instead of `poll`")
 
-    # --- channel subcommand: hold a live, two-way conversation over a messaging channel -------
+
+def add_channel_command(sub) -> None:
+    """The `channel` subcommand."""
     channel_p = sub.add_parser(
         "channel", help="drive a live ChannelTransport (e.g. OpenClaw) as a real-time chat lane")
     channel_p.add_argument("--once", action="store_true",
@@ -288,7 +310,9 @@ def _build_parser() -> argparse.ArgumentParser:
                                 "QAR_CONFIG_FILE also works. Environment variables always win over "
                                 "a value the file also sets.")
 
-    # --- serve-files: a read-only file server so a remote brain can read this machine's files ---
+
+def add_serve_files_command(sub) -> None:
+    """The `serve-files` subcommand."""
     files_p = sub.add_parser(
         "serve-files", help="serve one directory tree read-only over HTTP (needs QAR_FILES_TOKEN)")
     files_p.add_argument("--root", default=None, metavar="DIR",
@@ -298,8 +322,30 @@ def _build_parser() -> argparse.ArgumentParser:
     files_p.add_argument("--port", default=None, type=int, metavar="PORT",
                          help="port to listen on (default 8765; QAR_FILES_PORT also works)")
 
-    # Legacy: flags directly on the root command (no subcommand given) stay working; also
-    # documented on `poll` above. Kept visible (not argparse.SUPPRESS) so `-h` shows them.
+
+def _build_parser() -> argparse.ArgumentParser:
+    """The full argparse tree: `chat`, `quest`, `send`, ... `poll`, `channel`, plus the legacy flat poll flags."""
+    parser = argparse.ArgumentParser(prog="quest-ai-runner",
+                                     description="Poll Quest for due AI tasks and execute them.")
+    parser.add_argument("-v", "--verbose", action="count", default=0,
+                        help="increase verbosity: -v for info, -vv for debug")
+    sub = parser.add_subparsers(dest="command")
+    add_chat_command(sub)
+    add_quest_command(sub)
+    add_send_command(sub)
+    add_reconcile_plan_command(sub)
+    add_create_goal_command(sub)
+    add_bootstrap_command(sub)
+    add_paste_context_command(sub)
+    add_search_context_command(sub)
+    add_context_command(sub)
+    add_cards_command(sub)
+    add_sync_quest_folder_command(sub)
+    add_doctor_command(sub)
+    add_poll_command(sub)
+    add_lane_command(sub)
+    add_channel_command(sub)
+    add_serve_files_command(sub)
     parser.add_argument("--once", action="store_true",
                         help="poll mode: one scan then exit (cron mode); same as 'poll --once'")
     parser.add_argument("--check", action="store_true",
