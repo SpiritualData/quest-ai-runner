@@ -48,7 +48,7 @@ from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_reposit
     QuestApiCardRepository, quest_card_settings_from_env, select_card_scope)
 from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
 
-# Context Retriever (select-context): the assemblers and the personal lexicon behind them
+# Context Retriever (context-retriever): the assemblers and the personal lexicon behind them
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler

@@ -4,9 +4,9 @@ QAR's area arm ``card_and_reads`` is the hub's Body for Quest and offers the hub
 lives, where its requests come from and which enduring integrations it may use: the hub's Internal Context, Intake Sources and Hands,
 each built on first use) and ``record_run(run)`` (the run record, kept in the run store, never in the cards), beside QAR's own line,
 ``read(rel_path)``: the part of a source the host's retrieval adapter returns, as it is now. The members are the cards a quest keeps
-(``persist-cards``), the host's reads (``gather-evidence``, the retrieval adapter), the Quest account (``access-quest-operations``) and the
-operations on it (``operate-a-quest``), the changes the AI makes to files (``write-files``), what it claims it can reach
-(``claim-reach``), the queued tasks it runs (``run-queued-tasks``) and the goals it takes over from a person (``hand-off-a-goal``).
+(``persist-cards``), the host's reads (``quest-context``, the retrieval adapter), the Quest account (``quest-body``) and the
+operations on it (``quest-change-executor``), the changes the AI makes to files (``file-editing``), what it claims it can reach
+(``the-tools``), the queued tasks it runs (``quest-requests``) and the goals it takes over from a person (``hand-off-a-goal``).
 Members the line does not need are built on first use.
 """
 from __future__ import annotations

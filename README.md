@@ -82,7 +82,7 @@ specific to Quest:
 | QAR solution | Hub seat and package |
 |---|---|
 | `vendor-model-caller` | model providers, prefix router, retry and outage helpers (`hubofhubs.the_world.model_plumbing.vendor_model_caller`) |
-| `select-context`, `index-by-meaning` | Qdrant vectors, BM25, hybrid assembler (`hubofhubs.the_intelligence.subconscious.context_retriever`) |
+| `context-retriever`, `index-by-meaning` | Qdrant vectors, BM25, hybrid assembler (`hubofhubs.the_intelligence.subconscious.context_retriever`) |
 | `critical-thinking` | link guard and sufficiency gate (`hubofhubs.the_intelligence.critical_thinking`) |
 | `run-deep-work` | one-shot, stream-json and ACP runners (`hubofhubs.the_world.tools.delegated_agent_sessions`) |
 | `search-the-web` | search backends, cache, fetch, extraction (`hubofhubs.the_world.tools.web_search`) |
@@ -147,7 +147,7 @@ One line runs any solution by its id, QAR's own or any hub solution beneath it (
 import quest_ai_runner
 
 quest_ai_runner.run("quest-ai-runner", "What should I work on first this week?")      # the whole flow (the_self/respond.py)
-quest_ai_runner.run("select-context", "What should I work on first this week?")       # the context a request reads
+quest_ai_runner.run("context-retriever", "What should I work on first this week?")       # the context a request reads
 quest_ai_runner.run("proactivity", {"schedules": [...], "now": "2026-07-12T09:00:00Z"})  # when standing work is due (the hub's Proactivity)
 quest_ai_runner.run("prioritization", {"person": "", "request": "..."})               # what matters first (the hub's Prioritization, answered by Quest's ordering arm)
 ```
@@ -160,56 +160,62 @@ The flow of one request is `quest_ai_runner/the_self/respond.py`: Request intake
 
 | Solution id | Interface | Entry | Declared in |
 |---|---|---|---|
-| `operate-a-quest` | `QuestOperating` | `operate` | `quest_ai_runner/the_body/hands/quest_operations/interface.py` |
-| `hand-off-a-goal` | `GoalHandingOff` | `assign` | `quest_ai_runner/the_body/hands/quest_operations/interface.py` |
-| `claim-reach` | `ReachClaiming` | `claim` | `quest_ai_runner/the_body/hands/quest_operations/interface.py` |
-| `feed-context-sources` | `ContextFeeding` | `collect` | `quest_ai_runner/the_body/intake_sources/interface.py` |
-| `the-body` | `BodyActing` | `describe` | `quest_ai_runner/the_body/interface.py` |
+| `cache-cards` | `CardCache` | `load_listing` | `quest_ai_runner/the_body/internal_context/card_store/interface.py` |
 | `card-store` | `CardKeeping` | `search` | `quest_ai_runner/the_body/internal_context/card_store/interface.py` |
-| `persist-cards` | `CardPersisting` | `read` | `quest_ai_runner/the_body/internal_context/card_store/interface.py` |
-| `gather-evidence` | `RetrievalAdapter` | `read_section` | `quest_ai_runner/the_body/internal_context/interface.py` |
-| `access-quest-operations` | `QuestOperations` | `list_quest_goals` | `quest_ai_runner/the_body/internal_context/quest/interface.py` |
-| `escalate-to-a-human` | `EscalationSink` | `escalate` | `quest_ai_runner/the_consciousness/judgment_calls/interface.py` |
-| `select-a-rep` | `RepSelecting` | `resolve` | `quest_ai_runner/the_consciousness/representatives/interface.py` |
-| `talk-over-a-channel` | `ChannelTransport` | `send` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |
-| `run-queued-tasks` | `QueueRunning` | `scan` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |
-| `take-in-the-world` | `RequestTakingIn` | `take_in` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |
-| `assist-a-terminal-session` | `TerminalHelping` | `judge_goal` | `quest_ai_runner/the_consciousness/terminal/interface.py` |
-| `expose-the-public-api` | `PublicSurface` | `front_door` | `quest_ai_runner/the_consciousness/terminal/interface.py` |
-| `operate-from-a-terminal` | `TerminalOperating` | `operate` | `quest_ai_runner/the_consciousness/terminal/interface.py` |
-| `iterate-by-spec` | `GoalIteration` | `slice_for` | `quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py` |
-| `judge-a-decision` | `DecisionJudging` | `reach_verdict` | `quest_ai_runner/the_intelligence/critical_thinking/goal_completion/interface.py` |
-| `critical-thinking` | `MetricHolding` | `evaluate` | `quest_ai_runner/the_intelligence/critical_thinking/interface.py` |
-| `draft-a-metric` | `MetricDrafting` | `draft` | `quest_ai_runner/the_intelligence/critical_thinking/metric_translation/interface.py` |
-| `guard-a-reply` | `ReplyGuarding` | `links` | `quest_ai_runner/the_intelligence/critical_thinking/response_quality/interface.py` |
-| `guide-by-feedback` | `GuidanceProvider` | `select` | `quest_ai_runner/the_intelligence/higher_mind/guidance/interface.py` |
-| `guide-toward-the-long-term-goal` | `LongTermGuiding` | `directive` | `quest_ai_runner/the_intelligence/higher_mind/guidance/interface.py` |
-| `recall-recent-context` | `RecentContextStore` | `load` | `quest_ai_runner/the_intelligence/higher_mind/long_term_memory/interface.py` |
-| `remember-conversations` | `ConversationRemembering` | `current_slice` | `quest_ai_runner/the_intelligence/higher_mind/long_term_memory/interface.py` |
-| `hold-the-intents` | `IntentHolding` | `hold` | `quest_ai_runner/the_intelligence/higher_mind/objectives/interface.py` |
-| `ground-in-intent` | `IntentGrounding` | `frame` | `quest_ai_runner/the_intelligence/higher_mind/objectives/interface.py` |
-| `detect-a-stalled-run` | `StallDetecting` | `review` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
-| `receive-input-mid-run` | `InputInbox` | `peek` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
-| `answer-a-turn` | `TurnAnswering` | `turn` | `quest_ai_runner/the_intelligence/mind/interface.py` |
-| `answer-end-to-end` | `EndToEnd` | `answer` | `quest_ai_runner/the_intelligence/mind/interface.py` |
-| `core-ml-tasks` | `MlTasks` | `classify` | `quest_ai_runner/the_intelligence/mind/interface.py` |
-| `the-mind` | `StepReasoning` | `think` | `quest_ai_runner/the_intelligence/mind/interface.py` |
-| `assemble-a-prompt` | `PromptAssembling` | `assemble` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
-| `replay-known-operations` | `OperationReplaying` | `match` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
-| `route-a-message` | `MessageRouting` | `route` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
-| `nervous-system` | `RunWatching` | `watch` | `quest_ai_runner/the_intelligence/nervous_system/interface.py` |
-| `gate-an-autopilot-pass` | `PassGating` | `gate` | `quest_ai_runner/the_intelligence/proactivity/interface.py` |
 | `cards-from-files` | `CardBuilding` | `build` | `quest_ai_runner/the_intelligence/subconscious/cards_from_files/interface.py` |
 | `choose-the-context` | `ContextChoosing` | `choose` | `quest_ai_runner/the_intelligence/subconscious/context_retriever/interface.py` |
-| `select-context` | `ContextSelecting` | `assemble` | `quest_ai_runner/the_intelligence/subconscious/context_retriever/interface.py` |
-| `the-subconscious` | `CardRecall` | `recall` | `quest_ai_runner/the_intelligence/subconscious/interface.py` |
-| `persist-predictions` | `PredictionStore` | `load_predictions` | `quest_ai_runner/the_intelligence/subconscious/intuition/interface.py` |
-| `system-integrity` | `KeepingGeneric` | `audit` | `quest_ai_runner/the_self/integrity/interface.py` |
-| `do-grounded-work` | `GoalAgent` | `answer` | `quest_ai_runner/the_self/interface.py` |
+| `context-intake` | `PromptAssembling` | `assemble` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
+| `context-retriever` | `ContextSelecting` | `assemble` | `quest_ai_runner/the_intelligence/subconscious/context_retriever/interface.py` |
+| `critical-thinking` | `MetricHolding` | `evaluate` | `quest_ai_runner/the_intelligence/critical_thinking/interface.py` |
+| `delegated-agent-sessions` | `DeepSessions` | `run_goal` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
+| `describe-an-attachment` | `AttachmentPreparing` | `prepare` | `quest_ai_runner/the_intelligence/mind/context_intake/attachments.py` |
+| `detect-a-stalled-run` | `StallDetecting` | `review` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
+| `esoi-application` | `GoalIteration` | `slice_for` | `quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py` |
+| `feed-context-sources` | `ContextFeeding` | `collect` | `quest_ai_runner/the_body/intake_sources/interface.py` |
+| `feedback-learning` | `FeedbackKeeping` | `open_items` | `quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py` |
+| `file-editing` | `FileWriting` | `read_file` | `quest_ai_runner/the_world/tools/file_editing/interface.py` |
+| `goal-completion` | `DecisionJudging` | `reach_verdict` | `quest_ai_runner/the_intelligence/critical_thinking/goal_completion/interface.py` |
+| `guidance` | `IntentGrounding` | `frame` | `quest_ai_runner/the_intelligence/higher_mind/objectives/interface.py` |
+| `guide-by-feedback` | `GuidanceProvider` | `select` | `quest_ai_runner/the_intelligence/higher_mind/guidance/interface.py` |
+| `guide-toward-the-long-term-goal` | `LongTermGuiding` | `directive` | `quest_ai_runner/the_intelligence/higher_mind/guidance/interface.py` |
+| `hand-off-a-goal` | `GoalHandingOff` | `assign` | `quest_ai_runner/the_consciousness/interface.py` |
+| `index-by-meaning` | `MeaningIndexing` | `search` | `quest_ai_runner/the_intelligence/subconscious/context_retriever/interface.py` |
+| `intake-sources` | `ChannelTransport` | `send` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |
+| `intent-evolution` | `IntentEvolving` | `suggest` | `quest_ai_runner/the_consciousness/intent_evolution/interface.py` |
+| `long-term-memory` | `ConversationRemembering` | `current_slice` | `quest_ai_runner/the_intelligence/higher_mind/long_term_memory/interface.py` |
+| `metric-translation` | `MetricDrafting` | `draft` | `quest_ai_runner/the_intelligence/critical_thinking/metric_translation/interface.py` |
 | `model-tier-chooser` | `RegistryTierSelection` | `choose` | `quest_ai_runner/the_world/model_plumbing/model_tier_chooser/interface.py` |
-| `vendor-model-caller` | `RoutedModelCalling` | `answer` | `quest_ai_runner/the_world/model_plumbing/vendor_model_caller/interface.py` |
+| `nervous-system` | `RunWatching` | `watch` | `quest_ai_runner/the_intelligence/nervous_system/interface.py` |
+| `persist-cards` | `CardPersisting` | `read` | `quest_ai_runner/the_body/internal_context/card_store/interface.py` |
+| `planner` | `MessageRouting` | `route` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
+| `quest-account-truth` | `BodyActing` | `describe` | `quest_ai_runner/the_body/interface.py` |
+| `quest-autopilot` | `PassGating` | `gate` | `quest_ai_runner/the_intelligence/proactivity/interface.py` |
+| `quest-body` | `QuestOperations` | `list_quest_goals` | `quest_ai_runner/the_body/internal_context/quest/interface.py` |
+| `quest-change-executor` | `QuestOperating` | `operate` | `quest_ai_runner/the_body/hands/quest_operations/interface.py` |
+| `quest-consciousness` | `ConsciousnessFlowing` | `take_in` | `quest_ai_runner/the_consciousness/interface.py` |
+| `quest-context` | `RetrievalAdapter` | `read_section` | `quest_ai_runner/the_body/internal_context/interface.py` |
+| `quest-decision-requests` | `EscalationSink` | `escalate` | `quest_ai_runner/the_consciousness/judgment_calls/interface.py` |
+| `quest-intents` | `IntentHolding` | `hold` | `quest_ai_runner/the_intelligence/higher_mind/objectives/interface.py` |
+| `quest-representatives` | `RepSelecting` | `resolve` | `quest_ai_runner/the_consciousness/representatives/interface.py` |
+| `quest-requests` | `QueueRunning` | `scan` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |
+| `quest-self` | `GoalAgent` | `answer` | `quest_ai_runner/the_self/interface.py` |
+| `quest-work-shown` | `WorkShowing` | `start` | `quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py` |
+| `recall-recent-context` | `RecentContextStore` | `load` | `quest_ai_runner/the_intelligence/higher_mind/long_term_memory/interface.py` |
+| `receive-input-mid-run` | `InputInbox` | `peek` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
+| `replay-known-operations` | `OperationReplaying` | `match` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
+| `reply-in-steps` | `InterimPolicy` | `decide` | `quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py` |
+| `response-quality` | `ReplyGuarding` | `links` | `quest_ai_runner/the_intelligence/critical_thinking/response_quality/interface.py` |
+| `show-progress` | `ProgressShowing` | `update` | `quest_ai_runner/the_consciousness/terminal/interface.py` |
+| `system-integrity` | `KeepingGeneric` | `audit` | `quest_ai_runner/the_self/integrity/interface.py` |
+| `take-in-the-world` | `RequestTakingIn` | `take_in` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |
+| `the-intuition` | `PredictionStore` | `load_predictions` | `quest_ai_runner/the_intelligence/subconscious/intuition/interface.py` |
+| `the-mind` | `StepReasoning` | `think` | `quest_ai_runner/the_intelligence/mind/interface.py` |
 | `the-science` | `KnowingTheWorld` | `search` | `quest_ai_runner/the_world/science/interface.py` |
-| `write-files` | `FileWriting` | `read_file` | `quest_ai_runner/the_world/tools/file_editing/interface.py` |
+| `the-subconscious` | `CardRecall` | `recall` | `quest_ai_runner/the_intelligence/subconscious/interface.py` |
+| `the-tools` | `ReachClaiming` | `claim` | `quest_ai_runner/the_world/interface.py` |
+| `vendor-model-caller` | `RoutedModelCalling` | `answer` | `quest_ai_runner/the_world/model_plumbing/vendor_model_caller/interface.py` |
+| `web-search` | `WebSearching` | `search` | `quest_ai_runner/the_world/tools/web_search/web_research.py` |
+| `write-through-mcp` | `OperationWriting` | `write_operation` | `quest_ai_runner/the_world/tools/connected_system_operations/interface.py` |
 
 ## Quickstart
 
