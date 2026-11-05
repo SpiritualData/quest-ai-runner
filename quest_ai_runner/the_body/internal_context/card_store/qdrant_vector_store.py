@@ -30,7 +30,7 @@ COLLECTION_PREFIX = "qar_ctx"
 DEFAULT_STORE_PATH = ".quest-context/qdrant"
 
 
-@implementation("index-by-meaning", "qdrant")
+@implementation("context-retriever", "qdrant")
 class QdrantVectorStore(HubQdrantVectorStore):
     """The hub's Qdrant store under QAR's prefix, default folder, seed scope and environment knobs."""
 

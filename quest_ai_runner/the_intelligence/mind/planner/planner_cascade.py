@@ -200,5 +200,5 @@ def user_goal_fallback(cheap: PlanDecision) -> str:
 
 
 REVIEW_SPEC = declare(
-    "route-a-message.cascade-review", solution="route-a-message", metric="metric-route-a-message",
+    "route-a-message.cascade-review", solution="planner", metric="metric-route-a-message",
     tier="caller", cache_layer="none", template=REVIEW_PROMPT)

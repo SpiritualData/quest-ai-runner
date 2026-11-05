@@ -24,7 +24,7 @@ LISTING_FILE = "listing.json"
 OUTBOX_FILE = "outbox.json"
 
 
-@implementation("cache-cards", "file")
+@implementation("card-store", "file")
 class FileCardCache:
     """A ``CardCache`` persisted under ``directory`` (created on first write)."""
 

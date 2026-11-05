@@ -27,7 +27,7 @@ from quest_ai_runner.the_consciousness.terminal.interface import TerminalOperati
 
 
 
-@implementation("operate-from-a-terminal", "cli_commands")
+@implementation("system-integrity", "cli_commands")
 class CliCommands:
     """The command dispatchers called in process, with their output and exit code captured: ``qar`` is ``quest-ai-runner`` (``cli.main``)
     and ``tools`` is ``python -m quest_ai_runner tools`` (list, show, call)."""
@@ -47,7 +47,7 @@ class CliCommands:
 
 
 
-@implementation("expose-the-public-api", "package_front_doors")
+@implementation("system-integrity", "package_front_doors")
 class PackageFrontDoors:
     """The names in the package's ``__all__``: ``front_door`` returns the one asked for and refuses a name the package does not offer."""
     REQUIRES = ()     # reads the package, nothing else
@@ -59,7 +59,7 @@ class PackageFrontDoors:
         return getattr(quest_ai_runner, name)
 
 
-@implementation("take-in-the-world", "ways_in")
+@implementation("quest-requests", "ways_in")
 class WaysIn:
     """Each way in hands its request to the same router. ``take_in`` returns the route of the message and the sources that feed its
     context; the other methods hand a request to the member that owns that way in."""

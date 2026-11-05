@@ -146,7 +146,7 @@ def pref_is_duplicate(pref: str, existing: Any) -> bool:
     return False
 
 
-@implementation("select-context", "rep")
+@implementation("context-retriever", "rep")
 class RepContextAssembler(ContextAssemblerBase):
     """Wraps a ContextAssembler with the current rep's learned context preferences."""
 

@@ -6,6 +6,6 @@ from esoi import implementation
 from hubofhubs.api import ProviderWebSearchAdapter as HubProviderWebSearchAdapter
 
 
-@implementation("search-the-web", "provider_web_search")
+@implementation("web-search", "provider_web_search")
 class ProviderWebSearchAdapter(HubProviderWebSearchAdapter):
     """The hub's provider-native retrieval adapter, declared under QAR's ``search-the-web`` solution."""

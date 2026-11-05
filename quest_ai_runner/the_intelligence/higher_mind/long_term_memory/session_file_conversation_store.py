@@ -71,7 +71,7 @@ _CONV_CACHE_SIZE = 16
 
 
 
-@implementation("remember-conversations", "session_file")
+@implementation("long-term-memory", "session_file")
 class SessionFileConversationStore(ConversationStore):
     """ConversationStore over local Claude session files. Never raises from its public methods."""
 

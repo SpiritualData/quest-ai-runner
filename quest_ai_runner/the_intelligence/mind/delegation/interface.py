@@ -7,7 +7,7 @@ from esoi import solution
 from typing import List, Protocol, runtime_checkable
 
 
-@solution("detect-a-stalled-run", kind="event", entry="review", example={"elapsed": "12 minutes", "idle": "9 minutes", "tail": "(no output)"})
+@solution("delegated-agent-sessions", kind="event", entry="review", example={"elapsed": "12 minutes", "idle": "9 minutes", "tail": "(no output)"})
 @typing.runtime_checkable
 class StallDetecting(typing.Protocol):
     """Tells a stuck run from a slow one: from the elapsed time, the idle time and the tail of the session, whether the worker should still run."""
@@ -15,7 +15,6 @@ class StallDetecting(typing.Protocol):
     def review(self, elapsed: str, idle: str, tail: str) -> Mapping[str, Any]: ...
 
 
-@solution("receive-input-mid-run", kind="event", entry="peek", example="conversation-1")
 @runtime_checkable
 class InputInbox(Protocol):
     """A conversation-keyed inbox of user messages that arrived mid-run."""

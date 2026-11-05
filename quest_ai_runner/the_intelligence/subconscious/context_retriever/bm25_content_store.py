@@ -23,7 +23,7 @@ from quest_ai_runner.the_self.integrity.prompts.prompt_specs import declare, ren
 from quest_ai_runner.the_body.configuration.walk_settings import effective_skip_dirs
 
 QUERY_SPEC = declare(
-    "select-context.bm25-queries", solution="select-context", metric="metric-select-context",
+    "select-context.bm25-queries", solution="context-retriever", metric="metric-select-context",
     tier="caller", cache_layer="none", template=hub.QUERY_TEMPLATE, writes_text=False)
 
 
@@ -31,7 +31,7 @@ def query_prompt(num_queries: int, task_text: str) -> str:
     return render_prompt("select-context.bm25-queries", num_queries=num_queries, task_text=task_text)
 
 
-@implementation("select-context", "bm25")
+@implementation("context-retriever", "bm25")
 class BM25ContentStore(hub.BM25ContentStore):
     """The hub's BM25 content store under QAR's skip set and registered query prompt.
 

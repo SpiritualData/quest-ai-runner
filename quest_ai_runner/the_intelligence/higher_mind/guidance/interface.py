@@ -46,7 +46,6 @@ class GuidanceCard:
     tags: List[str] = field(default_factory=list)
 
 
-@solution("guide-by-feedback", kind="event", entry="select", example="What should I work on first this week?")
 @runtime_checkable
 class GuidanceProvider(Protocol):
     """OPTIONAL USE-CASE-SPECIFIC INSTRUCTIONS. The host app supplies retrievable guidance.
@@ -76,7 +75,7 @@ class GuidanceProvider(Protocol):
         ``meta`` carries the caller's scope (e.g. user/team/quest ids). Never raises."""
 
 
-@solution("guide-toward-the-long-term-goal", kind="event", entry="directive", example="What should I work on first this week?")
+@solution("guidance", kind="event", entry="directive", example="What should I work on first this week?")
 @typing.runtime_checkable
 class LongTermGuiding(typing.Protocol):
     """Points a reply at the quest's next milestone and its current reading, or holds back: the directive a reply is written under."""

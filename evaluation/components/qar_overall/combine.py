@@ -39,7 +39,7 @@ from esoi import split_ids as ids
 
 CONFIG = common.CONFIG
 WEIGHTS_KEY = "metric-qar-overall"   # keyed by the metric, not the component: the harness's accuracy/cost/time balance
-SELF = "do-grounded-work"                          # is read by component name, and this table is not that balance
+SELF = "quest-self"                          # is read by component name, and this table is not that balance
 TIERS = ("cheap", "full")
 
 

@@ -14,9 +14,10 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
-from esoi import implementation, solution, spec_search as search_lib
+from esoi import implementation, spec_search as search_lib
 
 from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
+from quest_ai_runner.the_self.assembler.resolve import resolve
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import declare, render_prompt
 from hubofhubs.api import STEP_SELECT, answer_with_reasoning
 
@@ -24,6 +25,7 @@ log = logging.getLogger("quest-ai-runner.spec-selection")
 
 SUPPORTED_INDEX_VERSION = 1
 VectorSearch = search_lib.VectorSearch
+SELECTED_ARM = "lexical-vector-gated"   # the arm of context-retriever that picks records, the one metric-spec-selection measured best
 SpecSelection = search_lib.Selection   # ids, candidates, linked, calls, failed_batches, sources, route
 # Records that state intent are candidates; implementations are reached through their solution's links (there are several per
 # solution and they would crowd the candidates).
@@ -73,7 +75,6 @@ def run(strategy: str, task: str, index: Dict[str, Any], provider: Any, model: O
                             expand=expand, ranked_kinds=kinds, gate=GATE, line_text=None)
 
 
-@solution("spec-selection", example={"task": "which solution picks the model tier?", "index": {"entries": []}})
 def select_specs(task: str, index: Dict[str, Any], *, provider: Any = None, model: Optional[str] = None,
                  vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                  batch_size: int = 10, max_workers: int = 4, expand: int = 1,
@@ -82,9 +83,12 @@ def select_specs(task: str, index: Dict[str, Any], *, provider: Any = None, mode
     after). Lexical narrowing and an optional vector search propose candidates; a confidence gate answers the clear cases
     and the empty ones itself, and a cheap model judges the rest in one call; with no provider the fused candidates are
     returned."""
+    return resolve("context-retriever", SELECTED_ARM)(task, index, provider=provider, model=model, vector_search=vector_search,
+                                                       k_lexical=k_lexical, k_vector=k_vector, batch_size=batch_size,
+                                                       max_workers=max_workers, expand=expand, kinds=kinds)
 
 
-@implementation("spec-selection", "lexical-vector-llm")
+@implementation("context-retriever", "lexical-vector-llm")
 def lexical_vector_llm(task: str, index: Dict[str, Any], *, provider: Any = None, model: Optional[str] = None,
                        vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                        batch_size: int = 10, max_workers: int = 4, expand: int = 1,
@@ -94,7 +98,7 @@ def lexical_vector_llm(task: str, index: Dict[str, Any], *, provider: Any = None
     return run("judge-all", task, index, provider, model, vector_search, k_lexical, k_vector, batch_size, max_workers, expand, kinds)
 
 
-@implementation("spec-selection", "lexical-vector-gated")
+@implementation("context-retriever", "lexical-vector-gated")
 def lexical_vector_gated(task: str, index: Dict[str, Any], *, provider: Any = None, model: Optional[str] = None,
                          vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                          batch_size: int = 10, max_workers: int = 4, expand: int = 1,
@@ -105,7 +109,7 @@ def lexical_vector_gated(task: str, index: Dict[str, Any], *, provider: Any = No
     return run("gated", task, index, provider, model, vector_search, k_lexical, k_vector, batch_size, max_workers, expand, kinds)
 
 
-@implementation("spec-selection", "lexical-only")
+@implementation("context-retriever", "lexical-only")
 def lexical_only(task: str, index: Dict[str, Any], *, provider: Any = None, model: Optional[str] = None,
                  vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                  batch_size: int = 10, max_workers: int = 4, expand: int = 1,
@@ -115,5 +119,5 @@ def lexical_only(task: str, index: Dict[str, Any], *, provider: Any = None, mode
 
 
 SELECT_SPEC = declare(
-    "spec-selection.batch-judge", solution="spec-selection", metric="metric-spec-selection",
+    "spec-selection.batch-judge", solution="context-retriever", metric="metric-spec-selection",
     tier="caller", cache_layer="none", template=SELECT_PROMPT)

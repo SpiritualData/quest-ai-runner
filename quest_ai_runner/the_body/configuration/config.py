@@ -275,7 +275,7 @@ class RunnerConfig:
     vector_store: Any = None
     # WHICH IMPLEMENTATION fills a swappable slot, as data: ``{solution_id: implementation name}``
     # (ids from the solutions.csv files of the records tree, names from the @implementation declarations), e.g.
-    # ``{"run-deep-work": "acp", "index-by-meaning": "qdrant"}``. A slot not named here takes the table
+    # ``{"delegated-agent-sessions": "acp", "context-retriever": "qdrant"}``. A slot not named here takes the table
     # default. Read by ``core.resolve.resolve`` at the selection sites; settable from a config file's
     # ``[selections]`` table, so switching an implementation is a config change, not code.
     selections: Dict[str, str] = field(default_factory=dict)
@@ -808,9 +808,9 @@ def build_orchestrator(
         web=cfg.web_research,
         recipes=cfg.recipe_store or build_recipe_store_from_env(os.environ),
         # How much the code adds around a deep goal: the selected iterate-by-spec implementation (or
-        # ``cfg.selections["iterate-by-spec"]``); the default measures the metric before and after the work,
+        # ``cfg.selections["esoi-application"]``); the default measures the metric before and after the work,
         # and ``generic-doctrine`` (the standing instructions alone) is the off switch.
-        goal_iteration=resolve("iterate-by-spec", overrides=cfg.selections)(),
+        goal_iteration=resolve("esoi-application", overrides=cfg.selections)(),
         edited_files_card_updater=update_cards_from_deep_edits,
         background_thread_registrar=_register_index_thread,
     )

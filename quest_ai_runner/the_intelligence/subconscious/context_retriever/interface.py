@@ -7,7 +7,6 @@ from esoi import solution
 from hubofhubs.api import AssembledContext, ContextAssembler
 
 
-@solution("choose-the-context", kind="event", entry="choose", example="What should I work on first this week?")
 @typing.runtime_checkable
 class ContextChoosing(typing.Protocol):
     """The context a request needs, chosen from the person's own cards, files and conversations."""
@@ -15,7 +14,7 @@ class ContextChoosing(typing.Protocol):
     def choose(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, assembler: Optional[ContextAssembler] = None) -> AssembledContext: ...
 
 
-@solution("select-context", kind="event", entry="assemble", example="What should I work on first this week?")
+@solution("context-retriever", kind="event", entry="assemble", example="What should I work on first this week?")
 @typing.runtime_checkable
 class ContextSelecting(ContextAssembler, typing.Protocol):
     """Which stored cards, files and conversations a request reads before it is planned: ``assemble`` returns the rendered context and the card ids

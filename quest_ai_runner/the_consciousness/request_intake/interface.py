@@ -94,7 +94,7 @@ class SendResult:
     error: Optional[str] = None
 
 
-@solution("talk-over-a-channel", kind="event", entry="send", example=OutboundReply(chat_ref="chat-1", text="Hello"))
+@solution("intake-sources", kind="event", entry="send", example=OutboundReply(chat_ref="chat-1", text="Hello"))
 @runtime_checkable
 class ChannelTransport(Protocol):
     """A LIVE, two-way messaging channel. NEVER raises — every failure is a returned value."""
@@ -132,7 +132,7 @@ class ChannelTransportBase(abc.ABC):
         return None
 
 
-@solution("run-queued-tasks", kind="event", entry="scan", example="team-1")
+@solution("quest-requests", kind="event", entry="scan", example="team-1")
 @typing.runtime_checkable
 class QueueRunning(typing.Protocol):
     """Takes the tasks queued for a team, runs each one and reports what happened; returns the ids it handled."""
@@ -140,7 +140,6 @@ class QueueRunning(typing.Protocol):
     def scan(self, team_id: str = "") -> List[str]: ...
 
 
-@solution("take-in-the-world", kind="event", entry="take_in", example="Save a note that the launch moves to Friday.")
 @typing.runtime_checkable
 class RequestTakingIn(typing.Protocol):
     """Accepts one request and describes it: where it goes and which channels its context is fed from."""

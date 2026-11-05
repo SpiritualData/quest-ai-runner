@@ -20,14 +20,14 @@ from quest_ai_runner.the_world.tools.web_search.web_search_backends import gemin
 logger = logging.getLogger("quest-ai-runner.web-research")
 
 
-@solution("search-the-web", kind="event", entry="search", example="latest Rust release")
+@solution("web-search", kind="event", entry="search", example="latest Rust release")
 @typing.runtime_checkable
 class WebSearching(WorldKnowing, typing.Protocol):
     """The hub's ``the-science`` lines (``describe``, ``search``, ``fetch``) over the live web: snippet-first search through a
     search backend and a focused read of one page."""
 
 
-@implementation("search-the-web", "web_research")
+@implementation("web-search", "web_research")
 class WebResearchAdapter(hub_research.WebResearchAdapter):
     """The hub's snippet-first search and focused page fetch, declared under QAR's solutions."""
 

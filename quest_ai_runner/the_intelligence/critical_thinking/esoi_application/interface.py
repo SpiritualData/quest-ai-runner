@@ -7,7 +7,7 @@ from esoi import MetricMeter
 from esoi import SliceSource, SpecSlice
 
 
-@solution("iterate-by-spec", kind="event", entry="slice_for", example="Tidy the card store")
+@solution("esoi-application", kind="event", entry="slice_for", example="Tidy the card store")
 class GoalIteration(Protocol):
     """What the code adds around one deep goal: a slice source (None for none) and the meters that read its metric."""
     name: str

@@ -68,7 +68,7 @@ class FolderAssembler(ContextAssembler):
         return None
 
 
-@implementation("select-context", "blind_grep")
+@implementation("context-retriever", "blind_grep")
 class BlindGrepAssembler(FolderAssembler):
     """Ranks every file by how many distinct task tokens (tokenized the way the card store does) appear in its text: no cards, no index, no
     model. What any context layer must beat to justify its existence. Ties break by path, so the ranking is deterministic."""
@@ -89,7 +89,7 @@ class BlindGrepAssembler(FolderAssembler):
         return [path for path, score in sorted(scores.items(), key=lambda kv: (-kv[1], kv[0])) if score > 0][:self.limit]
 
 
-@implementation("select-context", "hub_feature_rerank")
+@implementation("context-retriever", "hub_feature_rerank")
 class FeatureRerankAssembler(FolderAssembler):
     """The hub's ``feature_rerank`` retrieval arm: BM25 and dense retrieval fused, then reranked by weighted features and priors. The hub owns
     the ranking; this renders its hits as the context view. The first request indexes the corpus, later ones reuse the index."""

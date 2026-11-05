@@ -6,7 +6,7 @@ from typing import Any, Mapping, Sequence
 from esoi import solution
 
 
-@solution("assemble-a-prompt", kind="event", entry="assemble", example="What should I work on first this week?")
+@solution("context-intake", kind="event", entry="assemble", example="What should I work on first this week?")
 @typing.runtime_checkable
 class PromptAssembling(typing.Protocol):
     """Writes the prompt a step of the loop sends for a message: the planner's view of it, as text."""
@@ -14,7 +14,7 @@ class PromptAssembling(typing.Protocol):
     def assemble(self, message: str) -> str: ...
 
 
-@solution("replay-known-operations", kind="event", entry="match", example="Add a note that the launch moves to Friday")
+@solution("planner", kind="event", entry="match", example="Add a note that the launch moves to Friday")
 @typing.runtime_checkable
 class OperationReplaying(typing.Protocol):
     """Finds the operations learned from earlier requests that a new request repeats, best first, each with its similarity."""
@@ -22,7 +22,6 @@ class OperationReplaying(typing.Protocol):
     def match(self, request: str) -> Sequence[Any]: ...
 
 
-@solution("route-a-message", kind="event", entry="route", example="Save a note that the launch moves to Friday.")
 @typing.runtime_checkable
 class MessageRouting(typing.Protocol):
     """Decides where one message goes, as data: ``{"route", "tool", "calls", "raw"}``."""

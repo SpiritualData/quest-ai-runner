@@ -240,10 +240,10 @@ def llm_admission_judge(provider_fn: Callable[[], Any], tier: str = "fast"
 
 
 RELEVANCE_SPEC = declare(
-    "feed-context-sources.relevance", solution="feed-context-sources",
+    "feed-context-sources.relevance", solution="quest-context",
     metric="metric-feed-context-sources", tier="balanced", cache_layer="none",
     template=_RELEVANCE_PROMPT)
 ADMISSION_SPEC = declare(
-    "feed-context-sources.admission", solution="feed-context-sources",
+    "feed-context-sources.admission", solution="quest-context",
     metric="metric-feed-context-sources", tier="fast", cache_layer="none",
     template=_ADMISSION_PROMPT)

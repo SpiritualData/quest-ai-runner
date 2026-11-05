@@ -24,7 +24,7 @@ def registered(solution_id, name, target):
 
 def web_search():
     from quest_ai_runner.the_world.tools.web_search.web_search_backends import select_search_backend
-    with registered("search-the-web", "fakehub", "hub_of_hubs.fake_hub:FakeSearch"):
+    with registered("web-search", "fakehub", "hub_of_hubs.fake_hub:FakeSearch"):
         got = select_search_backend(env={"QAR_WEB_SEARCH_BACKEND": "fakehub", "FAKEHUB_URL": "http://hub.invalid"})
     return got is not None and type(got).__name__ == "FakeSearch", "selected by QAR_WEB_SEARCH_BACKEND"
 
@@ -61,8 +61,8 @@ def agent_harness():
 
 def context_assembly():
     from quest_ai_runner.the_self.assembler.resolve import resolve
-    with registered("index-by-meaning", "fakehub", "hub_of_hubs.fake_hub:FakeVectorStore"):
-        got = resolve("index-by-meaning", overrides={"index-by-meaning": "fakehub"})
+    with registered("context-retriever", "fakehub", "hub_of_hubs.fake_hub:FakeVectorStore"):
+        got = resolve("context-retriever", overrides={"context-retriever": "fakehub"})
     return got.__name__ == "FakeVectorStore", "chosen by cfg.selections for index-by-meaning"
 
 

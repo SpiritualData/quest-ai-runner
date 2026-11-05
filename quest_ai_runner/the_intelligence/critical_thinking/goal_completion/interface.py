@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 from esoi import solution
 
 
-@solution("judge-a-decision", kind="event", entry="reach_verdict", example='{"reach": "inside", "reason": "the note is in the card"}')
+@solution("goal-completion", kind="event", entry="reach_verdict", example='{"reach": "inside", "reason": "the note is in the card"}')
 @typing.runtime_checkable
 class DecisionJudging(typing.Protocol):
     """Settles a narrow question from a model's raw answer: the reach of a request, the quests an item belongs to, the cards still abridged."""

@@ -6,7 +6,7 @@ from esoi import solution
 from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation_learner import Pattern, Prediction
 
 
-@solution("persist-predictions", kind="event", entry="load_predictions", example="quest-id")
+@solution("the-intuition", kind="event", entry="load_predictions", example="quest-id")
 @runtime_checkable
 class PredictionStore(Protocol):
     """The port the anticipation engine persists through: patterns learned per scope, the scope's live

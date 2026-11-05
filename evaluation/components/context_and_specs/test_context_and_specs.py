@@ -44,7 +44,7 @@ def test_fixture_world_has_unsolved_records_and_fixture_tags():
     assert "prob-fixture-reminders-wrong-time-zone" not in served
     assert "fixture-household-meals" not in served
     assert w.index["n"] == len(w.index["entries"]) and w.index["df"]["pantry"] >= 1
-    assert set(w.tags.solution_tags) == {"persist-cards", "cache-cards", "detect-stale-cards"}
+    assert set(w.tags.solution_tags) == {"card-store", "card-store", "detect-stale-cards"}
 
 
 def test_the_cases_fail_the_broken_baseline():

@@ -26,7 +26,7 @@ DECLARED = declarations.scan(CONFIG, declarations.code_files(CONFIG))
 @pytest.fixture(autouse=True)
 def clean_registrations():
     def drop():
-        scope = selection.REGISTRY.get((resolve_mod.SCOPE, "search-the-web"))
+        scope = selection.REGISTRY.get((resolve_mod.SCOPE, "web-search"))
         if scope is not None:
             scope.implementations.pop("mine", None)
         resolve_mod.CONFIG_REFS.clear()
@@ -76,34 +76,34 @@ def test_an_unknown_solution_with_a_name_lists_the_solutions_that_can_be_chosen(
     """A typo in the solution id is the likelier typo: the error says what exists instead of 'choices: none'."""
     for call in (lambda: resolve("not-a-solution", "x"), lambda: chosen_name("not-a-solution", "x"),
                  lambda: resolve("not-a-solution", overrides={"not-a-solution": "x"})):
-        with pytest.raises(ValueError, match=r"unknown solution 'not-a-solution'.*run-deep-work.*vendor-model-caller"):
+        with pytest.raises(ValueError, match=r"unknown solution 'not-a-solution'.*delegated-agent-sessions.*vendor-model-caller"):
             call()
     with pytest.raises(ValueError, match="choices: .*claude_cli"):
         resolve("vendor-model-caller", "nope")
 
 
 def test_a_config_class_comes_with_runners_that_take_one():
-    assert dataclasses.is_dataclass(resolve_config("run-deep-work", "acp"))
-    assert dataclasses.is_dataclass(resolve_config("run-deep-work", "subprocess"))
-    assert resolve_config("run-deep-work", "fast_edit") is None
+    assert dataclasses.is_dataclass(resolve_config("delegated-agent-sessions", "acp"))
+    assert dataclasses.is_dataclass(resolve_config("delegated-agent-sessions", "subprocess"))
+    assert resolve_config("delegated-agent-sessions", "fast_edit") is None
 
 
 def test_register_adds_an_implementation_of_the_consumers_own():
-    register("search-the-web", "mine", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
-    assert "mine" in names("search-the-web")
-    assert resolve("search-the-web", "mine").__name__ == "BraveBackend"
-    assert default_name("search-the-web") == "web_research"
-    assert resolve("search-the-web", overrides={"search-the-web": "mine"}).__name__ == "BraveBackend"
+    register("web-search", "mine", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
+    assert "mine" in names("web-search")
+    assert resolve("web-search", "mine").__name__ == "BraveBackend"
+    assert default_name("web-search") == "web_research"
+    assert resolve("web-search", overrides={"web-search": "mine"}).__name__ == "BraveBackend"
 
 
 def test_a_consumer_registration_replaces_the_librarys_name_even_when_the_library_loads_later():
-    entry = selection.entry_for("write-files", None, resolve_mod.SCOPE)
+    entry = selection.entry_for("file-editing", None, resolve_mod.SCOPE)
     saved = dict(entry.implementations)
     try:
-        register("write-files", "files", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
-        assert resolve("write-files", "files").__name__ == "BraveBackend"
+        register("file-editing", "files", "quest_ai_runner.the_world.tools.web_search.web_search_backends:BraveBackend")
+        assert resolve("file-editing", "files").__name__ == "BraveBackend"
         import quest_ai_runner.the_world.tools.file_editing.files_writer
-        assert resolve("write-files", "files").__name__ == "BraveBackend"
+        assert resolve("file-editing", "files").__name__ == "BraveBackend"
     finally:
         entry.implementations.clear()
         entry.implementations.update(saved)
@@ -145,23 +145,23 @@ def test_deep_runner_default_and_override(monkeypatch, tmp_path):
     monkeypatch.setenv("QAR_CLAUDE_PATH", str(fake))
     cfg = RunnerConfig(corpus_root=str(tmp_path))
     assert type(resolve_deep_runner(cfg)).__name__ == "SubprocessGoalRunner"
-    cfg = RunnerConfig(corpus_root=str(tmp_path), selections={"run-deep-work": "acp"})
+    cfg = RunnerConfig(corpus_root=str(tmp_path), selections={"delegated-agent-sessions": "acp"})
     assert type(resolve_deep_runner(cfg)).__name__ == "AcpDeepRunner"
     # a ladder rung is not a standalone worker: reported, not raised
-    cfg = RunnerConfig(corpus_root=str(tmp_path), selections={"run-deep-work": "fast_edit"})
+    cfg = RunnerConfig(corpus_root=str(tmp_path), selections={"delegated-agent-sessions": "fast_edit"})
     assert resolve_deep_runner(cfg, warn=False) is None
 
 
 def test_selections_can_come_from_a_config_file(tmp_path):
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
     p = tmp_path / "lane.toml"
-    p.write_text('[selections]\n"run-deep-work" = "acp"\n"index-by-meaning" = "qdrant"\n')
+    p.write_text('[selections]\n"delegated-agent-sessions" = "acp"\n"context-retriever" = "qdrant"\n')
     cfg = RunnerConfig.from_file(str(p))
-    assert cfg.selections == {"run-deep-work": "acp", "index-by-meaning": "qdrant"}
+    assert cfg.selections == {"delegated-agent-sessions": "acp", "context-retriever": "qdrant"}
 
 
 def test_vector_store_class_is_resolved_through_the_declarations():
-    assert resolve("index-by-meaning").__name__ == "QdrantVectorStore"
+    assert resolve("context-retriever", "qdrant").__name__ == "QdrantVectorStore"
 
 
 # --- the project default is written once, in the records ------------------------------------------------
@@ -203,9 +203,9 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
         "import quest_ai_runner.the_self.assembler.resolve as r\n"
         f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
         "assert r.default_name('vendor-model-caller') == 'multi_provider'\n"
-        "assert r.resolve('search-the-web').__name__ == 'WebResearchAdapter'\n"
-        "assert r.resolve('cache-cards').__name__ == 'FileCardCache'\n"
-        "assert r.resolve('run-deep-work', 'acp').__name__ == 'AcpDeepRunner'\n"
+        "assert r.resolve('web-search').__name__ == 'WebResearchAdapter'\n"
+        "assert r.resolve('card-store', 'file').__name__ == 'FileCardCache'\n"
+        "assert r.resolve('delegated-agent-sessions', 'acp').__name__ == 'AcpDeepRunner'\n"
     )
     done = subprocess.run([sys.executable, "-c", code], cwd=elsewhere, capture_output=True, text=True,
                           env={"PATH": "/usr/bin:/bin", "PYTHONPATH": f"{site}:{esoi_home}:{hub_home}", "HOME": str(tmp_path)})

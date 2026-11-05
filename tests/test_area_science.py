@@ -14,7 +14,7 @@ def strict_outcome(solution_id):
     return "pending"
 
 
-@pytest.mark.parametrize("solution_id", ("the-science", "search-the-web"))
+@pytest.mark.parametrize("solution_id", ("the-science", "web-search"))
 def test_each_id_of_the_area_pends_on_the_search_key_offline(solution_id):
     assert strict_outcome(solution_id) == "pending"
 
@@ -31,7 +31,7 @@ class Web:
 
 
 def test_the_area_hands_each_line_to_the_web_member():
-    area = quest_ai_runner.run(KnowingTheWorld, environ={}, provided={"search-the-web": Web()})
+    area = quest_ai_runner.run(KnowingTheWorld, environ={}, provided={"web-search": Web()})
     assert area.describe() == "web"
     assert area.search("meditation and attention", max_results=3) == ("search", "meditation and attention", 3, False)
     assert area.fetch("https://example.org/a", focus="attention", part=2) == ("fetch", "https://example.org/a", "attention", 2)

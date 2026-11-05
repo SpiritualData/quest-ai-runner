@@ -49,7 +49,7 @@ _log = logging.getLogger("quest-ai-runner.mcp_retrieval_adapter")
 DEFAULT_MAX_BYTES = 20_000
 
 
-@implementation("gather-evidence", "mcp")
+@implementation("quest-context", "mcp")
 class MCPRetrievalAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over one MCP server, namespaced by ``alias``.
 

@@ -135,14 +135,14 @@ ASSIGNED_GOAL_JUDGE_SYSTEM = (
 
 
 GOAL_JUDGE_SPEC = register(PromptSpec(
-    id="assist-a-terminal-session.goal-judge", solution="assist-a-terminal-session",
+    id="assist-a-terminal-session.goal-judge", solution="system-integrity",
     metric="metric-assist-a-terminal-session", tier="balanced", cache_layer="head",
     template=ASSIGNED_GOAL_JUDGE_SYSTEM,
     output_schema={"ai_doable": "boolean", "confidence": "number 0 to 1", "reason": "one sentence"},
 ))
 
 ASK_CLASSIFY_SPEC = register(PromptSpec(
-    id="assist-a-terminal-session.ask-classify", solution="assist-a-terminal-session",
+    id="assist-a-terminal-session.ask-classify", solution="system-integrity",
     metric="metric-assist-a-terminal-session", tier="balanced", cache_layer="head",
     template=ASK_CLASSIFY_SYSTEM,
 ))
@@ -180,7 +180,7 @@ def judge_goal(provider, model, goal):
 
 
 
-@implementation("assist-a-terminal-session", "fast_model_helpers")
+@implementation("system-integrity", "fast_model_helpers")
 class FastModelHelpers:
     """The goal judgement asked of the model the balanced tier resolves to on the model seat; ``judge_goal`` is the same call
     ``reconcile-plan`` makes through ``_goal_judge``."""

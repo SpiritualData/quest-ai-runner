@@ -697,12 +697,12 @@ def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,
 
 
 EXPLICIT_ASK_SPEC = declare(
-    "select-a-rep.explicit-ask", solution="select-a-rep", metric="metric-select-a-rep",
+    "select-a-rep.explicit-ask", solution="quest-representatives", metric="metric-select-a-rep",
     tier="fast", cache_layer="none", template=JUDGE_PROMPT)
 
 
 
-@implementation("select-a-rep", "persona_resolver_precedence")
+@implementation("quest-representatives", "persona_resolver_precedence")
 class PersonaResolverPrecedence:
     """The persona resolver of this module, built from its configuration alone: a structured assignment field first, then the opt-in
     steps the configuration turns on. With no registry it resolves nobody."""

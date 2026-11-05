@@ -11,4 +11,12 @@ system-integrity,QME7
 nervous-system,metric-watch-a-run
 critical-thinking,metric-think-critically
 cards-from-files,metric-bound-card-growth
-select-context,QP2;metric-choose-the-context
+context-retriever,QP2;metric-choose-the-context
+intake-sources,metric-talk-over-a-channel
+delegated-agent-sessions,metric-run-deep-work
+file-editing,metric-write-files
+model-plumbing,metric-justified-model-spend
+planner,metric-route-a-message
+metric-translation,metric-draft-a-metric
+context-intake,metric-assemble-a-prompt
+web-search,metric-search-the-web

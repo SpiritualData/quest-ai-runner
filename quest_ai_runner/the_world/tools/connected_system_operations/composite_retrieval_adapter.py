@@ -16,7 +16,7 @@ from quest_ai_runner.the_body.internal_context.interface import RetrievalAdapter
 from esoi import implementation
 
 
-@implementation("gather-evidence", "composite")
+@implementation("quest-context", "composite")
 class CompositeRetrievalAdapter:
     """Parallel multi-source retrieval.
 

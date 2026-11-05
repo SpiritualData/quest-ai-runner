@@ -25,7 +25,7 @@ from quest_ai_runner.the_consciousness.representatives.interface import RepSelec
 
 
 
-@implementation("hold-the-intents", "separate_stores")
+@implementation("quest-intents", "separate_stores")
 class SeparateStores:
     """Conversation recall, recent context, feedback guidance, predictions and the feedback ledger, each read separately when a request
     begins. ``hold`` reads the four a request needs; the other lines hand a question to the member that owns it."""

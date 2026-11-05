@@ -54,7 +54,7 @@ def default_backup_dir() -> Path:
     return Path.home() / ".quest-ai-runner" / "file-backups"
 
 
-@implementation("write-files", "files")
+@implementation("file-editing", "files")
 class FilesWriter(FileWriterBase):
     """Write text files inside ``root``, keeping a backup of what was replaced.
 

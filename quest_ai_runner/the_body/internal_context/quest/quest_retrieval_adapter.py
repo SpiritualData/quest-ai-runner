@@ -26,7 +26,7 @@ from quest_ai_runner.the_intelligence.mind.context_intake.reflections import DEF
 from esoi import implementation
 
 
-@implementation("gather-evidence", "quest")
+@implementation("quest-context", "quest")
 class QuestRetrievalAdapter(RetrievalAdapter):
     """Query the Quest API for goal, task, and cross-environment context.
 

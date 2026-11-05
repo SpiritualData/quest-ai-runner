@@ -26,7 +26,7 @@ from quest_ai_runner.the_body.configuration.acp_deep_runner_config import QAR_AC
 from hubofhubs.api import AcpRun, AcpSessionClient, open_agent_connection  # noqa: F401
 
 
-@implementation("run-deep-work", "acp")
+@implementation("delegated-agent-sessions", "acp")
 class AcpDeepRunner(HubAcpDeepRunner):
     """A ``DeepRunner`` that runs each goal as one ACP session against the Claude ACP agent, with QAR's settings."""
 

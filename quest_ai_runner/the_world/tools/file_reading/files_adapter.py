@@ -111,7 +111,7 @@ def resolve_in_tree(root: Path, rel_or_abs: str) -> Optional[Path]:
     return resolved
 
 
-@implementation("gather-evidence", "files")
+@implementation("quest-context", "files")
 class FilesAdapter(RetrievalAdapterBase):
     def __init__(self, root: str, *, default_read_max_bytes: int = 20000,
                  default_grep_max_hits: int = 40, grep_max_file_bytes: int = 256 * 1024):

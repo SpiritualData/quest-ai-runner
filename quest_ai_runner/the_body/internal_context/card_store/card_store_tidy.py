@@ -13,7 +13,7 @@ from esoi import implementation
 from hubofhubs.api import RepositoryTidy, StorePlan, TidyRun, is_local_folder, split_steps
 
 
-@implementation("repair-a-card-store", "repository_tidy")
+@implementation("card-store", "repository_tidy")
 def repository_tidy(repo: Any, cards_dir: Any, **options: Any) -> RepositoryTidy:
     """QAR's ``repair-a-card-store`` implementation: the hub's repository tidy, carried out through the ``CardRepository`` port."""
     return RepositoryTidy(repo, cards_dir, **options)

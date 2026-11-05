@@ -192,7 +192,7 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
 
 
 
-@implementation("escalate-to-a-human", "quest_decision")
+@implementation("quest-decision-requests", "quest_decision")
 class QuestDecisionSink(EscalationSinkBase):
     """Adapt a QuestClient into a core EscalationSink.
 

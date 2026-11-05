@@ -148,7 +148,7 @@ def _extract_pdf_text(data: bytes) -> str:
 # The adapter
 # ---------------------------------------------------------------------------
 
-@implementation("gather-evidence", "google_drive")
+@implementation("quest-context", "google_drive")
 class GoogleDriveAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over Google Drive files and folders.
 

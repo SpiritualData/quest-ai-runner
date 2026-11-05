@@ -53,7 +53,7 @@ __all__ = ["config", "resources",
            "load_config", "load_client", "assembler", "run", "__version__"]
 
 
-WHOLE_RUNNER = {"quest-ai-runner": "do-grounded-work"}   # the package's own name reaches the solution that is the whole runner
+WHOLE_RUNNER = {"quest-ai-runner": "quest-self"}   # the package's own name reaches the solution that is the whole runner
 
 
 def run(target, input=None, **overrides):

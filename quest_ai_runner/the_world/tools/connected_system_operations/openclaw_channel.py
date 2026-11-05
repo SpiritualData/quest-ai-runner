@@ -346,7 +346,7 @@ def _parse_json_list(text: str, *, key_candidates: tuple) -> Optional[List[Any]]
     return None
 
 
-@implementation("talk-over-a-channel", "openclaw")
+@implementation("intake-sources", "openclaw")
 class OpenClawFromEnvironment:
     """The OpenClaw channel as the ``talk-over-a-channel`` seat builds it: the Gateway token file named by ``QAR_OPENCLAW_TOKEN_FILE`` and
     the ``openclaw`` program on the path. ``OpenClawChannel`` above is the transport; this arm hands the three calls of a

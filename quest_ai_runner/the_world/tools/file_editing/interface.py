@@ -6,7 +6,7 @@ from esoi import solution
 from hubofhubs.api import FileWriter
 
 
-@solution("write-files", kind="event", entry="read_file", example="NOTES.md")
+@solution("file-editing", kind="event", entry="read_file", example="NOTES.md")
 @typing.runtime_checkable
 class FileWriting(FileWriter, typing.Protocol):
     """Changes the text files under one root and keeps what it replaced; a file outside the root is refused."""

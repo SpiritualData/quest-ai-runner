@@ -9,8 +9,6 @@ from dataclasses import dataclass
 from typing import Sequence
 
 
-@solution("assist-a-terminal-session", kind="event", entry="judge_goal",
-          example={"name": "Draft the launch note", "description": "Write two paragraphs from the quest's notes."})
 @typing.runtime_checkable
 class TerminalHelping(typing.Protocol):
     """The small judgements the terminal commands lean on: whether a goal is work an AI can finish."""
@@ -18,7 +16,6 @@ class TerminalHelping(typing.Protocol):
     def judge_goal(self, goal: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
 
 
-@solution("expose-the-public-api", kind="event", entry="front_door", example="run")
 @typing.runtime_checkable
 class PublicSurface(typing.Protocol):
     """Names what the package offers a consumer and hands over the front door asked for (``run``, ``load_config``, ``load_client``)."""
@@ -33,7 +30,6 @@ class TerminalRun:
     output: str
 
 
-@solution("operate-from-a-terminal", kind="event", entry="operate", example=["--help"])
 @typing.runtime_checkable
 class TerminalOperating(typing.Protocol):
     """Runs one command of ``quest-ai-runner`` as the shell would, and returns what it did."""

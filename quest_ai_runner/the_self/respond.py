@@ -23,12 +23,12 @@ from hubofhubs.api import CardStore
 from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
 from quest_ai_runner.the_body.interface import BodyActing
 from quest_ai_runner.the_body.internal_context.quest.interface import QuestOperations
-from quest_ai_runner.the_consciousness.request_intake.interface import RequestTakingIn
+from quest_ai_runner.the_consciousness.request_intake.interface import QueueRunning
 from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
 from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import IntentHolding
 from quest_ai_runner.the_intelligence.mind.interface import StepReasoning
 from quest_ai_runner.the_intelligence.nervous_system.interface import RunWatching
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.interface import ContextChoosing
+from quest_ai_runner.the_intelligence.subconscious.context_retriever.interface import ContextSelecting
 from quest_ai_runner.the_intelligence.subconscious.interface import CardRecall
 from quest_ai_runner.the_self.integrity.interface import KeepingGeneric
 from quest_ai_runner.the_self.interface import GoalAnswer
@@ -49,24 +49,24 @@ class Part:
 
 
 FLOW: Tuple[Part, ...] = (
-    Part("take-in-the-world", "takes the request in, from a chat turn, a queued task or a live channel", LOOP),
-    Part("hold-the-intents", "says what the person is working toward, from their quests, goals and intents", LOOP),
-    Part("choose-the-context", "chooses the cards, files and conversations the request needs", LOOP),
+    Part("quest-requests", "takes the request in, from a chat turn, a queued task or a live channel", LOOP),
+    Part("quest-intents", "says what the person is working toward, from their quests, goals and intents", LOOP),
+    Part("context-retriever", "chooses the cards, files and conversations the request needs", LOOP),
     Part("the-mind", "reasons step by step over the request and its context, with Body acting and Science answering beyond the person's own material", OWN),
     Part("nervous-system", "watches the run for risk before anything irreversible is handed on", LOOP),
     Part("critical-thinking", "holds the work to the metric that serves it and answers a regression", LOOP),
 )
 
 
-@implementation("do-grounded-work", "library")
+@implementation("quest-self", "library")
 class Respond:
     """The flow over the seats it is handed; one object answers any number of messages. The ``taking_in``, ``intents``, ``context``, ``reasoning``,
     ``risk``, ``critic``, ``body``, ``world`` and ``generic`` parts are built on first use: ``answer`` reaches them through the Mind's loop."""
 
     def __init__(self, model: RoutedModelCalling, cards: CardStore, memory: CardRecall, quest: QuestOperations,
-                 reasoning: Lazy[StepReasoning], taking_in: Lazy[RequestTakingIn], body: Lazy[BodyActing], critic: Lazy[MetricHolding],
+                 reasoning: Lazy[StepReasoning], taking_in: Lazy[QueueRunning], body: Lazy[BodyActing], critic: Lazy[MetricHolding],
                  risk: Lazy[RunWatching], intents: Lazy[IntentHolding],
-                 generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld], context: Lazy[ContextChoosing]) -> None:
+                 generic: Lazy[KeepingGeneric], world: Lazy[KnowingTheWorld], context: Lazy[ContextSelecting]) -> None:
         self.model, self.cards, self.memory, self.quest, self.reasoning, self.taking_in = model, cards, memory, quest, reasoning, taking_in
         self.body, self.critic, self.risk, self.intents, self.generic, self.world = body, critic, risk, intents, generic, world
         self.context = context

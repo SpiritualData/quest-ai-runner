@@ -293,7 +293,7 @@ class CardCache(Protocol):
         """Queued ``(card_id, card, team_id)`` writes, oldest first."""
 
 
-@implementation("cache-cards", "null")
+@implementation("card-store", "null")
 class NullCardCache:
     """Stores nothing, queues nothing. ``directory`` is accepted (and ignored) so it is built the same way
     as ``FileCardCache``."""
@@ -318,7 +318,7 @@ class NullCardCache:
 # The repository
 # ---------------------------------------------------------------------------
 
-@implementation("persist-cards", "quest_api")
+@implementation("card-store", "quest_api")
 class QuestApiCardRepository:
     """CardRepository backed by quest-backend's ``/api/cards`` HTTP API (see the module docstring).
 

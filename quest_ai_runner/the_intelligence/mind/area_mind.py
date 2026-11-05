@@ -48,7 +48,7 @@ class PromptCapture:
 
 
 
-@implementation("assemble-a-prompt", "planner_prompt")
+@implementation("context-intake", "planner_prompt")
 class PlannerPrompt:
     """The planner's prompt for a message, written by the real loop with a model that only records what it is asked. No model call."""
     REQUIRES = ()     # the loop is built over a recorder, not a model
@@ -67,7 +67,7 @@ def turn_of(model: Any, message: str) -> GoalAnswer:
 
 
 
-@implementation("answer-a-turn", "orchestrator_turn")
+@implementation("quest-self", "orchestrator_turn")
 class OrchestratorTurn:
     """One turn of the orchestrator over the model, with no cards behind it."""
     REQUIRES = ()     # the model it is handed
@@ -80,7 +80,7 @@ class OrchestratorTurn:
 
 
 
-@implementation("answer-end-to-end", "shipped_path")
+@implementation("quest-self", "shipped_path")
 class ShippedPath:
     """The shipped path is one turn of the loop over the model; this arm returns that turn whole."""
     REQUIRES = ()     # the model it is handed
@@ -93,7 +93,7 @@ class ShippedPath:
 
 
 
-@implementation("replay-known-operations", "stored_recipes")
+@implementation("planner", "stored_recipes")
 class StoredRecipes:
     """The recipe store of ``core/recipes.py``: one JSON file when a path is given, otherwise held in memory."""
     REQUIRES = ()     # a file path or nothing
@@ -109,7 +109,7 @@ class StoredRecipes:
 
 
 
-@implementation("core-ml-tasks", "router_labels")
+@implementation("planner", "router_labels")
 class RouterLabels:
     """The classification is the route the loop's planner decides: ``answer``, ``tool``, ``deep``, ``confirm`` or ``clarify``."""
     REQUIRES = ()     # the model it is handed

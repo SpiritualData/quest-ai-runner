@@ -242,6 +242,6 @@ def select_quest(
 
 
 QUEST_RANKING_SPEC = declare(
-    "judge-a-decision.quest-ranking", solution="judge-a-decision",
+    "judge-a-decision.quest-ranking", solution="goal-completion",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",
     template=QUEST_RANKING_PROMPT, output_schema=QUEST_RANKING_TOOL)

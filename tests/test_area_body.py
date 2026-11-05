@@ -8,8 +8,8 @@ from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdap
 from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
 from tests.conftest import StubProvider
 
-AREA_IDS = ("the-body", "persist-cards", "write-files", "operate-a-quest", "claim-reach", "run-queued-tasks",
-            "hand-off-a-goal", "access-quest-operations")
+AREA_IDS = ("quest-account-truth", "card-store", "file-editing", "quest-change-executor", "the-tools", "quest-requests",
+            "quest-representatives", "quest-body")
 
 
 def strict_outcome(solution_id):
@@ -29,10 +29,10 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 def test_the_stores_pend_on_the_account_key_and_the_folder():
     with pytest.raises(Pending) as caught:
-        quest_ai_runner.run("persist-cards", "card-1", environ={})
+        quest_ai_runner.run("card-store", "card-1", environ={})
     assert {reason.kind for reason in caught.value.reasons} == {"key"}
     with pytest.raises(Pending) as caught:
-        quest_ai_runner.run("write-files", "NOTES.md", environ={})
+        quest_ai_runner.run("file-editing", "NOTES.md", environ={})
     assert [reason.kind for reason in caught.value.reasons] == ["key"]
 
 
@@ -87,8 +87,8 @@ class ScriptedModel(StubProvider):
 
 
 def area_over(tmp_path, provider):
-    provided = {"access-quest-operations": Account(), "gather-evidence": Reader(str(tmp_path)), "persist-cards": Cards(),
-                "write-files": FilesWriter(str(tmp_path), backups_enabled=False), "vendor-model-caller": provider}
+    provided = {"quest-body": Account(), "quest-context": Reader(str(tmp_path)), "card-store": Cards(),
+                "file-editing": FilesWriter(str(tmp_path), backups_enabled=False), "vendor-model-caller": provider}
     return quest_ai_runner.run(BodyActing, environ={}, provided=provided)
 
 

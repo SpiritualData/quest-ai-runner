@@ -1123,51 +1123,51 @@ Rules:
 
 # --- prompt specs: each prompt above declared once, with the solution and metric that justify it ---
 VERIFY_GOAL_SPEC = declare(
-    "verify-goal.verdict", solution="do-grounded-work", metric="QME2", tier="balanced", cache_layer="tail",
+    "verify-goal.verdict", solution="quest-self", metric="QME2", tier="balanced", cache_layer="tail",
     template=VERIFY_GOAL_PROMPT, output_schema=VERIFY_GOAL_TOOL)
 INTERIM_PROGRESS_SPEC = declare(
-    "reply-in-steps.interim-progress", solution="reply-in-steps",
+    "reply-in-steps.interim-progress", solution="quest-work-shown",
     metric="metric-interim-reply-truthful-and-useful", tier="fast", cache_layer="none",
     template=INTERIM_PROGRESS_PROMPT, output_schema=INTERIM_PROGRESS_TOOL)
 LANDED_WORK_DENIAL_SPEC = declare(
-    "judge-a-decision.landed-work-denial", solution="judge-a-decision",
+    "judge-a-decision.landed-work-denial", solution="goal-completion",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",
     template=LANDED_WORK_DENIAL_PROMPT, output_schema=LANDED_WORK_DENIAL_TOOL)
 FOUND_CONSTRAINT_SPEC = declare(
-    "judge-a-decision.found-constraint", solution="judge-a-decision",
+    "judge-a-decision.found-constraint", solution="goal-completion",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",
     template=FOUND_CONSTRAINT_PROMPT, output_schema=FOUND_CONSTRAINT_TOOL)
 INTENT_DIRECTIVE_SPEC = declare(
-    "judge-a-decision.intent-directive", solution="judge-a-decision",
+    "judge-a-decision.intent-directive", solution="goal-completion",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",
     template=INTENT_DIRECTIVE_PROMPT, output_schema=INTENT_DIRECTIVE_TOOL)
 MODE_RELEASE_SPEC = declare(
-    "judge-a-decision.mode-release", solution="judge-a-decision",
+    "judge-a-decision.mode-release", solution="goal-completion",
     metric="metric-judge-a-decision", tier="caller", cache_layer="none",
     template=MODE_RELEASE_PROMPT, output_schema=MODE_RELEASE_TOOL)
 CONDENSE_DECISION_SPEC = declare(
-    "ground-in-intent.condense-decision", solution="ground-in-intent",
+    "ground-in-intent.condense-decision", solution="guidance",
     metric="metric-ground-in-intent", tier="caller", cache_layer="none",
     template=_CONDENSE_DECISION_PROMPT)
 RESOLVE_REQUEST_SPEC = declare(
-    "ground-in-intent.resolve-request", solution="ground-in-intent",
+    "ground-in-intent.resolve-request", solution="guidance",
     metric="metric-ground-in-intent", tier="caller", cache_layer="tail",
     template=RESOLVE_REQUEST_PROMPT)
 DERIVE_GOAL_CONDITION_SPEC = declare(
-    "ground-in-intent.derive-goal-condition", solution="ground-in-intent",
+    "ground-in-intent.derive-goal-condition", solution="guidance",
     metric="metric-ground-in-intent", tier="fast", cache_layer="tail",
     template=DERIVE_GOAL_CONDITION_PROMPT)
 CARD_UPDATE_SPEC = declare(
-    "feed-context-sources.card-update", solution="feed-context-sources",
+    "feed-context-sources.card-update", solution="quest-context",
     metric="metric-feed-context-sources", tier="caller", cache_layer="tail",
     template=CARD_UPDATE_PROMPT)
 PREFLIGHT_PLAN_SPEC = declare(
-    "preflight.plan-sufficiency", solution="do-grounded-work", metric="QME2", tier="balanced", cache_layer="tail",
+    "preflight.plan-sufficiency", solution="quest-self", metric="QME2", tier="balanced", cache_layer="tail",
     template=PREFLIGHT_PLAN_PROMPT, output_schema=PREFLIGHT_PLAN_TOOL)
 
 
 
-@implementation("guide-toward-the-long-term-goal", "guided_v2")
+@implementation("guidance", "guided_v2")
 class GuidedVersionTwo:
     """The long-term guidance section the reply voice carries: it decides, by the person's message and the context, whether the reply
     ends with one sentence naming the next target and its reading, or stays silent."""

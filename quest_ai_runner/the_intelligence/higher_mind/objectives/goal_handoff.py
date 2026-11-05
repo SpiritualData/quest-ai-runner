@@ -74,14 +74,14 @@ doable, answer false.
 Answer with one JSON object only: {{"ai_can_do": true|false, "reason": "<one short sentence, no em dashes>"}}"""
 
 ASSIGNEE_SPEC = register(PromptSpec(
-    id="hand-off-a-goal.assignee", solution="hand-off-a-goal", metric="metric-hand-off-a-goal",
+    id="hand-off-a-goal.assignee", solution="quest-representatives", metric="metric-hand-off-a-goal",
     tier="fast", cache_layer="none", template=ASSIGNEE_PROMPT,
     inputs=("outcome", "current_state", "preferences", "title", "description", "members"),
     output_schema={"assignee": "member id or null", "ai_can_do": "boolean"},
 ))
 
 DOABILITY_SPEC = register(PromptSpec(
-    id="hand-off-a-goal.doability", solution="hand-off-a-goal", metric="metric-hand-off-a-goal",
+    id="hand-off-a-goal.doability", solution="quest-representatives", metric="metric-hand-off-a-goal",
     tier="fast", cache_layer="none", template=DOABILITY_PROMPT,
     inputs=("outcome", "current_state", "preferences", "title", "description"),
     output_schema={"ai_can_do": "boolean", "reason": "one short sentence"},

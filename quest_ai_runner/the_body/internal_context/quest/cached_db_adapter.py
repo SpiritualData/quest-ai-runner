@@ -38,7 +38,7 @@ def _canonical(filter_: Dict[str, Any]) -> str:
         return repr(filter_)
 
 
-@implementation("gather-evidence", "cached_db")
+@implementation("quest-context", "cached_db")
 class CachedDbAdapter(RetrievalAdapterBase):
     def __init__(self, fetch: FetchFn, *, ttl_seconds: float = 30.0, default_limit: int = 20,
                  max_render_bytes: int = 6000,

@@ -8,8 +8,8 @@ from quest_ai_runner.the_consciousness.request_intake.interface import InboundBa
 from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 from tests.conftest import StubProvider
 
-AREA_IDS = ("take-in-the-world", "route-a-message", "talk-over-a-channel", "receive-input-mid-run", "feed-context-sources",
-            "describe-an-attachment", "operate-from-a-terminal", "assist-a-terminal-session", "expose-the-public-api")
+AREA_IDS = ("quest-requests", "planner", "intake-sources", "quest-requests", "quest-context",
+            "quest-requests", "system-integrity", "system-integrity", "system-integrity")
 
 
 def strict_outcome(solution_id):
@@ -28,13 +28,13 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_model_return_a_value_offline():
-    for solution_id in ("receive-input-mid-run", "feed-context-sources", "operate-from-a-terminal", "expose-the-public-api"):
+    for solution_id in ("quest-requests", "quest-context", "system-integrity", "system-integrity"):
         assert strict_outcome(solution_id) == "ok"
 
 
 def test_the_channel_pends_on_its_token_file_and_program():
     with pytest.raises(Pending) as caught:
-        quest_ai_runner.run("talk-over-a-channel", {"chat_ref": "c"}, environ={})
+        quest_ai_runner.run("intake-sources", {"chat_ref": "c"}, environ={})
     assert {reason.kind for reason in caught.value.reasons} == {"key", "install"}
 
 
@@ -78,7 +78,7 @@ def test_take_in_routes_the_message_and_names_the_sources_that_feed_its_context(
 def test_each_way_in_is_handed_to_the_member_that_owns_it():
     provider = ScriptedModel([], answer_text='{"ai_doable": true, "confidence": 0.9, "reason": "text only"}')
     channel, inbox = FakeChannel(), InMemoryInbox()
-    area = area_over(provider, **{"talk-over-a-channel": channel, "receive-input-mid-run": inbox})
+    area = area_over(provider, **{"intake-sources": channel, "quest-requests": inbox})
     assert area.reply(OutboundReply(chat_ref="c", text="hello")).ok and channel.sent[0].text == "hello"
     area.hold("conversation-1", "one more thing")
     assert inbox.peek("conversation-1") == ["one more thing"]

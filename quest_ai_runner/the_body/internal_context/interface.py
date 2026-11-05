@@ -27,7 +27,7 @@ class OwnUpdates:
 # The four adapter Protocols (structural) + parallel ABCs (nominal).
 # ---------------------------------------------------------------------------
 
-@solution("gather-evidence", kind="event", entry="read_section", example="NOTES.md")
+@solution("quest-context", kind="event", entry="read_section", example="NOTES.md")
 @runtime_checkable
 class RetrievalAdapter(Protocol):
     """GATHER source. The brain calls these to ground before answering."""

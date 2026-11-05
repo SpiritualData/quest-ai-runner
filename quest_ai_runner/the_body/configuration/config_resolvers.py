@@ -59,10 +59,10 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
         from quest_ai_runner.the_self.assembler.resolve import chosen_name, resolve, resolve_config
 
         # Which runner and its config class come from the declared implementations (core/resolve.py),
-        # by ``cfg.selections["run-deep-work"]``; the default is the SubprocessGoalRunner.
+        # by ``cfg.selections["delegated-agent-sessions"]``; the default is the SubprocessGoalRunner.
         sel = getattr(cfg, "selections", None)
-        name = chosen_name("run-deep-work", overrides=sel)
-        runner_cls, config_cls = resolve("run-deep-work", overrides=sel), resolve_config("run-deep-work", overrides=sel)
+        name = chosen_name("delegated-agent-sessions", overrides=sel)
+        runner_cls, config_cls = resolve("delegated-agent-sessions", overrides=sel), resolve_config("delegated-agent-sessions", overrides=sel)
         if config_cls is None:
             raise ValueError(f"run-deep-work implementation {name!r} is a ladder rung, not a standalone deep worker")
         claude_path = os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
@@ -135,7 +135,7 @@ def resolve_rep_sync_resolver(cfg: RunnerConfig, *, quest_client: Any = None):
     )
 
 
-@implementation("run-deep-work", "fast_edit")
+@implementation("delegated-agent-sessions", "fast_edit")
 def resolve_fast_edit_runner(cfg: RunnerConfig):
     """Build the in-process fast editor, or return None. OFF unless a ``file_writer`` is wired.
 
@@ -167,7 +167,7 @@ def resolve_fast_edit_runner(cfg: RunnerConfig):
         return None
 
 
-@implementation("run-deep-work", "mcp_write")
+@implementation("delegated-agent-sessions", "mcp_write")
 def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
     """Build one ``MCPOperationRunner`` per configured ``MCPServerSpec`` that has non-empty
     ``writable_tools``, or ``[]``. OFF unless a spec's ``writable_tools`` is wired.

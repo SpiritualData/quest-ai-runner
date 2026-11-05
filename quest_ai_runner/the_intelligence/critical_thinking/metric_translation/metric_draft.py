@@ -73,7 +73,7 @@ def card_block(card: Mapping[str, Any]) -> str:
 
 
 DRAFT_SPEC = register(PromptSpec(
-    id="draft-a-metric.value", solution="draft-a-metric", metric="metric-draft-a-metric",
+    id="draft-a-metric.value", solution="metric-translation", metric="metric-draft-a-metric",
     tier="caller", cache_layer="none", inputs=("task_text", "card", "context"),
     output_schema=DRAFT_TOOL,
     template=(

@@ -30,7 +30,7 @@ def route_message(model: Any, message: str) -> Dict[str, Any]:
 
 
 
-@implementation("route-a-message", "planner_route")
+@implementation("planner", "planner_route")
 class PlannerRoute:
     """The loop's own planner makes one planning call over the model and its decision is the route. No tool runs and no worker starts."""
     REQUIRES = ()     # the model it is handed

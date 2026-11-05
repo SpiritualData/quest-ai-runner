@@ -22,7 +22,7 @@ def consolidate(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     return card_filter.consolidate_context(*args, **kwargs)
 
 
-@implementation("select-context", "hybrid")
+@implementation("context-retriever", "hybrid")
 class HybridContextAssembler(hub.HybridContextAssembler):
     """The hub's hybrid assembler with QAR's consolidating pass.
 

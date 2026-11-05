@@ -210,7 +210,7 @@ class ChatMessages:
 # The adapter
 # ---------------------------------------------------------------------------
 
-@implementation("gather-evidence", "google_chat")
+@implementation("quest-context", "google_chat")
 class GoogleChatAdapter(RetrievalAdapterBase):
     """RetrievalAdapter over Google Chat conversations.
 

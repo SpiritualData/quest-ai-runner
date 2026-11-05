@@ -21,14 +21,14 @@ from quest_ai_runner.the_self.integrity.prompts.prompt_specs import declare, ren
 _extract_json = hub.extract_json
 
 CONSOLIDATE_SPEC = declare(
-    "select-context.consolidate", solution="select-context", metric="metric-select-context",
+    "select-context.consolidate", solution="context-retriever", metric="metric-select-context",
     tier="balanced", cache_layer="none", template=hub.CONSOLIDATE_TEMPLATE)
 RANK_FILES_SPEC = declare(
-    "select-context.rank-files", solution="select-context", metric="metric-select-context",
+    "select-context.rank-files", solution="context-retriever", metric="metric-select-context",
     tier="balanced", cache_layer="none", template=hub.RANK_FILES_TEMPLATE)
 # The card-level pass was an inline prompt; it is registered with its text unchanged (no em-dash rule appended to it).
 CARD_SCORES_SPEC = declare(
-    "select-context.card-scores", solution="select-context", metric="metric-select-context",
+    "select-context.card-scores", solution="context-retriever", metric="metric-select-context",
     tier="balanced", cache_layer="none", template=hub.CARD_SCORES_TEMPLATE, writes_text=False)
 
 

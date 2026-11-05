@@ -6,8 +6,8 @@ import quest_ai_runner
 from quest_ai_runner.the_intelligence.critical_thinking.area import hold_case
 from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
 
-AREA_IDS = ("critical-thinking", "iterate-by-spec", "spec-selection", "judge-a-decision", "guard-a-reply", "ground-in-intent",
-            "detect-a-stalled-run", "draft-a-metric", "gate-an-autopilot-pass")
+AREA_IDS = ("critical-thinking", "esoi-application", "context-retriever", "goal-completion", "response-quality", "guidance",
+            "delegated-agent-sessions", "metric-translation", "quest-autopilot")
 
 
 def strict_outcome(solution_id):
@@ -26,13 +26,13 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_key_return_a_value_offline():
-    for solution_id in ("critical-thinking", "iterate-by-spec", "judge-a-decision", "guard-a-reply", "spec-selection"):
+    for solution_id in ("critical-thinking", "esoi-application", "goal-completion", "response-quality", "context-retriever"):
         assert strict_outcome(solution_id) == "ok"
 
 
 def test_the_members_over_the_account_and_the_model_program_name_what_they_need():
-    for solution_id, kind in (("ground-in-intent", "key"), ("draft-a-metric", "key"), ("gate-an-autopilot-pass", "key"),
-                              ("detect-a-stalled-run", "install")):
+    for solution_id, kind in (("guidance", "key"), ("metric-translation", "key"), ("quest-autopilot", "key"),
+                              ("delegated-agent-sessions", "install")):
         example = {sid: example for sid, level, k, example in targets(quest_ai_runner.assembler())}[solution_id]
         with pytest.raises(Pending) as caught:
             quest_ai_runner.run(solution_id, example, environ={})
@@ -75,7 +75,7 @@ class Gate:
 
 
 def test_the_area_hands_each_question_to_the_member_that_owns_it():
-    provided = {"access-quest-operations": Account(), "detect-a-stalled-run": Stall(), "draft-a-metric": Draft(), "gate-an-autopilot-pass": Gate()}
+    provided = {"quest-body": Account(), "delegated-agent-sessions": Stall(), "metric-translation": Draft(), "quest-autopilot": Gate()}
     area = quest_ai_runner.run(MetricHolding, environ={}, provided=provided)
     assert area.reach_verdict('{"reach": "inside", "reason": "known"}')["reach"] == "inside"
     assert [url for url, label in area.links("See https://example.org/a for details.")] == ["https://example.org/a"]

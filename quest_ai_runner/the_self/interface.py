@@ -78,7 +78,7 @@ class GoalAnswer:
     parts: Tuple[Tuple[str, str], ...] = field(default_factory=tuple)    # the flow's parts in order, each with where it ran
 
 
-@solution("do-grounded-work", kind="event", entry="answer", example="What should I work on first this week?")
+@solution("quest-self", kind="event", entry="answer", example="What should I work on first this week?")
 @typing.runtime_checkable
 class GoalAgent(typing.Protocol):
     """Answers a person's message from their own quests and cards, and does the work they ask for."""

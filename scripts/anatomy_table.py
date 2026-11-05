@@ -14,16 +14,16 @@ BEGIN, END = "<!-- anatomy-table:begin -->", "<!-- anatomy-table:end -->"
 
 # part -> (module, solution id). The module is the entry file; the solution id keys the records.
 PARTS = [
-    ("World (input)", "quest_ai_runner/the_consciousness/request_intake/poller.py", "run-queued-tasks"),
+    ("World (input)", "quest_ai_runner/the_consciousness/request_intake/poller.py", "quest-requests"),
     ("Subconscious, incl. Intuition", "quest_ai_runner/the_intelligence/subconscious/context_retriever/card_filter.py", "the-subconscious"),
     ("Mind", "quest_ai_runner/the_intelligence/mind/orchestrator.py", "the-mind"),
     ("Science", "quest_ai_runner/the_world/tools/web_search/web_research.py", "the-science"),
     ("Critical thinking", "quest_ai_runner/the_intelligence/critical_thinking/metric_translation/goal_metrics.py", "critical-thinking"),
     ("Overseer", "quest_ai_runner/the_intelligence/mind/delegation/overseer.py", "nervous-system"),
-    ("Body", "quest_ai_runner/the_body/internal_context/quest/client/quest_client.py", "the-body"),
-    ("World (act)", "quest_ai_runner/the_world/tools/delegated_agent_sessions/acp_deep_runner.py", "claim-reach"),
-    ("Higher mind", "quest_ai_runner/the_consciousness/representatives/personas.py", "hold-the-intents"),
-    ("Rep selection", "quest_ai_runner/the_consciousness/representatives/personas.py", "select-a-rep"),
+    ("Body", "quest_ai_runner/the_body/internal_context/quest/client/quest_client.py", "quest-account-truth"),
+    ("World (act)", "quest_ai_runner/the_world/tools/delegated_agent_sessions/acp_deep_runner.py", "the-tools"),
+    ("Higher mind", "quest_ai_runner/the_consciousness/representatives/personas.py", "quest-intents"),
+    ("Rep selection", "quest_ai_runner/the_consciousness/representatives/personas.py", "quest-representatives"),
 ]
 
 

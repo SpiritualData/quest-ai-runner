@@ -47,13 +47,13 @@ def default_max_seed_items() -> int:
 # The prompts of the assembler's three model steps. The text is the hub's; the spec carries QAR's solution, metric and tier
 # (``caller``: the model is the assembler's configured ``query_model``). Not marked as writing text: the prompt is sent as is.
 QUERIES_SPEC = declare(
-    "index-by-meaning.queries", solution="index-by-meaning", metric="metric-index-by-meaning",
+    "index-by-meaning.queries", solution="context-retriever", metric="metric-index-by-meaning",
     tier="caller", cache_layer="none", template=hub.QUERIES_TEMPLATE, writes_text=False)
 REVIEW_SPEC = declare(
-    "index-by-meaning.review", solution="index-by-meaning", metric="metric-index-by-meaning",
+    "index-by-meaning.review", solution="context-retriever", metric="metric-index-by-meaning",
     tier="caller", cache_layer="none", template=hub.REVIEW_TEMPLATE, writes_text=False)
 ASSOCIATION_SPEC = declare(
-    "index-by-meaning.association", solution="index-by-meaning", metric="metric-index-by-meaning",
+    "index-by-meaning.association", solution="context-retriever", metric="metric-index-by-meaning",
     tier="caller", cache_layer="none", template=hub.ASSOCIATION_TEMPLATE, writes_text=False)
 
 
@@ -73,7 +73,7 @@ PROMPTS = hub.VectorPrompts(queries=queries_prompt, review=review_prompt, associ
                             excerpt=prompt_budget.decision_excerpt)
 
 
-@implementation("select-context", "vector")
+@implementation("context-retriever", "vector")
 class VectorContextAssembler(hub.VectorContextAssembler):
     """The hub's vector assembler under QAR's seed scope, seed ceiling, prompts and seed thread name.
 

@@ -39,7 +39,7 @@ from quest_ai_runner.the_world.tools.file_editing.interface import FileWriting
 from quest_ai_runner.the_body.hands.quest_operations.interface import ReachClaiming
 
 
-@implementation("access-quest-operations", "quest_client")
+@implementation("quest-body", "quest_client")
 def quest_client(base_url: str, api_key: str, team_id: str = "") -> QuestClient:
     """The Quest HTTP client for the account named by ``QUEST_BASE_URL`` (or ``QUEST_API_URL``) and ``QUEST_API_KEY``."""
     return QuestClient(base_url=base_url, api_key=api_key, team_id=team_id or None)
@@ -57,7 +57,7 @@ def quest_config(model: Any, quest: Any) -> RunnerConfig:
                         team_id=getattr(quest, "team_id", "") or "", model_provider=model, context_assembler=NoContext())
 
 
-@implementation("operate-a-quest", "qar_orchestrator")
+@implementation("quest-change-executor", "qar_orchestrator")
 class OrchestratorOperating:
     """The orchestrator over the model and the Quest account: the planner picks a Quest tool, the registry runs it and the reply reports it."""
     REQUIRES = ()     # the seats it is handed
@@ -71,7 +71,7 @@ class OrchestratorOperating:
 
 
 
-@implementation("claim-reach", "coding_agent_prompt_reach")
+@implementation("the-tools", "coding_agent_prompt_reach")
 class PromptReach:
     """The model infers what it can reach from each effector's own description in the planner prompt, and the route its planner decides is the claim."""
     REQUIRES = ()     # the model it is handed
@@ -84,7 +84,7 @@ class PromptReach:
 
 
 
-@implementation("run-queued-tasks", "qar_runner")
+@implementation("quest-requests", "qar_runner")
 class QarRunner:
     """The poller over the runner's configuration: one scan claims what is queued, runs it and reports it back to Quest."""
     REQUIRES = ()     # the seats it is handed
@@ -100,7 +100,7 @@ class QarRunner:
 
 
 
-@implementation("hand-off-a-goal", "model_judge")
+@implementation("quest-representatives", "model_judge")
 class ModelJudge:
     """One small model call per goal decides the person and whether the AI can do it; a missing or failed judge leaves the goal with the quest owner."""
     REQUIRES = ()     # the model it is handed
@@ -115,7 +115,7 @@ class ModelJudge:
 
 
 
-@implementation("the-body", "card_and_reads")
+@implementation("quest-account-truth", "card_and_reads")
 class CardAndReads:
     """A card per quest grounds each turn and the planner reads live through the host's retrieval adapter when it wants more. ``describe``
     and ``record_run`` are the hub's Body composition over its Internal Context, Intake Sources and Hands; ``read`` returns the part of a

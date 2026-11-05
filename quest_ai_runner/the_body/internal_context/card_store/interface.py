@@ -14,7 +14,6 @@ class CardKeeping(CardStore, typing.Protocol):
     local folder holds, which the arms below present as hub cards."""
 
 
-@solution("persist-cards", kind="store", entry="read", example="card-1")
 @typing.runtime_checkable
 class CardPersisting(CardRepository, typing.Protocol):
     """The cards a quest keeps, written and read back whole (the hub's card repository interface)."""

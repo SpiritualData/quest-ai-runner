@@ -524,7 +524,7 @@ class DiscardedEvents:
         return None
 
 
-@solution("show-the-ais-work", kind="event", entry="start",
+@solution("quest-work-shown", kind="event", entry="start",
           example={"emit": DiscardedEvents(), "context_meta": {"work_trace": {"audience": "owner", "trace_id": "example"}}})
 @typing.runtime_checkable
 class WorkShowing(typing.Protocol):
@@ -533,7 +533,7 @@ class WorkShowing(typing.Protocol):
     def start(self, emit: Any, context_meta: Optional[Mapping[str, Any]]) -> Optional[TurnTrace]: ...
 
 
-@implementation("show-the-ais-work", "trail")
+@implementation("quest-work-shown", "trail")
 class WorkTrail:
     """The trail arm: ``start`` above, which builds the turn's ``TurnTrace`` (steps for web, papers, records and links, sent as live
     events). Holds no state of its own."""

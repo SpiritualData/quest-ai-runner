@@ -167,7 +167,7 @@ def test_the_tool_sits_beside_find_specs_reads_cards_when_a_source_is_registered
 def test_the_repository_tag_table_is_read_from_the_record_files(spec_repo):
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs
     table = repo_specs.repo_tag_table(spec_repo)
-    assert "specifications" in table.tag_problems and "specifications" in table.solution_tags["spec-selection"]
+    assert "specifications" in table.tag_problems and "specifications" in table.solution_tags["context-retriever"]
 
 
 def test_two_pipelines_puts_the_injected_cards_then_the_find_specs_records_side_by_side():

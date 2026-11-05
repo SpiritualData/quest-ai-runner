@@ -312,9 +312,9 @@ def test_the_runner_is_declared_and_not_selected():
     from quest_ai_runner.the_self.assembler import resolve
     assert StreamJsonGoalRunner.config_class is SubprocessConfig
     assert goal_runner_stream.MIN_STREAM_CONTROL_VERSION == (2, 1, 219)
-    assert "stream_json" in resolve.names("run-deep-work")
-    assert resolve.resolve("run-deep-work", "stream_json") is StreamJsonGoalRunner
-    assert resolve.default_name("run-deep-work") != "stream_json"   # an alternative until Phase 4 measures it
+    assert "stream_json" in resolve.names("delegated-agent-sessions")
+    assert resolve.resolve("delegated-agent-sessions", "stream_json") is StreamJsonGoalRunner
+    assert resolve.default_name("delegated-agent-sessions") != "stream_json"   # an alternative until Phase 4 measures it
 
 
 def test_the_wall_clock_cap_kills_the_session(tmp_path):

@@ -34,7 +34,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_session import
     worker_output_is_thin)
 
 
-@implementation("run-deep-work", "subprocess")
+@implementation("delegated-agent-sessions", "subprocess")
 class SubprocessGoalRunner(HubSubprocessGoalRunner):
     """Reference DeepRunner: spawn Claude Code headless with ``--max-turns``, with QAR's settings (see the module docstring).
 

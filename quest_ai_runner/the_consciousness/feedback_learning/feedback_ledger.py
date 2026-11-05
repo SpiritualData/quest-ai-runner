@@ -354,7 +354,7 @@ class FeedbackStore(Protocol):
 MAX_REMEMBERED_OFFERS = 300
 
 
-@solution("store-feedback", kind="event", entry="open_items", example="quest-id")
+@solution("feedback-learning", kind="event", entry="open_items", example="quest-id")
 @runtime_checkable
 class FeedbackKeeping(Protocol):
     """What a person asked for and what became of it: the items on a card that still owe somebody something, and the standing
@@ -364,7 +364,7 @@ class FeedbackKeeping(Protocol):
     def standing_rules(self, card_id: str) -> List["FeedbackItem"]: ...
 
 
-@implementation("store-feedback", "ledger")
+@implementation("feedback-learning", "ledger")
 class FeedbackLedger:
     """Every tracked item for this lane.
 

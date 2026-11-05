@@ -13,7 +13,7 @@ from hubofhubs.api import DeepResult
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
 
 
-@solution("escalate-to-a-human", kind="event", entry="escalate", example=Escalation(summary="Approve the launch note before it goes out"))
+@solution("quest-decision-requests", kind="event", entry="escalate", example=Escalation(summary="Approve the launch note before it goes out"))
 @runtime_checkable
 class EscalationSink(Protocol):
     """Raise a human-only confirm/decision and return its id."""

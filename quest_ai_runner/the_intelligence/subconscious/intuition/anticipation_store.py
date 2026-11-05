@@ -81,7 +81,7 @@ _prediction_from_dict = prediction_from_dict
 
 
 
-@implementation("persist-predictions", "file")
+@implementation("the-intuition", "file")
 class FilePredictionStore:
     """The runner lane's persistence for the anticipation engine: one JSON file per SCOPE KEY
     under ``<root_dir>/predictions/<sha1(key)[:16]>.json`` (the same layout convention as

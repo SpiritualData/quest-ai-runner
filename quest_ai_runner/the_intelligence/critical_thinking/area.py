@@ -43,9 +43,6 @@ from quest_ai_runner.the_intelligence.mind.delegation.interface import StallDete
 from quest_ai_runner.the_intelligence.proactivity.interface import PassGating
 
 
-SpecSelecting = select_specs.__wrapped__    # the function that declares the spec-selection solution, as the type of its seat
-
-
 class MemoryLedger:
     """The metric ledger of one run, held in memory."""
 
@@ -100,7 +97,7 @@ def hold_case(case: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 
-@implementation("judge-a-decision", "qar_judges")
+@implementation("goal-completion", "qar_judges")
 class QarJudges:
     """The deterministic halves of QAR's judges: the reach judge's parse, the quest judge's ranking and the sufficiency gate's abridged check."""
     REQUIRES = ()     # no seat: the model's answer is handed in
@@ -117,7 +114,7 @@ class QarJudges:
 
 
 
-@implementation("guard-a-reply", "qar_guards")
+@implementation("response-quality", "qar_guards")
 class QarGuards:
     """The link engine of the hub (``links_in_message``, ``LinkGuard``) that QAR's replies pass through."""
     REQUIRES = ()     # no seat: the fetcher is handed in
@@ -130,7 +127,7 @@ class QarGuards:
 
 
 
-@implementation("ground-in-intent", "frame-line")
+@implementation("guidance", "frame-line")
 class FrameLine:
     """The server computes a short frame from the stored ids; the quest card and the autopilot brief carry it. No model call."""
     REQUIRES = ()     # the seat it is handed
@@ -143,7 +140,7 @@ class FrameLine:
 
 
 
-@implementation("detect-a-stalled-run", "live_reviewer")
+@implementation("delegated-agent-sessions", "live_reviewer")
 class LiveReviewer:
     """The production reviewer: the watchdog prompt sent through one-shot ``claude -p`` and read by ``parse_deep_review``."""
     REQUIRES = (needs.CLAUDE_BINARY,)
@@ -155,7 +152,7 @@ class LiveReviewer:
 
 
 
-@implementation("draft-a-metric", "capped_model_draft")
+@implementation("metric-translation", "capped_model_draft")
 class CappedModelDraft:
     """One capped model call over the metric card and the quest's record; the model's structured answer comes back whole."""
     REQUIRES = ()     # the seats it is handed
@@ -168,7 +165,7 @@ class CappedModelDraft:
 
 
 
-@implementation("gate-an-autopilot-pass", "live_pass")
+@implementation("quest-autopilot", "live_pass")
 class LivePass:
     """The production autopilot pass run for one quest against the Quest account: the budget, cadence, run-now, reactive, roster-day and
     backpressure gates decide, and the outcome is either a skip with its reason or a pass to the work stage."""
@@ -193,9 +190,9 @@ class DeepRunsOnly:
     to the member that owns it."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, iteration: Lazy[GoalIteration], specs: Lazy[SpecSelecting], judges: Lazy[DecisionJudging], guards: Lazy[ReplyGuarding],
+    def __init__(self, iteration: Lazy[GoalIteration], judges: Lazy[DecisionJudging], guards: Lazy[ReplyGuarding],
                  intents: Lazy[IntentGrounding], stalls: Lazy[StallDetecting], drafts: Lazy[MetricDrafting], gates: Lazy[PassGating]) -> None:
-        self.iteration, self.specs, self.judges, self.guards = iteration, specs, judges, guards
+        self.iteration, self.judges, self.guards = iteration, judges, guards
         self.intents, self.stalls, self.drafts, self.gates = intents, stalls, drafts, gates
 
     def hold(self, case: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -222,7 +219,7 @@ class DeepRunsOnly:
         return self.iteration.slice_for(request, working_dir)
 
     def select(self, task: str, index: Dict[str, Any]) -> Any:
-        return self.specs(task, index)
+        return select_specs(task, index)
 
     def reach_verdict(self, raw: str) -> Optional[Dict[str, Any]]:
         return self.judges.reach_verdict(raw)

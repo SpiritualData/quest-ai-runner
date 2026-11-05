@@ -1,8 +1,8 @@
 """Selection by name: turn ``(solution_id, name)`` into the implementation the code declares.
 
     cls = resolve("vendor-model-caller", "gemini")                    # an explicit name
-    cls = resolve("run-deep-work", overrides=cfg.selections)   # a per-solution override dict, else the default
-    cls = resolve("search-the-web")                            # the project default
+    cls = resolve("delegated-agent-sessions", overrides=cfg.selections)   # a per-solution override dict, else the default
+    cls = resolve("web-search")                            # the project default
 
 Every implementation is declared beside its code with ``@implementation("<solution id>", "<name>")`` (``esoi``), and
 the ``implementations.csv`` of the folder that holds the code lists the same implementations with the file of each, so there is no table to keep in step.

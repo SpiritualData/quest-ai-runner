@@ -6,7 +6,7 @@ from typing import Any, Callable, List, Mapping
 from esoi import solution
 
 
-@solution("guard-a-reply", kind="event", entry="links", example="See https://example.org/a for details.")
+@solution("response-quality", kind="event", entry="links", example="See https://example.org/a for details.")
 @typing.runtime_checkable
 class ReplyGuarding(typing.Protocol):
     """Stops an unsafe reply: finds the links in a text and checks each one, so a link that does not resolve never reaches the person."""

@@ -479,7 +479,7 @@ class UpdateEngine:
         return bundle
 
 
-@implementation("feed-context-sources", "quest_channels")
+@implementation("quest-context", "quest_channels")
 def quest_channels() -> UpdateEngine:
     """The update engine over its built-in channels (quest notes, goal updates, decisions, reflections, insights, Drive, mail, Notion,
     Google Chat), with no Quest client until a caller builds one with ``build_update_engine``: a channel that needs an account reads nothing

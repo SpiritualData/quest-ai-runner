@@ -28,19 +28,19 @@ if TYPE_CHECKING:  # typing only: config imports this module, not the other way 
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
 
-@implementation("select-context", "composite")
+@implementation("context-retriever", "composite")
 def composite(assemblers: List[Any]) -> CompositeContextAssembler:
     """QAR's ``select-context`` arm that runs several assemblers in order as one: the hub's composite assembler."""
     return CompositeContextAssembler(assemblers)
 
 
-@implementation("persist-cards", "filesystem")
+@implementation("card-store", "filesystem")
 def filesystem_card_repository(cards_dir: str) -> FilesystemCardRepository:
     """QAR's ``persist-cards`` arm that keeps one JSON file per card in a folder: the hub's filesystem card repository."""
     return FilesystemCardRepository(cards_dir)
 
 
-@implementation("resolve-references", "note")
+@implementation("quest-context", "note")
 def note_resolver() -> NoteResolver:
     """QAR's ``resolve-references`` built-in for ``note`` items: the hub's note resolver (the registry itself is the hub's ``build_resolver_registry``)."""
     return NoteResolver()
@@ -93,12 +93,12 @@ def build_card_repository(cfg: "RunnerConfig", cards_dir: str, *,
             user_id=_qs["user_hint"]).org_of_team(lane_team))
         try:
             from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository, QuestApiCardVectorStore
-            # The offline listing cache is the "cache-cards" selection (durable file cache by
-            # default), kept apart per backend and scope so lanes never share a listing.
+            # The offline listing cache is the card-store arm "file" (a durable file cache),
+            # kept apart per backend and scope so lanes never share a listing.
             lane_key = hashlib.sha256("|".join((
                 _qs["base_url"], card_scope["team_id"], card_scope["org_id"],
                 _qs["user_hint"])).encode()).hexdigest()[:16]
-            _card_cache = resolve("cache-cards", overrides=cfg.selections)(
+            _card_cache = resolve("card-store", "file")(
                 os.path.join(cards_dir, ".api-card-cache", lane_key))
             _card_repository = QuestApiCardRepository(
                 base_url=_qs["base_url"],
@@ -267,8 +267,8 @@ def _resolve_context_assembler_base(
             vector_store = _cards_vector_store
         if vector_store is None and vector_backend not in ("none", "off"):
             try:
-                # Which store class: the declared implementations (core/resolve.py), by cfg.selections.
-                _QdrantVS = resolve("index-by-meaning", overrides=cfg.selections)
+                # The vector store class is the context-retriever arm "qdrant" (the declared implementations, core/resolve.py).
+                _QdrantVS = resolve("context-retriever", "qdrant")
                 if _QdrantVS is not None:
                     if notify:
                         notify("Loading context index...")

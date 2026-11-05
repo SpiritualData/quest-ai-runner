@@ -15,7 +15,7 @@ from hubofhubs.api import (
 from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 
-@implementation("run-deep-work", "stream_json")
+@implementation("delegated-agent-sessions", "stream_json")
 class StreamJsonGoalRunner(HubStreamJsonGoalRunner, SubprocessGoalRunner):
     """Deep runner holding one live ``claude -p --input-format stream-json`` session per run (the hub's, with QAR's settings).
 

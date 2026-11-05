@@ -211,7 +211,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         # every arm; this only says how much of it the code fills in itself. None = the selected arm, the same default
         # ``build_orchestrator`` uses, so a consumer that builds the brain itself (quest-backend does) records the
         # metric before and after by code too; it turns that off the way any selection is turned off.
-        self.goal_iteration: Any = goal_iteration if goal_iteration is not None else resolve("iterate-by-spec")()
+        self.goal_iteration: Any = goal_iteration if goal_iteration is not None else resolve("esoi-application")()
         # Optional LIVE WEB adapter (the ``WebResearch`` interface, ``core/adapters_retrieval.py``). When
         # wired, the planner gains its own two read keys -- {"web": "<query>"} and
         # {"web_page": "<url>", "focus": "<...>"} -- dispatched directly in ``_exec_one_read``,

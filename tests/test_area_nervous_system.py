@@ -7,7 +7,7 @@ from quest_ai_runner.the_intelligence.nervous_system.interface import RunWatchin
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
 from tests.conftest import StubProvider
 
-AREA_IDS = ("nervous-system", "escalate-to-a-human")
+AREA_IDS = ("nervous-system", "quest-decision-requests")
 
 
 def strict_outcome(solution_id):
@@ -30,7 +30,7 @@ def test_the_overseer_pends_on_the_model_program_and_the_escalation_on_the_accou
         quest_ai_runner.run("nervous-system", "delete the old backup folder", environ={})
     assert {reason.kind for reason in caught.value.reasons} == {"install"}
     with pytest.raises(Pending) as caught:
-        quest_ai_runner.run("escalate-to-a-human", Escalation(summary="Approve the note"), environ={})
+        quest_ai_runner.run("quest-decision-requests", Escalation(summary="Approve the note"), environ={})
     assert "key" in {reason.kind for reason in caught.value.reasons}
 
 
@@ -58,7 +58,7 @@ class Sink:
 
 def test_the_overseer_sends_one_risk_signal_and_hands_a_step_to_a_person():
     sink = Sink()
-    area = quest_ai_runner.run(RunWatching, environ={}, provided={"vendor-model-caller": ScriptedModel([]), "escalate-to-a-human": sink})
+    area = quest_ai_runner.run(RunWatching, environ={}, provided={"vendor-model-caller": ScriptedModel([]), "quest-decision-requests": sink})
     digest = area.digest(user_message="delete the old backup folder", goal_condition="keep the backups", step=1, max_steps=5)
     assert "delete the old backup folder" in digest
     signal = area.watch(digest)
@@ -73,7 +73,7 @@ def test_a_model_that_fails_degrades_to_proceed():
         def plan(self, prompt, *, model, tool_schema, layers=None):
             raise RuntimeError("provider down")
 
-    area = quest_ai_runner.run(RunWatching, environ={}, provided={"vendor-model-caller": Down([]), "escalate-to-a-human": Sink()})
+    area = quest_ai_runner.run(RunWatching, environ={}, provided={"vendor-model-caller": Down([]), "quest-decision-requests": Sink()})
     signal = area.watch("digest")
     assert signal.severity == "none" and signal.degraded is True
     assert area.oversee(Down([]), "m", "digest").signal == "proceed"

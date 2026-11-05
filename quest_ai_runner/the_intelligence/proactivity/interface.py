@@ -6,7 +6,7 @@ from typing import Any, Mapping
 from esoi import solution
 
 
-@solution("gate-an-autopilot-pass", kind="event", entry="gate", example="quest-id")
+@solution("quest-autopilot", kind="event", entry="gate", example="quest-id")
 @typing.runtime_checkable
 class PassGating(typing.Protocol):
     """Keeps background work inside its hours and budget: whether a quest's pass is skipped, and why, or passes every gate to the work."""

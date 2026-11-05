@@ -269,7 +269,7 @@ class Narrator:
 
 # The narrator's per-beat instruction (the system voice is ``Narrator.DEFAULT_SYSTEM``).
 NARRATE_BEAT_SPEC = register(PromptSpec(
-    id="narrate-a-turn.first-beat", solution="narrate-a-turn", metric="metric-narrate-a-turn",
+    id="narrate-a-turn.first-beat", solution="quest-work-shown", metric="metric-narrate-a-turn",
     tier="caller", cache_layer="tail", inputs=("context", "moment"),
     template=("{context}What just happened: {moment}\n\nIn one short first-person sentence that "
               "starts with I (I'll, I'm, I found), say, in 20 words or fewer, what you are about to do or "

@@ -36,7 +36,7 @@ def test_without_keys_the_whole_runner_pends_on_keys_only():
 
 
 def test_each_seat_has_a_default_that_pends_on_a_key_not_on_an_option():
-    for seat in ("card-store", "access-quest-operations"):
+    for seat in ("card-store", "quest-body"):
         with pytest.raises(Pending) as caught:
             quest_ai_runner.run(seat, "x", environ={})
         assert "QUEST_API_KEY" in " ".join(caught.value.lines)
@@ -53,7 +53,7 @@ def test_the_runner_answers_over_the_seats_it_is_given():
     cards = quest_ai_runner.run("card-store", arms={"card-store": "local_card_store"}, environ={})
     cards.add(Card(id="goal-1", text="Finish the book outline by Friday", tags=("book",)))
     answer = quest_ai_runner.run("quest-ai-runner", "What should I work on first this week?", environ={},
-                                 provided={"vendor-model-caller": provider, "card-store": cards, "access-quest-operations": QuestStub()})
+                                 provided={"vendor-model-caller": provider, "card-store": cards, "quest-body": QuestStub()})
     assert isinstance(answer, GoalAnswer) and answer.kind == "answer"
     assert "Start with the outline." in answer.text
     assert provider.answer_calls >= 1
@@ -85,10 +85,10 @@ def test_the_step_reasoning_arm_asks_no_model_of_its_own():
 def test_the_flow_names_its_parts_in_the_order_of_the_intent_paragraph():
     """``respond`` is the flow: the parts serve a request in this order, and the answer says where each ran."""
     from quest_ai_runner.the_self.respond import FLOW, LOOP, OWN
-    assert [part.solution for part in FLOW] == ["take-in-the-world", "hold-the-intents", "choose-the-context", "the-mind", "nervous-system", "critical-thinking"]
+    assert [part.solution for part in FLOW] == ["quest-requests", "quest-intents", "context-retriever", "the-mind", "nervous-system", "critical-thinking"]
     assert {part.runs for part in FLOW} == {LOOP, OWN}
     provider = ScriptedModel([{"action": "answer", "rationale": "known", "model_tier": "sonnet"}], answer_text="Start with the outline.")
     cards = quest_ai_runner.run("card-store", arms={"card-store": "local_card_store"}, environ={})
     answer = quest_ai_runner.run("quest-ai-runner", "What should I work on first this week?", environ={},
-                                 provided={"vendor-model-caller": provider, "card-store": cards, "access-quest-operations": QuestStub()})
+                                 provided={"vendor-model-caller": provider, "card-store": cards, "quest-body": QuestStub()})
     assert [solution for solution, _ in answer.parts] == [part.solution for part in FLOW]

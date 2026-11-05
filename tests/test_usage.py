@@ -336,7 +336,7 @@ def test_poller_default_limit_does_not_block_normal_scan():
 def test_rendering_a_spec_tags_the_next_call_and_the_summary_reads_it():
     from quest_ai_runner.the_self.integrity.prompts.prompt_specs import SPECS_BY_ID, PromptSpec
     from quest_ai_runner.the_world.model_plumbing.spend.usage import UNTAGGED, active_spec, tag_spec
-    spec = PromptSpec(id="test-usage.tagged", solution="justify-model-calls", metric="metric-justified-model-spend",
+    spec = PromptSpec(id="test-usage.tagged", solution="model-plumbing", metric="metric-justified-model-spend",
                       tier="fast", cache_layer="none", template="Say hi to {name}.", inputs=("name",))
     assert "test-usage.tagged" not in SPECS_BY_ID   # not registered: render tags by the spec's own id
     tag_spec("")

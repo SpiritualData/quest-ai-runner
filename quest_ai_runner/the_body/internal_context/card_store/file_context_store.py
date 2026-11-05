@@ -78,7 +78,7 @@ from quest_ai_runner.the_body.internal_context.card_store.context_store_heal imp
 _log = logging.getLogger("quest-ai-runner.context")
 
 
-@implementation("select-context", "file")
+@implementation("context-retriever", "file")
 class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, BootstrapWalkMixin, HealMixin,
                        ContextAssemblerBase):
     """Stdlib-only ContextAssembler backed by per-card JSON files.

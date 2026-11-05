@@ -48,10 +48,10 @@ DEFAULT_OUT = "handoff.html"
 # Each conceptual part of the anatomy (docs/explanation/anatomy.md) and the solution that specifies it.
 PARTS = [
     ("Mind", "the-mind"), ("Subconscious (includes Intuition)", "the-subconscious"),
-    ("Science", "the-science"), ("Critical thinking", "critical-thinking"), ("World", "claim-reach"),
-    ("Body", "the-body"), ("Higher mind", "hold-the-intents"), ("Overseer", "nervous-system"),
-    ("Rep selection", "select-a-rep"), ("Proactive guidance", "guide-toward-the-long-term-goal"),
-    ("Hub of hubs", "system-integrity"), ("End to end", "answer-end-to-end"), ("Prompt audit", "justify-model-calls"),
+    ("Science", "the-science"), ("Critical thinking", "critical-thinking"), ("World", "the-tools"),
+    ("Body", "quest-account-truth"), ("Higher mind", "quest-intents"), ("Overseer", "nervous-system"),
+    ("Rep selection", "quest-representatives"), ("Proactive guidance", "guidance"),
+    ("Hub of hubs", "system-integrity"), ("End to end", "quest-self"), ("Prompt audit", "model-plumbing"),
 ]
 STALE_DAYS = 14   # a hub finding older than this is called stale on the page
 

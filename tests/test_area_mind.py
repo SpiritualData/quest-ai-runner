@@ -8,8 +8,8 @@ from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import
 from quest_ai_runner.the_self.interface import GoalAnswer
 from tests.conftest import StubProvider
 
-AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "assemble-a-prompt", "answer-a-turn", "answer-end-to-end",
-            "replay-known-operations", "core-ml-tasks", "route-a-message", "reply-in-steps", "show-the-ais-work")
+AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "context-intake", "quest-self", "quest-self",
+            "planner", "planner", "planner", "quest-work-shown", "quest-work-shown")
 
 
 
@@ -32,7 +32,7 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_model_return_a_value_offline():
-    for solution_id in ("model-tier-chooser", "assemble-a-prompt", "replay-known-operations", "reply-in-steps", "show-the-ais-work"):
+    for solution_id in ("model-tier-chooser", "context-intake", "planner", "quest-work-shown", "quest-work-shown"):
         assert strict_outcome(solution_id) == "ok"
 
 

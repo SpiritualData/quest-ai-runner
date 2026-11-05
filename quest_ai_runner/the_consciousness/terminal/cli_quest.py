@@ -257,7 +257,7 @@ def _cmd_send(args, log) -> int:
 
 
 ACK_SPEC = register(PromptSpec(
-    id="assist-a-terminal-session.ack", solution="assist-a-terminal-session",
+    id="assist-a-terminal-session.ack", solution="system-integrity",
     metric="metric-assist-a-terminal-session", tier="fast", cache_layer="none", inputs=("request",),
     template=("Write ONE sentence (max 20 words) that restates the following request in your own "
               "words and says you are looking into it. Do NOT use em dashes (--). Be natural and "
