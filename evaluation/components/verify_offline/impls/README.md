@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Collection check by test file | `verify-offline:collect_by_file` | [`evaluation/components/verify_offline/impls/collect_by_file.py`](collect_by_file.py) | selected |
+| Collection check by test file | `system-integrity:collect_by_file` | [`evaluation/components/verify_offline/impls/collect_by_file.py`](collect_by_file.py) |  |
 
 ## Where to go next
 

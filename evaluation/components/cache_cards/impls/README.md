@@ -4,9 +4,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Durable file cache under outage scenarios | `cache-cards:file_cache` | [`evaluation/components/cache_cards/impls/file_cache.py`](file_cache.py) |  |
-| In-process memory cache | `cache-cards:memory_cache` | [`evaluation/components/cache_cards/impls/memory_cache.py`](memory_cache.py) |  |
-| No-op cache (shipped default of the seam) | `cache-cards:null_cache` | [`evaluation/components/cache_cards/impls/null_cache.py`](null_cache.py) |  |
+| Durable file cache under outage scenarios | `card-store:file_cache` | [`evaluation/components/cache_cards/impls/file_cache.py`](file_cache.py) |  |
+| In-process memory cache | `card-store:memory_cache` | [`evaluation/components/cache_cards/impls/memory_cache.py`](memory_cache.py) |  |
+| No-op cache (shipped default of the seam) | `card-store:null_cache` | [`evaluation/components/cache_cards/impls/null_cache.py`](null_cache.py) |  |
 
 ## Where to go next
 

@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Hysteresis resource guard | `track-usage-and-cost:resources` | [`quest_ai_runner/the_body/host/resources.py`](resources.py) |  |
+| Hysteresis resource guard | `justify-model-calls:resources` | [`quest_ai_runner/the_body/host/resources.py`](resources.py) |  |
 
 ## Where to go next
 

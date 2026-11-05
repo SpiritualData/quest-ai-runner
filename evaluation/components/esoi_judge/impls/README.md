@@ -4,8 +4,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Rubric-based model judge | `judge-esoi-behavior:model_judge` | [`evaluation/components/esoi_judge/impls/model_judge.py`](model_judge.py) | selected |
-| Regex-check floor | `judge-esoi-behavior:regex_only` | [`evaluation/components/esoi_judge/impls/regex_only.py`](regex_only.py) |  |
+| Rubric-based model judge | `response-quality:model_judge` | [`evaluation/components/esoi_judge/impls/model_judge.py`](model_judge.py) |  |
+| Regex-check floor | `response-quality:regex_only` | [`evaluation/components/esoi_judge/impls/regex_only.py`](regex_only.py) |  |
 
 ## Where to go next
 

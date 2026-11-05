@@ -16,102 +16,43 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Tiered model provider layer<br/><i>vendor-model-caller</i>"]
-    s1["Live messaging channel transport<br/><i>talk-over-a-channel</i>"]
-    s2["Nervous System<br/><i>nervous-system</i>"]
-    s3["Cost estimation, daily budget and host load guard<br/><i>track-usage-and-cost</i>"]
-    s4["Integrity<br/><i>system-integrity</i>"]
-    s5["Science<br/><i>the-science</i>"]
-    s6["Queued-task runner<br/><i>run-queued-tasks</i>"]
-    s7["Critical Thinking<br/><i>critical-thinking</i>"]
-    s8["Multi-source evidence retriever<br/><i>gather-evidence</i>"]
-    s9["Quest change executor<br/><i>operate-a-quest</i>"]
-    s10["Bounded autonomous work runner<br/><i>run-deep-work</i>"]
-    s11["Bounded reversible file writer<br/><i>write-files</i>"]
-    s12["Allowlisted operation writer<br/><i>write-through-mcp</i>"]
-    s13["World<br/><i>claim-reach</i>"]
-    s14["Goal assignee and doability judge<br/><i>hand-off-a-goal</i>"]
-    s15["Body<br/><i>the-body</i>"]
-    s16["Quest account access<br/><i>access-quest-operations</i>"]
-    s17["Mind<br/><i>the-mind</i>"]
-    s18["Higher mind<br/><i>hold-the-intents</i>"]
-    s19["Request intake<br/><i>take-in-the-world</i>"]
-    s20["Subconscious<br/><i>the-subconscious</i>"]
-    s21["Grounded goal agent<br/><i>do-grounded-work</i>"]
-    s22["Justified model calls<br/><i>justify-model-calls</i>"]
-    s23["Cost-ordered model tier selector with outage and allowance recovery<br/><i>model-tier-chooser</i>"]
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s2
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s6
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s9
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s13
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s14
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s17
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s18
-    s0 -->|"A raw decision dictionary for planning, answer text for answering, and a live list of available model identifiers; errors are formatted for humans"| s21
-    s1 -->|"An inbound batch (messages with ids, chat references, text and attachments, a healthy flag and any error) and a send result with success and message id"| s13
-    s1 -->|"An inbound batch (messages with ids, chat references, text and attachments, a healthy flag and any error) and a send result with success and message id"| s19
-    s2 -->|"For a flagged case: the risk category, the response applied and its signal (proceed, redirect with a hint, answer now, escalate to deep execution, escalate to a person), with a reason and a degraded flag"| s21
-    s3 -->|"A price per million input tokens, a bootstrap cost estimate with the provider and model used, a running total with an over-limit flag and status line, and a paused or not verdict"| s0
-    s4 -->|"Checked records, recorded metric results and the selected implementation for each solution"| s21
-    s5 -->|"Findings, each with its source, an evidence-strength label and the passage that supports it"| s21
-    s6 -->|"A reported status on each task (with result text or decision id), updated folder sync files, and logs"| s7
-    s6 -->|"A reported status on each task (with result text or decision id), updated folder sync files, and logs"| s15
-    s7 -->|"Per request: the metric applied with its reading before and after, or the reason none applies, or a proposed metric; and for a regression or a missing metric, the response taken"| s21
-    s8 -->|"Observation values carrying text, a path or source label, and a kind, with error observations in place of exceptions"| s5
-    s8 -->|"Observation values carrying text, a path or source label, and a kind, with error observations in place of exceptions"| s15
-    s9 -->|"The resulting quest state and a reply that reports what was done"| s7
-    s9 -->|"The resulting quest state and a reply that reports what was done"| s15
-    s10 -->|"A result stating whether the goal was met, the output text, and error or pause details such as a decision id"| s13
-    s10 -->|"A result stating whether the goal was met, the output text, and error or pause details such as a decision id"| s15
-    s11 -->|"A write result stating success, whether the file was created, bytes written, where the backup went and any error; the current text on read"| s13
-    s11 -->|"A write result stating success, whether the file was created, bytes written, where the backup went and any error; the current text on read"| s15
-    s12 -->|"A write result with success, error and an audit detail of the tool, arguments and whether it executed; a list of writable operations with schemas"| s13
-    s12 -->|"A write result with success, error and an audit detail of the tool, arguments and whether it executed; a list of writable operations with schemas"| s15
-    s13 -->|"A reach verdict for the request (inside, outside, in the world now, or not reachable, with why), and receipts for outside acts (what ran, where, its id)"| s15
-    s14 -->|"The text or verdict the call returns"| s15
-    s15 -->|"A current state view for the request's scope with the time each part was read, and after a change the read-back objects"| s21
-    s16 -->|"The result of one Quest operation"| s6
-    s16 -->|"The result of one Quest operation"| s9
-    s16 -->|"The result of one Quest operation"| s15
-    s16 -->|"The result of one Quest operation"| s21
-    s17 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s15
-    s17 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s21
-    s18 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s20
-    s18 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s21
-    s19 -->|"One routed turn with its context sources"| s21
-    s20 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s17
-    s20 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s21
-    s22 -->|"A per-prompt table and the share of average model spend that is justified"| s6
-    s23 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s2
-    s23 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s17
+    s0["Quest Context<br/><i>quest-context</i>"]
+    s1["Quest Requests<br/><i>quest-requests</i>"]
+    s2["Quest Body<br/><i>quest-body</i>"]
+    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
+    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
+    s5["Quest Intents<br/><i>quest-intents</i>"]
+    s6["Quest Self<br/><i>quest-self</i>"]
+    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
+    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
+    s1 -->|"The request taken in once and its outcome reported"| s3
+    s1 -->|"The request taken in once and its outcome reported"| s6
+    s2 --> s1
+    s2 --> s3
+    s2 --> s4
+    s2 --> s6
+    s3 -->|"The reply with its account claims checked"| s6
+    s4 -->|"The change made and the state read back"| s3
+    s5 -->|"The quest the message serves and the intent frame for the work"| s6
 ```
 
-## Queued-task runner (`run-queued-tasks`)
+## Quest Context (`quest-context`)
 
-Takes a person's queued requests to a reported outcome, so they run on time without anyone having to start them by hand.
+Give every request the person's own Quest material and nobody else's.
 
-- Entry call: `quest_ai_runner.run("run-queued-tasks", 'team-1')`
-- Selected implementation: Offline lifecycle harness (`qar_runner`)
-- Metric: Task lifecycle correctness over offline cases
-- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 116 more
-
-## Critical Thinking (`critical-thinking`)
-
-Makes sure everything the system does applies the relevant ESOI metric and leaves it improved, or at least not worse.
-
-- Entry call: `quest_ai_runner.run("critical-thinking", ...)`
-- Selected implementation: Code-enforced before and after on deep runs only (today) (`deep_runs_only`)
-- Metric: Requests held to their ESOI metric by code
-- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 930 more
-
-## Multi-source evidence retriever (`gather-evidence`)
-
-Gives a planner the material it needs to ground a decision or answer, drawn from the sources a person's work already lives in.
-
-- Entry call: `quest_ai_runner.run("gather-evidence", 'NOTES.md')`
+- Entry call: no entry declared
 - Selected implementation: Parallel multi-source composite (`composite`)
-- Metric: Retrieval recall of the right document over handbook questions
-- Implemented by: [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py), [`quest_ai_runner/the_body/configuration/config_core_settings.py`](the_body/configuration/config_core_settings.py) and 57 more
+- Metric: Retrieval recall of the right document over handbook questions, Update-offering correctness over synthetic quest channels, Pointer-resolution safety over offline cases
+- Implemented by: [`evaluation/components/feed_context_sources/impls/update_engine.py`](../evaluation/components/feed_context_sources/impls/update_engine.py), [`evaluation/components/resolve_references/impls/card_resolvers.py`](../evaluation/components/resolve_references/impls/card_resolvers.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py) and 119 more
+
+## Quest Requests (`quest-requests`)
+
+Take every request made in Quest in once, through the same AI, and report its outcome to the person.
+
+- Entry call: no entry declared
+- Selected implementation: Offline lifecycle harness (`qar_runner`)
+- Metric: Task lifecycle correctness over offline cases, Exactly-once mid-run delivery per run, and how fast it is seen, Answer pass rate gained per image described, Ways in that pass their own metric
+- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 161 more
 
 ## Diagram
 
@@ -119,52 +60,24 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Queued-task runner<br/><i>run-queued-tasks</i>"]
-    s1["Critical Thinking<br/><i>critical-thinking</i>"]
-    s2["Multi-source evidence retriever<br/><i>gather-evidence</i>"]
-    s3["Quest change executor<br/><i>operate-a-quest</i>"]
-    s4["Bounded autonomous work runner<br/><i>run-deep-work</i>"]
-    s5["Bounded reversible file writer<br/><i>write-files</i>"]
-    s6["Allowlisted operation writer<br/><i>write-through-mcp</i>"]
-    s7["World<br/><i>claim-reach</i>"]
-    s8["Goal assignee and doability judge<br/><i>hand-off-a-goal</i>"]
-    s9["Body<br/><i>the-body</i>"]
-    s10["Quest account access<br/><i>access-quest-operations</i>"]
-    s11["Mind<br/><i>the-mind</i>"]
-    s12["Higher mind<br/><i>hold-the-intents</i>"]
-    s13["Request intake<br/><i>take-in-the-world</i>"]
-    s14["Subconscious<br/><i>the-subconscious</i>"]
-    s15["Grounded goal agent<br/><i>do-grounded-work</i>"]
-    s16["Justified model calls<br/><i>justify-model-calls</i>"]
-    s17["Cost-ordered model tier selector with outage and allowance recovery<br/><i>model-tier-chooser</i>"]
-    s0 -->|"A reported status on each task (with result text or decision id), updated folder sync files, and logs"| s1
-    s0 -->|"A reported status on each task (with result text or decision id), updated folder sync files, and logs"| s9
-    s1 -->|"Per request: the metric applied with its reading before and after, or the reason none applies, or a proposed metric; and for a regression or a missing metric, the response taken"| s15
-    s2 -->|"Observation values carrying text, a path or source label, and a kind, with error observations in place of exceptions"| s9
-    s3 -->|"The resulting quest state and a reply that reports what was done"| s1
-    s3 -->|"The resulting quest state and a reply that reports what was done"| s9
-    s4 -->|"A result stating whether the goal was met, the output text, and error or pause details such as a decision id"| s7
-    s4 -->|"A result stating whether the goal was met, the output text, and error or pause details such as a decision id"| s9
-    s5 -->|"A write result stating success, whether the file was created, bytes written, where the backup went and any error; the current text on read"| s7
-    s5 -->|"A write result stating success, whether the file was created, bytes written, where the backup went and any error; the current text on read"| s9
-    s6 -->|"A write result with success, error and an audit detail of the tool, arguments and whether it executed; a list of writable operations with schemas"| s7
-    s6 -->|"A write result with success, error and an audit detail of the tool, arguments and whether it executed; a list of writable operations with schemas"| s9
-    s7 -->|"A reach verdict for the request (inside, outside, in the world now, or not reachable, with why), and receipts for outside acts (what ran, where, its id)"| s9
-    s8 -->|"The text or verdict the call returns"| s9
-    s9 -->|"A current state view for the request's scope with the time each part was read, and after a change the read-back objects"| s15
-    s10 -->|"The result of one Quest operation"| s0
-    s10 -->|"The result of one Quest operation"| s3
-    s10 -->|"The result of one Quest operation"| s9
-    s10 -->|"The result of one Quest operation"| s15
-    s11 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s9
-    s11 -->|"Each step's view of the request (a carried message list or a rebuilt prompt), with the step's decision added to it"| s15
-    s12 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s14
-    s12 -->|"For a request the representative handles: its standing view across its assigned quests and the views of their ancestor intents, with the source of each item, fenced to those quests and ancestors"| s15
-    s13 -->|"One routed turn with its context sources"| s15
-    s14 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s11
-    s14 -->|"The admitted items with a one-line reason each, and the dropped ones with theirs, for the explanation of how an answer was reached"| s15
-    s16 -->|"A per-prompt table and the share of average model spend that is justified"| s0
-    s17 -->|"A starting model and ladder, a concrete model id for a tier or family, the next lower tier, a vision-capability answer, an outage verdict, and a usage-limit record with its reset and resume times"| s11
+    s0["Quest Context<br/><i>quest-context</i>"]
+    s1["Quest Requests<br/><i>quest-requests</i>"]
+    s2["Quest Body<br/><i>quest-body</i>"]
+    s3["Quest Account Truth<br/><i>quest-account-truth</i>"]
+    s4["Quest Change Executor<br/><i>quest-change-executor</i>"]
+    s5["Quest Intents<br/><i>quest-intents</i>"]
+    s6["Quest Self<br/><i>quest-self</i>"]
+    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
+    s0 -->|"Evidence from the person's own sources, with where each item came from"| s3
+    s1 -->|"The request taken in once and its outcome reported"| s3
+    s1 -->|"The request taken in once and its outcome reported"| s6
+    s2 --> s1
+    s2 --> s3
+    s2 --> s4
+    s2 --> s6
+    s3 -->|"The reply with its account claims checked"| s6
+    s4 -->|"The change made and the state read back"| s3
+    s5 -->|"The quest the message serves and the intent frame for the work"| s6
 ```
 
 ## Metrics
@@ -172,20 +85,23 @@ flowchart LR
 - Task lifecycle correctness over offline cases (`metric-run-queued-tasks`): leader `qar_runner`, 43 of 43 cases
 - Requests held to their ESOI metric by code (`metric-think-critically`): leader `deep_runs_only`, 4 of 10 cases
 - Retrieval recall of the right document over handbook questions (`metric-gather-evidence`): leader `composite`, 19 of 21 cases
+- Combined world score (`metric-claim-reach`): leader `scripted_ideal`, 12 of 12 cases
+- Ways in that pass their own metric (`metric-take-in-the-world`)
 
 ## Problems
 
 - Help That Does Not Know The Person (`QP2`): A general assistant answers from general knowledge.
 - Unreliable Help With The App (`prob-app-help-unreliable`): Questions about how to use Quest, or what its AI can do for the person, are answered from guesses instead of the product's documentation and actual reach: the AI describes a capability it does not have, or says it cannot do something it can.
-- Advice Without A Way To Check It (`prob-experiments-not-proposed`): Advice and plans are given as one answer, not as the option most likely to work for this person with a metric to check it, and when the better option is unknown the AI does not propose an experiment that would settle it, though the app has an Experiments feature built for that.
-- Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+- Lost Or Unreported Tasks (`QP1`): Quest tasks attached to goals can be lost, run twice, or end without an outcome the person sees.
+- Different Answers On Different Surfaces (`QP4`): The same request can get a different answer depending on the Quest surface it came from.
 
 ## Ideals
 
 - Personally Grounded Help (`QI2`): Every answer and action rests on the person's own goals, material and preferences, and never on another person's.
 - Self-Explaining App (`ideal-self-explaining-app`): Any question about how to use the app gets a correct answer from its own documentation, and the AI knows what it can do.
-- Most-Likely Path (`ideal-most-likely-path`): Every recommendation is the option most likely to move the person's own metric toward their intent, and what is not known becomes an experiment.
 - Right Representative (`ideal-right-rep`): Each request is handled by the representative whose role and assigned quests fit it, and work spawned from a thread keeps that thread's representative unless the person chooses another.
+- Dependable Delivery (`ideal-dependable-delivery`): What is handed to the system arrives once, in order, and is accounted for.
+- Same Assistant Everywhere (`QI4`): A person gets the same assistant, with the same answer to the same request, on every Quest surface.
 
 ## Where to go next
 

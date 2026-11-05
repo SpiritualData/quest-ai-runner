@@ -1,12 +1,12 @@
 area,seam_solution_id,vendor_terms,code_paths
 agent_harness,run-deep-work,claude-agent-acp;codex;opencode;goose;openhands,quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py;quest_ai_runner/the_body/configuration/acp_deep_runner_config.py
-mcp_client,write-through-mcp,,quest_ai_runner/the_body/configuration/config_file.py
+mcp_client,quest-change-executor,,quest_ai_runner/the_body/configuration/config_file.py
 web_search,search-the-web,serper;brave;tavily;searxng,quest_ai_runner/the_world/tools/web_search/web_search_backends.py
-integration_aggregators,gather-evidence,notion;google_chat,quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py;quest_ai_runner/the_world/tools/connected_system_operations/google_drive_adapter.py;quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py
+integration_aggregators,quest-context,notion;google_chat,quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py;quest_ai_runner/the_world/tools/connected_system_operations/google_drive_adapter.py;quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py
 context_assembly,select-context;index-by-meaning,qdrant;bm25;fastembed,quest_ai_runner/the_intelligence/subconscious/context_retriever/bm25_content_store.py;quest_ai_runner/the_body/internal_context/card_store/qdrant_vector_store.py;quest_ai_runner/the_intelligence/subconscious/context_retriever/hybrid_context_assembler.py
 science_find_evidence,the-science,openalex;arxiv;semantic scholar;pubmed,quest_ai_runner/the_world/science/tools_science.py
 model_providers,vendor-model-caller,anthropic;openai;gemini;deepseek;claude;gpt,quest_ai_runner/the_world/model_plumbing/vendor_model_caller/providers.py
-memory,persist-cards,mem0;letta;graphiti;cognee,quest_ai_runner/the_body/internal_context/card_store/file_context_store.py;quest_ai_runner/the_body/configuration/config_assembler.py
+memory,card-store,mem0;letta;graphiti;cognee,quest_ai_runner/the_body/internal_context/card_store/file_context_store.py;quest_ai_runner/the_body/configuration/config_assembler.py
 channels,talk-over-a-channel,openclaw,quest_ai_runner/the_world/tools/connected_system_operations/openclaw_channel.py
 evals,system-integrity,promptfoo;deepeval;ragas;inspect,evaluation/components;esoi.toml
 voice,,pipecat;livekit;whisper,

@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Fake-backend delivery check | `escalate-to-a-human:quest_decision_sink` | [`evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py`](quest_decision_sink.py) |  |
+| Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [`evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py`](quest_decision_sink.py) |  |
 
 ## Where to go next
 

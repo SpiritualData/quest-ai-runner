@@ -4,8 +4,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Model-judged folder review before the gate | `choose-what-to-index:review_only` | [`evaluation/components/choose_what_to_index/impls/review_only.py`](review_only.py) |  |
-| Risk-gated folder review | `choose-what-to-index:risk_gate` | [`evaluation/components/choose_what_to_index/impls/risk_gate.py`](risk_gate.py) | selected |
+| Model-judged folder review before the gate | `cards-from-files:review_only` | [`evaluation/components/choose_what_to_index/impls/review_only.py`](review_only.py) |  |
+| Risk-gated folder review | `cards-from-files:risk_gate` | [`evaluation/components/choose_what_to_index/impls/risk_gate.py`](risk_gate.py) |  |
 
 ## Where to go next
 

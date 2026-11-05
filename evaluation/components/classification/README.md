@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Classify through the message router alternatives | `core-ml-tasks:message-route-family` | `evaluation/components/classification/impls` |  |
+| Classify through the message router alternatives | `route-a-message:message-route-family` | `evaluation/components/classification/impls` |  |
 
 ## Where to go next
 

@@ -6,8 +6,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Cached live-database reader | `gather-evidence:cached_db` | [`quest_ai_runner/the_body/internal_context/quest/cached_db_adapter.py`](cached_db_adapter.py) |  |
-| Quest API context reader | `gather-evidence:quest` | [`quest_ai_runner/the_body/internal_context/quest/quest_retrieval_adapter.py`](quest_retrieval_adapter.py) |  |
+| Cached live-database reader | `quest-context:cached_db` | [`quest_ai_runner/the_body/internal_context/quest/cached_db_adapter.py`](cached_db_adapter.py) |  |
+| Quest API context reader | `quest-context:quest` | [`quest_ai_runner/the_body/internal_context/quest/quest_retrieval_adapter.py`](quest_retrieval_adapter.py) |  |
 
 ## Where to go next
 

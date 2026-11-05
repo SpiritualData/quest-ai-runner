@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Fake-client allowlist check | `write-through-mcp:allowlist_writer` | [`evaluation/components/write_through_mcp/impls/allowlist_writer.py`](allowlist_writer.py) |  |
+| Fake-client allowlist check | `quest-change-executor:allowlist_writer` | [`evaluation/components/write_through_mcp/impls/allowlist_writer.py`](allowlist_writer.py) |  |
 
 ## Where to go next
 

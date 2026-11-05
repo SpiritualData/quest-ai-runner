@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Production registry under scripted host resolvers | `resolve-references:card_resolvers` | [`evaluation/components/resolve_references/impls/card_resolvers.py`](card_resolvers.py) |  |
+| Production registry under scripted host resolvers | `quest-context:card_resolvers` | [`evaluation/components/resolve_references/impls/card_resolvers.py`](card_resolvers.py) |  |
 
 ## Where to go next
 

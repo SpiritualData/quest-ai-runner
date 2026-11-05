@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Live usage evaluation arm | `track-usage-and-cost:qar_usage` | [`evaluation/components/track_usage_and_cost/impls/qar_usage.py`](qar_usage.py) | selected |
+| Live usage evaluation arm | `justify-model-calls:qar_usage` | [`evaluation/components/track_usage_and_cost/impls/qar_usage.py`](qar_usage.py) |  |
 
 ## Where to go next
 

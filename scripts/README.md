@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Problem-linked tag list with a check rule and a lookup | `tag-solutions:tag_list_with_check` | [`scripts/esoi_tags.py`](esoi_tags.py) | selected |
+| Problem-linked tag list with a check rule and a lookup | `system-integrity:tag_list_with_check` | [`scripts/esoi_tags.py`](esoi_tags.py) |  |
 
 ## Where to go next
 

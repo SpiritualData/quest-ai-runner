@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Index everything (broken baseline) | `choose-what-to-index:index_everything` | [`evaluation/components/choose_what_to_index/broken/index_everything.py`](index_everything.py) |  |
+| Index everything (broken baseline) | `cards-from-files:index_everything` | [`evaluation/components/choose_what_to_index/broken/index_everything.py`](index_everything.py) |  |
 
 ## Where to go next
 

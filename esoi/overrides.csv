@@ -3,12 +3,12 @@ card-store,metric-persist-cards
 vendor-model-caller,metric-call-a-model
 model-tier-chooser,metric-choose-a-model-tier
 the-science,metric-know-the-world
-claim-reach,prob-app-help-unreliable;ideal-self-explaining-app;metric-claim-reach
+the-tools,prob-app-help-unreliable;ideal-self-explaining-app;metric-claim-reach
 the-subconscious,metric-admit-to-the-mind
 the-mind,metric-keep-a-working-stream
-the-body,prob-account-state-contradicts;ideal-consistent-account-state;metric-act-as-the-body
+quest-account-truth,prob-account-state-contradicts;ideal-consistent-account-state;metric-act-as-the-body
 system-integrity,QME7
 nervous-system,metric-watch-a-run
 critical-thinking,metric-think-critically
 cards-from-files,metric-bound-card-growth
-choose-the-context,QP2;metric-choose-the-context
+select-context,QP2;metric-choose-the-context

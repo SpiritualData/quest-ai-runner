@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Offline suite configuration | `verify-offline:conftest` | [`tests/conftest.py`](conftest.py) |  |
+| Offline suite configuration | `system-integrity:conftest` | [`tests/conftest.py`](conftest.py) |  |
 
 ## Where to go next
 

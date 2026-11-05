@@ -1,3 +1,2 @@
 ideal_id,name,principle,state_description,hints_of_measurement,problem_ids,parent_ideal_ids
 QI3,Trusted Autonomy,The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.,"Work moves without you, and when a question reaches you it is one only you should answer, with what you need to answer it.","No human-only step is taken alone, and few asks turn out to be unnecessary.",QP3,
-QI4,Same Assistant Everywhere,"A person gets the same assistant, with the same answer to the same request, on every Quest surface.","A request made in chat, in a scheduled task or in the app is treated the same way, and an improvement is felt on every surface.",The same labelled requests sent through each surface give matching answers.,QP4,

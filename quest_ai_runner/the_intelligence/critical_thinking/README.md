@@ -14,26 +14,23 @@ Critical Thinking holds deep runs to their metric through Specification slice an
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Run liveness reviewer | `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
-| Guarded model-verdict judge | `judge-a-decision` | `quest_ai_runner.run("judge-a-decision", ...)` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
-| Reply safety and anticipation guards | `guard-a-reply` | `quest_ai_runner.run("guard-a-reply", 'See https://example.org/a for details.')` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases |
-| Autopilot run-or-skip gate | `gate-an-autopilot-pass` | `quest_ai_runner.run("gate-an-autopilot-pass", 'quest-id')` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
-| Intent frame for quest-scoped prompts | `ground-in-intent` | `quest_ai_runner.run("ground-in-intent", 'quest-id')` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
-| Specification slice and write-back | `iterate-by-spec` | `quest_ai_runner.run("iterate-by-spec", 'Tidy the card store')` | Slice before and write-back after (`slice-and-writeback`) | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
-| Metric drafting for a task | `draft-a-metric` | `quest_ai_runner.run("draft-a-metric", ...)` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
-| Intent specification selection | `spec-selection` | `esoi spec index --out FILE` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Quest Autopilot | `quest-autopilot` | no entry declared | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
+
+## Solutions from a library
+
+- [ESOI Application](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`iterate-by-spec`): Creates and edits specs and metrics, applies the structure's principles and runs the iterative improvement loop, so what a request needs becomes a measured specification rather than a longer prompt. Adopted from the library `hub`.
+- [Metric Translation](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`draft-a-metric`): Turns a request into a metric with a target value or an improvement, adjustable in real time, and applies the same step recursively to each sub-goal, rolling each up to its parent objective. Adopted from the library `hub`.
+- [Proactivity](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`quest-autopilot`): Says which of the system's standing schedules are due, by calendar period in their own zone, by a requested run or by an event since the last run, so the system acts without being asked. Specializes the library `hub`.
 
 ## Problems and ideals
 
 **Problems**
 
 - Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
-- Work Cut Off From Its Purpose (`prob-work-misses-its-why`): Replies, experiments and finished work are chosen and judged from the quest alone, not from the top intent and metrics the quest serves, so effort can drift from what the person cares about most and gaps under an intent can go unnoticed.
 
 **Ideals**
 
 - Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
-- Purposeful Work (`ideal-purposeful-work`): Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 
 ## Metrics and their leaders
 
@@ -61,52 +58,43 @@ Critical Thinking holds deep runs to their metric through Specification slice an
 ### Problems
 
 - Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
-- Work Cut Off From Its Purpose (`prob-work-misses-its-why`): Replies, experiments and finished work are chosen and judged from the quest alone, not from the top intent and metrics the quest serves, so effort can drift from what the person cares about most and gaps under an intent can go unnoticed.
 
 ### Ideals
 
 - Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
-- Purposeful Work (`ideal-purposeful-work`): Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
 
 ### Solutions
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Run liveness reviewer | `detect-a-stalled-run` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
-| Guarded model-verdict judge | `judge-a-decision` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
-| Reply safety and anticipation guards | `guard-a-reply` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases |
-| Autopilot run-or-skip gate | `gate-an-autopilot-pass` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
-| Intent frame for quest-scoped prompts | `ground-in-intent` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
-| Specification slice and write-back | `iterate-by-spec` | Slice before and write-back after (`slice-and-writeback`) | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed |
-| Metric drafting for a task | `draft-a-metric` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
-| Intent specification selection | `spec-selection` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Quest Autopilot | `quest-autopilot` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Production liveness review in the goal runner | `detect-a-stalled-run:goal_runner` | [quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py](../mind/delegation/goal_runner.py) |  |
-| Live model reviewer arm | `detect-a-stalled-run:live_reviewer` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
-| Keyword and threshold rule floor | `detect-a-stalled-run:rule_floor` | [evaluation/components/deep_review/impls/rule_floor.py](../../../evaluation/components/deep_review/impls/rule_floor.py) |  |
-| Production judges under a scripted provider | `judge-a-decision:qar_judges` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
-| Production guard engines under test | `guard-a-reply:qar_guards` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
-| Eligibility gate mixin | `gate-an-autopilot-pass:autopilot_gates` | [quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py](../proactivity/autopilot_gates.py) |  |
-| Scripted-client gate evaluation arm | `gate-an-autopilot-pass:live_pass` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
-| Prompts without the intent frame | `ground-in-intent:none` | [quest_ai_runner/the_intelligence/proactivity/autopilot_briefs.py](../proactivity/autopilot_briefs.py) |  |
-| Computed frame in the prompt | `ground-in-intent:frame-line` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
-| Frame plus intent card and record drill-down | `ground-in-intent:frame-card-drilldown` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client_intents.py](../../the_body/internal_context/quest/client/quest_client_intents.py) |  |
-| Frame plus a lazily generated quest specification | `ground-in-intent:frame-lazy-spec` | [quest_ai_runner/the_body/hands/quest_operations/tools_quest_intents.py](../../the_body/hands/quest_operations/tools_quest_intents.py) |  |
+| Production liveness review in the goal runner | `run-deep-work:goal_runner` | [quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py](../mind/delegation/goal_runner.py) |  |
+| Live model reviewer arm | `run-deep-work:live_reviewer` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
+| Keyword and threshold rule floor | `run-deep-work:rule_floor` | [evaluation/components/deep_review/impls/rule_floor.py](../../../evaluation/components/deep_review/impls/rule_floor.py) |  |
+| Production judges under a scripted provider | `goal-completion:qar_judges` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
+| Production guard engines under test | `response-quality:qar_guards` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
+| Eligibility gate mixin | `quest-autopilot:autopilot_gates` | [quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py](../proactivity/autopilot_gates.py) |  |
+| Scripted-client gate evaluation arm | `quest-autopilot:live_pass` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
+| Prompts without the intent frame | `guidance:none` | [quest_ai_runner/the_intelligence/proactivity/autopilot_briefs.py](../proactivity/autopilot_briefs.py) |  |
+| Computed frame in the prompt | `guidance:frame-line` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
+| Frame plus intent card and record drill-down | `guidance:frame-card-drilldown` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client_intents.py](../../the_body/internal_context/quest/client/quest_client_intents.py) |  |
+| Frame plus a lazily generated quest specification | `guidance:frame-lazy-spec` | [quest_ai_runner/the_body/hands/quest_operations/tools_quest_intents.py](../../the_body/hands/quest_operations/tools_quest_intents.py) |  |
 | Generic method in the standing instructions | `iterate-by-spec:generic-doctrine` | [quest_ai_runner/the_intelligence/critical_thinking/goal_iteration.py](goal_iteration.py) |  |
 | Slice of the specification before the task | `iterate-by-spec:slice-only` | [quest_ai_runner/the_intelligence/critical_thinking/goal_iteration.py](goal_iteration.py) |  |
 | Slice before and write-back after | `iterate-by-spec:slice-and-writeback` | [quest_ai_runner/the_intelligence/critical_thinking/goal_iteration.py](goal_iteration.py) |  |
 | Slice before and write-back onto each record (planned) | `iterate-by-spec:writeback-on-the-record` |  |  |
 | Capped model draft per task (today) | `draft-a-metric:capped_model_draft` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
 | Ask the owner to write it (floor, proposed) | `draft-a-metric:ask_owner` | [evaluation/components/draft_a_metric/impls/ask_owner.py](../../../evaluation/components/draft_a_metric/impls/ask_owner.py) |  |
-| No-call floor of the quest ranker and reach judge | `judge-a-decision:no_call_floor` | [evaluation/components/judge_live_decisions/impls/no_call_floor.py](../../../evaluation/components/judge_live_decisions/impls/no_call_floor.py) |  |
-| Live quest ranker and reach judge on a small model | `judge-a-decision:live_judges` | [evaluation/components/judge_live_decisions/impls/live_judges.py](../../../evaluation/components/judge_live_decisions/impls/live_judges.py) |  |
-| Lexical TF-IDF, optional vector search, parallel batched model judging | `spec-selection:lexical-vector-llm` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
-| Lexical top few only | `spec-selection:lexical-only` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
-| Lexical vector gated | `spec-selection:lexical-vector-gated` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
+| No-call floor of the quest ranker and reach judge | `goal-completion:no_call_floor` | [evaluation/components/judge_live_decisions/impls/no_call_floor.py](../../../evaluation/components/judge_live_decisions/impls/no_call_floor.py) |  |
+| Live quest ranker and reach judge on a small model | `goal-completion:live_judges` | [evaluation/components/judge_live_decisions/impls/live_judges.py](../../../evaluation/components/judge_live_decisions/impls/live_judges.py) |  |
+| Lexical TF-IDF, optional vector search, parallel batched model judging | `select-context:lexical-vector-llm` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
+| Lexical top few only | `select-context:lexical-only` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
+| Lexical vector gated | `select-context:lexical-vector-gated` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
 
 ### Metrics
 

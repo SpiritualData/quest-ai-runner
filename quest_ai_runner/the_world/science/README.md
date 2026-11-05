@@ -10,11 +10,9 @@ This sub-intent arises as the implementation `the-science:web_with_support_check
 
 Science gives a request the facts it needs from outside the person's own material, from the results of Bounded web research, which it checks for support and returns with their source.
 
-## Solutions at a glance
+## Solutions from a library
 
-| Solution | Handle | Entry call | Selected implementation | Metric |
-|---|---|---|---|---|
-| Bounded web research | `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
+- [Web Search](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/tools/README.md) (`search-the-web`): One narrow call: a query in, a response of hits out. Adopted from the library `hub`.
 
 ## Metrics and their leaders
 
@@ -29,12 +27,6 @@ Science gives a request the facts it needs from outside the person's own materia
 ---
 
 ## The full record
-
-### Solutions
-
-| Solution | Handle | Selected | Metric |
-|---|---|---|---|
-| Bounded web research | `search-the-web` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
 
 ### Implementations
 

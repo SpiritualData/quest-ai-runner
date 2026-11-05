@@ -4,8 +4,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Timestamp-and-size baseline | `detect-stale-cards:mtime_size` | [`evaluation/components/staleness/impls/mtime_size.py`](mtime_size.py) |  |
-| Content-hash fingerprint check | `detect-stale-cards:store_sha256` | [`evaluation/components/staleness/impls/store_sha256.py`](store_sha256.py) | selected |
+| Timestamp-and-size baseline | `card-store:mtime_size` | [`evaluation/components/staleness/impls/mtime_size.py`](mtime_size.py) |  |
+| Content-hash fingerprint check | `card-store:store_sha256` | [`evaluation/components/staleness/impls/store_sha256.py`](store_sha256.py) |  |
 
 ## Where to go next
 

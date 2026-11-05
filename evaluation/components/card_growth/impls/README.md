@@ -4,10 +4,10 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Bootstrap guards against re-import | `bound-card-growth:bootstrap_guards` | [`evaluation/components/card_growth/impls/bootstrap_guards.py`](bootstrap_guards.py) | selected |
-| Copy mode with no guard | `bound-card-growth:no_cleanup` | [`evaluation/components/card_growth/impls/no_cleanup.py`](no_cleanup.py) |  |
-| Store as copy mode leaves it | `repair-a-card-store:no_cleanup` | [`evaluation/components/card_growth/impls/no_cleanup.py`](no_cleanup.py) |  |
-| Card quarantine tool | `repair-a-card-store:quarantine_tool` | [`evaluation/components/card_growth/impls/quarantine_tool.py`](quarantine_tool.py) |  |
+| Store as copy mode leaves it | `card-store:no_cleanup` | [`evaluation/components/card_growth/impls/no_cleanup.py`](no_cleanup.py) |  |
+| Card quarantine tool | `card-store:quarantine_tool` | [`evaluation/components/card_growth/impls/quarantine_tool.py`](quarantine_tool.py) |  |
+| Bootstrap guards against re-import | `cards-from-files:bootstrap_guards` | [`evaluation/components/card_growth/impls/bootstrap_guards.py`](bootstrap_guards.py) |  |
+| Copy mode with no guard | `cards-from-files:no_cleanup` | [`evaluation/components/card_growth/impls/no_cleanup.py`](no_cleanup.py) |  |
 
 ## Where to go next
 

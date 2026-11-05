@@ -6,8 +6,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Static price table lookup | `track-usage-and-cost:pricing` | [`quest_ai_runner/the_world/model_plumbing/spend/pricing.py`](pricing.py) |  |
-| Persisted daily token tracker | `track-usage-and-cost:usage` | [`quest_ai_runner/the_world/model_plumbing/spend/usage.py`](usage.py) |  |
+| Static price table lookup | `justify-model-calls:pricing` | [`quest_ai_runner/the_world/model_plumbing/spend/pricing.py`](pricing.py) |  |
+| Persisted daily token tracker | `justify-model-calls:usage` | [`quest_ai_runner/the_world/model_plumbing/spend/usage.py`](usage.py) |  |
 
 ## Where to go next
 

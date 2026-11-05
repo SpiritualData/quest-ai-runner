@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Direct tool-call ablation | `operate-a-quest:direct_tool_call` | [`evaluation/components/quest_ops/impls/direct_tool_call.py`](direct_tool_call.py) |  |
+| Direct tool-call ablation | `quest-change-executor:direct_tool_call` | [`evaluation/components/quest_ops/impls/direct_tool_call.py`](direct_tool_call.py) |  |
 
 ## Where to go next
 

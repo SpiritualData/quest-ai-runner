@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Example check harness | `learn-by-example:live_examples` | [`evaluation/components/learn_by_example/impls/live_examples.py`](live_examples.py) | selected |
+| Example check harness | `system-integrity:live_examples` | [`evaluation/components/learn_by_example/impls/live_examples.py`](live_examples.py) |  |
 
 ## Where to go next
 

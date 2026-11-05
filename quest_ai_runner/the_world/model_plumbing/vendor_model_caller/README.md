@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Prefix-routing multi-provider | `vendor-model-caller:multi_provider` | [`quest_ai_runner/the_world/model_plumbing/vendor_model_caller/providers.py`](providers.py) | selected |
+| Prefix-routing multi-provider | `vendor-model-caller:multi_provider` | [`quest_ai_runner/the_world/model_plumbing/vendor_model_caller/providers.py`](providers.py) |  |
 | Keyless command-line provider | `vendor-model-caller:claude_cli` | [`quest_ai_runner/the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py`](claude_cli_provider.py) |  |
 
 ## Where to go next

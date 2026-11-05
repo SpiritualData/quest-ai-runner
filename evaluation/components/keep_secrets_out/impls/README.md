@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Planted-secret evaluation arm | `keep-secrets-out:live_scanner` | [`evaluation/components/keep_secrets_out/impls/live_scanner.py`](live_scanner.py) | selected |
+| Planted-secret evaluation arm | `system-integrity:live_scanner` | [`evaluation/components/keep_secrets_out/impls/live_scanner.py`](live_scanner.py) |  |
 
 ## Where to go next
 

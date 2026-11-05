@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Web research with the answer's support check (today) | `the-science:web_with_support_check` | [`quest_ai_runner/the_world/tools/web_search/area.py`](area.py) | selected |
+| Web research with the answer's support check (today) | `the-science:web_with_support_check` | [`quest_ai_runner/the_world/tools/web_search/area.py`](area.py) |  |
 
 ## Where to go next
 

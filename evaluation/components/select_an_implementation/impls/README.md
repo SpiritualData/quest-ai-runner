@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Live resolver driver | `select-an-implementation:live_resolver` | [`evaluation/components/select_an_implementation/impls/live_resolver.py`](live_resolver.py) | selected |
+| Live resolver driver | `select-an-implementation:live_resolver` | [`evaluation/components/select_an_implementation/impls/live_resolver.py`](live_resolver.py) |  |
 
 ## Where to go next
 

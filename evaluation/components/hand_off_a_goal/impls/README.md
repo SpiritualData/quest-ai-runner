@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Creator keeps the goal, no model call (floor, proposed) | `hand-off-a-goal:creator_keeps_it` | [`evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py`](creator_keeps_it.py) |  |
+| Creator keeps the goal, no model call (floor, proposed) | `quest-representatives:creator_keeps_it` | [`evaluation/components/hand_off_a_goal/impls/creator_keeps_it.py`](creator_keeps_it.py) |  |
 
 ## Where to go next
 

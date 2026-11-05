@@ -4,8 +4,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| An interim on every unmet attempt (spam baseline) | `reply-in-steps:every_attempt` | [`evaluation/components/interim_reply/impls/every_attempt.py`](every_attempt.py) |  |
-| Behaviour before the build (no interim for an unmet attempt) | `reply-in-steps:today` | [`evaluation/components/interim_reply/impls/today.py`](today.py) |  |
+| An interim on every unmet attempt (spam baseline) | `quest-work-shown:every_attempt` | [`evaluation/components/interim_reply/impls/every_attempt.py`](every_attempt.py) |  |
+| Behaviour before the build (no interim for an unmet attempt) | `quest-work-shown:today` | [`evaluation/components/interim_reply/impls/today.py`](today.py) |  |
 
 ## Where to go next
 

@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Real-entry-point evaluation arm | `operate-from-a-terminal:qar_main` | [`evaluation/components/operate_from_a_terminal/impls/qar_main.py`](qar_main.py) |  |
+| Real-entry-point evaluation arm | `system-integrity:qar_main` | [`evaluation/components/operate_from_a_terminal/impls/qar_main.py`](qar_main.py) |  |
 
 ## Where to go next
 

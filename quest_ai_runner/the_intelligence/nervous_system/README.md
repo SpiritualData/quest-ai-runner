@@ -14,7 +14,21 @@ Nervous System asks the model through Tiered model provider layer to oversee a r
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Human decision escalation channel | `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
+| Quest Decision Requests | `quest-decision-requests` | no entry declared | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
+
+## Solutions from a library
+
+- [Judgment Calls](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-decision-requests`): Decides, for one person, whether to ask, proceed or decline when the Nervous System raises a risk signal. Specializes the library `hub`.
+
+## Problems and ideals
+
+**Problems**
+
+- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
+
+**Ideals**
+
+- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
 
 ## Metrics and their leaders
 
@@ -24,24 +38,32 @@ Nervous System asks the model through Tiered model provider layer to oversee a r
 
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
 
+### Problems
+
+- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
+
+### Ideals
+
+- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
+
 ### Solutions
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Human decision escalation channel | `escalate-to-a-human` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
+| Quest Decision Requests | `quest-decision-requests` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Decision-request sink | `escalate-to-a-human:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../../the_body/internal_context/quest/client/quest_client.py) |  |
-| Fake-backend delivery check | `escalate-to-a-human:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
+| Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../../the_body/internal_context/quest/client/quest_client.py) |  |
+| Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
 
 ### Metrics
 

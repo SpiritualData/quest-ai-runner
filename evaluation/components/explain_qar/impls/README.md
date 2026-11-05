@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Shipped-documents evaluation arm | `explain-qar:shipped_docs` | [`evaluation/components/explain_qar/impls/shipped_docs.py`](shipped_docs.py) | selected |
+| Shipped-documents evaluation arm | `system-integrity:shipped_docs` | [`evaluation/components/explain_qar/impls/shipped_docs.py`](shipped_docs.py) |  |
 
 ## Where to go next
 

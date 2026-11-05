@@ -6,8 +6,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Scripted ideal decisions, no model call (offline) | `claim-reach:scripted_ideal` | [`evaluation/components/claim_reach/impls/scripted_ideal.py`](scripted_ideal.py) |  |
-| Rules only, no model (floor) | `claim-reach:rules_only` | [`evaluation/components/claim_reach/impls/rules_only.py`](rules_only.py) |  |
+| Scripted ideal decisions, no model call (offline) | `the-tools:scripted_ideal` | [`evaluation/components/claim_reach/impls/scripted_ideal.py`](scripted_ideal.py) |  |
+| Rules only, no model (floor) | `the-tools:rules_only` | [`evaluation/components/claim_reach/impls/rules_only.py`](rules_only.py) |  |
 
 ## Where to go next
 

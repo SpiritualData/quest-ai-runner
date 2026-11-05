@@ -4,8 +4,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Nothing shown (the status quo before the Trail) | `show-the-ais-work:no_trace` | [`evaluation/components/work_trace_experience/impls/no_trace.py`](no_trace.py) |  |
-| A plain list of every step | `show-the-ais-work:plain_list` | [`evaluation/components/work_trace_experience/impls/plain_list.py`](plain_list.py) |  |
+| Nothing shown (the status quo before the Trail) | `quest-work-shown:no_trace` | [`evaluation/components/work_trace_experience/impls/no_trace.py`](no_trace.py) |  |
+| A plain list of every step | `quest-work-shown:plain_list` | [`evaluation/components/work_trace_experience/impls/plain_list.py`](plain_list.py) |  |
 
 ## Where to go next
 

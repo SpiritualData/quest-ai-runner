@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Layered configuration evaluation arm | `configure-a-lane:qar_config` | [`evaluation/components/configure_a_lane/impls/qar_config.py`](qar_config.py) | selected |
+| Layered configuration evaluation arm | `system-integrity:qar_config` | [`evaluation/components/configure_a_lane/impls/qar_config.py`](qar_config.py) |  |
 
 ## Where to go next
 

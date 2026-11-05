@@ -6,8 +6,8 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Local file tree reader | `gather-evidence:files` | [`quest_ai_runner/the_world/tools/file_reading/files_adapter.py`](files_adapter.py) |  |
-| Remote file server reader | `gather-evidence:remote_files_adapter` | [`quest_ai_runner/the_world/tools/file_reading/remote_files_adapter.py`](remote_files_adapter.py) |  |
+| Local file tree reader | `quest-context:files` | [`quest_ai_runner/the_world/tools/file_reading/files_adapter.py`](files_adapter.py) |  |
+| Remote file server reader | `quest-context:remote_files_adapter` | [`quest_ai_runner/the_world/tools/file_reading/remote_files_adapter.py`](remote_files_adapter.py) |  |
 
 ## Where to go next
 

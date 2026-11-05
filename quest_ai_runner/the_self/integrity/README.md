@@ -10,16 +10,6 @@ This sub-intent arises as the implementation `system-integrity:structure-library
 
 Integrity keeps every part specified as a solution with measured alternatives. It finds what a change touches through Problem-linked tags that identify solutions. It measures whether the assistant acts by ESOI through Standing-instruction behaviour layer and Behaviour-grading judge. It wires the selected arms per lane through Layered lane configuration loader. It keeps the test suite and the public code trustworthy through Offline test collection and Public-repository hygiene scanner, and scores how much of QAR's wiring is configuration through @hub-of-hubs/score-hub-connections.
 
-## Solutions at a glance
-
-| Solution | Handle | Entry call | Selected implementation | Metric |
-|---|---|---|---|---|
-| Standing-instruction behaviour layer | `behave-by-esoi` | no entry declared | Shipped deep-run prompt with standing instructions (`insitu_standing_instructions`) | Principle-following pass rate under standing instructions |
-| Behaviour-grading judge | `judge-esoi-behavior` | no entry declared | Rubric-based model judge (`model_judge`) | Judge agreement with labelled reference replies |
-| Offline test collection | `verify-offline` | no entry declared | Collection check by test file (`collect_by_file`) | Offline test collection |
-| Public-repository hygiene scanner | `keep-secrets-out` | no entry declared | Planted-secret evaluation arm (`live_scanner`) | Secret detection and placeholder tolerance |
-| Problem-linked tags that identify solutions | `tag-solutions` | no entry declared | Problem-linked tag list with a check rule and a lookup (`tag_list_with_check`) | Right solution missed without the tag |
-
 ## Metrics and their leaders
 
 - Principle-following pass rate under standing instructions (`metric-behave-by-esoi`): leader `standing_instructions`, 30 of 60 cases
@@ -32,36 +22,26 @@ Integrity keeps every part specified as a solution with measured alternatives. I
 
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
 
-### Solutions
-
-| Solution | Handle | Selected | Metric |
-|---|---|---|---|
-| Standing-instruction behaviour layer | `behave-by-esoi` | Shipped deep-run prompt with standing instructions (`insitu_standing_instructions`) | Principle-following pass rate under standing instructions |
-| Behaviour-grading judge | `judge-esoi-behavior` | Rubric-based model judge (`model_judge`) | Judge agreement with labelled reference replies |
-| Offline test collection | `verify-offline` | Collection check by test file (`collect_by_file`) | Offline test collection |
-| Public-repository hygiene scanner | `keep-secrets-out` | Planted-secret evaluation arm (`live_scanner`) | Secret detection and placeholder tolerance |
-| Problem-linked tags that identify solutions | `tag-solutions` | Problem-linked tag list with a check rule and a lookup (`tag_list_with_check`) | Right solution missed without the tag |
-
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Shipped deep-run prompt with standing instructions | `behave-by-esoi:insitu_standing_instructions` | [evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py](../../../evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py) |  |
-| In-situ prompt without the instruction layer | `behave-by-esoi:insitu_plain` | [evaluation/components/esoi_behavior/impls/insitu_plain.py](../../../evaluation/components/esoi_behavior/impls/insitu_plain.py) |  |
-| Chat-completion ablation with instructions | `behave-by-esoi:standing_instructions` | [evaluation/components/esoi_behavior/impls/standing_instructions.py](../../../evaluation/components/esoi_behavior/impls/standing_instructions.py) |  |
-| Chat-completion baseline without instructions | `behave-by-esoi:plain` | [evaluation/components/esoi_behavior/impls/plain.py](../../../evaluation/components/esoi_behavior/impls/plain.py) |  |
-| Rubric-based model judge | `judge-esoi-behavior:model_judge` | [evaluation/components/esoi_judge/impls/model_judge.py](../../../evaluation/components/esoi_judge/impls/model_judge.py) |  |
-| Regex-check floor | `judge-esoi-behavior:regex_only` | [evaluation/components/esoi_judge/impls/regex_only.py](../../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
-| Offline suite configuration | `verify-offline:conftest` | [tests/conftest.py](../../../tests/conftest.py) |  |
-| Collection check by test file | `verify-offline:collect_by_file` | [evaluation/components/verify_offline/impls/collect_by_file.py](../../../evaluation/components/verify_offline/impls/collect_by_file.py) |  |
-| Planted-secret evaluation arm | `keep-secrets-out:live_scanner` | [evaluation/components/keep_secrets_out/impls/live_scanner.py](../../../evaluation/components/keep_secrets_out/impls/live_scanner.py) |  |
-| Problem-linked tag list with a check rule and a lookup | `tag-solutions:tag_list_with_check` | [scripts/esoi_tags.py](../../../scripts/esoi_tags.py) |  |
+| Shipped deep-run prompt with standing instructions | `iterate-by-spec:insitu_standing_instructions` | [evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py](../../../evaluation/components/esoi_behavior/impls/insitu_standing_instructions.py) |  |
+| In-situ prompt without the instruction layer | `iterate-by-spec:insitu_plain` | [evaluation/components/esoi_behavior/impls/insitu_plain.py](../../../evaluation/components/esoi_behavior/impls/insitu_plain.py) |  |
+| Chat-completion ablation with instructions | `iterate-by-spec:standing_instructions` | [evaluation/components/esoi_behavior/impls/standing_instructions.py](../../../evaluation/components/esoi_behavior/impls/standing_instructions.py) |  |
+| Chat-completion baseline without instructions | `iterate-by-spec:plain` | [evaluation/components/esoi_behavior/impls/plain.py](../../../evaluation/components/esoi_behavior/impls/plain.py) |  |
+| Rubric-based model judge | `response-quality:model_judge` | [evaluation/components/esoi_judge/impls/model_judge.py](../../../evaluation/components/esoi_judge/impls/model_judge.py) |  |
+| Regex-check floor | `response-quality:regex_only` | [evaluation/components/esoi_judge/impls/regex_only.py](../../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
+| Offline suite configuration | `system-integrity:conftest` | [tests/conftest.py](../../../tests/conftest.py) |  |
+| Collection check by test file | `system-integrity:collect_by_file` | [evaluation/components/verify_offline/impls/collect_by_file.py](../../../evaluation/components/verify_offline/impls/collect_by_file.py) |  |
+| Planted-secret evaluation arm | `system-integrity:live_scanner` | [evaluation/components/keep_secrets_out/impls/live_scanner.py](../../../evaluation/components/keep_secrets_out/impls/live_scanner.py) |  |
+| Problem-linked tag list with a check rule and a lookup | `system-integrity:tag_list_with_check` | [scripts/esoi_tags.py](../../../scripts/esoi_tags.py) |  |
 
 ### Metrics
 

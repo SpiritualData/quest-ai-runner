@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Contained backed-up writer | `write-files:files` | [`quest_ai_runner/the_world/tools/file_editing/files_writer.py`](files_writer.py) | selected |
+| Contained backed-up writer | `write-files:files` | [`quest_ai_runner/the_world/tools/file_editing/files_writer.py`](files_writer.py) |  |
 
 ## Where to go next
 

@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Path and title rules, no model call (floor, proposed) | `label-context-cards:path_rules` | [`evaluation/components/label_context_cards/impls/path_rules.py`](path_rules.py) |  |
+| Path and title rules, no model call (floor, proposed) | `cards-from-files:path_rules` | [`evaluation/components/label_context_cards/impls/path_rules.py`](path_rules.py) |  |
 
 ## Where to go next
 

@@ -6,7 +6,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Configured persona resolver | `run-queued-tasks:personas` | [`quest_ai_runner/the_consciousness/representatives/personas.py`](personas.py) |  |
+| Configured persona resolver | `quest-requests:personas` | [`quest_ai_runner/the_consciousness/representatives/personas.py`](personas.py) |  |
 
 ## Where to go next
 
