@@ -2,8 +2,8 @@
  "@intents": {
   "intents": {
    "context_retriever": {
-    "arm": "",
-    "root": "context-retriever"
+    "arm": "per_lane_assembly",
+    "root": "choose-the-context"
    },
    "critical_thinking": {
     "arm": "deep_runs_only",
@@ -14,24 +14,28 @@
     "root": "system-integrity"
    },
    "internal_context": {
-    "arm": "card_and_reads",
-    "root": "quest-account-truth"
+    "arm": "quest",
+    "root": "quest-context"
    },
    "mind": {
     "arm": "rebuilt_per_step",
     "root": "the-mind"
    },
-   "nervous_system": {
-    "arm": "",
-    "root": "quest-decision-requests"
+   "model_plumbing": {
+    "arm": "via_vendor",
+    "root": "model-plumbing"
    },
    "objectives": {
     "arm": "separate_stores",
     "root": "quest-intents"
    },
-   "request_intake": {
+   "quest-ai-runner": {
     "arm": "",
-    "root": "planner"
+    "root": "quest-self"
+   },
+   "request_intake": {
+    "arm": "poller",
+    "root": "quest-requests"
    },
    "science": {
     "arm": "",
@@ -46,8 +50,8 @@
     "root": "quest-body"
    },
    "the_consciousness": {
-    "arm": "",
-    "root": "intent-evolution"
+    "arm": "composition",
+    "root": "quest-consciousness"
    },
    "the_intelligence": {
     "arm": "composition",
@@ -55,11 +59,15 @@
    },
    "the_self": {
     "arm": "",
-    "root": "model-plumbing"
+    "root": "system-integrity"
    },
    "the_world": {
-    "arm": "",
-    "root": "model-tier-chooser"
+    "arm": "composition",
+    "root": "the-world"
+   },
+   "tools": {
+    "arm": "coding_agent_reach_judge",
+    "root": "the-tools"
    }
   },
   "scopes": {
@@ -82,7 +90,6 @@
    "guide-by-feedback": "quest_ai_runner",
    "guide-toward-the-long-term-goal": "quest_ai_runner",
    "hand-off-a-goal": "quest_ai_runner",
-   "higher-mind": "quest_ai_runner",
    "index-by-meaning": "quest_ai_runner",
    "intake-sources": "quest_ai_runner",
    "intent-evolution": "quest_ai_runner",

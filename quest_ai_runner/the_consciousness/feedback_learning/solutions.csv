@@ -1,2 +1,2 @@
 solution_id,name,description,purpose,approach,out_of_scope,milestones,knowledge,measures_of_success,parameters,inputs,outputs,effects,usage_notes,problem_ids,ideal_ids,metric_ids,implementations,tags,interface_name,selected,authoritative_metric_id,change_driver,delegates_to,adopts,specializes
-feedback-learning,Feedback Learning,,,,,,,,,,,,,,,metric-store-feedback,ledger,,FeedbackKeeping;FeedbackStore,ledger,metric-store-feedback,,,@hub/feedback-learning,
+feedback-learning,Feedback Learning,,,,,,,,,,"The corrections a person made, kept as standing guidance.",,,,,metric-store-feedback,ledger,,FeedbackKeeping;FeedbackStore,ledger,metric-store-feedback,,,@hub/feedback-learning,

@@ -1,2 +1,2 @@
 intent_id,name,vision_statement,implements,opportunities,solution_coherence,solution_diagram
-model_plumbing,Model Plumbing,Each question to a model goes to the tier that earns its cost.,model-plumbing:via_vendor,,,
+model_plumbing,Model Plumbing,Each question to a model goes to the tier that earns its cost.,model-plumbing:via_vendor,"Models change faster than the assistant does, so choosing the tier by measurement and keeping the vendor behind one caller lets a better model run as it appears.",Model Plumbing asks a model through one path whose model can change unseen. Model Tier Chooser picks the model that earns its cost for each tier. Vendor Model Caller asks the chosen model of its vendor.,

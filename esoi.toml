@@ -182,75 +182,63 @@ enabled = true
 
 [rules.S38]
 enabled = true
-# The limit on how many solutions one implementation uses is raised from 9 to 12, for one reason: the top intent's one implementation,
-# do-grounded-work:library, takes the model, the Quest account and nine areas as typed seats (respond.py), and the code composes no
-# grouping of them (the areas are siblings, none builds on another), so grouping them in the records would state a layer the code does
-# not have. No other intent uses more than three. The esoi library reads max_fan_out as one value for the repository (there is no per-intent
-# key in `[rules.S38.floors.<intent>]`), so the limit is this one value, to be lowered with the library change that allows it per intent.
-# The sentence limit (which defaults to the fan-out limit plus one) is pinned at its old value.
-max_fan_out = 12
-max_names_per_sentence = 10
+# The repository-wide limits are the library defaults (an implementation uses at most 9 solutions of its intent, nothing lies more than 4 below
+# a root); the widest implementation here uses 5.
 
-# The top intent: every edge between its solutions is imported code or executable names.
-[rules.S38.floors.quest-ai-runner]
-precision = 1.0
-coverage = 1.0
-
-# The floors of each area (a sub-intent): the measured precision and coverage of its edges, host edges included (the area's implementation
-# uses every root of the area). Edges that show no code are named by `python3 -m esoi.structure.structure_check.coherence`.
-# 5 of 7: run-deep-work and write-through-mcp are parts of the area that the area's composition does not type.
-[rules.S38.floors.body]
-precision = 0.714
-coverage = 1.0
-
-[rules.S38.floors.hold_the_intents]
-precision = 1.0
-coverage = 1.0
-
-# No checkable edge: none of the five solutions has a module in the package (their code is the esoi library's records and checks, the
-# files under evaluation/ and the tests), so the area's edges to its host have no code to show and coverage is 0.0. The selector
-# (select-an-implementation) was moved to take_in_the_world, where configure-a-lane imports it, after its edge here named no code.
-[rules.S38.floors.integrity]
-precision = 0.0
-coverage = 0.0
-
-[rules.S38.floors.science]
-precision = 1.0
-coverage = 1.0
-
-# 11 of 11: narrate-a-turn and explain-an-answer are used by answer-end-to-end, whose orchestrator imports both, so they are recorded
-# under it and are no longer roots; show-progress is shown by the component that owns its module (the library's E4 evidence).
-[rules.S38.floors.mind]
-precision = 1.0
-coverage = 1.0
-
-# 2 of 6: card-store imports persist-cards and persist-cards takes the cache-cards seat. The recency window takes only the card store
-# (a hub seat), so its edges to label-context-cards, repair-a-card-store, cards-from-files, detect-stale-cards and bound-card-growth show no
-# code: those five solutions use no other solution in code and are listed as the window's roots only because the hierarchy rule asks the
-# host to use every root. Coverage 0.667: detect-stale-cards, bound-card-growth and choose-what-to-index have no module in the package.
-[rules.S38.floors.subconscious]
+# Floors are measurements of `python3 -m esoi.structure.structure_check.coherence`, never set above one. Each container or area implementation
+# uses every root of its intent, so a host edge with no code behind it lowers its intent's precision until the composition types that seat.
+# Intents not listed show strong evidence on every edge. Edges without strong evidence, by intent:
+#   the_body: quest-body to quest-account-truth and to intake-sources (quest_client is a function that builds the client, it composes nothing).
+#   the_consciousness: quest-representatives to quest-requests (a third module imports both); quest-consciousness to intent-evolution (no module yet).
+#   the_world: the-world to model-plumbing (the flow asks through the hub's ModelPlumbing seat, which no module of the solution names).
+#   internal_context: quest-context to its four members (the code that holds them is the card store's modules and the poller, which name none of them in a seat).
+#   request_intake: quest-requests to its three members (the poller reaches them through the area line in the_consciousness/ways_in.py).
+#   mind: the-mind to show-progress (the sinks are chosen by the terminal, not by a seat of the loop).
+#   subconscious: the-subconscious to cards-from-files (the recency window takes the card store only).
+#   model_plumbing: model-plumbing to vendor-model-caller (a third module imports both).
+#   tools: the-tools to its five members (a claim judge composes none of them in code).
+#   context_retriever: choose-the-context to index-by-meaning and to spec-selection.
+[rules.S38.floors.the_body]
 precision = 0.333
-coverage = 0.667
-
-# 4 of 4: the area arises from choose-the-context:per_lane_assembly (select_context/area.py), which takes the assembler, the reference
-# resolver, the meaning index and names the mixed search in code, so every host edge shows imported code or an executable name.
-[rules.S38.floors.select_context]
-precision = 1.0
 coverage = 1.0
 
-# 7 of 8: feed-context-sources is a part of the area that no typed seat composes; configure-a-lane imports the selector it uses
-# (select-an-implementation, moved here from keep_it_generic); coverage 0.667: four edges have an end with no module.
-[rules.S38.floors.take_in_the_world]
-precision = 0.875
-coverage = 0.667
+[rules.S38.floors.the_consciousness]
+precision = 0.833
+coverage = 0.857
 
-# 7 of 8: spec-selection is a part of the area that no typed seat composes.
-[rules.S38.floors.critical_thinking]
-precision = 0.875
+[rules.S38.floors.the_world]
+precision = 0.667
 coverage = 1.0
 
-[rules.S38.floors.nervous_system]
-precision = 1.0
+[rules.S38.floors.internal_context]
+precision = 0.0
+coverage = 1.0
+min_lift = 0.0
+
+[rules.S38.floors.request_intake]
+precision = 0.0
+coverage = 1.0
+min_lift = 0.0
+
+[rules.S38.floors.mind]
+precision = 0.833
+coverage = 1.0
+
+[rules.S38.floors.subconscious]
+precision = 0.667
+coverage = 1.0
+
+[rules.S38.floors.model_plumbing]
+precision = 0.5
+coverage = 1.0
+
+[rules.S38.floors.tools]
+precision = 0.0
+coverage = 1.0
+min_lift = 0.0
+
+[rules.S38.floors.context_retriever]
+precision = 0.5
 coverage = 1.0
 
 [rules.S39]
