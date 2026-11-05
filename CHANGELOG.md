@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
-- Interfaces first: 57 solutions declare their interface in one `interface.py` beside their code, with the role (`delegates_to`) in their records; the Protocols left their `area_*.py` and implementation files. `quest_ai_runner.the_self.goal_agent` is now `quest_ai_runner.the_self.respond`, the flow of one request (`FLOW`).
+- Interfaces first: 50 solutions declare their interface in one `interface.py` beside their code, with the role (`delegates_to`) in their records; the Protocols left their `area_*.py` and implementation files. `quest_ai_runner.the_self.goal_agent` is now `quest_ai_runner.the_self.respond`, the flow of one request (`FLOW`).
 - `quest_ai_runner.api` is the one public surface: grouped by solution, no underscore names (`card_update_store`, `deep_future_context`, `future_context_channel` and `normalize_future_context` lost their underscore), no capability probes (`provider_call_accepts_layers`, `run_goal_accepts_is_subgoal`), and `run`. New constants: `TIER_WORDS`, `RUNNABLE_MODELS`, `LEGACY_TIER_ALIASES`, `PROPOSAL_TEXT_PREFIX`, `AUTOPILOT_PASS_KIND`, `AUTOPILOT_WORK_KIND`, `MAX_RESPONSE_BYTES`.
 - `select-context` declares its interface (`ContextSelecting`), so `quest_ai_runner.run("select-context", ...)` works. When standing work starts is the hub's Proactivity and what matters first is the hub's Prioritization; both are reached with `quest_ai_runner.run`.
 
