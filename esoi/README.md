@@ -130,11 +130,11 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Per-consumer worker | `quest-self:per-consumer-worker` |  |  |
 | Agent framework with Quest glue | `quest-self:agent-framework-with-quest-glue` |  |  |
 | Deep runner only | `quest-self:deep-runner-only` |  |  |
-| quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](../quest_ai_runner/the_self/respond.py) | [the_self](the_self/README.md) |
-| Quest HTTP client from the environment | `quest-body:quest_client` | [quest_ai_runner/the_body/area_body.py](../quest_ai_runner/the_body/area_body.py) | [the_body](the_body/README.md) |
-| Composition | `quest-consciousness:composition` | [quest_ai_runner/the_consciousness/flow.py](../quest_ai_runner/the_consciousness/flow.py) | [the_consciousness](the_consciousness/README.md) |
-| Composition | `the-intelligence:composition` | [quest_ai_runner/the_intelligence/flow.py](../quest_ai_runner/the_intelligence/flow.py) | [the_intelligence](the_intelligence/README.md) |
-| Composition | `the-world:composition` | [quest_ai_runner/the_world/flow.py](../quest_ai_runner/the_world/flow.py) | [the_world](the_world/README.md) |
+| quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](../quest_ai_runner/the_self/respond.py) | [the_self](../quest_ai_runner/the_self/README.md) |
+| Quest HTTP client from the environment | `quest-body:quest_client` | [quest_ai_runner/the_body/area_body.py](../quest_ai_runner/the_body/area_body.py) | [the_body](../quest_ai_runner/the_body/README.md) |
+| Composition | `quest-consciousness:composition` | [quest_ai_runner/the_consciousness/flow.py](../quest_ai_runner/the_consciousness/flow.py) | [the_consciousness](../quest_ai_runner/the_consciousness/README.md) |
+| Composition | `the-intelligence:composition` | [quest_ai_runner/the_intelligence/flow.py](../quest_ai_runner/the_intelligence/flow.py) | [the_intelligence](../quest_ai_runner/the_intelligence/README.md) |
+| Composition | `the-world:composition` | [quest_ai_runner/the_world/flow.py](../quest_ai_runner/the_world/flow.py) | [the_world](../quest_ai_runner/the_world/README.md) |
 | QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | [quest_ai_runner/the_intelligence/mind/orchestrator.py](../quest_ai_runner/the_intelligence/mind/orchestrator.py) |  |
 | Scripted ideal planner (offline) | `quest-self:reference_script` |  |  |
 | Rules only, no model (floor) | `quest-self:rules_only` |  |  |

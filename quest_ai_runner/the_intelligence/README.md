@@ -144,7 +144,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) | `quest-intents:per_rep_assigned_view` |  |  |
 | Scripted-client gate evaluation arm | `quest-autopilot:live_pass` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](critical_thinking/area.py) |  |
 | Rebuilt prompt per step with a referenced context (today) | `the-mind:rebuilt_per_step` | [quest_ai_runner/the_intelligence/mind/area_mind.py](mind/area_mind.py) | [mind](mind/README.md) |
-| Separate stores read at the start of a request (today) | `quest-intents:separate_stores` | [quest_ai_runner/the_intelligence/higher_mind/objectives/area.py](higher_mind/objectives/area.py) | [objectives](objectives/README.md) |
+| Separate stores read at the start of a request (today) | `quest-intents:separate_stores` | [quest_ai_runner/the_intelligence/higher_mind/objectives/area.py](higher_mind/objectives/area.py) | [objectives](higher_mind/objectives/README.md) |
 | Code-enforced before and after on deep runs only (today) | `critical-thinking:deep_runs_only` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](critical_thinking/area.py) | [critical_thinking](critical_thinking/README.md) |
 | Rebuilt prompt per step with the context re-sent from cache | `the-mind:rebuilt_full_context` | [quest_ai_runner/the_intelligence/mind/planner/orchestrator_planning.py](mind/planner/orchestrator_planning.py) |  |
 | Start-of-run card filter and a recency window (today) | `the-subconscious:recency_window` | [quest_ai_runner/the_intelligence/mind/context_intake/planner_context.py](mind/context_intake/planner_context.py) | [subconscious](subconscious/README.md) |
