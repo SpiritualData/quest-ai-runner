@@ -8,7 +8,8 @@ Part of [Tools](../README.md)
 
 ## Write Through MCP (`write-through-mcp`)
 
-- Out of scope: Reads from a tool server, and any operation that is not on the write allowlist.
+- Out of scope: Reads from a tool server (quest-context does that), any operation that is not on the write allowlist, and deciding which quest change a request asks for (quest-change-executor does that).
+- Delegates to: quest-context, quest-change-executor
 - Entry call: `quest_ai_runner.run("write-through-mcp", ...)`
 - Selected implementation: MCP operation writer (`mcp`)
 - Metric: Allowlist enforcement and exactly-once execution
