@@ -1,0 +1,2 @@
+implementation_id,solution_id,name,description,advantages,disadvantages,filepath,sub_intent,uses_solution_ids
+planner:planner_route,planner,The loop planner decides the route,"The loop makes one planning call over the model and its decision is the route, returned as data; no tool runs and no worker starts.","Returns the real decision with arguments, confirm and clarify handling.",Costs one planning call per message.,quest_ai_runner/the_intelligence/mind/planner/message_routing.py,,vendor-model-caller

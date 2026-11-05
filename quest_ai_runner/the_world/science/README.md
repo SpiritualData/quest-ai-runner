@@ -1,14 +1,20 @@
 # Science
 
-What a request needs from beyond the person's own material comes from the world, with its source.
+**Vision statement:** What a request needs from beyond the person's own material comes from the world, with its source.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: [Top](../../../esoi/README.md) > [World](../README.md) > Science
 
 This sub-intent arises as the implementation `the-science:web_with_support_check` of its parent intent [`the_world`](../README.md). Opportunities: Facts about the world arrive with a source and a strength the person can weigh, which the parent solution leaves aside: a low search spend per correct answer through snippet-first research, a check that a claim is supported by the page it cites, and how an answer is weighed when sources disagree or the model's own memory is the only source.
 
 ## How the solutions fit together
 
 Science answers what lies beyond a person's own material from public research, with the source shown. Web Search brings in the live web when the research sources do not answer.
+
+## One level below
+
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
+
+- Web Search (solution with no page of its own, its implementations are in this intent's records)
 
 ## Solutions at a glance
 
@@ -44,7 +50,6 @@ Science answers what lies beyond a person's own material from public research, w
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Snippet-first research with page extraction | `the-science:web_research` | [quest_ai_runner/the_world/tools/web_search/web_research.py](../tools/web_search/web_research.py) |  |
 | Model-native search | `web-search:provider_web_search` | [quest_ai_runner/the_world/tools/web_search/provider_web_search_adapter.py](../tools/web_search/provider_web_search_adapter.py) |  |
 | Pluggable search backends with fallback | `web-search:serper` | [quest_ai_runner/the_world/tools/web_search/web_search_backends.py](../tools/web_search/web_search_backends.py) |  |
 | Brave search backend | `web-search:brave` | [quest_ai_runner/the_world/tools/web_search/web_search_backends.py](../tools/web_search/web_search_backends.py) |  |
@@ -56,3 +61,6 @@ Science answers what lies beyond a person's own material from public research, w
 ### Metrics
 
 - Right-passage rate and search spend over public factual questions (`metric-search-the-web`): `esoi run web_search_live --impl web_research; esoi run web_search --impl fallback_chain`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

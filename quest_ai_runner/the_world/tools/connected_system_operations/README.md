@@ -1,21 +1,29 @@
-# connected_system_operations
+# Write Through MCP
 
-*ESOI records kept beside the code in `quest_ai_runner/the_world/tools/connected_system_operations`, generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*
+**Purpose:** Carry out one named change on an external tool server, and only when an explicit allowlist permits that operation.
+
+Breadcrumb: [Top](../../../../esoi/README.md) > [World](../../README.md) > [Tools](../README.md) > Write Through MCP
+
+Part of [Tools](../README.md)
+
+## Write Through MCP (`write-through-mcp`)
+
+- Out of scope: Reads from a tool server, and any operation that is not on the write allowlist.
+- Entry call: `quest_ai_runner.run("write-through-mcp", ...)`
+- Selected implementation: MCP operation writer (`mcp`)
+- Metric: Allowlist enforcement and exactly-once execution
+- Implemented by: [`quest_ai_runner/the_world/tools/__init__.py`](../__init__.py), [`quest_ai_runner/the_world/tools/connected_system_operations/__init__.py`](__init__.py), [`quest_ai_runner/the_world/tools/connected_system_operations/composite_retrieval_adapter.py`](composite_retrieval_adapter.py), [`quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py`](google_chat_adapter.py), [`quest_ai_runner/the_world/tools/connected_system_operations/google_drive_adapter.py`](google_drive_adapter.py), [`quest_ai_runner/the_world/tools/connected_system_operations/mcp_retrieval_adapter.py`](mcp_retrieval_adapter.py), [`quest_ai_runner/the_world/tools/connected_system_operations/mcp_write_adapter.py`](mcp_write_adapter.py), [`quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py`](notion_adapter.py) and 4 more
 
 ## Implementations
 
-| Implementation | Handle | Code | Selected |
-|---|---|---|---|
-| MCP gateway bridge transport | `intake-sources:openclaw` | [`quest_ai_runner/the_world/tools/connected_system_operations/openclaw_channel.py`](openclaw_channel.py) | selected |
-| Parallel multi-source composite | `quest-context:composite` | [`quest_ai_runner/the_world/tools/connected_system_operations/composite_retrieval_adapter.py`](composite_retrieval_adapter.py) | selected |
-| MCP server reader | `quest-context:mcp` | [`quest_ai_runner/the_world/tools/connected_system_operations/mcp_retrieval_adapter.py`](mcp_retrieval_adapter.py) |  |
-| Notion database reader | `quest-context:notion` | [`quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py`](notion_adapter.py) |  |
-| Drive document reader | `quest-context:google_drive` | [`quest_ai_runner/the_world/tools/connected_system_operations/google_drive_adapter.py`](google_drive_adapter.py) |  |
-| Chat conversation reader | `quest-context:google_chat` | [`quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py`](google_chat_adapter.py) |  |
-| MCP operation writer | `write-through-mcp:mcp` | [`quest_ai_runner/the_world/tools/connected_system_operations/mcp_write_adapter.py`](mcp_write_adapter.py) | selected |
+| Implementation | Handle | Purpose | Code | Selected |
+|---|---|---|---|---|
+| MCP operation writer | `write-through-mcp:mcp` | Lists the allow-listed subset of a server's tools as writable operations and executes one by name through the client, refusing anything off the allowlist before the network, with alias namespacing and an audit detail on every result. | [`quest_ai_runner/the_world/tools/connected_system_operations/mcp_write_adapter.py`](mcp_write_adapter.py) | selected |
 
 ## Where to go next
 
 - Up: [quest_ai_runner](../../../README.md)
-- Intent: [World](../../README.md)
+- Intent: [Tools](../README.md)
 - Repository: [top README](../../../../README.md)
+
+*Generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*

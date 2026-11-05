@@ -1,8 +1,8 @@
 # Quest Body
 
-Quest is the AI's body.
+**Vision statement:** Quest is the AI's body.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: [Top](../../esoi/README.md) > Quest Body
 
 This sub-intent arises as the implementation `quest-body:quest_client` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: A person's Quest data and the tools around it change for reasons of their own, so the one declared place where that data lives lets every other part stay unaware of how Quest stores it.
 
@@ -16,33 +16,32 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Delegated Agent Sessions<br/><i>delegated-agent-sessions</i>"]
-    s1["File Editing<br/><i>file-editing</i>"]
-    s2["Quest Account Truth<br/><i>quest-account-truth</i>"]
-    s3["Quest Change Executor<br/><i>quest-change-executor</i>"]
-    s0 --> s2
-    s1 --> s2
-    s3 -->|"The change made and the state read back"| s2
+    s0["Quest Context<br/><i>quest-context</i>"]
+    s1["Quest Account Truth<br/><i>quest-account-truth</i>"]
+    s0 -->|"Evidence from the person's own sources, with where each item came from"| s1
 ```
+
+## One level below
+
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
+
+- [Quest Context](internal_context/README.md) (sub-intent): The AI knows each person's own Quest, nobody else's.
+- Quest Account Truth (solution with no page of its own, its implementations are in this intent's records): Make what the AI says about an account the account as it is now.
+- Intake Sources (solution with no page of its own, its implementations are in this intent's records)
 
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Delegated Agent Sessions | `delegated-agent-sessions` | `quest_ai_runner.run("delegated-agent-sessions", ...)` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
-| File Editing | `file-editing` | `quest_ai_runner.run("file-editing", 'NOTES.md')` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
+| Quest Context | `quest-context` | `quest_ai_runner.run("quest-context", 'NOTES.md')` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases |
 | Quest Account Truth | `quest-account-truth` | `quest_ai_runner.run("quest-account-truth", '')` | Managed quest card plus optional live reads (today) (`card_and_reads`) | Account-state consistency across scripted sessions |
-| Quest Change Executor | `quest-change-executor` | `quest_ai_runner.run("quest-change-executor", 'Add a goal to ship the launch note by Friday')` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
-| Offline card cache and write outbox | `cache-cards` | `quest_ai_runner.run("cache-cards")` | Durable file cache (`file`) | Outage resilience of the card repository |
-| Learned-operation fast path | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
-| Allowlisted operation writer | `write-through-mcp` | `quest_ai_runner.run("write-through-mcp", ...)` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
+| Intake Sources | `intake-sources` | `quest_ai_runner.run("intake-sources")` | MCP gateway bridge transport (`openclaw`) | Channel transport conformance to the gateway wire contract |
 
 ## Solutions from a library
 
-- [Delegated Agent Sessions](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/tools/README.md) (`delegated-agent-sessions`): Hands open-ended work to an agent that runs in its own session and reports back. Adopted from the library `hub`.
-- [File Editing](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/tools/README.md) (`file-editing`): Changes a file by instruction and reports what changed. Adopted from the library `hub`.
+- [Internal Context](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`quest-context`): Declares where the system's data lives and which World tool reads it. Specializes the library `hub`.
 - [Response Quality](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`quest-account-truth`): Judges a response against a quality profile: a named set of criteria with weights and target values. Specializes the library `hub`.
-- [Connected System Operations](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/tools/README.md) (`quest-change-executor`): Calls an operation of a connected system, such as a write through an MCP server. Specializes the library `hub`.
+- [Intake Sources](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`intake-sources`): Declares where this system's requests come from (a chat, a task queue, a place where meeting action items are written) and reads the requests waiting at each, handing each over once. Adopted from the library `hub`.
 
 ## Problems and ideals
 
@@ -69,10 +68,10 @@ flowchart LR
 
 ## Where to go next
 
-- Sub-intent: [Quest Account Truth](internal_context/README.md) (What the AI says about a person's account is the account as it is now.)
+- Sub-intent: [Quest Context](internal_context/README.md)
 - Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
-- Records beside the code: [quest_ai_runner/the_body/configuration](configuration/README.md), [quest_ai_runner/the_body/host](host/README.md)
+- Records beside the code: [quest_ai_runner/the_body/configuration](configuration/README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
@@ -94,29 +93,29 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Delegated Agent Sessions | `delegated-agent-sessions` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
-| File Editing | `file-editing` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
+| Quest Context | `quest-context` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases |
 | Quest Account Truth | `quest-account-truth` | Managed quest card plus optional live reads (today) (`card_and_reads`) | Account-state consistency across scripted sessions |
-| Quest Change Executor | `quest-change-executor` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
-| Offline card cache and write outbox | `cache-cards` | Durable file cache (`file`) | Outage resilience of the card repository |
-| Learned-operation fast path | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
-| Allowlisted operation writer | `write-through-mcp` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
+| Intake Sources | `intake-sources` | MCP gateway bridge transport (`openclaw`) | Channel transport conformance to the gateway wire contract |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Subprocess goal runner | `delegated-agent-sessions:subprocess` | [quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py](../the_intelligence/mind/delegation/goal_runner.py) |  |
-| Coding agent with the host reach summary and reach judge (built, off by default) | `the-tools:coding_agent_reach_judge` | [quest_ai_runner/the_intelligence/mind/planner/reach_judge.py](../the_intelligence/mind/planner/reach_judge.py) |  |
-| Offline lifecycle harness | `quest-requests:qar_runner` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
-| Managed quest card plus optional live reads (today) | `quest-account-truth:card_and_reads` | [quest_ai_runner/the_body/area_body.py](area_body.py) | [internal_context](internal_context/README.md) |
-| Planner-only orchestration | `quest-change-executor:qar_orchestrator` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
-| Coding agent, reach described in the prompt (today) | `the-tools:coding_agent_prompt_reach` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
-| Two small model verdicts when a goal is created (today) | `hand-off-a-goal:model_judge` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
-| One-call fast file editor | `delegated-agent-sessions:fast_edit` | [quest_ai_runner/the_body/configuration/config_resolvers.py](configuration/config_resolvers.py) |  |
-| One-call MCP operation runner | `delegated-agent-sessions:mcp_write` | [quest_ai_runner/the_body/configuration/config_resolvers.py](configuration/config_resolvers.py) |  |
-| Lean guarded launch of the deep worker | `delegated-agent-sessions:lean_guarded` | [quest_ai_runner/the_body/configuration/deep_launch.py](configuration/deep_launch.py) |  |
-| Hysteresis resource guard | `model-plumbing:resources` | [quest_ai_runner/the_body/host/resources.py](host/resources.py) |  |
+| Read back what a change touched (proposed) | `quest-account-truth:read_after_write` |  |  |
+| A live read behind every state claim (proposed) | `quest-account-truth:live_read_only` |  |  |
+| Managed quest card plus optional live reads (today) | `quest-account-truth:card_and_reads` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
+| Cached live-database reader | `quest-context:cached_db` | [quest_ai_runner/the_body/internal_context/quest/cached_db_adapter.py](internal_context/quest/cached_db_adapter.py) |  |
+| Quest API context reader | `quest-context:quest` | [quest_ai_runner/the_body/internal_context/quest/quest_retrieval_adapter.py](internal_context/quest/quest_retrieval_adapter.py) | [internal_context](internal_context/README.md) |
+| Production registry under scripted host resolvers | `quest-context:card_resolvers` | [evaluation/components/resolve_references/impls/card_resolvers.py](../../evaluation/components/resolve_references/impls/card_resolvers.py) |  |
+| MCP gateway bridge transport | `intake-sources:openclaw` | [quest_ai_runner/the_world/tools/connected_system_operations/openclaw_channel.py](../the_world/tools/connected_system_operations/openclaw_channel.py) |  |
+| Parallel multi-source composite | `quest-context:composite` | [quest_ai_runner/the_world/tools/connected_system_operations/composite_retrieval_adapter.py](../the_world/tools/connected_system_operations/composite_retrieval_adapter.py) |  |
+| MCP server reader | `quest-context:mcp` | [quest_ai_runner/the_world/tools/connected_system_operations/mcp_retrieval_adapter.py](../the_world/tools/connected_system_operations/mcp_retrieval_adapter.py) |  |
+| Notion database reader | `quest-context:notion` | [quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py](../the_world/tools/connected_system_operations/notion_adapter.py) |  |
+| Drive document reader | `quest-context:google_drive` | [quest_ai_runner/the_world/tools/connected_system_operations/google_drive_adapter.py](../the_world/tools/connected_system_operations/google_drive_adapter.py) |  |
+| Chat conversation reader | `quest-context:google_chat` | [quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py](../the_world/tools/connected_system_operations/google_chat_adapter.py) |  |
+| Local file tree reader | `quest-context:files` | [quest_ai_runner/the_world/tools/file_reading/files_adapter.py](../the_world/tools/file_reading/files_adapter.py) |  |
+| Remote file server reader | `quest-context:remote_files_adapter` | [quest_ai_runner/the_world/tools/file_reading/remote_files_adapter.py](../the_world/tools/file_reading/remote_files_adapter.py) |  |
+| Registry of built-in and host resolvers | `quest-context:note` | [quest_ai_runner/the_body/configuration/config_assembler.py](configuration/config_assembler.py) |  |
 
 ### Metrics
 
@@ -128,3 +127,6 @@ flowchart LR
 - Goal loop outcomes against the done-standard (`metric-goal-met-by-evidence-and-coverage`): `esoi run deep_run --impl goal_contract`
 - Deep worker launch settings ranked by cost per goal met (`metric-harness-context-subagents-recursion-ranked`): `esoi run deep_runner --impl subprocess_runner`
 - Account-state consistency across scripted sessions (`metric-act-as-the-body`): `esoi run act_as_the_body --impl card_and_reads`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

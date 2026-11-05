@@ -1,24 +1,30 @@
 # Quest Requests
 
-Every request made in Quest is taken in once by the same AI.
+**Vision statement:** Every request made in Quest is taken in once by the same AI.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: [Top](../../../esoi/README.md) > [Quest Consciousness](../README.md) > Quest Requests
 
-This sub-intent arises as the implementation `take-in-the-world:ways_in` of its parent intent [`the_consciousness`](../README.md). Opportunities: A runner is reached from many places and each has its own failure and cost, which the parent solution measures one by one and none together: a short chat message must not pay for a long run, an image has to be described before it can ground an answer, input that arrives while a run works must be heard at the next decision, a terminal session needs helper calls that cost a fraction of a cent, and a developer needs a package that installs and runs on an empty environment, learned from documents and examples that are kept true.
+This sub-intent arises as the implementation `quest-requests:poller` of its parent intent [`the_consciousness`](../README.md). Opportunities: A runner is reached from many places and each has its own failure and cost, which the parent solution measures one by one and none together: a short chat message must not pay for a long run, an image has to be described before it can ground an answer, input that arrives while a run works must be heard at the next decision, a terminal session needs helper calls that cost a fraction of a cent, and a developer needs a package that installs and runs on an empty environment, learned from documents and examples that are kept true.
 
 ## How the solutions fit together
 
 Quest Requests takes a request in from a chat turn, a queued task or a live channel and gives every surface the same understanding of it. Planner decides where the request goes, whether to answer it, use a tool, hand it to deep work, confirm it with the person or ask for clarity, and replays a request that worked before at a fraction of the cost.
 
+## One level below
+
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
+
+- Take In The World (solution with no page of its own, its implementations are in this intent's records): Let a person or a program reach the runner from wherever they work and be understood the same way.
+- Receive Input Mid Run (solution with no page of its own, its implementations are in this intent's records): Lets a person change direction, pause or stop an assistant while it works, and be heard at its next decision.
+- Describe An Attachment (solution with no page of its own, its implementations are in this intent's records): Gives a person the text a vision model writes for an image a person attached at a cost and delay that its metric accepts.
+
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
-
-## Solutions from a library
-
-- [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`planner`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Adopted from the library `hub`.
+| Take In The World | `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
+| Receive Input Mid Run | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
+| Describe An Attachment | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
 
 ## Metrics and their leaders
 
@@ -47,42 +53,18 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Planner | `planner` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
+| Take In The World | `take-in-the-world` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
+| Receive Input Mid Run | `receive-input-mid-run` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
+| Describe An Attachment | `describe-an-attachment` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Full planner decision | `planner:qar_planner` | [evaluation/components/classification/impls/qar_planner.py](../../../evaluation/components/classification/impls/qar_planner.py) |  |
-| Keyword rules floor | `planner:keyword_rules` | [evaluation/components/classification/impls/keyword_rules.py](../../../evaluation/components/classification/impls/keyword_rules.py) |  |
-| Source interface with shared channel flags | `feed-context-sources:base` | [quest_ai_runner/the_body/intake_sources/context_sources_base.py](../../the_body/intake_sources/context_sources_base.py) |  |
-| Live engine over fake quest channels | `feed-context-sources:update_engine` | [evaluation/components/feed_context_sources/impls/update_engine.py](../../../evaluation/components/feed_context_sources/impls/update_engine.py) |  |
+| Channels, terminal and package as ways in | `take-in-the-world:ways_in` | [quest_ai_runner/the_consciousness/ways_in.py](../ways_in.py) |  |
 | In-memory thread-safe inbox | `receive-input-mid-run:in_memory` | [quest_ai_runner/the_intelligence/mind/delegation/inbox.py](../../the_intelligence/mind/delegation/inbox.py) |  |
-| Package root with front doors | `system-integrity:__init__` | [quest_ai_runner/__init__.py](../../__init__.py) |  |
-| Long-lived background loop bridge | `system-integrity:async_bridge` | [quest_ai_runner/the_consciousness/request_intake/async_bridge.py](async_bridge.py) |  |
-| Live package-surface driver | `system-integrity:live_surface` | [evaluation/components/expose_the_public_api/impls/live_surface.py](../../../evaluation/components/expose_the_public_api/impls/live_surface.py) |  |
-| Minimal lane example | `system-integrity:minimal_lane` | [examples/minimal_lane.py](../../../examples/minimal_lane.py) |  |
-| Custom consumer configuration example | `system-integrity:custom_consumer` | [examples/custom_consumer.py](../../../examples/custom_consumer.py) |  |
-| Example check harness | `system-integrity:live_examples` | [evaluation/components/learn_by_example/impls/live_examples.py](../../../evaluation/components/learn_by_example/impls/live_examples.py) |  |
-| Configuration dataclass and file entry point | `system-integrity:config` | [quest_ai_runner/the_body/configuration/config.py](../../the_body/configuration/config.py) |  |
-| Strict TOML file loader | `system-integrity:config_file` | [quest_ai_runner/the_body/configuration/config_file.py](../../the_body/configuration/config_file.py) |  |
-| Environment and env-file layering | `system-integrity:config_environment` | [quest_ai_runner/the_body/configuration/config_environment.py](../../the_body/configuration/config_environment.py) |  |
-| Environment-backed tuning settings | `system-integrity:config_core_settings` | [quest_ai_runner/the_body/configuration/config_core_settings.py](../../the_body/configuration/config_core_settings.py) |  |
-| Injected core settings holder | `system-integrity:runtime_settings` | [quest_ai_runner/the_body/configuration/runtime_settings.py](../../the_body/configuration/runtime_settings.py) |  |
-| Layered configuration evaluation arm | `system-integrity:qar_config` | [evaluation/components/configure_a_lane/impls/qar_config.py](../../../evaluation/components/configure_a_lane/impls/qar_config.py) |  |
-| Command dispatcher | `system-integrity:cli` | [quest_ai_runner/the_consciousness/terminal/cli.py](../terminal/cli.py) |  |
-| Declarative argument tree | `system-integrity:cli_parser` | [quest_ai_runner/the_consciousness/terminal/cli_parser.py](../terminal/cli_parser.py) |  |
-| Quest API subcommands | `system-integrity:cli_quest` | [quest_ai_runner/the_consciousness/terminal/cli_quest.py](../terminal/cli_quest.py) |  |
-| Card-store maintenance commands | `system-integrity:store_cli` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/store_cli.py](../../the_intelligence/subconscious/cards_from_files/store_cli.py) |  |
-| Tool catalog shell entry | `system-integrity:__main__` | [quest_ai_runner/the_consciousness/terminal/__main__.py](../terminal/__main__.py) |  |
-| Real-entry-point evaluation arm | `system-integrity:qar_main` | [evaluation/components/operate_from_a_terminal/impls/qar_main.py](../../../evaluation/components/operate_from_a_terminal/impls/qar_main.py) |  |
-| Documentation index | `system-integrity:README.md` | [docs/README.md](../../../docs/README.md) |  |
-| Shipped-documents evaluation arm | `system-integrity:shipped_docs` | [evaluation/components/explain_qar/impls/shipped_docs.py](../../../evaluation/components/explain_qar/impls/shipped_docs.py) |  |
 | One vision-model call per image (today) | `describe-an-attachment:vision_description` | [quest_ai_runner/the_intelligence/mind/context_intake/attachments.py](../../the_intelligence/mind/context_intake/attachments.py) |  |
 | No description, the image is named only (proposed) | `describe-an-attachment:skip_images` |  |  |
-| Rules only, no model call (floor, proposed) | `system-integrity:rules_only` |  |  |
-| The loop planner decides the route | `planner:planner_route` | [quest_ai_runner/the_intelligence/mind/planner/message_routing.py](../../the_intelligence/mind/planner/message_routing.py) |  |
-| The update engine over its built-in channels | `feed-context-sources:quest_channels` | [quest_ai_runner/the_body/intake_sources/context_updates.py](../../the_body/intake_sources/context_updates.py) |  |
 
 ### Metrics
 
@@ -96,3 +78,6 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 - Documentation coverage and voice conformance (`metric-explain-qar`): `esoi run explain_qar --impl shipped_docs`
 - Answer pass rate gained per image described (`metric-describe-an-attachment`): `esoi run describe_an_attachment --impl vision_description`
 - Correct terminal helper verdicts within the wait a person accepts (`metric-assist-a-terminal-session`): `esoi run assist_a_terminal_session --impl fast_model_helpers_live; esoi run assist_a_terminal_session --impl fast_model_helpers`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

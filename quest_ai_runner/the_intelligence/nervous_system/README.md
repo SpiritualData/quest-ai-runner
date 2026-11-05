@@ -1,70 +1,31 @@
-# Nervous System
+# nervous_system
 
-The AI system watches every run and brings in a person only where only a person can decide.
+Breadcrumb: [Top](../../../esoi/README.md) > [Intelligence](../README.md) > nervous_system
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Part of [Intelligence](../README.md)
 
-This sub-intent arises as the implementation `nervous-system:overseer` of its parent intent [`the_intelligence`](../README.md). Opportunities: A run can be watched at a fraction of the cost of the work it watches: a small model reads a digest of the run and sends one signal (proceed, redirect, answer now, escalate to deep work, escalate to a person). That opens ground the parent solution does not cover: which risks deserve a response of their own instead of one uniform treatment, which questions about a run a plain check can answer without a model, and how a step only a person may take is put before the right person with the work held until they answer.
+## Implementations
 
-## How the solutions fit together
-
-Nervous System watches every run and acts when only a person can decide. Quest Decision Requests carries that decision to the teammate it belongs to, holds the ask on the quest until it is answered and never takes the step without them.
-
-## Solutions at a glance
-
-| Solution | Handle | Entry call | Selected implementation | Metric |
+| Implementation | Handle | Purpose | Code | Selected |
 |---|---|---|---|---|
-| Quest Decision Requests | `quest-decision-requests` | `quest_ai_runner.run("quest-decision-requests")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
+| Digest-driven overseer | `nervous-system:overseer` | Builds a capped compact digest of the run, makes one structured model call with a fixed prompt and tool schema, validates the answer against the five signals, and returns proceed on any error, non-object response or unknown signal. | [`quest_ai_runner/the_intelligence/nervous_system/area.py`](area.py) | selected |
 
-## Solutions from a library
-
-- [Judgment Calls](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-decision-requests`): Decides, for one person, whether to ask, proceed or decline when the Nervous System raises a risk signal. Specializes the library `hub`.
-
-## Problems and ideals
-
-**Problems**
-
-- Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
-
-**Ideals**
-
-- Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
-
-## Metrics and their leaders
+## Metrics
 
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): leader `quest_decision_sink`, 15 of 15 cases
 
-## Where to go next
-
-- Parent intent: [Intelligence](../README.md)
-- Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
-
----
-
-## The full record
-
-### Problems
+## Problems
 
 - Decisions Not Reaching The Person (`QP3`): A step only a person on the quest may decide can be taken without them, reach the wrong teammate, or be dropped before they answer.
 
-### Ideals
+## Ideals
 
 - Trusted Autonomy (`QI3`): The AI acts first on what it may decide and brings the person exactly the decisions that are theirs.
 
-### Solutions
+## Where to go next
 
-| Solution | Handle | Selected | Metric |
-|---|---|---|---|
-| Quest Decision Requests | `quest-decision-requests` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
+- Up: [quest_ai_runner](../../README.md)
+- Intent: [Intelligence](../README.md)
+- Repository: [top README](../../../README.md)
 
-### Implementations
-
-| Implementation | Handle | Where | Sub-intent |
-|---|---|---|---|
-| Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../../the_body/internal_context/quest/client/quest_client.py) |  |
-| Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
-
-### Metrics
-
-- Escalation delivery and detail completeness (`metric-escalate-to-a-human`): `esoi run escalate_to_a_human --impl quest_decision_sink`
+*Generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*

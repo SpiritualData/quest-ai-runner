@@ -1,8 +1,8 @@
 # Quest Intents
 
-The AI works from the person's quests.
+**Vision statement:** The AI works from the person's quests.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../README.md) > Quest Intents
 
 This sub-intent arises as the implementation `quest-intents:separate_stores` of its parent intent [`the_intelligence`](../../README.md). Opportunities: A representative works across many quests, so the standing view it needs is wider than any one request: past conversations, recent context, the guidance learned from corrections, the ledger of what was asked, the predictions made and the person's long-term goal. That opens questions the parent solution does not ask: how a correction is kept in the person's own words and tracked until it is followed, how a view is held per quest, per intent and per representative without crossing scopes, how a reply is aimed at the person's end without hijacking a simple question, and which representative a request runs as, the same way in chat, tasks and background work.
 
@@ -10,38 +10,28 @@ This sub-intent arises as the implementation `quest-intents:separate_stores` of 
 
 Quest Intents keeps the person's quests and intents as the standing view every request is read against. Intuition remembers what it expected to happen so a surprise can be noticed. Long-Term Memory keeps what was said across conversations and says what bears on the request. Feedback Learning keeps what the person corrected so it guides the next answer. Quest Representatives chooses, from that view, the representative that holds each quest.
 
-## Diagram
+## One level below
 
-An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
 
-```mermaid
-flowchart LR
-    s0["Feedback Learning<br/><i>feedback-learning</i>"]
-    s1["Quest Representatives<br/><i>quest-representatives</i>"]
-    s0 --> s1
-```
+- Long-Term Memory (solution with no page of its own, its implementations are in this intent's records)
+- Guidance (solution with no page of its own, its implementations are in this intent's records)
+- Recall Recent Context (solution with no page of its own, its implementations are in this intent's records): Hands the next turn of a conversation the cards its last turns already found, so a short follow-up needs no restating.
+- Guide Toward The Long-Term Goal (solution with no page of its own, its implementations are in this intent's records): Keeps the person moving toward the end they are working for, without hijacking a simple question or nagging.
 
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Intuition | `the-intuition` | `quest_ai_runner.run("the-intuition", 'quest-id')` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
 | Long-Term Memory | `long-term-memory` | `quest_ai_runner.run("long-term-memory", ...)` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases |
-| Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
-| Quest Representatives | `quest-representatives` | `quest_ai_runner.run("quest-representatives", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
-| Scoped recent-context warm start | `recall-recent-context` | `quest_ai_runner.run("recall-recent-context", 'quest-id')` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
-| Incremental context-update feed | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | The update engine over its built-in channels (`quest_channels`) | Update-offering correctness over synthetic quest channels |
-| Context card persistence backend | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | Hosted card API repository (`quest_api`) | Card repository conformance across backends |
-| Feedback-to-guidance loop | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
-| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | `quest_ai_runner.run("guide-toward-the-long-term-goal", 'What should I work on first this week?')` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
-| Goal assignee and doability judge | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
+| Guidance | `guidance` | `quest_ai_runner.run("guidance", 'quest-id')` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
+| Recall Recent Context | `recall-recent-context` | `quest_ai_runner.run("recall-recent-context", 'quest-id')` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
+| Guide Toward The Long-Term Goal | `guide-toward-the-long-term-goal` | `quest_ai_runner.run("guide-toward-the-long-term-goal", 'What should I work on first this week?')` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
 
 ## Solutions from a library
 
-- [Intuition](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`the-intuition`): What comes to mind for a request without being asked for: cards and facts the Subconscious offers because they are close to the request, which the Mind may take or ignore. Adopted from the library `hub`.
 - [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`long-term-memory`): The retention policy and the recall over the Body's store: what the system keeps across requests, for how long, and how it is found again. Adopted from the library `hub`.
-- [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`feedback-learning`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Adopted from the library `hub`.
-- [Representatives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-representatives`): The AI personas that act for a person or a team. Specializes the library `hub`.
+- [Guidance](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`guidance`): An infrequent, longer-term nudge to the Planner, drawn from the objectives, and the context-specific criteria for what a good response is in this situation. Adopted from the library `hub`.
 
 ## Problems and ideals
 
@@ -71,7 +61,6 @@ flowchart LR
 - Parent intent: [Intelligence](../../README.md)
 - Repository: [top README](../../../../README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
-- Diagram page: [diagram.md](diagram.md)
 
 ---
 
@@ -92,35 +81,21 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Intuition | `the-intuition` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
 | Long-Term Memory | `long-term-memory` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases |
-| Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
-| Quest Representatives | `quest-representatives` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
-| Scoped recent-context warm start | `recall-recent-context` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
-| Incremental context-update feed | `feed-context-sources` | The update engine over its built-in channels (`quest_channels`) | Update-offering correctness over synthetic quest channels |
-| Context card persistence backend | `persist-cards` | Hosted card API repository (`quest_api`) | Card repository conformance across backends |
-| Feedback-to-guidance loop | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
-| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
-| Goal assignee and doability judge | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
+| Guidance | `guidance` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
+| Recall Recent Context | `recall-recent-context` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
+| Guide Toward The Long-Term Goal | `guide-toward-the-long-term-goal` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
+| Prompts without the intent frame | `guidance:none` | [quest_ai_runner/the_intelligence/proactivity/autopilot_briefs.py](../../proactivity/autopilot_briefs.py) |  |
+| Computed frame in the prompt | `guidance:frame-line` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](../../critical_thinking/area.py) |  |
+| Frame plus intent card and record drill-down | `guidance:frame-card-drilldown` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client_intents.py](../../../the_body/internal_context/quest/client/quest_client_intents.py) |  |
+| Frame plus a lazily generated quest specification | `guidance:frame-lazy-spec` | [quest_ai_runner/the_body/hands/quest_operations/tools_quest_intents.py](../../../the_body/hands/quest_operations/tools_quest_intents.py) |  |
 | Local session-file conversation store | `long-term-memory:session_file` | [quest_ai_runner/the_intelligence/higher_mind/long_term_memory/session_file_conversation_store.py](../long_term_memory/session_file_conversation_store.py) |  |
-| Universal guidance provider | `guide-by-feedback:universal` | [quest_ai_runner/the_intelligence/higher_mind/guidance/guidance_card_manager.py](../guidance/guidance_card_manager.py) |  |
-| Live ledger and provider arm | `guide-by-feedback:ledger_guidance` | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../../../../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
-| No-feedback floor | `guide-by-feedback:no_memory` | [evaluation/components/feedback_loop/impls/no_memory.py](../../../../evaluation/components/feedback_loop/impls/no_memory.py) |  |
-| Show-everything baseline | `guide-by-feedback:dump_all` | [evaluation/components/feedback_loop/impls/dump_all.py](../../../../evaluation/components/feedback_loop/impls/dump_all.py) |  |
-| File-backed feedback ledger | `feedback-learning:ledger` | [quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py](../../../the_consciousness/feedback_learning/feedback_ledger.py) |  |
 | Lexical-gated scoped file store | `recall-recent-context:file` | [quest_ai_runner/the_intelligence/higher_mind/long_term_memory/recent_context.py](../long_term_memory/recent_context.py) |  |
-| Atomic file prediction store | `the-intuition:file` | [quest_ai_runner/the_intelligence/subconscious/intuition/anticipation_store.py](../../subconscious/intuition/anticipation_store.py) |  |
-| In-memory reference store | `the-intuition:memory_store` | [evaluation/components/persist_predictions/impls/memory_store.py](../../../../evaluation/components/persist_predictions/impls/memory_store.py) |  |
-| Persona resolver precedence for queued tasks (today) | `quest-representatives:persona_resolver_precedence` | [quest_ai_runner/the_consciousness/representatives/personas.py](../../../the_consciousness/representatives/personas.py) |  |
-| Host chat classifier among assigned representatives (today, in the host) | `quest-representatives:host_assigned_classifier` |  |  |
-| A thread keeps its representative (proposed) | `quest-representatives:thread_holds_its_rep` |  |  |
-| Fit by role, assigned quests and intent branch (proposed) | `quest-representatives:fit_by_role_and_quests` |  |  |
-| Ask the person on an equal fit (proposed) | `quest-representatives:ask_the_person` |  |  |
 | Reply voice before the long-term guidance section (prior) | `guide-toward-the-long-term-goal:reply_voice` |  |  |
 | Reply voice plus a long-term guidance directive (proposed) | `guide-toward-the-long-term-goal:guided` |  |  |
 | Plain answer only (floor) | `guide-toward-the-long-term-goal:no_nudge` |  |  |
@@ -135,3 +110,6 @@ flowchart LR
 - Prediction store contract pass rate (`metric-persist-predictions`): `esoi run persist_predictions --impl file_store`
 - Representative choice accuracy and thread consistency (`metric-select-a-rep`): `esoi run select_a_rep --impl persona_resolver_precedence`
 - Two-sided long-term guidance (`metric-guide-toward-the-long-term-goal`): `esoi run proactive_guidance --impl guided_v2`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

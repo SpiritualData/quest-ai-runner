@@ -1,8 +1,8 @@
-# Selecting the context a planner reads
+# Chosen Context
 
-The planner reads the material the request concerns, however the request is worded.
+**Vision statement:** The planner reads the material the request concerns, however the request is worded.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../README.md) > [Subconscious](../README.md) > Chosen Context
 
 This sub-intent arises as the implementation `choose-the-context:per_lane_assembly` of its parent intent [`subconscious`](../README.md). Opportunities: Which material a planner reads is a retrieval problem with its own alternatives and its own public evidence, which the parent solution does not weigh: lexical, vector and hybrid rankers over a person's cards, files and conversations, a ranker per representative, references that must resolve to current text without failing a turn, and one ranking that holds the cards and the specification records of a repository together so a run also sees when no solution covers its request. Public benchmarks of similar rankers are shown beside the measurements made here.
 
@@ -10,11 +10,23 @@ This sub-intent arises as the implementation `choose-the-context:per_lane_assemb
 
 Context Retriever picks the cards, files and conversations that bear on a request, however it is worded, by ranking them and keeping what is confident enough.
 
+## One level below
+
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
+
+- Context Retriever (solution with no page of its own, its implementations are in this intent's records)
+- Index By Meaning (solution with no page of its own, its implementations are in this intent's records): Helps a person or a run find the card or note they need by meaning, including when they ask in different words.
+- Spec Selection (solution with no page of its own, its implementations are in this intent's records): Choose, from an ESOI specification index, the few records a new request concerns and their linked records, so the work starts from the intent that applies.
+- Search Cards And Specs (solution with no page of its own, its implementations are in this intent's records): Help each run see the cards and specification records it concerns in one ranked set, and see when no solution covers its request yet.
+
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
 | Context Retriever | `context-retriever` | `quest_ai_runner.run("context-retriever", 'What should I work on first this week?')` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Index By Meaning | `index-by-meaning` | `quest_ai_runner.run("index-by-meaning", 'rust release')` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
+| Spec Selection | `spec-selection` | `esoi spec index --out FILE` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Search Cards And Specs | `search-cards-and-specs` | no entry declared | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 
 ## Solutions from a library
 
@@ -42,11 +54,17 @@ Context Retriever picks the cards, files and conversations that bear on a reques
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
 | Context Retriever | `context-retriever` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Index By Meaning | `index-by-meaning` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
+| Spec Selection | `spec-selection` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Search Cards And Specs | `search-cards-and-specs` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
+| Lexical TF-IDF, optional vector search, parallel batched model judging | `spec-selection:lexical-vector-llm` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](../../critical_thinking/esoi_application/spec_selection.py) |  |
+| Lexical top few only | `spec-selection:lexical-only` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](../../critical_thinking/esoi_application/spec_selection.py) |  |
+| Lexical vector gated | `spec-selection:lexical-vector-gated` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](../../critical_thinking/esoi_application/spec_selection.py) |  |
 | Field-weighted keyword arm | `context-retriever:idf_docstrings` | [evaluation/components/context_selection/impls/idf_docstrings.py](../../../../evaluation/components/context_selection/impls/idf_docstrings.py) |  |
 | Docstring ablation of the keyword arm | `context-retriever:idf_paths_only` | [evaluation/components/context_selection/impls/idf_paths_only.py](../../../../evaluation/components/context_selection/impls/idf_paths_only.py) |  |
 | Blind text search | `context-retriever:blind_grep` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/retrieval_assembler.py](retrieval_assembler.py) |  |
@@ -64,8 +82,6 @@ Context Retriever picks the cards, files and conversations that bear on a reques
 | Offline warm-hint builder | `context-retriever:idf_hint` | [evaluation/components/claude_code_ab/impls/idf_hint.py](../../../../evaluation/components/claude_code_ab/impls/idf_hint.py) |  |
 | Agent without hint | `context-retriever:cold_claude` | [evaluation/components/claude_code_ab/impls/cold_claude.py](../../../../evaluation/components/claude_code_ab/impls/cold_claude.py) |  |
 | Agent with hint | `context-retriever:warm_claude` | [evaluation/components/claude_code_ab/impls/warm_claude.py](../../../../evaluation/components/claude_code_ab/impls/warm_claude.py) |  |
-| Registry of built-in and host resolvers | `quest-context:note` | [quest_ai_runner/the_body/configuration/config_assembler.py](../../../the_body/configuration/config_assembler.py) |  |
-| Production registry under scripted host resolvers | `quest-context:card_resolvers` | [evaluation/components/resolve_references/impls/card_resolvers.py](../../../../evaluation/components/resolve_references/impls/card_resolvers.py) |  |
 | Two pipelines side by side (today) | `search-cards-and-specs:two_pipelines` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/unified_search.py](unified_search.py) |  |
 | Every record kind ranked beside cards (planned) | `search-cards-and-specs:every_record_a_view` |  |  |
 | Cards, solutions and problems ranked; intents, ideals and metrics reached through links | `search-cards-and-specs:solutions_and_problems_with_links` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/unified_search.py](unified_search.py) |  |
@@ -90,3 +106,6 @@ Context Retriever picks the cards, files and conversations that bear on a reques
 - Pointer-resolution safety over offline cases (`metric-resolve-references`): `esoi run resolve_references --impl card_resolvers`
 - Mixed card and specification selection, with both existing selection metrics held (`metric-search-cards-and-specs`): `esoi run context_and_specs --impl solutions_and_problems_with_links; esoi run spec_selection --impl solutions_and_problems_with_links; esoi run context_selection --impl solutions_and_problems_with_links`
 - Semantic recall and query latency on the synthetic handbook (`metric-index-by-meaning`): `esoi run vector_recall --impl qdrant_embedded`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

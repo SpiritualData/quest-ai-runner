@@ -1,8 +1,8 @@
 # Quest AI Runner
 
-A Quest user's AI system continuously evolves to help the user continuously evolve towards their intents.
+**Vision statement:** A Quest user's AI system continuously evolves to help the user continuously evolve towards their intents.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: Top
 
 Opportunities: Other products that need an AI which works from a person's own goals and material could reuse this engine, so the grounding, the standard for delegated work and the scope fences are built once and shared.
 
@@ -16,100 +16,43 @@ An arrow runs from the solution that provides to the solution that builds on it;
 
 ```mermaid
 flowchart LR
-    s0["Integrity<br/><i>system-integrity</i>"]
-    s1["Intake Sources<br/><i>intake-sources</i>"]
-    s2["Nervous System<br/><i>nervous-system</i>"]
-    s3["Vendor Model Caller<br/><i>vendor-model-caller</i>"]
-    s4["Science<br/><i>the-science</i>"]
-    s5["Critical Thinking<br/><i>critical-thinking</i>"]
-    s6["Goal Completion<br/><i>goal-completion</i>"]
-    s7["Response Quality<br/><i>response-quality</i>"]
-    s8["guidance"]
-    s9["Tools<br/><i>the-tools</i>"]
-    s10["Quest Context<br/><i>quest-context</i>"]
-    s11["Quest Requests<br/><i>quest-requests</i>"]
-    s12["Quest Self<br/><i>quest-self</i>"]
-    s13["Quest Body<br/><i>quest-body</i>"]
-    s14["Image description for grounding<br/><i>describe-an-attachment</i>"]
-    s15["Request intake<br/><i>take-in-the-world</i>"]
-    s16["Context choice<br/><i>choose-the-context</i>"]
-    s0 --> s12
-    s0 --> s15
-    s1 --> s9
-    s1 --> s15
-    s2 --> s12
-    s3 --> s2
-    s3 --> s9
-    s3 --> s11
-    s3 --> s12
-    s3 --> s14
-    s4 --> s12
-    s5 --> s12
-    s6 --> s2
-    s6 --> s5
-    s7 --> s0
-    s7 --> s5
-    s8 --> s5
-    s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
-    s10 -->|"Evidence from the person's own sources, with where each item came from"| s15
-    s10 -->|"Evidence from the person's own sources, with where each item came from"| s16
-    s11 -->|"The request taken in once and its outcome reported"| s5
-    s11 -->|"The request taken in once and its outcome reported"| s12
-    s12 -->|"The assistant's answer and the changes it made"| s9
-    s13 --> s8
-    s13 --> s11
-    s13 --> s12
+    s0["Quest Self<br/><i>quest-self</i>"]
+    s1["Quest Body<br/><i>quest-body</i>"]
+    s2["Intelligence<br/><i>the-intelligence</i>"]
+    s3["World<br/><i>the-world</i>"]
+    s4["Quest Consciousness<br/><i>quest-consciousness</i>"]
+    s1 --> s0
+    s2 --> s0
+    s3 --> s0
+    s4 -->|"The request taken in, handled by a representative and answered"| s0
 ```
+
+## One level below
+
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
+
+- [Quest Body](../quest_ai_runner/the_body/README.md) (sub-intent): Quest is the AI's body.
+- [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md) (sub-intent): Each Quest user grows with an AI aligned to them.
+- [Intelligence](../quest_ai_runner/the_intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
+- [Quest Self](../quest_ai_runner/the_self/README.md) (sub-intent): Each Quest user meets one whole assistant.
+- [World](../quest_ai_runner/the_world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.
 
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Integrity | `system-integrity` | `quest_ai_runner.run("system-integrity", ['examplevendor'])` | Apply the evolvable-structure library (`structure-library`) | Parts selected by measurement, Hub of hubs, Hub of hubs, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Public surface conformance on fixture inputs, Example runnability on an empty environment, Configuration precedence and validation correctness, Command-line parsing, refusal and output correctness, Documentation coverage and voice conformance, Correct terminal helper verdicts within the wait a person accepts, Offline test collection, Secret detection and placeholder tolerance, Right solution missed without the tag |
-| Intake Sources | `intake-sources` | `quest_ai_runner.run("intake-sources")` | MCP gateway bridge transport (`openclaw`) | Channel transport conformance to the gateway wire contract |
-| Nervous System | `nervous-system` | `quest_ai_runner.run("nervous-system", 'delete the old backup folder')` | Digest-driven overseer (`overseer`) | Overseer digest evidence and signal correctness on labelled scenarios |
-| Vendor Model Caller | `vendor-model-caller` | `quest_ai_runner.run("vendor-model-caller", ...)` | Prefix-routing multi-provider (`multi_provider`) | Provider routing, fallback, retry and cost correctness |
-| Science | `the-science` | `quest_ai_runner.run("the-science", 'meditation and attention')` | Web research with the answer's support check (today) (`web_with_support_check`) | Supported and calibrated answers to world questions |
-| Intelligence | `the-intelligence` | no entry declared | `composition` | none yet |
-| World | `the-world` | no entry declared | `composition` | none yet |
-| Critical Thinking | `critical-thinking` | `quest_ai_runner.run("critical-thinking", ...)` | Code-enforced before and after on deep runs only (today) (`deep_runs_only`) | Requests held to their ESOI metric by code |
-| Goal Completion | `goal-completion` | `quest_ai_runner.run("goal-completion", ...)` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
-| Response Quality | `response-quality` | `quest_ai_runner.run("response-quality", 'See https://example.org/a for details.')` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
-| Higher Mind | `higher-mind` | no entry declared | none selected | none yet |
-| Guidance | `guidance` | `quest_ai_runner.run("guidance", 'quest-id')` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
-| Tools | `the-tools` | `quest_ai_runner.run("the-tools", 'Send the launch note to the whole team')` | Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`) | Combined world score |
-| Quest Context | `quest-context` | `quest_ai_runner.run("quest-context", 'NOTES.md')` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases |
-| Quest Requests | `quest-requests` | `quest_ai_runner.run("quest-requests", 'team-1')` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
 | Quest Self | `quest-self` | `quest_ai_runner.run("quest-self", 'What should I work on first this week?')` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 | Quest Body | `quest-body` | `quest_ai_runner.run("quest-body", 'quest-id')` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
+| Intelligence | `the-intelligence` | no entry declared | `composition` | none yet |
+| World | `the-world` | no entry declared | `composition` | none yet |
 | Quest Consciousness | `quest-consciousness` | no entry declared | `composition` | Quest Consciousness on Quest cases |
-| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
-| Image description for grounding | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
-| Request intake | `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
-| Semantic vector index | `index-by-meaning` | `quest_ai_runner.run("index-by-meaning", 'rust release')` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
-| Context choice | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
-| Intent specification selection | `spec-selection` | `esoi spec index --out FILE` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
-| Unified card and specification search | `search-cards-and-specs` | no entry declared | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 
 ## Solutions from a library
 
-- [Integrity](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_self/README.md) (`system-integrity`): Keeps the hub generic: claims match evidence, records match code, and only failures that are hidden are reported. Adopted from the library `hub`.
-- [Intake Sources](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`intake-sources`): Declares where this system's requests come from (a chat, a task queue, a place where meeting action items are written) and reads the requests waiting at each, handing each over once. Adopted from the library `hub`.
-- [Nervous System](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`nervous-system`): Watches a run and raises at most one small risk signal, with a severity and a reason, when a step cannot be undone or belongs to a person, and leaves ordinary work alone. Adopted from the library `hub`.
-- [Vendor Model Caller](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`vendor-model-caller`): Plans, answers and lists models for one vendor, or for several through a router that steps to the next model when a provider fails. Adopted from the library `hub`.
-- [Science](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/README.md) (`the-science`): Looks up what public research says and returns observations a reader can cite. Adopted from the library `hub`.
-- [Intelligence](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`the-intelligence`): How information is processed for one request: the long view is read, the request becomes a measurable goal, the Mind plans and writes the response from what the Subconscious and the World bring, and the result is checked for goal completion and response quality. Adopted from the library `hub`.
-- [World](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`the-world`): Awareness of the outside and interaction with it: public science, the tools of the outside, the models the hub asks, and how current the hub's own research is. Adopted from the library `hub`.
-- [Critical Thinking](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`critical-thinking`): Turns a request into a measurable target, and holds the result to it. Adopted from the library `hub`.
-- [Goal Completion](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`goal-completion`): Says whether the goal condition of a request or sub-goal was met, against the done-standard its metric names. Adopted from the library `hub`.
-- [Response Quality](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`response-quality`): Judges a response against a quality profile: a named set of criteria with weights and target values. Adopted from the library `hub`.
-- [Higher Mind](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`higher-mind`): The long view across requests: Long-Term Memory retains and recalls what happened, Objectives holds the live hierarchy of intents and goals, and Guidance gives the Planner an infrequent longer-term nudge. Adopted from the library `hub`.
-- [Guidance](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`guidance`): An infrequent, longer-term nudge to the Planner, drawn from the objectives and memory, and the context-specific criteria for what a good response is in this situation. Adopted from the library `hub`.
-- [Tools](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/README.md) (`the-tools`): What the AI can use or do outside the system, grouped by category. Adopted from the library `hub`.
-- [Internal Context](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_body/README.md) (`quest-context`): Declares where the system's data lives and which World tool reads it. Specializes the library `hub`.
-- [Request Intake](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-requests`): Takes in the requests people make from every source Body declares and attaches each to the person who made it, so the rest of the flow can ask for that person's Representative. Specializes the library `hub`.
 - [The Self](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-self`): Keeps the five kinds of part working as one whole: the Assembler builds them and reports the coverage, Integrity keeps the whole honest and generic and audits the run record, and Role Understanding says what each part is for. Specializes the library `hub`.
 - [Body](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-body`): The AI system's form and internal context. Specializes the library `hub`.
+- [Intelligence](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`the-intelligence`): How information is processed for one request: the long view is read, the request becomes a measurable goal, the Mind plans and writes the response from what the Subconscious and the World bring, and the result is checked for goal completion and response quality. Adopted from the library `hub`.
+- [World](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`the-world`): Awareness of the outside and interaction with it: public science, the tools of the outside, the models the hub asks, and how current the hub's own research is. Adopted from the library `hub`.
 - [Consciousness](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-consciousness`): The humans who interact with the system: AI Representatives act for a person, Prioritization turns the person's priorities into ESOI, Judgment Calls decide when to ask that person, and Feedback Learning applies the person's feedback to specs and metrics. Specializes the library `hub`.
 
 ## Problems and ideals
@@ -147,14 +90,14 @@ flowchart LR
 
 ## Where to go next
 
-- Sub-intent: [Quest Body](../quest_ai_runner/the_body/README.md) (Quest is the AI's body.)
-- Sub-intent: [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md) (Each Quest user grows with an AI aligned to them.)
-- Sub-intent: [Intelligence](../quest_ai_runner/the_intelligence/README.md) (AI requests are handled in the best way possible, given all relevant information.)
-- Sub-intent: [Quest Self](../quest_ai_runner/the_self/README.md) (Each Quest user meets one whole assistant.)
-- Sub-intent: [World](../quest_ai_runner/the_world/README.md) (The AI system optimally learns and interacts with the world outside of it.)
+- Sub-intent: [Quest Body](../quest_ai_runner/the_body/README.md)
+- Sub-intent: [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md)
+- Sub-intent: [Intelligence](../quest_ai_runner/the_intelligence/README.md)
+- Sub-intent: [Quest Self](../quest_ai_runner/the_self/README.md)
+- Sub-intent: [World](../quest_ai_runner/the_world/README.md)
 - Repository: [top README](../README.md)
-- Records beside the code: [quest_ai_runner](../quest_ai_runner/README.md), [evaluation/components/choose_a_model_tier/impls](../evaluation/components/choose_a_model_tier/impls/README.md), [evaluation/components/claim_reach/impls](../evaluation/components/claim_reach/impls/README.md), [evaluation/components/deep_run/impls](../evaluation/components/deep_run/impls/README.md), [evaluation/components/deep_runner/impls](../evaluation/components/deep_runner/impls/README.md), [evaluation/components/evolve_by_metric/impls](../evaluation/components/evolve_by_metric/impls/README.md), [evaluation/components/hand_off_a_goal/impls](../evaluation/components/hand_off_a_goal/impls/README.md), [evaluation/components/hub_of_hubs/impls](../evaluation/components/hub_of_hubs/impls/README.md), [evaluation/components/know_the_world/impls](../evaluation/components/know_the_world/impls/README.md), [evaluation/components/model_providers/impls](../evaluation/components/model_providers/impls/README.md), [evaluation/components/overseer_signals/impls](../evaluation/components/overseer_signals/impls/README.md), [evaluation/components/quest_ops/impls](../evaluation/components/quest_ops/impls/README.md), [evaluation/components/talk_over_a_channel/impls](../evaluation/components/talk_over_a_channel/impls/README.md), [evaluation/components/track_usage_and_cost/impls](../evaluation/components/track_usage_and_cost/impls/README.md), [evaluation/components/write_files/impls](../evaluation/components/write_files/impls/README.md), [evaluation/components/write_through_mcp/impls](../evaluation/components/write_through_mcp/impls/README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records beside the code: [quest_ai_runner](../quest_ai_runner/README.md), [evaluation/components/chat_quality/impls](../evaluation/components/chat_quality/impls/README.md), [evaluation/components/choose_a_model_tier/impls](../evaluation/components/choose_a_model_tier/impls/README.md), [evaluation/components/claim_reach/impls](../evaluation/components/claim_reach/impls/README.md), [evaluation/components/deep_run/impls](../evaluation/components/deep_run/impls/README.md), [evaluation/components/deep_runner/impls](../evaluation/components/deep_runner/impls/README.md), [evaluation/components/evolve_by_metric/impls](../evaluation/components/evolve_by_metric/impls/README.md), [evaluation/components/hand_off_a_goal/impls](../evaluation/components/hand_off_a_goal/impls/README.md), [evaluation/components/hub_of_hubs/impls](../evaluation/components/hub_of_hubs/impls/README.md), [evaluation/components/know_the_world/impls](../evaluation/components/know_the_world/impls/README.md), [evaluation/components/model_providers/impls](../evaluation/components/model_providers/impls/README.md), [evaluation/components/overseer_signals/impls](../evaluation/components/overseer_signals/impls/README.md), [evaluation/components/quest_ops/impls](../evaluation/components/quest_ops/impls/README.md), [evaluation/components/talk_over_a_channel/impls](../evaluation/components/talk_over_a_channel/impls/README.md), [evaluation/components/track_usage_and_cost/impls](../evaluation/components/track_usage_and_cost/impls/README.md), [evaluation/components/write_files/impls](../evaluation/components/write_files/impls/README.md), [evaluation/components/write_through_mcp/impls](../evaluation/components/write_through_mcp/impls/README.md)
+- Records: [intent.csv](intent.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
 ---
@@ -182,31 +125,11 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Integrity | `system-integrity` | Apply the evolvable-structure library (`structure-library`) | Parts selected by measurement, Hub of hubs, Hub of hubs, Correct selection decisions over the evolve-by-metric cases, Intents whose solutions one paragraph and one diagram explain as the code builds them, Public surface conformance on fixture inputs, Example runnability on an empty environment, Configuration precedence and validation correctness, Command-line parsing, refusal and output correctness, Documentation coverage and voice conformance, Correct terminal helper verdicts within the wait a person accepts, Offline test collection, Secret detection and placeholder tolerance, Right solution missed without the tag |
-| Intake Sources | `intake-sources` | MCP gateway bridge transport (`openclaw`) | Channel transport conformance to the gateway wire contract |
-| Nervous System | `nervous-system` | Digest-driven overseer (`overseer`) | Overseer digest evidence and signal correctness on labelled scenarios |
-| Vendor Model Caller | `vendor-model-caller` | Prefix-routing multi-provider (`multi_provider`) | Provider routing, fallback, retry and cost correctness |
-| Science | `the-science` | Web research with the answer's support check (today) (`web_with_support_check`) | Supported and calibrated answers to world questions |
-| Intelligence | `the-intelligence` | `composition` | none yet |
-| World | `the-world` | `composition` | none yet |
-| Critical Thinking | `critical-thinking` | Code-enforced before and after on deep runs only (today) (`deep_runs_only`) | Requests held to their ESOI metric by code |
-| Goal Completion | `goal-completion` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
-| Response Quality | `response-quality` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
-| Higher Mind | `higher-mind` | none selected | none yet |
-| Guidance | `guidance` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
-| Tools | `the-tools` | Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`) | Combined world score |
-| Quest Context | `quest-context` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases |
-| Quest Requests | `quest-requests` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
 | Quest Self | `quest-self` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 | Quest Body | `quest-body` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
+| Intelligence | `the-intelligence` | `composition` | none yet |
+| World | `the-world` | `composition` | none yet |
 | Quest Consciousness | `quest-consciousness` | `composition` | Quest Consciousness on Quest cases |
-| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
-| Image description for grounding | `describe-an-attachment` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
-| Request intake | `take-in-the-world` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
-| Semantic vector index | `index-by-meaning` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
-| Context choice | `choose-the-context` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
-| Intent specification selection | `spec-selection` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
-| Unified card and specification search | `search-cards-and-specs` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 
 ### Implementations
 
@@ -215,30 +138,18 @@ flowchart LR
 | Per-consumer worker | `quest-self:per-consumer-worker` |  |  |
 | Agent framework with Quest glue | `quest-self:agent-framework-with-quest-glue` |  |  |
 | Deep runner only | `quest-self:deep-runner-only` |  |  |
-| Carried message stream per request (proposed) | `the-mind:append_only_stream` |  |  |
-| Carried stream with compaction (proposed) | `the-mind:stream_with_compaction` |  |  |
-| Small-model judge of every candidate (proposed) | `the-subconscious:goal_judge` |  |  |
-| Score thresholds per source (proposed) | `the-subconscious:score_thresholds` |  |  |
-| Thresholds with a judge on the borderline (proposed) | `the-subconscious:thresholds_then_judge` |  |  |
-| Host research sources first, then the web (proposed) | `the-science:research_sources_first` |  |  |
-| Findings weighed by a host's evidence-estimation service (proposed) | `the-science:evidence_weighted` |  |  |
-| Read back what a change touched (proposed) | `quest-account-truth:read_after_write` |  |  |
-| A live read behind every state claim (proposed) | `quest-account-truth:live_read_only` |  |  |
-| Maintained view per quest only (proposed) | `quest-intents:per_quest_note` |  |  |
-| Periodic reflection on the best tier (proposed) | `quest-intents:periodic_reflection` |  |  |
-| Outcome precedents surfaced at admission (proposed) | `the-subconscious:outcome_precedents` |  |  |
-| Overseer that asks questions of fact (proposed) | `nervous-system:fact_questions` |  |  |
-| Every request measured by code (proposed) | `critical-thinking:every_request_measured` |  |  |
-| Measured, proposed and answered (proposed) | `critical-thinking:measured_proposed_and_answered` |  |  |
-| Per-risk response chosen by metric (proposed) | `nervous-system:per_risk_response` |  |  |
-| One view per intent, cascading down (proposed) | `quest-intents:per_intent_cascade` |  |  |
-| One view per representative across its assigned quests, placed in the hierarchy (proposed, recommended) | `quest-intents:per_rep_assigned_view` |  |  |
-| Registry plus per-call ablation against the owner metric (proposed) | `model-plumbing:spec_registry_ablation` |  |  |
 | quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](../quest_ai_runner/the_self/respond.py) | [the_self](the_self/README.md) |
 | Quest HTTP client from the environment | `quest-body:quest_client` | [quest_ai_runner/the_body/area_body.py](../quest_ai_runner/the_body/area_body.py) | [the_body](the_body/README.md) |
 | Composition | `quest-consciousness:composition` | [quest_ai_runner/the_consciousness/flow.py](../quest_ai_runner/the_consciousness/flow.py) | [the_consciousness](the_consciousness/README.md) |
 | Composition | `the-intelligence:composition` | [quest_ai_runner/the_intelligence/flow.py](../quest_ai_runner/the_intelligence/flow.py) | [the_intelligence](the_intelligence/README.md) |
 | Composition | `the-world:composition` | [quest_ai_runner/the_world/flow.py](../quest_ai_runner/the_world/flow.py) | [the_world](the_world/README.md) |
+| QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | [quest_ai_runner/the_intelligence/mind/orchestrator.py](../quest_ai_runner/the_intelligence/mind/orchestrator.py) |  |
+| Scripted ideal planner (offline) | `quest-self:reference_script` |  |  |
+| Rules only, no model (floor) | `quest-self:rules_only` |  |  |
+| One turn of the orchestrator over the model | `quest-self:orchestrator_turn` | [quest_ai_runner/the_intelligence/mind/area_mind.py](../quest_ai_runner/the_intelligence/mind/area_mind.py) |  |
+| The shipped path as one call | `quest-self:shipped_path` | [quest_ai_runner/the_intelligence/mind/area_mind.py](../quest_ai_runner/the_intelligence/mind/area_mind.py) |  |
+| Live chat on a disposable world | `quest-self:dev_quest_chat` | [evaluation/components/chat_quality/impls/dev_quest_chat.py](../evaluation/components/chat_quality/impls/dev_quest_chat.py) |  |
+| Offline metric validity check | `quest-self:reference_replies` | [evaluation/components/chat_quality/impls/reference_replies.py](../evaluation/components/chat_quality/impls/reference_replies.py) |  |
 | Live selection evaluation arm | `model-tier-chooser:qar_selection` | [evaluation/components/choose_a_model_tier/impls/qar_selection.py](../evaluation/components/choose_a_model_tier/impls/qar_selection.py) |  |
 | Scripted ideal decisions, no model call (offline) | `the-tools:scripted_ideal` | [evaluation/components/claim_reach/impls/scripted_ideal.py](../evaluation/components/claim_reach/impls/scripted_ideal.py) |  |
 | Rules only, no model (floor) | `the-tools:rules_only` | [evaluation/components/claim_reach/impls/rules_only.py](../evaluation/components/claim_reach/impls/rules_only.py) |  |
@@ -276,3 +187,6 @@ flowchart LR
 - Combined world score (`metric-claim-reach`): `esoi run claim_reach --impl scripted_ideal`
 - Ways in that pass their own metric (`metric-take-in-the-world`): `none`
 - Parity of Quest operations across access points (`metric-quest-operations-parity`): `none`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

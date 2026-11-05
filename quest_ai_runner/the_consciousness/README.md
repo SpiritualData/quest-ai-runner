@@ -1,8 +1,8 @@
 # Quest Consciousness
 
-Each Quest user grows with an AI aligned to them.
+**Vision statement:** Each Quest user grows with an AI aligned to them.
 
-*ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
+Breadcrumb: [Top](../../esoi/README.md) > Quest Consciousness
 
 This sub-intent arises as the implementation `quest-consciousness:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Aligning an AI to a person is half of helping them; the other half is helping the person's own intents move, which no part of the hub's Consciousness does for them.
 
@@ -10,11 +10,51 @@ This sub-intent arises as the implementation `quest-consciousness:composition` o
 
 Quest Consciousness is where the assistant adapts to the person it works for and helps them move toward their intents. Quest Requests takes in what the person asks, from every Quest surface, once. Quest Representatives gives each request to the representative that fits it. Quest Decision Requests carries a decision that only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected so it guides later work. Intent Evolution then suggests the option most likely to work for the person's intents, or an experiment when the best option is not yet known.
 
+## Diagram
+
+An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
+
+```mermaid
+flowchart LR
+    s0["Quest Requests<br/><i>quest-requests</i>"]
+    s1["Quest Representatives<br/><i>quest-representatives</i>"]
+    s2["Quest Decision Requests<br/><i>quest-decision-requests</i>"]
+    s3["Feedback Learning<br/><i>feedback-learning</i>"]
+    s0 -->|"The request taken in once and its outcome reported"| s1
+    s2 -->|"A decision-request on the quest, and its answer when it comes"| s1
+    s3 --> s1
+```
+
+## One level below
+
+This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
+
+- [Quest Requests](request_intake/README.md) (sub-intent): Every request made in Quest is taken in once by the same AI.
+- Quest Representatives (solution with no page of its own, its implementations are in this intent's records): Put each request in the hands of the representative that fits it.
+- Quest Decision Requests (solution with no page of its own, its implementations are in this intent's records): Make a decision reach the person it belongs to.
+- Intent Evolution (solution with no page of its own, its implementations are in this intent's records): Help each Quest user discover what works for their intents.
+- Hand Off A Goal (solution with no page of its own, its implementations are in this intent's records): Gives a person the verdicts on who a new goal belongs to and whether an AI representative can take it over at a cost and delay that its metric accepts.
+- Guide By Feedback (solution with no page of its own, its implementations are in this intent's records): Help the assistant stop repeating a mistake a person has already corrected, so they only have to say it once.
+- [Feedback Learning](feedback_learning/README.md) (solution with implementations)
+
 ## Solutions at a glance
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
+| Quest Requests | `quest-requests` | `quest_ai_runner.run("quest-requests", 'team-1')` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
+| Quest Representatives | `quest-representatives` | `quest_ai_runner.run("quest-representatives", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
+| Quest Decision Requests | `quest-decision-requests` | `quest_ai_runner.run("quest-decision-requests")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 | Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | none selected | Intent evolution: the most likely option or a checkable experiment |
+| Hand Off A Goal | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
+| Guide By Feedback | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
+
+## Solutions from a library
+
+- [Request Intake](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-requests`): Takes in the requests people make from every source Body declares and attaches each to the person who made it, so the rest of the flow can ask for that person's Representative. Specializes the library `hub`.
+- [Representatives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-representatives`): The AI personas that act for a person or a team. Specializes the library `hub`.
+- [Judgment Calls](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-decision-requests`): Decides, for one person, whether to ask, proceed or decline when the Nervous System raises a risk signal. Specializes the library `hub`.
+- [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`feedback-learning`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Adopted from the library `hub`.
 
 ## Problems and ideals
 
@@ -33,11 +73,12 @@ Quest Consciousness is where the assistant adapts to the person it works for and
 
 ## Where to go next
 
-- Sub-intent: [Quest Requests](request_intake/README.md) (Every request made in Quest is taken in once by the same AI.)
+- Sub-intent: [Quest Requests](request_intake/README.md)
 - Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
-- Records beside the code: [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
+- Records beside the code: [quest_ai_runner/the_consciousness/feedback_learning](feedback_learning/README.md), [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Diagram page: [diagram.md](diagram.md)
 
 ---
 
@@ -55,19 +96,42 @@ Quest Consciousness is where the assistant adapts to the person it works for and
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
+| Quest Requests | `quest-requests` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
+| Quest Representatives | `quest-representatives` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
+| Quest Decision Requests | `quest-decision-requests` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 | Intent Evolution | `intent-evolution` | none selected | Intent evolution: the most likely option or a checkable experiment |
+| Hand Off A Goal | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
+| Guide By Feedback | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Task poller and claimer | `quest-requests:poller` | [quest_ai_runner/the_consciousness/request_intake/poller.py](request_intake/poller.py) |  |
+| Offline lifecycle harness | `quest-requests:qar_runner` | [quest_ai_runner/the_body/area_body.py](../the_body/area_body.py) |  |
+| Two small model verdicts when a goal is created (today) | `hand-off-a-goal:model_judge` | [quest_ai_runner/the_body/area_body.py](../the_body/area_body.py) |  |
+| Task poller and claimer | `quest-requests:poller` | [quest_ai_runner/the_consciousness/request_intake/poller.py](request_intake/poller.py) | [request_intake](request_intake/README.md) |
 | Single-task executor | `quest-requests:executor` | [quest_ai_runner/the_consciousness/request_intake/executor.py](request_intake/executor.py) |  |
 | Shared lane entry point | `quest-requests:lane` | [quest_ai_runner/the_consciousness/request_intake/lane.py](request_intake/lane.py) |  |
-| Channels, terminal and package as ways in | `take-in-the-world:ways_in` | [quest_ai_runner/the_consciousness/ways_in.py](ways_in.py) | [request_intake](request_intake/README.md) |
+| Universal guidance provider | `guide-by-feedback:universal` | [quest_ai_runner/the_intelligence/higher_mind/guidance/guidance_card_manager.py](../the_intelligence/higher_mind/guidance/guidance_card_manager.py) |  |
+| Live ledger and provider arm | `guide-by-feedback:ledger_guidance` | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
+| No-feedback floor | `guide-by-feedback:no_memory` | [evaluation/components/feedback_loop/impls/no_memory.py](../../evaluation/components/feedback_loop/impls/no_memory.py) |  |
+| Show-everything baseline | `guide-by-feedback:dump_all` | [evaluation/components/feedback_loop/impls/dump_all.py](../../evaluation/components/feedback_loop/impls/dump_all.py) |  |
+| Host chat classifier among assigned representatives (today, in the host) | `quest-representatives:host_assigned_classifier` |  |  |
+| A thread keeps its representative (proposed) | `quest-representatives:thread_holds_its_rep` |  |  |
+| Fit by role, assigned quests and intent branch (proposed) | `quest-representatives:fit_by_role_and_quests` |  |  |
+| Ask the person on an equal fit (proposed) | `quest-representatives:ask_the_person` |  |  |
+| Work-folder sync | `quest-requests:quest_folder_sync` | [quest_ai_runner/the_intelligence/higher_mind/objectives/quest_folder_sync.py](../the_intelligence/higher_mind/objectives/quest_folder_sync.py) |  |
+| Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../the_body/internal_context/quest/client/quest_client.py) |  |
+| Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
+| File-backed feedback ledger | `feedback-learning:ledger` | [quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py](feedback_learning/feedback_ledger.py) |  |
 | Configured persona resolver | `quest-requests:personas` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
+| Persona resolver precedence for queued tasks (today) | `quest-representatives:persona_resolver_precedence` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
 
 ### Metrics
 
 - Intent evolution: the most likely option or a checkable experiment (`metric-intent-evolution`): `none`
 - Quest Consciousness on Quest cases (`metric-quest-consciousness`): `none`
+
+
+*Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
