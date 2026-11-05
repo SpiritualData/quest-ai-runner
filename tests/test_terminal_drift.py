@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from hubofhubs.terminal import strings, trail
+from hubofhubs.the_consciousness.terminal import strings, trail
 
 import quest_ai_runner.terminal_words  # noqa: F401  (registers the Quest wording)
 

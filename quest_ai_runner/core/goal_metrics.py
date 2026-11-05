@@ -32,7 +32,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from esoi.iteration import MetricIteration
 from esoi.metric_results import MAX_METRICS, MetricLedger, MetricResult, payload_of, render_line
-from hubofhubs.act.tool_ledger import ToolOutcome, changed_something
+from hubofhubs.the_body.internal_context.run_store.tool_ledger import ToolOutcome, changed_something
 
 from .runtime_settings import core_settings, process_environment
 from .tools_metric_results import TOOL_NAME, metric_ledger_from_env

@@ -7,13 +7,13 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.recall.text_sampling import keywords_from_text, select_representatives
+from hubofhubs.the_body.internal_context.card_store.text_sampling import keywords_from_text, select_representatives
 
 
 def scope_tags_for(meta: Optional[Dict[str, Any]]) -> List[str]:
     """The scope tags a turn carries: its explicit ``scope_tags``, else its quest ids as tags."""
     from .recent_context import quest_scope_key
-    from hubofhubs.recall.scope_tags import as_tag_list, union_scope_tags
+    from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import as_tag_list, union_scope_tags
     m = meta or {}
     explicit = as_tag_list(m.get("scope_tags"))
     if explicit:
@@ -128,7 +128,7 @@ class TurnContextStore:
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
     ) -> Any:
         """Return relevant past turns as context_view. Never raises."""
-        from hubofhubs.ports.context import AssembledContext
+        from hubofhubs.the_body.internal_context.context import AssembledContext
 
         try:
             cards = self._load_cards()
@@ -211,7 +211,7 @@ class TurnContextStore:
                              f"{turn_excerpt(card.get('assistant_summary', ''), self._max_assistant_chars or 400)}")
             return AssembledContext(context_view="\n".join(lines))
         except Exception:
-            from hubofhubs.ports.context import AssembledContext
+            from hubofhubs.the_body.internal_context.context import AssembledContext
             return AssembledContext()
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
@@ -284,5 +284,5 @@ def assembler_renders_turns(assembler: Any) -> bool:
     past brief twice (2026-10-06: about 289K characters each). The poller asks this before it
     renders the rep's own turns, so only one history reaches the prompt. Never raises.
     """
-    from hubofhubs.recall.composite_assembler import find_assembler
+    from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import find_assembler
     return find_assembler(assembler, lambda a: isinstance(a, TurnContextStore)) is not None

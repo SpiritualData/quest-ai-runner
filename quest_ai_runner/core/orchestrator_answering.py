@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from hubofhubs.orchestrate.answer import AnswerKit, AnsweringMixin as HubAnsweringMixin
+from hubofhubs.the_intelligence.mind.response_writer.answer import AnswerKit, AnsweringMixin as HubAnsweringMixin
 from .auxiliary_prompts import (
     REPLY_VOICE_SYSTEM,
     SYNTHESIZE_AFTER_DEEP_PROMPT,

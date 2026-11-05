@@ -13,7 +13,7 @@ from typing import Any
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
-from hubofhubs.seats import CardStore
+from hubofhubs.the_body.internal_context.card_store.interface import CardStore
 
 from .area_reason_and_answer import StepReasoning
 from .core.planner_context import CardRecall

@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
-from hubofhubs.act.mcp_client import MCPResourceResult, MCPServerSpec, MCPToolResult
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPResourceResult, MCPServerSpec, MCPToolResult
 from quest_ai_runner.act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter
 from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 

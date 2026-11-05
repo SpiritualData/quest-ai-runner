@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from esoi import implementation
 
-from hubofhubs.deep.acp_config import AcpSettings
-from hubofhubs.deep.acp_runner import AcpDeepRunner as HubAcpDeepRunner, acp_model_family  # noqa: F401
+from hubofhubs.the_world.tools.delegated_agent_sessions.acp_config import AcpSettings
+from hubofhubs.the_world.tools.delegated_agent_sessions.acp_runner import AcpDeepRunner as HubAcpDeepRunner, acp_model_family  # noqa: F401
 
 from ..adapters.acp_deep_runner_config import (  # noqa: F401  (kept importable from here)
     ALLOW,

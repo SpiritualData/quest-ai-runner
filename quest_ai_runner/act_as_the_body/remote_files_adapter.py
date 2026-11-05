@@ -247,7 +247,7 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
         Returns an ``Observation`` (a read, or an error carrying the typed ``LINK NOT READ [reason]``
         sentence for the person), or ``None`` when this server cannot read links at all or could
         not be reached, so the caller keeps the error it already has. Never raises."""
-        from hubofhubs.websearch.link_access import link_not_read_error
+        from hubofhubs.the_world.tools.web_search.link_access import link_not_read_error
         answer, _error = self.call(
             "link", {"url": url, "as_user": as_user, "full": bool(full) or None, "part": part,
                      "focus": focus}, keep_refusal=True)

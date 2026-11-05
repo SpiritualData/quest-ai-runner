@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, List, Optional
 from esoi import implementation
 from ..core.adapters_values import Observation
 from ..core.adapters_bases import RetrievalAdapterBase
-from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
+from hubofhubs.the_body.internal_context.card_store.walk import is_claude_state_file, prune_dirnames
 from .walk_settings import effective_skip_dirs
 
 log = logging.getLogger("quest-ai-runner.files_adapter")

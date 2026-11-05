@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from hubofhubs.models import prompt_spec as hub
+from hubofhubs.the_world.model_plumbing import prompt_spec as hub
 
 from ..usage import tag_spec
 from .model_registry import TIERS

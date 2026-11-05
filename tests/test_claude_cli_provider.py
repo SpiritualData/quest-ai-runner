@@ -9,7 +9,7 @@ import subprocess
 
 import pytest
 
-from hubofhubs.models import claude_cli as hub
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import claude_cli as hub
 from quest_ai_runner.adapters import ClaudeCliProvider
 from quest_ai_runner.adapters import claude_cli_provider as ccp
 from quest_ai_runner.core.goal_runner import _is_claude_model

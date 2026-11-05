@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
-from hubofhubs.models import outage as provider_outage
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
 
 from ..core import usage_limit
 from ..core.orchestrator import OrchestratorResult

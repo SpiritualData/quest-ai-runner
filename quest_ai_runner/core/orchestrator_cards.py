@@ -18,7 +18,7 @@ from .card_learning import (
     turn_observations,
     turn_teaches_new_facts,
 )
-from hubofhubs.ports.model import STEP_SUMMARIZE, answer_with_reasoning, plan_with_step
+from hubofhubs.the_world.model_plumbing.model import STEP_SUMMARIZE, answer_with_reasoning, plan_with_step
 from .adapters_values import PlanDecision
 from .card_filter import _extract_json
 from .orchestrator_text import _card_update_store, _deep_future_context

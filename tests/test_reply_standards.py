@@ -198,7 +198,7 @@ class RecordsAssembler:
         self.records = records
 
     def assemble(self, task_text, *, meta=None):
-        from hubofhubs.ports.context import AssembledContext
+        from hubofhubs.the_body.internal_context.context import AssembledContext
         sources = [{"adapter": "records", "label": "your records", "items": ["quest-note:1"]}] if self.records else []
         return AssembledContext(context_view="Quest note: the tutor only teaches Tuesday and Thursday evenings.", sources=sources)
 

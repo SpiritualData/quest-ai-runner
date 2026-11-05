@@ -9,7 +9,7 @@ import os
 from typing import TYPE_CHECKING, Any, Dict, Optional
 from pathlib import Path
 
-from hubofhubs.act.mcp_client import MCPServerSpec
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec
 from .config_support import _AUTO_CONTEXT, _log
 from .config_source_builders import (
     _build_drive_comments,
@@ -333,7 +333,7 @@ def _add_drive_mcp_server(cfg: RunnerConfig) -> None:
         return
     try:
         from .adapters.google_chat_adapter import service_account_token_provider
-        from hubofhubs.act.mcp_client import MCPServerSpec
+        from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec
 
         alias = str(spec.get("alias") or "drive")
         if any(getattr(s, "alias", "") == alias for s in (cfg.mcp_servers or [])):

@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from esoi import implementation, solution
-from hubofhubs import registry, scan
+from hubofhubs.the_world.learning.research_freshness_reader import registry
+from hubofhubs.the_self.integrity import scan
 from hubofhubs.seats import Genericity, HubScoring
 
 PACKAGE_DIR = Path(__file__).resolve().parent.parent

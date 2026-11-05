@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.adapters_values import PlanDecision
 from quest_ai_runner.core.deep_model_selection import (
     normalize_difficulty,

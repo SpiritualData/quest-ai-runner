@@ -14,7 +14,8 @@ from typing import Any, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
-from hubofhubs.seats import ModelCalling, Reasoning
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
+from hubofhubs.the_intelligence.mind.interface import Reasoning
 
 from .core.interim_policy import InterimDecision, InterimPolicy, InterimState
 from .core.model_registry import HUB_TIER_OF, RegistryTierSelection

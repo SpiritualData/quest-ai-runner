@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 
 import common  # noqa: F401  (sets sys.path for the repo)
-from hubofhubs import tiers as hub_tiers
+from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
 from quest_ai_runner import pricing
 from quest_ai_runner.core import model_registry, prompt_budget
 from quest_ai_runner.core.orchestrator_types import OrchestratorConfig

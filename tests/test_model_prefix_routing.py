@@ -1,6 +1,6 @@
 """QAR extends the hub's model-id prefix table from configuration: an OpenAI-compatible endpoint is configuration only."""
-from hubofhubs.models.family import provider_name_for_model
-from hubofhubs.models.router import MultiProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import provider_name_for_model
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.router import MultiProvider
 from quest_ai_runner import hub, providers
 
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 from esoi import solution
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 
 from .adapters_values import Escalation
 

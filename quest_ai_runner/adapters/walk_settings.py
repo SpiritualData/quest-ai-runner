@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Set
 
-from hubofhubs.recall.walk import effective_skip_dirs as hub_skip_dirs
+from hubofhubs.the_body.internal_context.card_store.walk import effective_skip_dirs as hub_skip_dirs
 
 STORE_DIR_NAME = ".quest-context"
 

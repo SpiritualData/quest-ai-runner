@@ -22,27 +22,13 @@ from typing import Any, Dict, List
 import pytest
 from unittest.mock import MagicMock
 
-from hubofhubs.recall.card_repository import (
-    QUARANTINE_DIR_NAME,
-    FilesystemCardRepository,
-)
-from hubofhubs.recall.context_folder_review import folder_review
+from hubofhubs.the_body.internal_context.card_store.card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import folder_review
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.recall.context_card_ceilings import (
-    apply_card_ceilings,
-    card_folder_key,
-    card_is_too_thin,
-    card_preference_key,
-    collapse_cards_by_file_set,
-    path_is_data_file,
-)
-from hubofhubs.recall.context_folder_review import (
-    drop_verdicts_under_final_exclusions,
-    final_exclusion_covering,
-    verdict_is_final,
-    verdict_is_pinned,
-    is_excluded_folder,
-)
+from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import (
+    apply_card_ceilings, card_folder_key, card_is_too_thin, card_preference_key, collapse_cards_by_file_set, path_is_data_file)
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import (
+    drop_verdicts_under_final_exclusions, final_exclusion_covering, verdict_is_final, verdict_is_pinned, is_excluded_folder)
 from quest_ai_runner.adapters.walk_settings import STORE_DIR_NAME, effective_skip_dirs
 
 
@@ -393,7 +379,7 @@ class TestCardCeilings:
         # What is true now: the owner's number (QAR_MAX_CARDS, 1,000 unless set) is enforced where cards
         # are written, a new folder is refused, and the refusal is ANNOUNCED with what fills the store and
         # how to change the limit, so it is never the silent permanent refusal that was removed.
-        from hubofhubs.recall import card_limit
+        from hubofhubs.the_body.internal_context.card_store import card_limit
         card_limit.reset_announcements()
         repo = tmp_path / "repo"
         (repo / "pkg").mkdir(parents=True)
@@ -438,9 +424,9 @@ class TestCardCeilings:
         # DEBUG, not WARNING: dropping a second card for a folder is the expected outcome (fca3b8d).
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
-        with caplog.at_level(logging.DEBUG, logger="hubofhubs.recall.context_bootstrap_support"):
+        with caplog.at_level(logging.DEBUG, logger="hubofhubs.the_body.internal_context.card_store.context_bootstrap_support"):
             apply_card_ceilings(cards, [], per_folder=1)   # the rule under test: one card per folder
-        logged = [r for r in caplog.records if r.name == "hubofhubs.recall.context_bootstrap_support"]
+        logged = [r for r in caplog.records if r.name == "hubofhubs.the_body.internal_context.card_store.context_bootstrap_support"]
         assert logged, "a ceiling nobody can see is indistinguishable from a bug"
         assert "folder" in logged[0].getMessage()
         assert not [r for r in logged if r.levelno >= logging.WARNING], "expected behavior is not warning noise"

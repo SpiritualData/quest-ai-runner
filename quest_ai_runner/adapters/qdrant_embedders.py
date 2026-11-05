@@ -14,12 +14,8 @@ import os
 
 from typing import Callable, List, Optional
 
-from hubofhubs.recall import embedders as hub_embedders
-from hubofhubs.recall.embedders import (  # noqa: F401  (same objects, old import path)
-    EMBED_BATCH_DEFAULT,
-    EMBED_MAX_CHARS_DEFAULT,
-    FASTEMBED_EMBEDDER_ID,
-)
+from hubofhubs.the_body.internal_context.card_store import embedders as hub_embedders
+from hubofhubs.the_body.internal_context.card_store.embedders import EMBED_BATCH_DEFAULT, EMBED_MAX_CHARS_DEFAULT, FASTEMBED_EMBEDDER_ID
 
 logger = logging.getLogger("quest_ai_runner.remember_and_recall.qdrant_vector_store")
 

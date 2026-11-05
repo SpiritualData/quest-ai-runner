@@ -10,11 +10,11 @@ import typing
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
-from hubofhubs import arm_needs as needs
-from hubofhubs.models.claude_cli import ClaudeCliProvider
-from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
-from hubofhubs.models.router import MultiProvider
-from hubofhubs.seats import ModelCalling
+from hubofhubs.the_self.assembler import arm_needs as needs
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli import ClaudeCliProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.router import MultiProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 
 from .core.model_registry import DEFAULT_FALLBACK_TOP, configured_providers
 from .usage import active_spec, limit_message

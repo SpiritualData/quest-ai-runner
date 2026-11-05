@@ -8,9 +8,9 @@ from __future__ import annotations
 import os
 from typing import Dict, Optional, Tuple
 
-from hubofhubs import registry
-from hubofhubs.models.family import VENDOR_PREFIXES, provider_name_for_model, split_tokens
-from hubofhubs.tiers import rates
+from hubofhubs.the_world.learning.research_freshness_reader import registry
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import VENDOR_PREFIXES, provider_name_for_model, split_tokens
+from hubofhubs.the_world.model_plumbing.model_tier_chooser.tiers import rates
 
 # A $20 a month subscription over ~1.2M tokens a month, rough: $0.0167 per million tokens.
 CLAUDE_CLI_PER_MTOK = 0.0167

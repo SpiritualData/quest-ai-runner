@@ -5,8 +5,8 @@ calls, zero network."""
 from datetime import datetime
 
 from quest_ai_runner.core import anticipation as ant
-from hubofhubs.critique.link_detect import links_in_message
-from hubofhubs.critique.link_guard import LinkGuard, LinkPolicy
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_detect import links_in_message
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import LinkGuard, LinkPolicy
 from quest_ai_runner.core.recipes import RecipeStore
 
 

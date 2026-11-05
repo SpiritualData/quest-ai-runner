@@ -26,13 +26,13 @@ import inspect
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.models import outage as provider_outage
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
 
 from ..core import usage_limit
-from hubofhubs.ports.events import Mode
+from hubofhubs.the_world.tools.events import Mode
 from ..core.orchestrator import Orchestrator, OrchestratorResult
 from ..core.requester import requester_from_task
-from hubofhubs.ports.control import ControlMessage, RunControl
+from hubofhubs.the_world.tools.delegated_agent_sessions.control import ControlMessage, RunControl
 from ..core.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
 
 from .executor_contracts import (
@@ -390,7 +390,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
                         task_id=task_id, card_id=card_id)
         # A card store at its limit says so in the lane's log; nobody watches a lane's log, so the first
         # task to start afterwards carries the same two lines on its live feed (once per notice).
-        from hubofhubs.recall.card_limit import take_task_notes
+        from hubofhubs.the_body.internal_context.card_store.card_limit import take_task_notes
         for store_note in take_task_notes():
             self._report_progress(task_id, "status", text=store_note)
 

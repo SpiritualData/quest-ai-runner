@@ -17,13 +17,13 @@ import pytest
 pytest.importorskip("qdrant_client")
 
 from quest_ai_runner import store_cli  # noqa: E402
-from hubofhubs.recall import card_store_identity as ident  # noqa: E402
-from hubofhubs.recall import card_store_merge as hub_merge  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store import card_store_merge as hub_merge  # noqa: E402
 from quest_ai_runner.adapters import card_store_merge as merge  # noqa: E402
-from hubofhubs.recall import card_store_mounts as mounts
+from hubofhubs.the_body.internal_context.card_store import card_store_mounts as mounts
 from quest_ai_runner.adapters import card_store_fence as fence  # noqa: E402
 from quest_ai_runner.adapters import card_store_vectors as vectors  # noqa: E402
-from hubofhubs.recall.card_repository import FilesystemCardRepository  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository  # noqa: E402
 from quest_ai_runner.adapters.file_context_store import FileContextStore  # noqa: E402
 from quest_ai_runner.remember_and_recall.qdrant_vector_store import QdrantVectorStore  # noqa: E402
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE  # noqa: E402

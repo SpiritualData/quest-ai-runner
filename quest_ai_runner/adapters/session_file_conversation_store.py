@@ -43,24 +43,13 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from hubofhubs.ports.context import ConversationContext, ConversationStore
+from hubofhubs.the_body.internal_context.context import ConversationContext, ConversationStore
 
 from esoi import implementation, solution
 from .walk_settings import conversation_scan_skip_dirs
-from hubofhubs.recall.conversation_format import (
-    conversation_digest,
-    conversation_messages,
-    conversation_timestamp,
-    is_claude_conversation,
-    nl_terms,
-    parse_date_bound,
-    rank_candidates_by_digest,
-    resolve_conv_key,
-    scan_conversation_files,
-    select_current_slice,
-    select_related,
-    timestamp_in_range,
-)
+from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import (
+    conversation_digest, conversation_messages, conversation_timestamp, is_claude_conversation, nl_terms, parse_date_bound,
+    rank_candidates_by_digest, resolve_conv_key, scan_conversation_files, select_current_slice, select_related, timestamp_in_range)
 
 # How long a directory scan stays fresh before the next call re-lists session files. Listing is
 # cheap (no file content is read) but a corpus-root scan can glob many directories, so it is

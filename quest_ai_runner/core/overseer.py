@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 import hubofhubs
-from hubofhubs.risk import OVERSEE_TOOL, OverseerSignal  # noqa: F401  (re-exported: the old import path)
+from hubofhubs.the_intelligence.mind.delegation.overseer.risk import OVERSEE_TOOL, OverseerSignal  # noqa: F401  (re-exported: the old import path)
 
 from .prompt_specs import declare, render_prompt
 

@@ -13,7 +13,7 @@ Pinned here:
 
 Fully offline, no LLM calls.
 """
-from hubofhubs.doctrine import assemble_doctrine, check_rules
+from hubofhubs.the_intelligence.mind.context_intake.doctrine import assemble_doctrine, check_rules
 
 from quest_ai_runner.core.planner_doctrine import FACTS, SITUATIONAL_PROFILE, planner_situation, situational_template
 from quest_ai_runner.core.planner_prompt import (

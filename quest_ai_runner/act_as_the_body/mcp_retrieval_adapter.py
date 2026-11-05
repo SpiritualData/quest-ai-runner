@@ -38,8 +38,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from hubofhubs.act.mcp_client import MCPClient, MCPServerSpec
-from hubofhubs.ports.retrieval import Observation, RetrievalAdapterBase
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPClient, MCPServerSpec
+from hubofhubs.the_world.observation import Observation, RetrievalAdapterBase
 
 from ..core.runtime_settings import process_environment
 

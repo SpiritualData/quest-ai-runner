@@ -14,9 +14,9 @@ from typing import Any, Dict, List, Mapping, Optional
 from esoi import implementation, solution
 from esoi.assemble import Lazy
 from esoi.requirements import api, env
-from hubofhubs.ports.deep import FileWriter
-from hubofhubs.recall.card_repository import CardRepository
-from hubofhubs.seats import ModelCalling
+from hubofhubs.the_world.tools.deep import FileWriter
+from hubofhubs.the_body.internal_context.card_store.card_repository import CardRepository
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 
 from .config import RunnerConfig
 from .core.adapters_retrieval import RetrievalAdapter

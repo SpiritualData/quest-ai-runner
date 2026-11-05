@@ -28,7 +28,7 @@ from types import SimpleNamespace
 import pytest
 
 from quest_ai_runner.chat_conversations import chat_log_path
-from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_EXEC, EVENT_MILESTONE, EVENT_PLAN, EVENT_STATUS
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_EXEC, EVENT_MILESTONE, EVENT_PLAN, EVENT_STATUS
 from quest_ai_runner.textual_ui import ActivityBar, QuestAITerminal, _RichLogHandler
 from quest_ai_runner import textual_ui_widgets
 from esoi.metric_results import NOT_RECORDED_LINE

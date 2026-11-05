@@ -12,8 +12,8 @@ from typing import List, Dict, Any
 # Add the package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hubofhubs.recall.context_bootstrap_support import select_representative_files
-from hubofhubs.recall.context_card_extraction import extract_file_snippet, summarize_snippet
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import select_representative_files
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import extract_file_snippet, summarize_snippet
 
 
 def generate_mock_files(num_files: int, num_folders: int = 5) -> List[str]:
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
 
 def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch):
-    from hubofhubs.recall.context_bootstrap_support import BOOTSTRAP_WORKERS_DEFAULT
+    from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import BOOTSTRAP_WORKERS_DEFAULT
     from quest_ai_runner.adapters.card_store_settings import bootstrap_workers as _bootstrap_workers
 
     # Each worker holds one model call open, and for the subprocess-backed (keyless) provider that

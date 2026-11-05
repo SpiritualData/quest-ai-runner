@@ -9,8 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402,F401  (puts the repository and this folder on the path)
 import hub_of_hubs  # noqa: E402,F401  (puts the hub package on the path when it is not installed)
 from esoi import intents  # noqa: E402
-from hubofhubs import evaluate, registry  # noqa: E402
-from hubofhubs.measure import KINDS, check  # noqa: E402
+from hubofhubs import evaluate
+from hubofhubs.the_world.learning.research_freshness_reader import registry  # noqa: E402
+from hubofhubs.the_self.integrity.measure import KINDS, check  # noqa: E402
 
 from hub_of_hubs import probes  # noqa: E402
 from hub_of_hubs.binding import REPO, binding  # noqa: E402
@@ -41,7 +42,7 @@ def test_every_area_and_seat_has_every_check_that_applies_to_it_as_a_case():
 
 
 def test_the_case_file_is_what_the_hub_generates():
-    from hubofhubs import cases
+    from hubofhubs.the_self.integrity import cases
     assert CASES == cases.cases(), "regenerate: python -m hubofhubs.cases > evaluation/components/hub_of_hubs/cases.json"
 
 

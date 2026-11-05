@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from hubofhubs.recall import card_store_merge as hub_merge
-from hubofhubs.recall.card_store_merge import MergePlan
+from hubofhubs.the_body.internal_context.card_store import card_store_merge as hub_merge
+from hubofhubs.the_body.internal_context.card_store.card_store_merge import MergePlan
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .card_store_settings import ENV_MAX_CARDS, max_cards_from_env

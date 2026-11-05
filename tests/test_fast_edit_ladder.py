@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.act.fast_edit import FastEditRunner
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditRunner
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.act_as_the_body.files_writer import FilesWriter
 from quest_ai_runner.config import (
     RunnerConfig,

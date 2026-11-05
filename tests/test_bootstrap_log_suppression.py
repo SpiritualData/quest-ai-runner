@@ -109,7 +109,7 @@ def test_the_hub_recall_loggers_are_kept_out_of_the_transcript_too():
         _suppress_background_bootstrap_logs(verbose=False)
         for module in ("context_folder_review", "context_card_ceilings", "card_store_mounts", "context_bootstrap_support"):
             assert not logging.getLogger(f"hubofhubs.recall.{module}").isEnabledFor(logging.INFO), module
-        assert logging.getLogger("hubofhubs.recall.card_limit").isEnabledFor(logging.WARNING)
+        assert logging.getLogger("hubofhubs.the_body.internal_context.card_store.card_limit").isEnabledFor(logging.WARNING)
     finally:
         root.setLevel(before)
         _reset_loggers()

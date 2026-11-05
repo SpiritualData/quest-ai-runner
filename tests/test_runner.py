@@ -2,8 +2,8 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from hubofhubs.deep import session as hub_session, subprocess_runner as hub_runner
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session, subprocess_runner as hub_runner
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorResult
 from quest_ai_runner.runner.executor import TaskExecutor
@@ -2062,7 +2062,7 @@ def test_monitor_says_which_model_the_worker_runs_on_once_while_it_runs(tmp_path
     import threading as _threading
     import time as _time
     from quest_ai_runner.core import goal_runner as gr
-    from hubofhubs.ports.events import EVENT_STATUS
+    from hubofhubs.the_world.tools.events import EVENT_STATUS
 
     project_dir = tmp_path / ".claude" / "projects" / "proj"
     project_dir.mkdir(parents=True)

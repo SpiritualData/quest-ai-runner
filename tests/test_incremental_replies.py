@@ -8,9 +8,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Dict, List
 
-from hubofhubs.act.tool_ledger import ToolOutcome
-from hubofhubs.ports.deep import DeepResult
-from hubofhubs.ports.events import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT
+from hubofhubs.the_body.internal_context.run_store.tool_ledger import ToolOutcome
+from hubofhubs.the_world.tools.deep import DeepResult
+from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.ask_policy import (
     Assignee, ask_dedupe_key, blocks_on_person, file_ask, resolve_assignee, stop_reason_of)

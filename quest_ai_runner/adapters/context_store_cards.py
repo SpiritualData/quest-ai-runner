@@ -10,20 +10,16 @@ import json
 import os
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
-from hubofhubs.recall import card_limit as limit_mod
-from hubofhubs.recall import card_origin
-from hubofhubs.recall.card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
-from hubofhubs.recall.card_content_render import (
-    dedupe_content,
-    normalize_content,
-    render_card_content,
-    tokenize,
-)
-from hubofhubs.recall.card_repository import card_embed_text
-from hubofhubs.recall.background_pacing import Pacer
-from hubofhubs.recall.scope_tags import union_scope_tags
+from hubofhubs.the_body.internal_context.card_store import card_limit as limit_mod
+from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.the_body.internal_context.card_store.card_store_identity import SCHEME_QUALIFIED, read_meta as read_store_meta
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import (
+    dedupe_content, normalize_content, render_card_content, tokenize)
+from hubofhubs.the_body.internal_context.card_store.card_repository import card_embed_text
+from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import union_scope_tags
 from ..core.vector_scopes import SeedItems
-from hubofhubs.recall.context_card_extraction import card_slug, managed_names, trim_content_by_recency
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import card_slug, managed_names, trim_content_by_recency
 from .context_card_dedup import _record_summary
 
 # How many cards an edit may be passed on through when the card it was meant for has been moved out and the card
@@ -424,7 +420,7 @@ class CardsMixin:
         """An edit meant for a card that now sits in ``_quarantine/``: send it to the card that stands for it
         (recorded in the manifest of the move that took it out), bring back a card the card limit moved out
         to make room, or, when neither is possible, log the edit in full at WARNING. Caller holds the lock."""
-        from hubofhubs.recall import card_store_hygiene as hygiene
+        from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
         keeper = hygiene.keeper_of_moved(self._cards_dir, card_id)
         edit = dict(add=add, replace=replace, remove=remove, fields=fields, scope_tags=scope_tags)
         if keeper and keeper != card_id and hops < MOVED_CARD_HOPS and not card_origin.is_store_qualified(keeper):

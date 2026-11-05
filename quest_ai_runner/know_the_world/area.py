@@ -11,7 +11,7 @@ import typing
 from typing import Any, List, Optional, Union
 
 from esoi import implementation, solution
-from hubofhubs.seats import WorldKnowing
+from hubofhubs.the_world.science.interface import WorldKnowing
 
 from .web_research import WebSearching
 

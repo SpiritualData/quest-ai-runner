@@ -12,14 +12,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from esoi import implementation
-from hubofhubs.recall import hybrid_assembler as hub
-from hubofhubs.recall.hybrid_assembler import (  # noqa: F401  (same objects, old import path)
-    CONSOLIDATE_MIN_REMAINING_SECONDS,
-    RRF_K,
-    VECTOR_RANK_WEIGHT,
-    arm_scores,
-    fused_card_order,
-)
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers import hybrid_assembler as hub
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.hybrid_assembler import (
+    CONSOLIDATE_MIN_REMAINING_SECONDS, RRF_K, VECTOR_RANK_WEIGHT, arm_scores, fused_card_order)
 
 
 def consolidate(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:

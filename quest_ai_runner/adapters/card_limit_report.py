@@ -10,10 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.recall import card_limit as limit_mod
-from hubofhubs.recall import card_limit_report as hub_report
-from hubofhubs.recall.card_limit_report import KEPT_OVER_WHY, Breakdown, Voice, can_set_aside
-from hubofhubs.recall.card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store import card_limit as limit_mod
+from hubofhubs.the_body.internal_context.card_store import card_limit_report as hub_report
+from hubofhubs.the_body.internal_context.card_store.card_limit_report import KEPT_OVER_WHY, Breakdown, Voice, can_set_aside
+from hubofhubs.the_body.internal_context.card_store.card_repository import QUARANTINE_DIR_NAME, FilesystemCardRepository
 
 from . import card_store_tidy as tidy
 from .card_store_settings import ENV_MAX_CARDS

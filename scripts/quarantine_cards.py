@@ -85,37 +85,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from hubofhubs.recall.card_origin import card_id_of_item, compounding_evidence  # noqa: E402,F401
-from hubofhubs.recall.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
-from hubofhubs.recall.card_store_hygiene import (  # noqa: E402,F401  (re-exported)
-    card_paths,
-    fold_card,
-    jaccard,
-    join_onto,
-    keeper_rank,
-    Move,
-    move_to,
-    name_match_score,
-    name_tokens,
-    plan_stray,
-    protection_reason as is_protected,
-    read_card,
-    render_health_report,
-    settle_move,
-    store_id_of,
-)
-from hubofhubs.recall.card_store_lock import StoreLock  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store.card_origin import card_id_of_item, compounding_evidence  # noqa: E402,F401
+from hubofhubs.the_body.internal_context.card_store.card_repository import QUARANTINE_DIR_NAME  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store.card_store_hygiene import (
+    card_paths, fold_card, jaccard, join_onto, keeper_rank, Move, move_to, name_match_score, name_tokens, plan_stray,
+    protection_reason as is_protected, read_card, render_health_report, settle_move, store_id_of)
+from hubofhubs.the_body.internal_context.card_store.card_store_lock import StoreLock  # noqa: E402
 from quest_ai_runner.adapters.card_store_settings import max_cards_per_folder, skip_dirs_from_env  # noqa: E402
-from hubofhubs.recall.card_store_hygiene import in_quarantine  # noqa: E402
-from hubofhubs.recall.card_store_tidy_plan import (  # noqa: E402,F401  (re-exported)
-    ALL_REASONS,
-    DEFAULT_REASONS,
-    excluded_prefixes_from_review,
-    plan_cards,
-    strip_prefix,
-    under_any_prefix,
-)
-from hubofhubs.recall.context_card_ceilings import FILE_SET_DEDUP_JACCARD  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store.card_store_hygiene import in_quarantine  # noqa: E402
+from hubofhubs.the_body.internal_context.card_store.card_store_tidy_plan import (
+    ALL_REASONS, DEFAULT_REASONS, excluded_prefixes_from_review, plan_cards, strip_prefix, under_any_prefix)
+from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import FILE_SET_DEDUP_JACCARD  # noqa: E402
 
 SKIP_FILES = {"bootstrap_meta.json", "folder_review.json"}
 

@@ -12,13 +12,9 @@ already executed (no double mutation).
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.deep import DeepResult, ProgressEvent
-from hubofhubs.ports.events import EVENT_EXEC
-from hubofhubs.act.execution_record import (
-    ExecutionFact,
-    ExecutionRecord,
-    classify_exec_phase,
-)
+from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_EXEC
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord, classify_exec_phase
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.runner.executor import TaskExecutor

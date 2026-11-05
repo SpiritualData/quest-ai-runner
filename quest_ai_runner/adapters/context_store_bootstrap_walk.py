@@ -12,28 +12,23 @@ import os
 from typing import Any, Dict, List, Optional, Set
 from pathlib import Path
 
-from hubofhubs.recall import card_origin
-from hubofhubs.recall.card_store_mounts import MODE_MOUNT
-from hubofhubs.recall.background_pacing import Pacer
-from hubofhubs.recall.card_content_render import tokenize
-from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
+from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import MODE_MOUNT
+from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import tokenize
+from hubofhubs.the_body.internal_context.card_store.walk import is_claude_state_file, prune_dirnames
 from .walk_settings import effective_skip_dirs
-from hubofhubs.recall.context_bootstrap_support import (
-    BOOTSTRAP_MAX_BYTES,
-    SOURCE_EXTS,
-    TFDFIDF_VERSION,
-    card_file_paths,
-    run_parallel,
-)
-from hubofhubs.recall.context_card_extraction import extract_topic_cards
-from hubofhubs.recall.context_folder_review import is_excluded_folder
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import (
+    BOOTSTRAP_MAX_BYTES, SOURCE_EXTS, TFDFIDF_VERSION, card_file_paths, run_parallel)
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import extract_topic_cards
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import is_excluded_folder
 from .card_store_settings import bootstrap_max_cards, bootstrap_max_files, prune_dead_cards
 from .context_risk_gate import FolderGate, folder_gate
-from hubofhubs.recall.context_card_ceilings import folders_for_room
+from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import folders_for_room
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
 from .context_card_builder import propose_topic_cards
 from .card_shape_guard import refusal as card_shape_refusal
-from hubofhubs.recall import card_limit as limit_mod
+from hubofhubs.the_body.internal_context.card_store import card_limit as limit_mod
 
 _log = logging.getLogger("quest-ai-runner.context")
 

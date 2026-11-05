@@ -28,11 +28,11 @@ from __future__ import annotations
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.context import ContextAssembler, ConversationStore
-from hubofhubs.ports.model import ModelProvider
-from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_PARTIAL, Mode
-from hubofhubs.ports.deep import DeepRunner, ProgressEvent
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_body.internal_context.context import ContextAssembler, ConversationStore
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_PARTIAL, Mode
+from hubofhubs.the_world.tools.deep import DeepRunner, ProgressEvent
 from .adapters_deep import EscalationSink
 from .adapters_guidance import GuidanceProvider
 from .adapters_values import PlanDecision
@@ -43,8 +43,8 @@ from .resolve import resolve
 from .tools import ToolRegistry
 
 from .recipes import RecipeStore
-from hubofhubs.critique.link_guard import LinkGuard
-from hubofhubs.models.family import provider_name_for_model
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import LinkGuard
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import provider_name_for_model
 from .model_registry import ModelRegistry
 
 # Log labels for where a deep-worker ladder came from (see Orchestrator.log_deep_ladder).

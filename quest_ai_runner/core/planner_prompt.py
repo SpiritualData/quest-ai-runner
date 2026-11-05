@@ -9,7 +9,7 @@ render these templates against ``OrchestratorConfig`` stay in ``orchestrator.py`
 """
 from typing import Dict
 
-from hubofhubs.doctrine import Rule
+from hubofhubs.the_intelligence.mind.context_intake.doctrine import Rule
 
 from .context_doctrine import (
     CACHED_HINT_GATE,

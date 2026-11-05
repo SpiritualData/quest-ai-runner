@@ -14,7 +14,7 @@ import json
 import re
 from typing import Any, Dict, List, Mapping, Optional
 
-from hubofhubs.ports.model import STEP_SUMMARIZE, plan_with_step
+from hubofhubs.the_world.model_plumbing.model import STEP_SUMMARIZE, plan_with_step
 from ..core.prompt_specs import PromptSpec, register, render_prompt
 from ..core.tools import ToolContext
 from ..core.tools_status import ACCEPTED_STATUSES

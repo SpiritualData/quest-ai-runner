@@ -3,8 +3,8 @@ the planner/verifier views of a page read, and the read dispatch. Offline: a fak
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
-from hubofhubs.websearch.cache import WebCache
-from hubofhubs.websearch.research import paginate_text
+from hubofhubs.the_world.tools.web_search.cache import WebCache
+from hubofhubs.the_world.tools.web_search.research import paginate_text
 from quest_ai_runner.know_the_world.web_research import WebResearchAdapter, build_web_research_from_env
 from quest_ai_runner.know_the_world.web_search_backends import SearchResponse
 from quest_ai_runner.core.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS

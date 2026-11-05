@@ -57,10 +57,10 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from hubofhubs.ports.context import VectorHit
-from hubofhubs.ports.context import VectorStoreBase
-from hubofhubs.recall import card_origin
-from hubofhubs.recall.card_repository import card_embed_text
+from hubofhubs.the_body.internal_context.context import VectorHit
+from hubofhubs.the_body.internal_context.context import VectorStoreBase
+from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.the_body.internal_context.card_store.card_repository import card_embed_text
 from ..core.scope_tags import card_scope_tags, fence_tags, quest_affinity_tags, affinity_mode
 
 logger = logging.getLogger(__name__)

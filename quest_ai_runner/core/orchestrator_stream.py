@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.ports.events import Mode
+from hubofhubs.the_world.tools.events import Mode
 
 LOG = logging.getLogger(__name__)
 

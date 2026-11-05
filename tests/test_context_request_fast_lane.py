@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.config import RunnerConfig
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 from quest_ai_runner.runner.poller import Poller, _task_signature
 
 from .conftest import StubProvider, StubRetrieval

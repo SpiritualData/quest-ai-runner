@@ -12,11 +12,11 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from hubofhubs.ports.context import VectorHit
-from hubofhubs.recall.card_store_identity import EMBEDDED
-from hubofhubs.recall.card_store_mounts import MOUNT_ID_SEP, NO_STORE, Mount, Rebase, mounted_card_id, rebase_path
+from hubofhubs.the_body.internal_context.context import VectorHit
+from hubofhubs.the_body.internal_context.card_store.card_store_identity import EMBEDDED
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import MOUNT_ID_SEP, NO_STORE, Mount, Rebase, mounted_card_id, rebase_path
 
-from hubofhubs.ports.context import VectorStoreBase
+from hubofhubs.the_body.internal_context.context import VectorStoreBase
 from .card_store_vectors import ReaderFactory, RemoteMountReaders, compatibility, embedded_reason
 
 log = logging.getLogger("quest-ai-runner.card-mounts")

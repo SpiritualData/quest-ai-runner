@@ -1,5 +1,5 @@
 """The structural work trace check: honest counts, no leak, terminal states. Offline, no model."""
-from hubofhubs.ports.trace import project
+from hubofhubs.the_consciousness.terminal.trace import project
 
 from evaluation.components.work_trace_check import check_turn, passes, score
 from quest_ai_runner.core import work_trace
@@ -24,7 +24,7 @@ REPLY = "Secret plan and Other secret are the two quests to protect; the page at
 
 
 def run_turn(audience):
-    from hubofhubs.ports.retrieval import Observation
+    from hubofhubs.the_world.observation import Observation
     sink = Sink()
     trace = work_trace.start(sink, {"work_trace": {"audience": audience}})
     trace.web_started()

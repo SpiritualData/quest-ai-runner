@@ -30,7 +30,7 @@ def web_search():
 
 
 def model_providers():
-    from hubofhubs.models.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
+    from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import MODEL_PREFIX_PROVIDERS, provider_name_for_model
     name = provider_name_for_model("fakevendor-1", {"fakevendor", "anthropic"}, {**MODEL_PREFIX_PROVIDERS, "fakevendor": "fakevendor"})
     return name == "fakevendor", "model prefix routed by registered data"
 

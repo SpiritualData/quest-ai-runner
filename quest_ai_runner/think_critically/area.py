@@ -19,13 +19,13 @@ from esoi import implementation, solution
 from esoi.assemble import Lazy
 from esoi.metric_meter import AFTER, BEFORE
 from esoi.spec_slice import SpecSlice
-from hubofhubs import arm_needs as needs
-from hubofhubs.critique import sufficiency
-from hubofhubs.critique.link_detect import links_in_message
-from hubofhubs.critique.link_guard import LinkGuard, LinkPolicy
-from hubofhubs.deep.contract import DEEP_REVIEW_PROMPT, SubprocessConfig, parse_deep_review
-from hubofhubs.deep.subprocess_runner import SubprocessGoalRunner
-from hubofhubs.seats import ModelCalling
+from hubofhubs.the_self.assembler import arm_needs as needs
+from hubofhubs.the_intelligence.critical_thinking.goal_completion import sufficiency
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_detect import links_in_message
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import LinkGuard, LinkPolicy
+from hubofhubs.the_world.tools.delegated_agent_sessions.contract import DEEP_REVIEW_PROMPT, SubprocessConfig, parse_deep_review
+from hubofhubs.the_world.tools.delegated_agent_sessions.subprocess_runner import SubprocessGoalRunner
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 
 from ..runner.quest_client import QuestOperations
 from ..core import quest_judge, reach_judge

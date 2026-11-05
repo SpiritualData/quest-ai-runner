@@ -62,7 +62,7 @@ from typing import Any, Dict, List, Optional
 
 from esoi import implementation
 from esoi.requirements import binary, env
-from hubofhubs.act.mcp_client import MCPClient, MCPServerSpec, MCPToolResult
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPClient, MCPServerSpec, MCPToolResult
 
 from ..core.adapters_channels import ChannelTransportBase, InboundBatch, InboundMessage, OutboundReply, SendResult
 from ..core.runtime_settings import process_environment

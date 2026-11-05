@@ -14,7 +14,7 @@ turn end to end.
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from hubofhubs.ports.events import EVENT_CONTEXT
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT
 from quest_ai_runner.textual_ui import QuestAITerminal
 
 

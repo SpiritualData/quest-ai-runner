@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from hubofhubs.orchestrate.text import clip_head_and_tail, ellipsize, sentence  # noqa: F401  (the hub's)
-from hubofhubs.ports.deep import DeepResult, FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
+from hubofhubs.the_intelligence.mind.text import clip_head_and_tail, ellipsize, sentence  # noqa: F401  (the hub's)
+from hubofhubs.the_world.tools.deep import DeepResult, FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
 from .auxiliary_prompts import FUTURE_CONTEXT_DELIMITER
 
 
@@ -259,7 +259,7 @@ def _card_update_store(assembler: Any) -> Optional[Any]:
     ``HybridContextAssembler``'s ``_keyword``/``_vector`` arms) and returns the first capable inner
     store it finds. Returns None when nothing card-update-capable is reachable.
     """
-    from hubofhubs.recall.composite_assembler import find_assembler
+    from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import find_assembler
 
     def _is_capable(obj: Any) -> bool:
         return bool(obj is not None

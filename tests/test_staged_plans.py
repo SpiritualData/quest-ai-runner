@@ -21,8 +21,8 @@ from __future__ import annotations
 import threading
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.deep import DeepResult
-from hubofhubs.ports.events import Mode
+from hubofhubs.the_world.tools.deep import DeepResult
+from hubofhubs.the_world.tools.events import Mode
 from quest_ai_runner.core.adapters_values import PlanDecision
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
@@ -32,9 +32,8 @@ from quest_ai_runner.core.orchestrator_decide_tool import (
 from quest_ai_runner.core.orchestrator_decisions import normalize_decision
 from quest_ai_runner.core.orchestrator_turn import _Emitter
 from quest_ai_runner.core.adapters_deep import StagedPlanRunner
-from hubofhubs.orchestrate.staged_plan import (
-    count_tasks, is_staged, normalize_staged_subtasks, sequence_stages, split_plan, step_allows, tasks_flat,
-)
+from hubofhubs.the_intelligence.mind.planner.staged_plan import (
+    count_tasks, is_staged, normalize_staged_subtasks, sequence_stages, split_plan, step_allows, tasks_flat)
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import RecordingRunner, ScriptedProvider

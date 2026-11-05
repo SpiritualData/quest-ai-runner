@@ -39,7 +39,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import urlsplit
 
-from hubofhubs.ports.trace import domain_of, validate
+from hubofhubs.the_consciousness.terminal.trace import domain_of, validate
 from quest_ai_runner.core.work_trace import facts_about, host_cited, is_record_title, reply_draws_on
 
 PRIVATE_KINDS = ("records", "action")

@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 
 
 # ---------------------------------------------------------------------------

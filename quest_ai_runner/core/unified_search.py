@@ -19,7 +19,7 @@ from esoi import implementation, solution, spec_search as search_lib
 from . import prompt_budget
 from .prompt_specs import declare, render_prompt
 from .spec_selection import GATE, VectorSearch
-from hubofhubs.ports.model import STEP_SELECT, answer_with_reasoning
+from hubofhubs.the_world.model_plumbing.model import STEP_SELECT, answer_with_reasoning
 
 CARD_SOURCE = "cards"
 CARD_KEY_PREFIX = "card:"   # a card view's key

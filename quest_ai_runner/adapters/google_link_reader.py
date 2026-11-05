@@ -53,13 +53,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .files_redaction import redact
-from hubofhubs.websearch.link_access import (
-    REASON_NOT_FOUND,
-    REASON_NOT_SHARED,
-    REASON_TOO_LARGE,
-    REASON_UNREACHABLE,
-    REASON_UNSUPPORTED_TYPE,
-)
+from hubofhubs.the_world.tools.web_search.link_access import (
+    REASON_NOT_FOUND, REASON_NOT_SHARED, REASON_TOO_LARGE, REASON_UNREACHABLE, REASON_UNSUPPORTED_TYPE)
 
 log = logging.getLogger("quest-ai-runner.google_link_reader")
 
@@ -606,8 +601,8 @@ class GoogleLinkReader:
 
     def shape(self, doc: LinkText, *, full: bool, part: Optional[int], focus: Optional[str]) -> Dict[str, Any]:
         """Redact, then return the focused passages or one part of the whole text."""
-        from hubofhubs.websearch.page_extract import select_passages, split_passages
-        from hubofhubs.websearch.research import paginate_text
+        from hubofhubs.the_world.tools.web_search.page_extract import select_passages, split_passages
+        from hubofhubs.the_world.tools.web_search.research import paginate_text
         text = redact(doc.text)
         answer: Dict[str, Any] = {"ok": True, "title": doc.title, "kind": doc.kind, "truncated": doc.cut}
         try:

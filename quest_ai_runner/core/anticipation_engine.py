@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 from .anticipation_learner import (
     K,
     MATCH_SERVE,
@@ -31,7 +31,7 @@ from .anticipation_learner import (
     update_weight,
 )
 from .anticipation_store import FilePredictionStore
-from hubofhubs.recall.scope_tags import union_scope_tags
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import union_scope_tags
 from .scope_tags import affinity_meta, quest_fence_allow, scope_tags_from_keys
 
 log = logging.getLogger("quest-ai-runner.anticipation")

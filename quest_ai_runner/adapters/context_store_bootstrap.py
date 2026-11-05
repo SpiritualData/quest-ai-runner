@@ -14,31 +14,23 @@ import tempfile
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from hubofhubs.recall.card_repository import FilesystemCardRepository
-from hubofhubs.recall.card_store_mounts import MODE_MOUNT, resolve_mounts
-from hubofhubs.recall.card_content_render import MAX_CARD_REF_ITEM_CHARS
-from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames, skip_subtrees
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import MODE_MOUNT, resolve_mounts
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import MAX_CARD_REF_ITEM_CHARS
+from hubofhubs.the_body.internal_context.card_store.walk import is_claude_state_file, prune_dirnames, skip_subtrees
 from .card_store_settings import STORE_DIR_NAME, max_cards_per_folder
 from .walk_settings import effective_skip_dirs
-from hubofhubs.recall.card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
-from hubofhubs.recall import card_origin
+from hubofhubs.the_body.internal_context.card_store.card_store_identity import is_merged as is_merged_store, read_meta as read_store_meta
+from hubofhubs.the_body.internal_context.card_store import card_origin
 from .bootstrap_reporter import mark_bootstrap_completed
-from hubofhubs.recall.background_pacing import Pacer
-from hubofhubs.filemodes import match_umask
-from hubofhubs.recall.context_bootstrap_support import (
-    BOOTSTRAP_MAX_BYTES,
-    BOOTSTRAP_META_FILE,
-    DISCOVERED_FILE,
-    MAX_ANCESTOR_WALK_LEVELS,
-    MAX_MERGED_KEYWORDS,
-    SOURCE_EXTS,
-    TFDFIDF_VERSION,
-    card_file_paths,
-    write_bootstrap_meta,
-)
+from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
+from hubofhubs.the_body.filemodes import match_umask
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import (
+    BOOTSTRAP_MAX_BYTES, BOOTSTRAP_META_FILE, DISCOVERED_FILE, MAX_ANCESTOR_WALK_LEVELS, MAX_MERGED_KEYWORDS, SOURCE_EXTS, TFDFIDF_VERSION,
+    card_file_paths, write_bootstrap_meta)
 from .context_card_dedup import _first_substantive_line, _is_prompt_echo
-from hubofhubs.recall.context_card_ceilings import MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
-from hubofhubs.recall.context_folder_review import dir_file_counts
+from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import MIN_FILES_PER_CARD, apply_card_ceilings, card_is_too_thin
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import dir_file_counts
 from .context_risk_gate import folder_gate
 
 _log = logging.getLogger("quest-ai-runner.context")
@@ -518,7 +510,7 @@ class BootstrapMixin:
         onto ``survivor_id``, the card that stands for it now (``card_store_hygiene.fold_card``). With no
         survivor, or when it cannot be joined without loss, the copy stays where it is.
         """
-        from hubofhubs.recall import card_store_hygiene as hygiene
+        from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
         repo = getattr(self, "_own_repo", self._repo)
         quarantine = getattr(repo, "quarantine", None)
         with self.folder_lock():
@@ -806,7 +798,7 @@ class BootstrapMixin:
             # card of its own: record it, so its mounts (and its own cards, later) have a home.
             write_bootstrap_meta(str(self._cards_dir), 0, root=str(walk_root))
         if not self._dry_run and read_store_meta(str(self._cards_dir)):
-            from hubofhubs.recall.card_store_identity import update_identity
+            from hubofhubs.the_body.internal_context.card_store.card_store_identity import update_identity
             update_identity(str(self._cards_dir),
                             mounts=[m.as_record() for m in outcome.mounts])
         self._mounts = list(outcome.mounts)
@@ -837,7 +829,7 @@ class BootstrapMixin:
             inside = os.path.realpath(str(self._cards_dir)) == os.path.realpath(str(walk_root / ".quest-context"))
             if os.path.isdir(recorded) and not inside:
                 return False
-            from hubofhubs.recall.card_store_identity import apply_move_root
+            from hubofhubs.the_body.internal_context.card_store.card_store_identity import apply_move_root
             apply_move_root(str(self._cards_dir), str(walk_root), force=True)
             _log.info("context index: the corpus folder moved from %s to %s; its card store now records the new "
                       "root (the cards name files relative to it, so nothing else changes)", recorded, walk_root)

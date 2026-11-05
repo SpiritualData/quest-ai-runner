@@ -9,7 +9,7 @@ from typing import List, Tuple
 
 from rich.text import Text
 
-from hubofhubs.terminal import Block
+from hubofhubs.the_consciousness.terminal import Block
 
 from .textual_ui_helpers import indented_line
 

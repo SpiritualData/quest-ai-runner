@@ -46,7 +46,7 @@ SHARED_ARMS: Dict[Tuple[str, str, int], Any] = {}
 
 def shared_limiter(key: str, limit: int):
     """The one daily counter for this key and limit in this process, kept across registry rebuilds."""
-    from hubofhubs.websearch.limiter import DailyLimiter
+    from hubofhubs.the_world.tools.web_search.limiter import DailyLimiter
 
     with SHARED_LOCK:
         if (key, limit) not in SHARED_LIMITERS:
@@ -56,7 +56,7 @@ def shared_limiter(key: str, limit: int):
 
 def shared_arm(key: str, mailto: str, limit: int):
     """The one OpenAlex arm (so one cache and one counter) per key, contact and limit in this process."""
-    from hubofhubs.science.openalex import OpenAlexWorks
+    from hubofhubs.the_world.science.openalex import OpenAlexWorks
 
     limiter = shared_limiter(key, limit)
     with SHARED_LOCK:
@@ -84,7 +84,7 @@ def science_literature_spec(env: Mapping[str, str], transport=None) -> Optional[
     key = (env.get("OPENALEX_API_KEY") or "").strip()
     if not key:
         return None
-    from hubofhubs.science.openalex import OpenAlexWorks, observation_of
+    from hubofhubs.the_world.science.openalex import OpenAlexWorks, observation_of
 
     mailto, limit = (env.get("OPENALEX_MAILTO") or "").strip(), daily_limit_from(env)
     if transport is None:

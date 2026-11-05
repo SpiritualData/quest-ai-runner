@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from esoi import implementation, solution
-from hubofhubs.critique.done_evidence import interim_data, parse_coverage, render_coverage_line
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.done_evidence import interim_data, parse_coverage, render_coverage_line
 
 DEFAULT_MAX_PER_TURN = 4
 DEFAULT_MIN_SECONDS_BETWEEN = 15.0

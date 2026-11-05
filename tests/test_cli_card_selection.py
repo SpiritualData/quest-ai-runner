@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from quest_ai_runner import cli, cli_context
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 
 
 def test_default_use_llm_is_false_and_skips_provider_setup(tmp_path, monkeypatch):

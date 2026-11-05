@@ -10,11 +10,11 @@ from typing import Any, Dict, List, Optional
 
 from .prompt_specs import PromptSpec, register, render_prompt
 
-from hubofhubs.ports.model import STEP_NARRATION, answer_with_reasoning
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.events import EVENT_PARTIAL, EVENT_STATUS, Mode  # noqa: F401  (EVENT_STATUS and Mode stay importable from here)
-from hubofhubs.orchestrate.turn import Emitter as HubEmitter, TurnCardCache  # noqa: F401
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.model import STEP_NARRATION, answer_with_reasoning
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.events import EVENT_PARTIAL, EVENT_STATUS, Mode  # noqa: F401  (EVENT_STATUS and Mode stay importable from here)
+from hubofhubs.the_intelligence.mind.delegation.overseer.turn import Emitter as HubEmitter, TurnCardCache  # noqa: F401
+from hubofhubs.the_world.tools.deep import ProgressEvent
 
 
 # The per-turn cache and the event router are the hub's (hubofhubs.orchestrate.turn); the old names stay importable.

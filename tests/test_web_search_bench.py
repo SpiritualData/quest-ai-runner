@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from hubofhubs.websearch.cache import WebCache
+from hubofhubs.the_world.tools.web_search.cache import WebCache
 from quest_ai_runner.know_the_world.web_research import WebResearchAdapter
 from quest_ai_runner.know_the_world.web_search_backends import SearchHit, SearchResponse
 

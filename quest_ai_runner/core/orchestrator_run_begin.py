@@ -11,15 +11,16 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from . import shared_thread
 from .adapters_retrieval import OwnUpdates
 from .adapters_values import PlanDecision
-from hubofhubs.recall.card_thread import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_thread import (
+    CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint)
 from .context_doctrine import CACHED_HINT_GATE
-from hubofhubs.act.execution_record import ExecutionRecord
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
 from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
     guidance_selection_timeout_seconds,
@@ -44,7 +45,7 @@ from .recent_context import (
     quest_scope_key,
     render_recent_cards,
 )
-from hubofhubs.critique.sufficiency import AbridgedTurnState, collect_abridged_items, render_abridged_notice
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.sufficiency import AbridgedTurnState, collect_abridged_items, render_abridged_notice
 
 
 class RunBeginMixin:

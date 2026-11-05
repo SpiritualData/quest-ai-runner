@@ -9,16 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from hubofhubs.recall import card_vectors as hub
-from hubofhubs.recall.card_vectors import (  # noqa: F401  (same objects, old import path)
-    CONNECT_TIMEOUT_SECONDS,
-    RETRY_AFTER_SECONDS,
-    SCOPE_KEY,
-    STORE_KEY,
-    Compatibility,
-    ReaderFactory,
-    compatibility,
-)
+from hubofhubs.the_body.internal_context.card_store import card_vectors as hub
+from hubofhubs.the_body.internal_context.card_store.card_vectors import (
+    CONNECT_TIMEOUT_SECONDS, RETRY_AFTER_SECONDS, SCOPE_KEY, STORE_KEY, Compatibility, ReaderFactory, compatibility)
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
 

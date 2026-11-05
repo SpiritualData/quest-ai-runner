@@ -8,11 +8,11 @@ import json
 from typing import Any, Callable, Dict, List, Optional
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.events import EVENT_CONTEXT, EVENT_EXEC
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_EXEC
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from .adapters_values import Observation
-from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord
 from . import tool_guards
 from .tools import ToolContext
 from .tools_status import DONE_STATUSES, RECEIPT_WORDS, SETTLED_STATUSES, ToolStatus, as_status

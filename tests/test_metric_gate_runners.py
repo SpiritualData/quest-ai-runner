@@ -30,12 +30,12 @@ from typing import Any, Dict, List, Optional
 import pytest
 from esoi import scaffold
 
-from hubofhubs.act.fast_edit import FastEditRunner
-from hubofhubs.act.mcp_operations import MCPOperationRunner
-from hubofhubs.ports.deep import WriteResult
+from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditRunner
+from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
+from hubofhubs.the_world.tools.deep import WriteResult
 from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
 from quest_ai_runner.act_as_the_body.files_writer import FilesWriter
-from hubofhubs.deep import stream_runner as hub_stream
+from hubofhubs.the_world.tools.delegated_agent_sessions import stream_runner as hub_stream
 from quest_ai_runner.act_as_the_body import goal_runner_stream
 from quest_ai_runner.core.goal_metrics import NUDGE_BRIEF
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner

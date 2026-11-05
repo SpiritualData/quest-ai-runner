@@ -29,8 +29,8 @@ import uuid
 from typing import Any, Dict, List, Mapping, Optional
 
 from esoi import implementation, solution
-from hubofhubs.ports.deep import ProgressEvent  # noqa: F401  (the event the emit callable receives)
-from hubofhubs.ports.trace import WorkTrace, domain_of
+from hubofhubs.the_world.tools.deep import ProgressEvent  # noqa: F401  (the event the emit callable receives)
+from hubofhubs.the_consciousness.terminal.trace import WorkTrace, domain_of
 
 STEP_WEB, STEP_PAPERS, STEP_RECORDS, STEP_LINKS = "web", "papers", "records", "links"
 SOLUTION_WEB, SOLUTION_PAPERS, SOLUTION_RECORDS, SOLUTION_LINKS = (

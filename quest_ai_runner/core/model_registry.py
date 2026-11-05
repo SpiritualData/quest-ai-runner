@@ -20,10 +20,10 @@ import typing
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
-from hubofhubs import tiers as hub_tiers
-from hubofhubs.seats import TierSelection
-from hubofhubs.models.family import newest_in_family, split_tokens
-from hubofhubs.ports.model import ModelProvider
+from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers as hub_tiers
+from hubofhubs.the_world.model_plumbing.model_tier_chooser.interface import TierSelection
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.family import newest_in_family, split_tokens
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
 
 # Tier names in capability order (cheap -> expensive). The brain uses these names.
 # Semantic names (provider-agnostic): fast/balanced/quality (best = quality if not overridden)

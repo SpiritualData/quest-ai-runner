@@ -10,9 +10,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from hubofhubs.models.anthropic import AnthropicProvider
-from hubofhubs.models.gemini import GeminiProvider
-from hubofhubs.models.openai import OpenAIProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.gemini import GeminiProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.openai import OpenAIProvider
 
 from .hub import make_provider
 from .providers import failover_models, routed, route_extra_model_prefixes

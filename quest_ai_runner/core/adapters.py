@@ -6,18 +6,11 @@ every module imports a name from where it is defined; this module re-exports onl
 repository (the Quest backend) imports from here. Add a name here only when such a consumer needs it, and put a new port in
 the module that owns its role.
 """
-from hubofhubs.ports.context import AssembledContext, ConversationContext, ConversationStore  # noqa: F401
-from hubofhubs.ports.deep import (  # noqa: F401
-    DeepResult,
-    DeepRunnerBase,
-    FUTURE_CONTEXT_VIA_FIELD,
-    FUTURE_CONTEXT_VIA_OUTPUT,
-    ProgressEvent,
-    WRITE_SURFACE_OPERATIONS,
-    runner_starts_background_work,
-    runner_uses_deep_model,
-)
-from hubofhubs.ports.events import EVENT_EXEC  # noqa: F401
+from hubofhubs.the_body.internal_context.context import AssembledContext, ConversationContext, ConversationStore  # noqa: F401
+from hubofhubs.the_world.tools.deep import (
+    DeepResult, DeepRunnerBase, FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT, ProgressEvent, WRITE_SURFACE_OPERATIONS,
+    runner_starts_background_work, runner_uses_deep_model)
+from hubofhubs.the_world.tools.events import EVENT_EXEC  # noqa: F401
 from .adapters_bases import (  # noqa: F401
     EscalationSinkBase,
     GuidanceProviderBase,

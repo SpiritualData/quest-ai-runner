@@ -51,39 +51,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from esoi import implementation
-from hubofhubs.ports.context import ContextAssemblerBase
-from hubofhubs.recall.card_content_render import (
-    MAX_CARD_REF_CHARS,
-    MAX_CARD_REFS,
-    tokenize,
-)
-from hubofhubs.recall import card_limit as card_limit_policy
-from hubofhubs.recall.card_repository import CardRepository, FilesystemCardRepository
+from hubofhubs.the_body.internal_context.context import ContextAssemblerBase
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import MAX_CARD_REF_CHARS, MAX_CARD_REFS, tokenize
+from hubofhubs.the_body.internal_context.card_store import card_limit as card_limit_policy
+from hubofhubs.the_body.internal_context.card_store.card_repository import CardRepository, FilesystemCardRepository
 from .card_limit_report import announce_full
-from hubofhubs.recall.card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import MODE_MOUNT, Mount, MountedCardRepository
 from .card_store_settings import card_mount_mode
 
-from hubofhubs.recall.context_bootstrap_support import (
-    BOOTSTRAP_META_FILE,
-    BOOTSTRAP_VERSION,
-    SOURCE_EXTS,
-    TFDFIDF_VERSION,
-    read_bootstrap_meta,
-    write_bootstrap_meta,
-)
-from hubofhubs.recall.context_folder_review import (
-    FOLDER_REVIEW_FILE,
-    ai_instruction_files_in,
-    dir_file_counts,
-    duplicate_folders,
-    folder_review,
-    has_kept_child,
-    is_excluded_folder,
-    nested_vcs_dirs,
-)
-from hubofhubs.recall.context_card_extraction import (
-    RECENCY_BOOST_MAX_DEFAULT,
-)
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import (
+    BOOTSTRAP_META_FILE, BOOTSTRAP_VERSION, SOURCE_EXTS, TFDFIDF_VERSION, read_bootstrap_meta, write_bootstrap_meta)
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import (
+    FOLDER_REVIEW_FILE, ai_instruction_files_in, dir_file_counts, duplicate_folders, folder_review, has_kept_child, is_excluded_folder,
+    nested_vcs_dirs)
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import RECENCY_BOOST_MAX_DEFAULT
 from .context_store_origins import OriginsMixin
 from .context_store_cards import CardsMixin
 from .context_store_assembly import AssemblyMixin
@@ -325,7 +306,7 @@ class FileContextStore(OriginsMixin, CardsMixin, AssemblyMixin, BootstrapMixin, 
         # are consumer-injected via ``reference_resolvers``. An un-wired type degrades to a graceful
         # unresolved-pointer line at render time (never an error). Local import avoids any cycle.
         try:
-            from hubofhubs.recall.reference_resolver import build_resolver_registry
+            from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import build_resolver_registry
             self._resolvers: Dict[str, Any] = build_resolver_registry(
                 file_read_text=self._read_file_fresh,
                 consumer_resolvers=reference_resolvers,

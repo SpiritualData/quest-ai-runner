@@ -4,7 +4,7 @@
 Quest words ("From your Quest", the Quest record kind) are registered here, once, when the terminal is set up. Import this module
 before rendering; ``tests/test_terminal_drift.py`` keeps these words equal to the Quest app's English pack.
 """
-from hubofhubs.terminal import strings
+from hubofhubs.the_consciousness.terminal import strings
 
 QUEST_WORDS = {
     "workTrace.group.records": "From your Quest",

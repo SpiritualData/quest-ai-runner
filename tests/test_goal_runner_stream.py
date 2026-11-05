@@ -17,11 +17,11 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.deep import stream_runner as hub_stream
+from hubofhubs.the_world.tools.delegated_agent_sessions import stream_runner as hub_stream
 from quest_ai_runner.act_as_the_body import goal_runner_stream
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.act_as_the_body.goal_runner_stream import StreamJsonGoalRunner
-from hubofhubs.ports.control import ControlMessage, RunControl
+from hubofhubs.the_world.tools.delegated_agent_sessions.control import ControlMessage, RunControl
 
 REPO_ROOT = str(Path(__file__).resolve().parents[1])
 
@@ -300,7 +300,7 @@ def test_a_claude_too_old_to_report_an_interrupt_runs_one_shot(tmp_path, monkeyp
 
     def fake_once(self, **kwargs):
         called.update(kwargs)
-        from hubofhubs.ports.deep import DeepResult
+        from hubofhubs.the_world.tools.deep import DeepResult
         return DeepResult(met=True, output="one-shot")
 
     monkeypatch.setattr(SubprocessGoalRunner, "run_goal_once", fake_once)

@@ -8,8 +8,8 @@ from __future__ import annotations
 import abc
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from hubofhubs.ports.model import ModelProviderBase  # noqa: F401  (moved to the hub; same class, old import path)
-from hubofhubs.ports.retrieval import RetrievalAdapterBase  # noqa: F401  (moved to the hub; same class, old import path)
+from hubofhubs.the_world.model_plumbing.model import ModelProviderBase  # noqa: F401  (moved to the hub; same class, old import path)
+from hubofhubs.the_world.observation import RetrievalAdapterBase  # noqa: F401  (moved to the hub; same class, old import path)
 
 from .adapters_values import Escalation
 

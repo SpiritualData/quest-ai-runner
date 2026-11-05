@@ -219,7 +219,7 @@ def test_skeleton_ignores_payload_words_so_free_text_requests_still_match():
 
 # --------------------------------------------------------------------------- deep recipes
 
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 
 
 class RecordingDeepRunner:

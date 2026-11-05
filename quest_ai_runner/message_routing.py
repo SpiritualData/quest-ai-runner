@@ -10,7 +10,7 @@ import typing
 from typing import Any, Dict, Mapping
 
 from esoi import implementation, solution
-from hubofhubs.seats import ModelCalling
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 
 from .loop_wiring import orchestrator_over
 

@@ -39,19 +39,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from hubofhubs.recall.walk import prune_dirnames, skip_subtrees
-from hubofhubs.recall.card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
-from hubofhubs.recall.context_folder_review import (
-    FOLDER_REVIEW_FILE,
-    FOLDER_REVIEW_MIN_FILES,
-    FOLDER_REVIEW_START_DEPTH,
-    HARD_RISK_KINDS,
-    dir_file_counts,
-    is_excluded_folder,
-    roll_up_to_depth,
-    load_verdicts,
-    review_corpus,
-)
+from hubofhubs.the_body.internal_context.card_store.walk import prune_dirnames, skip_subtrees
+from hubofhubs.the_body.internal_context.card_store.card_store_identity import BOOTSTRAP_META_FILE, is_merged, read_meta
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import (
+    FOLDER_REVIEW_FILE, FOLDER_REVIEW_MIN_FILES, FOLDER_REVIEW_START_DEPTH, HARD_RISK_KINDS, dir_file_counts, is_excluded_folder, roll_up_to_depth,
+    load_verdicts, review_corpus)
 from .card_store_settings import STORE_DIR_NAME, folder_review_enabled, skip_nested_repos
 
 CARDS_DIR = STORE_DIR_NAME

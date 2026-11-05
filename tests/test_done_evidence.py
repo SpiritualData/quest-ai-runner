@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.deep import DeepResult
-from hubofhubs.ports.events import EVENT_INTERIM
+from hubofhubs.the_world.tools.deep import DeepResult
+from hubofhubs.the_world.tools.events import EVENT_INTERIM
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig

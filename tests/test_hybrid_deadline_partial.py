@@ -11,7 +11,7 @@ zero-results case). Without a deadline, behavior is unchanged.
 import time
 
 from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 
 
 class _StubArm:

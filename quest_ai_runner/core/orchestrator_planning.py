@@ -44,8 +44,8 @@ from .planner_context import (
     planner_links_block,
     planner_web_block,
 )
-from hubofhubs.ports.model import STEP_JUDGE, STEP_PLAN, plan_with_step
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.model_plumbing.model import STEP_JUDGE, STEP_PLAN, plan_with_step
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .adapters_retrieval import OwnUpdates
 from .adapters_values import Observation, PlanDecision
 from .reach_judge import (

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from hubofhubs.websearch.query_spec import coerce_web_query
+from hubofhubs.the_world.tools.web_search.query_spec import coerce_web_query
 
 
 def coerce_web_query_text(spec):

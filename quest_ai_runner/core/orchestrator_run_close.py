@@ -9,8 +9,8 @@ from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
 from .auxiliary_prompts import SUPPORT_REWRITE_STEER
-from hubofhubs.ports.events import EVENT_INTENT, EVENT_MILESTONE, Mode
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_INTENT, EVENT_MILESTONE, Mode
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from .adapters_values import PlanDecision
 from .ask_policy import blocks_on_person
 from .orchestrator_constants import log, result_landed_work
@@ -27,7 +27,7 @@ from .reply_standards import turn_holds_records
 from .orchestrator_types import OrchestratorResult
 from .planner_context import gathered_content
 from .link_provenance_pass import opened_web_pages, failed_page_reads, unopened_pages_note
-from hubofhubs.critique.link_guard import normalize_url_for_match
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import normalize_url_for_match
 from .planner_prompt import NOT_QUEUED_NOTE
 from .tools_status import fact_is_held
 

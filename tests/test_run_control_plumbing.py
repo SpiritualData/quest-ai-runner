@@ -7,10 +7,10 @@
 """
 from typing import Any, Dict, List
 
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
-from hubofhubs.ports.control import ControlMessage, RunControl
+from hubofhubs.the_world.tools.delegated_agent_sessions.control import ControlMessage, RunControl
 from quest_ai_runner.runner.executor import TaskExecutor
 
 from .conftest import StubProvider, StubRetrieval

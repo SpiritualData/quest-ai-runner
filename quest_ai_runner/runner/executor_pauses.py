@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.models import outage as provider_outage
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
 
 from ..core.orchestrator import OrchestratorResult
 from ..core import usage_limit

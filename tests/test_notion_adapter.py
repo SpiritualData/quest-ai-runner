@@ -32,7 +32,7 @@ from quest_ai_runner.act_as_the_body.notion_adapter import (
     normalize_id,
     static_token_provider,
 )
-from hubofhubs.recall.reference_resolver import collect_reference_resolvers
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
 
 from .notion_fake import (
     DB_ID,

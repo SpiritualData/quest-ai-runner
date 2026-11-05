@@ -7,7 +7,7 @@ dict to the hub's store and assembler as their ``seed_scope``.
 """
 from typing import Any, Dict
 
-from hubofhubs.recall.vector_scopes import SeedItems
+from hubofhubs.the_body.internal_context.card_store.vector_scopes import SeedItems
 
 __all__ = ["CARD_SEED_SCOPE", "SeedItems"]
 

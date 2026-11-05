@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from hubofhubs.deep.session import FILE_CHANGE_TOOLS, resolve_session_file, session_record_paths
+from hubofhubs.the_world.tools.delegated_agent_sessions.session import FILE_CHANGE_TOOLS, resolve_session_file, session_record_paths
 
 SEARCH_TOOLS = frozenset({"websearch"})
 OPEN_TOOLS = frozenset({"webfetch"})

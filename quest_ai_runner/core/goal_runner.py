@@ -14,11 +14,11 @@ from typing import Callable, Optional
 
 from esoi import implementation
 
-from hubofhubs.deep.launch import DeepLaunchSettings
-from hubofhubs.deep.settings import GoalSettings
-from hubofhubs.ports.deep import DeepResult, DeepRunner, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent  # noqa: F401
-from hubofhubs.ports.events import EVENT_EXEC  # noqa: F401
-from hubofhubs.deep.subprocess_runner import SubprocessGoalRunner as HubSubprocessGoalRunner
+from hubofhubs.the_world.tools.delegated_agent_sessions.launch import DeepLaunchSettings
+from hubofhubs.the_world.tools.delegated_agent_sessions.settings import GoalSettings
+from hubofhubs.the_world.tools.deep import DeepResult, DeepRunner, LAUNCH_MISSING_PROGRAM, LAUNCH_PERMISSION_DENIED, ProgressEvent  # noqa: F401
+from hubofhubs.the_world.tools.events import EVENT_EXEC  # noqa: F401
+from hubofhubs.the_world.tools.delegated_agent_sessions.subprocess_runner import SubprocessGoalRunner as HubSubprocessGoalRunner
 
 from .goal_runner_receipts import receipt_ids, receipt_lines, tool_records
 from .goal_runner_contract import (  # noqa: F401

@@ -9,12 +9,12 @@ import contextlib
 from typing import Any, ContextManager, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from hubofhubs.recall.card_store_lock import StoreLock
+from hubofhubs.the_body.internal_context.card_store.card_store_lock import StoreLock
 
 NOT_PREPARED = object()      # ``_store_write`` was not told which cold cards may move out: it looks
-from hubofhubs.recall.card_store_mounts import MODE_MOUNT, Mount
-from hubofhubs.recall.card_store_identity import ORIGIN_FIELD, read_meta as read_store_meta, writer_origins
-from hubofhubs.recall.context_bootstrap_support import card_file_paths
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import MODE_MOUNT, Mount
+from hubofhubs.the_body.internal_context.card_store.card_store_identity import ORIGIN_FIELD, read_meta as read_store_meta, writer_origins
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import card_file_paths
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -37,14 +37,14 @@ class OriginsMixin:
         Edits, the card limit and the tidy all work through it, so two processes never move or rewrite the
         same card at once (see ``card_store_lock``).
         """
-        from hubofhubs.recall.card_repository import FilesystemCardRepository
+        from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
         if isinstance(self._own_repo, FilesystemCardRepository) and not self._dry_run:
             return StoreLock.for_dir(str(self._cards_dir))
         return contextlib.nullcontext()
 
     def folder_bump(self) -> None:
         """Record that a card joined or left this store's folder, so other processes count it again."""
-        from hubofhubs.recall.card_repository import FilesystemCardRepository
+        from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
         if isinstance(self._own_repo, FilesystemCardRepository) and not self._dry_run:
             StoreLock.for_dir(str(self._cards_dir)).bump()
 

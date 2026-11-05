@@ -15,8 +15,8 @@ from .recent_context import (
     quest_scope_key,
     render_recent_cards,
 )
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.deep import runner_uses_deep_model
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.deep import runner_uses_deep_model
 from .orchestrator_capabilities import (
     context_assembly_timeout_seconds,
     record_context_assembly_timeout,
@@ -24,7 +24,7 @@ from .orchestrator_capabilities import (
 )
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
 from .orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
-from hubofhubs.recall.scope_tags import as_tag_list
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import as_tag_list
 
 # Said when a deep run's own context could not be had in time, so the person is not left thinking
 # the worker was given it. The log WARNING carries the detail.

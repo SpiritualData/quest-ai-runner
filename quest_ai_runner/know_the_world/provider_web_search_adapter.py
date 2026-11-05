@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from esoi import implementation
-from hubofhubs.websearch.provider_adapter import ProviderWebSearchAdapter as HubProviderWebSearchAdapter
+from hubofhubs.the_world.tools.web_search.provider_adapter import ProviderWebSearchAdapter as HubProviderWebSearchAdapter
 
 
 @implementation("search-the-web", "provider_web_search")

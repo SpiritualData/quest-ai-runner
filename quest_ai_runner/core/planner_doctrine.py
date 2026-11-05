@@ -8,7 +8,7 @@ which keeps the rule. Opt in with ``planner_prompt_profile="situational"``; the 
 from dataclasses import dataclass, fields, replace
 from typing import Any, Mapping, Optional
 
-from hubofhubs.doctrine import Doctrine, assemble_doctrine
+from hubofhubs.the_intelligence.mind.context_intake.doctrine import Doctrine, assemble_doctrine
 
 from .planner_prompt import PLANNER_RULES
 

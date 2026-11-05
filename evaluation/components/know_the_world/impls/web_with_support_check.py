@@ -5,7 +5,7 @@ path and not the wording of a real model's answer. Zero model calls."""
 import common
 from know_the_world import compose
 from quest_ai_runner.know_the_world.web_research import WebResearchAdapter
-from hubofhubs.websearch.cache import WebCache
+from hubofhubs.the_world.tools.web_search.cache import WebCache
 from web_search import bench
 from web_search.impls import _vendor
 

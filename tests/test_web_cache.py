@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import time
 
-from hubofhubs.websearch.cache import WebCache, normalize_query
+from hubofhubs.the_world.tools.web_search.cache import WebCache, normalize_query
 
 
 # ---------------------------------------------------------------------------

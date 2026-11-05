@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Un
 
 
 
-from hubofhubs.ports.model import ModelProvider
-from hubofhubs.ports.deep import FileWriter
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
+from hubofhubs.the_world.tools.deep import FileWriter
 from .core.adapters_deep import EscalationSink
 from .core.adapters_guidance import GuidanceProvider
 from .core.adapters_retrieval import RetrievalAdapter
@@ -30,7 +30,7 @@ from .core.adapters_retrieval import RetrievalAdapter
 # import (needed for the RunnerConfig.mcp_servers field type) carries no circular-import risk,
 # same discipline as the file_context_store import above. It does NOT require the optional [mcp]
 # package -- hubofhubs.act.mcp_client only imports that lazily, inside its own connection seam.
-from hubofhubs.act.mcp_client import MCPServerSpec
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPServerSpec
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .core.resolve import resolve
 from .core.runtime_settings import CoreSettings

@@ -3,7 +3,7 @@ resolvers, coercion of consumer callables) and the production renderer ``render_
 (``hubofhubs.recall.reference_resolver``, ``hubofhubs.recall.card_content_render``), reached through the registry QAR exports as
 ``quest_ai_runner.adapters.build_resolver_registry``. The fakes are the consumer's
 file text and scripted resolvers. Zero model calls, zero network."""
-from hubofhubs.recall.card_content_render import render_card_content_blocks
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import render_card_content_blocks
 from quest_ai_runner.adapters import build_resolver_registry
 
 

@@ -18,8 +18,8 @@ from typing import Any, Dict
 import pytest
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.recall.context_card_extraction import trim_content_by_recency
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import trim_content_by_recency
+from hubofhubs.the_body.internal_context.context import AssembledContext
 
 
 

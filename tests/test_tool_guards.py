@@ -2,7 +2,7 @@
 companion. Offline; no model."""
 from types import SimpleNamespace
 
-from hubofhubs.act.execution_record import ExecutionRecord
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
 
 from quest_ai_runner.core import tool_guards
 from quest_ai_runner.core.model_registry import ModelRegistry

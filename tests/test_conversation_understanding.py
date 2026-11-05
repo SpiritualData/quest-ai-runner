@@ -16,11 +16,11 @@ Covers:
 """
 import json
 
-from hubofhubs.recall.conversation_format import compact_message
+from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import compact_message
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from hubofhubs.ports.context import ConversationContext
-from hubofhubs.ports.deep import ProgressEvent
-from hubofhubs.ports.events import EVENT_UNDERSTANDING, Mode
+from hubofhubs.the_body.internal_context.context import ConversationContext
+from hubofhubs.the_world.tools.deep import ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_UNDERSTANDING, Mode
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator

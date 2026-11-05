@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from hubofhubs.orchestrate.oversee import OverseeMixin as HubOverseeMixin
+from hubofhubs.the_intelligence.mind.delegation.overseer.oversee import OverseeMixin as HubOverseeMixin
 from .adapters_values import Escalation
 from .overseer import OverseerSignal, build_digest, oversee  # noqa: F401
 from .planner_context import _summarize_observation

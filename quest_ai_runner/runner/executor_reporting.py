@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from ..core.ask_policy import Assignee, file_ask
 from ..core.orchestrator import OrchestratorResult, _strip_future_context
 from ..core.tools_status import record_worked
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from .context_updates import parse_manifest, parse_usage_notes, render_receipt, strip_usage_block
 from .executor_support import (
     ExecutionOutcome,

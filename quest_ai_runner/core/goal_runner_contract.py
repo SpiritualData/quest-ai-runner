@@ -14,33 +14,14 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Optional, Tuple
 
-from hubofhubs.deep import contract as hub
-from hubofhubs.deep.contract import (  # noqa: F401  (same objects, old import path)
-    BALANCED_CLI_MODEL,
-    CANCEL_POLL_SECONDS,
-    CLAUDE_CODE_MODEL_PATTERN,
-    DEEP_REVIEW_CALL_TIMEOUT_SECONDS,
-    DEEP_REVIEW_PROMPT,
-    DEFAULT_CANCEL_GRACE_SECONDS,
-    DEFAULT_DEEP_MAX_TURNS,
-    DEFAULT_DEEP_REVIEW_MODEL,
-    DEFAULT_MONITOR_HEARTBEAT_SECONDS,
-    ESCALATION_ID_RE,
-    RESUME_TARGET_MISSING_MARKERS,
-    WEB_TOOLS,
-    GoalRunner,
-    SubprocessConfig,
-    envelope_reports_no_work,
-    kill_process_group,
-    log as _log,
-    parse_deep_review,
-    parse_worker_output as _parse_worker_output,
-    resume_target_missing,
-    signal_process_group,
-    stop_process_group,
-)
-from hubofhubs.deep.launch import DeepLaunchSettings
-from hubofhubs.deep.settings import GoalSettings
+from hubofhubs.the_world.tools.delegated_agent_sessions import contract as hub
+from hubofhubs.the_world.tools.delegated_agent_sessions.contract import (
+    BALANCED_CLI_MODEL, CANCEL_POLL_SECONDS, CLAUDE_CODE_MODEL_PATTERN, DEEP_REVIEW_CALL_TIMEOUT_SECONDS, DEEP_REVIEW_PROMPT,
+    DEFAULT_CANCEL_GRACE_SECONDS, DEFAULT_DEEP_MAX_TURNS, DEFAULT_DEEP_REVIEW_MODEL, DEFAULT_MONITOR_HEARTBEAT_SECONDS, ESCALATION_ID_RE,
+    RESUME_TARGET_MISSING_MARKERS, WEB_TOOLS, GoalRunner, SubprocessConfig, envelope_reports_no_work, kill_process_group, log as _log,
+    parse_deep_review, parse_worker_output as _parse_worker_output, resume_target_missing, signal_process_group, stop_process_group)
+from hubofhubs.the_world.tools.delegated_agent_sessions.launch import DeepLaunchSettings
+from hubofhubs.the_world.tools.delegated_agent_sessions.settings import GoalSettings
 
 from . import prompt_budget, standing_instructions, usage_limit
 from .requester import apply_requester_env

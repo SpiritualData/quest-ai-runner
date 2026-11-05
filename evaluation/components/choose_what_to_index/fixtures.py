@@ -21,7 +21,7 @@ Every card id that comes from a snapshot contains ``snap``; the nested project's
 import json
 from pathlib import Path
 
-from hubofhubs.recall.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import write_bootstrap_meta
 
 SERIES_DIR = "backups"

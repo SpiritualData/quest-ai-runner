@@ -16,8 +16,8 @@ work is actually carried out through it.
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.deep import DeepResult, ProgressEvent
-from hubofhubs.ports.events import EVENT_EXEC
+from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_EXEC
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator

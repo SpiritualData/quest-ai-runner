@@ -10,11 +10,11 @@ from .auxiliary_prompts import (
     DERIVE_GOAL_CONDITION_PROMPT,
     GOAL_CONDITION_SYSTEM,
 )
-from hubofhubs.ports.model import STEP_SUMMARIZE, STEP_UNDERSTAND, answer_with_reasoning
-from hubofhubs.ports.events import EVENT_DECISION, EVENT_DONE, EVENT_MILESTONE
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.model import STEP_SUMMARIZE, STEP_UNDERSTAND, answer_with_reasoning
+from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_DONE, EVENT_MILESTONE
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from .adapters_values import Escalation, PlanDecision, parse_deadline
-from hubofhubs.act.execution_record import ExecutionRecord
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
 from .prompt_specs import render_prompt
 from .orchestrator_decisions import (
     _ACK_PHRASES,

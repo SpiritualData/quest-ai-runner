@@ -427,7 +427,7 @@ from .act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapt
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (ConfigFileError, RunnerConfig, apply_file_defaults,
                      load_quest_client, resolve_config_objects)
-from hubofhubs.ports.model import ModelProvider
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
 from .pricing import estimate_bootstrap_cost
 from .runner.channel_runner import ChannelRunner
 from .runner.poller import Poller

@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.goal_runner import SubprocessConfig
 from quest_ai_runner.act_as_the_body.goal_runner_stream import StreamJsonGoalRunner
 from quest_ai_runner.core.model_registry import ModelRegistry

@@ -42,8 +42,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation, solution
-from hubofhubs.ports.model import ModelProvider
-from hubofhubs.seats import ModelCalling
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 from .model_registry import ModelRegistry, is_vision_capable
 from .prompt_specs import PromptSpec, register, render_prompt
 

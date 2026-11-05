@@ -22,14 +22,8 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
-from hubofhubs.ports.deep import DeepResult, ProgressEvent
-from hubofhubs.ports.events import (
-    EVENT_CONTEXT,
-    EVENT_EXEC,
-    EVENT_PLAN,
-    EVENT_STATUS,
-    EVENT_UNDERSTANDING,
-)
+from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT, EVENT_EXEC, EVENT_PLAN, EVENT_STATUS, EVENT_UNDERSTANDING
 from quest_ai_runner.core.inbox import InMemoryInbox
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 from quest_ai_runner.interactive_session_tracker import _DeepRunTracker

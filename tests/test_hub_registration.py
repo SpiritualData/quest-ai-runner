@@ -1,6 +1,6 @@
 """QAR registers its card repository with the hub at import and assembles it through the hub (offline, no model call)."""
 import hubofhubs
-from hubofhubs.card import Card
+from hubofhubs.the_body.internal_context.card_store.card import Card
 
 import quest_ai_runner.hub as qar_hub
 

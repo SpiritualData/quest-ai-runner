@@ -23,7 +23,7 @@ from quest_ai_runner.adapters import FilesAdapter
 from quest_ai_runner.act_as_the_body.composite_retrieval_adapter import CompositeRetrievalAdapter
 from quest_ai_runner.adapters.google_chat_adapter import DEFAULT_CHAT_SCOPES, GoogleChatAdapter
 from quest_ai_runner.act_as_the_body.notion_adapter import NotionAdapter
-from hubofhubs.recall.reference_resolver import collect_reference_resolvers
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
 from quest_ai_runner.config import ConfigFileError, RunnerConfig, resolve_config_objects
 from quest_ai_runner.config_retrieval import fold_into_retrieval
 from quest_ai_runner.runner.context_updates import build_update_engine

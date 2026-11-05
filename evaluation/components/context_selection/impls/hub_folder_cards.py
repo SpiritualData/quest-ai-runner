@@ -5,7 +5,7 @@ import posixpath
 import tempfile
 
 from context_selection.store_cost import store_charged
-from hubofhubs.recall.cards_from_files import file_card, group_card
+from hubofhubs.the_intelligence.subconscious.cards_from_files.cards_from_files import file_card, group_card
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 

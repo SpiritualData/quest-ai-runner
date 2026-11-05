@@ -11,7 +11,8 @@ from typing import List, Sequence
 
 from typing import Any, Mapping
 
-from hubofhubs.recall.scope_tags import ScopeTags, as_tag_list, scope_tags_allow, scope_tags_from_keys as hub_scope_tags_from_keys
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import (
+    ScopeTags, as_tag_list, scope_tags_allow, scope_tags_from_keys as hub_scope_tags_from_keys)
 
 QUEST_KINDS = ("quest",)
 
@@ -86,7 +87,7 @@ def card_affinity_factor(card: Mapping[str, Any], turn_tags: ScopeTags) -> float
     try:
         if not affinity_mode():
             return 1.0
-        from hubofhubs.recall.affinity_tags import affinity_factor
+        from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.affinity_tags import affinity_factor
         return affinity_factor(quest_affinity_tags(card_scope_tags(card)), quest_affinity_tags(turn_tags),
                                home_boost=AFFINITY_HOME_BOOST, away_factor=AFFINITY_AWAY_FACTOR)
     except Exception:  # noqa: BLE001

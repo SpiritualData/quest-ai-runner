@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.core import usage_limit
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorConfig, OrchestratorResult
 from quest_ai_runner.core.orchestrator_constants import AUTO_FOLLOWUP_MAX_RUNS
 from quest_ai_runner.runner.auto_followup import assess, followup_brief

@@ -11,15 +11,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
-from hubofhubs.recall.card_repository import FilesystemCardRepository
-from hubofhubs.recall.card_store_identity import ensure_store_id, read_meta, store_id_of, update_identity
-from hubofhubs.recall.card_store_mounts import (
-    Mount,
-    copy_origin_root,
-    discover_ancestor_stores,
-    discover_nested_stores,
-    resolve_mounts,
-)
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_store_identity import ensure_store_id, read_meta, store_id_of, update_identity
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import (
+    Mount, copy_origin_root, discover_ancestor_stores, discover_nested_stores, resolve_mounts)
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .walk_settings import STORE_DIR_NAME, effective_skip_dirs

@@ -13,31 +13,22 @@ from .auxiliary_prompts import (
     DEEP_FUTURE_CONTEXT_INSTRUCTION,
     SELF_INITIATED_READ_ONLY_INSTRUCTION,
 )
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.deep import (
-    DeepResult,
-    FUTURE_CONTEXT_VIA_FIELD,
-    ProgressEvent,
-    runner_starts_background_work,
-    runner_uses_deep_model,
-)
-from hubofhubs.critique.done_evidence import (
-    CONTINUE, continue_decision, coverage_gap, coverage_progress, interim_data, parse_coverage,
-    render_continue_plan, render_coverage_line)
-from hubofhubs.ports.events import EVENT_EXEC, EVENT_INTERIM, EVENT_MILESTONE, EVENT_STATUS
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.deep import DeepResult, FUTURE_CONTEXT_VIA_FIELD, ProgressEvent, runner_starts_background_work, runner_uses_deep_model
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.done_evidence import (
+    CONTINUE, continue_decision, coverage_gap, coverage_progress, interim_data, parse_coverage, render_continue_plan, render_coverage_line)
+from hubofhubs.the_world.tools.events import EVENT_EXEC, EVENT_INTERIM, EVENT_MILESTONE, EVENT_STATUS
 from .adapters_values import PlanDecision
 from .deep_model_selection import start_status_text
 from .goal_metrics import GoalMetrics, run_hint, working_dir_of
 from . import launch_failure, usage_limit
 from .goal_runner import cli_safe_model
-from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord, classify_exec_phase
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .planner_context import _is_discovery_obs, _render_gathered
 from .orchestrator_decisions import _truncate_goal, apply_quest_data_ladder_guard
 from .orchestrator_decide_tool import DEFERRED_RUNNER_KEY
 from .adapters_deep import StagedPlanRunner
-from hubofhubs.orchestrate.staged_plan import (
-    count_tasks, is_staged, split_plan, step_allows, tasks_flat, tasks_in,
-)
+from hubofhubs.the_intelligence.mind.planner.staged_plan import count_tasks, is_staged, split_plan, step_allows, tasks_flat, tasks_in
 from .orchestrator_constants import (
     CONTINUE_AFTER_DECISION_NOTE,
     DEEP_CONTINUATION_TURN_MULTIPLIER_CAP,
@@ -67,9 +58,8 @@ from .orchestrator_text import (
 )
 from .orchestrator_turn import TurnCardCache, _Emitter
 from .requester import requester_from_meta
-from hubofhubs.act.tool_ledger import (
-    STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something,
-    describe_failure, repeated_failure, unrecovered_failures)
+from hubofhubs.the_body.internal_context.run_store.tool_ledger import (
+    STUCK_OUTPUT_ALIKE, STUCK_REASON_ALIKE, ToolOutcome, alike, changed_something, describe_failure, repeated_failure, unrecovered_failures)
 from .orchestrator_types import OrchestratorResult
 from .ask_policy import blocks_on_person, stop_reason_of
 from .worker_ask_adoption import adopt_worker_asks

@@ -26,10 +26,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
-from hubofhubs.recall import card_origin
-from hubofhubs.recall import card_store_identity as ident
-from hubofhubs.recall.card_repository import FilesystemCardRepository
-from hubofhubs.recall.card_store_merge import item_id
+from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_store_merge import item_id
 from .card_shape_guard import refusal as card_shape_refusal
 from .quest_api_card_repository import BULK_MAX_CARDS, runner_env_id, strip_server_owned
 

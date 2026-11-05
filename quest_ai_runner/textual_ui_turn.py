@@ -45,21 +45,9 @@ class TurnMixin:
 
     def _types(self) -> dict:
         if self._ev is None:
-            from hubofhubs.ports.events import (
-                EVENT_CONTEXT,
-                EVENT_STATUS,
-                EVENT_PLAN,
-                EVENT_READ,
-                EVENT_REPLAN,
-                EVENT_PARTIAL,
-                EVENT_EXEC,
-                EVENT_INTENT,
-                EVENT_RESULT,
-                EVENT_DECISION,
-                EVENT_MILESTONE,
-                EVENT_DONE,
-                EVENT_UNDERSTANDING,
-            )
+            from hubofhubs.the_world.tools.events import (
+                EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_PARTIAL, EVENT_EXEC, EVENT_INTENT, EVENT_RESULT,
+                EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING)
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN,
                 read=EVENT_READ, replan=EVENT_REPLAN, partial=EVENT_PARTIAL,
@@ -354,7 +342,7 @@ class TurnMixin:
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after
             # the live deep widgets are gone. Each task leaves a permanent record.
-            from hubofhubs.act.execution_record import classify_exec_phase
+            from hubofhubs.the_body.internal_context.run_store.execution_record import classify_exec_phase
             outcome = classify_exec_phase(data.get("phase") if isinstance(data, dict) else None)
             if outcome is not None:
                 self._deep.set_run_status(run_id, "done" if outcome == "success" else "error")

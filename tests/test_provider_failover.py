@@ -117,7 +117,7 @@ def test_the_failover_list_names_one_model_per_other_configured_vendor_and_honou
 
 
 def test_build_orchestrators_wiring_gives_the_router_its_failover_models(monkeypatch):
-    from hubofhubs.models.anthropic import AnthropicProvider
+    from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
     for variable in ("ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_BASE_URL", "QAR_FALLBACK_MODELS"):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")

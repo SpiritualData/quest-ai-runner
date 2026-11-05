@@ -24,8 +24,8 @@ from typing import List, Optional
 import pytest
 
 from quest_ai_runner.core import goal_runner_contract
-from hubofhubs.ports.deep import DeepResult, ProgressEvent
-from hubofhubs.ports.events import EVENT_EXEC
+from hubofhubs.the_world.tools.deep import DeepResult, ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_EXEC
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from quest_ai_runner.core.goal_runner_contract import kill_process_group
 from quest_ai_runner.core.model_registry import ModelRegistry
@@ -85,7 +85,7 @@ def runner_for(tmp_path: Path, ignore: tuple = (), grace: float = 0.4) -> Subpro
 @pytest.fixture(autouse=True)
 def quick_poll(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "fake-home"))
-    monkeypatch.setattr("hubofhubs.deep.subprocess_runner.CANCEL_POLL_SECONDS", 0.1)
+    monkeypatch.setattr("hubofhubs.the_world.tools.delegated_agent_sessions.subprocess_runner.CANCEL_POLL_SECONDS", 0.1)
 
 
 def cancel_once_started(tmp_path: Path):

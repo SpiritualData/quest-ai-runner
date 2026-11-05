@@ -14,8 +14,8 @@ from datetime import datetime, timedelta, timezone
 # Value objects passed across the boundary (plain data, no behavior).
 # ---------------------------------------------------------------------------
 
-from hubofhubs.ports.retrieval import Observation  # noqa: F401  (moved to the hub; same class, old import path)
-from hubofhubs.orchestrate.plan import PlanDecision  # noqa: F401  (moved to the hub; same class, old import path)
+from hubofhubs.the_world.observation import Observation  # noqa: F401  (moved to the hub; same class, old import path)
+from hubofhubs.the_intelligence.mind.planner.plan import PlanDecision  # noqa: F401  (moved to the hub; same class, old import path)
 
 
 @dataclass

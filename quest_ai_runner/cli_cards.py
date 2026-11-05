@@ -29,7 +29,7 @@ def lane_store(args):
 
 def run_cards_command(args, log) -> int:
     """Run the `cards` subcommand; returns the process exit code."""
-    from hubofhubs.recall.card_limit_report import write_report
+    from hubofhubs.the_body.internal_context.card_store.card_limit_report import write_report
     from .adapters.card_limit_report import report_for
     from .adapters.card_store_settings import max_cards_from_env
 
@@ -51,13 +51,13 @@ def run_cards_command(args, log) -> int:
         return 2
     if op == "tidy":
         if undo:
-            from hubofhubs.recall.card_repository import FilesystemCardRepository
-            from hubofhubs.recall.card_store_tidy import MANIFEST_SUFFIX
+            from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+            from hubofhubs.the_body.internal_context.card_store.card_store_tidy import MANIFEST_SUFFIX
             if str(undo).endswith(MANIFEST_SUFFIX):
                 return undo_repository(FilesystemCardRepository(cards_dir), Path(cards_dir), Path(undo))
             return undo_cards(Path(cards_dir), Path(undo))
         if getattr(args, "merge_topics", False):
-            from hubofhubs.recall.card_repository import FilesystemCardRepository
+            from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
             local = FilesystemCardRepository(cards_dir)
             return tidy_repository(repository_store(cards_dir, corpus, None), local, Path(cards_dir),
                                    apply=bool(getattr(args, "apply", False)), merge_topics=True,
@@ -66,7 +66,7 @@ def run_cards_command(args, log) -> int:
         status = tidy_cards(Path(cards_dir), apply=applying)
         # What the folder tidy cannot do: a compounded card that is the only copy is re-keyed to its one-hop id (every
         # write to its current id is refused). A second pass joins the second of two cards re-keyed to one id.
-        from hubofhubs.recall.card_repository import FilesystemCardRepository
+        from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
         for _pass in range(2 if applying else 1):
             print("")
             rekeyed = tidy_repository(repository_store(cards_dir, corpus, None), FilesystemCardRepository(cards_dir),
@@ -76,7 +76,7 @@ def run_cards_command(args, log) -> int:
     text = report_for(cards_dir, max_cards_from_env())
     print(text)
     if args.write:
-        from hubofhubs.recall.card_limit_report import REPORT_NAME
+        from hubofhubs.the_body.internal_context.card_store.card_limit_report import REPORT_NAME
         if write_report(Path(cards_dir), text):
             print(f"Written to {Path(cards_dir) / REPORT_NAME}")
     return 0
@@ -97,7 +97,7 @@ def tidy_repository(store, repo, cards_dir: Path, *, apply: bool, merge_topics: 
     changes through the repository, then a check. Only the cards this lane owns are looked at. ``merge_topics`` joins
     cards that pin a keeper's files under another name onto it (the default keeps them as distinct topics);
     ``reasons`` narrows what is looked for (a local folder with ``--merge-topics`` looks for that alone)."""
-    from hubofhubs.recall import card_store_tidy as tidy
+    from hubofhubs.the_body.internal_context.card_store import card_store_tidy as tidy
 
     cards = store._own_cards()
     plan = tidy.plan_store(cards, cards_dir=cards_dir, reasons=reasons or tidy.DEFAULT_REASONS,
@@ -134,7 +134,7 @@ def tidy_repository(store, repo, cards_dir: Path, *, apply: bool, merge_topics: 
 
 def undo_repository(repo, cards_dir: Path, manifest: Path) -> int:
     """Take back a tidy made through the repository: re-create each removed card, restore each updated keeper."""
-    from hubofhubs.recall.card_store_tidy import RepositoryTidy
+    from hubofhubs.the_body.internal_context.card_store.card_store_tidy import RepositoryTidy
 
     if not manifest.is_file():
         print(f"error: {manifest} is not a file. The manifests are the *-store-tidy-manifest.jsonl files in "
@@ -153,8 +153,8 @@ def undo_repository(repo, cards_dir: Path, manifest: Path) -> int:
 
 def tidy_cards(cards_dir: Path, *, apply: bool) -> int:
     """List (or, with ``apply``, carry out) the moves the store's own tidy makes. Nothing is ever deleted."""
-    from hubofhubs.recall import card_store_hygiene as hygiene
-    from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
+    from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
+    from hubofhubs.the_body.internal_context.card_store.card_store_lock import TIDY_LOCK_FILE, StoreLock
 
     own_store_id = hygiene.store_id_of(cards_dir)
     plan = hygiene.plan_tidy(hygiene.card_files_in(cards_dir), own_store_id=own_store_id)
@@ -191,8 +191,8 @@ def tidy_cards(cards_dir: Path, *, apply: bool) -> int:
 def undo_cards(cards_dir: Path, manifest: Path) -> int:
     """Take back the moves a tidy manifest records. Moving the files back by hand puts the cards back but not
     what was joined onto the cards that stood for them (each joined note would then exist twice); this does both."""
-    from hubofhubs.recall import card_store_hygiene as hygiene
-    from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
+    from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
+    from hubofhubs.the_body.internal_context.card_store.card_store_lock import TIDY_LOCK_FILE, StoreLock
 
     if not manifest.is_file():
         print(f"error: {manifest} is not a file. The manifests are the *-tidy-manifest.jsonl files in "

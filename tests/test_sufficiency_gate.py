@@ -8,8 +8,8 @@ nothing enforced it.
 """
 from typing import Any, Dict, List
 
-from hubofhubs.recall.reference_resolver import NoteResolver
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import NoteResolver
+from hubofhubs.the_body.internal_context.context import AssembledContext
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig

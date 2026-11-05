@@ -1,8 +1,8 @@
 """The whole runner as one function: ``quest_ai_runner.run("quest-ai-runner", message)`` and the seats it is built from."""
 import pytest
 from esoi.entry import Pending
-from hubofhubs.card import Card
-from hubofhubs.cardstore import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
+from hubofhubs.the_body.internal_context.card_store.card import Card
+from hubofhubs.the_body.internal_context.card_store.cardstore import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
 from quest_ai_runner.loop_wiring import GoalAnswer
@@ -64,7 +64,8 @@ def test_the_library_takes_its_model_and_recall_by_the_interfaces_of_their_own_s
     call-a-model's own interface (a subtype of the hub's, so a plain hub provider still fills it) and the recall seat is
     remember-and-recall's own."""
     import typing
-    from hubofhubs.seats import ModelCalling, Remembering
+    from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
+    from hubofhubs.the_intelligence.subconscious.interface import Remembering
     from quest_ai_runner.core.planner_context import CardRecall
     from quest_ai_runner.goal_agent import QuestAiRunnerLibrary
     from quest_ai_runner.providers import RoutedModelCalling

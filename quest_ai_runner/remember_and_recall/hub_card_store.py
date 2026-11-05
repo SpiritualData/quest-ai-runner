@@ -16,8 +16,8 @@ from typing import Any, Dict, List, Optional
 
 from esoi import implementation, solution
 from esoi.requirements import api, env
-from hubofhubs.card import Card
-from hubofhubs.seats import CardStore
+from hubofhubs.the_body.internal_context.card_store.card import Card
+from hubofhubs.the_body.internal_context.card_store.interface import CardStore
 
 
 @solution("card-store", kind="store", entry="search", example="rust release")

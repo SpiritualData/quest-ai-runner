@@ -2,7 +2,7 @@
 is tested in the hub; every test here is offline."""
 from __future__ import annotations
 
-from hubofhubs.critique.link_guard import DEAD, OK, LinkGuard, LinkPolicy
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import DEAD, OK, LinkGuard, LinkPolicy
 
 
 def fetcher_for(statuses):
@@ -153,7 +153,7 @@ def deep_turn(runner, message="show me my docs"):
 
 
 def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_itself():
-    from hubofhubs.ports.deep import DeepResult
+    from hubofhubs.the_world.tools.deep import DeepResult
 
     from .test_deep_run_status_honesty import ScriptedRunner
 
@@ -169,7 +169,7 @@ def test_an_in_process_runners_invented_link_is_stripped_and_cannot_vouch_for_it
 
 
 def test_a_real_claude_code_workers_output_keeps_its_exemption():
-    from hubofhubs.ports.deep import DeepResult
+    from hubofhubs.the_world.tools.deep import DeepResult
 
     from .test_deep_run_status_honesty import ScriptedRunner
 
@@ -182,7 +182,7 @@ def test_a_real_claude_code_workers_output_keeps_its_exemption():
 def test_link_evidence_excludes_model_written_deep_output_but_keeps_what_it_read():
     from types import SimpleNamespace
 
-    from hubofhubs.ports.deep import DeepResult
+    from hubofhubs.the_world.tools.deep import DeepResult
     from quest_ai_runner.core.orchestrator_judges import JudgesMixin
 
     res = SimpleNamespace(deep_results=[

@@ -9,16 +9,16 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 
-from hubofhubs.ports.deep import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
+from hubofhubs.the_world.tools.deep import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
 from .adapters_values import PlanDecision
 from .auxiliary_prompts import QUEST_DATA_WRITE_SURFACE_INSTRUCTION
 from .model_registry import TIERS
 from .deep_model_selection import normalize_difficulty
 from .orchestrator_types import OrchestratorConfig
-from hubofhubs.orchestrate.staged_plan import normalize_staged_subtasks
+from hubofhubs.the_intelligence.mind.planner.staged_plan import normalize_staged_subtasks
 from .orchestrator_constants import log
 from .reply_standards import REPLY_SHAPES
-from hubofhubs.critique.done_evidence import clean_requirements
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.done_evidence import clean_requirements
 from .orchestrator_decide_tool import (
     USER_INTENT_ACT, WORK_SHAPE_ANALYSIS, normalize_user_intent, normalize_work_shape)
 

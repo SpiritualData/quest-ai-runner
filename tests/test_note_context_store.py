@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from quest_ai_runner.core.note_context_store import NoteContextStore, _stem_candidates
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 
 
 # ---------------------------------------------------------------------------

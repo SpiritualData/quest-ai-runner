@@ -12,12 +12,12 @@ import json
 from pathlib import Path
 from typing import Callable, Optional
 
-from hubofhubs.recall import card_limit as limit_mod
-from hubofhubs.recall import card_store_hygiene as hygiene
-from hubofhubs.recall import card_store_tidy as tidy
-from hubofhubs.recall.background_pacing import Pacer
-from hubofhubs.recall.card_repository import FilesystemCardRepository
-from hubofhubs.recall.card_store_lock import TIDY_LOCK_FILE, StoreLock
+from hubofhubs.the_body.internal_context.card_store import card_limit as limit_mod
+from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
+from hubofhubs.the_body.internal_context.card_store import card_store_tidy as tidy
+from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_store_lock import TIDY_LOCK_FILE, StoreLock
 
 from . import card_store_tidy as tidy_words
 from .card_store_settings import max_cards_per_folder, skip_dirs_from_env

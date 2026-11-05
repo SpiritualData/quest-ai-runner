@@ -5,4 +5,4 @@ The ``Escalation`` an ask becomes is built by the factory in ``acp_deep_runner_c
 """
 from __future__ import annotations
 
-from hubofhubs.deep.acp_session import AcpRun, AcpSessionClient, open_agent_connection  # noqa: F401  (same objects, old import path)
+from hubofhubs.the_world.tools.delegated_agent_sessions.acp_session import AcpRun, AcpSessionClient, open_agent_connection  # noqa: F401  (same objects, old import path)

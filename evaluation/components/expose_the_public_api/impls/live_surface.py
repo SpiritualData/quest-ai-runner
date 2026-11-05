@@ -16,9 +16,9 @@ from datetime import datetime, timedelta, timezone
 import quest_ai_runner
 from quest_ai_runner import bootstrap_email
 from quest_ai_runner.core import scaffolding
-from hubofhubs.act import signature_probe
+from hubofhubs.the_world.model_plumbing import signature_probe
 from quest_ai_runner.take_in_the_world import async_bridge
-from hubofhubs.act import editblock as aider_editblock
+from hubofhubs.the_world.tools.file_editing import editblock as aider_editblock
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([.-]\w+)?$")
 NO_NETWORK = ("import socket\n"

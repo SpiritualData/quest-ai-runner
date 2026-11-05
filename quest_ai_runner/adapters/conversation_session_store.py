@@ -38,8 +38,8 @@ class ChatSessionStore:
 
     def current_slice(self, conv_id: str, query: str, **kwargs) -> Any:
         try:
-            from hubofhubs.ports.context import ConversationContext
-            from hubofhubs.recall.conversation_format import select_current_slice
+            from hubofhubs.the_body.internal_context.context import ConversationContext
+            from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import select_current_slice
             messages = []
             for u, a in self._history:
                 messages.append({"role": "user", "content": u})
@@ -57,16 +57,16 @@ class ChatSessionStore:
                 scanned=len(messages), truncated=truncated,
             )
         except Exception:
-            from hubofhubs.ports.context import ConversationContext
+            from hubofhubs.the_body.internal_context.context import ConversationContext
             return ConversationContext(scanned=0)
 
     def related_slices(self, query: str, scope: Any, **kwargs) -> Any:
         try:
             store = self._get_file_store()
             if store is None:
-                from hubofhubs.ports.context import ConversationContext
+                from hubofhubs.the_body.internal_context.context import ConversationContext
                 return ConversationContext(scanned=0)
             return store.related_slices(query, scope or {}, **kwargs)
         except Exception:
-            from hubofhubs.ports.context import ConversationContext
+            from hubofhubs.the_body.internal_context.context import ConversationContext
             return ConversationContext(scanned=0)

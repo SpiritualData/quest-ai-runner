@@ -88,7 +88,7 @@ def test_vector_hit_of_a_quest_card_is_fenced_by_its_quest_alone():
     """The vector arm fences a hit by the payload's scope_tags, so a quest card whose stored tags grew
     another quest's tag must still carry only its own quest's tag there (REL-ISO-01)."""
     from quest_ai_runner.core.scope_tags import card_scope_tags
-    from hubofhubs.recall.scope_tags import scope_tags_allow
+    from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import scope_tags_allow
     business = {"managed_by": "quest", "quest_id": "quest_biz", "scope_tags": ["quest:quest_biz", "quest:quest_fit"]}
     assert card_scope_tags(business) == ["quest:quest_biz"]
     assert not scope_tags_allow(card_scope_tags(business), ["quest:quest_fit"])

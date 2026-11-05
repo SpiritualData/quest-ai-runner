@@ -37,15 +37,9 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from hubofhubs.orchestrate.cascade import (  # noqa: F401  (the hub's structural half of the cascade)
-    CONFIDENCE_LEVELS,
-    ESCALATABLE_ACTIONS,
-    apply_review as hub_apply_review,
-    escalation_spec,
-    should_escalate,
-    truncate_keep_both_ends,
-    user_goal_fallback as hub_user_goal_fallback,
-)
+from hubofhubs.the_intelligence.mind.planner.cascade import (
+    CONFIDENCE_LEVELS, ESCALATABLE_ACTIONS, apply_review as hub_apply_review, escalation_spec, should_escalate, truncate_keep_both_ends,
+    user_goal_fallback as hub_user_goal_fallback)
 
 from .adapters_values import PlanDecision
 from .prompt_specs import declare, render_prompt

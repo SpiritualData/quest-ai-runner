@@ -209,7 +209,7 @@ def test_a_dedup_merge_across_new_and_stored_cards_yields_plain_paths():
     raised TypeError: unhashable type: 'dict' -- after all the model work was done, reported as
     "Cards created: 0". It only bites on a RE-bootstrap, which is why a first run looked fine.
     """
-    from hubofhubs.recall.context_bootstrap_support import merge_card_group, card_file_paths
+    from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import merge_card_group, card_file_paths
 
     fresh = {"id": "a", "name": "A", "keywords": ["k1"], "files": ["src/a.py"]}
     stored = {"id": "b", "name": "B", "keywords": ["k2"],
@@ -271,7 +271,7 @@ def test_a_nameless_card_whose_summary_is_only_scaffolding_is_degenerate():
 def test_merging_cards_does_not_grow_keywords_without_bound():
     # Merges compound: one real store held a card with 2,174 keywords where the prompt asks for
     # 5 to 12. That card matches almost any query and crowds out the ones that actually answer it.
-    from hubofhubs.recall.context_bootstrap_support import merge_card_group, MAX_MERGED_KEYWORDS
+    from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import merge_card_group, MAX_MERGED_KEYWORDS
 
     group = [{"id": f"c{i}", "name": f"C{i}", "files": [f"f{i}.py"],
               "keywords": [f"kw{i}_{j}" for j in range(20)]} for i in range(10)]

@@ -5,7 +5,7 @@ names into the value (``config_core_settings.deep_launch_from_env``) and the def
 """
 from __future__ import annotations
 
-from hubofhubs.deep.launch import DeepLaunchSettings, build_deep_argv, lean_flags  # noqa: F401  (same objects, old import path)
+from hubofhubs.the_world.tools.delegated_agent_sessions.launch import DeepLaunchSettings, build_deep_argv, lean_flags  # noqa: F401  (same objects, old import path)
 
 # Named launch profiles, selected by ``QAR_DEEP_LAUNCH_PROFILE`` (config_core_settings). Unset, the launch is today's.
 #

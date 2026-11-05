@@ -18,11 +18,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.inbox import InMemoryInbox
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
-from hubofhubs.ports.control import RunControl
+from hubofhubs.the_world.tools.delegated_agent_sessions.control import RunControl
 from quest_ai_runner.textual_ui import QuestAITerminal
 from quest_ai_runner.textual_ui_control import TerminalRunControl
 

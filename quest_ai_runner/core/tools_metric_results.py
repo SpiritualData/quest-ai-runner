@@ -21,7 +21,7 @@ from typing import Any, Dict, Mapping, Optional
 from esoi.metric_results import (SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger, MetricResult, payload_of,
                                  render_line)
 from esoi.spec_slice import describe_metric
-from hubofhubs.critique.jsonl_ledger import default_directory
+from hubofhubs.the_body.internal_context.run_store.jsonl_ledger import default_directory
 
 from .repo_specs import root_for
 from .tools import STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec

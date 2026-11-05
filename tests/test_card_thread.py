@@ -43,7 +43,7 @@ class _StubAssembler:
         self.meta_seen: dict = {}
 
     def assemble(self, task_text, *, meta=None):
-        from hubofhubs.ports.context import AssembledContext
+        from hubofhubs.the_body.internal_context.context import AssembledContext
         self.calls += 1
         self.meta_seen = dict(meta or {})
         return AssembledContext(context_view="## cards\n(the assembled cards)",

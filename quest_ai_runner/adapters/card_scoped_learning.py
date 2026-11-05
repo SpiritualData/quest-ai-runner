@@ -42,8 +42,8 @@ import json
 import re
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, TypeVar
 
-from hubofhubs.recall.card_content_render import content_identity_key
-from hubofhubs.recall.text_sampling import keywords_from_text
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import content_identity_key
+from hubofhubs.the_body.internal_context.card_store.text_sampling import keywords_from_text
 
 T = TypeVar("T")
 

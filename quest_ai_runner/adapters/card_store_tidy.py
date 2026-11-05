@@ -10,7 +10,7 @@ import os
 from typing import Any
 
 from esoi import implementation
-from hubofhubs.recall.card_store_tidy import RepositoryTidy, StorePlan, TidyRun, is_local_folder, split_steps
+from hubofhubs.the_body.internal_context.card_store.card_store_tidy import RepositoryTidy, StorePlan, TidyRun, is_local_folder, split_steps
 
 
 @implementation("repair-a-card-store", "repository_tidy")

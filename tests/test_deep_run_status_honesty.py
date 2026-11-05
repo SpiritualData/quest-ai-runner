@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from quest_ai_runner.core import usage_limit
-from hubofhubs.ports.deep import DeepResult, runner_uses_deep_model
+from hubofhubs.the_world.tools.deep import DeepResult, runner_uses_deep_model
 from quest_ai_runner.core.goal_runner import (
     SubprocessConfig,
     SubprocessGoalRunner,

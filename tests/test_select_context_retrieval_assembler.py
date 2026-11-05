@@ -1,6 +1,6 @@
 """The production assemblers of the ``select-context`` seat: real ``ContextAssembler`` classes the seat can build, one ranking method that the
 evaluation arms share. No model call, no network, no embedding model."""
-from hubofhubs.ports.context import ContextAssembler
+from hubofhubs.the_body.internal_context.context import ContextAssembler
 
 from quest_ai_runner.select_context.retrieval_assembler import BlindGrepAssembler, FeatureRerankAssembler, read_folder
 

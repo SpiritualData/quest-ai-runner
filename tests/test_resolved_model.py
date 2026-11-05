@@ -1,9 +1,9 @@
 """A deep run reports the full model id its alias resolved to, not just the alias."""
 import json
 
-from hubofhubs.deep import session as hub_session
+from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session
 from quest_ai_runner.core import goal_runner
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.interactive_session import _model_display
 from quest_ai_runner.runner.executor_support import _model_used_note
 

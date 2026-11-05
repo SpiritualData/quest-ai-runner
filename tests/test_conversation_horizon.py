@@ -20,10 +20,7 @@ import time
 
 from quest_ai_runner.adapters import session_file_conversation_store as sfcs_module
 from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
-from hubofhubs.recall.conversation_format import (
-    rank_candidates_by_digest,
-    truncate_transcript_middle,
-)
+from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import rank_candidates_by_digest, truncate_transcript_middle
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry

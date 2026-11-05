@@ -2,8 +2,8 @@
 for BACKGROUND (every callback wired, as the runner's executor does) and ``FanoutSink`` for the
 LIVE-to-BACKGROUND handoff. Zero model calls, zero network."""
 from quest_ai_runner.core.adapters_sinks import FanoutSink, MilestoneSink, StreamSink
-from hubofhubs.ports.deep import ProgressEvent
-from hubofhubs.ports.events import Mode
+from hubofhubs.the_world.tools.deep import ProgressEvent
+from hubofhubs.the_world.tools.events import Mode
 
 
 def make_sinks(shown, broken):

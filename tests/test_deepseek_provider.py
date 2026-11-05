@@ -1,7 +1,7 @@
 """DeepSeek provider in QAR: opt-in registration, tier safety, the environment it is built from. No network (the arm itself is tested in the hub)."""
 import types
 
-from hubofhubs.models.openai import DeepSeekProvider
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.openai import DeepSeekProvider
 from quest_ai_runner.core.model_registry import bucket_top
 
 

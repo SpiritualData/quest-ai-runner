@@ -49,7 +49,7 @@ def test_the_credit_rows_come_from_the_two_credit_variables_and_nothing_set_mean
 
 
 def test_the_environment_credit_reaches_the_tier_selector_the_way_the_hub_counts_it(monkeypatch):
-    from hubofhubs import tiers
+    from hubofhubs.the_world.model_plumbing.model_tier_chooser import tiers
     from quest_ai_runner.core import model_registry
     from quest_ai_runner.providers import credits_from_environment
     monkeypatch.setenv("QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD", "200")
@@ -63,9 +63,9 @@ def test_the_environment_credit_reaches_the_tier_selector_the_way_the_hub_counts
 def test_the_vendors_are_the_hubs_own_arms_built_by_the_hub_assembly_and_the_router_wraps_them(monkeypatch):
     """No QAR re-declaration of a vendor: the object is the hub's class, QAR's flags and key variable names reach it, and the router
     build_orchestrator makes (wire_providers) is QAR's arm over the hub's MultiProvider with the same vendor map."""
-    from hubofhubs.models.anthropic import AnthropicProvider
-    from hubofhubs.models.openai import DeepSeekProvider
-    from hubofhubs.models.router import MultiProvider
+    from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
+    from hubofhubs.the_world.model_plumbing.vendor_model_caller.openai import DeepSeekProvider
+    from hubofhubs.the_world.model_plumbing.vendor_model_caller.router import MultiProvider
     from quest_ai_runner import config_orchestrator, hub
     from quest_ai_runner.config import RunnerConfig
 

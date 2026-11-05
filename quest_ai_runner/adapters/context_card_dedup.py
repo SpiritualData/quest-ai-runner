@@ -9,8 +9,8 @@ import logging
 import json
 from typing import Any, Dict, List, Optional, Set
 
-from hubofhubs.recall.context_bootstrap_support import extract_json_array, jaccard, merge_card_group
-from hubofhubs.recall.context_card_ceilings import collapse_cards_by_file_set
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import extract_json_array, jaccard, merge_card_group
+from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import collapse_cards_by_file_set
 
 _log = logging.getLogger("quest-ai-runner.context")
 

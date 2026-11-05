@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 import pytest
 
 from quest_ai_runner.config import shutdown_background_index
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.adapters_values import Escalation, Observation
 
 

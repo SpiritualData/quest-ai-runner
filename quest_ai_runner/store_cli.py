@@ -134,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_upload(args) -> int:
     """``context upload``: plan, then (with ``--apply``) send. Exit 1 on any problem or failed card."""
-    from hubofhubs.recall import card_store_identity as ident
+    from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
     from .adapters.card_store_upload import apply_upload, plan_upload
     from .remember_and_recall.qdrant_vector_store import embedder_id_from_env
     from .adapters.quest_api_card_repository import (
@@ -196,7 +196,7 @@ def run_upload(args) -> int:
 
 def vector_location_from_args(args):
     """``(record, problem)`` for ``store-info --vector-location``; the size is detected on a server."""
-    from hubofhubs.recall import card_store_identity as ident
+    from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
     from .remember_and_recall.qdrant_vector_store import embedder_id_from_env
     location = (args.vector_location or "").strip()
     if not location:
@@ -226,7 +226,7 @@ def vector_location_from_args(args):
 
 def run(argv: List[str]) -> int:
     args = build_parser().parse_args(argv[1:])
-    from hubofhubs.recall import card_store_identity as ident
+    from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
     from .adapters import card_store_migrate as mounts
 
     if args.op == "upload":

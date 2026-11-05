@@ -23,8 +23,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.critique.done_evidence import render_requirements
-from hubofhubs.ports.model import STEP_JUDGE, plan_with_step
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.done_evidence import render_requirements
+from hubofhubs.the_world.model_plumbing.model import STEP_JUDGE, plan_with_step
 
 from .auxiliary_prompts import PREFLIGHT_PLAN_TOOL
 from .card_filter import _extract_json

@@ -22,7 +22,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 
 from rich.text import Text
 
-from hubofhubs.ports.control import ControlMessage, RunControl
+from hubofhubs.the_world.tools.delegated_agent_sessions.control import ControlMessage, RunControl
 from .textual_ui_helpers import indented_line, person_line, plural, working_notes_in
 
 # How often a live worker looks for a typed message. Short, because a person is waiting at the

@@ -6,7 +6,7 @@ another's turns."""
 from assist_a_terminal_session import arms as terminal_arms
 from end_to_end.clock import fill_calendar
 from end_to_end.world import World
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from scripted_brain import ScriptedProvider
 
 PRIORITY = ("confirm", "clarify", "deep", "queue", "act", "web", "answer")
@@ -88,7 +88,7 @@ def run_with(case, world, orchestrator):
     attach_files(case, orchestrator)
     hosts = tuple((case.get("world") or {}).get("trusted_link_hosts") or ())
     if hosts:   # the offline world has no network: a host the case names is one whose link the guard may keep without fetching it
-        from hubofhubs.critique.link_guard import LinkPolicy
+        from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import LinkPolicy
         orchestrator.cfg.link_policy = LinkPolicy(trusted_hosts=hosts, check_external=False)
     result = orchestrator.run(case["message"], quest_id=world.pinned, context_view=world.context_view())
     return fold(case, world, result)

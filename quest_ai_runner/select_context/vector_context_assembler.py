@@ -18,16 +18,10 @@ import os
 from typing import Any, Optional
 
 from esoi import implementation
-from hubofhubs.recall import vector_assembler as hub
-from hubofhubs.recall.vector_assembler import (  # noqa: F401  (same objects, old import path)
-    MAX_SEED_ITEMS_DEFAULT,
-    SNIPPET_MAX_CHARS,
-    VECTOR_HIT_MAX_CARD_REF_CHARS,
-    VECTOR_HIT_MAX_CARD_REFS,
-    seed_source_takes_limit,
-    snippet,
-    task_slug,
-)
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers import vector_assembler as hub
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.vector_assembler import (
+    MAX_SEED_ITEMS_DEFAULT, SNIPPET_MAX_CHARS, VECTOR_HIT_MAX_CARD_REF_CHARS, VECTOR_HIT_MAX_CARD_REFS, seed_source_takes_limit, snippet,
+    task_slug)
 
 from ..core import prompt_budget
 from ..core.prompt_specs import declare, render_prompt

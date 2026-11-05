@@ -10,10 +10,10 @@ import json
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from hubofhubs.critique.done_evidence import render_coverage_line
-from hubofhubs.ports.deep import ProgressEvent
-from hubofhubs.ports.events import EVENT_DECISION, EVENT_INTERIM
-from hubofhubs.ports.model import STEP_SUMMARIZE, plan_with_step
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.done_evidence import render_coverage_line
+from hubofhubs.the_world.tools.deep import ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_INTERIM
+from hubofhubs.the_world.model_plumbing.model import STEP_SUMMARIZE, plan_with_step
 
 from .auxiliary_prompts import INTERIM_PROGRESS_TOOL
 from .card_filter import _extract_json

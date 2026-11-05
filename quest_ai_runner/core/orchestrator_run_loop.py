@@ -9,27 +9,17 @@ import time
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.events import (
-    EVENT_CARD_THREAD,
-    EVENT_DECISION,
-    EVENT_DONE,
-    EVENT_EXPLANATION,
-    EVENT_MODE_SIGNAL,
-    EVENT_PLAN,
-    EVENT_READ,
-    EVENT_REPLAN,
-    EVENT_RESULT,
-    EVENT_TOKENS,
-    Mode,
-)
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.events import (
+    EVENT_CARD_THREAD, EVENT_DECISION, EVENT_DONE, EVENT_EXPLANATION, EVENT_MODE_SIGNAL, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_RESULT,
+    EVENT_TOKENS, Mode)
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from . import shared_thread
 from .orchestrator_turn_messages import turn_outcome
 from .adapters_retrieval import OwnUpdates
 from .adapters_values import PlanDecision
 from .answer_explanation import is_eligible, trace_from_result
-from hubofhubs.recall.card_thread import CardThreadDecision, parse_card_thread
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_thread import CardThreadDecision, parse_card_thread
 from .goal_metrics import deep_metric_data
 from .orchestrator_capabilities import (
     planner_full_view_start,

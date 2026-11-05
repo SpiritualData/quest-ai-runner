@@ -6,7 +6,7 @@ the words of a receipt or of model output (hard rule #3).
 """
 import pytest
 
-from hubofhubs.act.execution_record import ExecutionRecord
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
 
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator
@@ -448,7 +448,7 @@ def test_the_tools_command_exits_zero_for_applied_noop_and_held_and_prints_the_s
 @pytest.mark.parametrize("status,ok", [("applied", True), ("noop", True), ("held", True),
                                        ("refused", False), ("failed", False), ("unknown", False)])
 def test_the_tool_ledger_records_a_held_write_as_ok(tmp_path, status, ok):
-    from hubofhubs.act.tool_ledger import FileToolLedger
+    from hubofhubs.the_body.internal_context.run_store.tool_ledger import FileToolLedger
     ledger = FileToolLedger(str(tmp_path / "ledger"))
     spec = ToolSpec(name="do_it", description="d", mutates=True,
                     handler=lambda args, c: ToolResult(ok=False, status=status, text=f"it said {status}"))

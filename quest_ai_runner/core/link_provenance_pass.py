@@ -15,7 +15,7 @@ import re
 from typing import Iterable, List, Sequence, Tuple
 from urllib.parse import urlsplit
 
-from hubofhubs.critique.link_guard import normalize_url_for_match
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import normalize_url_for_match
 
 MARKDOWN_OR_BARE = re.compile(
     r"\[(?P<label>[^\]\n]*)\]\(\s*<?(?P<target>[^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)"

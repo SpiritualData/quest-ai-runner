@@ -4,40 +4,14 @@ This is the package a host application (a chat backend or cockpit) imports IN-PR
 chat: construct an ``Orchestrator`` with adapters and call ``run``. It knows nothing about
 Quest, any database, or any org — only the four adapter interfaces.
 """
-from hubofhubs.ports.context import ConversationContext, ConversationStore
-from hubofhubs.ports.model import ModelProvider
-from hubofhubs.ports.events import (
-    EVENT_CARD_THREAD,
-    EVENT_DECISION,
-    EVENT_DONE,
-    EVENT_EXEC,
-    EVENT_EXPLANATION,
-    EVENT_MILESTONE,
-    EVENT_MODE_SIGNAL,
-    EVENT_OVERSEER,
-    EVENT_PARTIAL,
-    EVENT_PLAN,
-    EVENT_READ,
-    EVENT_REPLAN,
-    EVENT_RESULT,
-    EVENT_STATUS,
-    EVENT_UNDERSTANDING,
-    SURFACING_EVENTS,
-    Mode,
-)
-from hubofhubs.ports.deep import (
-    FUTURE_CONTEXT_VIA_FIELD,
-    FUTURE_CONTEXT_VIA_OUTPUT,
-    WRITE_SURFACE_AGENT,
-    WRITE_SURFACE_FILES,
-    WRITE_SURFACE_OPERATIONS,
-    DeepResult,
-    DeepRunner,
-    DeepRunnerBase,
-    ProgressEvent,
-    ProgressSink,
-    ProgressSinkBase,
-)
+from hubofhubs.the_body.internal_context.context import ConversationContext, ConversationStore
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
+from hubofhubs.the_world.tools.events import (
+    EVENT_CARD_THREAD, EVENT_DECISION, EVENT_DONE, EVENT_EXEC, EVENT_EXPLANATION, EVENT_MILESTONE, EVENT_MODE_SIGNAL, EVENT_OVERSEER,
+    EVENT_PARTIAL, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_RESULT, EVENT_STATUS, EVENT_UNDERSTANDING, SURFACING_EVENTS, Mode)
+from hubofhubs.the_world.tools.deep import (
+    FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT, WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS, DeepResult,
+    DeepRunner, DeepRunnerBase, ProgressEvent, ProgressSink, ProgressSinkBase)
 from .adapters_values import (
     Escalation,
     Observation,
@@ -89,11 +63,7 @@ from .orchestrator import (
     planner_prompt_defaults,
     render_planner_prompt,
 )
-from hubofhubs.act.execution_record import (
-    ExecutionFact,
-    ExecutionRecord,
-    classify_exec_phase,
-)
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord, classify_exec_phase
 from .overseer import (
     OVERSEE_TOOL,
     OVERSEER_PROMPT,
@@ -101,33 +71,13 @@ from .overseer import (
     build_digest,
     oversee,
 )
-from hubofhubs.recall.card_thread import (  # the public names a consumer's compat probe keys on; the code lives in the hub
-    ACTION_CONTINUE,
-    ACTION_NEW,
-    ACTION_SWITCH,
-    FINISHED_STATUSES,
-    STATUS_ACTIVE,
-    STATUS_ARCHIVED,
-    STATUS_COMPLETED,
-    STATUS_DORMANT,
-    CardCandidate,
-    CardThreadContext,
-    CardThreadDecision,
-    card_id_set,
-    find_duplicate_label,
-    lifecycle_note,
-    merge_candidates,
-    normalize_label,
-    parse_card_thread,
-    penalized_budget,
-    rank_card_first,
-    render_thread_hint,
-    select_thread_floor,
-    split_by_card,
-)
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_thread import (
+    ACTION_CONTINUE, ACTION_NEW, ACTION_SWITCH, FINISHED_STATUSES, STATUS_ACTIVE, STATUS_ARCHIVED, STATUS_COMPLETED, STATUS_DORMANT, CardCandidate,
+    CardThreadContext, CardThreadDecision, card_id_set, find_duplicate_label, lifecycle_note, merge_candidates, normalize_label, parse_card_thread,
+    penalized_budget, rank_card_first, render_thread_hint, select_thread_floor, split_by_card)
 from .context_doctrine import CARD_LIFECYCLE_GATE, CARD_THREAD_GATE
 from .turn_context_store import TurnContextStore
-from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
 
 __all__ = [
     # adapters / value objects

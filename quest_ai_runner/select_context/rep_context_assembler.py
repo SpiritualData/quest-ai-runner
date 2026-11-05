@@ -37,8 +37,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from esoi import implementation
-from hubofhubs.ports.context import AssembledContext
-from hubofhubs.ports.context import ContextAssemblerBase
+from hubofhubs.the_body.internal_context.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import ContextAssemblerBase
 from ..core.current_rep import current_rep
 
 log = logging.getLogger("quest-ai-runner.rep-context")

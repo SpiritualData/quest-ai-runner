@@ -12,8 +12,8 @@ tool schema name), and a stub deep runner records every call.
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.context import AssembledContext, ConversationContext
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_body.internal_context.context import AssembledContext, ConversationContext
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.adapters_bases import RetrievalAdapterBase
 from quest_ai_runner.core.model_registry import ModelRegistry

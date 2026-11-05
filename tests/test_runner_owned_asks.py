@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from hubofhubs.ports.events import EVENT_DECISION, EVENT_RESULT
+from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_RESULT
 from quest_ai_runner.core import shared_thread, work_trace
 from quest_ai_runner.core.adapters_sinks import StreamSink
 from quest_ai_runner.core.ask_policy import ask_state_block, record_turn_ask

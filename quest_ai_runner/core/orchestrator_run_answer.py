@@ -8,9 +8,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Optional
 
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
-from hubofhubs.ports.events import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_world.tools.events import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from . import shared_thread
 from .ask_policy import ask_state_block
 from .adapters_values import PlanDecision

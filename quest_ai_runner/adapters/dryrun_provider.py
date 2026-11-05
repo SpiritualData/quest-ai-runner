@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.model import ModelProvider
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
 
 
 class DryRunProvider(ModelProvider):

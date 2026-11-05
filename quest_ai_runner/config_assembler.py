@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Callable, Optional
 from typing import Any, List
 
 from esoi import implementation
-from hubofhubs.recall.card_repository import FilesystemCardRepository
-from hubofhubs.recall.composite_assembler import CompositeContextAssembler
-from hubofhubs.recall.reference_resolver import NoteResolver
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import NoteResolver
 
 from .config_context_index import (
     _bootstrap_if_needed,
@@ -197,7 +197,7 @@ def _resolve_context_assembler_base(
         # the RetrievalAdapter interface). Its OWN ``resolve_reference`` IS the resolver for its type,
         # so e.g. a wired ``GoogleChatAdapter`` makes its learned ``chat_thread`` references resolve
         # FRESH with no extra config. Consumer-supplied ``cfg.reference_resolvers`` win a collision.
-        from hubofhubs.recall.reference_resolver import collect_reference_resolvers
+        from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import collect_reference_resolvers
         _store_resolvers = {
             **collect_reference_resolvers(cfg.retrieval),
             **(cfg.reference_resolvers or {}),

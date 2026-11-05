@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hubofhubs.ports.context import AssembledContext, ContextAssembler, VectorHit, VectorStore
-from hubofhubs.ports.context import VectorStoreBase
+from hubofhubs.the_body.internal_context.context import AssembledContext, ContextAssembler, VectorHit, VectorStore
+from hubofhubs.the_body.internal_context.context import VectorStoreBase
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
 from quest_ai_runner.select_context import vector_context_assembler as vca
 from quest_ai_runner.select_context.vector_context_assembler import VectorContextAssembler
@@ -1763,7 +1763,7 @@ class TestResolveContextAssemblerSeedSourceWiring:
         assembler = resolve_context_assembler(cfg)
         # resolve_context_assembler now returns a CompositeContextAssembler wrapping
         # [HybridContextAssembler, TurnContextStore]. Unwrap to find the hybrid arm.
-        from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+        from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
         assert isinstance(assembler, CompositeContextAssembler), (
             f"expected CompositeContextAssembler, got {type(assembler)!r}"
         )
@@ -2480,7 +2480,7 @@ class TestVectorBackendEnvSwitch:
             f"{[r.getMessage() for r in qdrant_records]}"
         )
         # And the resolved assembler has no vector (hybrid) arm.
-        from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+        from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
         assert isinstance(assembler, CompositeContextAssembler)
         assert not any(
             isinstance(a, HybridContextAssembler) for a in assembler._assemblers

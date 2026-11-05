@@ -16,8 +16,8 @@ import threading
 import time
 
 from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
-from hubofhubs.models.router import MultiProvider
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.router import MultiProvider
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor
 from quest_ai_runner.core.adapters_bases import ModelProviderBase
 
 

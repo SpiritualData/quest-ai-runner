@@ -12,8 +12,8 @@ from typing import Any
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
-from hubofhubs.risk import OverseerSignal
-from hubofhubs.seats import RiskWatching
+from hubofhubs.the_intelligence.mind.delegation.overseer.risk import OverseerSignal
+from hubofhubs.the_intelligence.nervous_system.interface import RiskWatching
 
 from ..core import overseer
 from ..core.adapters_deep import EscalationSink

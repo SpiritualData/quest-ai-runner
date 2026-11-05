@@ -7,7 +7,7 @@ import ast
 import re
 from pathlib import Path
 
-from hubofhubs.terminal import strings
+from hubofhubs.the_consciousness.terminal import strings
 
 PACKAGE = Path(__file__).resolve().parent.parent / "quest_ai_runner"
 HUB_RENDERERS = {"live_text", "summary_text", "summary_sentences", "expanded_groups", "earlier_preview", "interim_parts", "stopped_reason",

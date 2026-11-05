@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from hubofhubs.ports.deep import ProgressEvent
-from hubofhubs.ports.events import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT, EVENT_WORK_TRACE
+from hubofhubs.the_world.tools.deep import ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT, EVENT_WORK_TRACE
 
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 from quest_ai_runner.textual_ui import QuestAITerminal

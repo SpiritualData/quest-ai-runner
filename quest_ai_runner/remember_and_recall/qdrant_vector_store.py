@@ -18,8 +18,8 @@ from __future__ import annotations
 from typing import Callable, List, Optional
 
 from esoi import implementation
-from hubofhubs.recall.qdrant_store import QdrantVectorStore as HubQdrantVectorStore
-from hubofhubs.recall.qdrant_store import SCOPE_KEY, STORE_KEY, point_id, scope_hash  # noqa: F401  (re-exported)
+from hubofhubs.the_body.internal_context.card_store.qdrant_store import QdrantVectorStore as HubQdrantVectorStore
+from hubofhubs.the_body.internal_context.card_store.qdrant_store import SCOPE_KEY, STORE_KEY, point_id, scope_hash  # noqa: F401  (re-exported)
 
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from ..adapters.qdrant_embedders import (  # noqa: F401  (re-exported: this was their import path)

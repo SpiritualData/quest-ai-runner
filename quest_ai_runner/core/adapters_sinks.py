@@ -7,18 +7,9 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 from esoi import implementation
-from hubofhubs.ports.deep import ProgressEvent, ProgressSink, ProgressSinkBase
-from hubofhubs.ports.events import (
-    EVENT_CONTEXT,
-    EVENT_DECISION,
-    EVENT_DONE,
-    EVENT_MILESTONE,
-    EVENT_OVERSEER,
-    EVENT_RESULT,
-    EVENT_TOKENS,
-    Mode,
-    SURFACING_EVENTS,
-)
+from hubofhubs.the_world.tools.deep import ProgressEvent, ProgressSink, ProgressSinkBase
+from hubofhubs.the_world.tools.events import (
+    EVENT_CONTEXT, EVENT_DECISION, EVENT_DONE, EVENT_MILESTONE, EVENT_OVERSEER, EVENT_RESULT, EVENT_TOKENS, Mode, SURFACING_EVENTS)
 
 
 # ---------------------------------------------------------------------------

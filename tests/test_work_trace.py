@@ -4,10 +4,10 @@ Offline: fake web, scholarly and link-guard results, no network and no model."""
 import json
 from types import SimpleNamespace
 
-from hubofhubs.ports.deep import ProgressEvent
-from hubofhubs.ports.events import EVENT_WORK_TRACE
-from hubofhubs.ports.retrieval import Observation
-from hubofhubs.ports.trace import validate
+from hubofhubs.the_world.tools.deep import ProgressEvent
+from hubofhubs.the_world.tools.events import EVENT_WORK_TRACE
+from hubofhubs.the_world.observation import Observation
+from hubofhubs.the_consciousness.terminal.trace import validate
 
 from quest_ai_runner.core import work_trace
 from quest_ai_runner.core.orchestrator_reads import ReadsMixin

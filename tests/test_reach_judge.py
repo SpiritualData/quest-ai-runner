@@ -24,7 +24,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.prompt_specs import NO_EM_DASH_RULE
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig

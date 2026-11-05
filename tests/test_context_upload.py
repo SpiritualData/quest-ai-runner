@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from quest_ai_runner import store_cli
-from hubofhubs.recall import card_store_identity as ident
+from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
 from quest_ai_runner.adapters.card_store_upload import REASON_IMPORTED, plan_upload
 from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
 from tests.quest_card_backend_fake import FakeCardBackend

@@ -4,12 +4,12 @@ import importlib
 import pytest
 
 PUBLIC_NAMES = {
-    "hubofhubs.ports.context": ["AssembledContext", "ConversationContext", "ConversationStore"],
-    "hubofhubs.ports.deep": [
+    "hubofhubs.the_body.internal_context.context": ["AssembledContext", "ConversationContext", "ConversationStore"],
+    "hubofhubs.the_world.tools.deep": [
         "DeepResult", "DeepRunnerBase", "FUTURE_CONTEXT_VIA_FIELD", "FUTURE_CONTEXT_VIA_OUTPUT", "ProgressEvent",
         "WRITE_SURFACE_OPERATIONS", "runner_starts_background_work", "runner_uses_deep_model",
     ],
-    "hubofhubs.ports.events": ["EVENT_EXEC"],
+    "hubofhubs.the_world.tools.events": ["EVENT_EXEC"],
     "quest_ai_runner.core.adapters_bases": ["EscalationSinkBase", "GuidanceProviderBase", "ModelProviderBase", "RetrievalAdapterBase"],
     "quest_ai_runner.core.adapters_guidance": ["GuidanceCard"],
     "quest_ai_runner.core.adapters_values": ["Escalation", "Observation"],

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, List, Mapping
 
-from hubofhubs.recall.context_bootstrap_support import card_file_paths
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import card_file_paths
 
 from .card_store_settings import ENV_MAX_CARDS, card_shape_min_files, max_cards_per_file, max_single_file_card_share
 

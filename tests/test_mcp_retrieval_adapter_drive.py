@@ -35,7 +35,7 @@ from typing import Any, Dict
 
 import pytest
 
-from hubofhubs.act.mcp_client import MCPToolResult
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPToolResult
 from quest_ai_runner.act_as_the_body.mcp_retrieval_adapter import MCPRetrievalAdapter
 from tests.test_mcp_retrieval_adapter import FakeMCPClient, make_adapter, tool
 

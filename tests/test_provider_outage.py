@@ -18,9 +18,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from hubofhubs.models import outage as provider_outage
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
 from quest_ai_runner.runner import executor_pauses
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 
 OVERLOADED = "Error code: 529 - overloaded_error: Overloaded"

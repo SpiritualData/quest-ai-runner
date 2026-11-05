@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
 
 from esoi import implementation
-from hubofhubs.ports.context import AssembledContext, ContextAssembler
-from hubofhubs.retrieval.fusion import FeatureRerank
+from hubofhubs.the_body.internal_context.context import AssembledContext, ContextAssembler
+from hubofhubs.the_intelligence.subconscious.context_retriever.fusion import FeatureRerank
 
 from ..adapters.file_context_store import tokenize
 

@@ -17,23 +17,14 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.adapters_retrieval import RetrievalAdapter
 from .walk_settings import conversation_scan_skip_dirs
-from hubofhubs.recall.conversation_format import (
-    conversation_digest,
-    conversation_metadata,
-    conversation_timestamp,
-    conversation_to_text,
-    is_claude_conversation,
-    load_conversations,
-    parse_date_bound,
-    resolve_conv_key,
-    timestamp_in_range,
-    truncate_transcript_middle,
-)
-from hubofhubs.recall.text_sampling import extract_terms, keywords_from_text, select_representatives
+from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import (
+    conversation_digest, conversation_metadata, conversation_timestamp, conversation_to_text, is_claude_conversation, load_conversations,
+    parse_date_bound, resolve_conv_key, timestamp_in_range, truncate_transcript_middle)
+from hubofhubs.the_body.internal_context.card_store.text_sampling import extract_terms, keywords_from_text, select_representatives
 from .card_scoped_learning import (
     active_card_terms,
     gate_terms,

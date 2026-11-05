@@ -1,7 +1,7 @@
 """The fake MCP client for the talk_over_a_channel component: the process edge, nothing else."""
 import json
 
-from hubofhubs.act.mcp_client import MCPToolResult
+from hubofhubs.the_world.tools.connected_system_operations.mcp_client import MCPToolResult
 
 ALLOWED = {"events_wait", "messages_send", "attachments_fetch"}
 

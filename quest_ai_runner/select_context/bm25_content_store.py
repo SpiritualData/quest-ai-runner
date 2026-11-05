@@ -16,8 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 from esoi import implementation
-from hubofhubs.recall import bm25_store as hub
-from hubofhubs.recall.bm25_store import BOOTSTRAP_MAX_BYTES, SOURCE_EXTS  # noqa: F401  (same objects, old import path)
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers import bm25_store as hub
+from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.bm25_store import BOOTSTRAP_MAX_BYTES, SOURCE_EXTS  # noqa: F401  (same objects, old import path)
 
 from ..core.prompt_specs import declare, render_prompt
 from ..adapters.walk_settings import effective_skip_dirs

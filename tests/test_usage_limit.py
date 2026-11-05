@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from quest_ai_runner.core import usage_limit
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 
 WEEKLY_DATED = "You've hit your weekly limit · resets Sep 26, 1pm (America/Los_Angeles)"

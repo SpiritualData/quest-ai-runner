@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from hubofhubs.recall import card_store_identity as ident
-from hubofhubs.recall.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.card_store_upload import plan_upload
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
@@ -240,7 +240,7 @@ def test_local_file_mode_is_unchanged(tmp_path):
 
 
 def test_turn_and_conversation_cards_carry_the_origin(tmp_path):
-    from hubofhubs.recall.conversation_card_builder import ConversationCardBuilder
+    from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_card_builder import ConversationCardBuilder
     from quest_ai_runner.core.turn_context_store import TurnContextStore
     turns = tmp_path / "turns"
     TurnContextStore(turns_dir=str(turns), origin="st_o").record("hello there friend", {"response": "hi"})
@@ -274,7 +274,7 @@ def test_context_upload_stamps_the_uploading_stores_origin(tmp_path):
 # --- legacy cards are corrected once, never left for a later backfill ---------------------------
 
 def test_local_refresh_stamps_the_origin_on_legacy_cards_once_without_changing_embed_text(tmp_path):
-    from hubofhubs.recall.card_repository import card_embed_text
+    from hubofhubs.the_body.internal_context.card_store.card_repository import card_embed_text
     root = tmp_path / "local"
     root.mkdir()
     (root / "keep.md").write_text("# keep\n")

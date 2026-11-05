@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from hubofhubs.ports.context import AssembledContext, ConversationContext
+from hubofhubs.the_body.internal_context.context import AssembledContext, ConversationContext
 from quest_ai_runner.core.adapters_values import Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import DECIDE_TOOL, Orchestrator, parse_goal_condition_reply

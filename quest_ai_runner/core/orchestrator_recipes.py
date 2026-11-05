@@ -7,11 +7,11 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional
 
 from .recipes import DEEP_PREFIX, RECIPE_ARGS_TOOL, RecipeRunner
-from hubofhubs.ports.model import STEP_JUDGE, plan_with_step
-from hubofhubs.ports.events import EVENT_DONE, EVENT_EXEC, EVENT_RESULT
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.model_plumbing.model import STEP_JUDGE, plan_with_step
+from hubofhubs.the_world.tools.events import EVENT_DONE, EVENT_EXEC, EVENT_RESULT
+from hubofhubs.the_world.tools.deep import ProgressEvent
 from .adapters_values import PlanDecision
-from hubofhubs.act.execution_record import ExecutionFact, ExecutionRecord
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionFact, ExecutionRecord
 from .tools_status import DONE_STATUSES, RECEIPT_WORDS, ToolStatus
 from .tools import ToolContext
 from .recent_context import quest_scope_key

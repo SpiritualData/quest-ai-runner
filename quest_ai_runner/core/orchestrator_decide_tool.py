@@ -7,7 +7,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, Optional
 
-from hubofhubs.orchestrate.schema import compact_schema, normalize_choice, strip_schema_descriptions  # noqa: F401
+from hubofhubs.the_intelligence.mind.planner.schema import compact_schema, normalize_choice, strip_schema_descriptions  # noqa: F401
 
 from .planner_prompt import (
     DEFAULT_PLANNER_PROMPT_PROFILE,

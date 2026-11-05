@@ -9,12 +9,8 @@ import logging
 from typing import Any, Dict, List
 from pathlib import Path
 
-from hubofhubs.recall.context_card_extraction import discover_areas, extract_topic_cards
-from hubofhubs.recall.context_bootstrap_support import (
-    CHUNK_SIZE,
-    run_parallel,
-    select_representative_files,
-)
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import discover_areas, extract_topic_cards
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import CHUNK_SIZE, run_parallel, select_representative_files
 from .card_store_settings import bootstrap_workers
 from .context_card_dedup import _dedup_topic_cards
 

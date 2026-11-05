@@ -82,10 +82,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
 from esoi import implementation, solution
-from hubofhubs.recall.date_bounds import parse_date_bound, timestamp_in_range
-from hubofhubs.recall.text_sampling import keywords_from_text
+from hubofhubs.the_intelligence.subconscious.cards_from_files.date_bounds import parse_date_bound, timestamp_in_range
+from hubofhubs.the_body.internal_context.card_store.text_sampling import keywords_from_text
 from quest_ai_runner.core.scope_tags import quest_fence_allow, scope_tags_from_keys
-from hubofhubs.filemodes import match_umask
+from hubofhubs.the_body.filemodes import match_umask
 
 log = logging.getLogger("quest-ai-runner.recent_context")
 

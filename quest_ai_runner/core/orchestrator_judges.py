@@ -16,8 +16,8 @@ from .answer_explanation import (
     metric_rule,
     render_record_for_prompt,
 )
-from hubofhubs.act.execution_record import ExecutionRecord
-from hubofhubs.critique.done_evidence import render_coverage_line, render_requirements
+from hubofhubs.the_body.internal_context.run_store.execution_record import ExecutionRecord
+from hubofhubs.the_intelligence.critical_thinking.goal_completion.done_evidence import render_coverage_line, render_requirements
 from .runtime_settings import core_settings
 from .link_provenance_pass import strip_unseen_links
 from .auxiliary_prompts import (
@@ -34,10 +34,10 @@ from .auxiliary_prompts import (
     VERIFY_RUN_OBSERVATIONS_NOTE,
     VERIFY_WEB_EVIDENCE_NOTE,
 )
-from hubofhubs.critique.link_guard import UNKNOWN, LinkGuard, build_link_guard, evidence_text
-from hubofhubs.science.citations import dois_in, strip_unlisted_dois
-from hubofhubs.ports.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, plan_with_step
-from hubofhubs.ports.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_guard import UNKNOWN, LinkGuard, build_link_guard, evidence_text
+from hubofhubs.the_intelligence.critical_thinking.response_quality.citations import dois_in, strip_unlisted_dois
+from hubofhubs.the_world.model_plumbing.model import STEP_JUDGE, STEP_SUMMARIZE, STEP_VERIFY, plan_with_step
+from hubofhubs.the_world.model_plumbing.scope import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from .card_filter import _extract_json
 from .planner_context import _is_discovery_obs, _render_gathered, cap_section
 from .prompt_layers import compose_layers, language_instruction

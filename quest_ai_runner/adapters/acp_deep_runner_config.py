@@ -13,17 +13,9 @@ import os
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 
-from hubofhubs.deep import acp_config as hub
-from hubofhubs.deep.acp_config import (  # noqa: F401  (same objects, old import path)
-    ALLOW,
-    HUMAN,
-    REJECT,
-    AcpSettings,
-    classify_permission,
-    node_major_version,
-    permission_response,
-    select_option,
-)
+from hubofhubs.the_world.tools.delegated_agent_sessions import acp_config as hub
+from hubofhubs.the_world.tools.delegated_agent_sessions.acp_config import (
+    ALLOW, HUMAN, REJECT, AcpSettings, classify_permission, node_major_version, permission_response, select_option)
 
 from ..core.adapters_values import Escalation
 from ..core.goal_runner_contract import goal_settings

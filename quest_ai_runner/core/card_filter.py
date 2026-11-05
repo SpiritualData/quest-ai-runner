@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.model import ModelProvider
-from hubofhubs.recall import card_selection as hub
-from hubofhubs.recall.card_selection import CardMetadata, stable_card_order  # noqa: F401  (same objects, old import path)
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards import card_selection as hub
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_selection import CardMetadata, stable_card_order  # noqa: F401  (same objects, old import path)
 
 from . import prompt_budget
 from .prompt_specs import declare, render_prompt

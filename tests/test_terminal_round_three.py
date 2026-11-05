@@ -21,8 +21,8 @@ import pytest
 from rich.console import Console
 from rich.text import Text
 
-from hubofhubs.ports.deep import DeepResult
-from hubofhubs.ports.events import EVENT_CONTEXT
+from hubofhubs.the_world.tools.deep import DeepResult
+from hubofhubs.the_world.tools.events import EVENT_CONTEXT
 from quest_ai_runner.core.inbox import InMemoryInbox
 from quest_ai_runner.core.orchestrator import OrchestratorResult
 from quest_ai_runner.core.orchestrator_text import ellipsize, sentence

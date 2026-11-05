@@ -9,7 +9,8 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parents[3]))
 
 import hub_of_hubs  # noqa: E402,F401  (puts the hub package on the path)
-from hubofhubs import evaluate_seats, render_docs  # noqa: E402
+from hubofhubs import evaluate_seats
+from hubofhubs.the_self.integrity import render_docs  # noqa: E402
 
 from hub_of_hubs.binding import REPO, binding  # noqa: E402
 

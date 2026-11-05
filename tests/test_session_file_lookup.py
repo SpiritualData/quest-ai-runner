@@ -1,7 +1,7 @@
 """The live deep-run monitor must find the worker's session file under any Claude config base."""
 from pathlib import Path
 
-from hubofhubs.deep import session as hub_session
+from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session
 from quest_ai_runner.core import goal_runner
 
 

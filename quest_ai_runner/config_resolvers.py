@@ -151,7 +151,7 @@ def resolve_fast_edit_runner(cfg: RunnerConfig):
     if writer is None or cfg.model_provider is None:
         return None
     try:
-        from hubofhubs.act.fast_edit import FastEditRunner
+        from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditRunner
 
         # ``cfg.model_provider`` is the MultiProvider-wrapped provider by the time this is called
         # from build_orchestrator (the wrap happens in place, earlier in that function), so the
@@ -189,7 +189,7 @@ def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
     runners: List[Any] = []
     try:
         from .act_as_the_body.mcp_write_adapter import MCPWriteAdapter
-        from hubofhubs.act.mcp_operations import MCPOperationRunner
+        from hubofhubs.the_world.tools.connected_system_operations.mcp_operations import MCPOperationRunner
 
         registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
         for spec in cfg.mcp_servers:

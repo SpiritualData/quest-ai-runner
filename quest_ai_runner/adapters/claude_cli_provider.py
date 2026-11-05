@@ -12,7 +12,7 @@ import os
 from typing import Optional
 
 from esoi import implementation
-from hubofhubs.models import claude_cli as hub
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import claude_cli as hub
 
 from ..core import usage_limit
 from .claude_live_models import newest_claude_id

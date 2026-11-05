@@ -13,7 +13,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.model import ModelProvider
+from hubofhubs.the_world.model_plumbing.model import ModelProvider
 from ..core.prompt_specs import PromptSpec, register, render_prompt
 
 register(PromptSpec(

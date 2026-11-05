@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from esoi import implementation
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 from ..core.adapters_values import Observation
 from ..core.adapters_bases import RetrievalAdapterBase
 from .card_scoped_learning import (
@@ -64,13 +64,9 @@ from .card_scoped_learning import (
     learn_card_references,
     learnable_candidates,
 )
-from hubofhubs.recall.conversation_format import (
-    conversation_digest,
-    conversation_timestamp,
-    conversation_to_text,
-    resolve_conv_key,
-)
-from hubofhubs.recall.text_sampling import extract_terms, keywords_from_text, select_representatives
+from hubofhubs.the_intelligence.subconscious.cards_from_files.conversation_format import (
+    conversation_digest, conversation_timestamp, conversation_to_text, resolve_conv_key)
+from hubofhubs.the_body.internal_context.card_store.text_sampling import extract_terms, keywords_from_text, select_representatives
 
 _log = logging.getLogger("quest-ai-runner.google-chat")
 

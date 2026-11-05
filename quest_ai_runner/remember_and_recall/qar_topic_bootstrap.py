@@ -14,8 +14,9 @@ import typing
 from typing import Any, List, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
-from hubofhubs.recall.cards_from_files import changed_cards
-from hubofhubs.seats import CardsFromFiles, ModelCalling
+from hubofhubs.the_intelligence.subconscious.cards_from_files.cards_from_files import changed_cards
+from hubofhubs.the_intelligence.subconscious.cards_from_files.interface import CardsFromFiles
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.interface import ModelCalling
 
 from ..adapters.context_topic_cards import _llm_topic_cards
 

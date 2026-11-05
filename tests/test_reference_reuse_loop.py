@@ -16,16 +16,10 @@ The links pinned here, end to end:
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.recall.card_content_render import (
-    locator_label,
-    mark_items_used,
-    normalize_content,
-    rank_content_by_recency_relevance,
-    render_block_lines,
-    tokenize,
-)
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import (
+    locator_label, mark_items_used, normalize_content, rank_content_by_recency_relevance, render_block_lines, tokenize)
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
 

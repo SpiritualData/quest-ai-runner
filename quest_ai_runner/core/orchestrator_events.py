@@ -8,7 +8,7 @@ import json
 import re
 from typing import Any, Dict, List
 
-from hubofhubs.orchestrate.watch import worth_a_look
+from hubofhubs.the_intelligence.mind.delegation.overseer.watch import worth_a_look
 
 from .context_doctrine import EVIDENCE_GATE
 from .tools_status import RECEIPT_WORDS, ToolStatus, as_status

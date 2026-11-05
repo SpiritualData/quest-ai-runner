@@ -150,7 +150,7 @@ import re
 
 import pytest
 
-from hubofhubs.recall import card_store_mounts as mounts
+from hubofhubs.the_body.internal_context.card_store import card_store_mounts as mounts
 from quest_ai_runner.adapters import card_store_migrate as migrate
 from quest_ai_runner.adapters import context_risk_gate as gate_mod
 from quest_ai_runner.adapters.file_context_store import FileContextStore
@@ -400,7 +400,7 @@ def _live_corpus(root: Path) -> None:
 
 def _snapshot(root: Path, name: str, *, recorded_root=None, layout=(), store_id=None):
     """One backup folder with a card store, optionally recording another root or the live layout."""
-    from hubofhubs.recall.card_store_identity import update_identity
+    from hubofhubs.the_body.internal_context.card_store.card_store_identity import update_identity
     snap = root / "backups" / name
     make_owner(snap, [card(f"snap-{name}", ["hq/docs/a.py", "hq/docs/b.py"])])
     for sub in layout:
@@ -433,7 +433,7 @@ def test_a_lone_backup_copy_of_the_corpus_is_neither_indexed_nor_imported(tmp_pa
     _live_corpus(tmp_path)
     own_cards = tmp_path / "cards_elsewhere"
     if how == "own_store_id":
-        from hubofhubs.recall.card_store_identity import write_meta
+        from hubofhubs.the_body.internal_context.card_store.card_store_identity import write_meta
         own_cards.mkdir()
         write_meta(str(own_cards), {"store_id": "st_live"})
     kwargs = {"recorded_root": tmp_path} if how == "recorded_root" else \

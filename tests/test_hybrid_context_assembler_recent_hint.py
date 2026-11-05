@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.recall.card_content_render import render_block_lines
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import render_block_lines
 from quest_ai_runner.select_context.hybrid_context_assembler import HybridContextAssembler
-from hubofhubs.ports.context import AssembledContext
+from hubofhubs.the_body.internal_context.context import AssembledContext
 
 
 class _FixedAssembler:

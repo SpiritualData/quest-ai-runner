@@ -49,7 +49,7 @@ import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from esoi import implementation
 from esoi.requirements import api, env
-from hubofhubs.recall import card_origin
+from hubofhubs.the_body.internal_context.card_store import card_origin
 from .card_shape_guard import refusal as card_shape_refusal
 
 _log = logging.getLogger("quest-ai-runner.quest_api_cards")
@@ -843,8 +843,8 @@ class QuestApiCardRepository:
 # Server-backed vector arm
 # ---------------------------------------------------------------------------
 
-from hubofhubs.ports.context import VectorHit  # noqa: E402
-from hubofhubs.ports.context import VectorStoreBase  # noqa: E402
+from hubofhubs.the_body.internal_context.context import VectorHit  # noqa: E402
+from hubofhubs.the_body.internal_context.context import VectorStoreBase  # noqa: E402
 
 
 class QuestApiCardVectorStore(VectorStoreBase):

@@ -11,7 +11,7 @@ import pytest
 
 import quest_ai_runner.remember_and_recall.qdrant_vector_store as qdrant_store_module
 from quest_ai_runner import config as config_mod
-from hubofhubs.recall.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.quest_api_card_repository import (
     QuestApiCardRepository, QuestApiCardVectorStore, quest_card_settings_from_env)

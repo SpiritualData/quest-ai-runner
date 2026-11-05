@@ -5,7 +5,7 @@ The library's ``review_corpus`` with no risk signals, which is what ``folder_rev
 excluded (fail-open). The deterministic safeguards (nested repositories, fuzzy duplicates) run above the floor."""
 from pathlib import Path
 
-from hubofhubs.recall.context_folder_review import folder_review
+from hubofhubs.the_body.internal_context.card_store.context_folder_review import folder_review
 from quest_ai_runner.adapters.card_store_settings import STORE_DIR_NAME, folder_review_enabled, skip_nested_repos
 from quest_ai_runner.adapters.context_risk_gate import FolderGate
 

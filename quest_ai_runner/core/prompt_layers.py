@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.models.layers import LayerBlock, join_layers
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.layers import LayerBlock, join_layers
 
 # Supported non-English language codes a user-facing prompt can pin a reply to. Small and
 # deliberate: only add a code here once a consumer actually offers it as a stored preference.

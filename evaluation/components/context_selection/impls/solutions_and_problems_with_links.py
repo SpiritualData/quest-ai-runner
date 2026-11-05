@@ -6,7 +6,7 @@ makes zero model calls. The implementation keeps its own settings (at most five 
 in its ranked order and the scorer reads the first three, as for every arm here. Every card is embedded by the model
 itself (``uncached_embedder``), so the run never writes the shared text-hash cache; it takes about a minute and a half."""
 from context_selection.embedder import uncached_embedder
-from hubofhubs.recall.card_repository import card_embed_text
+from hubofhubs.the_body.internal_context.card_store.card_repository import card_embed_text
 from esoi import spec_search
 from quest_ai_runner.core.unified_search import solutions_and_problems_with_links
 from context_selection.store_cost import store_charged

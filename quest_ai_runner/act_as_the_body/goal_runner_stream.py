@@ -8,20 +8,9 @@ from __future__ import annotations
 
 from esoi import implementation
 
-from hubofhubs.deep.stream_runner import (  # noqa: F401  (same objects, old import path)
-    DEFAULT_ECHO_WAIT_SECONDS,
-    LOOP_TICK_SECONDS,
-    MIN_STREAM_CONTROL_VERSION,
-    VERSION_CACHE,
-    VERSION_RE,
-    Sent,
-    StreamJsonGoalRunner as HubStreamJsonGoalRunner,
-    StreamRun,
-    cli_version,
-    echo_text,
-    interrupt_line,
-    user_line,
-)
+from hubofhubs.the_world.tools.delegated_agent_sessions.stream_runner import (
+    DEFAULT_ECHO_WAIT_SECONDS, LOOP_TICK_SECONDS, MIN_STREAM_CONTROL_VERSION, VERSION_CACHE, VERSION_RE, Sent,
+    StreamJsonGoalRunner as HubStreamJsonGoalRunner, StreamRun, cli_version, echo_text, interrupt_line, user_line)
 
 from ..core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 

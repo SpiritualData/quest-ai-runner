@@ -10,7 +10,7 @@ from typing import List
 from esoi import spec_search as search_lib
 
 from ..core.unified_search import CARD_SOURCE
-from hubofhubs.recall.card_repository import CardRepository, card_embed_text
+from hubofhubs.the_body.internal_context.card_store.card_repository import CardRepository, card_embed_text
 
 
 def card_views(repository: CardRepository, source: str = CARD_SOURCE) -> List[search_lib.View]:

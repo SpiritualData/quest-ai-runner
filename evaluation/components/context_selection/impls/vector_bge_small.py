@@ -10,7 +10,7 @@ ALTERNATIVE = True
 
 def build(meter):  # noqa: ARG001
     import numpy as np
-    from hubofhubs.recall.card_repository import card_embed_text
+    from hubofhubs.the_body.internal_context.card_store.card_repository import card_embed_text
     embed = embedder()
     index = {}
 

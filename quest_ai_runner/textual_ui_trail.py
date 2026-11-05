@@ -16,10 +16,9 @@ from rich.text import Text
 from textual import work
 from textual.widgets import Static
 
-from hubofhubs.terminal import (
-    Block, TerminalState, answer_ask, close_ask, continue_message, fold_ask, render, settle, toggle_trail, toggle_updates, unfold_ask,
-)
-from hubofhubs.terminal.asks import error_block, is_for_viewer
+from hubofhubs.the_consciousness.terminal import (
+    Block, TerminalState, answer_ask, close_ask, continue_message, fold_ask, render, settle, toggle_trail, toggle_updates, unfold_ask)
+from hubofhubs.the_consciousness.terminal.asks import error_block, is_for_viewer
 
 from . import terminal_words  # noqa: F401  (registers the Quest wording over the hub's generic words)
 from .textual_ui_ask_folds import is_folded, remember_fold
@@ -237,7 +236,7 @@ class TrailMixin:
 
     def trail_key_hints(self) -> List[tuple]:
         """The keys for what the newest reply can show now: its work, its earlier updates, Continue."""
-        from hubofhubs.terminal import trail as hub_trail
+        from hubofhubs.the_consciousness.terminal import trail as hub_trail
         hints: List[tuple] = []
         if self._turn_active:
             return hints

@@ -11,8 +11,8 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional, Sequence, Tuple
 
-from hubofhubs.models import outage as provider_outage
-from hubofhubs.models.retry import format_provider_error
+from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.retry import format_provider_error
 
 from .core import launch_failure, usage_limit
 

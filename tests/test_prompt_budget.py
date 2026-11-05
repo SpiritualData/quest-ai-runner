@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.deep import session as hub_session
+from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub_session
 from quest_ai_runner.core import goal_runner, goal_runner_session, prompt_budget
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.goal_runner import (SubprocessConfig, SubprocessGoalRunner,
                                               compose_goal_prompt)
 from quest_ai_runner.core.model_registry import ModelRegistry
@@ -417,7 +417,7 @@ def test_an_autopilot_runs_receipt_closes_what_it_accounts_for(tmp_path):
 # --- one history per prompt, and never the thread's own earlier runs ----------------------------
 
 def test_only_one_turn_history_is_rendered():
-    from hubofhubs.recall.composite_assembler import CompositeContextAssembler
+    from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
     from quest_ai_runner.core.turn_context_store import assembler_renders_turns
 
     class Hybrid:

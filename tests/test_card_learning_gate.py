@@ -13,8 +13,8 @@ exactly as before. Nothing here (and nothing in the gate) reads the WORDS of a m
 """
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.ports.context import AssembledContext
-from hubofhubs.ports.deep import DeepResult
+from hubofhubs.the_body.internal_context.context import AssembledContext
+from hubofhubs.the_world.tools.deep import DeepResult
 from quest_ai_runner.core.card_learning import (
     NO_OBSERVATIONS_TEXT,
     narrow_edits_to_removals,

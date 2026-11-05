@@ -11,9 +11,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.orchestrate.phases import run_phases
-from hubofhubs.ports.events import Mode
-from hubofhubs.ports.deep import ProgressSink
+from hubofhubs.the_intelligence.mind.phases import run_phases
+from hubofhubs.the_world.tools.events import Mode
+from hubofhubs.the_world.tools.deep import ProgressSink
 from .orchestrator_run_answer import RunAnswerMixin
 from .orchestrator_run_begin import RunBeginMixin
 from .orchestrator_run_close import RunCloseMixin

@@ -14,30 +14,18 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 from datetime import datetime, timezone
 
-from hubofhubs.ports.context import AssembledContext
-from hubofhubs.recall.background_pacing import Pacer
-from hubofhubs.recall.card_content_render import (
-    content_item_text,
-    filter_content_by_time_range,
-    mark_items_used,
-    normalize_content,
-    render_card_content_blocks,
-    tokenize,
-)
-from hubofhubs.recall import card_origin
-from hubofhubs.recall.walk import prune_dirnames
+from hubofhubs.the_body.internal_context.context import AssembledContext
+from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.card_content_render import (
+    content_item_text, filter_content_by_time_range, mark_items_used, normalize_content, render_card_content_blocks, tokenize)
+from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.the_body.internal_context.card_store.walk import prune_dirnames
 from .walk_settings import effective_skip_dirs
 from ..core.scope_tags import card_affinity_factor, card_visible_to_turn, other_quest_label
-from hubofhubs.recall.context_card_extraction import (
-    LINKED_FOLDER_BOOST,
-    RECENCY_BOOST_HALF_LIFE_DAYS,
-    RECENCY_BOOST_USAGE_CAP,
-    SOURCE_FILE_WEIGHT,
-    SOURCE_USAGE_MIN_INTERVAL_SECONDS,
-    card_covered_paths,
-    card_display_title,
-)
-from hubofhubs.recall.context_bootstrap_support import BOOTSTRAP_MAX_BYTES, SOURCE_EXTS, run_parallel
+from hubofhubs.the_body.internal_context.card_store.context_card_extraction import (
+    LINKED_FOLDER_BOOST, RECENCY_BOOST_HALF_LIFE_DAYS, RECENCY_BOOST_USAGE_CAP, SOURCE_FILE_WEIGHT, SOURCE_USAGE_MIN_INTERVAL_SECONDS,
+    card_covered_paths, card_display_title)
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import BOOTSTRAP_MAX_BYTES, SOURCE_EXTS, run_parallel
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -62,7 +50,7 @@ class AssemblyMixin:
                 return
             if ref_type in self._resolvers and not override:
                 return
-            from hubofhubs.recall.reference_resolver import coerce_resolver
+            from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import coerce_resolver
             coerced = coerce_resolver(resolver)
             if coerced is not None:
                 self._resolvers[ref_type] = coerced

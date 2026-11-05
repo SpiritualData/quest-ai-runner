@@ -13,17 +13,11 @@ import os
 from typing import Any, List, Mapping, Optional
 
 from esoi import implementation, runtime
-from hubofhubs.ports.search import SearchBackendError, SearchHit, SearchResponse  # noqa: F401
-from hubofhubs.seats import SearchBackend  # noqa: F401
-from hubofhubs.websearch import backends as hub_backends
-from hubofhubs.websearch.backends import (  # noqa: F401
-    FallbackSearchBackend,
-    dotted,
-    fill,
-    gemini_api_key_from_env,
-    load_file_specs,
-)
-from hubofhubs.websearch.gemini import GeminiGroundingBackend as HubGeminiBackend
+from hubofhubs.the_world.tools.web_search.search_port import SearchBackendError, SearchHit, SearchResponse  # noqa: F401
+from hubofhubs.the_world.tools.web_search.interface import SearchBackend  # noqa: F401
+from hubofhubs.the_world.tools.web_search import backends as hub_backends
+from hubofhubs.the_world.tools.web_search.backends import FallbackSearchBackend, dotted, fill, gemini_api_key_from_env, load_file_specs
+from hubofhubs.the_world.tools.web_search.gemini import GeminiGroundingBackend as HubGeminiBackend
 
 from ..core.resolve import SCOPE, resolve
 

@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import List
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore
-from hubofhubs.recall import background_pacing
-from hubofhubs.recall.background_pacing import Pacer
+from hubofhubs.the_body.internal_context.card_store import background_pacing
+from hubofhubs.the_body.internal_context.card_store.background_pacing import Pacer
 
 
 class FakeClock:

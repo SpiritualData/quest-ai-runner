@@ -20,17 +20,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from hubofhubs.recall import card_limit
-from hubofhubs.recall.card_limit_report import REPORT_NAME, breakdown
+from hubofhubs.the_body.internal_context.card_store import card_limit
+from hubofhubs.the_body.internal_context.card_store.card_limit_report import REPORT_NAME, breakdown
 from quest_ai_runner.adapters import card_store_settings
 from quest_ai_runner.adapters.card_limit_report import VOICE, notice_lines, report_for
-from hubofhubs.recall.card_repository import FilesystemCardRepository
+from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_store_growth.world import DiskProvider  # noqa: E402
 
-LOGGER = "hubofhubs.recall.card_limit"
+LOGGER = "hubofhubs.the_body.internal_context.card_store.card_limit"
 
 
 @pytest.fixture(autouse=True)
@@ -364,7 +364,7 @@ class TestAStaleWriterDoesNotUndoTheLimit:
         assert "is back in the index" in caplog.text
 
     def test_a_note_for_a_copy_that_was_moved_out_lands_on_the_card_that_stands_for_it(self, tmp_path, caplog):
-        from hubofhubs.recall import card_store_hygiene as hygiene
+        from hubofhubs.the_body.internal_context.card_store import card_store_hygiene as hygiene
         cards = tmp_path / "cards"
         files = ["a/one.md", "a/two.md"]
         seed(cards, [card("topic", files=files, name="a topic"),
@@ -396,7 +396,7 @@ class TestAStaleWriterDoesNotUndoTheLimit:
 def lock_log(monkeypatch):
     """Every acquisition of a card folder's lock in this process: whether it waited, and what the folder's
     repository was asked to do while it was held (``load_all`` parses every card, ``read`` one)."""
-    from hubofhubs.recall.card_store_lock import StoreLock
+    from hubofhubs.the_body.internal_context.card_store.card_store_lock import StoreLock
     log = {"acquired": [], "held": 0, "under_lock": []}
     real_acquire, real_release = StoreLock.acquire, StoreLock.release
 
@@ -618,7 +618,7 @@ class TestTheNotice:
         assert not any("card_limit_report" in line or "/" in line for line in shown), "the path is in the log only"
 
     def test_the_counts_fit_one_80_column_line_even_for_the_incident_sized_store(self):
-        from hubofhubs.recall.card_limit_report import Breakdown, count_line
+        from hubofhubs.the_body.internal_context.card_store.card_limit_report import Breakdown, count_line
         for numbers in ((1000, 1000, 812, 150, 30, 8), (1000, 1430, 1200, 200, 25, 5),
                         (1000, 142781, 130000, 10000, 2000, 781)):
             line = count_line(Breakdown(*numbers), VOICE)
@@ -732,7 +732,7 @@ class TestTheNotice:
 # --- the other writers -------------------------------------------------------------------------------
 
 def test_a_merge_that_would_pass_the_limit_is_a_problem_and_applies_nothing(tmp_path):
-    from hubofhubs.recall import card_store_identity as ident
+    from hubofhubs.the_body.internal_context.card_store import card_store_identity as ident
     from quest_ai_runner.adapters.card_store_merge import apply_merge
     wide, narrow = tmp_path / "wide" / ".quest-context", tmp_path / "wide" / "sub" / ".quest-context"
     seed(wide, [card(f"w{i}", files=[f"w{i}/a.md", f"w{i}/b.md"]) for i in range(3)])

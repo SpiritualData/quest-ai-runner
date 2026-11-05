@@ -56,7 +56,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from .runtime_settings import process_environment
 from .tools_status import RECEIPT_WORDS, ToolStatus, as_status
 from .prompt_specs import declare, render_prompt
-from hubofhubs.recall.scope_tags import as_tag_list, scope_tags_allow
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.scope_tags import as_tag_list, scope_tags_allow
 
 log = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class RecipeStore:
                     json.dump({"recipes": [r.to_dict() for r in self._recipes.values()]}, fh,
                               indent=1, default=str)
                 try:
-                    from hubofhubs.filemodes import match_umask
+                    from hubofhubs.the_body.filemodes import match_umask
                     with open(tmp, "rb") as fh2:
                         match_umask(fh2.fileno())
                 except Exception:  # noqa: BLE001

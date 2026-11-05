@@ -26,14 +26,14 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from hubofhubs.deep import acp_runner as hub_acp_runner
+from hubofhubs.the_world.tools.delegated_agent_sessions import acp_runner as hub_acp_runner
 from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
-from hubofhubs.deep import acp_config
-from hubofhubs.ports.deep import DeepRunner
-from hubofhubs.ports.events import EVENT_EXEC
+from hubofhubs.the_world.tools.delegated_agent_sessions import acp_config
+from hubofhubs.the_world.tools.deep import DeepRunner
+from hubofhubs.the_world.tools.events import EVENT_EXEC
 from quest_ai_runner.core.adapters_values import Escalation
 from quest_ai_runner.core.goal_runner import SubprocessGoalRunner
-from hubofhubs.act.execution_record import classify_exec_phase
+from hubofhubs.the_body.internal_context.run_store.execution_record import classify_exec_phase
 from quest_ai_runner.core.inbox import InMemoryInbox
 
 

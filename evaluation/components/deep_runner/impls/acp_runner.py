@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from deep_runner.support import normalise
 from quest_ai_runner.act_as_the_body import acp_deep_runner as acp
-from hubofhubs.deep import acp_runner as hub_acp
+from hubofhubs.the_world.tools.delegated_agent_sessions import acp_runner as hub_acp
 
 STOP_FOR_EXIT = {0: "end_turn"}
 

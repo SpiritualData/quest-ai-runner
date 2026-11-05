@@ -36,7 +36,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from hubofhubs.models.anthropic import AnthropicProvider   # the hub's provider arm: settings are arguments
+from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider  # the hub's provider arm: settings are arguments
 from quest_ai_runner.adapters import ClaudeCliProvider, FilesAdapter
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner

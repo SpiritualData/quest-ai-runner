@@ -10,11 +10,11 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from hubofhubs.recall.card_limit import parse_max_cards
-from hubofhubs.recall.context_bootstrap_support import bootstrap_workers as hub_bootstrap_workers
-from hubofhubs.recall.context_bootstrap_support import flag_enabled, optional_positive_int
-from hubofhubs.recall.card_store_mounts import parse_mount_mode
-from hubofhubs.recall.context_card_ceilings import MAX_CARDS_PER_FOLDER_DEFAULT, positive_int
+from hubofhubs.the_body.internal_context.card_store.card_limit import parse_max_cards
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import bootstrap_workers as hub_bootstrap_workers
+from hubofhubs.the_body.internal_context.card_store.context_bootstrap_support import flag_enabled, optional_positive_int
+from hubofhubs.the_body.internal_context.card_store.card_store_mounts import parse_mount_mode
+from hubofhubs.the_body.internal_context.card_store.context_card_ceilings import MAX_CARDS_PER_FOLDER_DEFAULT, positive_int
 
 from .walk_settings import STORE_DIR_NAME, skip_dirs_from_env
 

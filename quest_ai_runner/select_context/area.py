@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from esoi import implementation, solution
 from esoi.assemble import Lazy
-from hubofhubs.ports.context import AssembledContext, ContextAssembler, VectorStore
-from hubofhubs.recall.reference_resolver import ReferenceResolver
+from hubofhubs.the_body.internal_context.context import AssembledContext, ContextAssembler, VectorStore
+from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards.reference_resolver import ReferenceResolver
 
 from ..core.unified_search import search_cards_and_specs
 

@@ -10,10 +10,11 @@ import typing
 from typing import Any, Dict, List, Optional, Sequence
 
 from esoi import implementation, solution
-from hubofhubs.card import Card
-from hubofhubs.ports.context import AssembledContext
-from hubofhubs.seats import CardStore, Remembering
-from hubofhubs.critique.link_detect import MAX_LISTED_LINKS, links_in_message
+from hubofhubs.the_body.internal_context.card_store.card import Card
+from hubofhubs.the_body.internal_context.context import AssembledContext
+from hubofhubs.the_body.internal_context.card_store.interface import CardStore
+from hubofhubs.the_intelligence.subconscious.interface import Remembering
+from hubofhubs.the_intelligence.critical_thinking.response_quality.link_detect import MAX_LISTED_LINKS, links_in_message
 from .planner_prompt import DECLINED_PROPOSALS_NOTE
 
 

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import re
 
-from hubofhubs.act import secret_redaction as hub_redaction
-from hubofhubs.act.secret_redaction import *  # noqa: F401,F403 - the names importers already use
+from hubofhubs.the_world.tools import secret_redaction as hub_redaction
+from hubofhubs.the_world.tools.secret_redaction import *  # noqa: F401,F403 - the names importers already use
 
 QUEST_KEY_PATTERNS = (re.compile(r"(?<![A-Za-z0-9])qsk_[A-Za-z0-9]{16,}"),)
 

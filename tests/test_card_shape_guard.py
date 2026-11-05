@@ -5,7 +5,7 @@ from quest_ai_runner.adapters import card_shape_guard
 from quest_ai_runner.adapters.card_store_upload import apply_upload, plan_upload
 from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.quest_api_card_repository import QuestApiCardRepository
-from hubofhubs.recall import card_limit as limit_mod
+from hubofhubs.the_body.internal_context.card_store import card_limit as limit_mod
 
 
 def card(card_id, paths):

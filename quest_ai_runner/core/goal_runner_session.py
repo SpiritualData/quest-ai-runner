@@ -10,18 +10,11 @@ import threading
 from pathlib import Path
 from typing import Callable, List, Optional, Set
 
-from hubofhubs.deep import session as hub
-from hubofhubs.deep.session import (  # noqa: F401  (same objects, old import path)
-    FILE_CHANGE_TOOLS,
-    SESSION_TAIL_MAX_ACTIONS,
-    SESSION_TAIL_MAX_BYTES,
-    SESSION_TAIL_MAX_CHARS,
-    SESSION_TAIL_THIN_OUTPUT_CHARS,
-    session_record_paths,
-    subagent_work_in_flight,
-    worker_output_is_thin,
-)
-from hubofhubs.ports.deep import ProgressEvent
+from hubofhubs.the_world.tools.delegated_agent_sessions import session as hub
+from hubofhubs.the_world.tools.delegated_agent_sessions.session import (
+    FILE_CHANGE_TOOLS, SESSION_TAIL_MAX_ACTIONS, SESSION_TAIL_MAX_BYTES, SESSION_TAIL_MAX_CHARS, SESSION_TAIL_THIN_OUTPUT_CHARS,
+    session_record_paths, subagent_work_in_flight, worker_output_is_thin)
+from hubofhubs.the_world.tools.deep import ProgressEvent
 
 from .goal_runner_contract import DEFAULT_MONITOR_HEARTBEAT_SECONDS
 from .runtime_settings import core_settings

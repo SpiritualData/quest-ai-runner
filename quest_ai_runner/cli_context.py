@@ -35,7 +35,7 @@ def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
     sending the task -- but the failure is not invisible.
     """
     from .adapters.file_context_store import FileContextStore
-    from hubofhubs.ports.context import AssembledContext
+    from hubofhubs.the_body.internal_context.context import AssembledContext
 
     log = logging.getLogger("quest-ai-runner")
 
@@ -78,7 +78,7 @@ _LARGE_CORPUS_FILES = 5000
 def _count_indexable_files(corpus: str) -> int:
     """How many files one bootstrap of ``corpus`` would index, using the real walk rules."""
     from pathlib import Path as _Path
-    from hubofhubs.recall.walk import is_claude_state_file, prune_dirnames
+    from hubofhubs.the_body.internal_context.card_store.walk import is_claude_state_file, prune_dirnames
     from .adapters.walk_settings import effective_skip_dirs
     from .adapters.file_context_store import SOURCE_EXTS
     root = _Path(corpus).resolve()
@@ -205,7 +205,7 @@ def _cmd_bootstrap(args, log) -> int:
     """Run the `bootstrap` subcommand; returns the process exit code."""
     from .adapters.card_store_settings import max_cards_from_env
     from .adapters.file_context_store import FileContextStore
-    from hubofhubs.recall.walk import prune_dirnames
+    from hubofhubs.the_body.internal_context.card_store.walk import prune_dirnames
     from .adapters.walk_settings import effective_skip_dirs
     import shutil
     from pathlib import Path
@@ -217,7 +217,7 @@ def _cmd_bootstrap(args, log) -> int:
     if args.dry_run:
         from .adapters.dryrun_provider import DryRunProvider
         from .adapters.file_context_store import FileContextStore
-        from hubofhubs.recall.walk import prune_dirnames
+        from hubofhubs.the_body.internal_context.card_store.walk import prune_dirnames
         from .adapters.walk_settings import effective_skip_dirs
 
         # Count source files and estimate areas
@@ -497,7 +497,7 @@ def _cmd_paste_context(args, log) -> int:
         card["goal_id"] = args.goal_id
 
     # Write through the card repository, the one place that refuses an id that may never be stored.
-    from hubofhubs.recall.card_repository import FilesystemCardRepository
+    from hubofhubs.the_body.internal_context.card_store.card_repository import FilesystemCardRepository
     card_path = Path(cards_dir) / f"{card_id}.json"
     if not FilesystemCardRepository(str(cards_dir)).write(card_id, card):
         log.error("failed to write card %s (see the error above if the id was refused)", card_id)

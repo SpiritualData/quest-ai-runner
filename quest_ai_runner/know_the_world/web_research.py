@@ -13,8 +13,8 @@ import typing
 from typing import Any, Callable, Mapping, Optional
 
 from esoi import implementation, solution
-from hubofhubs.seats import WorldKnowing
-from hubofhubs.websearch import research as hub_research
+from hubofhubs.the_world.science.interface import WorldKnowing
+from hubofhubs.the_world.tools.web_search import research as hub_research
 from .web_search_backends import gemini_api_key_from_env, select_search_backend
 
 logger = logging.getLogger("quest-ai-runner.web-research")
@@ -41,7 +41,7 @@ def build_gemini_url_fallback(env: Mapping[str, str]) -> Optional[Callable[[str]
     model = env.get("QAR_WEB_SEARCH_MODEL") or "gemini-2.5-flash-lite"
 
     def fallback(url: str) -> str:
-        from hubofhubs.models.gemini import GeminiProvider
+        from hubofhubs.the_world.model_plumbing.vendor_model_caller.gemini import GeminiProvider
 
         return GeminiProvider(api_key=key).fetch_url(url, model=model).get("text", "")
 

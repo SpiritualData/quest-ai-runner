@@ -25,9 +25,9 @@ import time
 from concurrent.futures import Future
 from typing import Any, Dict, List, Optional, Tuple
 
-from hubofhubs.ports.context import AssembledContext
-from hubofhubs.ports.deep import DeepResult
-from hubofhubs.ports.events import EVENT_STATUS, Mode
+from hubofhubs.the_body.internal_context.context import AssembledContext
+from hubofhubs.the_world.tools.deep import DeepResult
+from hubofhubs.the_world.tools.events import EVENT_STATUS, Mode
 from quest_ai_runner.core.adapters_values import PlanDecision
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig

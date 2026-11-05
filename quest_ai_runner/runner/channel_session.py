@@ -45,8 +45,8 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from hubofhubs.ports.context import ConversationContext
-from hubofhubs.ports.events import EVENT_DECISION, EVENT_MILESTONE, EVENT_RESULT
+from hubofhubs.the_body.internal_context.context import ConversationContext
+from hubofhubs.the_world.tools.events import EVENT_DECISION, EVENT_MILESTONE, EVENT_RESULT
 from ..core.adapters_channels import ChannelTransport, OutboundReply
 from ..adapters.conversation_session_store import ChatSessionStore
 
