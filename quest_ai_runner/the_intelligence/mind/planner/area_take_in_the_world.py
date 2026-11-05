@@ -1,17 +1,14 @@
-"""The terminal's two arms of Integrity: the command dispatcher run in process and the front doors the package offers a consumer."""
+"""The terminal's two drivers, run by the Integrity cases (they are not arms of System Integrity, whose job is the audit): the command dispatcher run in process and the front doors the package offers a consumer."""
 from __future__ import annotations
 
 import contextlib
 import io
 from typing import Any, Sequence
 
-from esoi import implementation
-
 from quest_ai_runner.the_consciousness.terminal.interface import TerminalRun
 
 
 
-@implementation("system-integrity", "cli_commands")
 class CliCommands:
     """The command dispatchers called in process, with their output and exit code captured: ``qar`` is ``quest-ai-runner`` (``cli.main``)
     and ``tools`` is ``python -m quest_ai_runner tools`` (list, show, call)."""
@@ -31,7 +28,6 @@ class CliCommands:
 
 
 
-@implementation("system-integrity", "package_front_doors")
 class PackageFrontDoors:
     """The names in the package's ``__all__``: ``front_door`` returns the one asked for and refuses a name the package does not offer."""
     REQUIRES = ()     # reads the package, nothing else

@@ -12,7 +12,7 @@ from quest_ai_runner.the_body.intake_sources.context_update_types import Context
 from quest_ai_runner.the_body.intake_sources.context_update_state import CollectRequest
 
 
-@implementation("quest-context", "base")
+@implementation("feed-context-sources", "base")
 class ContextSource(Protocol):
     """One channel this engine can check. Implementations must never raise; the engine catches
     anyway, but a source that reports its own empty result can say WHY."""

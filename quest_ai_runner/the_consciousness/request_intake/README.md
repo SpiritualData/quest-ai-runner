@@ -4,7 +4,7 @@ Every request made in Quest is taken in once by the same AI.
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `quest-requests:ways_in` of its parent intent [`the_consciousness`](../README.md). Opportunities: A runner is reached from many places and each has its own failure and cost, which the parent solution measures one by one and none together: a short chat message must not pay for a long run, an image has to be described before it can ground an answer, input that arrives while a run works must be heard at the next decision, a terminal session needs helper calls that cost a fraction of a cent, and a developer needs a package that installs and runs on an empty environment, learned from documents and examples that are kept true.
+This sub-intent arises as the implementation `take-in-the-world:ways_in` of its parent intent [`the_consciousness`](../README.md). Opportunities: A runner is reached from many places and each has its own failure and cost, which the parent solution measures one by one and none together: a short chat message must not pay for a long run, an image has to be described before it can ground an answer, input that arrives while a run works must be heard at the next decision, a terminal session needs helper calls that cost a fraction of a cent, and a developer needs a package that installs and runs on an empty environment, learned from documents and examples that are kept true.
 
 ## How the solutions fit together
 
@@ -14,7 +14,7 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Fast-path hit rate and parity with the planner-only path, Accuracy of core ML tasks over labelled cases |
+| Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
 
 ## Solutions from a library
 
@@ -47,7 +47,7 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Planner | `planner` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Fast-path hit rate and parity with the planner-only path, Accuracy of core ML tasks over labelled cases |
+| Planner | `planner` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
 
 ### Implementations
 
@@ -55,9 +55,9 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 |---|---|---|---|
 | Full planner decision | `planner:qar_planner` | [evaluation/components/classification/impls/qar_planner.py](../../../evaluation/components/classification/impls/qar_planner.py) |  |
 | Keyword rules floor | `planner:keyword_rules` | [evaluation/components/classification/impls/keyword_rules.py](../../../evaluation/components/classification/impls/keyword_rules.py) |  |
-| Source interface with shared channel flags | `quest-context:base` | [quest_ai_runner/the_body/intake_sources/context_sources_base.py](../../the_body/intake_sources/context_sources_base.py) |  |
-| Live engine over fake quest channels | `quest-context:update_engine` | [evaluation/components/feed_context_sources/impls/update_engine.py](../../../evaluation/components/feed_context_sources/impls/update_engine.py) |  |
-| In-memory thread-safe inbox | `quest-requests:in_memory` | [quest_ai_runner/the_intelligence/mind/delegation/inbox.py](../../the_intelligence/mind/delegation/inbox.py) |  |
+| Source interface with shared channel flags | `feed-context-sources:base` | [quest_ai_runner/the_body/intake_sources/context_sources_base.py](../../the_body/intake_sources/context_sources_base.py) |  |
+| Live engine over fake quest channels | `feed-context-sources:update_engine` | [evaluation/components/feed_context_sources/impls/update_engine.py](../../../evaluation/components/feed_context_sources/impls/update_engine.py) |  |
+| In-memory thread-safe inbox | `receive-input-mid-run:in_memory` | [quest_ai_runner/the_intelligence/mind/delegation/inbox.py](../../the_intelligence/mind/delegation/inbox.py) |  |
 | Package root with front doors | `system-integrity:__init__` | [quest_ai_runner/__init__.py](../../__init__.py) |  |
 | Long-lived background loop bridge | `system-integrity:async_bridge` | [quest_ai_runner/the_consciousness/request_intake/async_bridge.py](async_bridge.py) |  |
 | Live package-surface driver | `system-integrity:live_surface` | [evaluation/components/expose_the_public_api/impls/live_surface.py](../../../evaluation/components/expose_the_public_api/impls/live_surface.py) |  |
@@ -78,14 +78,11 @@ Quest Requests takes a request in from a chat turn, a queued task or a live chan
 | Real-entry-point evaluation arm | `system-integrity:qar_main` | [evaluation/components/operate_from_a_terminal/impls/qar_main.py](../../../evaluation/components/operate_from_a_terminal/impls/qar_main.py) |  |
 | Documentation index | `system-integrity:README.md` | [docs/README.md](../../../docs/README.md) |  |
 | Shipped-documents evaluation arm | `system-integrity:shipped_docs` | [evaluation/components/explain_qar/impls/shipped_docs.py](../../../evaluation/components/explain_qar/impls/shipped_docs.py) |  |
-| One vision-model call per image (today) | `quest-requests:vision_description` | [quest_ai_runner/the_intelligence/mind/context_intake/attachments.py](../../the_intelligence/mind/context_intake/attachments.py) |  |
-| No description, the image is named only (proposed) | `quest-requests:skip_images` |  |  |
-| Fast-tier model calls in the terminal (today) | `system-integrity:fast_model_helpers` | [quest_ai_runner/the_body/configuration/cli_config.py](../../the_body/configuration/cli_config.py) |  |
+| One vision-model call per image (today) | `describe-an-attachment:vision_description` | [quest_ai_runner/the_intelligence/mind/context_intake/attachments.py](../../the_intelligence/mind/context_intake/attachments.py) |  |
+| No description, the image is named only (proposed) | `describe-an-attachment:skip_images` |  |  |
 | Rules only, no model call (floor, proposed) | `system-integrity:rules_only` |  |  |
 | The loop planner decides the route | `planner:planner_route` | [quest_ai_runner/the_intelligence/mind/planner/message_routing.py](../../the_intelligence/mind/planner/message_routing.py) |  |
-| The update engine over its built-in channels | `quest-context:quest_channels` | [quest_ai_runner/the_body/intake_sources/context_updates.py](../../the_body/intake_sources/context_updates.py) |  |
-| The command dispatcher run in process | `system-integrity:cli_commands` | [quest_ai_runner/the_intelligence/mind/planner/area_take_in_the_world.py](../../the_intelligence/mind/planner/area_take_in_the_world.py) |  |
-| The names in the package __all__ | `system-integrity:package_front_doors` | [quest_ai_runner/the_intelligence/mind/planner/area_take_in_the_world.py](../../the_intelligence/mind/planner/area_take_in_the_world.py) |  |
+| The update engine over its built-in channels | `feed-context-sources:quest_channels` | [quest_ai_runner/the_body/intake_sources/context_updates.py](../../the_body/intake_sources/context_updates.py) |  |
 
 ### Metrics
 

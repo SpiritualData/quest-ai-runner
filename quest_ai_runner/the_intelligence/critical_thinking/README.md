@@ -77,9 +77,9 @@ Critical Thinking holds a request to a measure. Metric Translation turns the req
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Production liveness review in the goal runner | `delegated-agent-sessions:goal_runner` | [quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py](../mind/delegation/goal_runner.py) |  |
-| Live model reviewer arm | `delegated-agent-sessions:live_reviewer` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
-| Keyword and threshold rule floor | `delegated-agent-sessions:rule_floor` | [evaluation/components/deep_review/impls/rule_floor.py](../../../evaluation/components/deep_review/impls/rule_floor.py) |  |
+| Production liveness review in the goal runner | `detect-a-stalled-run:goal_runner` | [quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py](../mind/delegation/goal_runner.py) |  |
+| Live model reviewer arm | `detect-a-stalled-run:live_reviewer` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
+| Keyword and threshold rule floor | `detect-a-stalled-run:rule_floor` | [evaluation/components/deep_review/impls/rule_floor.py](../../../evaluation/components/deep_review/impls/rule_floor.py) |  |
 | Production judges under a scripted provider | `goal-completion:qar_judges` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
 | Production guard engines under test | `response-quality:qar_guards` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](area.py) |  |
 | Eligibility gate mixin | `quest-autopilot:autopilot_gates` | [quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py](../proactivity/autopilot_gates.py) |  |
@@ -96,9 +96,9 @@ Critical Thinking holds a request to a measure. Metric Translation turns the req
 | Ask the owner to write it (floor, proposed) | `metric-translation:ask_owner` | [evaluation/components/draft_a_metric/impls/ask_owner.py](../../../evaluation/components/draft_a_metric/impls/ask_owner.py) |  |
 | No-call floor of the quest ranker and reach judge | `goal-completion:no_call_floor` | [evaluation/components/judge_live_decisions/impls/no_call_floor.py](../../../evaluation/components/judge_live_decisions/impls/no_call_floor.py) |  |
 | Live quest ranker and reach judge on a small model | `goal-completion:live_judges` | [evaluation/components/judge_live_decisions/impls/live_judges.py](../../../evaluation/components/judge_live_decisions/impls/live_judges.py) |  |
-| Lexical TF-IDF, optional vector search, parallel batched model judging | `context-retriever:lexical-vector-llm` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
-| Lexical top few only | `context-retriever:lexical-only` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
-| Lexical vector gated | `context-retriever:lexical-vector-gated` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
+| Lexical TF-IDF, optional vector search, parallel batched model judging | `spec-selection:lexical-vector-llm` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
+| Lexical top few only | `spec-selection:lexical-only` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
+| Lexical vector gated | `spec-selection:lexical-vector-gated` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py](esoi_application/spec_selection.py) |  |
 
 ### Metrics
 

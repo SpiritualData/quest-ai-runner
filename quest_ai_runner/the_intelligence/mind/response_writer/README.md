@@ -8,7 +8,7 @@
 |---|---|---|---|
 | One cheap model call per turn writes the beat (today) | `quest-work-shown:model_beat` | [`quest_ai_runner/the_intelligence/mind/response_writer/orchestrator_turn.py`](orchestrator_turn.py) |  |
 | The Trail (live line, one summary line, expandable groups) | `quest-work-shown:trail` | [`quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py`](work_trace.py) | selected |
-| The structural gate of core/interim_policy.py | `quest-work-shown:gated` | [`quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py`](interim_policy.py) |  |
+| The structural gate of core/interim_policy.py | `reply-in-steps:gated` | [`quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py`](interim_policy.py) | selected |
 
 ## Where to go next
 

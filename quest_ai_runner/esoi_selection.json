@@ -42,8 +42,8 @@
     "root": "the-subconscious"
    },
    "the_body": {
-    "arm": "",
-    "root": "quest-account-truth"
+    "arm": "quest_client",
+    "root": "quest-body"
    },
    "the_consciousness": {
     "arm": "",
@@ -63,18 +63,27 @@
    }
   },
   "scopes": {
+   "cache-cards": "quest_ai_runner",
    "card-store": "quest_ai_runner",
    "cards-from-files": "quest_ai_runner",
+   "choose-the-context": "quest_ai_runner",
    "context-intake": "quest_ai_runner",
    "context-retriever": "quest_ai_runner",
    "critical-thinking": "quest_ai_runner",
    "delegated-agent-sessions": "quest_ai_runner",
+   "describe-an-attachment": "quest_ai_runner",
+   "detect-a-stalled-run": "quest_ai_runner",
    "esoi-application": "quest_ai_runner",
+   "feed-context-sources": "quest_ai_runner",
    "feedback-learning": "quest_ai_runner",
    "file-editing": "quest_ai_runner",
    "goal-completion": "quest_ai_runner",
    "guidance": "quest_ai_runner",
+   "guide-by-feedback": "quest_ai_runner",
+   "guide-toward-the-long-term-goal": "quest_ai_runner",
+   "hand-off-a-goal": "quest_ai_runner",
    "higher-mind": "quest_ai_runner",
+   "index-by-meaning": "quest_ai_runner",
    "intake-sources": "quest_ai_runner",
    "intent-evolution": "quest_ai_runner",
    "long-term-memory": "quest_ai_runner",
@@ -82,6 +91,7 @@
    "model-plumbing": "quest_ai_runner",
    "model-tier-chooser": "quest_ai_runner",
    "nervous-system": "quest_ai_runner",
+   "persist-cards": "quest_ai_runner",
    "planner": "quest_ai_runner",
    "quest-account-truth": "quest_ai_runner",
    "quest-autopilot": "quest_ai_runner",
@@ -95,8 +105,16 @@
    "quest-requests": "quest_ai_runner",
    "quest-self": "quest_ai_runner",
    "quest-work-shown": "quest_ai_runner",
+   "recall-recent-context": "quest_ai_runner",
+   "receive-input-mid-run": "quest_ai_runner",
+   "replay-known-operations": "quest_ai_runner",
+   "reply-in-steps": "quest_ai_runner",
    "response-quality": "quest_ai_runner",
+   "search-cards-and-specs": "quest_ai_runner",
+   "show-progress": "quest_ai_runner",
+   "spec-selection": "quest_ai_runner",
    "system-integrity": "quest_ai_runner",
+   "take-in-the-world": "quest_ai_runner",
    "the-intelligence": "quest_ai_runner",
    "the-intuition": "quest_ai_runner",
    "the-mind": "quest_ai_runner",
@@ -105,25 +123,33 @@
    "the-tools": "quest_ai_runner",
    "the-world": "quest_ai_runner",
    "vendor-model-caller": "quest_ai_runner",
-   "web-search": "quest_ai_runner"
+   "web-search": "quest_ai_runner",
+   "write-through-mcp": "quest_ai_runner"
+  }
+ },
+ "cache-cards": {
+  "default": "file",
+  "evidence": {
+   "detail": "memory_cache is exactly equal to file_cache on the metric (memory_cache 1 against file_cache 1), so file_cache stays; file_cache leads null_cache (null_cache 0.5 against file_cache 1; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0625, 6 of 12 cases disagree)",
+   "p": 0.0625,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "file": "quest_ai_runner.the_body.internal_context.card_store.card_cache_file",
+   "null": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository"
   }
  },
  "card-store": {
   "default": "quest-api-cards",
   "evidence": {
-   "detail": "filesystem is exactly equal to quest_api on the metric (filesystem 1 against quest_api 1), so quest_api stays; qdrant is exactly equal to quest_api on the metric (qdrant 1 against quest_api 1), so quest_api stays",
+   "detail": "store_sha256 leads mtime_size (mtime_size 0.667 against store_sha256 0.833; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=1, 1 of 6 cases disagree)",
    "p": 1.0,
-   "verdict": "TIE"
+   "verdict": "WIN"
   },
   "modules": {
-   "file": "quest_ai_runner.the_body.internal_context.card_store.card_cache_file",
-   "filesystem": "quest_ai_runner.the_body.configuration.config_assembler",
    "local_folder_tidy": "quest_ai_runner.the_body.internal_context.card_store.context_store_heal",
-   "null": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository",
    "qar-card-repository": "quest_ai_runner.the_body.internal_context.card_store.hub_card_store",
-   "qdrant": "quest_ai_runner.the_body.internal_context.card_store.qdrant_card_repository",
    "quest-api-cards": "quest_ai_runner.the_body.internal_context.card_store.hub_card_store",
-   "quest_api": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository",
    "repository_tidy": "quest_ai_runner.the_body.internal_context.card_store.card_store_tidy"
   }
  },
@@ -137,6 +163,17 @@
   "modules": {
    "fast_model_labels": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.card_metadata_generator",
    "qar_topic_bootstrap": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.qar_topic_bootstrap"
+  }
+ },
+ "choose-the-context": {
+  "default": "per_lane_assembly",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "per_lane_assembly": "quest_ai_runner.the_intelligence.subconscious.area_context_retriever"
   }
  },
  "context-intake": {
@@ -153,9 +190,9 @@
  "context-retriever": {
   "default": "blind_grep",
   "evidence": {
-   "detail": "lexical_vector_gated leads lexical_only (lexical_only 0.788 against lexical_vector_gated 0.903; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.203, 50 of 76 cases disagree); lexical_vector_gated leads lexical_vector (lexical_vector 0.816 against lexical_vector_gated 0.903; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0888, 49 of 76 cases disagree; one of 2 looks, alpha 0.025); best guess, not yet significant: lexical_vector_llm 0.486 against lexical_vector_gated 0.903 on the point estimate; no case counts or per-case rows allow a test; lexical_vector_gated is better than solutions_and_problems_with_links (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.42e-05, 51 of 76 cases disagree)",
-   "p": 4.4e-05,
-   "verdict": "WIN"
+   "detail": "beaten by hub_abstaining_hybrid, hub_bm25_body, hub_bm25_fielded, hub_dense_bge_small, hub_feature_rerank, hub_feature_rerank_no_priors, hub_hybrid_rrf, hub_learned_rerank: best guess, not yet significant: hub_abstaining_hybrid 0.645 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_abstaining_learned 0.575 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_bm25_body 0.66 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_bm25_fielded 0.691 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_bm25_whole_files 0.527 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_dense_bge_small 0.66 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_feature_rerank 0.728 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_feature_rerank_no_priors 0.721 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_folder_cards 0.348 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_hybrid_rrf 0.715 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_learned_rerank 0.63 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_lsi 0.607 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hub_per_file_symbols 0.43 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: hybrid_union 0.503 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: idf_docstrings 0.503 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: solutions_and_problems_with_links 0.417 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test; best guess, not yet significant: vector_bge_small 0.375 against blind_grep 0.616 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "LOSS"
   },
   "modules": {
    "blind_grep": "quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler",
@@ -164,14 +201,7 @@
    "file": "quest_ai_runner.the_body.internal_context.card_store.file_context_store",
    "hub_feature_rerank": "quest_ai_runner.the_intelligence.subconscious.context_retriever.retrieval_assembler",
    "hybrid": "quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler",
-   "lexical-only": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
-   "lexical-vector-gated": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
-   "lexical-vector-llm": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
-   "per_lane_assembly": "quest_ai_runner.the_intelligence.subconscious.area_context_retriever",
-   "qdrant": "quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store",
    "rep": "quest_ai_runner.the_intelligence.subconscious.context_retriever.rep_context_assembler",
-   "solutions_and_problems_with_links": "quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search",
-   "two_pipelines": "quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search",
    "vector": "quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler"
   }
  },
@@ -197,12 +227,33 @@
   "modules": {
    "acp": "quest_ai_runner.the_world.tools.delegated_agent_sessions.acp_deep_runner",
    "fast_edit": "quest_ai_runner.the_body.configuration.config_resolvers",
-   "goal_runner": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner",
    "lean_guarded": "quest_ai_runner.the_body.configuration.deep_launch",
-   "live_reviewer": "quest_ai_runner.the_intelligence.critical_thinking.area",
    "mcp_write": "quest_ai_runner.the_body.configuration.config_resolvers",
    "stream_json": "quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream",
    "subprocess": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner"
+  }
+ },
+ "describe-an-attachment": {
+  "default": "vision_description",
+  "evidence": {
+   "detail": "beaten by skip_images: best guess, not yet significant: skip_images 0.399 against vision_description 0.331 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "LOSS"
+  },
+  "modules": {
+   "vision_description": "quest_ai_runner.the_intelligence.mind.context_intake.attachments"
+  }
+ },
+ "detect-a-stalled-run": {
+  "default": "live_reviewer",
+  "evidence": {
+   "detail": "rule_floor is exactly equal to live_reviewer on the metric (rule_floor 1 against live_reviewer 1), so live_reviewer stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "goal_runner": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner",
+   "live_reviewer": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
  "esoi-application": {
@@ -218,6 +269,18 @@
    "slice-only": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration"
   }
  },
+ "feed-context-sources": {
+  "default": "quest_channels",
+  "evidence": {
+   "detail": "update_engine is exactly equal to quest_channels on the metric (update_engine 1 against quest_channels 1), so quest_channels stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "base": "quest_ai_runner.the_body.intake_sources.context_sources_base",
+   "quest_channels": "quest_ai_runner.the_body.intake_sources.context_updates"
+  }
+ },
  "feedback-learning": {
   "default": "ledger",
   "evidence": {
@@ -226,8 +289,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "ledger": "quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger",
-   "universal": "quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager"
+   "ledger": "quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger"
   }
  },
  "file-editing": {
@@ -263,8 +325,51 @@
    "frame-card-drilldown": "quest_ai_runner.the_body.internal_context.quest.client.quest_client_intents",
    "frame-lazy-spec": "quest_ai_runner.the_body.hands.quest_operations.tools_quest_intents",
    "frame-line": "quest_ai_runner.the_intelligence.critical_thinking.area",
-   "guided_v2": "quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts",
    "none": "quest_ai_runner.the_intelligence.proactivity.autopilot_briefs"
+  }
+ },
+ "guide-by-feedback": {
+  "default": "universal",
+  "evidence": {
+   "detail": "ledger_guidance leads dump_all (dump_all 0.5 against ledger_guidance 0.75; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.125, 4 of 16 cases disagree); ledger_guidance leads no_memory (no_memory 0.25 against ledger_guidance 0.75; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.0771, 12 of 16 cases disagree)",
+   "p": 0.077148,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "universal": "quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager"
+  }
+ },
+ "guide-toward-the-long-term-goal": {
+  "default": "guided_v2",
+  "evidence": {
+   "detail": "guided_v2 leads guided (guided 0.667 against guided_v2 0.833; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.318, guided passed 16 of 24, guided_v2 20 of 24); guided_v2 leads no_nudge (no_nudge 0.5 against guided_v2 0.833; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0914, no_nudge passed 12 of 24, guided_v2 20 of 24); guided_v2 is better than proactive_guidance.broken.nudge_every_time:build (two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.000476, proactive_guidance.broken.nudge_every_time:build passed 0 of 10, guided_v2 9 of 10; one of 2 looks, alpha 0.025); guided_v2 leads reply_voice (reply_voice 0.5 against guided_v2 0.833; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.0914, reply_voice passed 12 of 24, guided_v2 20 of 24)",
+   "p": 0.000476,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "guided_v2": "quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts"
+  }
+ },
+ "hand-off-a-goal": {
+  "default": "model_judge",
+  "evidence": {
+   "detail": "model_judge is better than creator_keeps_it (two-sided exact McNemar test, Holm-adjusted p=0.00781, 9 of 18 cases disagree); model_judge leads model_judge_fast (model_judge_fast 0.778 against model_judge 0.944; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.338, model_judge_fast passed 14 of 18, model_judge 17 of 18)",
+   "p": 0.007812,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "model_judge": "quest_ai_runner.the_body.area_body"
+  }
+ },
+ "index-by-meaning": {
+  "default": "qdrant",
+  "evidence": {
+   "detail": "memory_cosine is exactly equal to qdrant_embedded on the metric (memory_cosine 0.941 against qdrant_embedded 0.941), so qdrant_embedded stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "qdrant": "quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store"
   }
  },
  "intake-sources": {
@@ -286,7 +391,6 @@
    "verdict": "WIN"
   },
   "modules": {
-   "file": "quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context",
    "session_file": "quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store"
   }
  },
@@ -340,6 +444,19 @@
    "overseer": "quest_ai_runner.the_intelligence.nervous_system.area"
   }
  },
+ "persist-cards": {
+  "default": "quest_api",
+  "evidence": {
+   "detail": "filesystem is exactly equal to quest_api on the metric (filesystem 1 against quest_api 1), so quest_api stays; qdrant is exactly equal to quest_api on the metric (qdrant 1 against quest_api 1), so quest_api stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "filesystem": "quest_ai_runner.the_body.configuration.config_assembler",
+   "qdrant": "quest_ai_runner.the_body.internal_context.card_store.qdrant_card_repository",
+   "quest_api": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository"
+  }
+ },
  "planner": {
   "default": "planner_route",
   "evidence": {
@@ -348,9 +465,7 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "planner_route": "quest_ai_runner.the_intelligence.mind.planner.message_routing",
-   "router_labels": "quest_ai_runner.the_intelligence.mind.area_mind",
-   "stored_recipes": "quest_ai_runner.the_intelligence.mind.area_mind"
+   "planner_route": "quest_ai_runner.the_intelligence.mind.planner.message_routing"
   }
  },
  "quest-account-truth": {
@@ -390,7 +505,6 @@
    "verdict": "LOSS"
   },
   "modules": {
-   "mcp": "quest_ai_runner.the_world.tools.connected_system_operations.mcp_write_adapter",
    "qar_orchestrator": "quest_ai_runner.the_body.area_body"
   }
  },
@@ -408,7 +522,6 @@
    "verdict": "WIN"
   },
   "modules": {
-   "base": "quest_ai_runner.the_body.intake_sources.context_sources_base",
    "cached_db": "quest_ai_runner.the_body.internal_context.quest.cached_db_adapter",
    "composite": "quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter",
    "files": "quest_ai_runner.the_world.tools.file_reading.files_adapter",
@@ -418,7 +531,6 @@
    "note": "quest_ai_runner.the_body.configuration.config_assembler",
    "notion": "quest_ai_runner.the_world.tools.connected_system_operations.notion_adapter",
    "quest": "quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter",
-   "quest_channels": "quest_ai_runner.the_body.intake_sources.context_updates",
    "remote_files_adapter": "quest_ai_runner.the_world.tools.file_reading.remote_files_adapter"
   }
  },
@@ -447,12 +559,11 @@
  "quest-representatives": {
   "default": "persona_resolver_precedence",
   "evidence": {
-   "detail": "model_judge is better than creator_keeps_it (two-sided exact McNemar test, Holm-adjusted p=0.00781, 9 of 18 cases disagree); model_judge leads model_judge_fast (model_judge_fast 0.778 against model_judge 0.944; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.338, model_judge_fast passed 14 of 18, model_judge 17 of 18)",
-   "p": 0.007812,
+   "detail": "persona_resolver_precedence is better than first_registered (two-sided exact McNemar test, Holm-adjusted p=0.00635, 12 of 16 cases disagree)",
+   "p": 0.006348,
    "verdict": "WIN"
   },
   "modules": {
-   "model_judge": "quest_ai_runner.the_body.area_body",
    "persona_resolver_precedence": "quest_ai_runner.the_consciousness.representatives.personas"
   }
  },
@@ -465,14 +576,11 @@
   },
   "modules": {
    "executor": "quest_ai_runner.the_consciousness.request_intake.executor",
-   "in_memory": "quest_ai_runner.the_intelligence.mind.delegation.inbox",
    "lane": "quest_ai_runner.the_consciousness.request_intake.lane",
    "personas": "quest_ai_runner.the_consciousness.representatives.personas",
    "poller": "quest_ai_runner.the_consciousness.request_intake.poller",
    "qar_runner": "quest_ai_runner.the_body.area_body",
-   "quest_folder_sync": "quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync",
-   "vision_description": "quest_ai_runner.the_intelligence.mind.context_intake.attachments",
-   "ways_in": "quest_ai_runner.the_consciousness.ways_in"
+   "quest_folder_sync": "quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync"
   }
  },
  "quest-self": {
@@ -492,18 +600,59 @@
  "quest-work-shown": {
   "default": "trail",
   "evidence": {
+   "detail": "best guess, not yet significant: trace_template 0.724 against model_explanation 0.787 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "model_beat": "quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn",
+   "model_explanation": "quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges",
+   "terminal_trail": "quest_ai_runner.the_consciousness.terminal.textual_ui_trail",
+   "trail": "quest_ai_runner.the_intelligence.mind.response_writer.work_trace"
+  }
+ },
+ "recall-recent-context": {
+  "default": "file",
+  "evidence": {
+   "detail": "file_store_filter leads last_turn (last_turn 0.6 against file_store_filter 0.9; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.375, 5 of 10 cases disagree)",
+   "p": 0.375,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "file": "quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context"
+  }
+ },
+ "receive-input-mid-run": {
+  "default": "in_memory",
+  "evidence": {
    "detail": "no rival implementation was measured on the same cases",
    "p": null,
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "gated": "quest_ai_runner.the_intelligence.mind.response_writer.interim_policy",
-   "milestone": "quest_ai_runner.the_consciousness.terminal.adapters_sinks",
-   "model_beat": "quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn",
-   "model_explanation": "quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges",
-   "stream": "quest_ai_runner.the_consciousness.terminal.adapters_sinks",
-   "terminal_trail": "quest_ai_runner.the_consciousness.terminal.textual_ui_trail",
-   "trail": "quest_ai_runner.the_intelligence.mind.response_writer.work_trace"
+   "in_memory": "quest_ai_runner.the_intelligence.mind.delegation.inbox"
+  }
+ },
+ "replay-known-operations": {
+  "default": "stored_recipes",
+  "evidence": {
+   "detail": "planner_only_offline is exactly equal to recipe_replay_offline on the metric (planner_only_offline 1 against recipe_replay_offline 1), so recipe_replay_offline stays",
+   "p": 1.0,
+   "verdict": "TIE"
+  },
+  "modules": {
+   "stored_recipes": "quest_ai_runner.the_intelligence.mind.area_mind"
+  }
+ },
+ "reply-in-steps": {
+  "default": "gated",
+  "evidence": {
+   "detail": "gated is better than every_attempt (two-sided exact McNemar test, Holm-adjusted p=9.54e-07, 22 of 24 cases disagree); gated is better than today (two-sided exact McNemar test, Holm-adjusted p=0.00195, 10 of 24 cases disagree)",
+   "p": 1e-06,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "gated": "quest_ai_runner.the_intelligence.mind.response_writer.interim_policy"
   }
  },
  "response-quality": {
@@ -515,6 +664,43 @@
   },
   "modules": {
    "qar_guards": "quest_ai_runner.the_intelligence.critical_thinking.area"
+  }
+ },
+ "search-cards-and-specs": {
+  "default": "solutions_and_problems_with_links",
+  "evidence": {
+   "detail": "solutions_and_problems_with_links is better than context_and_specs.broken.keyword_overlap:build (two-sided exact McNemar test, Holm-adjusted p=0.00391, 10 of 17 cases disagree); solutions_and_problems_with_links leads two_pipelines (two_pipelines 0.588 against solutions_and_problems_with_links 0.824; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.219, 6 of 17 cases disagree)",
+   "p": 0.003906,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "solutions_and_problems_with_links": "quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search",
+   "two_pipelines": "quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search"
+  }
+ },
+ "show-progress": {
+  "default": "stream",
+  "evidence": {
+   "detail": "no rival implementation was measured on the same cases",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "milestone": "quest_ai_runner.the_consciousness.terminal.adapters_sinks",
+   "stream": "quest_ai_runner.the_consciousness.terminal.adapters_sinks"
+  }
+ },
+ "spec-selection": {
+  "default": "lexical-vector-gated",
+  "evidence": {
+   "detail": "lexical_vector_gated leads lexical_only (lexical_only 0.788 against lexical_vector_gated 0.903; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.203, 50 of 76 cases disagree); lexical_vector_gated leads lexical_vector (lexical_vector 0.816 against lexical_vector_gated 0.903; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.0888, 49 of 76 cases disagree; one of 2 looks, alpha 0.025); best guess, not yet significant: lexical_vector_llm 0.486 against lexical_vector_gated 0.903 on the point estimate; no case counts or per-case rows allow a test; lexical_vector_gated is better than solutions_and_problems_with_links (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=4.42e-05, 51 of 76 cases disagree)",
+   "p": 4.4e-05,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "lexical-only": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
+   "lexical-vector-gated": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
+   "lexical-vector-llm": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection"
   }
  },
  "system-integrity": {
@@ -529,7 +715,6 @@
    "__main__": "quest_ai_runner.the_consciousness.terminal.__main__",
    "async_bridge": "quest_ai_runner.the_consciousness.request_intake.async_bridge",
    "cli": "quest_ai_runner.the_consciousness.terminal.cli",
-   "cli_commands": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world",
    "cli_parser": "quest_ai_runner.the_consciousness.terminal.cli_parser",
    "cli_quest": "quest_ai_runner.the_consciousness.terminal.cli_quest",
    "config": "quest_ai_runner.the_body.configuration.config",
@@ -538,13 +723,17 @@
    "config_file": "quest_ai_runner.the_body.configuration.config_file",
    "conftest": "tests.conftest",
    "custom_consumer": "examples.custom_consumer",
-   "fast_model_helpers": "quest_ai_runner.the_body.configuration.cli_config",
    "minimal_lane": "examples.minimal_lane",
-   "package_front_doors": "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world",
    "runtime_settings": "quest_ai_runner.the_body.configuration.runtime_settings",
    "store_cli": "quest_ai_runner.the_intelligence.subconscious.cards_from_files.store_cli",
    "structure-library": "quest_ai_runner.the_self.area_integrity",
    "tag_list_with_check": "scripts.esoi_tags"
+  }
+ },
+ "take-in-the-world": {
+  "default": "ways_in",
+  "modules": {
+   "ways_in": "quest_ai_runner.the_consciousness.ways_in"
   }
  },
  "the-intelligence": {
@@ -644,6 +833,17 @@
    "searxng": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
    "serper": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
    "tavily": "quest_ai_runner.the_world.tools.web_search.web_search_backends"
+  }
+ },
+ "write-through-mcp": {
+  "default": "mcp",
+  "evidence": {
+   "detail": "allowlist_writer is better than real_stdio_server (two-sided exact McNemar test, Holm-adjusted p=0.00781, 8 of 15 cases disagree)",
+   "p": 0.007812,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "mcp": "quest_ai_runner.the_world.tools.connected_system_operations.mcp_write_adapter"
   }
  }
 }

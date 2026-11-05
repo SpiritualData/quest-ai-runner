@@ -31,6 +31,8 @@ CARD_STORE = "card-store"
 CARD_REPOSITORY = "qar-card-repository"  # the name of QAR's arm; QAR's records select it, this only names it for tests and logs
 PACKAGE_DIR = Path(__file__).resolve().parents[2]
 SELF_DECLARING = ("quest_ai_runner.the_self.respond",
+                  "quest_ai_runner.the_intelligence.mind.context_intake.attachments",
+                  "quest_ai_runner.the_intelligence.mind.response_writer.interim_policy",
                   "quest_ai_runner.the_intelligence.mind.planner.message_routing",
                   "quest_ai_runner.the_intelligence.mind.area_mind",
                   "quest_ai_runner.the_intelligence.mind.planner.area_take_in_the_world",

@@ -6,9 +6,9 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Lexical TF-IDF, optional vector search, parallel batched model judging | `context-retriever:lexical-vector-llm` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
-| Lexical top few only | `context-retriever:lexical-only` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
-| Lexical vector gated | `context-retriever:lexical-vector-gated` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
+| Lexical TF-IDF, optional vector search, parallel batched model judging | `spec-selection:lexical-vector-llm` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
+| Lexical top few only | `spec-selection:lexical-only` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) |  |
+| Lexical vector gated | `spec-selection:lexical-vector-gated` | [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](spec_selection.py) | selected |
 
 ## Metrics
 

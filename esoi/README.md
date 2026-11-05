@@ -30,16 +30,19 @@ flowchart LR
     s11["Quest Requests<br/><i>quest-requests</i>"]
     s12["Quest Self<br/><i>quest-self</i>"]
     s13["Quest Body<br/><i>quest-body</i>"]
-    s0 --> s11
+    s14["Image description for grounding<br/><i>describe-an-attachment</i>"]
+    s15["Request intake<br/><i>take-in-the-world</i>"]
+    s16["Context choice<br/><i>choose-the-context</i>"]
     s0 --> s12
+    s0 --> s15
     s1 --> s9
-    s1 --> s11
+    s1 --> s15
     s2 --> s12
-    s3 --> s0
     s3 --> s2
     s3 --> s9
     s3 --> s11
     s3 --> s12
+    s3 --> s14
     s4 --> s12
     s5 --> s12
     s6 --> s2
@@ -48,7 +51,8 @@ flowchart LR
     s7 --> s5
     s8 --> s5
     s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
-    s10 -->|"Evidence from the person's own sources, with where each item came from"| s11
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s15
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s16
     s11 -->|"The request taken in once and its outcome reported"| s5
     s11 -->|"The request taken in once and its outcome reported"| s12
     s12 -->|"The assistant's answer and the changes it made"| s9
@@ -72,13 +76,20 @@ flowchart LR
 | Goal Completion | `goal-completion` | `quest_ai_runner.run("goal-completion", ...)` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
 | Response Quality | `response-quality` | `quest_ai_runner.run("response-quality", 'See https://example.org/a for details.')` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
 | Higher Mind | `higher-mind` | no entry declared | none selected | none yet |
-| Guidance | `guidance` | `quest_ai_runner.run("guidance", 'quest-id')` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate, Two-sided long-term guidance |
+| Guidance | `guidance` | `quest_ai_runner.run("guidance", 'quest-id')` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
 | Tools | `the-tools` | `quest_ai_runner.run("the-tools", 'Send the launch note to the whole team')` | Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`) | Combined world score |
-| Quest Context | `quest-context` | `quest_ai_runner.run("quest-context", 'NOTES.md')` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Update-offering correctness over synthetic quest channels, Pointer-resolution safety over offline cases |
-| Quest Requests | `quest-requests` | `quest_ai_runner.run("quest-requests", 'team-1')` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases, Exactly-once mid-run delivery per run, and how fast it is seen, Answer pass rate gained per image described, Ways in that pass their own metric |
+| Quest Context | `quest-context` | `quest_ai_runner.run("quest-context", 'NOTES.md')` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases |
+| Quest Requests | `quest-requests` | `quest_ai_runner.run("quest-requests", 'team-1')` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
 | Quest Self | `quest-self` | `quest_ai_runner.run("quest-self", 'What should I work on first this week?')` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 | Quest Body | `quest-body` | `quest_ai_runner.run("quest-body", 'quest-id')` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
 | Quest Consciousness | `quest-consciousness` | no entry declared | `composition` | Quest Consciousness on Quest cases |
+| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
+| Image description for grounding | `describe-an-attachment` | `quest_ai_runner.run("describe-an-attachment", ...)` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
+| Request intake | `take-in-the-world` | `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
+| Semantic vector index | `index-by-meaning` | `quest_ai_runner.run("index-by-meaning", 'rust release')` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
+| Context choice | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
+| Intent specification selection | `spec-selection` | `esoi spec index --out FILE` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Unified card and specification search | `search-cards-and-specs` | no entry declared | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 
 ## Solutions from a library
 
@@ -182,13 +193,20 @@ flowchart LR
 | Goal Completion | `goal-completion` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
 | Response Quality | `response-quality` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
 | Higher Mind | `higher-mind` | none selected | none yet |
-| Guidance | `guidance` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate, Two-sided long-term guidance |
+| Guidance | `guidance` | Computed frame in the prompt (`frame-line`) | Intent-grounded pass rate |
 | Tools | `the-tools` | Coding agent, reach described in the prompt (today) (`coding_agent_prompt_reach`) | Combined world score |
-| Quest Context | `quest-context` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Update-offering correctness over synthetic quest channels, Pointer-resolution safety over offline cases |
-| Quest Requests | `quest-requests` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases, Exactly-once mid-run delivery per run, and how fast it is seen, Answer pass rate gained per image described, Ways in that pass their own metric |
+| Quest Context | `quest-context` | Parallel multi-source composite (`composite`) | Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases |
+| Quest Requests | `quest-requests` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
 | Quest Self | `quest-self` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 | Quest Body | `quest-body` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
 | Quest Consciousness | `quest-consciousness` | `composition` | Quest Consciousness on Quest cases |
+| Conversation-keyed mid-run input inbox | `receive-input-mid-run` | In-memory thread-safe inbox (`in_memory`) | Exactly-once mid-run delivery per run, and how fast it is seen |
+| Image description for grounding | `describe-an-attachment` | One vision-model call per image (today) (`vision_description`) | Answer pass rate gained per image described |
+| Request intake | `take-in-the-world` | Channels, terminal and package as ways in (`ways_in`) | Ways in that pass their own metric |
+| Semantic vector index | `index-by-meaning` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
+| Context choice | `choose-the-context` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
+| Intent specification selection | `spec-selection` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
+| Unified card and specification search | `search-cards-and-specs` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
 
 ### Implementations
 

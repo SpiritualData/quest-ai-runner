@@ -25,8 +25,8 @@ from quest_ai_runner.the_intelligence.mind.planner.recipes import Recipe, Recipe
 from quest_ai_runner.the_intelligence.mind.response_writer.work_trace import WorkShowing
 from quest_ai_runner.the_self.loop_wiring import orchestrator_over
 from quest_ai_runner.the_self.interface import GoalAnswer
-from quest_ai_runner.the_intelligence.mind.planner.message_routing import route_message
-from quest_ai_runner.the_intelligence.mind.planner.interface import PromptAssembling
+from quest_ai_runner.the_intelligence.mind.planner.interface import OperationReplaying, PromptAssembling
+from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import InterimDecision, InterimPolicy, InterimState
 
 
 class PromptCapture:
@@ -74,7 +74,7 @@ class OrchestratorTurn:
     def __init__(self, model: ModelCalling) -> None:
         self.model = model
 
-    def turn(self, message: str) -> GoalAnswer:
+    def answer(self, message: str) -> GoalAnswer:
         return turn_of(self.model, message)
 
 
@@ -92,7 +92,7 @@ class ShippedPath:
 
 
 
-@implementation("planner", "stored_recipes")
+@implementation("replay-known-operations", "stored_recipes")
 class StoredRecipes:
     """The recipe store of ``core/recipes.py``: one JSON file when a path is given, otherwise held in memory."""
     REQUIRES = ()     # a file path or nothing
@@ -108,19 +108,6 @@ class StoredRecipes:
 
 
 
-@implementation("planner", "router_labels")
-class RouterLabels:
-    """The classification is the route the loop's planner decides: ``answer``, ``tool``, ``deep``, ``confirm`` or ``clarify``."""
-    REQUIRES = ()     # the model it is handed
-
-    def __init__(self, model: ModelCalling) -> None:
-        self.model = model
-
-    def classify(self, message: str) -> str:
-        return str(route_message(self.model, message)["route"])
-
-
-
 @implementation("the-mind", "rebuilt_per_step")
 class RebuiltPerStep:
     """Each step is a fresh planner call built from the template, the cached head and context layers and the newest observations.
@@ -129,8 +116,8 @@ class RebuiltPerStep:
     REQUIRES = ()     # the seats it is handed
 
     def __init__(self, provider: RoutedModelCalling, prompts: Lazy[PromptAssembling], tiers: Lazy[RegistryTierSelection],
-                 work: Lazy[WorkShowing]) -> None:
-        self.provider, self.prompts, self.tiers, self.work = provider, prompts, tiers, work
+                 replays: Lazy[OperationReplaying], steps: Lazy[InterimPolicy], work: Lazy[WorkShowing]) -> None:
+        self.provider, self.prompts, self.tiers, self.replays, self.steps, self.work = provider, prompts, tiers, replays, steps, work
 
     def think(self, request: str, authority: Optional[Mapping[str, Any]] = None, target: Optional[Mapping[str, Any]] = None,
               guidance: Optional[Mapping[str, Any]] = None, profile: Optional[Any] = None, prepared: Optional[Mapping[str, Any]] = None,
@@ -148,6 +135,12 @@ class RebuiltPerStep:
 
     def step_prompt(self, message: str) -> str:
         return self.prompts.assemble(message)
+
+    def replayable(self, request: str) -> Sequence[Any]:
+        return self.replays.match(request)
+
+    def interim(self, state: InterimState) -> InterimDecision:
+        return self.steps.decide(state)
 
     def trail(self, emit: Any, context_meta: Optional[Mapping[str, Any]]) -> Any:
         return self.work.start(emit, context_meta)

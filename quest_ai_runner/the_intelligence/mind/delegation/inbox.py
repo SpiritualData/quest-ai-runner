@@ -21,7 +21,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.interface import InputInbo
 
 
 
-@implementation("quest-requests", "in_memory")
+@implementation("receive-input-mid-run", "in_memory")
 class InMemoryInbox:
     """Thread-safe, in-process ``InputInbox``. The default wired by ``build_orchestrator``.
 

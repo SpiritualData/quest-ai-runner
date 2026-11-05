@@ -4,7 +4,7 @@ The planner reads the material the request concerns, however the request is word
 
 *ESOI records of this intent (evolvable structure that optimizes intent), generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
 
-This sub-intent arises as the implementation `context-retriever:per_lane_assembly` of its parent intent [`subconscious`](../README.md). Opportunities: Which material a planner reads is a retrieval problem with its own alternatives and its own public evidence, which the parent solution does not weigh: lexical, vector and hybrid rankers over a person's cards, files and conversations, a ranker per representative, references that must resolve to current text without failing a turn, and one ranking that holds the cards and the specification records of a repository together so a run also sees when no solution covers its request. Public benchmarks of similar rankers are shown beside the measurements made here.
+This sub-intent arises as the implementation `choose-the-context:per_lane_assembly` of its parent intent [`subconscious`](../README.md). Opportunities: Which material a planner reads is a retrieval problem with its own alternatives and its own public evidence, which the parent solution does not weigh: lexical, vector and hybrid rankers over a person's cards, files and conversations, a ranker per representative, references that must resolve to current text without failing a turn, and one ranking that holds the cards and the specification records of a repository together so a run also sees when no solution covers its request. Public benchmarks of similar rankers are shown beside the measurements made here.
 
 ## How the solutions fit together
 
@@ -14,7 +14,7 @@ Context Retriever picks the cards, files and conversations that bear on a reques
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Context Retriever | `context-retriever` | `quest_ai_runner.run("context-retriever", 'What should I work on first this week?')` | Blind text search (`blind_grep`) | Specification selection pass rate, Context handed to the planner, Context selection ranking accuracy and card-quality outcome, Mixed card and specification selection, with both existing selection metrics held, Semantic recall and query latency on the synthetic handbook |
+| Context Retriever | `context-retriever` | `quest_ai_runner.run("context-retriever", 'What should I work on first this week?')` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
 
 ## Solutions from a library
 
@@ -41,7 +41,7 @@ Context Retriever picks the cards, files and conversations that bear on a reques
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Context Retriever | `context-retriever` | Blind text search (`blind_grep`) | Specification selection pass rate, Context handed to the planner, Context selection ranking accuracy and card-quality outcome, Mixed card and specification selection, with both existing selection metrics held, Semantic recall and query latency on the synthetic handbook |
+| Context Retriever | `context-retriever` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
 
 ### Implementations
 
@@ -66,12 +66,12 @@ Context Retriever picks the cards, files and conversations that bear on a reques
 | Agent with hint | `context-retriever:warm_claude` | [evaluation/components/claude_code_ab/impls/warm_claude.py](../../../../evaluation/components/claude_code_ab/impls/warm_claude.py) |  |
 | Registry of built-in and host resolvers | `quest-context:note` | [quest_ai_runner/the_body/configuration/config_assembler.py](../../../the_body/configuration/config_assembler.py) |  |
 | Production registry under scripted host resolvers | `quest-context:card_resolvers` | [evaluation/components/resolve_references/impls/card_resolvers.py](../../../../evaluation/components/resolve_references/impls/card_resolvers.py) |  |
-| Two pipelines side by side (today) | `context-retriever:two_pipelines` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/unified_search.py](unified_search.py) |  |
-| Every record kind ranked beside cards (planned) | `context-retriever:every_record_a_view` |  |  |
-| Cards, solutions and problems ranked; intents, ideals and metrics reached through links | `context-retriever:solutions_and_problems_with_links` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/unified_search.py](unified_search.py) |  |
+| Two pipelines side by side (today) | `search-cards-and-specs:two_pipelines` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/unified_search.py](unified_search.py) |  |
+| Every record kind ranked beside cards (planned) | `search-cards-and-specs:every_record_a_view` |  |  |
+| Cards, solutions and problems ranked; intents, ideals and metrics reached through links | `search-cards-and-specs:solutions_and_problems_with_links` | [quest_ai_runner/the_intelligence/subconscious/context_retriever/unified_search.py](unified_search.py) |  |
 | The hub's per-file card arm | `context-retriever:hub_per_file_symbols` | [evaluation/components/context_selection/impls/hub_per_file_symbols.py](../../../../evaluation/components/context_selection/impls/hub_per_file_symbols.py) |  |
 | One card per folder, from the hub's card helpers | `context-retriever:hub_folder_cards` | [evaluation/components/context_selection/impls/hub_folder_cards.py](../../../../evaluation/components/context_selection/impls/hub_folder_cards.py) |  |
-| Qdrant-backed vector store | `context-retriever:qdrant` | [quest_ai_runner/the_body/internal_context/card_store/qdrant_vector_store.py](../../../the_body/internal_context/card_store/qdrant_vector_store.py) |  |
+| Qdrant-backed vector store | `index-by-meaning:qdrant` | [quest_ai_runner/the_body/internal_context/card_store/qdrant_vector_store.py](../../../the_body/internal_context/card_store/qdrant_vector_store.py) |  |
 | BM25 over unit bodies (hub) | `context-retriever:hub_bm25_body` | [evaluation/components/context_selection/impls/hub_bm25_body.py](../../../../evaluation/components/context_selection/impls/hub_bm25_body.py) |  |
 | Fielded BM25 over title, path and body (hub) | `context-retriever:hub_bm25_fielded` | [evaluation/components/context_selection/impls/hub_bm25_fielded.py](../../../../evaluation/components/context_selection/impls/hub_bm25_fielded.py) |  |
 | BM25 over whole files (hub) | `context-retriever:hub_bm25_whole_files` | [evaluation/components/context_selection/impls/hub_bm25_whole_files.py](../../../../evaluation/components/context_selection/impls/hub_bm25_whole_files.py) |  |

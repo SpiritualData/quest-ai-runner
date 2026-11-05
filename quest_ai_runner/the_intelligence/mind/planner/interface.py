@@ -14,6 +14,7 @@ class PromptAssembling(typing.Protocol):
     def assemble(self, message: str) -> str: ...
 
 
+@solution("replay-known-operations", kind="event", entry="match", example="Add a note that the launch moves to Friday")
 @typing.runtime_checkable
 class OperationReplaying(typing.Protocol):
     """Finds the operations learned from earlier requests that a new request repeats, best first, each with its similarity."""

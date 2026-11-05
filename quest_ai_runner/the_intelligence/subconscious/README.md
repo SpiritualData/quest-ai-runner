@@ -25,7 +25,7 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Card Store | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | Quest backend card API from the environment (`quest-api-cards`) | Card repository conformance across backends, Staleness detection precision and recall over mutation cases, Outage resilience of the card repository, Cards per source-file group and duplicate share after a repair of an inflated store |
+| Card Store | `card-store` | `quest_ai_runner.run("card-store", 'rust release')` | Quest backend card API from the environment (`quest-api-cards`) | Staleness detection precision and recall over mutation cases, Cards per source-file group and duplicate share after a repair of an inflated store |
 | Cards From Files | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
 
 ## Solutions from a library
@@ -60,23 +60,23 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Card Store | `card-store` | Quest backend card API from the environment (`quest-api-cards`) | Card repository conformance across backends, Staleness detection precision and recall over mutation cases, Outage resilience of the card repository, Cards per source-file group and duplicate share after a repair of an inflated store |
+| Card Store | `card-store` | Quest backend card API from the environment (`quest-api-cards`) | Staleness detection precision and recall over mutation cases, Cards per source-file group and duplicate share after a repair of an inflated store |
 | Cards From Files | `cards-from-files` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Atomic JSON file repository | `card-store:filesystem` | [quest_ai_runner/the_body/configuration/config_assembler.py](../../the_body/configuration/config_assembler.py) |  |
-| Vector database repository | `card-store:qdrant` | [quest_ai_runner/the_body/internal_context/card_store/qdrant_card_repository.py](../../the_body/internal_context/card_store/qdrant_card_repository.py) |  |
-| Hosted card API repository | `card-store:quest_api` | [quest_ai_runner/the_body/internal_context/card_store/quest_api_card_repository.py](../../the_body/internal_context/card_store/quest_api_card_repository.py) |  |
+| Atomic JSON file repository | `persist-cards:filesystem` | [quest_ai_runner/the_body/configuration/config_assembler.py](../../the_body/configuration/config_assembler.py) |  |
+| Vector database repository | `persist-cards:qdrant` | [quest_ai_runner/the_body/internal_context/card_store/qdrant_card_repository.py](../../the_body/internal_context/card_store/qdrant_card_repository.py) |  |
+| Hosted card API repository | `persist-cards:quest_api` | [quest_ai_runner/the_body/internal_context/card_store/quest_api_card_repository.py](../../the_body/internal_context/card_store/quest_api_card_repository.py) |  |
 | Content-hash fingerprint check | `card-store:store_sha256` | [evaluation/components/staleness/impls/store_sha256.py](../../../evaluation/components/staleness/impls/store_sha256.py) |  |
 | Timestamp-and-size baseline | `card-store:mtime_size` | [evaluation/components/staleness/impls/mtime_size.py](../../../evaluation/components/staleness/impls/mtime_size.py) |  |
-| Card repository with a cache seam and a null cache | `card-store:null` | [quest_ai_runner/the_body/internal_context/card_store/quest_api_card_repository.py](../../the_body/internal_context/card_store/quest_api_card_repository.py) |  |
-| Durable file cache | `card-store:file` | [quest_ai_runner/the_body/internal_context/card_store/card_cache_file.py](../../the_body/internal_context/card_store/card_cache_file.py) |  |
-| No-op cache (shipped default of the seam) | `card-store:null_cache` | [evaluation/components/cache_cards/impls/null_cache.py](../../../evaluation/components/cache_cards/impls/null_cache.py) |  |
-| In-process memory cache | `card-store:memory_cache` | [evaluation/components/cache_cards/impls/memory_cache.py](../../../evaluation/components/cache_cards/impls/memory_cache.py) |  |
-| Durable file cache under outage scenarios | `card-store:file_cache` | [evaluation/components/cache_cards/impls/file_cache.py](../../../evaluation/components/cache_cards/impls/file_cache.py) |  |
+| Card repository with a cache seam and a null cache | `cache-cards:null` | [quest_ai_runner/the_body/internal_context/card_store/quest_api_card_repository.py](../../the_body/internal_context/card_store/quest_api_card_repository.py) |  |
+| Durable file cache | `cache-cards:file` | [quest_ai_runner/the_body/internal_context/card_store/card_cache_file.py](../../the_body/internal_context/card_store/card_cache_file.py) |  |
+| No-op cache (shipped default of the seam) | `cache-cards:null_cache` | [evaluation/components/cache_cards/impls/null_cache.py](../../../evaluation/components/cache_cards/impls/null_cache.py) |  |
+| In-process memory cache | `cache-cards:memory_cache` | [evaluation/components/cache_cards/impls/memory_cache.py](../../../evaluation/components/cache_cards/impls/memory_cache.py) |  |
+| Durable file cache under outage scenarios | `cache-cards:file_cache` | [evaluation/components/cache_cards/impls/file_cache.py](../../../evaluation/components/cache_cards/impls/file_cache.py) |  |
 | Card quarantine tool | `card-store:quarantine_tool` | [evaluation/components/card_growth/impls/quarantine_tool.py](../../../evaluation/components/card_growth/impls/quarantine_tool.py) |  |
 | Copy mode with no guard | `cards-from-files:no_cleanup` | [evaluation/components/card_growth/impls/no_cleanup.py](../../../evaluation/components/card_growth/impls/no_cleanup.py) |  |
 | Bootstrap guards against re-import | `cards-from-files:bootstrap_guards` | [evaluation/components/card_growth/impls/bootstrap_guards.py](../../../evaluation/components/card_growth/impls/bootstrap_guards.py) |  |
@@ -89,7 +89,7 @@ flowchart LR
 | Path and title rules, no model call (floor, proposed) | `cards-from-files:path_rules` | [evaluation/components/label_context_cards/impls/path_rules.py](../../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
 | QAR card repository | `card-store:qar-card-repository` | [quest_ai_runner/the_body/internal_context/card_store/hub_card_store.py](../../the_body/internal_context/card_store/hub_card_store.py) |  |
 | Quest backend card API from the environment | `card-store:quest-api-cards` | [quest_ai_runner/the_body/internal_context/card_store/hub_card_store.py](../../the_body/internal_context/card_store/hub_card_store.py) |  |
-| Per-lane assembly of the context members (today) | `context-retriever:per_lane_assembly` | [quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py](area_context_retriever.py) | [context_retriever](context_retriever/README.md) |
+| Per-lane assembly of the context members (today) | `choose-the-context:per_lane_assembly` | [quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py](area_context_retriever.py) | [context_retriever](context_retriever/README.md) |
 | Fast-tier model writes metadata and categories (today) | `cards-from-files:fast_model_labels` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/card_metadata_generator.py](cards_from_files/card_metadata_generator.py) |  |
 | QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/qar_topic_bootstrap.py](cards_from_files/qar_topic_bootstrap.py) |  |
 

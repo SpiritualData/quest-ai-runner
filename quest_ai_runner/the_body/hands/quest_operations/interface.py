@@ -4,6 +4,7 @@ from __future__ import annotations
 import typing
 from typing import Any, Mapping
 from esoi import solution
+from hubofhubs.api import OperationWriter
 from quest_ai_runner.the_self.interface import GoalAnswer
 
 
@@ -15,6 +16,8 @@ class QuestOperating(typing.Protocol):
     def operate(self, message: str, quest_id: str = "") -> GoalAnswer: ...
 
 
+@solution("hand-off-a-goal", kind="event", entry="assign",
+          example={"outcome": "Ship the launch", "title": "Draft the launch note", "description": "", "members": []})
 @typing.runtime_checkable
 class GoalHandingOff(typing.Protocol):
     """Decides which person of a quest a new goal belongs to and whether an AI can do it itself: ``{"assignee", "ai_can_do"}``."""
@@ -29,3 +32,9 @@ class ReachClaiming(typing.Protocol):
     ``deep``, ``confirm`` or ``clarify``), from what the host's effectors say they allow."""
 
     def claim(self, message: str) -> Mapping[str, Any]: ...
+
+
+@solution("write-through-mcp", kind="event", entry="write_operation", example={"name": "issues:create", "args": {"title": "Draft the launch note"}})
+@typing.runtime_checkable
+class OperationWriting(OperationWriter, typing.Protocol):
+    """The hub's operation-writer interface (a named, schema-described mutating operation, reported as a value) over the MCP servers a lane connects."""

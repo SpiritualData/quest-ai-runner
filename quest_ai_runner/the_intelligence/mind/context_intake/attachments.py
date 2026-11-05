@@ -485,6 +485,8 @@ def _provider_sends_native(provider: ModelProvider, model: str) -> bool:
     return is_vision_capable(model)
 
 
+@solution("describe-an-attachment", kind="event", entry="prepare",
+          example=[{"filename": "notes.txt", "mime_type": "text/plain", "data": b"Call the mentor on Friday."}])
 @typing.runtime_checkable
 class AttachmentPreparing(typing.Protocol):
     """Turns what a person attached into what the loop can use: an image the answering model sees natively or a description of it,
@@ -493,7 +495,7 @@ class AttachmentPreparing(typing.Protocol):
     def prepare(self, attachments: Optional[List[Dict[str, Any]]]) -> PreparedAttachments: ...
 
 
-@implementation("quest-requests", "vision_description")
+@implementation("describe-an-attachment", "vision_description")
 class VisionDescription:
     """``prepare_attachments`` over the model seat: images go native to a vision-capable model, or are described by it, and files are
     read as text. The model is the one the ``tier`` resolves to on that seat."""

@@ -140,7 +140,7 @@ class FrameLine:
 
 
 
-@implementation("delegated-agent-sessions", "live_reviewer")
+@implementation("detect-a-stalled-run", "live_reviewer")
 class LiveReviewer:
     """The production reviewer: the watchdog prompt sent through one-shot ``claude -p`` and read by ``parse_deep_review``."""
     REQUIRES = (needs.CLAUDE_BINARY,)

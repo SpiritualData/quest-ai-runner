@@ -26,9 +26,15 @@ flowchart LR
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
 | Intuition | `the-intuition` | `quest_ai_runner.run("the-intuition", 'quest-id')` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
-| Long-Term Memory | `long-term-memory` | `quest_ai_runner.run("long-term-memory", ...)` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases, Warm-start accuracy with no cross-work-item leakage |
-| Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Repeat-correction recall and precision over feedback sequences, Correction carry-through over the feedback-loop cases |
-| Quest Representatives | `quest-representatives` | `quest_ai_runner.run("quest-representatives", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Hand-offs a person keeps per unit of cost and time, Representative choice accuracy and thread consistency |
+| Long-Term Memory | `long-term-memory` | `quest_ai_runner.run("long-term-memory", ...)` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases |
+| Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
+| Quest Representatives | `quest-representatives` | `quest_ai_runner.run("quest-representatives", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
+| Scoped recent-context warm start | `recall-recent-context` | `quest_ai_runner.run("recall-recent-context", 'quest-id')` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
+| Incremental context-update feed | `feed-context-sources` | `quest_ai_runner.run("feed-context-sources", {'quest_id': 'quest-id'})` | The update engine over its built-in channels (`quest_channels`) | Update-offering correctness over synthetic quest channels |
+| Context card persistence backend | `persist-cards` | `quest_ai_runner.run("persist-cards", 'card-1')` | Hosted card API repository (`quest_api`) | Card repository conformance across backends |
+| Feedback-to-guidance loop | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | `quest_ai_runner.run("guide-toward-the-long-term-goal", 'What should I work on first this week?')` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
+| Goal assignee and doability judge | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 
 ## Solutions from a library
 
@@ -87,21 +93,27 @@ flowchart LR
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
 | Intuition | `the-intuition` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
-| Long-Term Memory | `long-term-memory` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases, Warm-start accuracy with no cross-work-item leakage |
-| Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Repeat-correction recall and precision over feedback sequences, Correction carry-through over the feedback-loop cases |
-| Quest Representatives | `quest-representatives` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Hand-offs a person keeps per unit of cost and time, Representative choice accuracy and thread consistency |
+| Long-Term Memory | `long-term-memory` | Local session-file conversation store (`session_file`) | Past-conversation recall and isolation over synthetic cases |
+| Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
+| Quest Representatives | `quest-representatives` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
+| Scoped recent-context warm start | `recall-recent-context` | Lexical-gated scoped file store (`file`) | Warm-start accuracy with no cross-work-item leakage |
+| Incremental context-update feed | `feed-context-sources` | The update engine over its built-in channels (`quest_channels`) | Update-offering correctness over synthetic quest channels |
+| Context card persistence backend | `persist-cards` | Hosted card API repository (`quest_api`) | Card repository conformance across backends |
+| Feedback-to-guidance loop | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Guidance toward the long-term goal | `guide-toward-the-long-term-goal` | Long-term guidance section in the reply voice (`guided_v2`) | Two-sided long-term guidance |
+| Goal assignee and doability judge | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 
 ### Implementations
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
 | Local session-file conversation store | `long-term-memory:session_file` | [quest_ai_runner/the_intelligence/higher_mind/long_term_memory/session_file_conversation_store.py](../long_term_memory/session_file_conversation_store.py) |  |
-| Universal guidance provider | `feedback-learning:universal` | [quest_ai_runner/the_intelligence/higher_mind/guidance/guidance_card_manager.py](../guidance/guidance_card_manager.py) |  |
-| Live ledger and provider arm | `feedback-learning:ledger_guidance` | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../../../../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
-| No-feedback floor | `feedback-learning:no_memory` | [evaluation/components/feedback_loop/impls/no_memory.py](../../../../evaluation/components/feedback_loop/impls/no_memory.py) |  |
-| Show-everything baseline | `feedback-learning:dump_all` | [evaluation/components/feedback_loop/impls/dump_all.py](../../../../evaluation/components/feedback_loop/impls/dump_all.py) |  |
+| Universal guidance provider | `guide-by-feedback:universal` | [quest_ai_runner/the_intelligence/higher_mind/guidance/guidance_card_manager.py](../guidance/guidance_card_manager.py) |  |
+| Live ledger and provider arm | `guide-by-feedback:ledger_guidance` | [evaluation/components/feedback_loop/impls/ledger_guidance.py](../../../../evaluation/components/feedback_loop/impls/ledger_guidance.py) |  |
+| No-feedback floor | `guide-by-feedback:no_memory` | [evaluation/components/feedback_loop/impls/no_memory.py](../../../../evaluation/components/feedback_loop/impls/no_memory.py) |  |
+| Show-everything baseline | `guide-by-feedback:dump_all` | [evaluation/components/feedback_loop/impls/dump_all.py](../../../../evaluation/components/feedback_loop/impls/dump_all.py) |  |
 | File-backed feedback ledger | `feedback-learning:ledger` | [quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py](../../../the_consciousness/feedback_learning/feedback_ledger.py) |  |
-| Lexical-gated scoped file store | `long-term-memory:file` | [quest_ai_runner/the_intelligence/higher_mind/long_term_memory/recent_context.py](../long_term_memory/recent_context.py) |  |
+| Lexical-gated scoped file store | `recall-recent-context:file` | [quest_ai_runner/the_intelligence/higher_mind/long_term_memory/recent_context.py](../long_term_memory/recent_context.py) |  |
 | Atomic file prediction store | `the-intuition:file` | [quest_ai_runner/the_intelligence/subconscious/intuition/anticipation_store.py](../../subconscious/intuition/anticipation_store.py) |  |
 | In-memory reference store | `the-intuition:memory_store` | [evaluation/components/persist_predictions/impls/memory_store.py](../../../../evaluation/components/persist_predictions/impls/memory_store.py) |  |
 | Persona resolver precedence for queued tasks (today) | `quest-representatives:persona_resolver_precedence` | [quest_ai_runner/the_consciousness/representatives/personas.py](../../../the_consciousness/representatives/personas.py) |  |
@@ -109,10 +121,10 @@ flowchart LR
 | A thread keeps its representative (proposed) | `quest-representatives:thread_holds_its_rep` |  |  |
 | Fit by role, assigned quests and intent branch (proposed) | `quest-representatives:fit_by_role_and_quests` |  |  |
 | Ask the person on an equal fit (proposed) | `quest-representatives:ask_the_person` |  |  |
-| Reply voice before the long-term guidance section (prior) | `guidance:reply_voice` |  |  |
-| Reply voice plus a long-term guidance directive (proposed) | `guidance:guided` |  |  |
-| Plain answer only (floor) | `guidance:no_nudge` |  |  |
-| Long-term guidance section in the reply voice | `guidance:guided_v2` | [quest_ai_runner/the_self/integrity/prompts/auxiliary_prompts.py](../../../the_self/integrity/prompts/auxiliary_prompts.py) |  |
+| Reply voice before the long-term guidance section (prior) | `guide-toward-the-long-term-goal:reply_voice` |  |  |
+| Reply voice plus a long-term guidance directive (proposed) | `guide-toward-the-long-term-goal:guided` |  |  |
+| Plain answer only (floor) | `guide-toward-the-long-term-goal:no_nudge` |  |  |
+| Long-term guidance section in the reply voice | `guide-toward-the-long-term-goal:guided_v2` | [quest_ai_runner/the_self/integrity/prompts/auxiliary_prompts.py](../../../the_self/integrity/prompts/auxiliary_prompts.py) |  |
 
 ### Metrics
 

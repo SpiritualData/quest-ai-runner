@@ -6,7 +6,7 @@ each built on first use) and ``record_run(run)`` (the run record, kept in the ru
 ``read(rel_path)``: the part of a source the host's retrieval adapter returns, as it is now. The members are the cards a quest keeps
 (``persist-cards``), the host's reads (``gather-evidence``, the retrieval adapter), the Quest account (``access-quest-operations``) and the
 operations on it (``operate-a-quest``), the changes the AI makes to files (``write-files``), what it claims it can reach
-(``claim-reach``), and the queued tasks it runs (``run-queued-tasks``).
+(``claim-reach``), the queued tasks it runs (``run-queued-tasks``) and the goals it takes over from a person (``hand-off-a-goal``).
 Members the line does not need are built on first use.
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ from quest_ai_runner.the_body.hands.quest_operations.interface import QuestOpera
 from quest_ai_runner.the_consciousness.request_intake.interface import QueueRunning
 from quest_ai_runner.the_body.internal_context.card_store.interface import CardKeeping
 from quest_ai_runner.the_world.tools.file_editing.interface import FileWriting
-from quest_ai_runner.the_body.hands.quest_operations.interface import ReachClaiming
+from quest_ai_runner.the_body.hands.quest_operations.interface import GoalHandingOff, ReachClaiming
 
 
 @implementation("quest-body", "quest_client")
@@ -100,7 +100,7 @@ class QarRunner:
 
 
 
-@implementation("quest-representatives", "model_judge")
+@implementation("hand-off-a-goal", "model_judge")
 class ModelJudge:
     """One small model call per goal decides the person and whether the AI can do it; a missing or failed judge leaves the goal with the quest owner."""
     REQUIRES = ()     # the model it is handed
@@ -124,10 +124,10 @@ class CardAndReads:
 
     def __init__(self, cards: Lazy[CardKeeping], evidence: Lazy[RetrievalAdapter], operations: Lazy[QuestOperating],
                  reach: Lazy[ReachClaiming], files: Lazy[FileWriting], quest: QuestOperations, queue: Lazy[QueueRunning],
-                 internal: Lazy[InternalContexting], intake: Lazy[IntakeSourcing],
+                 handoff: Lazy[GoalHandingOff], internal: Lazy[InternalContexting], intake: Lazy[IntakeSourcing],
                  hands: Lazy[Connecting]) -> None:
         self.cards, self.evidence, self.operations, self.reach = cards, evidence, operations, reach
-        self.files, self.quest, self.queue = files, quest, queue
+        self.files, self.quest, self.queue, self.handoff = files, quest, queue, handoff
         self.form = BodyComposition(internal, intake, hands)
 
     def describe(self, person: str = "") -> Mapping[str, Any]:
@@ -156,3 +156,6 @@ class CardAndReads:
 
     def run_queue(self, team_id: str = "") -> List[str]:
         return self.queue.scan(team_id)
+
+    def assign(self, goal: Mapping[str, Any]) -> Mapping[str, Any]:
+        return self.handoff.assign(goal)

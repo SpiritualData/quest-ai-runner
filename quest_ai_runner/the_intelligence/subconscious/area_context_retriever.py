@@ -20,7 +20,7 @@ from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_sea
 
 
 
-@implementation("context-retriever", "per_lane_assembly")
+@implementation("choose-the-context", "per_lane_assembly")
 class PerLaneAssembly:
     """The reference resolver and the vector index, each handed in as a seat and built on first use; ``choose`` reads the lane's assembler passed
     in, ``search`` ranks cards and specification records, and the other lines delegate to the member that owns them."""

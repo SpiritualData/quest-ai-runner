@@ -30,16 +30,19 @@ flowchart LR
     s11["Quest Requests<br/><i>quest-requests</i>"]
     s12["Quest Self<br/><i>quest-self</i>"]
     s13["Quest Body<br/><i>quest-body</i>"]
-    s0 --> s11
+    s14["Image description for grounding<br/><i>describe-an-attachment</i>"]
+    s15["Request intake<br/><i>take-in-the-world</i>"]
+    s16["Context choice<br/><i>choose-the-context</i>"]
     s0 --> s12
+    s0 --> s15
     s1 --> s9
-    s1 --> s11
+    s1 --> s15
     s2 --> s12
-    s3 --> s0
     s3 --> s2
     s3 --> s9
     s3 --> s11
     s3 --> s12
+    s3 --> s14
     s4 --> s12
     s5 --> s12
     s6 --> s2
@@ -48,7 +51,8 @@ flowchart LR
     s7 --> s5
     s8 --> s5
     s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
-    s10 -->|"Evidence from the person's own sources, with where each item came from"| s11
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s15
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s16
     s11 -->|"The request taken in once and its outcome reported"| s5
     s11 -->|"The request taken in once and its outcome reported"| s12
     s12 -->|"The assistant's answer and the changes it made"| s9
@@ -102,7 +106,7 @@ flowchart LR
 
 - Entry call: `quest_ai_runner.run("guidance", 'quest-id')`
 - Selected implementation: Computed frame in the prompt (`frame-line`)
-- Metric: Intent-grounded pass rate, Two-sided long-term guidance
+- Metric: Intent-grounded pass rate
 - Implemented by: [`quest_ai_runner/the_body/hands/quest_operations/tools_quest_intents.py`](the_body/hands/quest_operations/tools_quest_intents.py), [`quest_ai_runner/the_body/internal_context/quest/client/quest_client_intents.py`](the_body/internal_context/quest/client/quest_client_intents.py), [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/__init__.py`](the_intelligence/critical_thinking/esoi_application/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py`](the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py`](the_intelligence/critical_thinking/esoi_application/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/repo_specs.py`](the_intelligence/critical_thinking/esoi_application/repo_specs.py) and 67 more
 
 ## Tools (`the-tools`)
@@ -118,8 +122,8 @@ Give every request the person's own Quest material and nobody else's.
 
 - Entry call: `quest_ai_runner.run("quest-context", 'NOTES.md')`
 - Selected implementation: Parallel multi-source composite (`composite`)
-- Metric: Retrieval recall of the right document over handbook questions, Update-offering correctness over synthetic quest channels, Pointer-resolution safety over offline cases
-- Implemented by: [`evaluation/components/feed_context_sources/impls/update_engine.py`](../evaluation/components/feed_context_sources/impls/update_engine.py), [`evaluation/components/resolve_references/impls/card_resolvers.py`](../evaluation/components/resolve_references/impls/card_resolvers.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py) and 119 more
+- Metric: Retrieval recall of the right document over handbook questions, Pointer-resolution safety over offline cases
+- Implemented by: [`evaluation/components/resolve_references/impls/card_resolvers.py`](../evaluation/components/resolve_references/impls/card_resolvers.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 118 more
 
 ## Quest Requests (`quest-requests`)
 
@@ -127,7 +131,7 @@ Take every request made in Quest in once, through the same AI, and report its ou
 
 - Entry call: `quest_ai_runner.run("quest-requests", 'team-1')`
 - Selected implementation: Offline lifecycle harness (`qar_runner`)
-- Metric: Task lifecycle correctness over offline cases, Exactly-once mid-run delivery per run, and how fast it is seen, Answer pass rate gained per image described, Ways in that pass their own metric
+- Metric: Task lifecycle correctness over offline cases
 - Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/configuration/__init__.py`](the_body/configuration/__init__.py), [`quest_ai_runner/the_body/configuration/acp_deep_runner_config.py`](the_body/configuration/acp_deep_runner_config.py), [`quest_ai_runner/the_body/configuration/card_store_settings.py`](the_body/configuration/card_store_settings.py), [`quest_ai_runner/the_body/configuration/cli_config.py`](the_body/configuration/cli_config.py), [`quest_ai_runner/the_body/configuration/config.py`](the_body/configuration/config.py), [`quest_ai_runner/the_body/configuration/config_assembler.py`](the_body/configuration/config_assembler.py), [`quest_ai_runner/the_body/configuration/config_context_index.py`](the_body/configuration/config_context_index.py) and 162 more
 
 ## Quest Self (`quest-self`)
@@ -157,6 +161,69 @@ Let each Quest user grow with an AI aligned to them.
 - Metric: Quest Consciousness on Quest cases
 - Implemented by: [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py)
 
+## Conversation-keyed mid-run input inbox (`receive-input-mid-run`)
+
+Lets a person change direction, pause or stop an assistant while it works, and be heard at its next decision.
+
+- Entry call: `quest_ai_runner.run("receive-input-mid-run", 'conversation-1')`
+- Selected implementation: In-memory thread-safe inbox (`in_memory`)
+- Metric: Exactly-once mid-run delivery per run, and how fast it is seen
+- Implemented by: [`quest_ai_runner/the_intelligence/mind/__init__.py`](the_intelligence/mind/__init__.py), [`quest_ai_runner/the_intelligence/mind/area_mind.py`](the_intelligence/mind/area_mind.py), [`quest_ai_runner/the_intelligence/mind/delegation/__init__.py`](the_intelligence/mind/delegation/__init__.py), [`quest_ai_runner/the_intelligence/mind/delegation/auto_followup.py`](the_intelligence/mind/delegation/auto_followup.py), [`quest_ai_runner/the_intelligence/mind/delegation/current_rep.py`](the_intelligence/mind/delegation/current_rep.py), [`quest_ai_runner/the_intelligence/mind/delegation/executor_followup.py`](the_intelligence/mind/delegation/executor_followup.py), [`quest_ai_runner/the_intelligence/mind/delegation/goal_runner.py`](the_intelligence/mind/delegation/goal_runner.py), [`quest_ai_runner/the_intelligence/mind/delegation/goal_runner_contract.py`](the_intelligence/mind/delegation/goal_runner_contract.py) and 20 more
+
+## Image description for grounding (`describe-an-attachment`)
+
+Gives a person the text a vision model writes for an image a person attached at a cost and delay that its metric accepts.
+
+- Entry call: `quest_ai_runner.run("describe-an-attachment", ...)`
+- Selected implementation: One vision-model call per image (today) (`vision_description`)
+- Metric: Answer pass rate gained per image described
+- Implemented by: [`quest_ai_runner/the_intelligence/mind/__init__.py`](the_intelligence/mind/__init__.py), [`quest_ai_runner/the_intelligence/mind/area_mind.py`](the_intelligence/mind/area_mind.py), [`quest_ai_runner/the_intelligence/mind/context_intake/__init__.py`](the_intelligence/mind/context_intake/__init__.py), [`quest_ai_runner/the_intelligence/mind/context_intake/attachments.py`](the_intelligence/mind/context_intake/attachments.py), [`quest_ai_runner/the_intelligence/mind/context_intake/context_doctrine.py`](the_intelligence/mind/context_intake/context_doctrine.py), [`quest_ai_runner/the_intelligence/mind/context_intake/orchestrator_events.py`](the_intelligence/mind/context_intake/orchestrator_events.py), [`quest_ai_runner/the_intelligence/mind/context_intake/orchestrator_reads.py`](the_intelligence/mind/context_intake/orchestrator_reads.py), [`quest_ai_runner/the_intelligence/mind/context_intake/orchestrator_run.py`](the_intelligence/mind/context_intake/orchestrator_run.py) and 10 more
+
+## Request intake (`take-in-the-world`)
+
+Let a person or a program reach the runner from wherever they work and be understood the same way.
+
+- Entry call: `quest_ai_runner.run("take-in-the-world", 'Save a note that the launch moves to Friday.')`
+- Selected implementation: Channels, terminal and package as ways in (`ways_in`)
+- Metric: Ways in that pass their own metric
+- Implemented by: [`quest_ai_runner/the_consciousness/ways_in.py`](the_consciousness/ways_in.py)
+
+## Semantic vector index (`index-by-meaning`)
+
+Helps a person or a run find the card or note they need by meaning, including when they ask in different words.
+
+- Entry call: `quest_ai_runner.run("index-by-meaning", 'rust release')`
+- Selected implementation: Qdrant-backed vector store (`qdrant`)
+- Metric: Semantic recall and query latency on the synthetic handbook
+- Implemented by: [`quest_ai_runner/the_body/internal_context/__init__.py`](the_body/internal_context/__init__.py), [`quest_ai_runner/the_body/internal_context/adapters_values.py`](the_body/internal_context/adapters_values.py), [`quest_ai_runner/the_body/internal_context/card_store/__init__.py`](the_body/internal_context/card_store/__init__.py), [`quest_ai_runner/the_body/internal_context/card_store/card_cache_file.py`](the_body/internal_context/card_store/card_cache_file.py), [`quest_ai_runner/the_body/internal_context/card_store/card_limit_report.py`](the_body/internal_context/card_store/card_limit_report.py), [`quest_ai_runner/the_body/internal_context/card_store/card_store_fence.py`](the_body/internal_context/card_store/card_store_fence.py), [`quest_ai_runner/the_body/internal_context/card_store/card_store_merge.py`](the_body/internal_context/card_store/card_store_merge.py), [`quest_ai_runner/the_body/internal_context/card_store/card_store_migrate.py`](the_body/internal_context/card_store/card_store_migrate.py) and 15 more
+
+## Context choice (`choose-the-context`)
+
+Gives the planner the right material at little cost, so a run starts grounded in the person's own knowledge without re-discovering it.
+
+- Entry call: `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')`
+- Selected implementation: Per-lane assembly of the context members (today) (`per_lane_assembly`)
+- Metric: Context handed to the planner
+- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/hands/__init__.py`](the_body/hands/__init__.py), [`quest_ai_runner/the_body/interface.py`](the_body/interface.py), [`quest_ai_runner/the_intelligence/higher_mind/__init__.py`](the_intelligence/higher_mind/__init__.py), [`quest_ai_runner/the_intelligence/subconscious/__init__.py`](the_intelligence/subconscious/__init__.py), [`quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py`](the_intelligence/subconscious/area_context_retriever.py), [`quest_ai_runner/the_intelligence/subconscious/interface.py`](the_intelligence/subconscious/interface.py), [`quest_ai_runner/the_self/integrity/__init__.py`](the_self/integrity/__init__.py) and 2 more
+
+## Intent specification selection (`spec-selection`)
+
+Choose, from an ESOI specification index, the few records a new request concerns and their linked records, so the work starts from the intent that applies.
+
+- Entry call: `esoi spec index --out FILE`
+- Selected implementation: Lexical vector gated (`lexical-vector-gated`)
+- Metric: Specification selection pass rate
+- Implemented by: [`quest_ai_runner/the_intelligence/critical_thinking/__init__.py`](the_intelligence/critical_thinking/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/area.py`](the_intelligence/critical_thinking/area.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/__init__.py`](the_intelligence/critical_thinking/esoi_application/__init__.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py`](the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py`](the_intelligence/critical_thinking/esoi_application/interface.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/repo_specs.py`](the_intelligence/critical_thinking/esoi_application/repo_specs.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/spec_selection.py`](the_intelligence/critical_thinking/esoi_application/spec_selection.py), [`quest_ai_runner/the_intelligence/critical_thinking/esoi_application/tools_repo_specs.py`](the_intelligence/critical_thinking/esoi_application/tools_repo_specs.py) and 2 more
+
+## Unified card and specification search (`search-cards-and-specs`)
+
+Help each run see the cards and specification records it concerns in one ranked set, and see when no solution covers its request yet.
+
+- Entry call: no entry declared
+- Selected implementation: Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`)
+- Metric: Mixed card and specification selection, with both existing selection metrics held
+- Implemented by: [`quest_ai_runner/the_intelligence/subconscious/context_retriever/__init__.py`](the_intelligence/subconscious/context_retriever/__init__.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/bm25_content_store.py`](the_intelligence/subconscious/context_retriever/bm25_content_store.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/card_filter.py`](the_intelligence/subconscious/context_retriever/card_filter.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/card_learning.py`](the_intelligence/subconscious/context_retriever/card_learning.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/card_scoped_learning.py`](the_intelligence/subconscious/context_retriever/card_scoped_learning.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/card_views.py`](the_intelligence/subconscious/context_retriever/card_views.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/claude_conversations_adapter.py`](the_intelligence/subconscious/context_retriever/claude_conversations_adapter.py), [`quest_ai_runner/the_intelligence/subconscious/context_retriever/context_store_assembly.py`](the_intelligence/subconscious/context_retriever/context_store_assembly.py) and 9 more
+
 ## Diagram
 
 An arrow runs from the solution that provides to the solution that builds on it; its label is what the provider outputs.
@@ -172,11 +239,14 @@ flowchart LR
     s6["Quest Requests<br/><i>quest-requests</i>"]
     s7["Quest Self<br/><i>quest-self</i>"]
     s8["Quest Body<br/><i>quest-body</i>"]
+    s9["Request intake<br/><i>take-in-the-world</i>"]
+    s10["Context choice<br/><i>choose-the-context</i>"]
     s0 --> s7
     s1 --> s0
     s2 --> s0
     s3 --> s0
-    s5 -->|"Evidence from the person's own sources, with where each item came from"| s6
+    s5 -->|"Evidence from the person's own sources, with where each item came from"| s9
+    s5 -->|"Evidence from the person's own sources, with where each item came from"| s10
     s6 -->|"The request taken in once and its outcome reported"| s0
     s6 -->|"The request taken in once and its outcome reported"| s7
     s7 -->|"The assistant's answer and the changes it made"| s4

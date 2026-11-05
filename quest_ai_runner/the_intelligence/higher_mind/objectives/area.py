@@ -13,6 +13,8 @@ from typing import Any, Mapping, Optional, Tuple
 from esoi import implementation
 from esoi import Lazy
 
+from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceProvider, LongTermGuiding
+from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import RecentContextStore
 from quest_ai_runner.the_intelligence.subconscious.intuition.interface import PredictionStore
 from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import ConversationRemembering
 from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import FeedbackKeeping
@@ -26,12 +28,15 @@ class SeparateStores:
     begins. ``hold`` reads the four a request needs; the other lines hand a question to the member that owns it."""
     REQUIRES = ()     # the seats it is handed
 
-    def __init__(self, conversations: Lazy[ConversationRemembering], feedback: Lazy[FeedbackKeeping], predictions: Lazy[PredictionStore],
-                 reps: Lazy[RepSelecting]) -> None:
-        self.conversations, self.feedback, self.predictions, self.reps = conversations, feedback, predictions, reps
+    def __init__(self, conversations: Lazy[ConversationRemembering], recent: Lazy[RecentContextStore], guidance: Lazy[GuidanceProvider],
+                 feedback: Lazy[FeedbackKeeping], predictions: Lazy[PredictionStore], reps: Lazy[RepSelecting],
+                 long_term: Lazy[LongTermGuiding]) -> None:
+        self.conversations, self.recent, self.guidance, self.feedback = conversations, recent, guidance, feedback
+        self.predictions, self.reps, self.long_term = predictions, reps, long_term
 
     def hold(self, quest_id: str, message: str = "") -> Mapping[str, Any]:
-        return {"owed": list(self.feedback.open_items(quest_id)), "standing": list(self.feedback.standing_rules(quest_id)),
+        return {"recent": list(self.recent.load(quest_id)), "guidance": list(self.guidance.select(message, limit=3)),
+                "owed": list(self.feedback.open_items(quest_id)), "standing": list(self.feedback.standing_rules(quest_id)),
                 "predictions": list(self.predictions.load_predictions(quest_id))}
 
     def conversation(self, conv_id: str, query: str) -> Any:
@@ -39,3 +44,6 @@ class SeparateStores:
 
     def rep(self, task: Mapping[str, Any]) -> Optional[Tuple[str, str]]:
         return self.reps.resolve(task)
+
+    def directive(self, message: str) -> str:
+        return self.long_term.directive(message)

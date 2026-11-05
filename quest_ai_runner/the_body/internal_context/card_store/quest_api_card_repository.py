@@ -46,9 +46,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from esoi import implementation
 from esoi import requirements
+from quest_ai_runner.the_body.internal_context.card_store.interface import CardCache
 from hubofhubs.api import card_origin
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.card_shape_guard import refusal as card_shape_refusal
 
@@ -270,30 +271,7 @@ class QuestCardApiError(Exception):
         self.detail = detail
 
 
-class CardCache(Protocol):
-    """INTERFACE SEAM for an offline card cache and write outbox (``FileCardCache`` is the durable one).
-
-    An implementation lets a lane keep working when the backend is unreachable: ``load_listing``
-    seeds a cold start, ``store_listing`` is called after every successful full or delta refresh,
-    and ``enqueue_write`` is offered every write that FAILED so it can be replayed later
-    (``pending_writes``). The repository never depends on a cache for correctness: with the default
-    ``NullCardCache`` every method is a no-op and failures stay loud.
-    """
-
-    def load_listing(self) -> Optional[Tuple[Dict[str, Dict[str, Any]], float]]:
-        """``(cards_by_id, max_updated_at)`` from the last stored listing, or None."""
-
-    def store_listing(self, cards: Dict[str, Dict[str, Any]], max_updated_at: float) -> None:
-        """Persist the latest known listing."""
-
-    def enqueue_write(self, card_id: str, card: Dict[str, Any], team_id: str) -> bool:
-        """Offer a write that could not reach the backend. Return True if it was queued."""
-
-    def pending_writes(self) -> List[Tuple[str, Dict[str, Any], str]]:
-        """Queued ``(card_id, card, team_id)`` writes, oldest first."""
-
-
-@implementation("card-store", "null")
+@implementation("cache-cards", "null")
 class NullCardCache:
     """Stores nothing, queues nothing. ``directory`` is accepted (and ignored) so it is built the same way
     as ``FileCardCache``."""
@@ -318,7 +296,7 @@ class NullCardCache:
 # The repository
 # ---------------------------------------------------------------------------
 
-@implementation("card-store", "quest_api")
+@implementation("persist-cards", "quest_api")
 class QuestApiCardRepository:
     """CardRepository backed by quest-backend's ``/api/cards`` HTTP API (see the module docstring).
 

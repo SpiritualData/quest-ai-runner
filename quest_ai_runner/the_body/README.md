@@ -29,10 +29,13 @@ flowchart LR
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Delegated Agent Sessions | `delegated-agent-sessions` | `quest_ai_runner.run("delegated-agent-sessions", ...)` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met, Stop-or-continue verdict accuracy with false stops counted apart |
+| Delegated Agent Sessions | `delegated-agent-sessions` | `quest_ai_runner.run("delegated-agent-sessions", ...)` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
 | File Editing | `file-editing` | `quest_ai_runner.run("file-editing", 'NOTES.md')` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
 | Quest Account Truth | `quest-account-truth` | `quest_ai_runner.run("quest-account-truth", '')` | Managed quest card plus optional live reads (today) (`card_and_reads`) | Account-state consistency across scripted sessions |
-| Quest Change Executor | `quest-change-executor` | `quest_ai_runner.run("quest-change-executor", 'Add a goal to ship the launch note by Friday')` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases, Allowlist enforcement and exactly-once execution |
+| Quest Change Executor | `quest-change-executor` | `quest_ai_runner.run("quest-change-executor", 'Add a goal to ship the launch note by Friday')` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
+| Offline card cache and write outbox | `cache-cards` | `quest_ai_runner.run("cache-cards")` | Durable file cache (`file`) | Outage resilience of the card repository |
+| Learned-operation fast path | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
+| Allowlisted operation writer | `write-through-mcp` | `quest_ai_runner.run("write-through-mcp", ...)` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
 
 ## Solutions from a library
 
@@ -91,10 +94,13 @@ flowchart LR
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Delegated Agent Sessions | `delegated-agent-sessions` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met, Stop-or-continue verdict accuracy with false stops counted apart |
+| Delegated Agent Sessions | `delegated-agent-sessions` | Subprocess goal runner (`subprocess`) | Outcome reporting correctness across deep runners, Goal loop outcomes against the done-standard, Deep worker launch settings ranked by cost per goal met |
 | File Editing | `file-editing` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
 | Quest Account Truth | `quest-account-truth` | Managed quest card plus optional live reads (today) (`card_and_reads`) | Account-state consistency across scripted sessions |
-| Quest Change Executor | `quest-change-executor` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases, Allowlist enforcement and exactly-once execution |
+| Quest Change Executor | `quest-change-executor` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
+| Offline card cache and write outbox | `cache-cards` | Durable file cache (`file`) | Outage resilience of the card repository |
+| Learned-operation fast path | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
+| Allowlisted operation writer | `write-through-mcp` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
 
 ### Implementations
 
@@ -106,7 +112,7 @@ flowchart LR
 | Managed quest card plus optional live reads (today) | `quest-account-truth:card_and_reads` | [quest_ai_runner/the_body/area_body.py](area_body.py) | [internal_context](internal_context/README.md) |
 | Planner-only orchestration | `quest-change-executor:qar_orchestrator` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
 | Coding agent, reach described in the prompt (today) | `the-tools:coding_agent_prompt_reach` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
-| Two small model verdicts when a goal is created (today) | `quest-representatives:model_judge` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
+| Two small model verdicts when a goal is created (today) | `hand-off-a-goal:model_judge` | [quest_ai_runner/the_body/area_body.py](area_body.py) |  |
 | One-call fast file editor | `delegated-agent-sessions:fast_edit` | [quest_ai_runner/the_body/configuration/config_resolvers.py](configuration/config_resolvers.py) |  |
 | One-call MCP operation runner | `delegated-agent-sessions:mcp_write` | [quest_ai_runner/the_body/configuration/config_resolvers.py](configuration/config_resolvers.py) |  |
 | Lean guarded launch of the deep worker | `delegated-agent-sessions:lean_guarded` | [quest_ai_runner/the_body/configuration/deep_launch.py](configuration/deep_launch.py) |  |

@@ -257,7 +257,7 @@ class GuidanceCardManager:
             return False
 
 
-@implementation("feedback-learning", "universal")
+@implementation("guide-by-feedback", "universal")
 class CardGuidanceProvider(UniversalGuidanceProvider):
     """The universal guidance provider with its card store injected: guidance cards read from a folder, plus what was learned from
     corrections when a loader is given. ``core`` cannot import this adapter, so this is where the two meet."""

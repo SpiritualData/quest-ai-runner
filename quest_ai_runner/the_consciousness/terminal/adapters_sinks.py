@@ -17,7 +17,7 @@ from hubofhubs.api import (
 # consumer inherits identical messaging policy regardless of how they wire things.
 # ---------------------------------------------------------------------------
 
-@implementation("quest-work-shown", "stream")
+@implementation("show-progress", "stream")
 class StreamSink(ProgressSinkBase):
     """LIVE sink — forward EVERYTHING to the consumer's stream in real time.
 
@@ -36,7 +36,7 @@ class StreamSink(ProgressSinkBase):
             pass
 
 
-@implementation("quest-work-shown", "milestone")
+@implementation("show-progress", "milestone")
 class MilestoneSink(ProgressSinkBase):
     """BACKGROUND sink — surface ONLY result / decision / milestone / context / done.
 

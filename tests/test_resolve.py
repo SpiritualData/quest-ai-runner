@@ -161,7 +161,7 @@ def test_selections_can_come_from_a_config_file(tmp_path):
 
 
 def test_vector_store_class_is_resolved_through_the_declarations():
-    assert resolve("context-retriever", "qdrant").__name__ == "QdrantVectorStore"
+    assert resolve("index-by-meaning", "qdrant").__name__ == "QdrantVectorStore"
 
 
 # --- the project default is written once, in the records ------------------------------------------------
@@ -204,7 +204,7 @@ def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
         f"assert r.__file__.startswith({str(site)!r}), r.__file__\n"
         "assert r.default_name('vendor-model-caller') == 'multi_provider'\n"
         "assert r.resolve('the-science', 'web_research').__name__ == 'WebResearchAdapter'\n"
-        "assert r.resolve('card-store', 'file').__name__ == 'FileCardCache'\n"
+        "assert r.resolve('cache-cards', 'file').__name__ == 'FileCardCache'\n"
         "assert r.resolve('delegated-agent-sessions', 'acp').__name__ == 'AcpDeepRunner'\n"
     )
     done = subprocess.run([sys.executable, "-c", code], cwd=elsewhere, capture_output=True, text=True,

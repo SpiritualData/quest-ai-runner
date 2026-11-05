@@ -15,7 +15,10 @@ Mind works one request in steps, each step building on what the earlier ones est
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
 | Context Intake | `context-intake` | `quest_ai_runner.run("context-intake", 'What should I work on first this week?')` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
-| Quest Work Shown | `quest-work-shown` | `quest_ai_runner.run("quest-work-shown")` | The Trail (live line, one summary line, expandable groups) (`trail`) | Surfaced-event policy by mode, Faithful explanations per unit of cost and time, Progress shown while the work runs, What is shown of the AI's work is true, the same for everyone, and earns its place, Interim messages and asks that are true, not repeated and only where a person is needed, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
+| Quest Work Shown | `quest-work-shown` | `quest_ai_runner.run("quest-work-shown")` | The Trail (live line, one summary line, expandable groups) (`trail`) | Faithful explanations per unit of cost and time, What is shown of the AI's work is true, the same for everyone, and earns its place, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
+| Run liveness reviewer | `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
+| Reply in steps when the goal is not met yet | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
+| Mode-aware progress surfacing | `show-progress` | `quest_ai_runner.run("show-progress", {'event': 'milestone', 'mode': 'background'})` | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
 
 ## Solutions from a library
 
@@ -76,7 +79,10 @@ Mind works one request in steps, each step building on what the earlier ones est
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
 | Context Intake | `context-intake` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
-| Quest Work Shown | `quest-work-shown` | The Trail (live line, one summary line, expandable groups) (`trail`) | Surfaced-event policy by mode, Faithful explanations per unit of cost and time, Progress shown while the work runs, What is shown of the AI's work is true, the same for everyone, and earns its place, Interim messages and asks that are true, not repeated and only where a person is needed, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
+| Quest Work Shown | `quest-work-shown` | The Trail (live line, one summary line, expandable groups) (`trail`) | Faithful explanations per unit of cost and time, What is shown of the AI's work is true, the same for everyone, and earns its place, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
+| Run liveness reviewer | `detect-a-stalled-run` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
+| Reply in steps when the goal is not met yet | `reply-in-steps` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
+| Mode-aware progress surfacing | `show-progress` | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
 
 ### Implementations
 
@@ -84,14 +90,14 @@ Mind works one request in steps, each step building on what the earlier ones est
 |---|---|---|---|
 | Live chat on a disposable world | `quest-self:dev_quest_chat` | [evaluation/components/chat_quality/impls/dev_quest_chat.py](../../../evaluation/components/chat_quality/impls/dev_quest_chat.py) |  |
 | Offline metric validity check | `quest-self:reference_replies` | [evaluation/components/chat_quality/impls/reference_replies.py](../../../evaluation/components/chat_quality/impls/reference_replies.py) |  |
-| Stream, milestone and fan-out sinks | `quest-work-shown:stream` | [quest_ai_runner/the_consciousness/terminal/adapters_sinks.py](../../the_consciousness/terminal/adapters_sinks.py) |  |
-| Sink policy cases | `quest-work-shown:progress_sinks` | [evaluation/components/show_progress/impls/progress_sinks.py](../../../evaluation/components/show_progress/impls/progress_sinks.py) |  |
-| Live recipe replay arm | `planner:recipe_replay` | [evaluation/components/recipe_fast_path/impls/recipe_replay.py](../../../evaluation/components/recipe_fast_path/impls/recipe_replay.py) |  |
-| Live planner-only baseline | `planner:planner_only` | [evaluation/components/recipe_fast_path/impls/planner_only.py](../../../evaluation/components/recipe_fast_path/impls/planner_only.py) |  |
-| Offline recipe replay arm | `planner:recipe_replay_offline` | [evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py](../../../evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py) |  |
-| Offline planner-only baseline | `planner:planner_only_offline` | [evaluation/components/recipe_fast_path/impls/planner_only_offline.py](../../../evaluation/components/recipe_fast_path/impls/planner_only_offline.py) |  |
+| Stream, milestone and fan-out sinks | `show-progress:stream` | [quest_ai_runner/the_consciousness/terminal/adapters_sinks.py](../../the_consciousness/terminal/adapters_sinks.py) |  |
+| Sink policy cases | `show-progress:progress_sinks` | [evaluation/components/show_progress/impls/progress_sinks.py](../../../evaluation/components/show_progress/impls/progress_sinks.py) |  |
+| Live recipe replay arm | `replay-known-operations:recipe_replay` | [evaluation/components/recipe_fast_path/impls/recipe_replay.py](../../../evaluation/components/recipe_fast_path/impls/recipe_replay.py) |  |
+| Live planner-only baseline | `replay-known-operations:planner_only` | [evaluation/components/recipe_fast_path/impls/planner_only.py](../../../evaluation/components/recipe_fast_path/impls/planner_only.py) |  |
+| Offline recipe replay arm | `replay-known-operations:recipe_replay_offline` | [evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py](../../../evaluation/components/recipe_fast_path/impls/recipe_replay_offline.py) |  |
+| Offline planner-only baseline | `replay-known-operations:planner_only_offline` | [evaluation/components/recipe_fast_path/impls/planner_only_offline.py](../../../evaluation/components/recipe_fast_path/impls/planner_only_offline.py) |  |
 | Live assembly-point driver | `context-intake:live` | [evaluation/components/prompt_size/impls/live.py](../../../evaluation/components/prompt_size/impls/live.py) |  |
-| Milestone sink | `quest-work-shown:milestone` | [quest_ai_runner/the_consciousness/terminal/adapters_sinks.py](../../the_consciousness/terminal/adapters_sinks.py) |  |
+| Milestone sink | `show-progress:milestone` | [quest_ai_runner/the_consciousness/terminal/adapters_sinks.py](../../the_consciousness/terminal/adapters_sinks.py) |  |
 | Classify through the message router alternatives | `planner:message-route-family` | evaluation/components/classification/impls |  |
 | Route with the registry of examples, by model tier | `planner:registry-conditioned-routing` |  |  |
 | Shared quest ranker | `quest-intents:shared-quest-ranker` |  |  |
@@ -107,17 +113,16 @@ Mind works one request in steps, each step building on what the earlier ones est
 | Planner prompt with only the rules that apply to the turn | `context-intake:situational` | [evaluation/components/prompt_size/impls/situational.py](../../../evaluation/components/prompt_size/impls/situational.py) |  |
 | Nothing shown (the status quo before the Trail) | `quest-work-shown:no_trace` | [evaluation/components/work_trace_experience/impls/no_trace.py](../../../evaluation/components/work_trace_experience/impls/no_trace.py) |  |
 | A plain list of every step | `quest-work-shown:plain_list` | [evaluation/components/work_trace_experience/impls/plain_list.py](../../../evaluation/components/work_trace_experience/impls/plain_list.py) |  |
-| Behaviour before the build (no interim for an unmet attempt) | `quest-work-shown:today` | [evaluation/components/interim_reply/impls/today.py](../../../evaluation/components/interim_reply/impls/today.py) |  |
-| An interim on every unmet attempt (spam baseline) | `quest-work-shown:every_attempt` | [evaluation/components/interim_reply/impls/every_attempt.py](../../../evaluation/components/interim_reply/impls/every_attempt.py) |  |
+| Behaviour before the build (no interim for an unmet attempt) | `reply-in-steps:today` | [evaluation/components/interim_reply/impls/today.py](../../../evaluation/components/interim_reply/impls/today.py) |  |
+| An interim on every unmet attempt (spam baseline) | `reply-in-steps:every_attempt` | [evaluation/components/interim_reply/impls/every_attempt.py](../../../evaluation/components/interim_reply/impls/every_attempt.py) |  |
 | The terminal draws the Trail from the hub's renderers | `quest-work-shown:terminal_trail` | [quest_ai_runner/the_consciousness/terminal/textual_ui_trail.py](../../the_consciousness/terminal/textual_ui_trail.py) |  |
 | The planner prompt written by the real loop | `context-intake:planner_prompt` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
 | One turn of the orchestrator over the model | `quest-self:orchestrator_turn` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
 | The shipped path as one call | `quest-self:shipped_path` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
-| The recipe store of the loop | `planner:stored_recipes` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
-| The route as the classification label | `planner:router_labels` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
+| The recipe store of the loop | `replay-known-operations:stored_recipes` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
 | One cheap model call per turn writes the beat (today) | `quest-work-shown:model_beat` | [quest_ai_runner/the_intelligence/mind/response_writer/orchestrator_turn.py](response_writer/orchestrator_turn.py) |  |
 | The Trail (live line, one summary line, expandable groups) | `quest-work-shown:trail` | [quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py](response_writer/work_trace.py) |  |
-| The structural gate of core/interim_policy.py | `quest-work-shown:gated` | [quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py](response_writer/interim_policy.py) |  |
+| The structural gate of core/interim_policy.py | `reply-in-steps:gated` | [quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py](response_writer/interim_policy.py) |  |
 
 ### Metrics
 

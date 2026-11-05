@@ -4,7 +4,7 @@
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Sink policy cases | `quest-work-shown:progress_sinks` | [`evaluation/components/show_progress/impls/progress_sinks.py`](progress_sinks.py) |  |
+| Sink policy cases | `show-progress:progress_sinks` | [`evaluation/components/show_progress/impls/progress_sinks.py`](progress_sinks.py) |  |
 
 ## Where to go next
 

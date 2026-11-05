@@ -59,7 +59,7 @@ World is how the assistant learns what is outside it and acts on it. Model Plumb
 | Notion database reader | `quest-context:notion` | [quest_ai_runner/the_world/tools/connected_system_operations/notion_adapter.py](tools/connected_system_operations/notion_adapter.py) |  |
 | Drive document reader | `quest-context:google_drive` | [quest_ai_runner/the_world/tools/connected_system_operations/google_drive_adapter.py](tools/connected_system_operations/google_drive_adapter.py) |  |
 | Chat conversation reader | `quest-context:google_chat` | [quest_ai_runner/the_world/tools/connected_system_operations/google_chat_adapter.py](tools/connected_system_operations/google_chat_adapter.py) |  |
-| MCP operation writer | `quest-change-executor:mcp` | [quest_ai_runner/the_world/tools/connected_system_operations/mcp_write_adapter.py](tools/connected_system_operations/mcp_write_adapter.py) |  |
+| MCP operation writer | `write-through-mcp:mcp` | [quest_ai_runner/the_world/tools/connected_system_operations/mcp_write_adapter.py](tools/connected_system_operations/mcp_write_adapter.py) |  |
 | Agent-protocol deep runner | `delegated-agent-sessions:acp` | [quest_ai_runner/the_world/tools/delegated_agent_sessions/acp_deep_runner.py](tools/delegated_agent_sessions/acp_deep_runner.py) |  |
 | Persistent stream-json runner | `delegated-agent-sessions:stream_json` | [quest_ai_runner/the_world/tools/delegated_agent_sessions/goal_runner_stream.py](tools/delegated_agent_sessions/goal_runner_stream.py) |  |
 | Contained backed-up writer | `file-editing:files` | [quest_ai_runner/the_world/tools/file_editing/files_writer.py](tools/file_editing/files_writer.py) |  |

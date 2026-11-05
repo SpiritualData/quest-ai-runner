@@ -7,7 +7,7 @@ from quest_ai_runner.the_intelligence.critical_thinking.area import hold_case
 from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
 
 AREA_IDS = ("critical-thinking", "esoi-application", "context-retriever", "goal-completion", "response-quality", "guidance",
-            "delegated-agent-sessions", "metric-translation", "quest-autopilot")
+            "delegated-agent-sessions", "detect-a-stalled-run", "metric-translation", "quest-autopilot")
 
 
 def strict_outcome(solution_id):
@@ -75,7 +75,7 @@ class Gate:
 
 
 def test_the_area_hands_each_question_to_the_member_that_owns_it():
-    provided = {"quest-body": Account(), "delegated-agent-sessions": Stall(), "metric-translation": Draft(), "quest-autopilot": Gate()}
+    provided = {"quest-body": Account(), "detect-a-stalled-run": Stall(), "metric-translation": Draft(), "quest-autopilot": Gate()}
     area = quest_ai_runner.run(MetricHolding, environ={}, provided=provided)
     assert area.reach_verdict('{"reach": "inside", "reason": "known"}')["reach"] == "inside"
     assert [url for url, label in area.links("See https://example.org/a for details.")] == ["https://example.org/a"]

@@ -47,7 +47,7 @@ from quest_ai_runner.the_body.configuration.runtime_settings import process_envi
 _log = logging.getLogger("quest-ai-runner.mcp_write_adapter")
 
 
-@implementation("quest-change-executor", "mcp")
+@implementation("write-through-mcp", "mcp")
 class MCPWriteAdapter(OperationWriterBase):
     """OperationWriter over one MCP server's mutating tools, namespaced by ``alias``.
 

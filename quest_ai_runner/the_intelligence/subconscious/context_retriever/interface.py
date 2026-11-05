@@ -4,9 +4,10 @@ from __future__ import annotations
 import typing
 from typing import Any, Dict, Optional
 from esoi import solution
-from hubofhubs.api import AssembledContext, ContextAssembler
+from hubofhubs.api import AssembledContext, ContextAssembler, VectorStore
 
 
+@solution("choose-the-context", kind="event", entry="choose", example="What should I work on first this week?")
 @typing.runtime_checkable
 class ContextChoosing(typing.Protocol):
     """The context a request needs, chosen from the person's own cards, files and conversations."""
@@ -20,3 +21,9 @@ class ContextSelecting(ContextAssembler, typing.Protocol):
     """Which stored cards, files and conversations a request reads before it is planned: ``assemble`` returns the rendered context and the card ids
     in relevance order (empty when nothing is confident enough) and ``record`` writes the outcome back. The hub's Context Retriever arms are
     candidates for the same seat and compete on its metric."""
+
+
+@solution("index-by-meaning", kind="event", entry="search", example="rust release")
+@typing.runtime_checkable
+class MeaningIndexing(VectorStore, typing.Protocol):
+    """The hub's vector-store interface (search by meaning, upsert, sync) over the index a lane keeps beside its cards."""

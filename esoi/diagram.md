@@ -22,16 +22,19 @@ flowchart LR
     s11["Quest Requests<br/><i>quest-requests</i>"]
     s12["Quest Self<br/><i>quest-self</i>"]
     s13["Quest Body<br/><i>quest-body</i>"]
-    s0 --> s11
+    s14["Image description for grounding<br/><i>describe-an-attachment</i>"]
+    s15["Request intake<br/><i>take-in-the-world</i>"]
+    s16["Context choice<br/><i>choose-the-context</i>"]
     s0 --> s12
+    s0 --> s15
     s1 --> s9
-    s1 --> s11
+    s1 --> s15
     s2 --> s12
-    s3 --> s0
     s3 --> s2
     s3 --> s9
     s3 --> s11
     s3 --> s12
+    s3 --> s14
     s4 --> s12
     s5 --> s12
     s6 --> s2
@@ -40,7 +43,8 @@ flowchart LR
     s7 --> s5
     s8 --> s5
     s10 -->|"Evidence from the person's own sources, with where each item came from"| s4
-    s10 -->|"Evidence from the person's own sources, with where each item came from"| s11
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s15
+    s10 -->|"Evidence from the person's own sources, with where each item came from"| s16
     s11 -->|"The request taken in once and its outcome reported"| s5
     s11 -->|"The request taken in once and its outcome reported"| s12
     s12 -->|"The assistant's answer and the changes it made"| s9

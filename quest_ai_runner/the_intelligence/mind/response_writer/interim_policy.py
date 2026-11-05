@@ -108,6 +108,7 @@ EXAMPLE_STATE = InterimState(enabled=True, met=False, blocker="more_work", loop_
                              last_signature=None)
 
 
+@solution("reply-in-steps", kind="event", entry="decide", example=EXAMPLE_STATE)
 @typing.runtime_checkable
 class InterimPolicy(typing.Protocol):
     """Says whether a turn that is not finished sends an interim message now, and why."""
@@ -115,7 +116,7 @@ class InterimPolicy(typing.Protocol):
     def decide(self, state: InterimState) -> InterimDecision: ...
 
 
-@implementation("quest-work-shown", "gated")
+@implementation("reply-in-steps", "gated")
 class GatedInterim:
     """The gated policy: ``decide`` above, offered as an object (the only arm that is built; no state, no model call)."""
     REQUIRES = ()     # a pure function of the state

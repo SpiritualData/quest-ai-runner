@@ -14,7 +14,6 @@ from typing import Any, Dict, Optional
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
 from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
-from esoi import implementation, solution
 from hubofhubs.api import ModelProvider
 from hubofhubs.api import ModelCalling
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
@@ -180,7 +179,6 @@ def judge_goal(provider, model, goal):
 
 
 
-@implementation("system-integrity", "fast_model_helpers")
 class FastModelHelpers:
     """The goal judgement asked of the model the balanced tier resolves to on the model seat; ``judge_goal`` is the same call
     ``reconcile-plan`` makes through ``_goal_judge``."""

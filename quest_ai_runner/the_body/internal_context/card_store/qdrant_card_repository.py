@@ -141,7 +141,7 @@ def _connect(
     return QdrantClient(path=path or ".quest-context/cards-qdrant")
 
 
-@implementation("card-store", "qdrant")
+@implementation("persist-cards", "qdrant")
 class QdrantCardRepository:
     """A generic ``CardRepository`` over a Qdrant collection, optionally scoped to a tenant.
 

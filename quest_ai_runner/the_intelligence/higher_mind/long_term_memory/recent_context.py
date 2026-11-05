@@ -283,7 +283,7 @@ def _union_items(
         return (existing or [])[:max_items]
 
 
-@implementation("long-term-memory", "file")
+@implementation("recall-recent-context", "file")
 class FileRecentContextStore:
     """Default ``RecentContextStore``: one JSON file per SCOPE KEY under ``root_dir/recent``.
 

@@ -9,7 +9,7 @@ from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWrite
 from tests.conftest import StubProvider
 
 AREA_IDS = ("quest-account-truth", "card-store", "file-editing", "quest-change-executor", "the-tools", "quest-requests",
-            "quest-body")
+            "hand-off-a-goal", "quest-body")
 
 
 def strict_outcome(solution_id):
@@ -114,8 +114,11 @@ def test_the_area_reads_and_writes_what_the_host_holds(tmp_path):
     assert (tmp_path / "NOTES.md").read_text() == "Launch moved to Friday"
 
 
-def test_the_area_claims_a_reach(tmp_path):
+def test_the_area_claims_a_reach_and_assigns_a_goal(tmp_path):
     provider = ScriptedModel([{"action": "deep", "rationale": "outside the sources", "model_tier": "sonnet"}],
-                             answer_text="")
+                             answer_text='{"assignee": "u1", "ai_can_do": true, "reason": "research"}')
     area = area_over(tmp_path, provider)
     assert area.claim("Send the launch note to the whole team")["route"] == "deep"
+    members = [{"user_id": "u1", "name": "Ana", "role": "owner"}]
+    assigned = area.assign({"outcome": "Ship", "title": "Draft the note", "members": members})
+    assert set(assigned) == {"assignee", "ai_can_do"}

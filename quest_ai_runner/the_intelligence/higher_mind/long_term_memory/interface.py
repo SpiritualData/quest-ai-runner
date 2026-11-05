@@ -7,6 +7,7 @@ from esoi import solution
 from hubofhubs.api import ConversationStore
 
 
+@solution("recall-recent-context", kind="event", entry="load", example="quest-id")
 @runtime_checkable
 class RecentContextStore(Protocol):
     """Scoped, per-card-and-item persistence of recently selected context. NEVER raises."""

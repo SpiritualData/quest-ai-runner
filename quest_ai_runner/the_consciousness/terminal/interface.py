@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from esoi import solution
 from dataclasses import dataclass
 from typing import Sequence
+from hubofhubs.api import ProgressSink
 
 
 @typing.runtime_checkable
@@ -35,3 +36,10 @@ class TerminalOperating(typing.Protocol):
     """Runs one command of ``quest-ai-runner`` as the shell would, and returns what it did."""
 
     def operate(self, argv: Sequence[str], entry: str = "qar") -> TerminalRun: ...
+
+
+@solution("show-progress", kind="event", entry="update", example={"event": "milestone", "mode": "background"})
+@typing.runtime_checkable
+class ProgressShowing(ProgressSink, typing.Protocol):
+    """The hub's progress-sink interface (every internal event of a run goes through ``update(event, mode)``, and the sink decides what surfaces)
+    over the two reference sinks: the live stream and the background milestones."""

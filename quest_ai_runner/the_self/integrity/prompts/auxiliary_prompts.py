@@ -1126,7 +1126,7 @@ VERIFY_GOAL_SPEC = declare(
     "verify-goal.verdict", solution="quest-self", metric="QME2", tier="balanced", cache_layer="tail",
     template=VERIFY_GOAL_PROMPT, output_schema=VERIFY_GOAL_TOOL)
 INTERIM_PROGRESS_SPEC = declare(
-    "reply-in-steps.interim-progress", solution="quest-work-shown",
+    "reply-in-steps.interim-progress", solution="reply-in-steps",
     metric="metric-interim-reply-truthful-and-useful", tier="fast", cache_layer="none",
     template=INTERIM_PROGRESS_PROMPT, output_schema=INTERIM_PROGRESS_TOOL)
 LANDED_WORK_DENIAL_SPEC = declare(
@@ -1158,7 +1158,7 @@ DERIVE_GOAL_CONDITION_SPEC = declare(
     metric="metric-ground-in-intent", tier="fast", cache_layer="tail",
     template=DERIVE_GOAL_CONDITION_PROMPT)
 CARD_UPDATE_SPEC = declare(
-    "feed-context-sources.card-update", solution="quest-context",
+    "feed-context-sources.card-update", solution="feed-context-sources",
     metric="metric-feed-context-sources", tier="caller", cache_layer="tail",
     template=CARD_UPDATE_PROMPT)
 PREFLIGHT_PLAN_SPEC = declare(
@@ -1167,7 +1167,7 @@ PREFLIGHT_PLAN_SPEC = declare(
 
 
 
-@implementation("guidance", "guided_v2")
+@implementation("guide-toward-the-long-term-goal", "guided_v2")
 class GuidedVersionTwo:
     """The long-term guidance section the reply voice carries: it decides, by the person's message and the context, whether the reply
     ends with one sentence naming the next target and its reading, or stays silent."""

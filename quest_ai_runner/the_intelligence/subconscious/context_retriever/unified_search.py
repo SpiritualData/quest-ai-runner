@@ -14,15 +14,13 @@ from __future__ import annotations
 
 from typing import Any, Callable, List, Optional, Sequence
 
-from esoi import implementation, spec_search as search_lib
+from esoi import implementation, solution, spec_search as search_lib
 
 from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
-from quest_ai_runner.the_self.assembler.resolve import resolve
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import declare, render_prompt
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import GATE, VectorSearch
 from hubofhubs.api import STEP_SELECT, answer_with_reasoning
 
-SELECTED_ARM = "solutions_and_problems_with_links"   # the arm of context-retriever that ranks cards and records together
 CARD_SOURCE = "cards"
 CARD_KEY_PREFIX = "card:"   # a card view's key
 RANKED_KINDS = ("card", "solution", "problem")
@@ -50,6 +48,7 @@ def model_judge(provider: Any, model: Optional[str]) -> Callable[[str, List[str]
     return judge
 
 
+@solution("search-cards-and-specs", example={"task": "which card says how cards are stored?", "views": []})
 def search_cards_and_specs(task: str, views: Sequence[search_lib.View], *, provider: Any = None, model: Optional[str] = None,
                            vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15,
                            max_ranked: int = 5, expand: int = 3, ranked_kinds: Sequence[str] = RANKED_KINDS,
@@ -57,12 +56,9 @@ def search_cards_and_specs(task: str, views: Sequence[search_lib.View], *, provi
                            tag_mode: str = "boost") -> search_lib.Selection:
     """The cards and records ``task`` concerns, in one ranked list labelled by kind, each ranked record followed by the
     records it links; ``no_solution_yet`` set when the top record is a problem or intent no solution serves."""
-    return resolve("context-retriever", SELECTED_ARM)(task, views, provider=provider, model=model, vector_search=vector_search,
-                                                       k_lexical=k_lexical, k_vector=k_vector, max_ranked=max_ranked, expand=expand,
-                                                       ranked_kinds=ranked_kinds, tags=tags, tag_table=tag_table, tag_mode=tag_mode)
 
 
-@implementation("context-retriever", "solutions_and_problems_with_links")
+@implementation("search-cards-and-specs", "solutions_and_problems_with_links")
 def solutions_and_problems_with_links(task: str, views: Sequence[search_lib.View], *, provider: Any = None,
                                       model: Optional[str] = None, vector_search: Optional[VectorSearch] = None,
                                       k_lexical: int = 15, k_vector: int = 15, max_ranked: int = 5, expand: int = 3,
@@ -78,7 +74,7 @@ def solutions_and_problems_with_links(task: str, views: Sequence[search_lib.View
                             tag_mode=tag_mode, gate=GATE, line_text=None)
 
 
-@implementation("context-retriever", "two_pipelines")
+@implementation("search-cards-and-specs", "two_pipelines")
 def two_pipelines(task: str, views: Sequence[search_lib.View], *, provider: Any = None, model: Optional[str] = None,
                   vector_search: Optional[VectorSearch] = None, k_lexical: int = 15, k_vector: int = 15, max_ranked: int = 5,
                   expand: int = 3, ranked_kinds: Sequence[str] = RANKED_KINDS, tags: Optional[Sequence[str]] = None,
@@ -114,6 +110,6 @@ def two_pipelines(task: str, views: Sequence[search_lib.View], *, provider: Any 
 
 
 SELECT_SPEC = declare(
-    "search-cards-and-specs.pool-judge", solution="context-retriever",
+    "search-cards-and-specs.pool-judge", solution="search-cards-and-specs",
     metric="metric-search-cards-and-specs", tier="caller", cache_layer="none",
     template=SELECT_PROMPT)

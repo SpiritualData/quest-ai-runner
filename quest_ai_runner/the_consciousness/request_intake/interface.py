@@ -140,6 +140,7 @@ class QueueRunning(typing.Protocol):
     def scan(self, team_id: str = "") -> List[str]: ...
 
 
+@solution("take-in-the-world", kind="event", entry="take_in", example="Save a note that the launch moves to Friday.")
 @typing.runtime_checkable
 class RequestTakingIn(typing.Protocol):
     """Accepts one request and describes it: where it goes and which channels its context is fed from."""
