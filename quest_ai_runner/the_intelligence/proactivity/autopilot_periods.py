@@ -189,9 +189,10 @@ def _ordered_goals(goals: List[Dict[str, Any]], scope: str, now: datetime) -> Li
     The order is not decided here. The payload's own order breaks every tie, so a horizon whose goals carry no deadlines at all is listed exactly as the
     person's own plan lists them.
     """
-    candidates = [{"id": str(index), "kind": "goal", "horizon": _LADDER_HORIZONS.get(scope, ""), "deadline": str(goal.get("deadline") or "").strip()}
+    candidates = [{"id": str(index), "kind": "goal", "horizon": _LADDER_HORIZONS.get(scope, ""), "deadline": str(goal.get("deadline") or "").strip(),
+                   "solution_id": str(goal.get("spec_solution_id") or "")}
                   for index, goal in enumerate(goals)]
-    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "now": now.isoformat()})
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "subject": "goals", "now": now.isoformat()})
     return [goals[int(place)] for place in ordered_ids(answer["ordered"])]
 
 

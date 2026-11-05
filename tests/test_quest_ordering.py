@@ -19,7 +19,7 @@ def test_every_quest_case_comes_back_in_the_reviewed_order():
     assert len(CASES) == 20
     for case in CASES:
         args = case["args"]
-        got = ids(arm.prioritize(person=args["person"], candidates=args["candidates"], stated=args.get("stated"), now=args["now"]))
+        got = ids(arm.prioritize(person=args["person"], candidates=args["candidates"], stated=args.get("stated"), now=args["now"], subject=args["subject"]))
         assert got == case["expect"], case["id"]
 
 
@@ -96,3 +96,22 @@ def test_goals_are_ordered_at_three_levels_and_the_day_has_no_invented_schedulin
     assert levels == {"quest", "milestone", "period", "daily"}
     daily = [case for case in CASES if case["level"] == "daily"]
     assert [case["source"] for case in daily] == ["quest-backend api/endpoints/planning.py sort_ai_handled_last"]    # the only rule Quest writes for the day
+
+
+def test_the_generic_rules_are_the_hubs_met_milestones_and_the_batch_limit_come_from_its_arm():
+    milestones = [{"id": "done", "kind": "milestone", "met": True}, {"id": "next", "kind": "milestone", "deadline": "2026-07-13T00:00:00Z"}, {"id": "later", "kind": "milestone"}]
+    answer = QuestOrdering().prioritize(candidates=milestones, now=NOW, subject="goals", batch_limit=1)
+    assert ids(answer) == ["next"] and {h["id"] for h in answer["held"]} == {"done", "later"} and answer["subject"] == "goals"
+
+
+def test_a_period_goal_is_the_milestone_of_its_solution_and_what_the_person_said_about_the_solution_counts_for_it():
+    from quest_ai_runner.the_consciousness.prioritization.quest_ordering import as_milestone
+    assert as_milestone({"id": "g", "solution_id": "s1"})["solution"] == "s1" and "solution" not in as_milestone({"id": "g"})
+    goals = [{"id": "g1", "kind": "goal", "horizon": "week", "solution_id": "s1"}, {"id": "g2", "kind": "goal", "horizon": "year", "solution_id": "s2"}]
+    answer = QuestOrdering().prioritize(candidates=goals, stated={"order": ["s2"]}, now=NOW, subject="goals")
+    assert ids(answer) == ["g2", "g1"]
+
+
+def test_a_completed_goal_stays_listed_after_the_open_ones_and_the_reason_says_why():
+    answer = QuestOrdering().prioritize(candidates=[{"id": "d", "kind": "goal", "completed": True}, {"id": "o", "kind": "goal", "horizon": "month"}], now=NOW, subject="goals")
+    assert ids(answer) == ["o", "d"] and "it is completed" in answer["ordered"][1]["reason"]

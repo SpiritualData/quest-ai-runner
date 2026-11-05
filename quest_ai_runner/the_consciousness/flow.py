@@ -55,5 +55,6 @@ class ConsciousnessFlow:
     def suggest(self, quest: Mapping[str, Any]) -> Mapping[str, Any]:
         return self.evolution.suggest(quest)
 
-    def prioritize(self, person: str = "", request: str = "", candidates: Sequence[Mapping[str, Any]] = (), stated: Any = None, now: str = "") -> Mapping[str, Any]:
-        return self.priorities.prioritize(person=person, request=request, candidates=candidates, stated=stated, now=now)
+    def prioritize(self, person: str = "", request: str = "", candidates: Sequence[Mapping[str, Any]] = (), stated: Any = None, now: str = "",
+                   subject: str = "work", batch_limit: int = 0) -> Mapping[str, Any]:
+        return self.priorities.prioritize(person=person, request=request, candidates=candidates, stated=stated, now=now, subject=subject, batch_limit=batch_limit)

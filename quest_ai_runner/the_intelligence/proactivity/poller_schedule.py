@@ -155,7 +155,7 @@ def dispatch_order(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return list(tasks)
     candidates = [{"id": str(index), "kind": ("start-requested" if task.get("start_requested_at") else "real-time" if task.get("real_time") else "task"),
                    "asked_at": str(task.get("created_at") or "")} for index, task in enumerate(tasks)]
-    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "stated": {"kind_order": list(DISPATCH_KINDS)}, "now": datetime.now(timezone.utc).isoformat()})
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "subject": "work", "stated": {"kind_order": list(DISPATCH_KINDS)}, "now": datetime.now(timezone.utc).isoformat()})
     return [tasks[int(place)] for place in ordered_ids(answer["ordered"])]
 
 

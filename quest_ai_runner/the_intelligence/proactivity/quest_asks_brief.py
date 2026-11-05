@@ -186,7 +186,7 @@ def oldest_first(rows: List[Dict[str, Any]], now: datetime) -> List[Dict[str, An
     if len(rows) < 2:
         return list(rows)
     candidates = [{"id": str(index), "kind": "ask", "asked_at": str(row.get("occurred_at") or row.get("first_seen_at") or "")} for index, row in enumerate(rows)]
-    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "now": now.isoformat()})
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "subject": "asks", "now": now.isoformat()})
     return [rows[int(place)] for place in ordered_ids(answer["ordered"])]
 
 
@@ -197,7 +197,7 @@ def waiting_in_order(rows: List[Dict[str, Any]], now: datetime) -> List[Dict[str
         return list(rows)
     candidates = [{"id": str(index), "kind": "decision", "deadline": str(row.get("deadline") or ""), "created_at": str(row.get("created_at") or "")}
                   for index, row in enumerate(rows)]
-    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "now": now.isoformat()})
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "subject": "asks", "now": now.isoformat()})
     return [rows[int(place)] for place in ordered_ids(answer["ordered"])]
 
 

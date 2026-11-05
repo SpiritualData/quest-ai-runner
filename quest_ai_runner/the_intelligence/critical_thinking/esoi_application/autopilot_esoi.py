@@ -88,7 +88,7 @@ def pick_solution(records: List[Dict[str, Any]]) -> Optional[Tuple[Dict[str, Any
     if not candidates:
         return None
     stated = {"kind_order": ["solution-with-milestone", "solution"]}
-    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "stated": stated, "now": datetime.now(timezone.utc).isoformat()})
+    answer = quest_ai_runner.run("prioritization", {"candidates": candidates, "subject": "goals", "stated": stated, "now": datetime.now(timezone.utc).isoformat()})
     return found[int(ordered_ids(answer["ordered"])[0])]
 
 

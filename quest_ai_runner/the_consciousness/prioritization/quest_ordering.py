@@ -1,30 +1,23 @@
-"""Quest's arm of the hub's Prioritization: the order Quest puts its own work in.
+"""Quest's arm of the hub's Prioritization: it COMPOSES the hub's ``stated_fields`` arm and overrides only Quest's own rules.
 
-The hub's ``stated_fields`` arm orders by what a person stated and the fields any data carries. Quest's data has rules of its own, which the hub does not
-carry (they were moved here from the hub's code and cases), so this arm competes with it under the hub's metric on the hub's cases plus Quest's:
+Everything generic is the hub's, called through ``hubofhubs.api``: what the person stated (order, deferrals, not-before, only-kinds, feedback, kind order), a blocked
+item after the unblocked, the person's own rank, the deadline, the age of an ask, the people waiting, the time since a nudge, for asks what answering frees and the
+effort, for goals the met and ended milestones and what a milestone frees, and the ``batch_limit``. The answer (each item's place, reason and weighted milestone) is
+the hub's. This arm adds only what Quest's data and code say, and hands it to the hub in the fields the hub already reads:
 
-- a quest list: ranked quests first, ascending (0 is highest), the rest in the order given; a person's own entry in ``rank_by_person`` (person to rank)
-  decides, else the quest model's legacy ``rank`` counts only for the quest's ``owner`` (an item with no ``owner`` carries the person's own rank);
-- the autopilot's default instructions: open asks first, then goals of the periods running, then the system's own ideas (``DEFAULT_KIND_ORDER``; a kind
-  that is not listed sits with the goals), unless the person or the consumer states another ``kind_order``;
-- goals: the shorter ``horizon`` first (today, week, month, quarter, year; none last), after the person's rank and before the deadline, then the nearest
-  deadline with undated goals last in the order given;
-- open asks: the oldest ``asked_at`` first;
-- asks put to the person ("asks for you", kind ``decision``): the overdue and the nearer ``deadline`` first, the undated newest first by ``created_at``;
-- one to one: a quest's period goal IS a milestone of the solution (strategy) it is for, linked by Quest's ``spec_solution_id`` (carried here as ``solution_id``).
-  A goal has no ranking of its own: its place is its milestone's, by horizon and deadline, with or without a metric value (``spec_metric_id`` and
-  ``metric_target_value`` are optional, so a goal with none orders the same way);
-- the person's goals, at three levels: solution milestones (the hub's concept: a solution with a milestone before one without, one with no metric first, then
-  the metric measured longest ago, as ``last_nudged_at``), period goals of a quest (horizon, then deadline, as above) and the day's goals, which are tasks
-  (the person's own before a goal their AI rep handles, ``ai_handling == "rep"``); a ``completed`` goal comes after every open one. Only the rules Quest
-  already writes down are here; how the day is scheduled (time blocks, sustained focus) has no ordering rule or case in Quest yet and is not guessed.
+- a quest list: a person's own entry in ``rank_by_person`` decides, else the quest model's legacy ``rank`` counts only for the quest's ``owner`` (an item with no
+  ``owner`` carries the person's own rank);
+- the work to start, with no kind order stated: open asks, then goals of the periods running, then the system's own ideas (``DEFAULT_KIND_ORDER``);
+- goals: the shorter ``horizon`` first (today, week, month, quarter, year; none last) after the person's rank and before the deadline; a ``completed`` goal after
+  every open one; a goal the person's AI rep handles (``ai_handling == "rep"``) after the person's own;
+- the tie-breaks the hub leaves to the order given: undated asks put to the person newest first by ``created_at``, a milestone's metric measured longest ago first;
+- one to one: a quest's period goal IS the milestone of the solution it is for, linked by ``spec_solution_id`` (carried here as ``solution_id``): ``as_milestone``
+  gives the goal in the hub's milestone fields, and the goal has no ranking of its own.
 
-These are the three uses of Prioritization in Quest: the standing work the autopilot starts, the asks put to the person (their order; whether to ask at all
-is Judgment Calls') and the person's goals.
-
-What a person stated (``order``, ``deferred``, ``not_before``, ``only_kinds``, ``feedback``) still outranks all of this. The order is Quest's; the shape of the
-answer (each item's place, its weighted milestone) is the hub's, taken from its ``as_given`` arm, so a change to the hub's answer reaches this arm unchanged.
+Horizon, completed and rep-handled are folded with the person's rank into the one ``rank`` the hub reads (``ladder_rank``), so the hub's own rules (blocked
+first, then the deadline and the rest) apply after them. Open asks oldest first and the nearest deadline with undated last are the hub's rules, not restated here.
 """
+import dataclasses
 import functools
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -34,7 +27,6 @@ from hubofhubs.api import AssemblyConfig, Stated, assemble
 
 DEFAULT_KIND_ORDER = ("ask", "goal", "idea")
 HORIZONS = ("today", "week", "month", "quarter", "year")
-NEVER = datetime.max.replace(tzinfo=timezone.utc)
 EARLIEST = datetime.min.replace(tzinfo=timezone.utc)
 
 
@@ -54,9 +46,9 @@ def whole(value: Any) -> Optional[int]:
 
 
 @functools.lru_cache(maxsize=1)
-def hub_shape():
-    """The hub's own arm that keeps the order given: it gives each item its place and weighted milestone, which Quest does not restate."""
-    return assemble(AssemblyConfig(solutions=("prioritization",), selections={"prioritization": "as_given"}))["prioritization"]
+def hub_arm():
+    """The hub's own ``stated_fields`` arm, which does the generic ordering and gives the answer its shape."""
+    return assemble(AssemblyConfig(solutions=("prioritization",), selections={"prioritization": "stated_fields"}))["prioritization"]
 
 
 def own_rank(item: Mapping[str, Any], person: str) -> Optional[int]:
@@ -70,93 +62,66 @@ def own_rank(item: Mapping[str, Any], person: str) -> Optional[int]:
     return None
 
 
+def as_milestone(goal: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A quest's period goal in the hub's milestone fields. One to one: the goal IS the milestone of the solution it is for (Quest has no field naming the
+    milestone itself: the goal row with its ``spec_solution_id``, carried as ``solution_id``, is the milestone). Its ``solution`` is that id, so what the person said about
+    the solution counts for the goal; its ``deadline`` is the milestone's target time. A goal that names no solution yet is returned as it is, never given a second milestone."""
+    return dict(goal, solution=str(goal["solution_id"])) if goal.get("solution_id") else goal
+
+
+def ladder_mark(item: Mapping[str, Any], person: str) -> Tuple:
+    """Where Quest puts an item on its ladder, before the deadline: open before completed, the person's own before an AI rep's, ranked before unranked, ascending, then the shorter horizon."""
+    rank = own_rank(item, person)
+    horizon = str(item.get("horizon") or "")
+    return (bool(item.get("completed")), item.get("ai_handling") == "rep", (0, rank) if rank is not None else (1, 0), HORIZONS.index(horizon) if horizon in HORIZONS else len(HORIZONS))
+
+
+def ladder_rank(candidates: Sequence[Mapping[str, Any]], person: str) -> List[Optional[int]]:
+    """The one ``rank`` the hub reads for each candidate: its place among the distinct places of ``ladder_mark``, or None for all when they are all the same."""
+    marks = [ladder_mark(c, person) for c in candidates]
+    places = sorted(set(marks))
+    return [places.index(m) if len(places) > 1 else None for m in marks]
+
+
+def tie_order(item: Mapping[str, Any]) -> Tuple[float, datetime]:
+    """What breaks a tie the hub leaves to the order given: the newest ``created_at`` first, then the metric measured longest ago (none measured first)."""
+    created = moment(item.get("created_at"))
+    return (-created.timestamp() if created is not None else 0.0, moment(item.get("last_nudged_at")) or EARLIEST)
+
+
 @implementation("prioritization", "quest_ordering")
 class QuestOrdering:
-    """Orders Quest's quests, asks, goals and ideas by Quest's rules, with what the person stated first."""
+    """The hub's ``stated_fields`` arm with Quest's own rules handed to it as the fields it reads."""
     REQUIRES = ()     # standard library plus the hub
 
     def prioritize(self, person: str = "", request: str = "", implied: Optional[Mapping[str, Any]] = None, candidates: Sequence[Mapping[str, Any]] = (),
-                   stated: Any = None, now: str = "") -> Mapping[str, Any]:
+                   stated: Any = None, now: str = "", subject: str = "work", batch_limit: int = 0) -> Mapping[str, Any]:
         said = Stated.of(stated if stated is not None else implied)
-        at = moment(now) or datetime.now(timezone.utc)
-        kinds = tuple(said.kind_order) or DEFAULT_KIND_ORDER
-        feedback = {str(f.get("about")): str(f.get("direction")) for f in said.feedback}
-        present = {str(c.get("id")) for c in candidates}
-        held: List[Dict[str, Any]] = []
-        kept: List[Tuple[Tuple, Mapping[str, Any], List[str]]] = []
-        for index, item in enumerate(candidates):
-            ident, kind = str(item.get("id")), str(item.get("kind") or "")
-            if said.only_kinds and kind not in said.only_kinds:
-                held.append({"id": ident, "reason": f"the person limited the work to {', '.join(said.only_kinds)}"})
-                continue
-            wait = moment(said.not_before.get(ident))
-            if wait is not None and at < wait:
-                held.append({"id": ident, "reason": f"the person said not before {said.not_before[ident]}"})
-                continue
-            key, why = self.key(item, index, person, said, kinds, present, feedback, at)
-            kept.append((key, item, why))
-        kept.sort(key=lambda row: row[0])
-        answer = dict(hub_shape().prioritize(candidates=[row[1] for row in kept], stated=said, now=now))
-        answer["ordered"] = [dict(placed, reason="; ".join(row[2]) or "no rule applies, kept in the order given", metric=self.metric(row[1], placed["metric"]))
-                             for placed, row in zip(answer["ordered"], kept)]
-        answer["held"] = held
+        if subject == "work" and not said.kind_order:
+            said = dataclasses.replace(said, kind_order=DEFAULT_KIND_ORDER)
+        given = sorted(candidates, key=tie_order)
+        places = ladder_rank(given, person)
+        handed = []
+        for item, place in zip(given, places):
+            item = as_milestone(item) if subject == "goals" else item
+            handed.append({**{k: v for k, v in item.items() if k != "rank"}, **({} if place is None else {"rank": place})})
+        answer = dict(hub_arm().prioritize(person=person, candidates=handed, stated=said, now=now, subject=subject, batch_limit=batch_limit))
+        by_id = {str(c.get("id")): (c, place) for c, place in zip(given, places)}
+        answer["ordered"] = [self.explained(placed, *by_id[placed["id"]], person) for placed in answer["ordered"]]
         return answer
 
     @staticmethod
-    def metric(item: Mapping[str, Any], shaped: Mapping[str, Any]) -> Dict[str, Any]:
-        """The hub's metric form, with a goal's horizon as its due when it has no deadline."""
-        return dict(shaped, due=shaped["due"] or str(item.get("horizon") or ""))
-
-    def key(self, item: Mapping[str, Any], index: int, person: str, said: Stated, kinds: Sequence[str], present: set, feedback: Mapping[str, str],
-            now: datetime) -> Tuple[Tuple, List[str]]:
-        ident, kind = str(item.get("id")), str(item.get("kind") or "")
-        why: List[str] = []
-        if ident in said.order:
-            stance, spot = 0, said.order.index(ident)
-            why.append("the person ordered it")
-        elif ident in said.deferred:
-            stance, spot = 4, 0
-            why.append("the person deferred it")
-        else:
-            spot = 0
-            direction = feedback.get(ident) or feedback.get(kind) or ""
-            stance = {"sooner": 1, "later": 3}.get(direction, 2)
-            if stance != 2:
-                why.append(f"the person's feedback implies {direction}")
-        done = bool(item.get("completed"))
-        if done:
-            why.append("it is completed")
-        if item.get("solution_id"):
-            why.append(f"milestone of solution {item['solution_id']}")
-        handled = item.get("ai_handling") == "rep"
-        if handled:
-            why.append("its AI rep handles it")
-        sits = kind if kind in kinds else "goal"
-        tier = kinds.index(sits) if sits in kinds else len(kinds)
-        why.append(f"kind {kind} is {tier + 1} of {len(kinds)} in the order of kinds")
-        blocked = any(str(b) in present for b in item.get("blocked_by") or ())
-        if blocked:
-            why.append("it waits for " + ", ".join(str(b) for b in item["blocked_by"] if str(b) in present))
+    def explained(placed: Mapping[str, Any], item: Mapping[str, Any], place: Optional[int], person: str) -> Dict[str, Any]:
+        """The hub's place with Quest's reasons: the hub's ``ranked`` is the place on Quest's ladder, so it is replaced by what Quest ranked by, and the
+        goal's horizon is the ``due`` of its milestone when it has no deadline."""
+        parts = [p for p in str(placed["reason"]).split("; ") if not p.startswith("ranked ")]
         rank = own_rank(item, person)
-        rank_key = (0, rank) if rank is not None else (1, 0)
         if rank is not None:
-            why.append(f"ranked {rank}")
-        horizon = str(item.get("horizon") or "")
-        shorter = HORIZONS.index(horizon) if horizon in HORIZONS else len(HORIZONS)
-        if horizon in HORIZONS:
-            why.append(f"horizon {horizon}")
-        deadline = moment(item.get("deadline"))
-        if deadline is not None:
-            why.append(f"due {item['deadline']}" + (" and overdue" if deadline < now else ""))
-        asked = moment(item.get("asked_at"))
-        if asked is not None:
-            why.append(f"asked {item['asked_at']}")
-        waiting = len(item.get("waiting") or ())
-        if waiting:
-            why.append(f"{waiting} waiting")
-        created = moment(item.get("created_at"))
-        if created is not None and deadline is None and asked is None:
-            why.append(f"created {item['created_at']}, newest first")
-        newest = -created.timestamp() if created is not None else 0.0
-        nudged = moment(item.get("last_nudged_at")) or EARLIEST
-        return (stance, spot, tier, done, handled, blocked, rank_key, shorter, deadline or NEVER, asked or NEVER, newest, -waiting, nudged, index), why
+            parts.append(f"ranked {rank}")
+        for field, text in (("completed", "it is completed"), ("horizon", f"horizon {item.get('horizon')}")):
+            if item.get(field) and (field != "horizon" or item["horizon"] in HORIZONS):
+                parts.append(text)
+        if item.get("ai_handling") == "rep":
+            parts.append("its AI rep handles it")
+        metric = dict(placed["metric"], due=placed["metric"]["due"] or str(item.get("horizon") or ""))
+        return dict(placed, reason="; ".join(parts) or "no rule applies, kept in the order given", metric=metric)
