@@ -33,6 +33,10 @@ class IntelligenceFlow:
     def hold(self, quest_id: str, message: str = "") -> Mapping[str, Any]:
         return self.intents.hold(quest_id, message)
 
+    def view(self, request: str, person: str = "", objectives: Sequence[Mapping[str, Any]] = (), stated: Optional[Mapping[str, Any]] = None,
+             now: str = "") -> Mapping[str, Any]:
+        return self.intents.view(request, person, objectives, stated, now)
+
     def prepare(self, request: str) -> Mapping[str, Any]:
         return self.recall.prepare(request)
 

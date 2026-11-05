@@ -104,3 +104,15 @@ def test_the_area_reads_each_store_for_one_request_and_hands_the_other_lines_to_
     assert area.rep({"assignee_rep_id": "rep-1"}) == ("rep-1", "skills/rep")
     assert area.conversation("c1", "what next") == "c1: what next"
     assert area.directive("hello") == "name the next milestone"
+
+
+def test_the_view_orders_the_persons_goals_as_solution_milestones_through_prioritization():
+    area = quest_ai_runner.run(IntentHolding, environ={}, provided={
+        "long-term-memory": Conversations(), "recall-recent-context": Recent(), "guide-by-feedback": Guidance(), "feedback-learning": Ledger(),
+        "the-intuition": Predictions(), "quest-representatives": Reps(), "guide-toward-the-long-term-goal": Directive()})
+    goals = [{"id": "later", "deadline": "2026-07-30", "solution_id": "s2"}, {"id": "soon", "deadline": "2026-07-14", "solution_id": "s1"},
+             {"id": "done", "completed": True, "deadline": "2026-07-13"}]
+    view = area.view("what first", "p", goals, {"order": ["s2"]}, "2026-07-12T09:00:00Z")
+    assert [g["id"] for g in view["priority"]["ordered"]] == ["later", "soon", "done"]
+    assert view["priority"]["ordered"][0]["metric"]["milestone"] == "later"
+    assert area.view("what first", "p")["priority"] is None

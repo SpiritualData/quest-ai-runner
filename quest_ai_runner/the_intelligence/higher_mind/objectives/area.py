@@ -8,8 +8,9 @@ use, so a line that does not read one never asks for it.
 """
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
+import quest_ai_runner
 from esoi import implementation
 from esoi import Lazy
 
@@ -38,6 +39,14 @@ class SeparateStores:
         return {"recent": list(self.recent.load(quest_id)), "guidance": list(self.guidance.select(message, limit=3)),
                 "owed": list(self.feedback.open_items(quest_id)), "standing": list(self.feedback.standing_rules(quest_id)),
                 "predictions": list(self.predictions.load_predictions(quest_id))}
+
+    def view(self, request: str, person: str = "", objectives: Sequence[Mapping[str, Any]] = (), stated: Optional[Mapping[str, Any]] = None,
+             now: str = "") -> Mapping[str, Any]:
+        """The person's goals ordered as the milestones of their solutions: Prioritization (``subject="goals"``, Quest's arm of the hub's) says which come first."""
+        goals = [dict(goal, kind="milestone") for goal in objectives]
+        priority = (quest_ai_runner.run("prioritization", {"person": person, "candidates": goals, "subject": "goals", "stated": stated, "now": now})
+                    if goals else None)
+        return {"objectives": list(objectives), "priority": priority}
 
     def conversation(self, conv_id: str, query: str) -> Any:
         return self.conversations.current_slice(conv_id, query)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import typing
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 from esoi import solution
 
 
@@ -12,6 +12,12 @@ class IntentHolding(typing.Protocol):
     """What is already known for a request: the recent cards, the guidance that applies, what is still owed and the predictions."""
 
     def hold(self, quest_id: str, message: str = "") -> Mapping[str, Any]: ...
+
+    def view(self, request: str, person: str = "", objectives: Sequence[Mapping[str, Any]] = (), stated: Optional[Mapping[str, Any]] = None,
+             now: str = "") -> Mapping[str, Any]:
+        """The long view the hub's Higher Mind takes (its ``view`` signature): the person's goals, each one the milestone of the solution it is for,
+        and ``priority``, the order Prioritization gives them for what the person stated."""
+        ...
 
 
 @solution("guidance", kind="event", entry="frame", example="quest-id")
