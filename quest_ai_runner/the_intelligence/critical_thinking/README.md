@@ -27,20 +27,13 @@ Critical Thinking holds deep runs to their metric through Specification slice an
 
 **Problems**
 
-- Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still making progress. (`prob-deep-work-wanders`)
-- Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due. (`prob-autopilot-works-when-unwanted`)
-- People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between people. (`prob-same-ask-repeats-cost`)
-- A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn. (`prob-narrow-verdicts-unreliable`)
-- Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed. (`prob-work-misses-its-why`)
-- Whether a run improved anything is recorded only in part and only for a while. (`prob-run-improvement-unchecked`)
-- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention. (`prob-intent-specs-not-found-for-input`)
+- Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
+- Work Cut Off From Its Purpose (`prob-work-misses-its-why`): Replies, experiments and finished work are chosen and judged from the quest alone, not from the top intent and metrics the quest serves, so effort can drift from what the person cares about most and gaps under an intent can go unnoticed.
 
 **Ideals**
 
-- Accountable Autonomy (`ideal-accountable-autonomy`): Autonomous work runs to a written goal, within bounds, and stops exactly when it should.
 - Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
 - Purposeful Work (`ideal-purposeful-work`): Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
-- Specifications that apply are in view (`ideal-specs-that-apply-are-in-view`): Every run sees the intent specifications that concern its input, and only those, at the cheapest tier that lets it decide.
 
 ## Metrics and their leaders
 
@@ -67,20 +60,13 @@ Critical Thinking holds deep runs to their metric through Specification slice an
 
 ### Problems
 
-- Long autonomous work can run without bound, get stuck, repeat the same action, wait forever on a person, hit a usage limit unnoticed, or be killed while a slow build or download was actually still making progress. (`prob-deep-work-wanders`)
-- Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day nobody is rostered, or without a cadence being due. (`prob-autopilot-works-when-unwanted`)
-- People ask for the same operation again and again, and each time the AI searches and plans from scratch at full cost, while what it learned about their habits is lost on restart or mixes between people. (`prob-same-ask-repeats-cost`)
-- A small model call used to settle one narrow question (reach, quest choice, overseer signal, sufficiency) can return a malformed, hallucinated or missing verdict, and a wrong verdict silently changes the turn. (`prob-narrow-verdicts-unreliable`)
-- Replies, experiments and finished work are chosen and judged from the quest alone, never from the top intent and metrics the quest serves, so effort drifts from what the person cares about most and gaps under an intent go unnoticed. (`prob-work-misses-its-why`)
-- Whether a run improved anything is recorded only in part and only for a while. (`prob-run-improvement-unchecked`)
-- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention. (`prob-intent-specs-not-found-for-input`)
+- Unwanted Background Work (`prob-autopilot-works-when-unwanted`): Recurring background passes can work when the person's settings say they should not: past the daily budget, on a day outside the roster, or without a cadence being due.
+- Work Cut Off From Its Purpose (`prob-work-misses-its-why`): Replies, experiments and finished work are chosen and judged from the quest alone, not from the top intent and metrics the quest serves, so effort can drift from what the person cares about most and gaps under an intent can go unnoticed.
 
 ### Ideals
 
-- Accountable Autonomy (`ideal-accountable-autonomy`): Autonomous work runs to a written goal, within bounds, and stops exactly when it should.
 - Permitted Timing (`ideal-permitted-timing`): Background work happens exactly when the person's settings allow and never otherwise.
 - Purposeful Work (`ideal-purposeful-work`): Every piece of work names the ideal or gap it serves and is judged by that intent's metric.
-- Specifications that apply are in view (`ideal-specs-that-apply-are-in-view`): Every run sees the intent specifications that concern its input, and only those, at the cheapest tier that lets it decide.
 
 ### Solutions
 

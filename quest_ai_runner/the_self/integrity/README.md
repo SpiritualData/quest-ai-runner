@@ -20,26 +20,6 @@ Integrity keeps every part specified as a solution with measured alternatives. I
 | Public-repository hygiene scanner | `keep-secrets-out` | no entry declared | Planted-secret evaluation arm (`live_scanner`) | Secret detection and placeholder tolerance |
 | Problem-linked tags that identify solutions | `tag-solutions` | no entry declared | Problem-linked tag list with a check rule and a lookup (`tag_list_with_check`) | Right solution missed without the tag |
 
-## Problems and ideals
-
-**Problems**
-
-- A public repository grown from private code can leak keys, real machine paths, real ids or real addresses, and nobody notices until it is published. (`prob-public-repo-leaks`)
-- AI collaborators produce changes without naming the problem, the ideal or a metric, duplicate what already exists, or add structure whose cost outweighs its benefit. (`prob-ai-skips-structure-thinking`)
-- A grader for AI replies rewards the right words without the right behaviour, or was calibrated only against its own author's labels, so passing scores mean less than they appear to. (`prob-grader-fooled-by-vocabulary`)
-- A person or a run about to build or change something does not identify the solutions that already cover it or constrain it. (`prob-solution-not-identified`)
-- R1: Adding a new solution that duplicates an existing one. (`esoi-r1-duplicate-solution`)
-- R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose. (`esoi-r2-overlap-not-leveraged`)
-- R3: Not being aware of solutions that need to change definition or implementation due to something else changing. (`esoi-r3-co-change-missed`)
-- R4: Using a solution when it should not be for the particular use case. (`esoi-r4-solution-misused`)
-
-**Ideals**
-
-- Clean Publication (`ideal-clean-publication`): Nothing secret or consumer specific is ever published.
-- Structured Habit (`ideal-structured-habit`): An AI that works here names the problem, the ideal and the metric, reuses what exists, and adds only structure that earns its cost.
-- Honest Grading (`ideal-honest-grading`): A grade means the reply did what the principle asks, whatever words it used.
-- Constraining Solutions Identified (`ideal-risks-identified-by-tag`): Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
-
 ## Metrics and their leaders
 
 - Principle-following pass rate under standing instructions (`metric-behave-by-esoi`): leader `standing_instructions`, 30 of 60 cases
@@ -52,29 +32,11 @@ Integrity keeps every part specified as a solution with measured alternatives. I
 
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
-
-### Problems
-
-- A public repository grown from private code can leak keys, real machine paths, real ids or real addresses, and nobody notices until it is published. (`prob-public-repo-leaks`)
-- AI collaborators produce changes without naming the problem, the ideal or a metric, duplicate what already exists, or add structure whose cost outweighs its benefit. (`prob-ai-skips-structure-thinking`)
-- A grader for AI replies rewards the right words without the right behaviour, or was calibrated only against its own author's labels, so passing scores mean less than they appear to. (`prob-grader-fooled-by-vocabulary`)
-- A person or a run about to build or change something does not identify the solutions that already cover it or constrain it. (`prob-solution-not-identified`)
-- R1: Adding a new solution that duplicates an existing one. (`esoi-r1-duplicate-solution`)
-- R2: Not leveraging the benefits of an existing solution, such as partial overlap of purpose. (`esoi-r2-overlap-not-leveraged`)
-- R3: Not being aware of solutions that need to change definition or implementation due to something else changing. (`esoi-r3-co-change-missed`)
-- R4: Using a solution when it should not be for the particular use case. (`esoi-r4-solution-misused`)
-
-### Ideals
-
-- Clean Publication (`ideal-clean-publication`): Nothing secret or consumer specific is ever published.
-- Structured Habit (`ideal-structured-habit`): An AI that works here names the problem, the ideal and the metric, reuses what exists, and adds only structure that earns its cost.
-- Honest Grading (`ideal-honest-grading`): A grade means the reply did what the principle asks, whatever words it used.
-- Constraining Solutions Identified (`ideal-risks-identified-by-tag`): Before something is built or changed, every solution that already covers it or constrains it is identified, through a short flat list of tags each of which names the problems it mitigates.
 
 ### Solutions
 

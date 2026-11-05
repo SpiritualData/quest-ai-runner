@@ -215,17 +215,11 @@ flowchart LR
 
 ## Problems
 
-- The AI states what it can and cannot do outside the host's own data without a source of truth for it: it describes a capability that does not exist, reports a setting as blocking when the setting was never read, or says outside work has started when nothing ran. (`prob-reach-claims-unfounded`)
-- Deep work can start from a task description with no written, checkable condition for finishing, so the run plans forward from its first step and has nothing to be checked against when it stops. (`prob-work-not-planned-backwards-from-done`)
-- A new goal is given to the wrong owner, or to an AI representative that cannot do it, so it sits undone or is done badly while the person believes it is handled. (`prob-new-goal-lands-on-the-wrong-owner`)
-- What the AI says about the person's own account (which quests exist, what changed, whether a change ran) is re-derived each turn from whatever slice it read, and a change it made is not read back, so within one session it reports the same state two ways, repeats a change it already made, or proposes again what it said was done. (`prob-account-state-contradicts`)
-- Quest's operations can be reached in the same process as Quest and over its HTTP API, and two access points to the same operations can drift apart, so the same request may behave or return differently depending on how it arrived. (`prob-two-access-points-to-quest-diverge`)
+- Contradictory Account State (`prob-account-state-contradicts`): What the AI says about the person's own account (which quests exist, what changed, whether a change ran) is re-derived each turn from whatever slice it read, and a change it made is not read back, so within one session it can report the same state two ways, repeat a change it already made, or propose again what it said was done.
 
 ## Ideals
 
-- Backward-Planned Work (`ideal-plan-from-the-done-standard`): Work is planned backwards from a written, checkable done-standard, so every step serves a condition that can be seen to be met.
 - Consistent Account State (`ideal-consistent-account-state`): What the AI says about the person's own account is true of the account when it says it, every time in a session.
-- Shared Quest Operations (`ideal-one-implementation-two-access-points`): Quest's operations are implemented once, and each way of reaching them (in the same process as Quest, or over its HTTP API) gives the same results.
 
 ## Where to go next
 

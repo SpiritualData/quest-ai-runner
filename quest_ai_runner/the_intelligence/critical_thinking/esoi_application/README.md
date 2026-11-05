@@ -31,14 +31,6 @@ Choose, from an ESOI specification index, the few records a new request concerns
 
 - Specification selection pass rate (`metric-spec-selection`): leader `lexical_vector_gated`, 70 of 76 cases
 
-## Problems
-
-- A new request or input arrives and the system cannot tell which of a project's intent specifications (problems, ideals, solutions, implementations, metrics) concern it, so it either loads none, loads all, or relies on whichever the person remembers to mention. (`prob-intent-specs-not-found-for-input`)
-
-## Ideals
-
-- Specifications that apply are in view (`ideal-specs-that-apply-are-in-view`): Every run sees the intent specifications that concern its input, and only those, at the cheapest tier that lets it decide.
-
 ## Where to go next
 
 - Up: [quest_ai_runner/the_intelligence](../../README.md)

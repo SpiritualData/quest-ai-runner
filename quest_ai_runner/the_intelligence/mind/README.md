@@ -42,29 +42,16 @@ flowchart LR
 
 **Problems**
 
-- Prompts grow past what the model window or the budget allows, or repeat the same block, so calls fail, cost more than expected, or bury the relevant part under noise. (`prob-prompt-overflow-and-duplication`)
-- A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them. (`prob-progress-unreadable`)
-- One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes. (`prob-vendor-outage-halts-work`)
-- Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). (`prob-core-ml-tasks-unspecified`)
-- Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it assumes a circumstance the person never gave. (`prob-quest-answer-not-tied-to-my-goal`)
-- Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out. (`prob-assistant-not-jarvis-from-the-users-seat`)
-- A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do. (`prob-unmet-turn-leaves-person-guessing`)
-- A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves. (`prob-answer-reasoning-unseen`)
-- A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known. (`prob-known-operation-planned-again`)
+- Unreadable Work (`prob-progress-unreadable`): A person cannot see what their AI is doing for them: whether background work is moving, or what an answer rests on.
+- Answers Not Tied To The Person's Goal (`prob-quest-answer-not-tied-to-my-goal`): Asked how Quest could help, what a feature is for, or whether it is worth it, Quest AI can answer with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it can assume a circumstance the person did not give.
+- Parts Pass While The Assistant Fails (`prob-assistant-not-jarvis-from-the-users-seat`): Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out.
 
 **Ideals**
 
-- Bounded Prompt (`ideal-bounded-prompt`): Every prompt stays within a budget derived from the model window and the cost per call, with nothing repeated.
-- Legible Progress (`ideal-legible-progress`): The person sees what they need and no more, for the mode they are in.
-- Measured Core ML (`ideal-measured-core-ml`): Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
+- Legible Work (`ideal-legible-progress`): A person can see what their AI is doing for them and what an answer rests on, as much as they need and no more, for the mode they are in.
 - Goal-Fitted Answer (`ideal-quest-answer-fits-my-goal`): When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
 - Capable From The User's Seat (`ideal-jarvis-from-the-users-seat`): The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says only what it did.
 - Present And Prompt (`ideal-jarvis-j01-always-there-and-fast`): The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
-- Known Context (`ideal-jarvis-j02-knows-my-context`): The assistant already knows the person's own quests, goals and what they have said, and uses it without being told again.
-- Well-Timed Nudges (`ideal-jarvis-j03-nudges-at-the-right-moment`): The assistant speaks up on its own when something needs the person, at a moment that helps, and stays quiet when it does not.
-- Asked-First Action (`ideal-jarvis-j04-does-things-and-asks-first`): The assistant carries out what the person asked in their own account, and for anything that leaves Quest or cannot be undone it files a request for approval and does nothing until the person says yes.
-- Conditional Multi-Step Work (`ideal-jarvis-j05-multi-step-with-conditions`): A request with several parts, an order or a condition is carried out as stated: each step in turn, a later step only if the earlier result meets the condition.
-- and 10 more: all 20 are in [ideals](#ideals) of the full record below
 
 ## Metrics and their leaders
 
@@ -94,38 +81,16 @@ flowchart LR
 
 ### Problems
 
-- Prompts grow past what the model window or the budget allows, or repeat the same block, so calls fail, cost more than expected, or bury the relevant part under noise. (`prob-prompt-overflow-and-duplication`)
-- A person waiting on background work cannot tell what is happening, or is flooded with every internal step and cannot find the one thing that needs them. (`prob-progress-unreadable`)
-- One model vendor's outage, quota or price change stops all AI work, and moving to another vendor means code changes. (`prob-vendor-outage-halts-work`)
-- Quest relies on a few core machine-learning tasks in many places: classifying a quest or an input (which quest, which kind of ask, which route) and recommending (which goal, step or quest comes next). (`prob-core-ml-tasks-unspecified`)
-- Asked how Quest could help, or whether a feature is worth it, Quest AI answers with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it assumes a circumstance the person never gave. (`prob-quest-answer-not-tied-to-my-goal`)
-- Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out. (`prob-assistant-not-jarvis-from-the-users-seat`)
-- A turn that cannot finish yet ends with a bare answer, or with text that only looks like a question, so the person cannot tell whether work continues, why, or what only they can do. (`prob-unmet-turn-leaves-person-guessing`)
-- A person cannot tell how an answer was reached, so they cannot see whether it rests on their own account or on general knowledge, and have to check each line themselves. (`prob-answer-reasoning-unseen`)
-- A request that worked before is planned again from nothing every time, paying for every search and step again although the steps are already known. (`prob-known-operation-planned-again`)
+- Unreadable Work (`prob-progress-unreadable`): A person cannot see what their AI is doing for them: whether background work is moving, or what an answer rests on.
+- Answers Not Tied To The Person's Goal (`prob-quest-answer-not-tied-to-my-goal`): Asked how Quest could help, what a feature is for, or whether it is worth it, Quest AI can answer with a list of everything Quest has, or with a generic description, instead of the few features that fit this person's goal and circumstance, or it can assume a circumstance the person did not give.
+- Parts Pass While The Assistant Fails (`prob-assistant-not-jarvis-from-the-users-seat`): Each part of QAR can pass its own test while the assistant, as a person meets it across a day, forgets what it knows, acts unasked, claims work it did not do, or answers a vague request with a generic plan, and the person is the one who finds out.
 
 ### Ideals
 
-- Bounded Prompt (`ideal-bounded-prompt`): Every prompt stays within a budget derived from the model window and the cost per call, with nothing repeated.
-- Legible Progress (`ideal-legible-progress`): The person sees what they need and no more, for the mode they are in.
-- Measured Core ML (`ideal-measured-core-ml`): Every classification and recommendation Quest depends on has a defined input and output, a held-out labelled case set, and a recorded comparison of its alternatives.
+- Legible Work (`ideal-legible-progress`): A person can see what their AI is doing for them and what an answer rests on, as much as they need and no more, for the mode they are in.
 - Goal-Fitted Answer (`ideal-quest-answer-fits-my-goal`): When a person asks what Quest can do for them, the answer picks the few features that fit their own goal and circumstance and says why each helps, instead of listing everything.
 - Capable From The User's Seat (`ideal-jarvis-from-the-users-seat`): The assistant is judged as the person meets it across a day: one capable assistant that gets real work done in the person's own quests, asks before it does anything outward or hard to undo, and says only what it did.
 - Present And Prompt (`ideal-jarvis-j01-always-there-and-fast`): The assistant answers whenever the person asks, and quickly enough that asking it is easier than doing the thing alone.
-- Known Context (`ideal-jarvis-j02-knows-my-context`): The assistant already knows the person's own quests, goals and what they have said, and uses it without being told again.
-- Well-Timed Nudges (`ideal-jarvis-j03-nudges-at-the-right-moment`): The assistant speaks up on its own when something needs the person, at a moment that helps, and stays quiet when it does not.
-- Asked-First Action (`ideal-jarvis-j04-does-things-and-asks-first`): The assistant carries out what the person asked in their own account, and for anything that leaves Quest or cannot be undone it files a request for approval and does nothing until the person says yes.
-- Conditional Multi-Step Work (`ideal-jarvis-j05-multi-step-with-conditions`): A request with several parts, an order or a condition is carried out as stated: each step in turn, a later step only if the earlier result meets the condition.
-- Noticed Background Work (`ideal-jarvis-j06-background-work-with-notice`): Long work is handed to the background with a short reply at once, and the person is told when it is done or needs them.
-- Honest Limits (`ideal-jarvis-j07-honest-about-limits-and-actions`): The assistant says plainly what it cannot do and what it did and did not do: nothing described as sent, scheduled or paid that was not.
-- Pointed Questions (`ideal-jarvis-j08-good-questions-when-vague`): When a request is vague or lacks facts only the person holds, the assistant asks one or two specific questions that build on what it already knows, and does not guess or hand over a generic plan.
-- Continuous Assistant (`ideal-jarvis-j09-same-assistant-across-sessions`): The person deals with the same assistant from one session to the next, which remembers what was said and decided before.
-- Steady Adjustable Personality (`ideal-jarvis-j10-stable-adjustable-personality`): The assistant keeps one recognisable manner from day to day, and the person can change it, for example to be briefer.
-- Fitting Team Treatment (`ideal-jarvis-j11-treats-my-team-appropriately`): In a shared chat the assistant treats each person according to their place in the team, and what it shows or does for one person stays within what that person may see and change.
-- Improving Over Time (`ideal-jarvis-j12-gets-better-over-time`): A correction the person makes lasts, so the same mistake is not made twice, and the assistant serves them better the longer they use it.
-- Cheap Dependable Day (`ideal-jarvis-j13-cheap-and-reliable-all-day`): An ordinary day of use costs little and does not break: spend is known and bounded, and a failed call does not end the day.
-- Accurate Brief Answers (`ideal-jarvis-j14-accurate-brief-personal-quest-answers`): Answers about Quest and about the person's own quests are correct from the documentation and the account, short, and put in terms of the person's own goal.
-- Never Left Guessing (`ideal-never-left-guessing`): The person always knows whether work continues, why, and what only they can do.
 
 ### Solutions
 

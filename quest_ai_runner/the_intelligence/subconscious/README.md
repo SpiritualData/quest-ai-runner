@@ -41,22 +41,6 @@ flowchart LR
 | Context choice | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
 | QAR topic cards for a folder | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth |
 
-## Problems and ideals
-
-**Problems**
-
-- Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops writes. (`prob-context-drifts-from-its-source`)
-- The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it. (`prob-relevant-card-not-found`)
-- A card store grows far past the distinct content of its corpus. (`prob-card-store-inflates`)
-- A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. (`prob-index-walks-into-copies`)
-
-**Ideals**
-
-- Current Knowledge (`ideal-current-knowledge`): What the AI reads still matches the source it came from, and outages are loud but harmless.
-- Findable Knowledge (`ideal-findable-knowledge`): The knowledge that bears on a question is found whatever words it uses.
-- Proportionate Card Store (`ideal-proportionate-store`): A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
-- Proportionate Index Scope (`ideal-proportionate-index-scope`): The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
-
 ## Metrics and their leaders
 
 - Card repository conformance across backends (`metric-persist-cards`): leader `filesystem`, 14 of 14 cases
@@ -73,26 +57,12 @@ flowchart LR
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/the_intelligence/subconscious/cards_from_files](cards_from_files/README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
 ---
 
 ## The full record
-
-### Problems
-
-- Context cards drift from the sources they describe: a file changes or disappears and the card still says the old thing, and when a card backend is unreachable the AI loses its cards or silently drops writes. (`prob-context-drifts-from-its-source`)
-- The card or passage that would answer a question exists, but it is worded differently from the question, so keyword search does not surface it and the answer is built without it. (`prob-relevant-card-not-found`)
-- A card store grows far past the distinct content of its corpus. (`prob-card-store-inflates`)
-- A corpus's walk and its card sources read folders that are not its knowledge, and the worst of them look harmless by file count. (`prob-index-walks-into-copies`)
-
-### Ideals
-
-- Current Knowledge (`ideal-current-knowledge`): What the AI reads still matches the source it came from, and outages are loud but harmless.
-- Findable Knowledge (`ideal-findable-knowledge`): The knowledge that bears on a question is found whatever words it uses.
-- Proportionate Card Store (`ideal-proportionate-store`): A store holds one card per distinct topic of its corpus, so its size follows the corpus's distinct content and never grows by re-importing what it already has.
-- Proportionate Index Scope (`ideal-proportionate-index-scope`): The system itself decides, proportionately and without a person, whether a large or high-risk folder is worth looking into: a cheap call per folder, never per file, and it fails closed only where the risk is real.
 
 ### Solutions
 

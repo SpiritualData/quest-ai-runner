@@ -43,20 +43,6 @@ flowchart LR
 | Terminal helper calls | `assist-a-terminal-session` | `quest_ai_runner.run("assist-a-terminal-session", ...)` | Fast-tier model calls in the terminal (today) (`fast_model_helpers`) | Correct terminal helper verdicts within the wait a person accepts |
 | Implementation selection | `select-an-implementation` | no entry declared | Live resolver driver (`live_resolver`) | Implementation selection |
 
-## Problems and ideals
-
-**Problems**
-
-- Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no source supports. (`prob-reply-misses-the-account`)
-- A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said. (`prob-follow-up-loses-thread`)
-- A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error. (`prob-integration-is-trial-and-error`)
-- The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the coding agent completes the work, while sending every request to the coding agent pays its slow, token-heavy context search each time. (`prob-harness-weaker-than-a-coding-agent`)
-
-**Ideals**
-
-- Unbroken Thread (`ideal-unbroken-thread`): A conversation carries what the person just said, wherever in time it appears.
-- Trustworthy Interface (`ideal-trustworthy-interface`): What the documents say is true of the code, and a newcomer can start from them.
-
 ## Metrics and their leaders
 
 - Routing correctness over the classification cases (`metric-route-a-message`): leader `single_prompt`, 52 of 54 cases
@@ -75,24 +61,12 @@ flowchart LR
 
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
 ---
 
 ## The full record
-
-### Problems
-
-- Replies state things that are not in the person's own account, or miss facts that are, because the AI answers from general knowledge, from the wrong slice of data, or invents a link or claim that no source supports. (`prob-reply-misses-the-account`)
-- A follow-up such as "and the other one?", or a message sent while the AI is still working, is treated as a fresh start, so the person has to restate what they just said. (`prob-follow-up-loses-thread`)
-- A developer embedding the library cannot tell which names are stable, how to configure a lane, whether the examples still run, or where to look, so integration is trial and error. (`prob-integration-is-trial-and-error`)
-- The same request is handled less capably through the chat than as a task sent to a coding agent: the chat's own loop is a partial agent harness, so it fails, stops early or asks again where the coding agent completes the work, while sending every request to the coding agent pays its slow, token-heavy context search each time. (`prob-harness-weaker-than-a-coding-agent`)
-
-### Ideals
-
-- Unbroken Thread (`ideal-unbroken-thread`): A conversation carries what the person just said, wherever in time it appears.
-- Trustworthy Interface (`ideal-trustworthy-interface`): What the documents say is true of the code, and a newcomer can start from them.
 
 ### Solutions
 

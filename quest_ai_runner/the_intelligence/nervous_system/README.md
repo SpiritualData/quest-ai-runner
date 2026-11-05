@@ -16,12 +16,6 @@ Nervous System asks the model through Tiered model provider layer to oversee a r
 |---|---|---|---|---|
 | Human decision escalation channel | `escalate-to-a-human` | `quest_ai_runner.run("escalate-to-a-human")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
 
-## Problems and ideals
-
-**Problems**
-
-- The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking. (`prob-asks-what-is-not-theirs`)
-
 ## Metrics and their leaders
 
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): leader `quest_decision_sink`, 15 of 15 cases
@@ -30,15 +24,11 @@ Nervous System asks the model through Tiered model provider layer to oversee a r
 
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
-
-### Problems
-
-- The AI asks the person about implementation details they neither care about nor understand, and when told it should not have asked, does not learn which kinds of question to stop asking. (`prob-asks-what-is-not-theirs`)
 
 ### Solutions
 

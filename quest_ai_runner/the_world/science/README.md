@@ -16,16 +16,6 @@ Science gives a request the facts it needs from outside the person's own materia
 |---|---|---|---|---|
 | Bounded web research | `search-the-web` | `quest_ai_runner.run("search-the-web", 'latest Rust release')` | Snippet-first research with page extraction (`web_research`) | Right-passage rate and search spend over public factual questions |
 
-## Problems and ideals
-
-**Problems**
-
-- Answering from the live web risks fetching addresses that should never be fetched, paying again for the same search, or returning the wrong passage from the right page. (`prob-web-answers-unsafe-or-costly`)
-
-**Ideals**
-
-- Safe Search (`ideal-safe-search`): Web answers come from the right passage, fetched safely and paid for once.
-
 ## Metrics and their leaders
 
 - Right-passage rate and search spend over public factual questions (`metric-search-the-web`): leader `web_research`, 10 of 10 cases
@@ -34,19 +24,11 @@ Science gives a request the facts it needs from outside the person's own materia
 
 - Parent intent: [Grounded AI that advances people's goals](../../../esoi/README.md)
 - Repository: [top README](../../../README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
-
-### Problems
-
-- Answering from the live web risks fetching addresses that should never be fetched, paying again for the same search, or returning the wrong passage from the right page. (`prob-web-answers-unsafe-or-costly`)
-
-### Ideals
-
-- Safe Search (`ideal-safe-search`): Web answers come from the right passage, fetched safely and paid for once.
 
 ### Solutions
 
