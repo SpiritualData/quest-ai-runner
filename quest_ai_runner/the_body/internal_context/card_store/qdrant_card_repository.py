@@ -59,7 +59,7 @@ from typing import Any, Callable, Dict, List, Optional
 from esoi import implementation
 from hubofhubs.api import VectorHit
 from hubofhubs.api import VectorStoreBase
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 from hubofhubs.api import card_embed_text
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import card_scope_tags, fence_tags, quest_affinity_tags, affinity_mode
 

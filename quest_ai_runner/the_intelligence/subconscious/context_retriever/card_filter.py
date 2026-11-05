@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import ModelProvider
-from hubofhubs.the_intelligence.subconscious.context_retriever.context_cards import card_selection as hub
+from hubofhubs.api import card_selection as hub
 from hubofhubs.api import CardMetadata, stable_card_order  # noqa: F401  (same objects, old import path)
 
 from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget

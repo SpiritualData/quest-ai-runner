@@ -455,7 +455,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         return root / ".quest-context"
 
     def test_the_pass_records_what_it_wrote_and_the_card_is_free_to_move_while_it_matches(self, tmp_path):
-        from hubofhubs.the_body.internal_context.card_store import card_origin
+        from hubofhubs.api import card_origin
         cards = self.indexed(tmp_path)
         card_a = FilesystemCardRepository(str(cards)).read("a-topic")
         assert card_a["provenance"]["index_hash"] == card_origin.index_fingerprint(card_a)
@@ -466,7 +466,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         {"notes": "a custom field a person added"}, {"description": "a better description"},
     ], ids=["summary", "keywords", "links", "custom notes field", "description"])
     def test_an_edit_by_hand_protects_the_card(self, tmp_path, change):
-        from hubofhubs.the_body.internal_context.card_store import card_origin
+        from hubofhubs.api import card_origin
         cards = self.indexed(tmp_path)
         edited = FilesystemCardRepository(str(cards)).read("a-topic")
         edited.update(change)
@@ -474,7 +474,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         assert card_origin.protection(edited, check_edits=False) == "", "the quick look does not hash"
 
     def test_the_heat_and_usage_the_machine_leaves_are_not_an_edit_but_a_retrieval_is_a_use(self, tmp_path):
-        from hubofhubs.the_body.internal_context.card_store import card_origin
+        from hubofhubs.api import card_origin
         cards = self.indexed(tmp_path)
         card_a = FilesystemCardRepository(str(cards)).read("a-topic")
         card_a["files"][0]["sha256"] = "changed"
@@ -485,7 +485,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         assert card_origin.protection(card_a) == "has been used"
 
     def test_a_refresh_does_not_turn_the_pass_own_repair_into_an_edit(self, tmp_path):
-        from hubofhubs.the_body.internal_context.card_store import card_origin
+        from hubofhubs.api import card_origin
         cards = self.indexed(tmp_path)
         before = FilesystemCardRepository(str(cards)).read("a-topic")
         files = {"a/n0.md", "a/n1.md"}
@@ -500,7 +500,7 @@ class TestWhatTheIndexWroteAndWhatSomebodyChanged:
         assert before["provenance"]["index_hash"] or True
 
     def test_the_tidy_keeps_a_duplicate_somebody_edited(self, tmp_path):
-        from hubofhubs.the_body.internal_context.card_store import card_origin
+        from hubofhubs.api import card_origin
         cards = self.indexed(tmp_path)
         original = FilesystemCardRepository(str(cards)).read("a-topic")
         twin = json.loads(json.dumps(original))

@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional, Sequence, Tuple
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.api import outage as provider_outage
 from hubofhubs.api import format_provider_error
 
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure

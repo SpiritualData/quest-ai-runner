@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.api import outage as provider_outage
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult

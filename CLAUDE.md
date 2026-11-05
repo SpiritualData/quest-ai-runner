@@ -19,8 +19,8 @@ are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR ke
 - **One front door.** `quest_ai_runner.run("<id>", input)` runs any solution (beside `hubofhubs.run`); `quest_ai_runner/api.py` lists the stable names a
   host application (the Quest backend) imports, so a module can move without breaking it; `python -m quest_ai_runner <cli|tools|lane|requirements>` is
   the one stable command line (deep workers and lane scripts call it, never a module path).
-- **The hub only through `hubofhubs.api` and `hubofhubs.run`.** Never import a hub internal path (three modules the hub has not exported yet,
-  `card_origin`, `outage` and `card_selection`, are the open exceptions).
+- **The hub only through `hubofhubs.api` and `hubofhubs.run`.** Never import a hub internal path; a missing name is
+  added to the hub's `api.py` first.
 - The orchestrator loop (`the_intelligence/mind/orchestrator*.py`, split by role into mixins) is the one arm of the hub's Mind that QAR selects today;
   `the_intelligence/mind/delegation/` holds the deep run and its goal runner. Tests are in `tests/`, evaluation components in `evaluation/components/`.
 - `config`: `RunnerConfig` and the `config_*` modules are in `the_body/configuration/`, the single place a consumer supplies everything specific.

@@ -12,7 +12,7 @@ import copy
 import itertools
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 
 SERVER_FIELDS = ("updated_at", "revision", "owner_user_id", "user_id", "card_id")
 

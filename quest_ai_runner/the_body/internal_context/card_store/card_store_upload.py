@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 from hubofhubs.api import card_store_identity as ident
 from hubofhubs.api import FilesystemCardRepository
 from hubofhubs.api import item_id

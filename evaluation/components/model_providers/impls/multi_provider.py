@@ -2,7 +2,7 @@
 ``format_provider_error`` (``hubofhubs.models.retry``), the real ``DryRunProvider`` token estimator, and the
 ``pricing.py`` table, driven with fake providers. Zero model calls, zero network."""
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.api import outage as provider_outage
 from hubofhubs.api import format_provider_error, retry_transient
 from hubofhubs.api import MultiProvider
 from model_providers import fakes

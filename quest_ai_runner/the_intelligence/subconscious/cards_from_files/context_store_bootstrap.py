@@ -21,7 +21,7 @@ from hubofhubs.api import is_claude_state_file, prune_dirnames, skip_subtrees
 from quest_ai_runner.the_body.configuration.card_store_settings import STORE_DIR_NAME, max_cards_per_folder
 from quest_ai_runner.the_body.configuration.walk_settings import effective_skip_dirs
 from hubofhubs.api import is_merged as is_merged_store, read_meta as read_store_meta
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.bootstrap_reporter import mark_bootstrap_completed
 from hubofhubs.api import Pacer
 from hubofhubs.api import match_umask

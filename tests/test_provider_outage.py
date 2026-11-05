@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.api import outage as provider_outage
 from quest_ai_runner.the_consciousness.judgment_calls import executor_pauses
 from hubofhubs.api import DeepResult
 from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult

@@ -49,7 +49,7 @@ import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple
 from esoi import implementation
 from esoi.requirements import api, env
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.card_shape_guard import refusal as card_shape_refusal
 
 _log = logging.getLogger("quest-ai-runner.quest_api_cards")

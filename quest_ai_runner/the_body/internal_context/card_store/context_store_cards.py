@@ -11,7 +11,7 @@ import os
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from hubofhubs.api import card_limit as limit_mod
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 from hubofhubs.api import SCHEME_QUALIFIED, read_meta as read_store_meta
 from hubofhubs.api import dedupe_content, normalize_content, render_card_content, tokenize
 from hubofhubs.api import card_embed_text

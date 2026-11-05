@@ -26,7 +26,7 @@ import inspect
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller import outage as provider_outage
+from hubofhubs.api import outage as provider_outage
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from hubofhubs.api import Mode

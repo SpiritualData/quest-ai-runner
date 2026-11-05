@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from hubofhubs.api import AssembledContext
 from hubofhubs.api import Pacer
 from hubofhubs.api import content_item_text, filter_content_by_time_range, mark_items_used, normalize_content, render_card_content_blocks, tokenize
-from hubofhubs.the_body.internal_context.card_store import card_origin
+from hubofhubs.api import card_origin
 from hubofhubs.api import prune_dirnames
 from quest_ai_runner.the_body.configuration.walk_settings import effective_skip_dirs
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import card_affinity_factor, card_visible_to_turn, other_quest_label
