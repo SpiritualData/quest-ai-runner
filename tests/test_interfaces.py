@@ -21,7 +21,7 @@ def test_the_assembler_imports_every_interface_module():
 
 
 def test_autopilot_is_the_hubs_proactivity_and_prioritization():
-    """WHEN standing work starts and WHAT matters first are the hub's solutions, reached through QAR's one line; QAR adds no arm of its own for either."""
+    """WHEN standing work starts and WHAT matters first are the hub's solutions, reached through QAR's one line; QAR adds only Quest's ordering arm under Prioritization (tests/test_quest_ordering.py)."""
     due = quest_ai_runner.run("proactivity", {"schedules": [{"id": "weekly", "cadence": "daily"}], "now": "2026-07-12T09:00:00Z"}, environ={})
     assert isinstance(due, (list, tuple))
     ranked = quest_ai_runner.run("prioritization", {"person": "", "request": "what is the latest Rust version?"}, environ={})

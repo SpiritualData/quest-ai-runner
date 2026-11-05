@@ -23,3 +23,4 @@ response-quality,metric-guard-a-reply
 the-intuition,metric-persist-predictions
 long-term-memory,metric-remember-conversations
 guidance,metric-ground-in-intent
+prioritization,metric-order-quest-work

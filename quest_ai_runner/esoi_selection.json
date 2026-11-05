@@ -389,7 +389,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "openclaw": "quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel"
+   "openclaw": "quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel",
+   "quest_events": "quest_ai_runner.the_body.intake_sources.quest_events"
   }
  },
  "long-term-memory": {
@@ -475,6 +476,12 @@
   },
   "modules": {
    "planner_route": "quest_ai_runner.the_intelligence.mind.planner.message_routing"
+  }
+ },
+ "prioritization": {
+  "default": "quest_ordering",
+  "modules": {
+   "quest_ordering": "quest_ai_runner.the_consciousness.prioritization.quest_ordering"
   }
  },
  "quest-account-truth": {
