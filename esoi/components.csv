@@ -53,7 +53,7 @@ tests,tests,tests/**,Offline test suite and shared fakes,system-integrity
 structure-registry,docs,esoi/*;esoi.toml;scripts/esoi_rules.py;scripts/env_vars.py;scripts/README.md;esoi/tracker/*;quest_ai_runner/*.csv;quest_ai_runner/README.md;quest_ai_runner/**/intent.csv;quest_ai_runner/**/solutions.csv;quest_ai_runner/**/implementations.csv;quest_ai_runner/**/problems.csv;quest_ai_runner/**/ideals.csv;quest_ai_runner/**/metrics.csv;quest_ai_runner/**/README.md,"This registry, the solutions ontology, and the check that keeps them true",system-integrity
 solution-tags,scripts,scripts/esoi_tags.py,"Solution tags: rule Q1 over esoi/tags.csv and the tags columns, and the lookup of the solutions that share a tag or a connected problem",system-integrity
 docs-and-meta,docs,docs/**;.github/**;.env.example;.gitignore;README.md;CHANGELOG.md;CLAUDE.md;CONTRIBUTING.md;SECURITY.md;CODE_OF_CONDUCT.md;LICENSE;NOTICE;pyproject.toml,Documentation and repo-level project files,system-integrity
-package-selection,the_self,quest_ai_runner/esoi_selection.json,QAR's recorded selection by metric,
+package-selection,the_self,quest_ai_runner/esoi_selection.json,QAR's recorded selection by metric,system-integrity
 package-entry-points,the_self,quest_ai_runner/__main__.py;quest_ai_runner/api.py,The stable command line and the stable names a host application builds against,quest-self
 the-body-container,the_body,quest_ai_runner/the_body/__init__.py,The the body container of QAR,quest-self
 the-intelligence-container,the_intelligence,quest_ai_runner/the_intelligence/__init__.py,The the intelligence container of QAR,quest-self
