@@ -65,7 +65,6 @@ the-consciousness-flow,the_consciousness,quest_ai_runner/the_consciousness/flow.
 the-intelligence-flow,the_intelligence,quest_ai_runner/the_intelligence/flow.py,The composition of Intelligence,the-intelligence
 the-world-flow,the_world,quest_ai_runner/the_world/flow.py,The composition of World,the-world
 the-body-diagram,the_body,quest_ai_runner/the_body/diagram.md,The generated solution diagram of Quest Body,quest-body
+the-consciousness-diagram,the_consciousness,quest_ai_runner/the_consciousness/diagram.md,The generated solution diagram of Quest Consciousness,quest-consciousness
 the-intelligence-diagram,the_intelligence,quest_ai_runner/the_intelligence/diagram.md,The generated solution diagram of Intelligence,the-intelligence
-the-intelligence-objectives-diagram,the_intelligence,quest_ai_runner/the_intelligence/higher_mind/objectives/diagram.md,The generated solution diagram of Quest Intents,quest-intents
-the-intelligence-subconscious-diagram,the_intelligence,quest_ai_runner/the_intelligence/subconscious/diagram.md,The generated solution diagram of Subconscious,the-subconscious
 the-consciousness-ways-in,the_consciousness,quest_ai_runner/the_consciousness/ways_in.py,"The ways a request comes in, handed to one router",quest-requests;take-in-the-world

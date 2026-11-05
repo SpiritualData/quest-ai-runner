@@ -27,4 +27,4 @@ def copy_records(destination: Path) -> None:
             if (folder / name).is_file():
                 shutil.copy2(folder / name, target / name)
     (destination / "esoi.toml").write_text(
-        'package = "x"\nstructure_dir = "esoi"\n[records]\nbeside_code = ["quest_ai_runner", "quest_ai_runner/*"]\n', encoding="utf-8")
+        'package = "x"\nstructure_dir = "esoi"\n[records]\nbeside_code = ["quest_ai_runner", "quest_ai_runner/*", "quest_ai_runner/*/*", "quest_ai_runner/*/*/*", "quest_ai_runner/*/*/*/*"]\n', encoding="utf-8")

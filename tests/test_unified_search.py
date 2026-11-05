@@ -151,7 +151,7 @@ def test_the_tool_sits_beside_find_specs_reads_cards_when_a_source_is_registered
     assert tools_repo_specs.REPO_SPEC_BUILDERS["find_specs"]({}) is not None
     records_only = spec.handler({"request": "a queued task was lost or run twice"}, ToolContext())
     assert records_only.ok and "records only" in records_only.text
-    assert any(i["key"] == "prob-queued-task-falls-through" for i in records_only.data["items"])
+    assert any(i["key"] == "QP1" for i in records_only.data["items"])
     monkeypatch.setattr(tools_repo_specs, "card_views_source", lambda: spec_search.views_from_items(CARDS, kind="card", source="cards"))
     mixed = spec.handler({"request": "rotate the backup encryption keys", "tags": "memory"}, ToolContext())
     assert mixed.ok and "card card:backup-keys:" in mixed.text and "records only" not in mixed.text
@@ -167,7 +167,8 @@ def test_the_tool_sits_beside_find_specs_reads_cards_when_a_source_is_registered
 def test_the_repository_tag_table_is_read_from_the_record_files(spec_repo):
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs
     table = repo_specs.repo_tag_table(spec_repo)
-    assert "specifications" in table.tag_problems and "specifications" in table.solution_tags["context-retriever"]
+    assert table.tag_problems["irreversible"] == ("QP3", "prob-unrequested-or-partial-changes")
+    assert table.solution_tags["quest-change-executor"] == ("irreversible",)
 
 
 def test_two_pipelines_puts_the_injected_cards_then_the_find_specs_records_side_by_side():
