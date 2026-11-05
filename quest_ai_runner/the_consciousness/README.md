@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `quest-consciousness:composition` o
 
 ## How the solutions fit together
 
-Quest Consciousness keeps the assistant aligned with the person it serves and helps their own intents move. Quest Requests takes each request in once, from every Quest surface. Quest Representatives resolves the representative a task is for from what Quest Requests took in. Hand Off A Goal says who a new goal belongs to and whether an AI can carry it. Quest Decision Requests carries a decision only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected. Guide By Feedback shows the corrections that apply on the turns where they matter. Intent Evolution suggests the option most likely to work for their intents.
+Quest Consciousness keeps the assistant aligned with the person it serves and helps their own intents move. Quest Requests takes each request in once, from every Quest surface. Quest Representatives resolves the representative a task is for from what Quest Requests took in. Hand Off A Goal says who a new goal belongs to and whether an AI can carry it. Quest Decision Requests carries a decision only a person can make to the person it belongs to. Feedback Learning keeps what the person corrected. Guide By Feedback shows the corrections that apply on the turns where they matter. Prioritization puts the work that competes for attention in order for the person, with Quest's own rules for quests, asks and goals. Intent Evolution suggests the option most likely to work for their intents.
 
 ## Diagram
 
@@ -35,6 +35,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Intent Evolution (solution with no page of its own, its implementations are in this intent's records): Help each Quest user discover what works for their intents.
 - Hand Off A Goal (solution with no page of its own, its implementations are in this intent's records): Gives a person the verdicts on who a new goal belongs to and whether an AI representative can take it over at a cost and delay that its metric accepts.
 - Guide By Feedback (solution with no page of its own, its implementations are in this intent's records): Help the assistant stop repeating a mistake a person has already corrected, so they only have to say it once.
+- Prioritization (solution with no page of its own, its implementations are in this intent's records)
 - [Feedback Learning](feedback_learning/README.md) (solution with implementations)
 
 ## Solutions at a glance
@@ -47,6 +48,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | none selected | Intent evolution: the most likely option or a checkable experiment |
 | Hand Off A Goal | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Prioritization | `prioritization` | no entry declared | none selected | none yet |
 | Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ## Solutions from a library
@@ -54,6 +56,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Request Intake](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-requests`): Takes in the requests people make from every source Body declares and attaches each to the person who made it, so the rest of the flow can ask for that person's Representative. Specializes the library `hub`.
 - [Representatives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-representatives`): The AI personas that act for a person or a team. Specializes the library `hub`.
 - [Judgment Calls](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`quest-decision-requests`): Decides, for one person, whether to ask, proceed or decline when the Nervous System raises a risk signal. Specializes the library `hub`.
+- [Prioritization](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`prioritization`): Translates a person's priorities, which are sometimes only subtly specified or implied, into ESOI: milestones, metric weights and quality profile weights, and puts the work that competes for attention (tasks, asks, standing-work triggers) in order for that person, with the reason for each place and the priority in the form Metric Translation and the Planner use. Adopted from the library `hub`.
 - [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`feedback-learning`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Adopted from the library `hub`.
 
 ## Problems and ideals
@@ -114,6 +117,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Intent Evolution | `intent-evolution` | none selected | Intent evolution: the most likely option or a checkable experiment |
 | Hand Off A Goal | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
+| Prioritization | `prioritization` | none selected | none yet |
 | Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ### Implementations

@@ -100,6 +100,8 @@
    "nervous-system": "quest_ai_runner",
    "persist-cards": "quest_ai_runner",
    "planner": "quest_ai_runner",
+   "prioritization": "quest_ai_runner",
+   "proactivity": "quest_ai_runner",
    "quest-account-truth": "quest_ai_runner",
    "quest-autopilot": "quest_ai_runner",
    "quest-body": "quest_ai_runner",

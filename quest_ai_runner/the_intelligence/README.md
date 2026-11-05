@@ -8,7 +8,7 @@ This sub-intent arises as the implementation `the-intelligence:composition` of i
 
 ## How the solutions fit together
 
-Intelligence turns one request into a response. Quest Intents says which of the person's quests the request serves and what the work is for. Subconscious prepares what the request needs before it is asked for. Mind thinks the request through step by step. Nervous System watches the run and brings in a person only where only a person can decide. Critical Thinking holds the work to the measure that serves the person's goals, and hands work nobody asked for to Quest Autopilot, which starts it only when the person allows.
+Intelligence turns one request into a response. Quest Intents says which of the person's quests the request serves and what the work is for. Subconscious prepares what the request needs before it is asked for. Mind thinks the request through step by step. Nervous System watches the run and brings in a person only where only a person can decide. Critical Thinking holds the work to the measure that serves the person's goals, and hands work nobody asked for to Quest Autopilot, which starts it only when the person allows. Proactivity says what standing work is due, from the schedule a quest states and the events Quest reports, and Quest Autopilot asks it before it starts anything.
 
 ## Diagram
 
@@ -36,6 +36,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Quest Intents](higher_mind/objectives/README.md) (sub-intent): The AI works from the person's quests.
 - Nervous System (solution with no page of its own, its implementations are in this intent's records)
 - Quest Autopilot (solution with no page of its own, its implementations are in this intent's records): Run Quest work unasked only when the person allows it.
+- Proactivity (solution with no page of its own, its implementations are in this intent's records)
 
 ## Solutions at a glance
 
@@ -47,6 +48,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Nervous System | `nervous-system` | `quest_ai_runner.run("nervous-system", 'delete the old backup folder')` | Digest-driven overseer (`overseer`) | Overseer digest evidence and signal correctness on labelled scenarios |
 | Quest Autopilot | `quest-autopilot` | `quest_ai_runner.run("quest-autopilot", 'quest-id')` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
 | Quest Intents | `quest-intents` | `quest_ai_runner.run("quest-intents", ...)` | Separate stores read at the start of a request (today) (`separate_stores`) | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| Proactivity | `proactivity` | no entry declared | none selected | none yet |
 
 ## Solutions from a library
 
@@ -56,6 +58,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Nervous System](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`nervous-system`): Watches a run and raises at most one small risk signal, with a severity and a reason, when a step cannot be undone or belongs to a person, and leaves ordinary work alone. Adopted from the library `hub`.
 - [Proactivity](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`quest-autopilot`): Says which of the system's standing schedules are due, by calendar period in their own zone, by a requested run or by an event since the last run, so the system acts without being asked. Specializes the library `hub`.
 - [Objectives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`quest-intents`): The live hierarchy of intents and goals across requests. Specializes the library `hub`.
+- [Proactivity](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/README.md) (`proactivity`): Says which of the system's standing schedules are due, by calendar period in their own zone, by a requested run or by an event since the last run, so the system acts without being asked. Adopted from the library `hub`.
 
 ## Problems and ideals
 
@@ -117,6 +120,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Nervous System | `nervous-system` | Digest-driven overseer (`overseer`) | Overseer digest evidence and signal correctness on labelled scenarios |
 | Quest Autopilot | `quest-autopilot` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
 | Quest Intents | `quest-intents` | Separate stores read at the start of a request (today) (`separate_stores`) | Representative long-view carry-through across assigned quests, with nothing outside its branch |
+| Proactivity | `proactivity` | none selected | none yet |
 
 ### Implementations
 

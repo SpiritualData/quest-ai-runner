@@ -3,13 +3,15 @@
 The composition arm ``composition`` takes the Consciousness members as typed seats, built on first use: Quest Requests runs the tasks queued
 for a team, Quest Representatives chooses the representative a task is for, Hand Off A Goal says who a new goal belongs to, Quest Decision
 Requests carries a decision to the person it belongs to, Feedback Learning keeps what the person corrected, Guide By Feedback shows the
-corrections that apply and Intent Evolution suggests what is most likely to work for their intents.
+corrections that apply, Prioritization (the hub's, with Quest's ordering arm) puts the work that competes for attention in order and Intent
+Evolution suggests what is most likely to work for their intents.
 """
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from esoi import Lazy, implementation
+from hubofhubs.api import Prioritizing
 
 from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
 from quest_ai_runner.the_body.hands.quest_operations.interface import GoalHandingOff
@@ -28,9 +30,9 @@ class ConsciousnessFlow:
 
     def __init__(self, queue: Lazy[QueueRunning], reps: Lazy[RepSelecting], handoff: Lazy[GoalHandingOff],
                  decisions: Lazy[EscalationSink], feedback: Lazy[FeedbackKeeping], guidance: Lazy[GuidanceProvider],
-                 evolution: Lazy[IntentEvolving]) -> None:
+                 evolution: Lazy[IntentEvolving], priorities: Lazy[Prioritizing]) -> None:
         self.queue, self.reps, self.handoff, self.decisions = queue, reps, handoff, decisions
-        self.feedback, self.guidance, self.evolution = feedback, guidance, evolution
+        self.feedback, self.guidance, self.evolution, self.priorities = feedback, guidance, evolution, priorities
 
     def take_in(self, team_id: str = "") -> List[str]:
         return self.queue.scan(team_id)
@@ -52,3 +54,6 @@ class ConsciousnessFlow:
 
     def suggest(self, quest: Mapping[str, Any]) -> Mapping[str, Any]:
         return self.evolution.suggest(quest)
+
+    def prioritize(self, person: str = "", request: str = "", candidates: Sequence[Mapping[str, Any]] = (), stated: Any = None, now: str = "") -> Mapping[str, Any]:
+        return self.priorities.prioritize(person=person, request=request, candidates=candidates, stated=stated, now=now)

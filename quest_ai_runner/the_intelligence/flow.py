@@ -2,13 +2,15 @@
 
 The composition arm ``composition`` takes the Intelligence members as typed seats, built on first use: Quest Intents says what the person is
 working toward, Subconscious prepares what the request needs, Mind reasons through the request, Nervous System watches the run, Critical
-Thinking holds the work to its measure and Quest Autopilot says whether standing work may start now.
+Thinking holds the work to its measure, Proactivity (the hub's) says what standing work is due and Quest Autopilot asks it, asks Prioritization
+what matters first among the work waiting and says whether that work may start now.
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, Sequence
 
 from esoi import Lazy, implementation
+from hubofhubs.api import Proactive
 
 from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
 from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import IntentHolding
@@ -24,8 +26,9 @@ class IntelligenceFlow:
     REQUIRES = ()     # the seats it is handed
 
     def __init__(self, intents: Lazy[IntentHolding], recall: Lazy[CardRecall], reasoning: Lazy[StepReasoning],
-                 risk: Lazy[RunWatching], critic: Lazy[MetricHolding], autopilot: Lazy[PassGating]) -> None:
+                 risk: Lazy[RunWatching], critic: Lazy[MetricHolding], autopilot: Lazy[PassGating], proactivity: Lazy[Proactive]) -> None:
         self.intents, self.recall, self.reasoning, self.risk, self.critic, self.autopilot = intents, recall, reasoning, risk, critic, autopilot
+        self.proactivity = proactivity
 
     def hold(self, quest_id: str, message: str = "") -> Mapping[str, Any]:
         return self.intents.hold(quest_id, message)
@@ -44,3 +47,6 @@ class IntelligenceFlow:
 
     def gate(self, quest_id: str, now: str = "") -> Mapping[str, Any]:
         return self.autopilot.gate(quest_id, now)
+
+    def due(self, schedules: Sequence[Mapping[str, Any]], now: str = "", priorities: Optional[Mapping[str, Any]] = None) -> Sequence[Mapping[str, Any]]:
+        return self.proactivity.due(schedules, now, priorities)
