@@ -35,7 +35,7 @@ taken. Reads are real, so the answers use the real data: keep the output log pri
 The arm needs three paths, all outside the repository: `QAR_PROD_LANE_ENV_FILE` (the lane's environment file), `QAR_CONFIG_FILE` (its TOML
 configuration) and optionally `QAR_PROD_LANE_DIR` (the folder the lane runs in). Without them the arm prints SKIPPED and exits 0. The
 model is the configured Claude CLI on the subscription; the arm spends no API credit. `--max-calls` bounds the model calls of the whole run;
-one case stops at 30 model calls or 5 minutes (`QAR_PROD_CASE_MODEL_CALLS`, `QAR_PROD_CASE_SECONDS`). A tool the lane lacks is reported in the log as a lane gap, apart from a model failure.
+one case stops at 45 model calls or 5 minutes (`QAR_PROD_CASE_MODEL_CALLS`, `QAR_PROD_CASE_SECONDS`). A tool the lane lacks is reported in the log as a lane gap, apart from a model failure.
 
 ## One command per deployment
 
@@ -54,7 +54,7 @@ wrapper's command in the sheet's HOW TO RUN column), and `docs/how-to/public-hyg
 - **Messages in order.** Every assistant message of the turn (interim, progress, final) is kept with its time. A case that acts is judged on
   two roles, not wording: message 1 states the current status and what is being done, message 2 reports what was done, the new state and the
   metric before and after. A reply-only case is judged as one message.
-- **Tokens, model calls, lane gaps, the account acted as.** A plain read-and-answer turn on this path took 16 to 32 model calls.
+- **Tokens, model calls, lane gaps, the account acted as.** A plain read-and-answer turn on this path took 16 to 32 model calls, about half of them the context engine (query generation, review and card filtering, run again for each overseer consultation).
 
 ## Judging a blocked write
 

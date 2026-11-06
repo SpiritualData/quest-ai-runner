@@ -123,6 +123,11 @@ def _bootstrap_if_needed(
     cards do not already cover or that changed. While the backend is unreachable it indexes nothing.
     """
 
+    from quest_ai_runner.the_world.tools import dry_run_writes
+    if dry_run_writes.active():     # QAR_DRY_RUN_WRITES: whatever the refresh builds could not be stored, so it spends no model calls
+        _log.info("context index: refresh skipped in a dry run (nothing it builds could be stored)")
+        return
+
     def _tell(msg: str) -> None:
         """Emit msg to the notify callback when set, else to the log."""
         if notify is not None:

@@ -15,6 +15,7 @@ from hubofhubs.api import (
     EVENT_CARD_THREAD, EVENT_DECISION, EVENT_DONE, EVENT_EXPLANATION, EVENT_MODE_SIGNAL, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_RESULT,
     EVENT_TOKENS, Mode)
 from hubofhubs.api import ProgressEvent
+from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
@@ -204,7 +205,7 @@ class RunLoopMixin:
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later
             # invalidates. Without this the card would pin nothing and never go stale.
-            if self.context_assembler is not None:
+            if self.context_assembler is not None and not dry_run_writes.active():   # a dry run stores nothing, so it does not spend model calls learning
                 try:
                     used_files: List[str] = []
                     _seen = set()

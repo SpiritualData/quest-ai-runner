@@ -7,7 +7,7 @@ call. Set, one process runs the unchanged production code path (config, context,
   so nothing reaches Quest and nothing can read as done;
 * a tool whose spec says it ``mutates`` is not run (``tool_call``): the call and its arguments are recorded and the tool reports "Blocked in
   test mode", so a reply cannot claim the action was made;
-* the deep worker is replaced by a stub (``DryDeepRunner``) that records the brief it would have been given and reports that the run was not started (blocked in test mode);
+* the deep worker is replaced by a stub (``DryDeepRunner``) that records the brief it would have been given and reports that the run did not start (blocked in test mode, a failed run with nothing left to try, so the brain keeps the answer it already has when the run was its own escalation);
 * every other way out of the process is closed by ``install``: an HTTP request whose method is not GET, HEAD or OPTIONS is refused unless
   it is on the explicit read-only list below, a file opened for writing is redirected to a scratch copy, a file removal or rename is
   refused, and a subprocess is refused unless it is the model CLI answering with no tools.
@@ -28,7 +28,9 @@ import io
 import os
 import re
 import tempfile
+import logging
 import threading
+import time
 import urllib.parse
 from collections import Counter
 from pathlib import Path
@@ -77,10 +79,13 @@ class Recorder:
         self.briefs: List[Dict[str, Any]] = []
         self.missing_tools: List[str] = []
         self.done: List[str] = []
+        self.model_log: List[Dict[str, Any]] = []
+        self.skipped_housekeeping = 0
 
     def clear(self) -> None:
         with self.lock:
             self.writes, self.reads, self.model_calls, self.briefs, self.missing_tools, self.done = [], Counter(), 0, [], [], []
+            self.model_log, self.skipped_housekeeping = [], 0
 
     def missing_tool(self, name: str) -> None:
         """The model asked for a tool this deployment does not have: a gap in the lane, reported apart from a model failure."""
@@ -101,9 +106,16 @@ class Recorder:
         with self.lock:
             self.reads[name] += 1
 
-    def model_call(self) -> None:
+    def model_call(self, label: str = "") -> None:
+        """One allowed model process, with what it was for (the start of its system prompt) so a count can be broken down by purpose."""
         with self.lock:
             self.model_calls += 1
+            self.model_log.append({"t": time.time(), "label": label})
+
+    def skipped(self, what: str) -> None:
+        """A housekeeping write the guard stopped, counted once here instead of reported where the caller logged its failure."""
+        with self.lock:
+            self.skipped_housekeeping += 1
 
     def lines(self, internal: bool = False) -> List[str]:
         """The ``would have done`` lines of the writes a request caused (``internal=True``: the runner's own bookkeeping instead)."""
@@ -113,7 +125,8 @@ class Recorder:
     def snapshot(self) -> Dict[str, Any]:
         with self.lock:
             return {"writes": list(self.writes), "reads": dict(self.reads), "model_calls": self.model_calls,
-                    "briefs": list(self.briefs), "missing_tools": list(self.missing_tools), "performed": list(self.done)}
+                    "briefs": list(self.briefs), "missing_tools": list(self.missing_tools), "performed": list(self.done),
+                    "model_log": list(self.model_log), "skipped_housekeeping": self.skipped_housekeeping}
 
 
 RECORDER = Recorder()
@@ -236,7 +249,8 @@ class DryDeepRunner:
         RECORDER.write("deep run", f"goal: {summarize(goal, 300)}", model=model, brief_chars=len(brief or ""))
         with RECORDER.lock:
             RECORDER.briefs.append({"goal": goal, "brief": brief, "model": model})
-        return DeepResult(met=True, deferred=True, output="Blocked in test mode: the background run was not started and nothing was changed.")
+        return DeepResult(met=False, exhausted=True, error="blocked_in_test_mode",
+                          output="Blocked in test mode: the background run was not started and nothing was changed.")
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("__") or name == "real":
@@ -307,10 +321,36 @@ def check_process(argv: Any) -> None:
         harmless = parts[-1] in ("--help", "--version")
         if (no_tools or harmless) and not any(flag in parts for flag in MODEL_CLI_FORBIDDEN):
             if not harmless:
-                RECORDER.model_call()
+                prompt = next((parts[i + 1] for i, a in enumerate(parts[:-1]) if a in ("--system-prompt", "--append-system-prompt")), "")
+                RECORDER.model_call(f"{caller_label()} | {' '.join(prompt.split())[:50]}")
             return
     RECORDER.write("process", summarize(" ".join(parts), 200))
     raise DryRunBlocked(f"dry run: process {summarize(' '.join(parts), 80)} was not started")
+
+
+PLUMBING = ("vendor_model_caller", "dry_run_writes", "model_registry", "model_tier", "subprocess.py", "threading.py", "provider", "multi_")
+
+
+def caller_label(depth: int = 3) -> str:
+    """The first ``depth`` functions of the call stack that are not model plumbing, as ``module.function``: what asked for a model call."""
+    import sys
+    frame, found = sys._getframe(2), []
+    while frame is not None and len(found) < depth:
+        path = frame.f_code.co_filename
+        if not any(mark in path for mark in PLUMBING) and ("quest_ai_runner" in path or "hubofhubs" in path):
+            found.append(f"{Path(path).stem}.{frame.f_code.co_name}")
+        frame = frame.f_back
+    return " < ".join(found) or "unknown"
+
+
+def chain_has_block(error: Optional[BaseException]) -> bool:
+    """True when ``error`` or anything it was raised from or while handling is a ``DryRunBlocked``."""
+    seen = 0
+    while error is not None and seen < 12:
+        if isinstance(error, DryRunBlocked):
+            return True
+        error, seen = error.__cause__ or error.__context__, seen + 1
+    return False
 
 
 def install(environ: Optional[Mapping[str, str]] = None) -> bool:
@@ -350,7 +390,7 @@ def install(environ: Optional[Mapping[str, str]] = None) -> bool:
             if paths and all(writable_here(p) for p in paths):
                 return real(*args, **kwargs)
             RECORDER.write("file", f"{name} {' '.join(str(p) for p in paths)}", internal=True)
-            raise DryRunBlocked(f"dry run: os.{name} was not done")
+            return None                    # the runner's own housekeeping outside the scratch folder: skipped quietly, counted once
         setattr(os, name, guarded)
     for name in ("remove", "unlink", "rename", "replace", "rmdir", "mkdir", "removedirs"):
         refuse_path_change(name)
@@ -359,7 +399,7 @@ def install(environ: Optional[Mapping[str, str]] = None) -> bool:
         if writable_here(Path(os.fspath(path)).absolute()):
             return shutil_rmtree(path, *args, **kwargs)
         RECORDER.write("file", f"rmtree {path}", internal=True)
-        raise DryRunBlocked("dry run: rmtree was not done")
+        return None
     shutil.rmtree = rmtree_guard
 
     opener_open = originals["opener"] = urllib.request.OpenerDirector.open
@@ -395,6 +435,14 @@ def install(environ: Optional[Mapping[str, str]] = None) -> bool:
     except ImportError:
         pass
 
+    log_handle = originals["log_handle"] = logging.Logger.handle
+    def quiet_handle(self, record):
+        if record.exc_info and chain_has_block(record.exc_info[1]) or "DryRunBlocked" in str(record.msg) + " ".join(map(str, record.args or ())):
+            RECORDER.skipped("housekeeping write skipped")
+            return None
+        return log_handle(self, record)
+    logging.Logger.handle = quiet_handle
+
     popen_init = originals["popen"] = subprocess.Popen.__init__
     def popen_guard(self, args, *rest, **kwargs):
         check_process(args)
@@ -419,6 +467,7 @@ def uninstall() -> None:
     urllib.request.OpenerDirector.open = originals["opener"]
     http.client.HTTPConnection.request = originals["conn"]
     subprocess.Popen.__init__ = originals["popen"]
+    logging.Logger.handle = originals["log_handle"]
     try:
         import httpx
         httpx.Client.send, httpx.AsyncClient.send = originals["httpx.Client"], originals["httpx.AsyncClient"]

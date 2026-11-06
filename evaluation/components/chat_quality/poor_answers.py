@@ -7,7 +7,7 @@ fails. Nothing from the data is copied here: the digest of the cases records the
 into the untracked ``datasets/case_sources.local.json`` (only when a file is present) before the case files are hashed, so a row recorded with the set and a row recorded without it never compare.
 
 A private case runs through the same chat arm as every other case (a fresh conversation, no quest pinned) and is judged by the same judge. Its
-rubric is built from the case's own ``failure_kind`` and ``ideal_handling``: generic checks that the dev eval world can satisfy (the world holds no
+rubric is the case's own ``pass_criteria`` when it lists them, else built from its ``failure_kind`` and ``ideal_handling``: generic checks that the dev eval world can satisfy (the world holds no
 data of the organization the request came from), so a case passes by honest, correctly routed, non-fabricating handling, never by facts the world
 lacks. The ideal handling and what went wrong go to the judge as ``evidence_notes``.
 
@@ -81,7 +81,8 @@ def case_of(raw):
              "non-fabricating handling that follows the shape of the ideal, never by facts the world lacks."]
     return dict(id=str(case_id), dataset="implicit", source=SOURCE, private=True, area=f"poor answers: {kind}", category=kind,
                 capability=str(raw.get("capability_tested") or ""), message=text, conversation_scope="none", expected_routing="any",
-                rubric=[item.format(kind=kind) for item in GENERIC_RUBRIC], forbid_writes=False, pivots_change_answer=False,
+                rubric=[str(item) for item in raw["pass_criteria"]] if isinstance(raw.get("pass_criteria"), list) and raw["pass_criteria"]
+                else [item.format(kind=kind) for item in GENERIC_RUBRIC],     # the case's own criteria when it states them forbid_writes=False, pivots_change_answer=False,
                 precheck={"reply_regex": [r"\S"]}, evidence_notes=" ".join(notes),
                 **{key: raw[key] for key in ("effect", "state_check", "metric_probe", "increment", "increment_kind", "group", "cue_resolves_to") if raw.get(key)})   # optional: the writes the case allows on the bounded production arm and how to count its effect
 

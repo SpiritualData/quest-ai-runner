@@ -12,11 +12,12 @@ line, and ``environment`` = ``production (writes blocked)``. A write the ideal h
 is told that the changes listed are attempts that were blocked, not failures to act.
 
 PAID in subscription calls (``claude -p``), no API dollars. ``--max-calls`` bounds the model calls of the whole run; one case stops at
-``CASE_MODEL_CALL_CAP`` model calls (default 30, ``QAR_PROD_CASE_MODEL_CALLS``; a plain read-and-answer turn on this path measured 16 to 32) or ``CASE_SECONDS_CAP`` seconds (default 300, ``QAR_PROD_CASE_SECONDS``).
+``CASE_MODEL_CALL_CAP`` model calls (default 45, ``QAR_PROD_CASE_MODEL_CALLS``; a plain read-and-answer turn on this path measured 16 to 32, of which about half is the context engine) or ``CASE_SECONDS_CAP`` seconds (default 300, ``QAR_PROD_CASE_SECONDS``).
 A tool the lane lacks is listed in ``lane_gaps`` and judged apart from the model; a blocked write is never a failure by itself."""
 PAID = True
 import os
 import sys
+from collections import Counter
 import tempfile
 import time
 import uuid
@@ -27,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 ENVIRONMENT = "production (writes blocked)"
 ENVIRONMENT_BOUNDED = "production (bounded writes)"
-CASE_MODEL_CALL_CAP = int(os.environ.get("QAR_PROD_CASE_MODEL_CALLS") or 30)
+CASE_MODEL_CALL_CAP = int(os.environ.get("QAR_PROD_CASE_MODEL_CALLS") or 45)
 CASE_SECONDS_CAP = int(os.environ.get("QAR_PROD_CASE_SECONDS") or 300)
 BLOCKED_NOTE = ("Environment: production with every write blocked. A line under the changes headed 'would have done' is a write the "
                 "assistant attempted for the request (the runner's own memory writes are left out) and was stopped from making; it counts as the assistant having acted, so judge whether acting was "
@@ -129,6 +130,17 @@ def build_arm(meter, bounded):
           f"per-case caps {CASE_MODEL_CALL_CAP} model calls / {CASE_SECONDS_CAP}s, run budget "
           f"{meter.max_calls if meter.max_calls is not None else 'none'}")
 
+    assemblies = Counter()          # how often the turn asked the context assembler, and from where
+    assembler = getattr(session._orch, "context_assembler", None)
+    if assembler is not None and hasattr(assembler, "assemble"):
+        assemble_real = assembler.assemble
+
+        def counted_assemble(*args, **kwargs):
+            assemblies[dry.caller_label(2)] += 1
+            return assemble_real(*args, **kwargs)
+        assembler.assemble = counted_assemble
+    startup = {"calls": len(dry.RECORDER.snapshot()["model_log"])}      # model processes the build and its background work started before any turn
+
     def converse(case):
         if meter.max_calls is not None and meter.calls >= meter.max_calls:
             from common import BudgetExceeded
@@ -136,7 +148,9 @@ def build_arm(meter, bounded):
         case = P.with_rules(case, rules)
         record = {"id": case["id"], "dataset": case.get("dataset"), "area": case.get("area"), "environment": environment}
         message = case.get("message") or (case.get("messages") or [""])[0]
+        record["startup_calls"], startup["calls"] = startup["calls"], 0
         dry.RECORDER.clear()
+        assemblies.clear()
         effect, check = P.structured(case.get("effect")), P.structured(case.get("state_check"))
         allow = effect.get("allow") if (bounded and effect) else None
         dry.set_allowances(allow or [], harness_paths)
@@ -231,14 +245,19 @@ def build_arm(meter, bounded):
         types = [f.get("type") for f in frames]
         record.update(
             seconds=round(time.time() - started, 1), model_calls=run_calls if "run_calls" in locals() else snap["model_calls"],
+            calls_by_purpose=dict(Counter(m["label"] for m in snap["model_log"][:(run_calls if "run_calls" in locals() else len(snap["model_log"]))])),
+            housekeeping_skipped=snap["skipped_housekeeping"], context_assemblies=dict(assemblies),
             judge_calls=snap["model_calls"] - (run_calls if "run_calls" in locals() else snap["model_calls"]), performed=snap["performed"], state=record.get("state"), reads=snap["reads"], writes=[w for w in snap["writes"] if not w.get("internal")],
             bookkeeping=sum(1 for w in snap["writes"] if w.get("internal")),
             tokens_in=getattr(final, "tokens_in", 0) or 0, tokens_out=getattr(final, "tokens_out", 0) or 0, lane_gaps=sorted(set(snap["missing_tools"])),
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error")}
-        meter.record(record["model_calls"])
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error", "calls_by_purpose", "housekeeping_skipped", "startup_calls", "context_assemblies")}
+        try:
+            meter.record(record["model_calls"])
+        except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check
+            record["budget_exceeded"] = str(e)
         meter.tokens_in += record["tokens_in"]
         meter.tokens_out += record["tokens_out"]
         return record

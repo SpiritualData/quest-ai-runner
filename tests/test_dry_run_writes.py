@@ -86,8 +86,7 @@ def test_file_writes_go_to_a_scratch_copy(on, tmp_path):
         handle.write("x")
     assert not os.path.exists(outside)
     assert dry.RECORDER.writes[0]["kind"] == "file"
-    with pytest.raises(dry.DryRunBlocked):
-        os.remove(outside)
+    assert os.remove(outside) is None and dry.RECORDER.writes[-1]["internal"] is True       # housekeeping outside scratch: skipped quietly
     scratch_file = tmp_path / "scratch" / "ok.txt"
     scratch_file.parent.mkdir(parents=True, exist_ok=True)
     scratch_file.write_text("fine")
@@ -116,7 +115,7 @@ def test_the_deep_run_is_stubbed(on):
             raise AssertionError("the real worker must not run")
     stub = dry.wrap_deep(Real())
     result = stub.run_goal(goal="g", brief="the brief")
-    assert result.met and result.deferred
+    assert not result.met and result.exhausted and "Blocked in test mode" in result.output
     assert dry.RECORDER.writes[0]["kind"] == "deep run" and dry.RECORDER.briefs[0]["brief"] == "the brief"
     assert set(dry.wrap_deep({"a": Real()})) == {"a"}
 
@@ -142,3 +141,22 @@ def test_a_bounded_run_makes_only_the_allowed_write_for_real(on):
         assert len(dry.RECORDER.snapshot()["performed"]) == 3
     finally:
         dry.set_allowances([])
+
+
+def test_a_blocked_housekeeping_write_logged_by_its_caller_makes_no_noise(on, caplog):
+    import logging
+    log = logging.getLogger("dry-run-test")
+    with caplog.at_level(logging.INFO):
+        try:
+            raise dry.DryRunBlocked("dry run: PUT x was not sent")
+        except dry.DryRunBlocked:
+            log.exception("card cache: could not write listing.json")
+        log.warning("Quest card backend PUT /api/cards/a failed: DryRunBlocked: dry run")
+        log.warning("an ordinary warning")
+    assert [r.getMessage() for r in caplog.records] == ["an ordinary warning"]
+    assert dry.RECORDER.snapshot()["skipped_housekeeping"] == 2
+
+
+def test_model_calls_are_labelled_by_the_start_of_their_system_prompt(on):
+    dry.check_process(["claude", "-p", "--system-prompt", "You plan the next step.  Choose one.", "--tools", ""])
+    assert dry.RECORDER.snapshot()["model_log"][0]["label"].endswith("| You plan the next step. Choose one.")
