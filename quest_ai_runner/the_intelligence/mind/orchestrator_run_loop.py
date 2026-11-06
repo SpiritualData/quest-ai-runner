@@ -618,19 +618,28 @@ class RunLoopMixin:
                     rs.plan.tool_calls = []
 
             # --- RECORDS GATE: an answer the planner says rests on the person's records is not written before any record was read ------
-            # ``needs_records`` (or the ``support`` reply shape, which is always about the person's own progress) is the planner's structured self-report that the reply depends on what the person's notes, logs or
-            # collections hold beyond what CONTEXT shows. When it answers anyway with nothing read this turn (no read, no tool result),
-            # the code hands it back once with a note, so the next planning step reads before answering. Once a turn, inside the step budget.
+            # ``needs_records`` (or the ``support`` reply shape, which is always about the person's own progress) is the planner's structured
+            # self-report that the reply depends on what the person's notes, logs or collections hold beyond what CONTEXT shows. When it
+            # answers anyway with nothing read this turn (no read, no tool result), the code hands it back once with a note. A planner that
+            # answers a second time still having read nothing is not asked again: the code reads the entries of the collections the context
+            # names (their ids come from the assembled context, not from any model text), up to the per-step read cap. Inside the step budget.
             if (rs.plan and rs.plan.action == "answer" and (getattr(rs.plan, "needs_records", False) or rs.plan.reply_shape == "support")
-                    and not getattr(rs, "records_gate_done", False)
+                    and getattr(rs, "records_gate_runs", 0) < 2
                     and message_is_user_turn and not getattr(rs, "no_attachment", False) and not executed_reads
                     and not any(str(g.get("locator") or "").startswith("tool:") for g in gathered if isinstance(g, dict))
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
-                rs.records_gate_done = True
-                log.info("Records gate: the planner says the reply rests on the person's records and none was read; planning again.")
-                gathered.append(planner_note_observation(RECORDS_NOT_READ_NOTE, "records_not_read"))
-                emit.status("Reading your records before answering…")
-                continue
+                rs.records_gate_runs = getattr(rs, "records_gate_runs", 0) + 1
+                if rs.records_gate_runs == 1:
+                    log.info("Records gate: the planner says the reply rests on the person's records and none was read; planning again.")
+                    gathered.append(planner_note_observation(RECORDS_NOT_READ_NOTE, "records_not_read"))
+                    emit.status("Reading your records before answering…")
+                    continue
+                owed = list(cfg.owed_record_reads(rs.context_view or ""))[: cfg.max_reads_per_step] if cfg.owed_record_reads else []
+                if owed:
+                    log.info("Records gate: still nothing read; the code reads %d record source(s) the context names.", len(owed))
+                    rs.plan.action = "read"
+                    rs.plan.reads = owed
+                    emit.status("Reading your records before answering…")
 
             # --- STRUCTURAL SUFFICIENCY GATE: never answer ABOUT a summary you never opened ------
             # The prose SUFFICIENCY gate in the planner prompt asks the model to check, before

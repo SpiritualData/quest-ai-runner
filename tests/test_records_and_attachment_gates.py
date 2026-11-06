@@ -80,3 +80,26 @@ def test_a_support_reply_is_sent_back_to_read_the_records_even_when_needs_record
     provider = StubProvider([answer(reply_shape="support"), READ, answer(reply_shape="support")])
     orch(provider, retrieval).run("I missed another run and want to quit.")
     assert retrieval.read_calls == ["log/entries.md"]
+
+
+class QueryRetrieval(StubRetrieval):
+    def __init__(self):
+        super().__init__(FILES)
+        self.queries = []
+
+    def query(self, spec):
+        from hubofhubs.api import Observation
+        self.queries.append(spec)
+        return Observation(kind="query", locator="operation(get_collection_entries)", text="GROUNDING Run Log: the knee hurt at km 6")
+
+
+def test_a_planner_that_answers_twice_without_reading_gets_the_context_named_records_read_by_the_code():
+    retrieval = QueryRetrieval()
+    provider = StubProvider([answer(needs_records=True)] * 2 + [answer()])
+    config = OrchestratorConfig()
+    config.overseer = False
+    config.owed_record_reads = lambda context: [{"query": {"operation": "get_collection_entries", "args": {"collection_id": c}}}
+                                                for c in ("coll_a1", "coll_b2") if c in context]
+    res = Orchestrator(retrieval=retrieval, provider=provider, registry=ModelRegistry(provider), config=config).run(
+        "I missed another run.", context_view="Linked: Run Log (coll_a1), Other (coll_zz)")
+    assert [q["query"]["args"]["collection_id"] for q in retrieval.queries] == ["coll_a1"] and res.kind == "answer"

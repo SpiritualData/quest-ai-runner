@@ -4,7 +4,7 @@ Split out of ``orchestrator.py`` by definition; ``orchestrator`` re-exports ever
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import DEFAULT_DIFFICULTY_MODELS
@@ -25,6 +25,10 @@ class OrchestratorConfig:
     max_elapsed_seconds: float = DEFAULT_MAX_ELAPSED_SECONDS
     max_gathered_chars: int = DEFAULT_MAX_GATHERED_CHARS
     max_reads_per_step: int = DEFAULT_MAX_READS_PER_STEP
+    # RECORDS GATE (second stage). The consumer's way of turning the assembled context into read specs for the record sources it names (the ids of
+    # the logs and collections the context lists, in the consumer's own read-spec shape). Called only when the planner twice answered
+    # an answer it reported as resting on the person's records without reading any this turn; None (the default) leaves the gate at its note.
+    owed_record_reads: Optional[Callable[[str], List[Dict[str, Any]]]] = None
     max_parallel: int = DEFAULT_MAX_PARALLEL
     max_subquestions: int = DEFAULT_MAX_SUBQUESTIONS
     max_deep_subtasks: int = DEFAULT_MAX_DEEP_SUBTASKS
