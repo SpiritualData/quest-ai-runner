@@ -15,8 +15,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 PRODUCT = REPO.parents[1]
-DEV_ENV_FILE = Path(os.environ.get("QUAL_DEV_ENV_FILE")
-                    or PRODUCT / "setup" / "sd-dev-runner" / ".env")
+# The default is the hermetic eval identity's own env file, never the dev lane's (that key is a real person's
+# account: a world built, torn down or card-swept there touches their data). The wrapper's variable is honoured too.
+DEV_ENV_FILE = Path(os.environ.get("QUAL_DEV_ENV_FILE") or os.environ.get("QAR_EVAL_DEV_ENV_FILE")
+                    or PRODUCT / "setup" / "sd-dev-runner" / "eval-account.env")
 
 DEV_ENV = {}
 # No env file is fine for everything that never reaches a backend (the offline validity arm, dataset validation);
