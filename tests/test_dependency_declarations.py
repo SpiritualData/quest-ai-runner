@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 # Import name -> distribution name, for every library the hub is allowed to import. A new library must be added here AND declared.
 DISTRIBUTION = {"anthropic": "anthropic", "google": "google-genai", "openai": "openai", "httpx": "httpx", "mcp": "mcp",
                 "filelock": "filelock", "pypdf": "pypdf", "trafilatura": "trafilatura", "esoi": "esoi",
-                "qdrant_client": "qdrant-client", "fastembed": "fastembed", "voyageai": "voyageai", "bm25s": "bm25s"}
+                "qdrant_client": "qdrant-client", "fastembed": "fastembed", "voyageai": "voyageai", "bm25s": "bm25s",
+                "Stemmer": "pystemmer", "numpy": "numpy", "sklearn": "scikit-learn", "acp": "agent-client-protocol",
+                "graphify": "graphifyy", "networkx": "networkx"}
 # Pulled by the hub's own extras named in QAR's core dependency line (locks, web) and by esoi's line.
 THROUGH_CORE = {"filelock", "httpx", "esoi"}
 
@@ -22,6 +24,8 @@ THROUGH_CORE = {"filelock", "httpx", "esoi"}
 def imported_third_party(package_dir: Path) -> set:
     found = set()
     for path in package_dir.rglob("*.py"):
+        if "tests" in path.relative_to(package_dir).parts:
+            continue   # the hub's tests sit beside its code and are not shipped, so their libraries are not install requirements
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.Import):
                 found.update(alias.name.split(".")[0] for alias in node.names)

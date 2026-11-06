@@ -103,6 +103,12 @@ all = [
     "voyageai",      # the hub's Voyage AI embedder factory
     "mcp==2.0.0",
     "trafilatura",   # the hub's page extraction (optional there: without it page text degrades)
+    "PyStemmer>=3.0",              # the hub's BM25 content store
+    "numpy>=1.26",                 # the hub's dense and latent-semantic context retrievers
+    "scikit-learn>=1.4",           # the hub's latent-semantic index and learned reranker
+    "agent-client-protocol>=0.4",  # the hub's Agent Client Protocol deep runner
+    "graphifyy==0.9.102",          # the hub's code-only card extraction (cards-from-files)
+    "networkx",                    # imported by the hub's graph-based arms
 ]
 # esoi (a core dependency, pinned above) also checks esoi/ and runs and records the evaluation components
 # (`esoi check`, `esoi run`, `esoi hygiene`), so dev and test need nothing more of it.

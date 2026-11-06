@@ -1,8 +1,13 @@
 """QAR registers its card repository with the hub at import and assembles it through the hub (offline, no model call)."""
+import csv
+from pathlib import Path
+
 import hubofhubs
 from hubofhubs.api import Card
 
 import quest_ai_runner.the_self.assembler.hub as qar_hub
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class DictRepository:
@@ -68,7 +73,8 @@ def test_the_card_store_override_comes_from_qars_records_and_cites_its_own_ids()
     one = qar_hub.child().overrides()
     card = next(o for o in one if o.solution_id == qar_hub.CARD_STORE)
     assert card.parent_default == "local_card_store" and card.chosen == "quest-api-cards" and card.justified
-    assert "prob-context-drifts-from-its-source" in card.reasons
+    cited = next(r["reason_ids"] for r in csv.DictReader((ROOT / "esoi" / "overrides.csv").open()) if r["solution_id"] == qar_hub.CARD_STORE)
+    assert cited and all(reason_id in card.reasons for reason_id in cited.split(";")), "the override cites the ids of QAR's own overrides record"
     assert all(o.justified for o in one)
 
 
