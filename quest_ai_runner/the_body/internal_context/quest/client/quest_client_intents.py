@@ -83,14 +83,22 @@ class IntentsMixin:
         return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/refresh",
                                   {"reason": reason, "force": bool(force)})
 
+    def create_spec_record(self, subject_type: str, subject_id: str, record_type: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """POST /api/intents/specs/{subjectType}/{subjectId}/records: one new record (problem, ideal, solution, implementation or metric) of
+        the specification. The server answers 403 when the quest's autopilot is off, and a record the AI writes stays the AI's."""
+        return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/records", {"type": record_type, "fields": fields})
+
     def edit_spec_record(self, record_id: str, fields: Dict[str, Any], expected_revision: int,
-                         *, status: Optional[str] = None) -> Dict[str, Any]:
-        """PATCH /api/intents/records/{recordId}. A field the person edited answers 409 FIELD_LOCKED."""
+                         *, status: Optional[str] = None, milestone_entries: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """PATCH /api/intents/records/{recordId}. A field the person edited answers 409 FIELD_LOCKED. ``milestone_entries`` (a solution only)
+        replaces the structured milestones with the whole list given."""
         body: Dict[str, Any] = {"expectedRevision": int(expected_revision)}
         if fields:
             body["fields"] = fields
         if status:
             body["status"] = status
+        if milestone_entries is not None:
+            body["milestoneEntries"] = milestone_entries
         return self.intent_write("PATCH", f"/api/intents/records/{record_id}", body)
 
     def place_quest(self, quest_id: str, intent_id: Optional[str], *, implementation_id: Optional[str] = None,

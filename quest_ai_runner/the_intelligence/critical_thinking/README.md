@@ -23,7 +23,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| ESOI Application | `esoi-application` | `quest_ai_runner.run("esoi-application", 'Tidy the card store')` | Slice before and write-back after (`slice-and-writeback`) | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed, Principle-following pass rate under standing instructions |
+| ESOI Application | `esoi-application` | `quest_ai_runner.run("esoi-application", {'change': {}})` | Slice before and write-back after (`slice-and-writeback`) | First-pass acceptance and exploration before the first edit, Runs that leave a durable, attributed record of what they changed, Principle-following pass rate under standing instructions |
 | Metric Translation | `metric-translation` | `quest_ai_runner.run("metric-translation", ...)` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
 | Goal Completion | `goal-completion` | `quest_ai_runner.run("goal-completion", ...)` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
 | Response Quality | `response-quality` | `quest_ai_runner.run("response-quality", 'See https://example.org/a for details.')` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
@@ -87,6 +87,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Chat-completion baseline without instructions | `esoi-application:plain` | [evaluation/components/esoi_behavior/impls/plain.py](../../../evaluation/components/esoi_behavior/impls/plain.py) |  |
 | Rubric-based model judge | `response-quality:model_judge` | [evaluation/components/esoi_judge/impls/model_judge.py](../../../evaluation/components/esoi_judge/impls/model_judge.py) |  |
 | Regex-check floor | `response-quality:regex_only` | [evaluation/components/esoi_judge/impls/regex_only.py](../../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
+| Edit a quest's specification in Quest | `esoi-application:quest_spec_records` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/quest_spec_edit.py](esoi_application/quest_spec_edit.py) |  |
 
 ### Metrics
 

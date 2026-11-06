@@ -274,6 +274,7 @@
   },
   "modules": {
    "generic-doctrine": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
+   "quest_spec_records": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit",
    "slice-and-writeback": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
    "slice-only": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration"
   }

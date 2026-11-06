@@ -27,7 +27,7 @@ An arm is only what the goal loop hands the ``esoi.iteration.MetricIteration`` i
 """
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from esoi import implementation, solution
 from esoi import MetricMeter, meters_from_names
@@ -48,6 +48,13 @@ class DoctrineOnly:
 
     def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
         return self.source.slice_for(request, working_dir) if self.source is not None else None
+
+    def apply(self, change: Mapping[str, Any]) -> Mapping[str, Any]:
+        """The solution's entry is applying a proposed edit to the ESOI records; an arm that only iterates a deep goal keeps no records and says so."""
+        return {"applied": False, "reason": "this arm iterates a deep goal by the specification slice and holds no records; select the 'quest_spec_records' arm to edit a quest's specification"}
+
+    def read(self, subject: str = "") -> Mapping[str, Mapping[str, Mapping[str, Any]]]:
+        return {}
 
 
 @implementation("esoi-application", "slice-only")

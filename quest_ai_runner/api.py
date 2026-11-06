@@ -28,6 +28,9 @@ from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import 
     KIND_QUESTION, KIND_REQUEST, KIND_STANDING, KIND_UNKNOWN, NEEDS_REAPPLYING, NOTED, OPEN, OPEN_STATES, PARTIALLY_APPLIED, SUPERSEDED,
     guidance_writer_for, open_items_block, record_run_account)
 
+# ESOI Application (esoi-application): the name of the arm that edits a quest's own specification through Quest (a host selects it with ``arms`` and passes its Quest client in ``options``)
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit import QUEST_SPEC_RECORDS
+
 # Quest account access (the_body/internal_context/quest): the Quest API as the system's own data
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestApiError
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import DECISION_KIND_RE
@@ -180,6 +183,7 @@ __all__ = [
     "Prediction",
     "PrivateLinkWebResearch",
     "QUEST_DATA_WRITE_SURFACE_INSTRUCTION",
+    "QUEST_SPEC_RECORDS",
     "QdrantCardRepository",
     "QdrantCardVectorStore",
     "QdrantVectorStore",

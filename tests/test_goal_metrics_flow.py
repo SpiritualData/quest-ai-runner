@@ -426,9 +426,9 @@ def test_a_run_that_never_started_is_not_measured_after(world, repo):
 
 # -- selection through resolve -------------------------------------------------------------------------
 
-def test_the_three_arms_are_declared_and_the_runners_own_measuring_is_selected():
+def test_the_deep_run_arms_and_the_quest_specification_arm_are_declared_and_the_runners_own_measuring_is_selected():
     assert default_name("esoi-application") == "slice-and-writeback"
-    assert names("esoi-application") == ["generic-doctrine", "slice-and-writeback", "slice-only"]
+    assert names("esoi-application") == ["generic-doctrine", "quest_spec_records", "slice-and-writeback", "slice-only"]
     assert resolve("esoi-application") is SliceAndWriteback
     assert resolve("esoi-application", "slice-only") is SliceOnly
     assert resolve("esoi-application", "generic-doctrine") is DoctrineOnly
