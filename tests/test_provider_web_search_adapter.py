@@ -118,3 +118,10 @@ def test_answer_only_result_still_surfaces_in_grep():
     obs = ProviderWebSearchAdapter(prov, model="m").grep("something")
     assert obs.kind == "grep"
     assert obs.hits and "Just an answer" in obs.hits[0]["line"]
+
+
+def test_search_returns_the_providers_hits_as_a_search_response():
+    adapter = ProviderWebSearchAdapter(StubWebProvider(), model="m")
+    response = adapter.search("portland marathon", max_results=2)
+    assert [hit.url for hit in response.hits] == ["https://www.portlandmarathon.com/", "https://www.runguides.com/portland"]
+    assert "Portland Marathon" in response.answer

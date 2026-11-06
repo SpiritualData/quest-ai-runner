@@ -17,10 +17,14 @@ class ContextChoosing(typing.Protocol):
 
 @solution("context-retriever", kind="event", entry="assemble", example="What should I work on first this week?")
 @typing.runtime_checkable
-class ContextSelecting(ContextAssembler, typing.Protocol):
+class ContextSelecting(typing.Protocol):
     """Which stored cards, files and conversations a request reads before it is planned: ``assemble`` returns the rendered context and the card ids
     in relevance order (empty when nothing is confident enough) and ``record`` writes the outcome back. The hub's Context Retriever arms are
-    candidates for the same seat and compete on its metric."""
+    candidates for the same seat and compete on its metric. An arm may accept the hub's ``on_event`` progress callback or ignore it."""
+
+    def assemble(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None) -> AssembledContext: ...
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None: ...
 
 
 @solution("index-by-meaning", kind="event", entry="search", example="rust release")

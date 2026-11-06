@@ -90,6 +90,8 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         function_name: Optional[str] = None,
         tags: Optional[List[str]] = None,
         limit: int = 5,
+        k: Optional[int] = None,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> List[CoreGuidanceCard]:
         """Intelligently select applicable guidance with hierarchical scope resolution.
 
@@ -111,10 +113,15 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
             function_name: Specific function being called (list_goals, create_quest, etc.).
             tags: Additional tags to match (custom categories).
             limit: Max cards to return.
+            k: The interface's name for ``limit``; it wins when given.
+            meta: The caller's scope (``rep_id``, ``team_id``, ``org_id``), used for each scope not passed on its own.
 
         Returns:
             List of applicable GuidanceCard objects, ordered by relevance and scope.
         """
+        limit = k if k is not None else limit
+        scope = meta or {}
+        rep_id, team_id, org_id = rep_id or scope.get("rep_id"), team_id or scope.get("team_id"), org_id or scope.get("org_id")
         # Reload if changes detected
         self._reload_if_needed()
 

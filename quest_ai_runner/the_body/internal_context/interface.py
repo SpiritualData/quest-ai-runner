@@ -87,19 +87,17 @@ class RetrievalAdapter(Protocol):
     # web search or deep run; a plain Observation is only handed to the planner as gathered. An adapter without it is simply never asked, so it
     # still satisfies this Protocol.
 
-    # --- OPTIONAL: PERSISTED REFERENCE RESOLUTION ------------------------------------
-    # A context card can LEARN a source hit as a durable, typed REFERENCE that is re-resolved
-    # FRESH every time the card is used (see adapters/reference_resolver.py +
-    # adapters/card_scoped_learning.py) — never a stale snapshot. An adapter opts INTO being a
-    # source whose content can be persisted-and-refetched this way by advertising a NON-None
-    # ``reference_type`` (the content ``type`` its references register under, e.g. "conversation"
-    # or "chat_thread") and implementing ``make_locator`` + ``resolve_reference``. This is the SAME
-    # optional-capability convention as ``query`` above: an adapter that does NOT support it simply
-    # leaves ``reference_type = None`` (the ``RetrievalAdapterBase`` default), and THAT is the
-    # structural, checkable signal — ``adapter.reference_type is not None`` — no second Protocol and
-    # no reading call chains to find out. ``resolve_reference`` mirrors ``ReferenceResolver.resolve``
-    # (reference_resolver.py) exactly, so an adapter's own bound method drops STRAIGHT into
-    # ``build_resolver_registry``'s ``consumer_resolvers`` as the resolver for its type — no wrapper.
+    # Persisted reference resolution is also not a member: ``ReferenceSource`` below adds it.
+
+
+@runtime_checkable
+class ReferenceSource(RetrievalAdapter, Protocol):
+    """A retrieval adapter whose hits a context card can learn as durable, typed references that are re-resolved fresh every time the card is used
+    (see adapters/reference_resolver.py and adapters/card_scoped_learning.py). An adapter opts in by advertising a non-None ``reference_type`` (the
+    content ``type`` its references register under, e.g. "conversation" or "chat_thread") and implementing ``make_locator`` and ``resolve_reference``;
+    one that does not leaves ``reference_type = None`` (the ``RetrievalAdapterBase`` default), and that is the structural signal. ``resolve_reference``
+    mirrors ``ReferenceResolver.resolve`` exactly, so an adapter's own bound method drops straight into ``build_resolver_registry``'s
+    ``consumer_resolvers`` as the resolver for its type."""
 
     # The content ``type`` this adapter's learned references register under, or None (the default in
     # ``RetrievalAdapterBase``) when the adapter does not support persisted reference resolution.

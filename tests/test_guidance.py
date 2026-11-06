@@ -175,3 +175,9 @@ def test_read_guidance_of_preselected_id_returns_dedupe_note():
     assert g.read_calls == []
     joined = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert "already provided above under APPLICABLE GUIDANCE" in joined
+
+
+def test_universal_provider_select_takes_the_interfaces_k_and_meta(tmp_path):
+    from quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager import CardGuidanceProvider
+    provider = CardGuidanceProvider(cards_dir=str(tmp_path))
+    assert provider.select("plan the week", k=2, meta={"team_id": "t1", "org_id": "o1"}) == []
