@@ -40,7 +40,7 @@ RESULTS_JSON = WORK_DIR / "results.json"
 RESULTS_MD = HERE / "RESULTS.md"
 DATASETS = ("explicit", "implicit", "multistep")
 SUITES = ("acceptance",)
-NOT_DATASETS = ("case_sources",)   # the digest of the private case sources (``case_sources.py``), hashed with the datasets but holding no case
+NOT_DATASETS = ("case_sources", "case_sources.local")   # the digest of the private case sources (``case_sources.py``), hashed with the datasets but holding no case
 PASS_THRESHOLD = 0.7
 RESET_LOCK = threading.Lock()
 

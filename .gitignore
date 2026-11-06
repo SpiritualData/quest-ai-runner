@@ -40,3 +40,6 @@ evaluation/components/chat_quality/RESULTS.md
 
 # resumable run logs (state of an unfinished esoi run, not source)
 evaluation/components/runs.csv
+
+# Digest of a private case source, written by the case_sources hook only when a private dataset is present; the committed case_sources.json stays private:absent
+evaluation/components/*/datasets/case_sources.local.json

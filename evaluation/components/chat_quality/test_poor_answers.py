@@ -105,3 +105,20 @@ def test_the_end_to_end_scorer_logs_the_reply_too(tmp_path, monkeypatch):
     e2e.score_case(lambda c: {"reply": "Invented answer", "writes": [], "reads": [], "web": [], "route": "answer", "asks": []}, case)
     got = json.loads((tmp_path / "end_to_end" / "E-1.jsonl").read_text())
     assert got["reply"] == "Invented answer" and got["route"].startswith("route: answer") and got["input"] == "Invented ask"
+
+
+def test_publishing_the_digest_never_touches_the_tracked_file(tmp_path, monkeypatch):
+    """The private digest goes to the untracked local file; the committed case_sources.json is not read or written, and the local file goes when the set does."""
+    local = tmp_path / "case_sources.local.json"
+    monkeypatch.setattr(poor_answers, "SOURCES_FILE", local)
+    tracked = tmp_path / "case_sources.json"
+    tracked.write_text('{"poor_answers": "private:absent"}\n')
+    poor_answers.publish_digest({})
+    assert not local.exists()
+    env = write(tmp_path)
+    poor_answers.publish_digest(env)
+    assert json.loads(local.read_text())[poor_answers.SOURCE].startswith("poor_answers:")
+    assert tracked.read_text() == '{"poor_answers": "private:absent"}\n'
+    poor_answers.publish_digest({})
+    assert not local.exists()
+    assert poor_answers.SOURCES_FILE.name == "case_sources.local.json" and "case_sources.local" in runner.NOT_DATASETS

@@ -45,7 +45,7 @@ from pathlib import Path
 ENV = "QAR_PRIVATE_CONTEXT_DATASET"
 LABELS = ("needed", "helpful", "irrelevant")
 HERE = Path(__file__).resolve().parent
-SOURCES_FILE = HERE / "datasets" / "case_sources.json"
+SOURCES_FILE = HERE / "datasets" / "case_sources.local.json"   # untracked (gitignored); the committed case_sources.json always says ``private:absent``
 ABSENT = "private:absent"
 
 # The weight of this source in the one number is not set here: it is the share the hub's retrieval metric leaves (esoi.toml [builds_on.context_selection.*]).
@@ -89,13 +89,16 @@ def digest_parts(environ=None):
 
 
 def publish_digest(environ=None):
-    """Write the digest part where the harness hashes the case files (``datasets/``), and put the committed text back when the process ends, so
-    the working tree is not left changed by a run that saw the dataset."""
-    committed = SOURCES_FILE.read_text(encoding="utf-8") if SOURCES_FILE.exists() else None
-    text = json.dumps(dict(private=digest_parts(environ))) + "\n"
-    if committed != text:
+    """Write the digest part where the harness hashes the case files (``datasets/``) when a private dataset is present, into the untracked
+    ``case_sources.local.json`` beside the committed ``case_sources.json`` (which stays ``private:absent``), and remove that file when none is
+    present: a run that saw the dataset never changes a tracked file, so no private digest can be committed."""
+    part = digest_parts(environ)
+    if part == ABSENT:
+        SOURCES_FILE.unlink(missing_ok=True)
+        return
+    text = json.dumps(dict(private=part)) + "\n"
+    if not SOURCES_FILE.exists() or SOURCES_FILE.read_text(encoding="utf-8") != text:
         SOURCES_FILE.write_text(text, encoding="utf-8")
-        atexit.register(lambda: SOURCES_FILE.write_text(committed, encoding="utf-8") if committed is not None else SOURCES_FILE.unlink(missing_ok=True))
 
 
 def kind_of(raw):

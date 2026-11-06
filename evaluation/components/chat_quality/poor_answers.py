@@ -4,7 +4,7 @@ The cases are real requests that production answered badly, each labelled with h
 OUTSIDE this repository, in the file (or the folder holding ``poorly_answered_inputs.jsonl``) named by ``QAR_PRIVATE_POOR_ANSWERS_DATASET``
 (several separated by ``os.pathsep``). With nothing present the source contributes no case and the metric runs on the dataset cases alone; nothing
 fails. Nothing from the data is copied here: the digest of the cases records the sha256 of every present file (or ``private:absent``), written
-into ``datasets/case_sources.json`` before the case files are hashed, so a row recorded with the set and a row recorded without it never compare.
+into the untracked ``datasets/case_sources.local.json`` (only when a file is present) before the case files are hashed, so a row recorded with the set and a row recorded without it never compare.
 
 A private case runs through the same chat arm as every other case (a fresh conversation, no quest pinned) and is judged by the same judge. Its
 rubric is built from the case's own ``failure_kind`` and ``ideal_handling``: generic checks that the dev eval world can satisfy (the world holds no
@@ -18,7 +18,6 @@ prints and the number the combined QAR metric reads for the chat arm.
 import hashlib
 import json
 import os
-import atexit
 from pathlib import Path
 
 ENV = "QAR_PRIVATE_POOR_ANSWERS_DATASET"
@@ -26,7 +25,7 @@ FILE_NAME = "poorly_answered_inputs.jsonl"
 SOURCE = "poor_answers"
 ABSENT = "private:absent"
 HERE = Path(__file__).resolve().parent
-SOURCES_FILE = HERE / "datasets" / "case_sources.json"
+SOURCES_FILE = HERE / "datasets" / "case_sources.local.json"   # untracked (gitignored); the committed case_sources.json always says ``private:absent``
 
 GENERIC_RUBRIC = (
     "Does not hand the work back to the person when the assistant could act, search or read for itself (no 'you could check' or 'please look it up' in place of doing it)",
@@ -57,12 +56,16 @@ def digest_part(environ=None):
 
 
 def publish_digest(environ=None):
-    """Write the digest where the harness hashes the case files (``datasets/``), and put the committed text back when the process ends."""
-    committed = SOURCES_FILE.read_text(encoding="utf-8") if SOURCES_FILE.exists() else None
-    text = json.dumps({SOURCE: digest_part(environ)}) + "\n"
-    if committed != text:
+    """Write the digest where the harness hashes the case files (``datasets/``) when a private set is present, into the untracked
+    ``case_sources.local.json`` beside the committed ``case_sources.json`` (which stays ``private:absent``), and remove that file when none is
+    present: a run that saw the dataset never changes a tracked file, so no private digest can be committed."""
+    part = digest_part(environ)
+    if part == ABSENT:
+        SOURCES_FILE.unlink(missing_ok=True)
+        return
+    text = json.dumps({SOURCE: part}) + "\n"
+    if not SOURCES_FILE.exists() or SOURCES_FILE.read_text(encoding="utf-8") != text:
         SOURCES_FILE.write_text(text, encoding="utf-8")
-        atexit.register(lambda: SOURCES_FILE.write_text(committed, encoding="utf-8") if committed is not None else SOURCES_FILE.unlink(missing_ok=True))
 
 
 def case_of(raw):
