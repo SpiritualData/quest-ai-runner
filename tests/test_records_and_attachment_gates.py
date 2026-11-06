@@ -73,3 +73,10 @@ def test_a_message_that_refers_to_a_missing_attachment_is_answered_with_the_line
     provider = StubProvider([deep, answer(refers_to_attachment=True)])
     res = orch(provider, retrieval).run("Here is a photo of my receipt. Please log the amount.")
     assert res.kind == "answer" and res.text.startswith(NO_ATTACHMENT_LINE)
+
+
+def test_a_support_reply_is_sent_back_to_read_the_records_even_when_needs_records_was_not_set():
+    retrieval = StubRetrieval(FILES)
+    provider = StubProvider([answer(reply_shape="support"), READ, answer(reply_shape="support")])
+    orch(provider, retrieval).run("I missed another run and want to quit.")
+    assert retrieval.read_calls == ["log/entries.md"]

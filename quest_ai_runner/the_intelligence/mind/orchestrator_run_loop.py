@@ -618,10 +618,11 @@ class RunLoopMixin:
                     rs.plan.tool_calls = []
 
             # --- RECORDS GATE: an answer the planner says rests on the person's records is not written before any record was read ------
-            # ``needs_records`` is the planner's structured self-report that the reply depends on what the person's notes, logs or
+            # ``needs_records`` (or the ``support`` reply shape, which is always about the person's own progress) is the planner's structured self-report that the reply depends on what the person's notes, logs or
             # collections hold beyond what CONTEXT shows. When it answers anyway with nothing read this turn (no read, no tool result),
             # the code hands it back once with a note, so the next planning step reads before answering. Once a turn, inside the step budget.
-            if (rs.plan and rs.plan.action == "answer" and getattr(rs.plan, "needs_records", False) and not getattr(rs, "records_gate_done", False)
+            if (rs.plan and rs.plan.action == "answer" and (getattr(rs.plan, "needs_records", False) or rs.plan.reply_shape == "support")
+                    and not getattr(rs, "records_gate_done", False)
                     and message_is_user_turn and not getattr(rs, "no_attachment", False) and not executed_reads
                     and not any(str(g.get("locator") or "").startswith("tool:") for g in gathered if isinstance(g, dict))
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
