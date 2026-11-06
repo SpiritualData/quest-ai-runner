@@ -16,7 +16,7 @@ Corrected need role, Notes, Reviewer; Cases: Reviewed, Exclude case, Corrected s
 onto the rows whose key still exists (Items by case_id + item_id, Cases by case id), reading columns BY HEADER NAME so an older layout
 still carries over. A reviewed row whose key is gone goes to the "Orphaned reviews" tab (keys, old item text, reviewer columns; it
 accumulates over exports, and a key that comes back gets its review again). The counts carried / orphaned are printed. The rewrite is
-clean: a temporary sheet is added, Summary, Cases, Items (and the old orphan tab) are deleted and recreated with the same names and
+clean: a temporary sheet is added, Summary, Cases, Items (and the old orphan tab) are deleted (any other tab in the file is left alone) and recreated with the same names and
 sheetIds, then the temporary sheet is deleted, so formats, validations, filters and protected ranges never pile up. The Summary files
 table holds the new shas (import's sha check matches the new files); an "Export history" list under it keeps each export's timestamp and shas.
 
@@ -299,6 +299,7 @@ def summary_rows(args, labels: list[str], need_roles: list[str], scope_needs: li
 
 
 ORPHAN_TAB = "Orphaned reviews"
+OWNED_TABS = ("Summary", "Cases", "Items", ORPHAN_TAB)   # the only tabs export rewrites
 ORPHAN_HEAD = ["Kind", "case_id", "item_id", "Item text", "Reviewed", "Corrected label", "Corrected need role", "Corrected scope need",
                "Exclude case", "Missing context (reviewer)", "Notes", "Reviewer"]
 ITEM_REVIEW_COLS = ITEMS_EDIT_TAIL
@@ -399,7 +400,12 @@ def export(args) -> None:
         # clean rewrite: a temporary sheet keeps the file valid while the three sheets (and their formats, validations, filters and
         # protected ranges) are deleted and recreated with the same names and ids
         reqs = [{"addSheet": {"properties": {"sheetId": TEMP_SHEET_ID, "title": "Temporary rewrite"}}}]
-        reqs += [{"deleteSheet": {"sheetId": sid}} for sid in existing.values()]
+        # only the tabs this script owns are deleted; any other tab (another script's, a person's) is left exactly as it is
+        foreign_ids = {sid for title, sid in existing.items() if title not in OWNED_TABS}
+        if foreign_ids & set(range(1, 5)):
+            raise SystemExit(f"Another tab already uses sheetId {sorted(foreign_ids & set(range(1, 5)))}, which this export needs for "
+                             f"{', '.join(OWNED_TABS)}; nothing was changed.")
+        reqs += [{"deleteSheet": {"sheetId": sid}} for title, sid in existing.items() if title in OWNED_TABS]
         if args.title:
             reqs.append({"updateSpreadsheetProperties": {"properties": {"title": args.title}, "fields": "title"}})
         sheets.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests": reqs}).execute()

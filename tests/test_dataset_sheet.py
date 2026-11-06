@@ -225,6 +225,16 @@ def test_export_with_sheet_rewrites_in_place_and_never_creates(monkeypatch, tmp_
     assert report["reviews_carried"] == {"items": 1, "cases": 1} and report["reviews_orphaned"] == 3
 
 
+def test_export_leaves_tabs_it_does_not_own_alone(monkeypatch, tmp_path):
+    tabs = {"Datasets": [["a"]], "Inputs": [["b"]], "How to use": [["c"]], "Summary": [["x"]], "Cases": OLD_CASES, "Items": OLD_ITEMS}
+    fake = run_export(monkeypatch, tmp_path, "existing-id", tabs)
+    foreign = {10, 11, 12}   # the fake numbers its tabs from 10 in dict order: Datasets, Inputs, How to use
+    deleted = {r["deleteSheet"]["sheetId"] for name, kw in fake.calls if name == "batchUpdate" and "requests" in kw["body"]
+               for r in kw["body"]["requests"] if "deleteSheet" in r}
+    assert deleted and not deleted & foreign
+    assert deleted - {ds.TEMP_SHEET_ID} == {13, 14, 15}
+
+
 def test_export_without_sheet_creates_once_and_tells_you_to_pass_the_id(monkeypatch, tmp_path, capsys):
     fake = run_export(monkeypatch, tmp_path, None, {})
     assert [name for name, _ in fake.calls].count("create") == 1
