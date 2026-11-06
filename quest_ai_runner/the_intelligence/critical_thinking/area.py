@@ -20,6 +20,7 @@ from esoi import Lazy
 from esoi import AFTER, BEFORE
 from esoi import SpecSlice
 from hubofhubs.api import arm_needs as needs
+from hubofhubs.api import BoundedReplan
 from hubofhubs.api import sufficiency
 from hubofhubs.api import links_in_message
 from hubofhubs.api import LinkGuard, LinkPolicy
@@ -214,6 +215,12 @@ class DeepRunsOnly:
         held = hold_case(outcome)
         findings = ["a change landed with no metric reading on record"] if held["missing"] else []
         return {"profile": "quest-ai-runner", "goal": {"met": not held["missing"], "rows": held["rows"]}, "findings": findings, "steps": []}
+
+    def pursue(self, goal: str, done_standard: str, draft: Any, attempt: Optional[Callable[[Mapping[str, Any]], Mapping[str, Any]]] = None,
+               means: Sequence[Mapping[str, Any]] = (), budget: Optional[Mapping[str, Any]] = None,
+               announce: Optional[Callable[[str], Any]] = None, check: Optional[Callable[[Any], Mapping[str, Any]]] = None) -> Mapping[str, Any]:
+        """Keeps working on an unmet goal with the hub's bounded replan; the orchestrator's last net calls it (``unmet_goal.pursue_before_giving_up``)."""
+        return BoundedReplan().pursue(goal, done_standard, draft, attempt, means, budget, announce, check)
 
     def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
         return self.iteration.slice_for(request, working_dir)

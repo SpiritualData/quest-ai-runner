@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-233 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+234 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -41,6 +41,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_BOOTSTRAP_TIER` | Model tier used for bootstrap topic extraction (default balanced). | `the_consciousness/terminal/cli_context.py` | - |
 | `QAR_BOOTSTRAP_WORKERS` | Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only. | `the_body/configuration/card_store_settings.py` | - |
 | `QAR_CALL_LOG_PATH` | Path of the JSON-lines call log where the runner persists every model call it makes, tagged with its prompt spec id (default: next to the usage file); production.py reads it to report average and maximum seconds, tokens and dollars per call. Read in quest_ai_runner/the_world/model_plumbing/spend/usage.py. | `the_world/model_plumbing/spend/usage.py` | - |
+| `QAR_CANDIDATE_CASES_DIR` | A private folder outside any repository (default unset: nothing is recorded). When set, a turn that ended with an unmet goal, an empty reply or work pushed back to the person appends one JSON line to <dir>/poorly_answered_inputs/<case id>.jsonl, in the format of the evaluation output log, as a candidate case for a person to prioritise. | `the_consciousness/feedback_learning/candidate_cases.py` | - |
 | `QAR_CARDS_BACKEND` |  | `the_body/configuration/config_assembler.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `the_body/configuration/config_context_index.py` | - |
 | `QAR_CARDS_SCOPE` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |

@@ -247,7 +247,7 @@ def test_an_answer_turn_blocked_on_a_person_files_one_ask_when_switched_on_and_n
     meta = {"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1", "participants": [{"user_id": "u1", "name": "Ana"}]}
     for switched_on in (True, False):
         sink = Sink()
-        orch = build(Provider([dict(LOOKUP)], verdicts=[dict(verdict), dict(verdict)]), Runner([]), sink=sink,
+        orch = build(Provider([dict(LOOKUP)], verdicts=[dict(verdict), dict(verdict)]), Runner([DeepResult(met=False, output="")]), sink=sink,
                      interim_replies=switched_on, answer_goal_max_iterations=3)
         events = run(orch, meta=meta)
         asks = [e for e in events if e["type"] == EVENT_DECISION]

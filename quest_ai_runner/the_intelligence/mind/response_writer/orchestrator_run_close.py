@@ -29,10 +29,17 @@ from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_pr
 from hubofhubs.api import normalize_url_for_match
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import NOT_QUEUED_NOTE
 from quest_ai_runner.the_world.tools.tools_status import fact_is_held
+from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
+from quest_ai_runner.the_consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
 
 
 class RunCloseMixin:
     """Closing a turn: deferred deep work, goal verification of the answer, and the final result."""
+
+    def _search_untried(self, rs: SimpleNamespace, exec_record: Any, ctx_meta: Dict[str, Any]) -> bool:
+        """Whether the read-only deep search is still untried this turn and safe to run: wired, not tried or settled, no change attempted."""
+        return bool(not rs.own_escalation_settled and not rs.brainstorm_active and not ctx_meta.get("deep_attempted")
+                    and self._has_deep_execution_capability() and (exec_record is None or not exec_record.any_mutation_attempted))
 
     def keep_landed_work_reported(self, rs: SimpleNamespace, text: str) -> str:
         """Never let a reply deny work the execution record proves landed.
@@ -442,7 +449,9 @@ class RunCloseMixin:
                     # says needs_person and it gave the question. Regenerating the same answer cannot unblock it,
                     # so ONE deduplicated ask is filed (to the asker, or the participant the verifier named and the
                     # code resolved) and the turn ends with it. Switched on with ``interim_replies``.
-                    if getattr(self.cfg, "interim_replies", False) and blocks_on_person(
+                    # A block only a person can lift is asked about only when nothing else is left to try: while the read-only deep search is
+                    # untried, the last net below pursues it first, and files this ask itself if the search cannot meet the goal.
+                    if getattr(self.cfg, "interim_replies", False) and not self._search_untried(rs, exec_record, _ctx_meta) and blocks_on_person(
                             str(verdict.get("blocker") or ""), str(verdict.get("question") or "").strip()):
                         blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False,
                                                   coverage=None)
@@ -665,58 +674,38 @@ class RunCloseMixin:
         # verifier naming a gap without setting need_more_context, a non-answer like "which file
         # should I look in?"). One pass only; skipped when something already mutated this turn (a
         # re-run could double the change) or the human asked us to hold off.
-        if (self.cfg.deep_before_giving_up and not rs.own_escalation_settled
-                and not rs._deferred_handoff_confirmed and not rs._decision_parked
+        if (self.cfg.deep_before_giving_up and not rs._deferred_handoff_confirmed and not rs._decision_parked
                 and not rs.deferred_unconfirmed
-                and not rs._claim_corrected and not rs.brainstorm_active and not rs.page_unopenable
+                and not rs._claim_corrected and not rs.page_unopenable
                 and rs._last_verdict is not None and not rs._last_verdict.get("met")
                 and not rs._last_verdict.get("claims_unsupported")
-                and not _ctx_meta.get("deep_attempted")
-                and self._has_deep_execution_capability()
-                and (exec_record is None or not exec_record.any_mutation_attempted)):
+                and self._search_untried(rs, exec_record, _ctx_meta)):
             try:
-                if emit is not None:
-                    emit.status("Not enough to answer yet, searching deeper before giving up…")
-                _gap = (rs._last_verdict.get("next_action") or rs._last_verdict.get("reason")
-                        or "the answer did not meet the goal")
-                _lr_plan = PlanDecision(
-                    action="deep",
-                    goal=_truncate_goal(overall_goal),
-                    deep_brief=(
-                        f"{rs.user_message}\n\n"
-                        "NOTE: The quick answer did not meet the goal and no deep search has been "
-                        f"done yet. What is missing: {_gap}. Search the corpus, cards, notes and "
-                        "files thoroughly and give a definitive answer. Do not ask the user which "
-                        "file or quest to look in; find it yourself. Only say something could not "
-                        "be found after actually searching, and name where you looked."
-                    )[:2000],
-                    rationale="goal not met and no deep run yet: deep run before giving up",
-                    deep_difficulty=getattr(rs.plan, "deep_difficulty", None),
-                    deep_difficulty_reason=getattr(rs.plan, "deep_difficulty_reason", None),
-                )
-                _lr_model = self._answer_model(_lr_plan, "balanced", hint=rs.model_hint)
-                lr_facts_before = len(getattr(exec_record, "facts", None) or [])
-                _lr_res = self._run_deep(
-                    _lr_plan, rs.user_message, _lr_model,
-                    emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
-                    gathered=gathered, quality_standards=rs.quality_standards,
-                    pending_inputs=rs.pending_inputs, model_hint=rs.model_hint,
-                    ctx_meta=_ctx_meta, cancel_check=cancel_check,
-                    working_dir_override=working_dir_override,
-                    resume_session_id=take_resume_session(), self_initiated=True,
-                    user_ordered=user_ordered_work(rs.turn_user_intent),
-                    run_control=rs.run_control, card_context=rs.card_context)
-                if _lr_res.kind == "cancelled":
-                    return finish(_lr_res)
-                if not own_escalation_adds_nothing(_lr_res, exec_record, lr_facts_before):
-                    _lr_res.exit_reason = "escalated_deep"
-                    _lr_res.goal_verdict = rs._last_verdict
-                    self._kickoff_card_update(_lr_res, _lr_plan, rs.user_message, _ctx_meta, emit,
+                pursued = pursue_before_giving_up(self, rs, overall_goal, exec_record, _ctx_meta, emit, cancel_check, take_resume_session,
+                                                  working_dir_override)
+                pursuit = pursued["pursuit"]
+                rs.pursuit = pursuit
+                if pursued["result"] is not None and pursued["result"].kind == "cancelled":
+                    return finish(pursued["result"])
+                if pursuit["status"] == "met_after_replan" and pursued["result"] is not None:
+                    self._kickoff_card_update(pursued["result"], PlanDecision(action="deep", goal=overall_goal), rs.user_message, _ctx_meta, emit,
                                               gathered=gathered)
-                    return finish(_lr_res)
-                log.info("last-resort escalation added nothing; keeping the answer")
-                if emit is not None:
-                    emit.status(OWN_ESCALATION_KEPT_STATUS)
+                    return finish(pursued["result"])
+                if pursuit["status"] == "continuing":
+                    # the current reply goes out with the one plain line; the follow-up posts its result to this conversation
+                    rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]
+                elif pursuit["message"] and pursuit["replans"]:
+                    rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]
+                _last = rs._last_verdict
+                _question = str(_last.get("question") or "").strip()
+                if (pursuit["status"] == "unmet_reported" and getattr(self.cfg, "interim_replies", False)
+                        and blocks_on_person(str(_last.get("blocker") or ""), _question)):
+                    # What the search could not find is now the one thing only the person can give: ask for exactly that.
+                    _blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+                    if file_blocked_ask(self, emit, _ctx_meta, _blocked, _last, question=_question):
+                        rs.text = _blocked.output
+                        rs._parked_decision_id = _blocked.decision_id
+                        rs._decision_parked = True
             except Exception:  # noqa: BLE001 — the net must never break the turn
                 log.warning("last-resort deep run failed", exc_info=True)
 
@@ -737,6 +726,12 @@ class RunCloseMixin:
         if (rs.overseer_decided == "overseer_answer_now" and rs._last_verdict is None
                 and not rs._deferred_handoff_confirmed and not rs._decision_parked):
             _exit_reason = "overseer_answer_now"
+        try:      # noticing: an input that ended unmet, empty or pushed back becomes a candidate case (off unless the private folder is named)
+            _signals = turn_signals(rs._last_verdict, rs.text, getattr(rs, "pursuit", None))
+            if any(_signals.values()):
+                record_candidate(rs.user_message, rs.text, _signals, reason=str((rs._last_verdict or {}).get("reason") or ""))
+        except Exception:  # noqa: BLE001 — noticing must never break the turn
+            log.warning("candidate case not recorded", exc_info=True)
         _res = OrchestratorResult(kind="answer", text=rs.text, rationale=rs.plan.rationale,
                                   model=rs.model, exit_reason=_exit_reason,
                                   goal_verdict=rs._last_verdict,

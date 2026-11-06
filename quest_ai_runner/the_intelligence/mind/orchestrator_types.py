@@ -238,6 +238,14 @@ class OrchestratorConfig:
     # "I don't have material on that, which file should I look in?"). Only applies when a deep
     # execution path is wired. The in-loop ``need_more_context`` escalation still comes first.
     deep_before_giving_up: bool = True
+    # PURSUING AN UNMET GOAL (Critical Thinking's ``pursue``). The last net above (``deep_before_giving_up``) runs through the hub's bounded replan: while the goal is
+    # unmet and the read-only deep search is untried, it runs before the reply is sent (``pursue_max_replans`` rounds, ``pursue_wall_seconds`` in all).
+    # A search estimated longer than ``pursue_inline_seconds`` sends the current reply first with one plain "still working" line, and continues
+    # as a queued follow-up that posts to the same conversation when a queue runner is wired, else inline. ``pursue_deep_seconds`` is the estimate.
+    pursue_max_replans: int = 2
+    pursue_wall_seconds: float = 300.0
+    pursue_inline_seconds: float = 60.0
+    pursue_deep_seconds: float = 120.0
     # STRUCTURAL SUFFICIENCY GATE (see hubofhubs.critique.sufficiency). The prose SUFFICIENCY gate in the
     # planner prompt is an instruction the model may simply not follow: a real turn answered from a
     # card item that held only a short synthesized SUMMARY of a note, and spent its reply telling
