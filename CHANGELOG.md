@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `quest-ai-runner doctor` checks the installed `quest-ai-runner` command: it reports an entry script that imports a module or name that no longer exists, or a `console_scripts` entry point that does not resolve, and prints the fix (`pip install -e <checkout> --no-deps` in that environment). A stale command makes the doctor exit 1.
+
 ### Fixed
 - The terminal no longer cuts a warning notice to the window width with an ellipsis (`⚠ The context store needs a tidy because it…`). The transcript shows the whole first sentence of a warning and the terminal wraps it under its words; only a sentence over 400 characters is still ellipsized. The full record stays in the log file.
 
