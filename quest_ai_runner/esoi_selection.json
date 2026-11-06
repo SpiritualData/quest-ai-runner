@@ -55,7 +55,7 @@
    },
    "the_intelligence": {
     "arm": "composition",
-    "root": "the-intelligence"
+    "root": "quest-intelligence"
    },
    "the_self": {
     "arm": "",
@@ -63,7 +63,7 @@
    },
    "the_world": {
     "arm": "composition",
-    "root": "the-world"
+    "root": "quest-world"
    },
    "tools": {
     "arm": "coding_agent_reach_judge",
@@ -109,11 +109,13 @@
    "quest-consciousness": "quest_ai_runner",
    "quest-context": "quest_ai_runner",
    "quest-decision-requests": "quest_ai_runner",
+   "quest-intelligence": "quest_ai_runner",
    "quest-intents": "quest_ai_runner",
    "quest-representatives": "quest_ai_runner",
    "quest-requests": "quest_ai_runner",
    "quest-self": "quest_ai_runner",
    "quest-work-shown": "quest_ai_runner",
+   "quest-world": "quest_ai_runner",
    "recall-recent-context": "quest_ai_runner",
    "receive-input-mid-run": "quest_ai_runner",
    "replay-known-operations": "quest_ai_runner",
@@ -124,13 +126,11 @@
    "spec-selection": "quest_ai_runner",
    "system-integrity": "quest_ai_runner",
    "take-in-the-world": "quest_ai_runner",
-   "the-intelligence": "quest_ai_runner",
    "the-intuition": "quest_ai_runner",
    "the-mind": "quest_ai_runner",
    "the-science": "quest_ai_runner",
    "the-subconscious": "quest_ai_runner",
    "the-tools": "quest_ai_runner",
-   "the-world": "quest_ai_runner",
    "vendor-model-caller": "quest_ai_runner",
    "web-search": "quest_ai_runner",
    "write-through-mcp": "quest_ai_runner"
@@ -393,6 +393,12 @@
    "quest_events": "quest_ai_runner.the_body.intake_sources.quest_events"
   }
  },
+ "intent-evolution": {
+  "default": "",
+  "modules": {
+   "history_floor": "quest_ai_runner.the_consciousness.intent_evolution.history_floor"
+  }
+ },
  "long-term-memory": {
   "default": "session_file",
   "evidence": {
@@ -566,6 +572,12 @@
    "quest_decision": "quest_ai_runner.the_body.internal_context.quest.client.quest_client"
   }
  },
+ "quest-intelligence": {
+  "default": "composition",
+  "modules": {
+   "composition": "quest_ai_runner.the_intelligence.flow"
+  }
+ },
  "quest-intents": {
   "default": "separate_stores",
   "evidence": {
@@ -630,6 +642,12 @@
    "model_explanation": "quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges",
    "terminal_trail": "quest_ai_runner.the_consciousness.terminal.textual_ui_trail",
    "trail": "quest_ai_runner.the_intelligence.mind.response_writer.work_trace"
+  }
+ },
+ "quest-world": {
+  "default": "composition",
+  "modules": {
+   "composition": "quest_ai_runner.the_world.flow"
   }
  },
  "recall-recent-context": {
@@ -757,12 +775,6 @@
    "ways_in": "quest_ai_runner.the_consciousness.ways_in"
   }
  },
- "the-intelligence": {
-  "default": "composition",
-  "modules": {
-   "composition": "quest_ai_runner.the_intelligence.flow"
-  }
- },
  "the-intuition": {
   "default": "file",
   "evidence": {
@@ -819,12 +831,6 @@
   "modules": {
    "coding_agent_prompt_reach": "quest_ai_runner.the_body.area_body",
    "coding_agent_reach_judge": "quest_ai_runner.the_intelligence.mind.planner.reach_judge"
-  }
- },
- "the-world": {
-  "default": "composition",
-  "modules": {
-   "composition": "quest_ai_runner.the_world.flow"
   }
  },
  "vendor-model-caller": {
