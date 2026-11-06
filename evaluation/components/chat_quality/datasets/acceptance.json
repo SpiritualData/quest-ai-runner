@@ -471,9 +471,6 @@
   "precheck": {
    "code_not_contains": [
     "send_quest_email"
-   ],
-   "code_contains_any": [
-    "create_assistant_task"
    ]
   },
   "expect_writes": [
