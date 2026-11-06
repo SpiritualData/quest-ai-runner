@@ -1075,13 +1075,39 @@ def revert(before, after, world=None, attempts_left=2):
 # ---------------------------------------------------------------------------------------------
 
 def restore_quest_fields(key, qid):
-    """Put the editable quest fields back to their seeded values (human edit route)."""
+    """Put the editable quest fields back to their seeded values.
+
+    Not through REST: an API key is always the AI to quest-backend's field-write gate, so its PATCH
+    only parks an approvable proposal and a field a case changed stayed changed ("quest ...
+    NOT restored", which aborted every reset). The write runs in-process as the human actor, dev
+    only, through ``restore_own_fields.py`` (same pattern and safety checks as
+    ``approve_own_asks``). The server's own quest cache would then serve the old value, so a
+    scratch note is appended and deleted through the API: the atomic note write drops that cache."""
+    import subprocess
+    import tempfile
     spec = QUESTS[key]
-    for field, value in (("outcome", spec["outcome"]),
-                         ("current_state", spec["current_state"]),
-                         ("timeline_days", spec["timeline_days"]),
-                         ("acceptance_criteria", f"{spec['acceptance_criteria']} ({TAG})")):
-        api("PATCH", f"/api/quests/{qid}/field", {"field_name": field, "value": value})
+    plan = {qid: {"outcome": spec["outcome"], "current_state": spec["current_state"],
+                  "timeline_days": spec["timeline_days"],
+                  "acceptance_criteria": f"{spec['acceptance_criteria']} ({TAG})"}}
+    python = os.environ.get("QUAL_BACKEND_PYTHON") or str(BACKEND_DIR / "venv" / "bin" / "python3")
+    script = Path(__file__).resolve().parent / "restore_own_fields.py"
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(plan, f)
+    try:
+        proc = subprocess.run([python, str(script), f.name], cwd=BACKEND_DIR,
+                              capture_output=True, text=True, timeout=300)
+    finally:
+        Path(f.name).unlink(missing_ok=True)
+    for line in proc.stdout.splitlines():
+        if line.startswith("{") and '"ok": false' in line:
+            print(f"  restore-own-fields: {line}")
+    if proc.returncode != 0:
+        print(f"  WARN restore-own-fields failed (exit {proc.returncode}): "
+              f"{(proc.stderr or '').strip().splitlines()[-1:]}")
+    api("POST", f"/api/quests/{qid}/notes", {"text": f"{TAG} cache bust"})
+    for note in notes_of(qid):
+        if "cache bust" in str(note.get("text") or "") and note.get("id"):
+            api("DELETE", f"/api/quests/{qid}/notes/{note['id']}")
 
 
 def teardown(keep_quests=False, decline_asks=False):

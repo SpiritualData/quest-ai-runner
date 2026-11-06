@@ -5,6 +5,7 @@ names into the value (``config_core_settings.deep_launch_from_env``) and the def
 """
 from __future__ import annotations
 
+from esoi import implementation
 from hubofhubs.api import DeepLaunchSettings, build_deep_argv, lean_flags  # noqa: F401  (same objects, old import path)
 
 # Named launch profiles, selected by ``QAR_DEEP_LAUNCH_PROFILE`` (config_core_settings). Unset, the launch is today's.
@@ -21,3 +22,9 @@ LEAN_GUARDED = DeepLaunchSettings(
     setting_sources="user", strict_mcp=True, exclude_dynamic_sections=True)
 
 PROFILES = {"lean_guarded": LEAN_GUARDED}
+
+
+@implementation("delegated-agent-sessions", "lean_guarded")
+def lean_guarded_launch() -> DeepLaunchSettings:
+    """The ``lean_guarded`` arm: the launch settings value a deployment selects with ``QAR_DEEP_LAUNCH_PROFILE``."""
+    return LEAN_GUARDED
