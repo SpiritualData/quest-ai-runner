@@ -90,6 +90,7 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
   rather than pip-installing it. QAR keeps its bindings (`esoi/hub_seats.csv`), probes and Quest adapters; registry facts are
   changed in the hub repository, never copied here (`docs/explanation/hub-of-hubs.md`). Generic assembly, selection, cascade and checking
   belong in the esoi library, not here or in the hub; see `evolvable-structure/docs/explanation/what-belongs-where.md`.
+- **Extend before adding a solution:** a new behaviour is first a case, a metric stage, an arm or a flow step of an existing solution; a new solution needs a distinct purpose, competing alternatives and lasting existence (`evolvable-structure/docs/explanation/extend-before-adding-a-solution.md`).
 - **New module:** put it where its role lives (existing glob usually covers it). A new role is a new
   `components.csv` row. A new implementation of a port is added to its `solutions.csv` row; select it only
   when its metric wins on the same cases.
