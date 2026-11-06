@@ -21,8 +21,8 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "evaluation" / "components"))
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 SHAPE_QUOTA = {"edit_files": 10, "real_world_action": 6, "answer_question": 3, "plan_schedule": 3, "draft_message": 3,
                "analysis_strategy": 3, "data_entry": 2}  # a 30-case draw; other sizes scale it
