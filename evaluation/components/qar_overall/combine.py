@@ -1,6 +1,6 @@
 """The combined QAR metric (``metric-qar-overall``, the authoritative metric of do-grounded-work), computed from recorded rows only.
 
-Nothing here runs an arm. Each sub-metric (QME1 to QME7, one case each in ``cases.json``) names the recorded arms that
+Nothing here runs an arm. Each sub-metric (QME1 to QME9, one case each in ``cases.json``) names the recorded arms that
 measure it in two tiers:
 
   cheap  offline arms (free, whole set) or a small sampled run of a paid arm (``--sample N --max-calls M``): the everyday
@@ -18,8 +18,8 @@ counts), and a stale or missing arm is unmeasured. Humility: an
 unmeasured arm is never a pass. Every score is reported three ways, the floor first (unmeasured counted 0) beside the
 measured share of the weight, then the headline (measured weight only, renormalised) and the ceiling (unmeasured counted 1).
 
-Weights: each of do-grounded-work's ideals carries a weight in ``esoi.toml`` ``[balance.metric-qar-overall]`` (with a written reason),
-split equally over the sub-metrics that serve it (their ``ideal_ids`` in ``esoi/metrics.csv``). An ideal no sub-metric
+Weights: each ideal of the QAR intent that a top-level metric serves carries a weight in ``esoi.toml`` ``[balance.metric-qar-overall]`` (with a written reason),
+split equally over the sub-metrics that serve it (their ``ideal_ids`` in the metrics.csv records of the tree). An ideal no sub-metric
 serves keeps its weight unmeasured. QME6 and QME7 are read from the structure itself (``structure_*`` rules): the share of
 solutions whose selected arm has a current row that no rival beats.
 """

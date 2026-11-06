@@ -93,7 +93,28 @@ def test_weights_follow_the_ideals_and_sum_to_one():
     subs = [c["id"] for c in combine.load_definitions()]
     weights, serving, unserved = combine.submetric_weights(subs)
     assert sum(weights.values()) + unserved == pytest.approx(1.0)
-    assert all(serving[i] for i in combine.settings()["ideals"]), "every ideal of do-grounded-work is served by a sub-metric"
+    assert all(serving[i] for i in combine.settings()["ideals"]), "every ideal of the QAR intent is served by a sub-metric"
+    assert unserved == 0.0
+    assert weights["QME2"] == pytest.approx(combine.settings()["ideals"]["ideal-moves-me-forward"])
+    assert weights["QME1"] + weights["QME4"] == pytest.approx(combine.settings()["ideals"]["QI2"])
+
+
+def test_every_weighted_ideal_is_a_current_ideal_of_the_records():
+    import csv
+    root = combine.CONFIG.root
+    current = {r["ideal_id"] for f in Path(root).glob("quest_ai_runner/**/ideals.csv") for r in csv.DictReader(open(f, encoding="utf-8"))}
+    assert set(combine.settings()["ideals"]) <= current
+
+
+def test_the_poorly_answered_share_is_applied_when_present_and_absent_means_plain_cases():
+    from chat_quality import poor_answers
+    share = poor_answers.share()
+    present = {"passed": "11", "cases": "20", "details": "poor_answers 5/10 others 6/10 share 0.2 weighted pass rate 0.560"}
+    assert combine.pass_rate(present) == pytest.approx(poor_answers.weighted_rate(6, 10, 5, 10, share))
+    assert combine.pass_rate(present) != pytest.approx(11 / 20)
+    absent = {"passed": "6", "cases": "10", "details": "poor_answers absent"}
+    assert combine.pass_rate(absent) == pytest.approx(0.6)
+    assert combine.pass_rate({"passed": "3", "cases": "4"}) == pytest.approx(0.75)
 
 
 def test_definitions_are_valid():
@@ -109,8 +130,8 @@ def test_definitions_are_valid():
 
 def test_report_leads_with_the_floor_and_names_what_the_headline_leaves_out(fixture_log, monkeypatch):
     monkeypatch.setattr(combine, "submetric_weights", lambda subs: ({s: 1.0 / len(subs) for s in subs},
-                                                                    {"QI1": list(subs)}, 0.0))
-    monkeypatch.setattr(combine, "settings", lambda config=None: {"ideals": {"QI1": 1.0}, "reasons": {}, "bar": 0.8,
+                                                                    {"QI2": list(subs)}, 0.0))
+    monkeypatch.setattr(combine, "settings", lambda config=None: {"ideals": {"QI2": 1.0}, "reasons": {}, "bar": 0.8,
                                                                   "cost_per_passing_turn_usd": 0.05})
     rows = [{"id": "S1", "area": "Half measured", "reading": combine.read(args())},
             {"id": "S2", "area": "Fully measured", "reading": combine.read(args(cheap=[{"arm": "a/x", "share": 1.0}]))}]

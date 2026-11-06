@@ -136,20 +136,22 @@ source_shares = { poor_answers = 0.20 }
 
 # The combined QAR metric (metric-qar-overall, the authoritative metric of do-grounded-work; evaluation/components/qar_overall). Keyed by
 # the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.
-# Each of do-grounded-work's ideals carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME8 whose ideal_ids name
-# it (the metrics.csv records of the tree). Joshua can change any weight; the reason beside it says why it is what it is now.
+# Each ideal of the QAR intent that a top-level metric serves carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME9
+# whose ideal_ids name it (the metrics.csv records of the tree). The reorganization moved metric-led evolution (the old QI5) and visible value
+# (the old QI6) to the hub's and esoi's own ideals and merged delegated work done to standard (the old QI1) into ideal-moves-me-forward, so the
+# weights of those two retired ideals (0.25) are shared over the four that remain in proportion to their earlier weights (each earlier weight
+# over 0.75), fixed here before the new combination was scored. QME6, QME7 and QME8 serve no QAR ideal now: they are still read and shown,
+# with weight 0. Joshua can change any weight; the reason beside it says why it is what it is now.
 [balance.metric-qar-overall]
-ideals = { QI1 = 0.25, QI2 = 0.25, QI3 = 0.15, QI4 = 0.10, QI5 = 0.10, QI6 = 0.15 }
+ideals = { ideal-moves-me-forward = 0.3333, QI2 = 0.3333, QI3 = 0.2, QI4 = 0.1334 }
 bar = 0.8                         # a sub-metric "passes" its case at or above this value on current rows
 cost_per_passing_turn_usd = 0.05  # QME1: "a few cents" per passing turn (answer-a-turn milestone); dearer turns scale down
 
 [balance.metric-qar-overall.reasons]
-QI1 = "The top intent's first clause: goals keep moving because delegated work gets done to the standard written. The reason QAR exists."
+ideal-moves-me-forward = "The top intent's first clause: the person's goals keep moving because delegated work gets done to the standard written (the old QI1, merged here). The reason QAR exists."
 QI2 = "The top intent's second clause: every answer rests on the person's own material, never another's. Wrong or leaked help is worse than none."
 QI3 = "Acting first without taking a human-only step decides whether people can delegate at all; weighted below the two clauses of the vision."
 QI4 = "One engine for every consumer is how QAR stays worth maintaining, but it serves the person only indirectly."
-QI5 = "Selection by metric is the method that keeps the other ideals improving; it is a means, so it carries less than the outcomes it protects."
-QI6 = "Cost and quality known before they surprise anyone: spend is a real constraint (a daily cap), so it weighs as much as consent."
 
 # QAR builds on the hub of hubs: the hub's ESOI-informed defaults sit beneath QAR's own `selected` arms, and a solution whose
 # `selected` differs from the hub's default cites ids of QAR's own records in esoi/overrides.csv (rule S35).
