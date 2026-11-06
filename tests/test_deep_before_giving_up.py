@@ -142,3 +142,16 @@ def test_an_empty_escalation_that_filed_a_decision_still_reports_itself():
     Record.facts.append(done)
     assert own_escalation_adds_nothing(Res(), Record(), facts_before=1) is False
     assert own_escalation_adds_nothing(Res(), Record(), facts_before=2) is True
+
+
+def test_a_which_quest_question_from_the_deep_run_replaces_the_draft():
+    """ACC-020: the runner's deliberate question (error quest_ambiguous) must not be dropped as a failed run."""
+    from hubofhubs.api import DeepResult
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import own_escalation_adds_nothing
+
+    class Res:
+        text = ""
+        deep_results = [DeepResult(met=False, error="quest_ambiguous", output="Which quest should this go on?")]
+    assert own_escalation_adds_nothing(Res()) is False
+    Res.deep_results = [DeepResult(met=False, error="mutation_codegen_failed", output="I couldn't turn that")]
+    assert own_escalation_adds_nothing(Res()) is True

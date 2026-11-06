@@ -337,6 +337,11 @@ def own_escalation_adds_nothing(result: Any, exec_record: Any = None, facts_befo
     if deep_declined_background(result):
         return True
     results = list(getattr(result, "deep_results", None) or [])
+    if any(getattr(d, "error", None) == "quest_ambiguous" and (getattr(d, "output", "") or "").strip()
+           for d in results):
+        # The runner's deliberate question "which quest do you mean?" is its answer, not a failure: an
+        # earlier draft that said the change cannot be made would be a false statement (ACC-020).
+        return False
     facts_after = list(getattr(exec_record, "facts", None) or [])[facts_before:]
     if (results and all(not getattr(d, "met", False) and getattr(d, "error", None) for d in results)
             and not any(getattr(d, "decision_id", None) or getattr(d, "usage_limited", False)
