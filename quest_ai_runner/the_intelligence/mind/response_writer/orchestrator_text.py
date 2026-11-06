@@ -202,6 +202,21 @@ def _strip_future_context(output: Optional[str]) -> str:
 UNCONFIRMED_NO_CHANGE_LEAD = "Not confirmed as done, and nothing was changed."
 
 
+def tool_landed_account(exec_record: Any) -> str:
+    """The turn's own record of the changes its tool calls made, written by code from the execution facts.
+
+    One line per acting tool call that succeeded (``ExecutionFact.succeeded``, set from the tool's own status), taken from the
+    receipt the tool returned. Empty when no tool change landed. It is what ``keep_landed_work_reported`` holds a reply to, so a
+    planner-tool turn gets the same guard a deferred run has: the reply may not deny a change this record shows was made. It reads
+    no prose of the model. Never raises."""
+    try:
+        lines = [str(f.goal).strip() for f in (getattr(exec_record, "facts", None) or [])
+                 if getattr(f, "succeeded", False) and str(getattr(f, "goal", "")).startswith("tool ")]
+        return "Changes made this turn:\n" + "\n".join(f"- {line}" for line in lines) if lines else ""
+    except Exception:  # noqa: BLE001 -- the account is a guard's input and must never break the reply
+        return ""
+
+
 def unconfirmed_no_change_text(result: Any) -> str:
     """One deep result's text for the user, with the honesty gate for an unconfirmed no-change run.
 

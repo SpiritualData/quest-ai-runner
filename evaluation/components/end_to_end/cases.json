@@ -2833,7 +2833,15 @@
      "single quest",
      "that quest",
      "one quest",
-     "just that quest"
+     "just that quest",
+     "specific quest",
+     "particular quest",
+     "this quest",
+     "fitness quest",
+     "only that",
+     "just that",
+     "only the quest",
+     "just the quest"
     ],
     [
      "private"
@@ -3138,8 +3146,8 @@
    },
    "reply_lacks_regex": [
     "[\\u2014\\u2013]",
-    "\\bsales\\b",
-    "\\brevenue\\b"
+    "\\d[\\d,.]*\\s*(usd|dollars)?\\s*(in|of)\\s+(revenue|sales)\\b",
+    "\\b(revenue|sales)\\s+(is|was|stands at|of|reached|hit|totals?)\\s+\\$?\\d"
    ]
   },
   "quality_rubric": [

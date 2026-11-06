@@ -20,7 +20,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool impo
     OWN_ESCALATION_KEPT_STATUS, USER_INTENT_HOLD_OFF, own_escalation_adds_nothing)
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import (
     FACTS_ANSWER_HEAD, _clarify_question_text, _truncate_goal, facts_block, user_ordered_work)
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _answer_describes_unexecuted_work
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _answer_describes_unexecuted_work, tool_landed_account
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
@@ -547,6 +547,12 @@ class RunAnswerMixin:
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 pass
 
+        # A reply may not deny a change this turn's own tool calls made. The account is code-written from the execution facts, and
+        # the judge (one structured contradiction verdict, no keywords) swaps in the account when the reply denies it. Set before
+        # the nets below, which would otherwise read a denial ("I can't add it") as work still to execute.
+        rs.landed_account = tool_landed_account(exec_record)
+        rs.text = self.keep_landed_work_reported(rs, rs.text)
+
         # If deferred_deep is set, also run the deep task now, synchronously, right after the
         # answer text is produced (same turn; nothing is saved for later)
         # OR if planner explicitly flagged answer_contains_work_to_execute
@@ -643,7 +649,8 @@ class RunAnswerMixin:
         # still held to the overall goal (grounded in what the deep run actually produced).
         rs._deferred_deep_grounded = False
         # The landed deferred run's own code-written account; see ``keep_landed_work_reported``.
-        rs.landed_account = ""
+        # (A turn whose tool calls changed something starts with that account; a deferred run replaces it with its own.)
+        rs.landed_account = tool_landed_account(exec_record)
         # True once a QUEUED deployment's deferred hand-off is CONFIRMED (the deep runner enqueued
         # the work and returned a deferred met result). Gates the goal-verification loop below off
         # for this turn: the deferred contract trusts met and never re-verifies a hand-off sentinel
