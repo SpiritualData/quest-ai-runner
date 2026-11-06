@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- The private poorly answered inputs are a conditional case source of the chat-quality metric (`QAR_PRIVATE_POOR_ANSWERS_DATASET`, a file or a folder holding `poorly_answered_inputs.jsonl`): absent means no case and nothing fails, the digest of the present file is recorded with the cases, each case runs through the dev chat arm and is judged on a rubric built from its own failure kind and ideal handling, and the source carries the share set in `esoi.toml` (`[balance.chat_quality]` `source_shares`) of the pass rate, which the combined QAR metric reads for its chat arm.
+- `QAR_EVAL_OUTPUT_DIR`: when set, every `chat_quality` and `end_to_end` case a run scores appends one JSON line (dataset, case id, arm, input, reply, route, score, pass, reason, commit, time) to `<dir>/<dataset>/<case id>.jsonl`. Unset writes nothing.
+- `scripts/qar_datasets_sheet.py` writes a Datasets, Inputs and How to use view of the evaluation datasets (status, best alternative and its last output per input) to an existing Google Sheet, carrying human-entered priority and notes over each rewrite.
 - Files are found by the date in their name: `find` takes `date` (`yesterday`, `last thursday`, `this week`, `2026-01-31`, `A..B`) with no pattern, resolved by code (`file_reading/date_references.py`). The server map lists folders of date-named files with today's date, so the planner sees where "yesterday's meeting" lives.
 - Dated-file gate: when the person's own message names a time and a file source is wired, the loop runs the dated find once before an answer or a question back. The planner rubric says to look for named material before asking the person to paste it.
 

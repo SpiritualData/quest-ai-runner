@@ -37,6 +37,8 @@ stays free.
 ``aggregate`` reads the whole run: share correct overall and per kind, unrequested writes, and model calls per case."""
 import re
 
+import output_log
+
 from assist_a_terminal_session import score as terminal_score
 from end_to_end.clock import countdown_problems
 
@@ -208,7 +210,13 @@ def bulk_problems(got, expect):
 
 
 def score_case(fn, case):
-    return judge(fn(case), case)
+    got = fn(case)
+    verdict = judge(got, case)
+    output_log.record("end_to_end", case.get("id", ""), output_log.arm_of(fn), case.get("message") or " / ".join(case.get("messages") or []),
+                      (got.get("terminal") or {}).get("stdout", "") if case["kind"] == "terminal" else got.get("reply", ""),
+                      f"route: {got.get('route', '')}; tools: {','.join(w['tool'] for w in got.get('writes', [])) or 'none'}",
+                      None, verdict["ok"], verdict["note"])
+    return verdict
 
 
 def judge(got, case):

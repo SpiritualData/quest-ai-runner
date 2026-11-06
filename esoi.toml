@@ -123,6 +123,17 @@ weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.044
 seconds_per_case = 10
 
+# The chat-quality pass rate (metric-answer-a-turn, evaluation/components/chat_quality). The recorded number stays the pass rate: cost and time carry
+# no weight here (a turn is judged on its answer, and its price is read beside it). The one addition is a case source: the private poorly answered
+# inputs (QAR_PRIVATE_POOR_ANSWERS_DATASET, evaluation/components/chat_quality/poor_answers.py), present only on a machine that holds them. When they
+# are present they carry `source_shares.poor_answers` of the pass rate (the dataset cases carry the rest), a share fixed here before any of them was
+# scored; the combined QAR metric reads the chat arm's rate with the same share. Absent, the number is the dataset cases' alone.
+[balance.chat_quality]
+weights = { accuracy = 1.0, cost = 0.0, time = 0.0 }
+cost_per_case_usd = 0.05
+seconds_per_case = 120
+source_shares = { poor_answers = 0.20 }
+
 # The combined QAR metric (metric-qar-overall, the authoritative metric of do-grounded-work; evaluation/components/qar_overall). Keyed by
 # the metric id, not a component name, because the harness reads [balance.<component>] as an accuracy/cost/time balance.
 # Each of do-grounded-work's ideals carries a weight (summing to 1), split equally over the sub-metrics QME1 to QME8 whose ideal_ids name

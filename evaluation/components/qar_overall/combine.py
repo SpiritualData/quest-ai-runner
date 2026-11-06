@@ -216,7 +216,17 @@ def cost_known(row):
     return str(row.get("cost_usd", "")).strip() != ""
 
 
+POOR_ANSWERS = re.compile(r"poor_answers (\d+)/(\d+) others (\d+)/(\d+)")
+
+
 def pass_rate(row):
+    """Passed cases / cases run. A chat_quality row that ran the private poorly answered source (its details say so) is read with that source at its
+    share of the number (``[balance.chat_quality]`` ``source_shares`` in esoi.toml), the same rate the component prints."""
+    found = POOR_ANSWERS.search(row.get("details") or "")
+    if found:
+        from chat_quality import poor_answers
+        mine_ok, mine_n, other_ok, other_n = (int(g) for g in found.groups())
+        return poor_answers.weighted_rate(other_ok, other_n, mine_ok, mine_n, poor_answers.share())
     return num(row, "passed") / max(num(row, "cases"), 1.0)
 
 

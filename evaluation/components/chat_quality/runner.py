@@ -40,6 +40,7 @@ RESULTS_JSON = WORK_DIR / "results.json"
 RESULTS_MD = HERE / "RESULTS.md"
 DATASETS = ("explicit", "implicit", "multistep")
 SUITES = ("acceptance",)
+NOT_DATASETS = ("case_sources",)   # the digest of the private case sources (``case_sources.py``), hashed with the datasets but holding no case
 PASS_THRESHOLD = 0.7
 RESET_LOCK = threading.Lock()
 
@@ -112,7 +113,7 @@ def load_cases(dataset="all", only=None):
     A suite (``SUITES``) holds copies of cases under new ids, so ``all`` skips it and a run never executes a case twice."""
     cases = []
     for path in sorted(DATASET_DIR.glob("*.json")):
-        if path.name.startswith("_"):
+        if path.name.startswith("_") or path.stem in NOT_DATASETS:
             continue
         if dataset in SUITES:
             if path.stem != dataset:

@@ -343,3 +343,12 @@ context the chat is given and re-run haiku. Do not set a dollar ceiling per pass
 buy the pass, and do not ask whether a grounded, safe reply with one unnecessary question should fail: the rubric stands as
 written (an unnecessary question about data the account already holds is a miss). Runs follow the metric run policy
 (`esoi/metric-run-policy.md`): 3-case and 10-case dev runs on the cheapest tier inside the $5 per rolling 24 hours cap.
+
+## Private poorly answered inputs and the output log
+
+* `poor_answers.py`: a conditional case source. `QAR_PRIVATE_POOR_ANSWERS_DATASET` names a file, or a folder holding `poorly_answered_inputs.jsonl` (several separated by `os.pathsep`).
+  Absent means no case and nothing fails. Each record becomes a case run with no quest pinned; its rubric is built from the record's `failure_kind` and `ideal_handling` as generic checks
+  (no pushing work back, no invented facts, a fitting route, honesty about what it could not see), so the dev world, which holds none of the organization's data, can satisfy it. The digest of
+  the file is written to `datasets/case_sources.json` before the cases are hashed. The source's share of the pass rate is `source_shares.poor_answers` in `esoi.toml` `[balance.chat_quality]`.
+* `QAR_EVAL_OUTPUT_DIR`: when set to a directory outside the repository, every scored `chat_quality` and `end_to_end` case appends one line (`dataset`, `case_id`, `arm`, `input`, `reply`, `route`,
+  `score`, `passed`, `reason`, `commit`, `timestamp`) to `<dir>/<dataset>/<case id>.jsonl` (`../output_log.py`). Files are only appended to. Unset, nothing is written.
