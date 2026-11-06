@@ -35,6 +35,41 @@ QUEST_TEAM = DEV_ENV.get("QUEST_TEAM_ID") or ""
 assert not QUEST_BASE or ("batmanhq" in QUEST_BASE and "spiritualdata.org" not in QUEST_BASE), (
     f"REFUSING TO RUN: {QUEST_BASE} is not the dev Quest backend")
 
+#: The hermetic eval identity's team (make_eval_account.py). Every destructive step (setup, reset, teardown,
+#: a run's world restore) acts on whatever account the key belongs to, so it must be this one and never a lane's
+#: or a person's account (a teardown once ran against another account's cards).
+EVAL_TEAM_ID = os.environ.get("QUAL_EVAL_TEAM_ID") or "team_qaevalchat01"
+
+
+def eval_identity_problem(env_file=None, env=None, lane_env_file=None):
+    """Why the client must NOT run a destructive step, or None when it acts on the eval identity.
+
+    Checks, from the env the client loaded: the file is the eval identity's own (``eval-account.env``), the
+    team is the eval team, and the key is not the dev lane's key. Pure function so a test can feed it."""
+    env_file = Path(env_file or DEV_ENV_FILE)
+    env = DEV_ENV if env is None else env
+    if env_file.name != "eval-account.env":
+        return f"{env_file} is not the eval identity's env file (eval-account.env)"
+    if (env.get("QUEST_TEAM_ID") or "") != EVAL_TEAM_ID:
+        return f"team {env.get('QUEST_TEAM_ID')!r} is not the eval team {EVAL_TEAM_ID!r}"
+    if not env.get("QUEST_API_KEY"):
+        return "no API key loaded"
+    lane = Path(lane_env_file) if lane_env_file else env_file.with_name(".env")
+    if lane.is_file():
+        for line in lane.read_text().splitlines():
+            if line.strip().startswith("QUEST_API_KEY=") and line.split("=", 1)[1].strip().strip('"\'') == env["QUEST_API_KEY"]:
+                return "the key is the dev lane's key, not the eval identity's"
+    return None
+
+
+def assert_eval_identity(command=""):
+    """Print what the client will act on and refuse (SystemExit) unless it is the eval identity."""
+    problem = eval_identity_problem()
+    print(f"eval client: {QUEST_BASE} team={QUEST_TEAM} env={DEV_ENV_FILE.name} command={command or '-'}")
+    if problem:
+        raise SystemExit(f"REFUSING a destructive eval step: {problem}")
+
+
 # QUAL_INPROCESS=1: serve every call from quest-backend's app in this process (see inprocess.py),
 # so one run can pin its own models without touching the shared dev server's config.
 INPROCESS = os.environ.get("QUAL_INPROCESS") == "1"
@@ -87,6 +122,7 @@ class WorldLock:
     def __enter__(self):
         import datetime
         import fcntl
+        assert_eval_identity(self.command)
         self.handle = open(LOCK_PATH, "a+")
         try:
             fcntl.flock(self.handle, fcntl.LOCK_EX | fcntl.LOCK_NB)

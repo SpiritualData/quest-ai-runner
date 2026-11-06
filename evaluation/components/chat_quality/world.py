@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from devclient import (  # noqa: E402
+    assert_eval_identity,  # noqa: E402
     QUEST_TEAM, TAG, WORK_DIR, api, entries_of, goals_of, list_collections, list_quests,
     measurable_outcomes_of, notes_of, quest_state, unwrap_list)
 
@@ -268,6 +269,7 @@ def setup(wait_seconds=0, approve_own=False):
     """Build the world. Needs one-time approval of the five quest creations (see request_quest):
     by a person, or on dev by the harness itself with ``approve_own``. Exits 3 if any are still
     pending; re-run `setup` after approving."""
+    assert_eval_identity("setup")
     if STATE_PATH.exists() and json.loads(STATE_PATH.read_text()).get("contents_built"):
         raise SystemExit(f"{STATE_PATH} exists: a world is already built. Run teardown or reset.")
     quests, pending = ensure_quests(wait_seconds, approve_own)
@@ -291,6 +293,7 @@ def setup_partial():
     """SMOKE MODE ONLY: no quests (no approvals needed). Builds the collections that need no quest,
     unlinked, plus team context, so the runner/judge pipeline can be exercised end to end. A
     partial world cannot serve the datasets; it is labelled so in the state file."""
+    assert_eval_identity("setup_partial")
     if STATE_PATH.exists():
         raise SystemExit(f"{STATE_PATH} exists: run teardown first.")
     state = fresh_state()
@@ -1126,6 +1129,7 @@ def teardown(keep_quests=False, decline_asks=False):
     """Delete the world and PROVE it is gone. ``keep_quests`` leaves the five quests (whose
     creation needed a person's approval) in place with their fields restored, so a re-setup needs
     no new approvals; everything else is deleted and verified either way."""
+    assert_eval_identity("teardown")
     state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else fresh_state()
     report = []
 
@@ -1246,6 +1250,7 @@ def reset():
     to the eval), so a learned item on one survives teardown and every prior reset indefinitely.
     ``reset_world_quest_cards`` strips those back to managed-only content here too, so a fresh reset
     is a clean slate for cards as well as quest/collection data."""
+    assert_eval_identity("reset")
     state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else None
     if state is None or state.get("partial") or not state.get("quests"):
         raise SystemExit("reset needs a full world; run setup")
