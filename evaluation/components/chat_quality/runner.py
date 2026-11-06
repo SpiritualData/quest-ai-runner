@@ -39,6 +39,7 @@ RAW_DIR = WORK_DIR / "raw"
 RESULTS_JSON = WORK_DIR / "results.json"
 RESULTS_MD = HERE / "RESULTS.md"
 DATASETS = ("explicit", "implicit", "multistep")
+SUITES = ("acceptance",)
 PASS_THRESHOLD = 0.7
 RESET_LOCK = threading.Lock()
 
@@ -106,9 +107,17 @@ def validate_case(case, source):
 
 
 def load_cases(dataset="all", only=None):
+    """``dataset``: ``all`` (every file except the suites), a dataset name, or a suite file name (``acceptance``).
+
+    A suite (``SUITES``) holds copies of cases under new ids, so ``all`` skips it and a run never executes a case twice."""
     cases = []
     for path in sorted(DATASET_DIR.glob("*.json")):
         if path.name.startswith("_"):
+            continue
+        if dataset in SUITES:
+            if path.stem != dataset:
+                continue
+        elif path.stem in SUITES:
             continue
         data = json.loads(W.resolve_date_tokens(path.read_text()))
         for case in (data["cases"] if isinstance(data, dict) else data):
@@ -119,7 +128,9 @@ def load_cases(dataset="all", only=None):
     dupes = {i for i in ids if ids.count(i) > 1}
     if dupes:
         raise SystemExit(f"duplicate case ids: {sorted(dupes)}")
-    if dataset != "all":
+    if dataset in SUITES:
+        pass
+    elif dataset != "all":
         cases = [c for c in cases if c["dataset"] == dataset]
     if only:
         cases = [c for c in cases if c["id"] in set(only)]
@@ -139,6 +150,7 @@ def validate_datasets():
     pivot_use = sum(1 for c in cases if c.get("must_use_pivots"))
     writes = sum(1 for c in cases if c.get("expect_writes"))
     print(f"datasets    : {', '.join(f'{ds}={n}' for ds, n in per_dataset.items())}")
+    print(f"suites      : {', '.join(f'{name}={len(load_cases(name))}' for name in SUITES)} (copies under new ids, run with --dataset <name>)")
     print(f"cases       : {len(cases)} valid, no duplicate ids ({len(examples)} example cases too)")
     print(f"             {pivot_use} with required pivots, {writes} with expect_writes, "
           f"{sum(1 for c in cases if c.get('forbid_writes'))} write-forbidden")
@@ -605,7 +617,7 @@ def main():
     parser.add_argument("command",
                         choices=["setup", "run", "teardown", "report", "reset", "validate",
                                 "cleanup-asks"])
-    parser.add_argument("--dataset", default="all", choices=["all", *DATASETS])
+    parser.add_argument("--dataset", default="all", choices=["all", *DATASETS, *SUITES])
     parser.add_argument("--only", default=None, help="comma-separated case ids")
     parser.add_argument("--workers", type=int, default=1,
                         help="parallelism for read-only cases (mutating cases always run serially)")

@@ -31,6 +31,7 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 * `judge.py`: evidence builder, deterministic pre-checks, `claude -p` judge (sonnet, no API key).
 * `runner.py`: loads `datasets/*.json`, drives one fresh conversation per case, snapshots the DB
   before and after, pre-checks, judges, writes `RESULTS.md` and `/tmp/qualeval/raw/*.json`.
+* `datasets/acceptance.json`: the 30-case acceptance suite (ACC-001..ACC-030, one per required behaviour category, each a copy of an existing case under a new id or a new case; `evidence_notes` carries `source:` and `ideal:`). Not part of `--dataset all`; run it with `runner.py run --dataset acceptance` or `esoi run chat_quality --impl dev_quest_chat --only ACC-001,...,ACC-030`. `test_acceptance.py` pins the 30 ids and categories.
 * `datasets/schema.md`: the case schema. `cases.json`: the two smoke cases. The component's case set (`score.load_cases`) is every dataset case plus those two; the offline arm checks all of them, and `esoi run chat_quality --impl dev_quest_chat --sample N` (or `--only`) draws the live ones.
 * `test_card_sweep.py`: offline tests for the id-only sweep's selection/settling.
   `test_card_restore.py`: offline tests for the full-dict restore's selection

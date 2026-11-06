@@ -40,7 +40,7 @@ def test_smoke_cases_are_valid_dataset_cases():
 def test_the_component_covers_every_dataset_case_and_the_offline_arm_checks_all_of_them():
     cases = common.load_cases("chat_quality")
     ids = [c["id"] for c in cases]
-    assert ids == [c["id"] for c in runner.load_cases("all")] + ["EX-READ-1", "EX-WRITE-1"]
+    assert ids == [c["id"] for c in runner.load_cases("all")] + [c["id"] for c in runner.load_cases("acceptance")] + ["EX-READ-1", "EX-WRITE-1"]
     assert len(set(ids)) == len(ids) > 200
     from chat_quality.impls import reference_replies
     check = reference_replies.build(None)
