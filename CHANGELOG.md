@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
+### Changed
+- Release pins: `esoi` is installed from the `v0.4.0` tag and `hubofhubs[locks,science,web]` from the `v0.3.0` tag, the same two strings in quest-backend and conceptai. `quest_ai_runner.api` also exports `TaskExecutor`, `GoogleDriveAdapter`, `parse_drive_url`, `DEFAULT_DRIVE_SCOPES` and `service_account_token_provider`.
+
 ### Added
 - `quest-ai-runner doctor` checks the installed `quest-ai-runner` command: it reports an entry script that imports a module or name that no longer exists, or a `console_scripts` entry point that does not resolve, and prints the fix (`pip install -e <checkout> --no-deps` in that environment). A stale command makes the doctor exit 1.
 
@@ -6633,5 +6638,6 @@ Initial public release.
 - **Tests**: offline core-loop, model-registry, mode/streaming, runner (mock client), and
   example wiring tests.
 
-[Unreleased]: https://github.com/SpiritualData/quest-ai-runner/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/SpiritualData/quest-ai-runner/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/SpiritualData/quest-ai-runner/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/SpiritualData/quest-ai-runner/releases/tag/v0.1.0
