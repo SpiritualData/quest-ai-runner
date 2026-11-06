@@ -104,7 +104,8 @@ def build_evidence(turns, tasks=None, proposals=None):
                  for e in events if event_name(e) in ("plan", "replan")]
         reads = [{"step": (e.get("data") or {}).get("step"),
                   "reads": (e.get("data") or {}).get("reads"),
-                  "sources": clip((e.get("data") or {}).get("sources"), 500)}
+                  "sources": clip((e.get("data") or {}).get("sources"), 500),
+                  "locators": (e.get("data") or {}).get("locators") or []}
                  for e in events if event_name(e) == "read"]
         contexts = []
         for e in events:
@@ -152,6 +153,11 @@ def build_evidence(turns, tasks=None, proposals=None):
     out["code_text"] = "\n".join(
         str(e.get("data", {}).get("code") or "") for t in turns for e in t["events"]
         if event_name(e) == "exec" and (e.get("data") or {}).get("phase") in ("code", "executing"))
+    # A read step calls the same helpers by name ({"operation": "get_insights"}): its locator records which, and it
+    # counts as the helper being called (the pre-checks look for helper names in this text).
+    out["code_text"] += "\n" + "\n".join(
+        str(loc) for t in turns for e in t["events"] if event_name(e) == "read"
+        for loc in ((e.get("data") or {}).get("locators") or []) if str(loc).startswith("operation"))
     # Code parked on an approval card counts as generated code (it is what approving would run).
     out["code_text"] = (out["code_text"] + "\n" + "\n".join(
         str(p.get("parked_code") or "") for p in (proposals or [])))[:30000]

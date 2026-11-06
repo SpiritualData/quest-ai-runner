@@ -331,3 +331,14 @@ def test_formula_keeps_every_cap():
         {**base, "rubric": [{"id": 1, "pass": True, "evidence": "q"}, {"id": 2, "pass": False}],
          "context_used": [{"pivot": "P", "used": True, "changed_answer": True}]}, case)
     assert half["score"] == 0.5
+
+
+def test_a_read_step_operation_counts_as_the_helper_being_called():
+    """The chat reads with {"operation": "get_insights"} in a read step as well as in generated code: the read
+    frame's locators are in the evidence's code text, so the pre-check sees the helper named (ACC-010)."""
+    events = [{"type": "read", "data": {"step": 1, "reads": 2, "sources": [],
+                                        "locators": ["operation(get_insights)", "semantic q='insights'"]}},
+              {"type": "done", "content": "No insights are saved on this quest."}]
+    evidence = J.build_evidence([{"message": "any insights?", "events": events}])
+    assert "get_insights" in evidence["code_text"]
+    assert "semantic" not in evidence["code_text"]

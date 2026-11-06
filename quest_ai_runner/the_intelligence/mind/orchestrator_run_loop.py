@@ -905,9 +905,14 @@ class RunLoopMixin:
                             _rp = _o.get("rel_path") or _o.get("pattern")
                             if _rp:
                                 rs._sources.append(_rp)
+                    # What each read asked for (an operation call, a collection filter, a search), so an
+                    # observer can verify WHICH helper answered without the read's payload.
+                    locators = [str(_o.get("locator"))[:120] for _o in new_obs
+                                if isinstance(_o, dict) and _o.get("locator")]
                     emit.emit(ProgressEvent(type=EVENT_READ, step=rs.steps,
                                             data={"reads": len(fresh_reads),
-                                                  "sources": rs._sources[:8]}))
+                                                  "sources": rs._sources[:8],
+                                                  "locators": locators[:12]}))
                     if budget_exhausted():
                         break
                     continue
