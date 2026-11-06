@@ -31,5 +31,7 @@ def aggregate(rows):
     if not private:
         return "case sources private 0 (dataset absent); the hub's cases are the foundation's"
     passed = sum(bool(r["ok"]) for r in private)
-    return (f"case sources private {len(private)} | real inputs {passed}/{len(private)} ({passed / len(private):.0%}), "
+    loaded = len(private_cases.load_all(private_cases.present_folders()))
+    ran = f"{len(private)} of {loaded} loaded (a run of only the cases that still fail scores a part)" if len(private) < loaded else str(len(private))
+    return (f"case sources private {ran} | real inputs {passed}/{len(private)} ({passed / len(private):.0%}), "
             f"mean accuracy {sum(r['accuracy'] for r in private) / len(private):.3f}")

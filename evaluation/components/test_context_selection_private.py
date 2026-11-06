@@ -81,6 +81,13 @@ def test_the_private_aggregate_names_the_count_and_the_accuracy_of_the_private_s
     assert score.aggregate(rows).startswith("case sources private 2 | real inputs 1/2 (50%), mean accuracy 0.500")
 
 
+def test_a_partial_run_says_how_many_of_the_loaded_cases_it_scored(tmp_path, monkeypatch):
+    write_dataset(tmp_path, (("a", 0), ("b", 1), ("c", 1)))
+    monkeypatch.setenv(private_cases.ENV, str(tmp_path))
+    assert "private 1 of 3 loaded" in score.aggregate([dict(ok=True, private=True, accuracy=1.0)])
+    assert score.aggregate([dict(ok=True, private=True, accuracy=1.0)] * 3).startswith("case sources private 3 |")
+
+
 def test_the_scorer_keeps_no_copy_of_the_hub_cases(tmp_path):
     assert score.load_cases() == private_cases.load_cases()
     assert not (Path(score.__file__).parent / "cases.json").exists() and not hasattr(score, "score_topic")
