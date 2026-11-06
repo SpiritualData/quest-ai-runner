@@ -13,6 +13,7 @@ from quest_ai_runner import run
 from quest_ai_runner.the_self.assembler.resolve import names, register, resolve
 
 # Request intake (the_consciousness/request_intake): queued tasks, the lane's poller and the bridge to async code
+from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
 from quest_ai_runner.the_consciousness.request_intake.poller import Poller
 from quest_ai_runner.the_consciousness.request_intake.async_bridge import run_coro_sync, run_detached
 from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
@@ -37,6 +38,8 @@ from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 # Internal Context: the retrieval sources a host composes
 from quest_ai_runner.the_body.internal_context.quest.cached_db_adapter import CachedDbAdapter
 from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import service_account_token_provider
+from quest_ai_runner.the_world.tools.connected_system_operations.google_drive_adapter import DEFAULT_DRIVE_SCOPES, GoogleDriveAdapter, parse_drive_url
 from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
 from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter, MAX_RESPONSE_BYTES
 
@@ -126,6 +129,7 @@ __all__ = [
     "CorpusBackground",
     "DECISION_KIND_RE",
     "DECLINED",
+    "DEFAULT_DRIVE_SCOPES",
     "DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION",
     "DEFERRED_RUNNER_KEY",
     "DONE",
@@ -138,6 +142,7 @@ __all__ = [
     "FileRecentContextStore",
     "FilesAdapter",
     "GLOBAL_SCOPE_KEY",
+    "GoogleDriveAdapter",
     "GuidanceCard",
     "GuidanceCardManager",
     "GuidanceProviderBase",
@@ -188,6 +193,7 @@ __all__ = [
     "SUPERSEDED",
     "StagedPlanRunner",
     "StreamSink",
+    "TaskExecutor",
     "TIERS",
     "TIER_WORDS",
     "ToolContext",
@@ -216,6 +222,7 @@ __all__ = [
     "names",
     "normalize_future_context",
     "open_items_block",
+    "parse_drive_url",
     "parse_refresh_response",
     "pattern_from_dict",
     "prediction_from_dict",
@@ -231,6 +238,7 @@ __all__ = [
     "sanitize_user_text",
     "scope_point_id",
     "select_card_scope",
+    "service_account_token_provider",
     "strip_future_context",
     "terms_within_budget",
     "turn_teaches_new_facts",
