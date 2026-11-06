@@ -673,6 +673,20 @@ class RunLoopMixin:
                     rs.plan.tool_calls = _calls
                     emit.status("Reading the quest before answering…")
 
+            # --- DATED-FILE GATE: a time the person named is searched by file-name date before the answer or the question back ------
+            # "the meeting transcript from yesterday": files named by date are found by the date in the name. The person's own words name
+            # the time (hard rule #3 reads only the model's output), so the code runs one find per file source, once a turn, and the
+            # planner then reads what it found instead of asking the person to paste it.
+            if (rs.plan and rs.plan.action in ("answer", "clarify") and message_is_user_turn and self.retrieval is not None
+                    and not getattr(rs, "dated_files_gate_done", False) and step + 1 < cfg.max_steps and not budget_exhausted()):
+                rs.dated_files_gate_done = True
+                _dated = tool_guards.dated_file_reads_owed(rs.user_message, self.retrieval)
+                if _dated:
+                    log.info("Dated-file gate: the message names a time; finding date-named files before answering.")
+                    rs.plan.action = "read"
+                    rs.plan.reads = _dated
+                    emit.status("Looking for files from that day…")
+
             # --- WEB-READ GATE: a question about the world right now is answered after a web read ------------------------
             # The reach judge (opt in) settles where what the person asks lives. When it says "the world right now", web research is
             # wired and the planner chose to answer without one web read, the code runs the read (``core/tool_guards.py``). Once a turn.

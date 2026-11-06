@@ -69,6 +69,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from hubofhubs.api import prune_dirnames
+from quest_ai_runner.the_world.tools.file_reading.date_references import name_in_span
 from quest_ai_runner.the_world.tools.file_reading.files_index import VisibleIndex
 from quest_ai_runner.the_world.tools.file_reading.files_redaction import redact
 from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter, _BINARY_EXTS, _is_secretish, grep_budget_seconds, resolve_in_tree
@@ -427,8 +428,17 @@ class FileOperations:
     # --- find ------------------------------------------------------------------
 
     def find(self, pattern: str, scope: Optional[str] = None,
-             max_results: Optional[int] = None) -> Dict[str, Any]:
+             max_results: Optional[int] = None, date: Optional[str] = None) -> Dict[str, Any]:
         pattern = (pattern or "").strip()
+        span = None
+        if date:
+            from datetime import date as calendar_date
+            from quest_ai_runner.the_world.tools.file_reading.date_references import clamp_span, resolve_date_reference
+            span = resolve_date_reference(str(date), calendar_date.today())
+            if span is None:
+                return {"ok": False, "error": f"date {date!r} is not a date or a date range (use YYYY-MM-DD, A..B, yesterday, last thursday, this week)"}
+            span = clamp_span(span)
+            pattern = pattern or "*"
         if not pattern:
             return {"ok": False, "error": "pattern is required"}
         start, error = self.locate(scope)
@@ -445,6 +455,8 @@ class FileOperations:
         collect_cap = MAX_MAX_RESULTS * 4
 
         def accepts(rel: str, name: str) -> bool:
+            if span is not None and not name_in_span(name, span):
+                return False
             target = rel if wants_path else name
             if has_glob:
                 return fnmatch.fnmatch(target.lower(), needle)
@@ -713,7 +725,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if op == "search":
             return ops.search(str(body.get("pattern") or ""), body.get("scope"), body.get("max_hits"))
         if op == "find":
-            return ops.find(str(body.get("pattern") or ""), body.get("scope"), body.get("max_results"))
+            return ops.find(str(body.get("pattern") or ""), body.get("scope"), body.get("max_results"), body.get("date"))
         if op == "list":
             return ops.list_dir(body.get("path"))
         if op == "map":

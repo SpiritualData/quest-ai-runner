@@ -249,7 +249,26 @@ class VisibleIndex:
             text = self.render_map(root_files, root_dirs, listed, per_dir)
             if len(text) <= MAP_MAX_CHARS:
                 break
-        return text
+        return text + self.dated_section()
+
+    def dated_section(self) -> str:
+        """Folders whose file names carry a date, newest first, so a request by when ("yesterday's meeting") can see where such files
+        live and that a ``date`` find reaches them. Visible paths only; empty when no folder holds three or more dated files."""
+        from datetime import date as calendar_date
+        from quest_ai_runner.the_world.tools.file_reading.date_references import newest_dated
+        try:
+            self.ensure()
+            today = calendar_date.today()
+            rows = newest_dated(self.files, today)
+        except Exception:  # noqa: BLE001 - orientation must never break the map
+            return ""
+        if not rows:
+            return ""
+        lines = [f"Folders of date-named files (today is {today.strftime('%A')} {today.isoformat()}; find them by date with "
+                 "op find and a date such as yesterday, last thursday or 2026-01-31):"]
+        for folder, names, count in rows:
+            lines.append(f"  {folder or '.'}/ ({count} files) newest: {', '.join(names)}"[:MAP_LINE_CHARS])
+        return "\n" + "\n".join(lines)
 
     def render_map(self, root_files, root_dirs, listed, per_dir: int) -> str:
         lines: List[str] = []

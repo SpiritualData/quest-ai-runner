@@ -291,3 +291,22 @@ def drop_web_reads_for_own_records(verdict: Optional[Mapping[str, Any]], reads: 
         return list(reads), []
     kept = [r for r in reads if not (isinstance(r, Mapping) and (r.get("web") is not None or r.get("web_page")))]
     return kept, [r for r in reads if r not in kept]
+
+
+def dated_file_reads_owed(message: str, retrieval: Any, today: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """The file finds the code runs before an answer or a question back to the person, or []. Owed when the person's OWN message points
+    at a time ("yesterday", "last thursday", "this week") and a remote file source is wired: files named by date are found by the
+    date the person named, one find per source, so the answer is not "I don't have it" for a file that is there. Reads the person's
+    words, never the planner's."""
+    from datetime import date as calendar_date
+    from quest_ai_runner.the_world.tools.file_reading.date_references import date_references_in
+    from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
+
+    day = today or calendar_date.today()
+    references = date_references_in(message, day)
+    if not references or retrieval is None:
+        return []
+    members = getattr(retrieval, "adapters", None) or [retrieval]
+    aliases = [a.alias for a in members if isinstance(a, RemoteFilesAdapter)]
+    phrase = references[0][0]
+    return [{"query": {"files": alias, "op": "find", "date": phrase, "max_results": 40}} for alias in aliases[:3]]

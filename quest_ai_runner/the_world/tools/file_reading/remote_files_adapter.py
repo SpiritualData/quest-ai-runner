@@ -29,10 +29,12 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 from hubofhubs.api import RetrievalAdapterBase
+from quest_ai_runner.the_world.tools.file_reading.date_references import clamp_span, name_in_span, resolve_date_reference, span_text
 
 log = logging.getLogger("quest-ai-runner.remote_files_adapter")
 
@@ -352,13 +354,26 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
         stripped_scope = self.strip_alias(raw_scope) if raw_scope else None
         scope = (stripped_scope if stripped_scope is not None else raw_scope) or None
         if op == "find":
+            span = None
+            if spec.get("date"):
+                span = resolve_date_reference(str(spec.get("date")), date.today())
+                if span is None:
+                    return Observation(kind="error", error=f"date {spec.get('date')!r} is not a date: use YYYY-MM-DD, A..B, "
+                                                           "yesterday, last thursday or this week")
+                span = clamp_span(span)
+            pattern = spec.get("pattern") or spec.get("glob") or spec.get("name")
+            if span is not None and not pattern and span[0] == span[1]:
+                pattern = f"*{span[0].isoformat()}*"  # an older server without `date` still finds a single day by name
             answer, error = self.call("find", {
-                "pattern": spec.get("pattern") or spec.get("glob") or spec.get("name"),
-                "scope": scope, "max_results": spec.get("max_results")})
+                "pattern": pattern,
+                "scope": scope, "max_results": spec.get("max_results"),
+                "date": span_text(span) if span else None})
             if answer is None:
                 return Observation(kind="error", error=error)
-            rows = [f"{self.tag(str(r.get('path')))}  ({r.get('size')} bytes, modified {r.get('modified')})"
-                    for r in (answer.get("results") or []) if isinstance(r, dict)]
+            results = [r for r in (answer.get("results") or []) if isinstance(r, dict)]
+            if span is not None:  # an older server ignores `date`: the name test is applied here too
+                results = [r for r in results if name_in_span(str(r.get("path")), span)]
+            rows = [f"{self.tag(str(r.get('path')))}  ({r.get('size')} bytes, modified {r.get('modified')})" for r in results]
             body = "\n".join(rows) if rows else "(no files matched)"
             note = str(answer.get("note") or "")
             return Observation(kind="query", locator=f"files({self.alias}).find",
@@ -393,11 +408,13 @@ class RemoteFilesAdapter(RetrievalAdapterBase):
 
     def usage(self) -> str:
         a = self.alias
+        today = date.today()
         return (
             f'read {{"rel_path": "{a}:<path>", "start_line": N, "end_line": M}} or {{"rel_path": "{a}:<path>", '
             f'"heading": "<title>"}}; search {{"grep": "<regex>", "scope": "{a}:<directory>"}} '
             f'(scope is required); find files {{"query": {{"files": "{a}", "op": "find", "pattern": "<name or *.glob>", '
-            f'"scope": "<directory>"}}}}; list a folder {{"query": {{"files": "{a}", "op": "list", "path": "<directory>"}}}}. '
+            f'"scope": "<directory>"}}}}; find files by the date in their name (no pattern needed; today is {today.strftime("%A")} '
+            f'{today.isoformat()}) {{"query": {{"files": "{a}", "op": "find", "date": "yesterday | last thursday | this week | 2026-01-31 | 2026-01-25..2026-01-31"}}}}; list a folder {{"query": {{"files": "{a}", "op": "list", "path": "<directory>"}}}}. '
             f'{UNTRUSTED_NOTE}'
         )
 

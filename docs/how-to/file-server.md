@@ -36,7 +36,7 @@ All operations are `POST /v1/<op>` with a JSON body and `Authorization: Bearer <
 | Operation | Body | Answer |
 |---|---|---|
 | `search` | `pattern` (regex), `scope?`, `max_hits?` | matching lines: path, line number, text |
-| `find` | `pattern` (name part or `*.glob`), `scope?`, `max_results?` | files, newest first |
+| `find` | `pattern` (name part or `*.glob`), `scope?`, `max_results?`, `date?` (`YYYY-MM-DD`, `A..B`; the client also accepts `yesterday`, `last thursday`, `this week`) | files, newest first; with `date`, only files whose name carries a date in range, and `pattern` may be empty |
 | `list` | `path?` | the entries of one directory |
 | `map` | none | a compact map of the top of the tree (root files, each top folder with its subfolders; at most 60 lines, visible entries only) |
 | `read` | `path`, `start_line?`, `end_line?`, `heading?`, `max_bytes?` | text; pdf, docx and xlsx are converted to text; other binary files answer with a note |

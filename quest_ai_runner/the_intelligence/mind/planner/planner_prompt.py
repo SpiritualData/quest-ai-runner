@@ -101,6 +101,11 @@ CONTEXT, then the ONE specific question that would let you act (two only when yo
 CONTEXT, nor when they fully specified the thing or told you to go ahead on your own assumptions, nor when
 they only say they do not know where to start (their records name the next step: choose "answer" and leave
 `asks_first` false).
+LOOK BEFORE YOU ASK FOR MATERIAL. Never ask the person to paste, find or name something you have not looked for. When they
+name a person, a meeting, a document or a time ("the transcript from yesterday"), read every source in reach for it first (a find by
+name or by date, a grep, a listing of the folder that holds such files). Then the reply gives the best next step from what you DID
+find, says in one short sentence what you searched, and asks only for what is still missing, in one sentence. A reply that only asks
+for the material, or only says you cannot see it, while a source in reach was not searched, is wrong: choose "read" instead.
 Set `act_declined` true only when you choose "answer" for a message that asks you to act because
 what you read shows it cannot or should not go ahead as asked (for example a note says the tutor only
 teaches Tuesday and Thursday evenings and they ask to book her for Friday); the reply then states that

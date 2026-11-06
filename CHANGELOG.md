@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Files are found by the date in their name: `find` takes `date` (`yesterday`, `last thursday`, `this week`, `2026-01-31`, `A..B`) with no pattern, resolved by code (`file_reading/date_references.py`). The server map lists folders of date-named files with today's date, so the planner sees where "yesterday's meeting" lives.
+- Dated-file gate: when the person's own message names a time and a file source is wired, the loop runs the dated find once before an answer or a question back. The planner rubric says to look for named material before asking the person to paste it.
+
 ## [0.2.0] - 2026-11-06
 
 ### Changed
