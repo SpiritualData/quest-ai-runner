@@ -598,10 +598,34 @@ def build_prompt(case, evidence, changes, pre, truth, pivots):
         steps=json.dumps(case.get("steps") or [], indent=1)[:3000],
         evidence_notes=case.get("evidence_notes") or "(none)",
         ground_truth=truth[:24000] + period_dates_note(),
-        evidence=json.dumps({k: v for k, v in evidence.items() if k != "code_text"},
-                            indent=1, default=str)[:20000],
+        evidence=evidence_for_judge(evidence),
         changes="\n".join(f"- {c}" for c in changes) or "(no changes at all)",
         precheck=json.dumps(pre["checks"], indent=1)[:3500])
+
+
+EVIDENCE_JUDGE_CHARS = 20000
+
+
+def evidence_for_judge(evidence, limit=EVIDENCE_JUDGE_CHARS):
+    """The evidence JSON the judge reads, never cut off mid-transcript.
+
+    A long conversation (ACC-024, six turns) overflowed the limit and the tail was clipped, so the judge could not
+    see the last replies it was asked to check and failed a correct recall. Over the limit, the bulky per-turn
+    traces (explanation, plans, statuses, contexts, execs) are dropped turn by turn from the first turn on, and
+    every turn keeps its message and its reply."""
+    body = {k: v for k, v in evidence.items() if k != "code_text"}
+    text = json.dumps(body, indent=1, default=str)
+    if len(text) <= limit:
+        return text
+    keep = ("message", "reply", "delegated", "frame_counts")
+    turns = list(body.get("turns") or [])
+    for i in range(len(turns)):
+        turns[i] = {k: v for k, v in turns[i].items() if k in keep}
+        body["turns"] = turns
+        text = json.dumps(body, indent=1, default=str)
+        if len(text) <= limit:
+            return text
+    return text[:limit]
 
 
 def extract_json(raw):

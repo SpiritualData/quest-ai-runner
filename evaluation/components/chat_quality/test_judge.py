@@ -342,3 +342,12 @@ def test_a_read_step_operation_counts_as_the_helper_being_called():
     evidence = J.build_evidence([{"message": "any insights?", "events": events}])
     assert "get_insights" in evidence["code_text"]
     assert "semantic" not in evidence["code_text"]
+
+
+def test_a_long_conversation_keeps_every_reply_for_the_judge():
+    turns = [{"message": f"m{i}", "reply": f"reply number {i}", "explanation": "x" * 6000, "plans": [], "statuses": []}
+             for i in range(6)]
+    text = J.evidence_for_judge({"turns": turns, "code_text": "ignored"})
+    assert len(text) <= J.EVIDENCE_JUDGE_CHARS
+    for i in range(6):
+        assert f"reply number {i}" in text
