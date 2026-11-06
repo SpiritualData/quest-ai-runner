@@ -51,11 +51,11 @@ REPLY_LIMIT = 8000
 DATASETS_HEAD = ["Dataset id", "Name", "What it tests", "Owner", "PRIORITY", "Priority set by", "STATUS", "Inputs", "Metrics that use it",
                  "Private or repo", "Source", "How to run", "Notes"]
 INPUTS_HEAD = ["Dataset", "Input id", "Group", "Input text", "Category", "What went wrong", "Ideal handling", "Input note", "Original input text", "PRIORITY", "Priority set by", "Status", "Environment", "BEST ALTERNATIVE",
-               "ITS LAST OUTPUT", "Output from", "Acted as", "Score", "Tokens", "Model calls", "Lane gaps", "Judge reason", "Run date", "Commit", "Notes"]
+               "ITS LAST OUTPUT", "Messages (in order)", "Metric", "Before", "After", "Moved?", "Output from", "Acted as", "Score", "Tokens", "Model calls", "Lane gaps", "Judge reason", "Run date", "Commit", "Notes"]
 EDITABLE = {"Datasets": ["PRIORITY", "Notes"], "Inputs": ["PRIORITY", "Notes"]}
 KEYS = {"Datasets": ("Dataset id",), "Inputs": ("Dataset", "Input id", "Environment")}
 WIDTHS = {"Dataset id": 170, "Name": 200, "What it tests": 320, "Owner": 90, "PRIORITY": 90, "Priority set by": 150, "STATUS": 260, "Inputs": 60,
-          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Group": 110, "Acted as": 170, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
+          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Group": 110, "Acted as": 170, "Messages (in order)": 520, "Metric": 160, "Before": 70, "After": 70, "Moved?": 120, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
           "Category": 180, "Status": 80, "BEST ALTERNATIVE": 140, "ITS LAST OUTPUT": 520, "Output from": 120, "Score": 60, "Tokens": 80, "Model calls": 80, "Lane gaps": 140, "Judge reason": 300,
           "Run date": 90, "Commit": 90}
 
@@ -212,6 +212,11 @@ def judge_reason(record: dict) -> str:
     return str(judged.get("summary") or (judged.get("verdict") or {}).get("summary") or "")
 
 
+def messages_text(messages) -> str:
+    """The assistant messages of a turn in order as one cell: ``(1) first | (2) second``."""
+    return " | ".join(f"({m.get('n', i + 1)}) {m.get('text', '')}" for i, m in enumerate(messages or []) if isinstance(m, dict))
+
+
 def acted_as_text(value) -> str:
     """The account a run acted as, from the log line's ``acted_as`` (a dict of identity fields), as one short text."""
     if isinstance(value, dict):
@@ -232,7 +237,7 @@ def input_state(dataset: dict, case: dict, arm: str, sources: dict) -> dict:
     if mine:
         last = max(mine, key=lambda e: e.get("timestamp", ""))
         return dict(status="pass" if last.get("passed") else "fail", reply=last.get("reply", ""), source="output log", score=last.get("score", ""),
-                    acted_as=acted_as_text(last.get("acted_as")),
+                    acted_as=acted_as_text(last.get("acted_as")), messages=messages_text(last.get("messages")), metric=last.get("metric") or {},
                     tokens=sum(int(last.get(k) or 0) for k in ("tokens_in", "tokens_out")) or "", calls=last.get("model_calls", ""),
                     gaps=", ".join(last.get("lane_gaps") or []), reason=last.get("reason", ""), date=str(last.get("timestamp", ""))[:10], commit=last.get("commit", ""),
                     environment=environment_of(last.get("environment"), arm))
@@ -294,7 +299,9 @@ def build_rows(datasets: list[dict], sources: dict, owner: str, command_prefix: 
                 by_env.setdefault(state["environment"], []).append(state)
                 irows.append([dataset["id"], case["id"], case.get("group", ""), text, case["category"], ds.clip(case.get("went_wrong", "")), ds.clip(case.get("ideal", "")),
                               ds.clip(case.get("note", "")), ds.clip(case.get("original", "")), preset, PRESET_NOTE if preset else "", state["status"], state["environment"], arm,
-                              ds.clip(state["reply"])[:REPLY_LIMIT], state["source"], state.get("acted_as", ""), state["score"], state.get("tokens", ""), state.get("calls", ""),
+                              ds.clip(state["reply"])[:REPLY_LIMIT], ds.clip(state.get("messages", ""))[:REPLY_LIMIT], (state.get("metric") or {}).get("name", ""),
+                              (state.get("metric") or {}).get("before", ""), (state.get("metric") or {}).get("after", ""), (state.get("metric") or {}).get("moved", ""),
+                              state["source"], state.get("acted_as", ""), state["score"], state.get("tokens", ""), state.get("calls", ""),
                               state.get("gaps", ""), state["reason"], state["date"], state["commit"], ""])
         sizes = len(dataset["cases"])
         envs = env_order(set(by_env) | {environment_of("", arm) for arm in arms})

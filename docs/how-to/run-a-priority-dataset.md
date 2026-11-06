@@ -35,7 +35,7 @@ taken. Reads are real, so the answers use the real data: keep the output log pri
 The arm needs three paths, all outside the repository: `QAR_PROD_LANE_ENV_FILE` (the lane's environment file), `QAR_CONFIG_FILE` (its TOML
 configuration) and optionally `QAR_PROD_LANE_DIR` (the folder the lane runs in). Without them the arm prints SKIPPED and exits 0. The
 model is the configured Claude CLI on the subscription; the arm spends no API credit. `--max-calls` bounds the model calls of the whole run;
-one case stops at 15 model calls or 5 minutes (`QAR_PROD_CASE_MODEL_CALLS`, `QAR_PROD_CASE_SECONDS`). A tool the lane lacks is reported in the log as a lane gap, apart from a model failure.
+one case stops at 30 model calls or 5 minutes (`QAR_PROD_CASE_MODEL_CALLS`, `QAR_PROD_CASE_SECONDS`). A tool the lane lacks is reported in the log as a lane gap, apart from a model failure.
 
 ## One command per deployment
 
@@ -43,6 +43,18 @@ A deployment wraps the steps so there is one way to run a dataset: choose the da
 that shows every dataset and input with its latest result per environment, print the sheet link and the pass count. See your
 deployment's wrapper; `scripts/qar_datasets_sheet.py` is the generic exporter that wrapper calls (its `--run-command` option puts the
 wrapper's command in the sheet's HOW TO RUN column), and `docs/how-to/public-hygiene.md` says what must never enter this repository.
+
+## What each result records
+
+- **Metric before and after.** A case may carry a `metric_probe` (or get one from the rules file named by `QAR_PROD_CASE_RULES_FILE`, a JSON
+  object keyed by case id that may also give the structured `effect` and `state_check`): what to read, how to pick the number, and
+  optionally the same number worked out from readable data. The arm reads it as the acting account before and after the turn and records
+  name, before, after, delta and `moved` (`yes`, `no`, or `not-movable-by-AI-in-one-turn`). A metric that did not change is `no`, however good
+  the step; a recorded value that differs from the computed one fails the case.
+- **Messages in order.** Every assistant message of the turn (interim, progress, final) is kept with its time. A case that acts is judged on
+  two roles, not wording: message 1 states the current status and what is being done, message 2 reports what was done, the new state and the
+  metric before and after. A reply-only case is judged as one message.
+- **Tokens, model calls, lane gaps, the account acted as.** A plain read-and-answer turn on this path took 16 to 32 model calls.
 
 ## Judging a blocked write
 

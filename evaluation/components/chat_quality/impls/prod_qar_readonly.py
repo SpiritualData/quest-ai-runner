@@ -12,7 +12,7 @@ line, and ``environment`` = ``production (writes blocked)``. A write the ideal h
 is told that the changes listed are attempts that were blocked, not failures to act.
 
 PAID in subscription calls (``claude -p``), no API dollars. ``--max-calls`` bounds the model calls of the whole run; one case stops at
-``CASE_MODEL_CALL_CAP`` model calls (default 15, ``QAR_PROD_CASE_MODEL_CALLS``) or ``CASE_SECONDS_CAP`` seconds (default 300, ``QAR_PROD_CASE_SECONDS``).
+``CASE_MODEL_CALL_CAP`` model calls (default 30, ``QAR_PROD_CASE_MODEL_CALLS``; a plain read-and-answer turn on this path measured 16 to 32) or ``CASE_SECONDS_CAP`` seconds (default 300, ``QAR_PROD_CASE_SECONDS``).
 A tool the lane lacks is listed in ``lane_gaps`` and judged apart from the model; a blocked write is never a failure by itself."""
 PAID = True
 import os
@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 ENVIRONMENT = "production (writes blocked)"
 ENVIRONMENT_BOUNDED = "production (bounded writes)"
-CASE_MODEL_CALL_CAP = int(os.environ.get("QAR_PROD_CASE_MODEL_CALLS") or 15)
+CASE_MODEL_CALL_CAP = int(os.environ.get("QAR_PROD_CASE_MODEL_CALLS") or 30)
 CASE_SECONDS_CAP = int(os.environ.get("QAR_PROD_CASE_SECONDS") or 300)
 BLOCKED_NOTE = ("Environment: production with every write blocked. A line under the changes headed 'would have done' is a write the "
                 "assistant attempted for the request (the runner's own memory writes are left out) and was stopped from making; it counts as the assistant having acted, so judge whether acting was "
@@ -116,6 +116,8 @@ def build_arm(meter, bounded):
     harness_paths = [os.environ.get("QAR_EVAL_OUTPUT_DIR"), str(components), str(components.parents[1] / "esoi")]
     dry.set_allowances([], harness_paths)
     import judge as J
+    import prod_probes as P
+    rules = P.load_rules(os.environ.get("QAR_PROD_CASE_RULES_FILE"))
     J.OTHER_ACCOUNT_DATA.update(built=True, section="")      # the dev-account listing is for the dev world; production has no seeded data
     from quest_ai_runner.the_body.configuration.cli_config import _config_from_env
     from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
@@ -131,14 +133,22 @@ def build_arm(meter, bounded):
         if meter.max_calls is not None and meter.calls >= meter.max_calls:
             from common import BudgetExceeded
             raise BudgetExceeded(f"model-call budget {meter.max_calls} reached before {case['id']}")
+        case = P.with_rules(case, rules)
         record = {"id": case["id"], "dataset": case.get("dataset"), "area": case.get("area"), "environment": environment}
         message = case.get("message") or (case.get("messages") or [""])[0]
         dry.RECORDER.clear()
-        effect, check = case.get("effect"), case.get("state_check")
-        allow = (effect.get("allow") if isinstance(effect, dict) else None) if bounded else None
+        effect, check = P.structured(case.get("effect")), P.structured(case.get("state_check"))
+        allow = effect.get("allow") if (bounded and effect) else None
         dry.set_allowances(allow or [], harness_paths)
         counts = {}
-        if bounded and isinstance(check, dict):
+        probe = P.structured(case.get("metric_probe"))
+        metric_before = None
+        if probe:
+            try:
+                metric_before = P.read_metric(probe, state_client)
+            except Exception as e:  # noqa: BLE001
+                record["metric_error"] = f"before: {type(e).__name__}: {e}"
+        if bounded and check:
             try:
                 counts["before"] = count_state(check, state_client)
             except Exception as e:  # noqa: BLE001
@@ -162,11 +172,15 @@ def build_arm(meter, bounded):
                     if isinstance(item, OrchestratorResult):
                         final = item
                     else:
-                        frames.append(frames_of(item))
+                        frames.append(dict(frames_of(item), t=P.stamp(started)))
             finally:
                 close = getattr(stream, "close", None)
                 if callable(close):
                     close()
+            if final is not None and final.kind == "cancelled":
+                why = (f"stopped at the model-call cap ({CASE_MODEL_CALL_CAP})" if dry.RECORDER.model_calls >= CASE_MODEL_CALL_CAP
+                       else f"stopped at the time cap ({CASE_SECONDS_CAP}s)")
+                raise RuntimeError(f"not judged: the turn was {why} before it replied")
             reply = (final.text if final is not None and final.text else "") or next(
                 (f.get("text") for f in reversed(frames) if f.get("type") in ("result", "done") and f.get("text")), "") or ""
             frames.append({"type": "done", "content": reply})
@@ -190,12 +204,26 @@ def build_arm(meter, bounded):
                 if counts["before"] >= int(check.get("expect", 1)):
                     judged_case["rubric"] = list(judged_case.get("rubric") or []) + [
                         "The thing already exists, so the reply says it is already set or already there, and does not claim to have created it again"]
+            metric = None
+            if probe and metric_before is not None:
+                try:
+                    metric = P.metric_verdict(probe, metric_before, P.read_metric(probe, state_client), case.get("increment_kind", ""))
+                    record["metric"] = metric
+                except Exception as e:  # noqa: BLE001
+                    record["metric_error"] = f"after: {type(e).__name__}: {e}"
+            messages = P.messages_of(frames)
+            record["messages"] = messages
+            sequence, item = P.sequence_note(case, messages, metric)
+            judged_case["evidence_notes"] += " " + sequence
+            judged_case["rubric"] = list(judged_case.get("rubric") or []) + [item]
             evidence = J.build_evidence([{"message": message, "events": frames}])
             pre = J.precheck(judged_case, evidence, {}, {}, changes)
             judged = J.judge(judged_case, evidence, changes, pre, "", {}, None)
             passed = J.case_passed(judged_case, pre, judged)
             if record.get("state"):
                 passed = passed and record["state"]["ok"]
+            if metric and metric.get("matches_computed") is False:
+                passed = False                 # the recorded value differs from the one worked out from the readable data
             record.update(evidence=evidence, changes=changes, precheck=pre, judged=judged, score=J.final_score(pre, judged), passed=passed)
         except Exception as e:  # noqa: BLE001
             record.update(error=f"{type(e).__name__}: {e}", score=None, passed=False)
@@ -209,7 +237,7 @@ def build_arm(meter, bounded):
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error")}
         meter.record(record["model_calls"])
         meter.tokens_in += record["tokens_in"]
         meter.tokens_out += record["tokens_out"]

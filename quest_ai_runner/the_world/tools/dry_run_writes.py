@@ -7,7 +7,7 @@ call. Set, one process runs the unchanged production code path (config, context,
   so nothing reaches Quest and nothing can read as done;
 * a tool whose spec says it ``mutates`` is not run (``tool_call``): the call and its arguments are recorded and the tool reports "Blocked in
   test mode", so a reply cannot claim the action was made;
-* the deep worker is replaced by a stub (``DryDeepRunner``) that records the brief it would have been given and reports the run as queued;
+* the deep worker is replaced by a stub (``DryDeepRunner``) that records the brief it would have been given and reports that the run was not started (blocked in test mode);
 * every other way out of the process is closed by ``install``: an HTTP request whose method is not GET, HEAD or OPTIONS is refused unless
   it is on the explicit read-only list below, a file opened for writing is redirected to a scratch copy, a file removal or rename is
   refused, and a subprocess is refused unless it is the model CLI answering with no tools.
@@ -222,7 +222,7 @@ def tool_call(spec: Any, name: str, args: Mapping[str, Any]):
 # --- the deep worker ----------------------------------------------------------------------------
 
 class DryDeepRunner:
-    """Stands in for every deep worker: records the goal and brief it would have been given and reports the run as queued."""
+    """Stands in for every deep worker: records the goal and brief it would have been given and reports that the run was not started (blocked in test mode)."""
 
     write_surface = "agent"
 
@@ -236,7 +236,7 @@ class DryDeepRunner:
         RECORDER.write("deep run", f"goal: {summarize(goal, 300)}", model=model, brief_chars=len(brief or ""))
         with RECORDER.lock:
             RECORDER.briefs.append({"goal": goal, "brief": brief, "model": model})
-        return DeepResult(met=True, deferred=True, output="Queued: the work is running in the background and will report back here.")
+        return DeepResult(met=True, deferred=True, output="Blocked in test mode: the background run was not started and nothing was changed.")
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("__") or name == "real":

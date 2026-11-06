@@ -773,10 +773,20 @@ _FORBIDS_NEW_TASK_RE = re.compile(
     r"\b(?:do\s*n[o’']?t|dont|never|stop|avoid|refrain\s+from|without)\b[^.!?\n]{0,40}"
     r"\b(?:creat\w*|open\w*|start\w*|spawn\w*|queu\w*|mak\w*|run\w*)\b[^.!?\n]{0,25}\btasks?\b"
     r"|\bno\s+(?:new\s+|more\s+)?tasks?\b"
-    r"|\bjust\b[^.!?\n]{0,30}\b(?:answer|reply|respond|tell\s+me|drop|say)\b"
-    r"|\b(?:answer|reply|respond|drop)\b[^.!?\n]{0,25}\b(?:here|in\s+(?:the\s+)?chat)\b"
     r"|\bhave\s*n[o’']?t\s+(?:even\s+)?(?:given|asked|told)\b|\bhavent\s+(?:even\s+)?(?:given|asked|told)\b"
     r")",
+    re.IGNORECASE,
+)
+
+
+# "just answer me", "just tell me", "reply here": a veto only when they stand alone. In a message that also orders a change ("make sure the
+# quest has one note; if it is already there, just tell me") they describe the reply to one branch of the order, not a ban on acting, and
+# vetoing it left an explicit "add the note" request answered with no write (found 2026-11-06 on an ensure-one-note case). Like the bare hold
+# phrases below, they are honored only when the rest of the message carries no directive of its own; "don't create a task, just answer me
+# here" still vetoes through the unconditional phrase above.
+_JUST_ANSWER_RE = re.compile(
+    r"\bjust\b[^.!?\n]{0,30}\b(?:answer|reply|respond|tell\s+me|drop|say)\b"
+    r"|\b(?:answer|reply|respond|drop)\b[^.!?\n]{0,25}\b(?:here|in\s+(?:the\s+)?chat)\b",
     re.IGNORECASE,
 )
 
@@ -815,7 +825,7 @@ def message_forbids_new_task(message: Optional[str]) -> bool:
     try:
         if _FORBIDS_NEW_TASK_RE.search(message):
             return True
-        if _BARE_HOLD_PHRASE_RE.search(message) and not _change_verb_used_as_verb(message):
+        if (_BARE_HOLD_PHRASE_RE.search(message) or _JUST_ANSWER_RE.search(message)) and not _change_verb_used_as_verb(message):
             return True
         return False
     except Exception:  # noqa: BLE001

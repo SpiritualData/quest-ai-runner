@@ -154,3 +154,13 @@ def test_group_tokens_and_the_account_a_run_acted_as_are_columns(tmp_path):
     row = dict(zip(irows[0], irows[1]))
     assert (row["Group"], row["Tokens"], row["Model calls"], row["Lane gaps"], row["Acted as"], row["Environment"]) == (
         "milestone", 120, 3, "send_x", "ai@example.org u1", qs.BOUNDED_ENV)
+
+
+def test_messages_in_order_and_the_metric_before_and_after_are_columns():
+    log = {("chat_quality/acceptance", "A-1"): [dict(arm="prod_qar", environment=qs.BOUNDED_ENV, reply="final", passed=True, timestamp="2026-11-06T01:00:00",
+                                                     messages=[dict(n=1, kind="interim", text="Status now"), dict(n=2, kind="final", text="Did it")],
+                                                     metric=dict(name="paid users", before=10, after=12, delta=2, moved="yes"))]}
+    _, irows = qs.build_rows([dataset(cases=("A-1",))], sources(log=log), "")
+    row = {k: v for k, v in zip(irows[0], irows[1])}
+    assert row["Messages (in order)"] == "(1) Status now | (2) Did it"
+    assert (row["Metric"], row["Before"], row["After"], row["Moved?"]) == ("paid users", 10, 12, "yes")

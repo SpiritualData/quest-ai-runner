@@ -135,3 +135,11 @@ def test_an_ordinary_message_is_untouched():
     assert res.kind == "deep"
     assert runner.calls != []
     assert "THE USER ASKED YOU NOT TO OPEN A TASK" not in provider.plan_prompts[0]
+
+
+def test_just_tell_me_inside_an_order_is_not_a_veto():
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import message_forbids_new_task
+    order = "Make sure the quest has exactly one note reading 'x'. If it is already there, just tell me it is already there and do not add another."
+    assert message_forbids_new_task(order) is False
+    assert message_forbids_new_task("Just tell me what the plan is.") is True
+    assert message_forbids_new_task("Don't create a task, just answer me here.") is True
