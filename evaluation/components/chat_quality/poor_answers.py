@@ -82,7 +82,8 @@ def case_of(raw):
     return dict(id=str(case_id), dataset="implicit", source=SOURCE, private=True, area=f"poor answers: {kind}", category=kind,
                 capability=str(raw.get("capability_tested") or ""), message=text, conversation_scope="none", expected_routing="any",
                 rubric=[item.format(kind=kind) for item in GENERIC_RUBRIC], forbid_writes=False, pivots_change_answer=False,
-                precheck={"reply_regex": [r"\S"]}, evidence_notes=" ".join(notes))
+                precheck={"reply_regex": [r"\S"]}, evidence_notes=" ".join(notes),
+                **{key: raw[key] for key in ("effect", "state_check") if raw.get(key)})   # optional: the writes the case allows on the bounded production arm and how to count its effect
 
 
 def parse_cases(text):

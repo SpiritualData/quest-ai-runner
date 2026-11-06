@@ -3,13 +3,18 @@
 Opt in with ``QAR_DRY_RUN_WRITES=1``. Unset (the default) nothing here does anything: every function returns at once and no hook changes a
 call. Set, one process runs the unchanged production code path (config, context, personas, tools, model) while:
 
-* the Quest client answers every request that is not a read with a recorded stand-in (``quest_exchange``), so a tool that creates a task
-  or a note sees a success and nothing reaches Quest;
-* a tool whose spec says it ``mutates`` is not run (``tool_call``): the call and its arguments are recorded and the tool reports done;
+* the Quest client refuses every request that is not a read with an explicit 403 "blocked in test mode" after recording it (``quest_exchange``),
+  so nothing reaches Quest and nothing can read as done;
+* a tool whose spec says it ``mutates`` is not run (``tool_call``): the call and its arguments are recorded and the tool reports "Blocked in
+  test mode", so a reply cannot claim the action was made;
 * the deep worker is replaced by a stub (``DryDeepRunner``) that records the brief it would have been given and reports the run as queued;
 * every other way out of the process is closed by ``install``: an HTTP request whose method is not GET, HEAD or OPTIONS is refused unless
   it is on the explicit read-only list below, a file opened for writing is redirected to a scratch copy, a file removal or rename is
   refused, and a subprocess is refused unless it is the model CLI answering with no tools.
+
+A run may also be BOUNDED: ``set_allowances`` names the few writes the case asks for (a tool and its arguments, or a Quest method and path),
+and exactly those run for real, in the thread of the allowed call; every other write is still refused and recorded. The allowed ones are listed
+in ``RECORDER.performed``. No allowance is ever read from the model's words: they come from the case.
 
 Everything refused is listed in ``RECORDER.writes`` as ``would have done: <what>``; the reads that ran are counted in ``RECORDER.reads``.
 Status, never the model's words, decides what is a read: the method of the request, the ``mutates`` flag of the spec, the argument list of
@@ -52,6 +57,7 @@ READ_POST_COMPILED = tuple((re.compile(h + r"\Z"), re.compile(p + r"\Z")) for h,
 #: The model CLI answers with no tools in these flags (hubofhubs claude_cli), so it can change nothing.
 MODEL_CLI_NAMES = frozenset({"claude"})
 #: git commands that only read the repository (the harness records the commit of the code it ran).
+READ_PROCESSES = frozenset({"uname", "hostname", "whoami", "nproc", "getconf", "lsb_release"})   # report the machine, change nothing
 READ_GIT = frozenset({"rev-parse", "status", "diff", "log", "show", "rev-list", "ls-files", "describe", "config"})
 MODEL_CLI_FORBIDDEN = ("--dangerously-skip-permissions", "--allowedTools", "--allowed-tools", "--permission-mode")
 
@@ -70,10 +76,11 @@ class Recorder:
         self.model_calls = 0
         self.briefs: List[Dict[str, Any]] = []
         self.missing_tools: List[str] = []
+        self.done: List[str] = []
 
     def clear(self) -> None:
         with self.lock:
-            self.writes, self.reads, self.model_calls, self.briefs, self.missing_tools = [], Counter(), 0, [], []
+            self.writes, self.reads, self.model_calls, self.briefs, self.missing_tools, self.done = [], Counter(), 0, [], [], []
 
     def missing_tool(self, name: str) -> None:
         """The model asked for a tool this deployment does not have: a gap in the lane, reported apart from a model failure."""
@@ -85,6 +92,10 @@ class Recorder:
         listed apart from the writes a person's request caused."""
         with self.lock:
             self.writes.append({"kind": kind, "what": what, "internal": internal, **detail})
+
+    def performed(self, what: str) -> None:
+        with self.lock:
+            self.done.append(what)
 
     def read(self, name: str) -> None:
         with self.lock:
@@ -102,11 +113,51 @@ class Recorder:
     def snapshot(self) -> Dict[str, Any]:
         with self.lock:
             return {"writes": list(self.writes), "reads": dict(self.reads), "model_calls": self.model_calls,
-                    "briefs": list(self.briefs), "missing_tools": list(self.missing_tools)}
+                    "briefs": list(self.briefs), "missing_tools": list(self.missing_tools), "performed": list(self.done)}
 
 
 RECORDER = Recorder()
-STATE: Dict[str, Any] = {"installed": False, "scratch": None, "originals": {}}
+STATE: Dict[str, Any] = {"installed": False, "scratch": None, "originals": {}, "allowances": [], "harness_paths": []}
+LOCAL = threading.local()
+
+
+def set_allowances(rules: Optional[List[Mapping[str, Any]]], harness_paths: Optional[List[str]] = None) -> None:
+    """The writes this run may really make. A rule is ``{"tool": name, "args": {k: v}}`` (the tool, when every listed argument is equal) or
+    ``{"method": "POST", "path": "<regex>"}`` (a Quest request). ``harness_paths`` are folders the measuring harness writes its own record to."""
+    STATE["allowances"] = [dict(r) for r in rules or []]
+    STATE["harness_paths"] = [str(p) for p in harness_paths or [] if p]
+
+
+def tool_allowed(name: str, args: Mapping[str, Any]) -> bool:
+    for rule in STATE["allowances"]:
+        if rule.get("tool") == name and all(str(args.get(k)) == str(v) for k, v in (rule.get("args") or {}).items()):
+            return True
+    return False
+
+
+def request_allowed(method: str, path: str) -> bool:
+    return any(rule.get("method", "").upper() == method.upper() and re.match(rule.get("path", "") + r"\Z", path.split("?")[0])
+               for rule in STATE["allowances"] if rule.get("path"))
+
+
+class allow_scope:
+    """Inside it (in this thread) the writes of an allowed tool call go through. ``allowed`` False makes it do nothing."""
+
+    def __init__(self, allowed: bool) -> None:
+        self.allowed = allowed
+
+    def __enter__(self):
+        if self.allowed:
+            LOCAL.depth = getattr(LOCAL, "depth", 0) + 1
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if self.allowed:
+            LOCAL.depth -= 1
+
+
+def in_allowed_scope() -> bool:
+    return getattr(LOCAL, "depth", 0) > 0
 
 
 def active(environ: Optional[Mapping[str, str]] = None) -> bool:
@@ -136,20 +187,24 @@ def is_read_post(host: str, path: str) -> bool:
 
 
 def quest_exchange(method: str, path: str, body: Any = None):
-    """None when the Quest request may go (a read), else ``(status, payload)`` to answer it with, after recording it."""
+    """None when the Quest request may go (a read or an allowed write); a write that is not allowed is recorded and refused with an explicit
+    403 "blocked in test mode", never a stand-in success: a reply must not be able to claim a blocked write was made."""
     if not active() or method.upper() in SAFE_METHODS:
         if active():
             RECORDER.read(f"quest {path.split('?')[0]}")
         return None
+    if in_allowed_scope() or request_allowed(method, path):
+        RECORDER.performed(f"quest api {method.upper()} {path.split('?')[0]}")
+        return None
     RECORDER.write("quest api", f"{method.upper()} {path.split('?')[0]} {summarize(body) if body else ''}".strip(), internal=is_internal(path))
-    stand_in = f"dryrun-{hashlib.sha1(f'{method} {path} {body}'.encode()).hexdigest()[:10]}"
-    return 200, {"id": stand_in, "task_id": stand_in, "success": True, "applied": True, "dry_run": True}
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+    raise QuestApiError(f"Quest API {method.upper()} {path.split('?')[0]} -> 403: blocked in test mode, nothing was changed", status=403, code="blocked_in_test_mode")
 
 
 # --- tools --------------------------------------------------------------------------------------
 
 def tool_call(spec: Any, name: str, args: Mapping[str, Any]):
-    """None when the tool may run, else a ``ToolResult`` standing in for a tool that mutates, after recording the call."""
+    """None when the tool may run, else a refused ``ToolResult`` ("Blocked in test mode") for a tool that mutates, after recording the call."""
     if not active():
         return None
     from quest_ai_runner.the_world.tools.tools_status import ToolStatus
@@ -157,8 +212,11 @@ def tool_call(spec: Any, name: str, args: Mapping[str, Any]):
     if not getattr(spec, "mutates", True):
         RECORDER.read(f"tool {name}")
         return None
+    if tool_allowed(name, args):
+        RECORDER.performed(f"tool {name} {summarize(dict(args))}")
+        return None
     RECORDER.write("tool", f"{name} {summarize(dict(args))}", tool=name)
-    return ToolResult(ok=True, status=ToolStatus.APPLIED, text=f"{name} done.", data={"id": "dryrun", "dry_run": True})
+    return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"Blocked in test mode: {name} was not run and nothing was changed.")
 
 
 # --- the deep worker ----------------------------------------------------------------------------
@@ -208,8 +266,10 @@ def scratch_dir() -> Path:
 
 
 def writable_here(path: Path) -> bool:
-    """A path under the scratch folder or the system temp folder may be written."""
-    for root in (scratch_dir(), Path(tempfile.gettempdir())):
+    """A path under the scratch folder, the system temp folder or a harness folder (its own record of the run) may be written."""
+    if in_allowed_scope():
+        return True
+    for root in (scratch_dir(), Path(tempfile.gettempdir()), *(Path(p) for p in STATE["harness_paths"])):
         try:
             path.resolve().relative_to(root.resolve())
             return True
@@ -221,6 +281,8 @@ def writable_here(path: Path) -> bool:
 def check_request(method: str, url: str) -> None:
     """Raise ``DryRunBlocked`` (after recording) for a request that is not a read or an allowed read-only POST."""
     method = (method or "GET").upper()
+    if in_allowed_scope():
+        return
     parsed = urllib.parse.urlsplit(url if "://" in url else f"http://{url}")
     if method in SAFE_METHODS or is_read_post(parsed.hostname or "", parsed.path):
         RECORDER.read(f"http {parsed.hostname}")
@@ -231,6 +293,8 @@ def check_request(method: str, url: str) -> None:
 
 def check_process(argv: Any) -> None:
     parts = [str(a) for a in (argv if isinstance(argv, (list, tuple)) else [argv])]
+    if parts and os.path.basename(parts[0]) in READ_PROCESSES:
+        return
     if parts and os.path.basename(parts[0]) == "git":
         rest = parts[1:]
         while rest[:1] in (["-C"], ["-c"]):

@@ -590,9 +590,12 @@ class ToolRegistry:
 
         box: Dict[str, Any] = {}
 
+        allowed_write = dry_run_writes.active() and spec.mutates and dry_run_writes.tool_allowed(name, resolved)
+
         def run_handler():
             try:
-                box["result"] = coerce_result(spec.handler(resolved, ctx))
+                with dry_run_writes.allow_scope(allowed_write):
+                    box["result"] = coerce_result(spec.handler(resolved, ctx))
             except Exception as e:  # a tool failure is a result, never a crash of the loop
                 log.warning("tool %s raised: %s", name, e)
                 # A client write error carries its own status (refused, failed, unknown) and a message that says so.

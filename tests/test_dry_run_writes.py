@@ -32,11 +32,18 @@ def test_unset_changes_nothing(monkeypatch):
     assert dry.wrap_deep(runner) is runner
 
 
-def test_quest_reads_pass_and_writes_are_answered_and_recorded(on):
+def blocked(method, path, body=None):
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+    with pytest.raises(QuestApiError) as caught:
+        dry.quest_exchange(method, path, body)
+    return caught.value
+
+
+def test_quest_reads_pass_and_writes_are_refused_and_recorded(on):
     assert dry.quest_exchange("GET", "/api/quests/me") is None
-    status, payload = dry.quest_exchange("POST", "/api/assistant-tasks", {"text": "buy milk"})
-    assert status == 200 and payload["dry_run"] is True
-    assert dry.quest_exchange("PATCH", "/api/quests/q1/field", {"a": 1})[0] == 200
+    error = blocked("POST", "/api/assistant-tasks", {"text": "buy milk"})
+    assert error.status == 403 and "blocked in test mode" in str(error)
+    assert blocked("PATCH", "/api/quests/q1/field", {"a": 1}).status == 403
     assert dry.RECORDER.reads["quest /api/quests/me"] == 1
     assert [w["kind"] for w in dry.RECORDER.writes] == ["quest api", "quest api"]
     assert "POST /api/assistant-tasks" in dry.RECORDER.lines()[0]
@@ -48,7 +55,8 @@ def test_tools_that_mutate_are_recorded_not_run(on):
     writer = ToolSpec(name="change", description="d", mutates=True, handler=lambda a, c: ran.append("change") or ToolResult(ok=True, text="did"))
     registry = ToolRegistry([reader, writer])
     assert registry.invoke("look", {}, ToolContext()).text == "seen"
-    assert registry.invoke("change", {}, ToolContext()).ok
+    refused = registry.invoke("change", {}, ToolContext())
+    assert not refused.ok and "Blocked in test mode" in refused.text
     assert ran == ["look"]
     assert dry.RECORDER.reads["tool look"] == 1 and dry.RECORDER.writes[0]["tool"] == "change"
 
@@ -111,3 +119,26 @@ def test_the_deep_run_is_stubbed(on):
     assert result.met and result.deferred
     assert dry.RECORDER.writes[0]["kind"] == "deep run" and dry.RECORDER.briefs[0]["brief"] == "the brief"
     assert set(dry.wrap_deep({"a": Real()})) == {"a"}
+
+
+def test_a_bounded_run_makes_only_the_allowed_write_for_real(on):
+    ran = []
+    def note(args, ctx):
+        ran.append(("note", dry.quest_exchange("POST", "/api/quests/q1/notes", {"text": "t"})))   # the tool's own Quest call
+        return ToolResult(ok=True, text="saved")
+    allowed = ToolSpec(name="add_note", description="d", mutates=True, handler=note)
+    other = ToolSpec(name="add_goal", description="d", mutates=True, handler=lambda a, c: ran.append("goal") or ToolResult(ok=True, text="did"))
+    registry = ToolRegistry([allowed, other])
+    dry.set_allowances([{"tool": "add_note", "args": {"quest_id": "q1"}}])
+    try:
+        assert registry.invoke("add_note", {"quest_id": "q1", "text": "hi"}, ToolContext()).text == "saved"
+        assert ran == [("note", None)]                                  # the Quest call inside the allowed tool went through
+        registry.invoke("add_note", {"quest_id": "other", "text": "hi"}, ToolContext())   # same tool, other quest: refused
+        registry.invoke("add_goal", {}, ToolContext())
+        assert len(ran) == 1 and [w["tool"] for w in dry.RECORDER.writes] == ["add_note", "add_goal"]
+        assert blocked("POST", "/api/quests/q1/notes", {}).status == 403        # outside the allowed call: still refused
+        dry.set_allowances([{"method": "POST", "path": "/api/planning/goals"}])
+        assert dry.quest_exchange("POST", "/api/planning/goals", {}) is None and blocked("DELETE", "/api/planning/goals", {}).status == 403
+        assert len(dry.RECORDER.snapshot()["performed"]) == 3
+    finally:
+        dry.set_allowances([])

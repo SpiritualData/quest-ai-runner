@@ -99,7 +99,7 @@ def test_each_environment_has_its_own_row_and_the_status_names_both():
     assert [r["Environment"] for r in rows if r["Input id"] == "A-2"] == [qs.DEV_ENV]       # no result anywhere: one unknown row
     status = dict(zip(drows[0], drows[1]))
     assert qs.PROD_ENV + ": passing 1 of 1 (1 of 2 inputs have a result)" in status["STATUS"] and qs.DEV_ENV + ": failing 0 of 1" in status["STATUS"]
-    assert status["How to run"] == "run.sh acceptance prod   (or: run.sh acceptance dev)"
+    assert status["How to run"] == "run.sh acceptance prod   (or: run.sh acceptance prod --readonly, or: run.sh acceptance dev)"
 
 
 def test_carry_over_keeps_human_columns_per_environment_and_from_a_sheet_without_the_column():
@@ -144,3 +144,13 @@ def test_optional_review_fields_of_a_private_row_become_columns(tmp_path):
     one, two = (dict(zip(irows[0], r)) for r in irows[1:])
     assert (one["What went wrong"], one["Ideal handling"], one["Input note"], one["Original input text"]) == ("it stalled", "ask one question", "reworded", "Old wording")
     assert two["Original input text"] == "" and two["What went wrong"] == ""
+
+
+def test_group_tokens_and_the_account_a_run_acted_as_are_columns(tmp_path):
+    (tmp_path / "poorly_answered_inputs.jsonl").write_text(json.dumps(dict(case_id="M-01", input_text="x", group="milestone")) + "\n")
+    log = {("poor_answers", "M-01"): [dict(arm="prod_qar", environment=qs.BOUNDED_ENV, reply="r", passed=True, tokens_in=100, tokens_out=20, model_calls=3,
+                                           acted_as={"email": "ai@example.org", "user_id": "u1"}, lane_gaps=["send_x"], timestamp="2026-11-06T01:00:00")]}
+    _, irows = qs.build_rows([qs.describe(qs.poor_answer_dataset(str(tmp_path)))], sources(log=log), "")
+    row = dict(zip(irows[0], irows[1]))
+    assert (row["Group"], row["Tokens"], row["Model calls"], row["Lane gaps"], row["Acted as"], row["Environment"]) == (
+        "milestone", 120, 3, "send_x", "ai@example.org u1", qs.BOUNDED_ENV)

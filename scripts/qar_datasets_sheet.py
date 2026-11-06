@@ -40,8 +40,9 @@ COMPONENTS = REPO / "evaluation" / "components"
 TABS = ("Datasets", "Inputs", "How to use")
 TAB_IDS = {"Datasets": 9101, "Inputs": 9102, "How to use": 9103}   # TABS is also the tab order: index 0, 1, 2
 DEV_ENV, PROD_ENV, OTHER_ENV = "dev eval world", "production (writes blocked)", "offline or local"
-PROD_ARMS = {"chat_quality": "prod_qar_readonly"}   # the arm that answers on production with writes blocked
-ARM_ENVIRONMENT = {"dev_quest_chat": DEV_ENV, "qar_live": DEV_ENV, "prod_qar_readonly": PROD_ENV}   # for a log line that names no environment
+BOUNDED_ENV = "production (bounded writes)"
+PROD_ARMS = {"chat_quality": ["prod_qar", "prod_qar_readonly"]}   # the arms that answer on production: bounded writes, then every write blocked
+ARM_ENVIRONMENT = {"dev_quest_chat": DEV_ENV, "qar_live": DEV_ENV, "prod_qar_readonly": PROD_ENV, "prod_qar": BOUNDED_ENV}   # for a log line that names no environment
 PRIORITIES = ("High", "Medium", "Low")
 PRESET_NOTE = "preset, human may change"
 PRESET_HIGH = ("chat_quality/acceptance", "poor_answers")
@@ -49,12 +50,12 @@ NO_OUTPUT = "no recorded output yet"
 REPLY_LIMIT = 8000
 DATASETS_HEAD = ["Dataset id", "Name", "What it tests", "Owner", "PRIORITY", "Priority set by", "STATUS", "Inputs", "Metrics that use it",
                  "Private or repo", "Source", "How to run", "Notes"]
-INPUTS_HEAD = ["Dataset", "Input id", "Input text", "Category", "What went wrong", "Ideal handling", "Input note", "Original input text", "PRIORITY", "Priority set by", "Status", "Environment", "BEST ALTERNATIVE",
-               "ITS LAST OUTPUT", "Output from", "Score", "Tokens", "Model calls", "Lane gaps", "Judge reason", "Run date", "Commit", "Notes"]
+INPUTS_HEAD = ["Dataset", "Input id", "Group", "Input text", "Category", "What went wrong", "Ideal handling", "Input note", "Original input text", "PRIORITY", "Priority set by", "Status", "Environment", "BEST ALTERNATIVE",
+               "ITS LAST OUTPUT", "Output from", "Acted as", "Score", "Tokens", "Model calls", "Lane gaps", "Judge reason", "Run date", "Commit", "Notes"]
 EDITABLE = {"Datasets": ["PRIORITY", "Notes"], "Inputs": ["PRIORITY", "Notes"]}
 KEYS = {"Datasets": ("Dataset id",), "Inputs": ("Dataset", "Input id", "Environment")}
 WIDTHS = {"Dataset id": 170, "Name": 200, "What it tests": 320, "Owner": 90, "PRIORITY": 90, "Priority set by": 150, "STATUS": 260, "Inputs": 60,
-          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
+          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Group": 110, "Acted as": 170, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
           "Category": 180, "Status": 80, "BEST ALTERNATIVE": 140, "ITS LAST OUTPUT": 520, "Output from": 120, "Score": 60, "Tokens": 80, "Model calls": 80, "Lane gaps": 140, "Judge reason": 300,
           "Run date": 90, "Commit": 90}
 
@@ -120,7 +121,7 @@ def poor_answer_dataset(path: str) -> dict | None:
         return None
     rows = [json.loads(line) for line in target.read_text(encoding="utf-8").splitlines() if line.strip()]
     return dict(id="poor_answers", private=True, source="private: the poorly answered set (QAR_PRIVATE_POOR_ANSWERS_DATASET)",
-                cases=[dict(id=r["case_id"], text=r.get("input_text", ""), category=r.get("failure_kind", ""), went_wrong=r.get("what_went_wrong", ""),
+                cases=[dict(id=r["case_id"], text=r.get("input_text", ""), category=r.get("failure_kind", ""), group=r.get("group", ""), went_wrong=r.get("what_went_wrong", ""),
                             ideal=r.get("ideal_handling", ""), note=r.get("input_note", ""),
                             original=r.get("original_input_text", "") if r.get("original_input_text", "") != r.get("input_text", "") else "")
                        for r in rows if r.get("case_id")])
@@ -211,6 +212,13 @@ def judge_reason(record: dict) -> str:
     return str(judged.get("summary") or (judged.get("verdict") or {}).get("summary") or "")
 
 
+def acted_as_text(value) -> str:
+    """The account a run acted as, from the log line's ``acted_as`` (a dict of identity fields), as one short text."""
+    if isinstance(value, dict):
+        return " ".join(str(value.get(k)) for k in ("email", "user_id", "id", "error") if value.get(k))
+    return str(value or "")
+
+
 def environment_of(entry_environment, arm: str) -> str:
     return entry_environment or ARM_ENVIRONMENT.get(arm, OTHER_ENV)
 
@@ -224,11 +232,12 @@ def input_state(dataset: dict, case: dict, arm: str, sources: dict) -> dict:
     if mine:
         last = max(mine, key=lambda e: e.get("timestamp", ""))
         return dict(status="pass" if last.get("passed") else "fail", reply=last.get("reply", ""), source="output log", score=last.get("score", ""),
+                    acted_as=acted_as_text(last.get("acted_as")),
                     tokens=sum(int(last.get(k) or 0) for k in ("tokens_in", "tokens_out")) or "", calls=last.get("model_calls", ""),
                     gaps=", ".join(last.get("lane_gaps") or []), reason=last.get("reason", ""), date=str(last.get("timestamp", ""))[:10], commit=last.get("commit", ""),
                     environment=environment_of(last.get("environment"), arm))
     environment = environment_of("", arm)
-    raw = sources["raw"].get(case_id) if component == "chat_quality" and environment != PROD_ENV else None
+    raw = sources["raw"].get(case_id) if component == "chat_quality" and environment not in (PROD_ENV, BOUNDED_ENV) else None
     if raw and (raw.get("evidence") or {}).get("reply") is not None and raw.get("passed") is not None:
         return dict(status="pass" if raw["passed"] else "fail", reply=raw["evidence"].get("reply", ""), source="runner raw result",
                     score=raw.get("score") if raw.get("score") is not None else "", reason=judge_reason(raw), date=raw["file_date"], commit="",
@@ -256,8 +265,7 @@ def arms_of(dataset: dict, sources: dict) -> list[str]:
     """The arms that answer this dataset, one per environment: the dev arm (or the leading arm of the component), then the production arm."""
     component = dataset["component"]
     arms = [ANSWER_ARMS.get(component) or leading_arm(sources["results_list"], component)]
-    if PROD_ARMS.get(component):
-        arms.append(PROD_ARMS[component])
+    arms += PROD_ARMS.get(component, [])
     return arms
 
 
@@ -266,7 +274,7 @@ def run_command(dataset: dict, prefix: str) -> str:
     component = dataset["component"]
     if component == "chat_quality" and prefix:
         name = dataset["id"].split("/")[-1]
-        return f"{prefix} {name} prod   (or: {prefix} {name} dev)"
+        return f"{prefix} {name} prod   (or: {prefix} {name} prod --readonly, or: {prefix} {name} dev)"
     if dataset["id"].startswith("context/"):
         return f"esoi run {component} (the private case source is read from its environment variable)"
     return f"esoi run {component} --impl {ANSWER_ARMS.get(component) or '<arm>'}"
@@ -284,9 +292,9 @@ def build_rows(datasets: list[dict], sources: dict, owner: str, command_prefix: 
             text = "" if dataset["id"].startswith("context/") else ds.clip(case["text"])
             for arm, state in shown:
                 by_env.setdefault(state["environment"], []).append(state)
-                irows.append([dataset["id"], case["id"], text, case["category"], ds.clip(case.get("went_wrong", "")), ds.clip(case.get("ideal", "")),
+                irows.append([dataset["id"], case["id"], case.get("group", ""), text, case["category"], ds.clip(case.get("went_wrong", "")), ds.clip(case.get("ideal", "")),
                               ds.clip(case.get("note", "")), ds.clip(case.get("original", "")), preset, PRESET_NOTE if preset else "", state["status"], state["environment"], arm,
-                              ds.clip(state["reply"])[:REPLY_LIMIT], state["source"], state["score"], state.get("tokens", ""), state.get("calls", ""),
+                              ds.clip(state["reply"])[:REPLY_LIMIT], state["source"], state.get("acted_as", ""), state["score"], state.get("tokens", ""), state.get("calls", ""),
                               state.get("gaps", ""), state["reason"], state["date"], state["commit"], ""])
         sizes = len(dataset["cases"])
         envs = env_order(set(by_env) | {environment_of("", arm) for arm in arms})
@@ -297,7 +305,7 @@ def build_rows(datasets: list[dict], sources: dict, owner: str, command_prefix: 
 
 
 def env_order(envs) -> list[str]:
-    return sorted(envs, key=lambda e: (e != DEV_ENV, e != PROD_ENV, e))
+    return sorted(envs, key=lambda e: (e != DEV_ENV, e != BOUNDED_ENV, e != PROD_ENV, e))
 
 
 def states_for(env: str, arms: list[str], dataset: dict, sources: dict) -> list[dict]:
@@ -338,13 +346,13 @@ def how_to_use(sheet_stamp: str) -> list[list]:
     return [["How to use this sheet"], [],
             ["What it is", "Every evaluation dataset of the quest-ai-runner and each of its inputs, with how it was last answered in each environment. Rewritten by a command; only the editable columns below survive a rewrite."],
             ["Datasets tab", "One row per dataset. STATUS has one entry per environment, computed from the results (passing or failing, how many inputs have a result, the date and commit of the last run); 'not run' means no result is recorded. HOW TO RUN is the exact command."],
-            ["Inputs tab", "One row per input and environment that has a result. Environment says where the answer came from: 'dev eval world' (a disposable development account) or 'production (writes blocked)' (the real production brain, real data, every state change recorded and not made). BEST ALTERNATIVE is the implementation that answers in that environment. ITS LAST OUTPUT is the reply that implementation gave on its latest run on this input; 'no recorded output yet' means no run has saved a reply."],
+            ["Inputs tab", "One row per input and environment that has a result. Environment says where the answer came from: 'dev eval world' (a disposable development account) or 'production (bounded writes)' (the real production brain and data; only the writes the case itself allows, such as one reminder or one note, are made, and the matching items are counted before and after) or 'production (writes blocked)' (the same with every state change recorded and not made). BEST ALTERNATIVE is the implementation that answers in that environment. ITS LAST OUTPUT is the reply that implementation gave on its latest run on this input; 'no recorded output yet' means no run has saved a reply."],
             ["PRIORITY (editable)", "A dropdown: High, Medium or Low. A human sets it. Blank means not yet set. The acceptance cases and the poorly answered inputs are preset to High (the column Priority set by says 'preset, human may change'); change them freely."],
             ["Notes (editable)", "Free text on a dataset or an input. Never overwritten."],
             ["Do not edit", "Every other column is rewritten from the data at each refresh; edits there are lost."],
             ["Privacy", "Input text is shown for repository datasets and the poorly answered set. Context datasets show ids and status only. The sheet is private to its owner; do not share it."],
             ["How rows are matched", "Priority and Notes are carried over by Dataset id (Datasets) and Dataset, Input id and Environment (Inputs). A removed input loses its row."],
-            ["How to run a dataset", "One command for every chat dataset: the HOW TO RUN column of the Datasets tab, for example `run-qar-dataset.sh poor_answers prod` (production, writes blocked) or `... dev` (the dev eval world). It runs the cases, then refreshes this sheet. Optional `--only ID,ID` runs some inputs."],
+            ["How to run a dataset", "One command for every chat dataset: the HOW TO RUN column of the Datasets tab, for example `run-qar-dataset.sh poor_answers prod` (production, bounded writes; add `--readonly` to block every write) or `... dev` (the dev eval world). It runs the cases, then refreshes this sheet. Optional `--only ID,ID` runs some inputs."],
             ["Where outputs come from", "Lines appended to the output directory (QAR_EVAL_OUTPUT_DIR) by every chat_quality and end_to_end run, each naming its environment; else the chat runner's raw result files; else the per-case results (status only)."],
             ["How to refresh", "Run the refresh command of the deployment (it passes the credentials, the sheet and the private dataset paths to scripts/qar_datasets_sheet.py). It costs no model call. The run command above refreshes by itself at the end."],
             ["Last refreshed (UTC)", sheet_stamp]]
