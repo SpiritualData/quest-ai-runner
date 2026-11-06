@@ -4,7 +4,7 @@ the transcript and the context block for a note saying they were given at step o
 default haiku) over the in-memory quest: no Quest server, no deep runner."""
 import os
 
-import common
+import offline_orchestrator
 from quest_ops.fake_quest import WORLD
 from quest_ops.impls.qar_orchestrator import record_view
 
@@ -16,7 +16,7 @@ def build(meter, abbreviate=None):
     flag = ABBREVIATE if abbreviate is None else abbreviate
 
     def run_request(case, world):
-        orch = common.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier)
+        orch = offline_orchestrator.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier)
         orch.cfg.planner_abbreviate_repeat_context = flag
         seen = {"steps": 0}
         original = orch._plan

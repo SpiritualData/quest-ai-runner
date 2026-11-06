@@ -14,6 +14,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402
+import offline_orchestrator  # noqa: E402
 from end_to_end import drive, score  # noqa: E402
 
 GUIDANCE = json.loads((HERE / "cases_guidance.json").read_text(encoding="utf-8"))
@@ -61,7 +62,7 @@ def run_case(case, model, max_calls):
     meter = common.CallMeter(max_calls=max_calls)
     meter.model = model
     world = drive.new_world(case)
-    orch = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier="fast")
+    orch = offline_orchestrator.build_offline_orchestrator(meter, registry=world.registry, planner_tier="fast")
     orch.web = world.web
     if world.web is not None:
         # The web-read gate acts on the reach judge's verdict, which a deployment opts into with a reach summary.

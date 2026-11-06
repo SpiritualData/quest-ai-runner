@@ -7,7 +7,7 @@ unset (the default), the turn runs exactly as before."""
 PAID = True
 import os
 
-import common
+import offline_orchestrator
 import live_arm
 from end_to_end import drive, transcript
 
@@ -20,7 +20,7 @@ def build(meter):
         if case["kind"] == "terminal":
             return drive.run_terminal(case, lambda: ack_provider)
         world = drive.new_world(case)
-        orch = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier)
+        orch = offline_orchestrator.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier)
         orch.web = world.web
         where = transcript.target_dir()
         if where is None:

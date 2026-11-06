@@ -11,7 +11,7 @@ import os
 import tempfile
 from pathlib import Path
 
-import common
+import offline_orchestrator
 from card_quality.impls.seeded_keyword_store import StubCollectionResolver
 
 
@@ -28,7 +28,7 @@ def build(meter):
     state = {}
 
     def seed(world):
-        orch = common.build_offline_orchestrator(meter)
+        orch = offline_orchestrator.build_offline_orchestrator(meter)
         resolver = StubCollectionResolver()
         client = QdrantClient(path=tempfile.mkdtemp(prefix="qar_card_qdrant_"))
         scope = {"user_id": "evaluser"}

@@ -7,7 +7,7 @@
 * deep_prompt: ``core.goal_runner_contract.compose_goal_prompt`` (fitted by ``core.prompt_budget``).
 Zero model calls.
 """
-import common
+import offline_orchestrator
 
 
 class _Capture:
@@ -22,7 +22,7 @@ class _Capture:
 
 
 def build(meter, profile="full"):
-    orch = common.build_offline_orchestrator(meter)
+    orch = offline_orchestrator.build_offline_orchestrator(meter)
     cap = _Capture()
     orch.get_provider_for_model = lambda model: cap
 

@@ -5,13 +5,13 @@ scenario (16 calls). Needs a model backend; it cannot run, and so cannot be reco
 PAID = True
 import os
 
-import common
+import offline_orchestrator
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import oversee
 
 
 def build(meter):
     model = os.environ.get("QAR_EVAL_MODEL", "haiku")
-    provider = common.build_offline_orchestrator(meter).provider
+    provider = offline_orchestrator.build_offline_orchestrator(meter).provider
 
     def signal(digest):
         sig = oversee(provider, model, digest)

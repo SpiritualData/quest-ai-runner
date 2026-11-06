@@ -6,7 +6,7 @@ answered "already on your record" to a request whose earlier twin ran in a diffe
 current record is handed in as ``context_view``, the slot production fills from Quest."""
 import os
 
-import common
+import offline_orchestrator
 from quest_ops.fake_quest import WORLD
 
 
@@ -24,7 +24,7 @@ def build(meter):
     tier = os.environ.get("QAR_EVAL_MODEL", "haiku")
 
     def run_operation(message, world):
-        orch = common.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier)
+        orch = offline_orchestrator.build_offline_orchestrator(meter, registry=WORLD.registry, planner_tier=tier)
         res = orch.run(message, quest_id=world.quest_id, context_view=record_view(world))
         return {"reply": getattr(res, "text", "") or ""}
     return run_operation

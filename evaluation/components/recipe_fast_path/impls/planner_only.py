@@ -2,7 +2,7 @@
 recipe solution must match on correctness and beat on cost. One orchestrator for the whole run."""
 import os
 
-import common
+import offline_orchestrator
 
 
 def build(meter):
@@ -11,7 +11,7 @@ def build(meter):
 
     def handle(message, world):
         if "orch" not in state:
-            state["orch"] = common.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier)
+            state["orch"] = offline_orchestrator.build_offline_orchestrator(meter, registry=world.registry, planner_tier=tier)
         res = state["orch"].run(message, quest_id="q_eval")
         return {"reply": getattr(res, "text", "") or "", "exit_reason": getattr(res, "exit_reason", None)}
     return handle

@@ -3,7 +3,7 @@ Only the planning step runs: no answer, no tool, no deep run is ever executed. I
 arguments), confirm and clarify decisions are returned as the router's whole answer."""
 import os
 
-import common
+import offline_orchestrator
 
 
 def decision_to_route(plan):
@@ -17,7 +17,7 @@ def decision_to_route(plan):
 
 
 def build(meter):
-    orch = common.build_offline_orchestrator(meter, planner_tier=os.environ.get("QAR_EVAL_MODEL", "haiku"))
+    orch = offline_orchestrator.build_offline_orchestrator(meter, planner_tier=os.environ.get("QAR_EVAL_MODEL", "haiku"))
 
     def classify(message, context):
         quest = context["quest"]

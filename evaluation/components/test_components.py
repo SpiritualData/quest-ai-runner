@@ -6,6 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
+import offline_orchestrator  # noqa: E402
 
 
 def test_meter_counts_and_aborts():
@@ -29,7 +30,7 @@ def test_wrap_keeps_signature_and_counts():
 
 
 def test_orchestrator_has_no_deep_runner_and_no_reachable_quest():
-    orch = common.build_offline_orchestrator(common.CallMeter())
+    orch = offline_orchestrator.build_offline_orchestrator(common.CallMeter())
     assert not getattr(orch, "deep_runner", None)
     assert common.OFFLINE_QUEST_URL.endswith(".invalid")
 
