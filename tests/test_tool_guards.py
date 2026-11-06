@@ -342,3 +342,30 @@ def test_other_verdicts_and_no_verdict_keep_every_web_read():
     reads = [{"web": "price"}]
     for verdict in (None, {}, WORLD, {"reach": "outside", "covered_by": None}):
         assert tool_guards.drop_web_reads_for_own_records(verdict, reads) == (reads, [])
+
+
+def test_a_tool_or_operation_name_is_never_a_quest_id_even_when_the_catalog_shows_it():
+    spec = quest_tool("list_quest_notes")
+    seen = LISTING + "\nOperations:\nget_reflection_context: the person's review"
+    verdict = tool_guards.check_quest_ids(spec, {"quest_id": "get_reflection_context"}, seen, not_quest_ids=["list_quest_goals"])
+    assert verdict.refusal and "not a quest" in verdict.refusal and "q_fit" in verdict.refusal
+    assert tool_guards.check_quest_ids(spec, {"quest_id": "list_quest_goals"}, "", not_quest_ids=["list_quest_goals"]).refusal
+    assert tool_guards.check_quest_ids(spec, {"quest_id": "q_biz"}, seen, not_quest_ids=["list_quest_goals"]).refusal is None
+
+
+def test_the_planner_naming_an_operation_as_a_tool_or_as_a_quest_never_reaches_a_quest_read():
+    ran = []
+    notes = ToolSpec(name="list_quest_notes", description="d", mutates=False, handler=lambda a, c: ran.append(a) or ToolResult(ok=True, text="n"),
+                     parameters={"type": "object", "properties": {"quest_id": {"type": "string"}}}, context_args={"quest_id": "quest_id"})
+    orch = orchestrator([notes])
+    evidence = LISTING + "\nget_reflection_context: Fetch the person's own latest period review"
+    got = run_calls(orch, [{"name": "list_quest_notes", "args": {"quest_id": "get_reflection_context"}},
+                           {"name": "get_reflection_context", "args": {}}], evidence=evidence, order_gate=lambda: False)
+    assert ran == []
+    assert "not a quest" in got[0]["text"] and "not a tool" in got[1]["text"] and "not ordered" not in got[1]["text"]
+
+
+def test_the_operation_names_are_the_adapters_operations():
+    from quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
+    lines = QuestRetrievalAdapter.list_operations(object.__new__(QuestRetrievalAdapter)).text.splitlines()
+    assert {l.split(":")[0] for l in lines if l[:1].islower() and ": " in l} == set(tool_guards.RETRIEVAL_OPERATION_NAMES)

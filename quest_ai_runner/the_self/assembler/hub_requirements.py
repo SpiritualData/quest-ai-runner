@@ -122,11 +122,35 @@ def selected_entries(assembler=None) -> Tuple[list, Dict[str, str]]:
     return esoi_requirements.gather(esoi_requirements.members_pairs(members)), unresolved
 
 
+QAR_FILLED_ENV = {"delegated-agent-sessions": ("HUBOFHUBS_WRITE_ROOT",)}   # QAR builds that arm itself with its own working directory, so the hub's variable is never read
+
+
+def unused_seats(environ: Mapping[str, str]) -> set:
+    """Seats QAR does not use in this process: ``intake-sources`` (the OpenClaw arm) only runs under ``channel`` and needs
+    ``QAR_CHANNEL_PROVIDER``; a lane or chat without it never builds that arm, so its requirements must not fail a check."""
+    return set() if (environ.get("QAR_CHANNEL_PROVIDER") or "").strip() else {"intake-sources"}
+
+
+def in_use(entry, environ: Mapping[str, str]) -> bool:
+    """False when every user of the requirement is a seat QAR does not use here, or a variable QAR fills itself."""
+    skipped = unused_seats(environ)
+    names = tuple(getattr(entry.requirement, "names", ()) or ())
+    users = [u.split(":")[0] for u in entry.used_by]
+    if users and all(u in skipped for u in users):
+        return False
+    if users and all(any(n in QAR_FILLED_ENV.get(u, ()) for n in names) for u in users):
+        return False
+    return True
+
+
 def requirements_report(environ: Optional[Mapping[str, str]] = None, assembler=None) -> Report:
     """The unmet requirements of what QAR's assembly would use, checked offline against ``environ`` (default: the process
     environment). Safe to call at any time: no model call, no network, no value printed."""
     environ = os.environ if environ is None else environ
     entries, unresolved = selected_entries(assembler)
+    entries = [entry for entry in entries if in_use(entry, environ)]
+    skipped = unused_seats(environ)
+    unresolved = {seat: why for seat, why in unresolved.items() if seat not in skipped}
     checks = esoi_requirements.check(entries, environ, offline=True)
     items = [Item(label=esoi_requirements.describe(entry.requirement), kind=entry.requirement.kind, status=one.status,
                   required=bool(entry.requirement.required), blocking=one.blocking, remedy=one.remedy, used_by=tuple(entry.used_by))

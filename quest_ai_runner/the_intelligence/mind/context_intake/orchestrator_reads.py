@@ -458,8 +458,16 @@ class ReadsMixin:
             name = call.get("name") or ""
             args = dict(call.get("args") or {})
             spec = self.tools.get(name) if self.tools is not None else None
+            if spec is None and self.tools is not None:
+                # Not a tool (the planner named a retrieval operation or made one up): say so, never "not ordered".
+                gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value,
+                                 "text": f"TOOL {name} NOT RUN: it is not a tool. Available tools: {', '.join(self.tools.names()) or 'none'}."})
+                emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not a tool",
+                                        data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
+                continue
             if spec is not None and not call.get("companion"):
-                checked = tool_guards.check_quest_ids(spec, args, evidence() if evidence is not None else "", ctx.quest_id)
+                checked = tool_guards.check_quest_ids(spec, args, evidence() if evidence is not None else "", ctx.quest_id,
+                                                      not_quest_ids=self.tools.names())
                 args = checked.args
                 if checked.refusal:
                     gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value,

@@ -93,12 +93,26 @@ def refusal_text(tool: str, arg: str, token: str, candidates: Mapping[str, str])
             f"with words from the quest's name:\n{listing}")
 
 
-def check_quest_ids(spec: Any, args: Mapping[str, Any], evidence: str, pinned: Optional[str] = None) -> IdVerdict:
-    """Check every quest id argument of a call against what the turn has seen. Mapped ids are replaced in the returned args."""
+#: The names of the retrieval adapter's operations (``list_operations``): the planner sees them in its catalog next to quest ids.
+RETRIEVAL_OPERATION_NAMES = frozenset(("get_goal_context", "query_quest", "discover_goals", "get_reflection_context", "get_task"))
+
+
+def check_quest_ids(spec: Any, args: Mapping[str, Any], evidence: str, pinned: Optional[str] = None,
+                    not_quest_ids: Iterable[str] = ()) -> IdVerdict:
+    """Check every quest id argument of a call against what the turn has seen. Mapped ids are replaced in the returned args.
+    ``not_quest_ids`` are names that are never a quest (tool and operation names): they sit in the catalog the turn saw, so
+    "seen in the evidence" alone would pass them."""
     out = dict(args or {})
     verdict = IdVerdict(args=out)
+    names = set(not_quest_ids) | RETRIEVAL_OPERATION_NAMES
     for arg in quest_id_args(spec):
         token = str(out.get(arg) or "").strip()
+        if token and token in names and token != pinned:
+            candidates = {t: l for t, l in listed_quests(evidence).items()}
+            verdict.refusal = (f"{getattr(spec, 'name', 'tool')} NOT RUN: {arg} {token!r} is the name of a tool or operation, not a "
+                               f"quest. Give a quest id" + (":\n" + "\n".join(f"- {c}: {l[:100]}" for c, l in list(candidates.items())[:REFUSAL_LISTS_AT_MOST])
+                                                            if candidates else ", or call find_quest with words from its name."))
+            break
         if not token or token == pinned or token in evidence:
             continue
         candidates = evidence_ids(evidence, shape_of(token))

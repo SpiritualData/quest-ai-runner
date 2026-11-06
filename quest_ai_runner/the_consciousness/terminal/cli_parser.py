@@ -269,9 +269,11 @@ def add_doctor_command(sub) -> None:
 def add_poll_command(sub) -> None:
     """The `poll` subcommand."""
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
-    poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
-    poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
-    poll_p.add_argument("--config", default=None, metavar="PATH",
+    # default=SUPPRESS: a subparser's own default would overwrite the same flag given BEFORE the subcommand
+    # (`--check poll`), which silently started the real loop under --check.
+    poll_p.add_argument("--once", action="store_true", default=argparse.SUPPRESS, help="one scan then exit (cron mode)")
+    poll_p.add_argument("--check", action="store_true", default=argparse.SUPPRESS, help="validate config + key, then exit")
+    poll_p.add_argument("--config", default=argparse.SUPPRESS, metavar="PATH",
                         help="TOML config file (see docs/how-to/writing-a-consumer.md); "
                              "QAR_CONFIG_FILE also works. Environment variables always win over "
                              "a value the file also sets.")

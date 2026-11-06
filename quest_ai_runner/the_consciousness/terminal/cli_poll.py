@@ -48,6 +48,33 @@ def _cmd_channel(args, log) -> int:
     return 0
 
 
+def check_lane(cfg, lane, log, client=None) -> int:
+    """`poll --check`: the same prerequisite and hub-requirement checks as `chat --check`, then one key check.
+    Returns in seconds with a clear pass or fail; builds no Poller, claims and dispatches nothing."""
+    from quest_ai_runner.the_consciousness.terminal.cli_chat import _check_chat_prerequisites
+    from quest_ai_runner.the_self.assembler.hub_requirements import requirements_report
+    failed = False
+    for p in _check_chat_prerequisites():
+        log.error("%s not ready: %s", lane, p)
+        failed = True
+    report = requirements_report()
+    for line in report.lines():
+        log.info("hub requirements: %s", line)
+    if report.failing():
+        log.error("%s not ready: the hub assembly has unmet requirements; run `quest-ai-runner doctor`", lane)
+        failed = True
+    try:
+        if client is None:
+            from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+            client = QuestClient(cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id)
+        log.info("%s key OK: %s", lane, client.whoami())
+    except Exception as e:  # noqa: BLE001
+        log.error("%s key check failed: %s", lane, e)
+        failed = True
+    log.info("%s check %s", lane, "FAILED" if failed else "PASSED")
+    return 1 if failed else 0
+
+
 def _cmd_poll(args, log) -> int:
     """Run the poller (the default when no subcommand is given, and `poll`)."""
     cfg = _config_from_env(getattr(args, "config", None))
@@ -61,19 +88,13 @@ def _cmd_poll(args, log) -> int:
     # The config file's own state_path is the last resort BELOW the env var, matching every other
     # field's precedence, so a unit can still relocate one lane's state without touching its file.
     state_path = os.getenv("QAR_STATE_PATH") or cfg.state_path or "qar_state.json"
+
+    once = bool(getattr(args, "once", False))
+    if getattr(args, "check", False):
+        # Never builds a Poller: its constructor wires the whole hub and its loop claims tasks.
+        return check_lane(cfg, lane, log)
+
     poller = Poller(cfg, state_path=state_path)
-
-    once = args.once or (args.command == "poll" and getattr(args, "once", False))
-    check = args.check or (args.command == "poll" and getattr(args, "check", False))
-
-    if check:
-        try:
-            who = poller.client.whoami()
-            log.info("%s key OK: %s", lane, who)
-            return 0
-        except Exception as e:  # noqa: BLE001
-            log.error("%s key check failed: %s", lane, e)
-            return 1
 
     if once:
         handled = poller.run_once()
