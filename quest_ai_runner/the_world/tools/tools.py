@@ -553,6 +553,9 @@ class ToolRegistry:
                ctx: Optional[ToolContext] = None) -> ToolResult:
         spec = self.get(name)
         if spec is None:
+            from quest_ai_runner.the_world.tools import dry_run_writes   # QAR_DRY_RUN_WRITES: a tool the lane lacks is listed apart
+            if dry_run_writes.active():
+                dry_run_writes.RECORDER.missing_tool(name)
             return ToolResult(ok=False, text=f"unknown tool {name!r}; available: "
                                              f"{', '.join(self.names()) or 'none'}")
         if args is not None and not isinstance(args, Mapping):
@@ -579,6 +582,11 @@ class ToolRegistry:
         if spec.mutates:
             # Text the AI writes into the person's data never carries an em dash (brand rule, enforced here, not asked of the model).
             resolved = clean_value(resolved)
+
+        from quest_ai_runner.the_world.tools import dry_run_writes   # QAR_DRY_RUN_WRITES: a tool that mutates is recorded, not run
+        stand_in = dry_run_writes.tool_call(spec, name, resolved)
+        if stand_in is not None:
+            return stand_in
 
         box: Dict[str, Any] = {}
 

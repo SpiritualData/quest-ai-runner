@@ -8,14 +8,17 @@ datasets by path (they are read, never copied into this repository). Uses the Sh
   qar_datasets_sheet.py --sheet SHEET_ID --service-account KEY.json --subject USER@DOMAIN
         [--poor-answers FILE_OR_DIR] [--context-dataset LABEL=FOLDER ...] [--output-dir DIR] [--raw-dir DIR] [--owner TEXT] [--dry-run]
 
-Tabs written (only these three; every other tab of the sheet is left alone, and the sheet is never created or shared here):
-  Datasets    one row per dataset: id, name, what it tests, owner, PRIORITY (a dropdown a human sets), STATUS (from the results), inputs
-              count, metrics that use it, private or repo, source label, notes.
-  Inputs      one row per input: dataset, input id, input text (repo datasets and the poorly answered set; never a context dataset), category,
-              PRIORITY, status, the BEST ALTERNATIVE (the leading implementation of the component, from the results log), ITS LAST OUTPUT (the
+Tabs written (only these three, always the first three tabs in this order, so they open first; every other tab of the sheet is left alone,
+and the sheet is never created or shared here):
+  Datasets    one row per dataset: id, name, what it tests, owner, PRIORITY (a dropdown a human sets), STATUS (one line per environment, from the
+              results), inputs count, metrics that use it, private or repo, source label, HOW TO RUN (the exact command), notes.
+  Inputs      (a private set may add What went wrong, Ideal handling, Input note and the Original input text, read from optional fields of its rows)
+              one row per input and ENVIRONMENT that has a result (the latest result of each): dataset, input id, input text (repo datasets and the
+              poorly answered set; never a context dataset), category, PRIORITY, status, environment ("dev eval world" or "production (writes
+              blocked)", from the log line, else from the arm), the BEST ALTERNATIVE (the arm that answers in that environment), ITS LAST OUTPUT (the
               reply from ``QAR_EVAL_OUTPUT_DIR`` lines, else the runner's raw result file, else "no recorded output yet"), score, judge reason,
               run date and commit, notes.
-  How to use  what each editable column means, how priority is set, how to refresh.
+  How to use  what each editable column means, how priority is set, how to run a dataset, how to refresh.
 
 The editable columns (Priority, Notes) are carried over on every rewrite by header name: a row that still exists keeps what a human entered. A
 new row gets a preset priority only where ``PRESET_HIGH`` says so (shown as "preset, human may change"); otherwise it is blank for a human to set.
@@ -35,21 +38,24 @@ import dataset_sheet as ds  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 COMPONENTS = REPO / "evaluation" / "components"
 TABS = ("Datasets", "Inputs", "How to use")
-TAB_IDS = {"Datasets": 9101, "Inputs": 9102, "How to use": 9103}
+TAB_IDS = {"Datasets": 9101, "Inputs": 9102, "How to use": 9103}   # TABS is also the tab order: index 0, 1, 2
+DEV_ENV, PROD_ENV, OTHER_ENV = "dev eval world", "production (writes blocked)", "offline or local"
+PROD_ARMS = {"chat_quality": "prod_qar_readonly"}   # the arm that answers on production with writes blocked
+ARM_ENVIRONMENT = {"dev_quest_chat": DEV_ENV, "qar_live": DEV_ENV, "prod_qar_readonly": PROD_ENV}   # for a log line that names no environment
 PRIORITIES = ("High", "Medium", "Low")
 PRESET_NOTE = "preset, human may change"
 PRESET_HIGH = ("chat_quality/acceptance", "poor_answers")
 NO_OUTPUT = "no recorded output yet"
 REPLY_LIMIT = 8000
 DATASETS_HEAD = ["Dataset id", "Name", "What it tests", "Owner", "PRIORITY", "Priority set by", "STATUS", "Inputs", "Metrics that use it",
-                 "Private or repo", "Source", "Notes"]
-INPUTS_HEAD = ["Dataset", "Input id", "Input text", "Category", "PRIORITY", "Priority set by", "Status", "BEST ALTERNATIVE", "ITS LAST OUTPUT",
-               "Output from", "Score", "Judge reason", "Run date", "Commit", "Notes"]
+                 "Private or repo", "Source", "How to run", "Notes"]
+INPUTS_HEAD = ["Dataset", "Input id", "Input text", "Category", "What went wrong", "Ideal handling", "Input note", "Original input text", "PRIORITY", "Priority set by", "Status", "Environment", "BEST ALTERNATIVE",
+               "ITS LAST OUTPUT", "Output from", "Score", "Tokens", "Model calls", "Lane gaps", "Judge reason", "Run date", "Commit", "Notes"]
 EDITABLE = {"Datasets": ["PRIORITY", "Notes"], "Inputs": ["PRIORITY", "Notes"]}
-KEYS = {"Datasets": ("Dataset id",), "Inputs": ("Dataset", "Input id")}
+KEYS = {"Datasets": ("Dataset id",), "Inputs": ("Dataset", "Input id", "Environment")}
 WIDTHS = {"Dataset id": 170, "Name": 200, "What it tests": 320, "Owner": 90, "PRIORITY": 90, "Priority set by": 150, "STATUS": 260, "Inputs": 60,
-          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Input text": 380,
-          "Category": 180, "Status": 80, "BEST ALTERNATIVE": 140, "ITS LAST OUTPUT": 520, "Output from": 120, "Score": 60, "Judge reason": 300,
+          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
+          "Category": 180, "Status": 80, "BEST ALTERNATIVE": 140, "ITS LAST OUTPUT": 520, "Output from": 120, "Score": 60, "Tokens": 80, "Model calls": 80, "Lane gaps": 140, "Judge reason": 300,
           "Run date": 90, "Commit": 90}
 
 CHAT = ("chat_quality", "metric-answer-a-turn, QME1, metric-qar-overall")
@@ -114,7 +120,10 @@ def poor_answer_dataset(path: str) -> dict | None:
         return None
     rows = [json.loads(line) for line in target.read_text(encoding="utf-8").splitlines() if line.strip()]
     return dict(id="poor_answers", private=True, source="private: the poorly answered set (QAR_PRIVATE_POOR_ANSWERS_DATASET)",
-                cases=[dict(id=r["case_id"], text=r.get("input_text", ""), category=r.get("failure_kind", "")) for r in rows if r.get("case_id")])
+                cases=[dict(id=r["case_id"], text=r.get("input_text", ""), category=r.get("failure_kind", ""), went_wrong=r.get("what_went_wrong", ""),
+                            ideal=r.get("ideal_handling", ""), note=r.get("input_note", ""),
+                            original=r.get("original_input_text", "") if r.get("original_input_text", "") != r.get("input_text", "") else "")
+                       for r in rows if r.get("case_id")])
 
 
 def context_dataset(label: str, folder: str) -> dict | None:
@@ -179,6 +188,7 @@ def read_output_log(folder: str) -> dict:
             if line.strip():
                 entry = json.loads(line)
                 found.setdefault((entry.get("dataset", path.parent.name), entry.get("case_id", path.stem)), []).append(entry)
+                found.setdefault(("*", entry.get("case_id", path.stem)), []).append(entry)   # a case id names one case whatever folder its source wrote it to
     return found
 
 
@@ -201,25 +211,34 @@ def judge_reason(record: dict) -> str:
     return str(judged.get("summary") or (judged.get("verdict") or {}).get("summary") or "")
 
 
+def environment_of(entry_environment, arm: str) -> str:
+    return entry_environment or ARM_ENVIRONMENT.get(arm, OTHER_ENV)
+
+
 def input_state(dataset: dict, case: dict, arm: str, sources: dict) -> dict:
-    """What is known of one input for the leading arm: status, reply, score, reason, date and commit, from the output log first, then the
-    runner's raw result file, then the per-case results."""
+    """What is known of one input for one arm: status, reply, score, reason, date, commit and environment, from the output log first (the
+    latest line of that arm), then the runner's raw result file (dev runs only), then the per-case results."""
     component, case_id = dataset["component"], case["id"]
-    mine = [e for e in sources["log"].get((dataset["id"], case_id), []) + sources["log"].get((dataset["id"].split("/")[-1], case_id), []) if e.get("arm") == arm]
+    lines = sources["log"].get((dataset["id"], case_id), []) + sources["log"].get((dataset["id"].split("/")[-1], case_id), []) or sources["log"].get(("*", case_id), [])
+    mine = [e for e in lines if e.get("arm") == arm]
     if mine:
         last = max(mine, key=lambda e: e.get("timestamp", ""))
         return dict(status="pass" if last.get("passed") else "fail", reply=last.get("reply", ""), source="output log", score=last.get("score", ""),
-                    reason=last.get("reason", ""), date=str(last.get("timestamp", ""))[:10], commit=last.get("commit", ""))
-    raw = sources["raw"].get(case_id) if component == "chat_quality" else None
+                    tokens=sum(int(last.get(k) or 0) for k in ("tokens_in", "tokens_out")) or "", calls=last.get("model_calls", ""),
+                    gaps=", ".join(last.get("lane_gaps") or []), reason=last.get("reason", ""), date=str(last.get("timestamp", ""))[:10], commit=last.get("commit", ""),
+                    environment=environment_of(last.get("environment"), arm))
+    environment = environment_of("", arm)
+    raw = sources["raw"].get(case_id) if component == "chat_quality" and environment != PROD_ENV else None
     if raw and (raw.get("evidence") or {}).get("reply") is not None and raw.get("passed") is not None:
         return dict(status="pass" if raw["passed"] else "fail", reply=raw["evidence"].get("reply", ""), source="runner raw result",
-                    score=raw.get("score") if raw.get("score") is not None else "", reason=judge_reason(raw), date=raw["file_date"], commit="")
+                    score=raw.get("score") if raw.get("score") is not None else "", reason=judge_reason(raw), date=raw["file_date"], commit="",
+                    environment=environment)
     row = sources["per_case"].get((component, arm, case_id))
     if row:
         ran = sources["results"].get((component, arm, row.get("cases_sha", ""), row.get("sample", "")), {})
         return dict(status="pass" if row.get("ok") in ("1", "True", "true") else "fail", reply=NO_OUTPUT, source="", score=row.get("score", ""),
-                    reason="", date=ran.get("date", ""), commit=ran.get("git_sha", ""))
-    return dict(status="unknown", reply=NO_OUTPUT, source="", score="", reason="", date="", commit="")
+                    reason="", date=ran.get("date", ""), commit=ran.get("git_sha", ""), environment=environment)
+    return dict(status="unknown", reply=NO_OUTPUT, source="", score="", reason="", date="", commit="", environment=environment)
 
 
 def dataset_status(states: list[dict]) -> str:
@@ -233,31 +252,76 @@ def dataset_status(states: list[dict]) -> str:
     return f"{'passing' if passed == len(known) else 'failing'} {passed} of {len(known)}{covered}, {where}"
 
 
-def build_rows(datasets: list[dict], sources: dict, owner: str) -> tuple[list[list], list[list]]:
+def arms_of(dataset: dict, sources: dict) -> list[str]:
+    """The arms that answer this dataset, one per environment: the dev arm (or the leading arm of the component), then the production arm."""
+    component = dataset["component"]
+    arms = [ANSWER_ARMS.get(component) or leading_arm(sources["results_list"], component)]
+    if PROD_ARMS.get(component):
+        arms.append(PROD_ARMS[component])
+    return arms
+
+
+def run_command(dataset: dict, prefix: str) -> str:
+    """The exact command that runs this dataset: the deployment's wrapper for a chat dataset (``prefix``), else the component's own run."""
+    component = dataset["component"]
+    if component == "chat_quality" and prefix:
+        name = dataset["id"].split("/")[-1]
+        return f"{prefix} {name} prod   (or: {prefix} {name} dev)"
+    if dataset["id"].startswith("context/"):
+        return f"esoi run {component} (the private case source is read from its environment variable)"
+    return f"esoi run {component} --impl {ANSWER_ARMS.get(component) or '<arm>'}"
+
+
+def build_rows(datasets: list[dict], sources: dict, owner: str, command_prefix: str = "") -> tuple[list[list], list[list]]:
     drows, irows = [DATASETS_HEAD], [INPUTS_HEAD]
     for dataset in datasets:
-        arm = ANSWER_ARMS.get(dataset["component"]) or leading_arm(sources["results_list"], dataset["component"])
+        arms = arms_of(dataset, sources)
         preset = "High" if dataset["id"] in PRESET_HIGH else ""
-        states = []
+        by_env: dict = {}
         for case in dataset["cases"]:
-            state = input_state(dataset, case, arm, sources)
-            states.append(state)
+            states = [(arm, input_state(dataset, case, arm, sources)) for arm in arms]
+            shown = [(arm, st) for arm, st in states if st["status"] != "unknown"] or states[:1]
             text = "" if dataset["id"].startswith("context/") else ds.clip(case["text"])
-            irows.append([dataset["id"], case["id"], text, case["category"], preset, PRESET_NOTE if preset else "", state["status"], arm,
-                          ds.clip(state["reply"])[:REPLY_LIMIT], state["source"], state["score"], state["reason"], state["date"], state["commit"], ""])
-        drows.append([dataset["id"], dataset["name"], dataset["what"], owner, preset, PRESET_NOTE if preset else "", dataset_status(states),
-                      len(dataset["cases"]), dataset["metrics"], "private" if dataset["private"] else "repo", dataset["source"], ""])
+            for arm, state in shown:
+                by_env.setdefault(state["environment"], []).append(state)
+                irows.append([dataset["id"], case["id"], text, case["category"], ds.clip(case.get("went_wrong", "")), ds.clip(case.get("ideal", "")),
+                              ds.clip(case.get("note", "")), ds.clip(case.get("original", "")), preset, PRESET_NOTE if preset else "", state["status"], state["environment"], arm,
+                              ds.clip(state["reply"])[:REPLY_LIMIT], state["source"], state["score"], state.get("tokens", ""), state.get("calls", ""),
+                              state.get("gaps", ""), state["reason"], state["date"], state["commit"], ""])
+        sizes = len(dataset["cases"])
+        envs = env_order(set(by_env) | {environment_of("", arm) for arm in arms})
+        status = " | ".join(f"{env}: {dataset_status(states_for(env, arms, dataset, sources))}" for env in envs)
+        drows.append([dataset["id"], dataset["name"], dataset["what"], owner, preset, PRESET_NOTE if preset else "", status,
+                      sizes, dataset["metrics"], "private" if dataset["private"] else "repo", dataset["source"], run_command(dataset, command_prefix), ""])
     return drows, irows
+
+
+def env_order(envs) -> list[str]:
+    return sorted(envs, key=lambda e: (e != DEV_ENV, e != PROD_ENV, e))
+
+
+def states_for(env: str, arms: list[str], dataset: dict, sources: dict) -> list[dict]:
+    """Every input's state for the arm of ``env`` (an input with no result there counts as not run, so the status says how many have one)."""
+    arm = next((a for a in arms if environment_of("", a) == env), arms[0])
+    return [input_state(dataset, case, arm, sources) for case in dataset["cases"]]
 
 
 def carry_over(old_rows: list[dict], new_rows: list[list], tab: str) -> int:
     """Copy the human-entered columns of ``tab`` from the old rows (dicts by header name) onto the rows whose key still exists; a changed
-    priority is labelled as set by a human. Returns the number of rows carried."""
+    priority is labelled as set by a human. A row of a sheet written before the Environment column carried over to the first row of the same
+    input. Returns the number of rows carried."""
     head, keys = new_rows[0], KEYS[tab]
     old = {tuple(str(r.get(k, "")) for k in keys): r for r in old_rows}
+    short = {}
+    for r in old_rows:
+        if "Environment" in r:
+            continue
+        short.setdefault(tuple(str(r.get(k, "")) for k in keys[:2]), r)
     carried = 0
     for row in new_rows[1:]:
         before = old.get(tuple(str(row[head.index(k)]) for k in keys))
+        if before is None:
+            before = short.get(tuple(str(row[head.index(k)]) for k in keys[:2])) if tab == "Inputs" else None
         if before is None:
             continue
         carried += 1
@@ -272,16 +336,17 @@ def carry_over(old_rows: list[dict], new_rows: list[list], tab: str) -> int:
 
 def how_to_use(sheet_stamp: str) -> list[list]:
     return [["How to use this sheet"], [],
-            ["What it is", "Every evaluation dataset of the quest-ai-runner and each of its inputs, with how the leading implementation last answered. Rewritten by a command; only the editable columns below survive a rewrite."],
-            ["Datasets tab", "One row per dataset. STATUS is computed from the results (passing or failing, how many inputs have a result, the date and commit of the last run); 'not run' means no result is recorded."],
-            ["Inputs tab", "One row per input. BEST ALTERNATIVE is the implementation that gives the reply for the component that serves the dataset (the leading one in the results log where none is named). ITS LAST OUTPUT is the reply that implementation gave on its latest run on this input; 'no recorded output yet' means no run has saved a reply."],
+            ["What it is", "Every evaluation dataset of the quest-ai-runner and each of its inputs, with how it was last answered in each environment. Rewritten by a command; only the editable columns below survive a rewrite."],
+            ["Datasets tab", "One row per dataset. STATUS has one entry per environment, computed from the results (passing or failing, how many inputs have a result, the date and commit of the last run); 'not run' means no result is recorded. HOW TO RUN is the exact command."],
+            ["Inputs tab", "One row per input and environment that has a result. Environment says where the answer came from: 'dev eval world' (a disposable development account) or 'production (writes blocked)' (the real production brain, real data, every state change recorded and not made). BEST ALTERNATIVE is the implementation that answers in that environment. ITS LAST OUTPUT is the reply that implementation gave on its latest run on this input; 'no recorded output yet' means no run has saved a reply."],
             ["PRIORITY (editable)", "A dropdown: High, Medium or Low. A human sets it. Blank means not yet set. The acceptance cases and the poorly answered inputs are preset to High (the column Priority set by says 'preset, human may change'); change them freely."],
             ["Notes (editable)", "Free text on a dataset or an input. Never overwritten."],
             ["Do not edit", "Every other column is rewritten from the data at each refresh; edits there are lost."],
             ["Privacy", "Input text is shown for repository datasets and the poorly answered set. Context datasets show ids and status only. The sheet is private to its owner; do not share it."],
-            ["How rows are matched", "Priority and Notes are carried over by Dataset id (Datasets) and Dataset plus Input id (Inputs). A removed input loses its row."],
-            ["Where outputs come from", "Lines appended to the output directory (QAR_EVAL_OUTPUT_DIR) by every chat_quality and end_to_end run; else the chat runner's raw result files; else the per-case results (status only)."],
-            ["How to refresh", "Run the refresh command of the deployment (it passes the credentials, the sheet and the private dataset paths to scripts/qar_datasets_sheet.py). It costs no model call."],
+            ["How rows are matched", "Priority and Notes are carried over by Dataset id (Datasets) and Dataset, Input id and Environment (Inputs). A removed input loses its row."],
+            ["How to run a dataset", "One command for every chat dataset: the HOW TO RUN column of the Datasets tab, for example `run-qar-dataset.sh poor_answers prod` (production, writes blocked) or `... dev` (the dev eval world). It runs the cases, then refreshes this sheet. Optional `--only ID,ID` runs some inputs."],
+            ["Where outputs come from", "Lines appended to the output directory (QAR_EVAL_OUTPUT_DIR) by every chat_quality and end_to_end run, each naming its environment; else the chat runner's raw result files; else the per-case results (status only)."],
+            ["How to refresh", "Run the refresh command of the deployment (it passes the credentials, the sheet and the private dataset paths to scripts/qar_datasets_sheet.py). It costs no model call. The run command above refreshes by itself at the end."],
             ["Last refreshed (UTC)", sheet_stamp]]
 
 
@@ -329,9 +394,15 @@ def read_old(sheets, sheet_id: str, existing: dict, tab: str) -> list[dict]:
     return ds.read_tab(sheets, sheet_id, tab) if tab in existing else []
 
 
+def tab_requests(existing: dict) -> list[dict]:
+    """Delete this script's tabs and add them again as the first three tabs, in ``TABS`` order, whatever the sheet holds before or after them."""
+    reqs = [{"deleteSheet": {"sheetId": existing[t]}} for t in TABS if t in existing]
+    return reqs + [{"addSheet": {"properties": {"title": t, "sheetId": TAB_IDS[t], "index": i}}} for i, t in enumerate(TABS)]
+
+
 def export(args) -> dict:
     datasets, sources = gather(args)
-    drows, irows = build_rows(datasets, sources, args.owner)
+    drows, irows = build_rows(datasets, sources, args.owner, args.run_command)
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     if args.dry_run:
         return dict(datasets=len(drows) - 1, inputs=len(irows) - 1)
@@ -340,14 +411,15 @@ def export(args) -> dict:
     existing = {s["properties"]["title"]: s["properties"]["sheetId"] for s in meta["sheets"]}
     carried = {"Datasets": carry_over(read_old(sheets, args.sheet, existing, "Datasets"), drows, "Datasets"),
                "Inputs": carry_over(read_old(sheets, args.sheet, existing, "Inputs"), irows, "Inputs")}
-    reqs = [{"deleteSheet": {"sheetId": existing[t]}} for t in TABS if t in existing]
-    reqs += [{"addSheet": {"properties": {"title": t, "sheetId": TAB_IDS[t]}}} for t in TABS]
+    reqs = tab_requests(existing)
     sheets.spreadsheets().batchUpdate(spreadsheetId=args.sheet, body={"requests": reqs}).execute()
     sheets.spreadsheets().values().batchUpdate(spreadsheetId=args.sheet, body={"valueInputOption": "RAW", "data": [
         {"range": "Datasets!A1", "values": drows}, {"range": "Inputs!A1", "values": irows},
         {"range": "How to use!A1", "values": how_to_use(stamp)}]}).execute()
     sheets.spreadsheets().batchUpdate(spreadsheetId=args.sheet, body={"requests": requests_for({"Datasets": len(drows) - 1, "Inputs": len(irows) - 1})}).execute()
-    return dict(spreadsheetId=args.sheet, datasets=len(drows) - 1, inputs=len(irows) - 1, carried=carried)
+    after = sheets.spreadsheets().get(spreadsheetId=args.sheet, fields="sheets.properties(title,index)").execute()
+    order = [s["properties"]["title"] for s in sorted(after["sheets"], key=lambda s: s["properties"]["index"])]
+    return dict(spreadsheetId=args.sheet, datasets=len(drows) - 1, inputs=len(irows) - 1, carried=carried, tab_order=order)
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -360,6 +432,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default="", help="the QAR_EVAL_OUTPUT_DIR directory")
     parser.add_argument("--raw-dir", default="", help="the chat runner's raw result files")
     parser.add_argument("--owner", default="", help="text for the Owner column of every dataset")
+    parser.add_argument("--run-command", default="", help="the deployment's wrapper that runs a chat dataset (shown in the HOW TO RUN column)")
     parser.add_argument("--dry-run", action="store_true", help="build the rows and print the counts; no Google call")
     return parser
 

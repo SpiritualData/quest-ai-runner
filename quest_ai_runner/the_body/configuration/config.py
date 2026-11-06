@@ -752,6 +752,8 @@ def build_orchestrator(
     console-print callback so bootstrap events appear as visible system messages
     rather than silent log entries.
     """
+    from quest_ai_runner.the_world.tools import dry_run_writes
+    dry_run_writes.install()   # QAR_DRY_RUN_WRITES=1 closes the process to writes; unset, this does nothing
     install_for_config(cfg.core_settings)
     _skip = {"quest", "retrieval adapter"}
     problems = [p for p in cfg.validate()
@@ -779,13 +781,14 @@ def build_orchestrator(
     # style as the MultiProvider wrap above). Consumers and the chat UIs read ``cfg.deep_runner``
     # directly to decide whether execution is available, so the sentinel must never survive past
     # here — after build_orchestrator, that field is always a real runner or a real None.
-    cfg.deep_runner = resolve_deep_runner(cfg)
+    cfg.deep_runner = dry_run_writes.wrap_deep(resolve_deep_runner(cfg))
+    cfg.deep_runners = dry_run_writes.wrap_deep(cfg.deep_runners)
     # The LADDER the goal loop indexes by attempt. Built from the already-resolved ``deep_runner``
     # plus, only if the consumer wired a ``file_writer``, the in-process fast editor in front of
     # it. ``cfg.deep_runner`` stays exactly what it was — a single runner — because consumers and
     # the chat UIs read that field to decide whether execution is available; the ladder is the
     # orchestrator's business, not a redefinition of the config field.
-    deep_runner_ladder = resolve_deep_runner_ladder(cfg, warn=False)
+    deep_runner_ladder = dry_run_writes.wrap_deep(resolve_deep_runner_ladder(cfg, warn=False))
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,

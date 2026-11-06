@@ -143,6 +143,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Live chat on a disposable world | `quest-self:dev_quest_chat` | [evaluation/components/chat_quality/impls/dev_quest_chat.py](../evaluation/components/chat_quality/impls/dev_quest_chat.py) |  |
 | Offline metric validity check | `quest-self:reference_replies` | [evaluation/components/chat_quality/impls/reference_replies.py](../evaluation/components/chat_quality/impls/reference_replies.py) |  |
 | Planner-only route check on the chat dataset | `quest-self:planner_route` | [evaluation/components/chat_quality/impls/planner_route.py](../evaluation/components/chat_quality/impls/planner_route.py) |  |
+| Production brain, writes blocked | `quest-self:prod_qar_readonly` | [evaluation/components/chat_quality/impls/prod_qar_readonly.py](../evaluation/components/chat_quality/impls/prod_qar_readonly.py) |  |
 | Live selection evaluation arm | `model-tier-chooser:qar_selection` | [evaluation/components/choose_a_model_tier/impls/qar_selection.py](../evaluation/components/choose_a_model_tier/impls/qar_selection.py) |  |
 | Scripted ideal decisions, no model call (offline) | `the-tools:scripted_ideal` | [evaluation/components/claim_reach/impls/scripted_ideal.py](../evaluation/components/claim_reach/impls/scripted_ideal.py) |  |
 | Rules only, no model (floor) | `the-tools:rules_only` | [evaluation/components/claim_reach/impls/rules_only.py](../evaluation/components/claim_reach/impls/rules_only.py) |  |

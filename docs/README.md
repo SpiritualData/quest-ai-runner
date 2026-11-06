@@ -29,6 +29,7 @@ Steps for a task you already know you want to do.
   script, notebook, or one-off lookup that only needs a `QuestClient` (see also the README's
   "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
 - **[Keeping Quest AI Runner current with the hub](how-to/keep-quest-ai-runner-current-with-the-hub.md)**: check the hub's requirements with `doctor`, and notice and resolve a hub update when you lock selections (for an AI agent or a person).
+- **[Running a priority dataset on production, safely](how-to/run-a-priority-dataset.md)**: run any chat dataset on the production brain with every write blocked and recorded, and keep one sheet of the latest result per environment.
 - **[Keeping the repository clean](how-to/public-hygiene.md)**: the scan that keeps secrets, real machine
   paths and real addresses out of a public repository.
 - **[Implementing adapters](how-to/adapters.md)**: the four interfaces (`RetrievalAdapter`,

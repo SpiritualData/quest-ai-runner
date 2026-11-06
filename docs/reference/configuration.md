@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-234 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+236 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -62,7 +62,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CLI_EFFORT` | Reasoning effort passed to the Claude CLI provider (low, medium, high; empty = CLI default). | `the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py` | - |
 | `QAR_CLI_HAIKU_THINKING_TOKENS` | Thinking-token cap for Haiku completions through the CLI provider (unset = CLI default). | `the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py` | - |
 | `QAR_CLI_PLAN_THINKING_TOKENS` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_CONFIG_FILE` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_body/internal_context/card_store/card_store_tidy.py` +1 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +1 |
+| `QAR_CONFIG_FILE` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_body/internal_context/card_store/card_store_tidy.py` +1 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
 | `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `the_body/configuration/config_core_settings.py`, `the_consciousness/request_intake/lane.py` | `.env.example`, `docs/explanation/context-assembly.md` |
 | `QAR_CONTEXT_CARDS_DIR` |  | `the_consciousness/terminal/cli_cards.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/cli_context.py` | `.env.example`, `docs/explanation/context-assembly.md` |
 | `QAR_CONTEXT_POLL_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/reference/quest-api-contract.md` |
@@ -96,6 +96,8 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_WORKING_DIR` |  | `the_body/configuration/config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_DRY_RUN_SCRATCH` | Folder a dry run (QAR_DRY_RUN_WRITES=1) redirects file writes into; default a new folder under the system temp folder. | `the_world/tools/dry_run_writes.py` | - |
+| `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (the_world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `the_world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md` |
 | `QAR_EMBEDDER_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py`, `the_body/internal_context/card_store/qdrant_embedders.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
 | `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `the_body/internal_context/card_store/qdrant_embedders.py` | - |

@@ -35,7 +35,7 @@ def score_case(fn, case):
     row = scored(record)
     output_log.record(case.get("source") or case.get("dataset") or "chat_quality", case.get("id", ""), output_log.arm_of(fn), input_of(case),
                       ((record.get("evidence") or {}).get("reply") or record.get("reply") or ""), route_summary(record), record.get("score"),
-                      row["ok"], row["note"] or record.get("error") or "")
+                      row["ok"], row["note"] or record.get("error") or "", extra=record.get("log_extra"))
     return dict(row, source=case["source"]) if case.get("source") else row
 
 

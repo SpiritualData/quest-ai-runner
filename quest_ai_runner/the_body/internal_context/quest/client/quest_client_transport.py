@@ -241,6 +241,10 @@ class TransportMixin:
 
     def attempt(self, method: str, path: str, *, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]],
                 timeout: float, key: Optional[str]) -> "tuple[int, Any]":
+        from quest_ai_runner.the_world.tools import dry_run_writes   # QAR_DRY_RUN_WRITES: a write is recorded and answered, never sent
+        stand_in = dry_run_writes.quest_exchange(method, path, body)
+        if stand_in is not None:
+            return stand_in
         url = f"{self.base_url}{path}"
         if params:
             clean = {k: v for k, v in params.items() if v is not None}
