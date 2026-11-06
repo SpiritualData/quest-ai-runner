@@ -51,6 +51,8 @@ READ_POST_RULES = (
 READ_POST_COMPILED = tuple((re.compile(h + r"\Z"), re.compile(p + r"\Z")) for h, p in READ_POST_RULES)
 #: The model CLI answers with no tools in these flags (hubofhubs claude_cli), so it can change nothing.
 MODEL_CLI_NAMES = frozenset({"claude"})
+#: git commands that only read the repository (the harness records the commit of the code it ran).
+READ_GIT = frozenset({"rev-parse", "status", "diff", "log", "show", "rev-list", "ls-files", "describe", "config"})
 MODEL_CLI_FORBIDDEN = ("--dangerously-skip-permissions", "--allowedTools", "--allowed-tools", "--permission-mode")
 
 
@@ -229,6 +231,12 @@ def check_request(method: str, url: str) -> None:
 
 def check_process(argv: Any) -> None:
     parts = [str(a) for a in (argv if isinstance(argv, (list, tuple)) else [argv])]
+    if parts and os.path.basename(parts[0]) == "git":
+        rest = parts[1:]
+        while rest[:1] in (["-C"], ["-c"]):
+            rest = rest[2:]
+        if rest[:1] and rest[0] in READ_GIT and not (rest[0] == "config" and any(a for a in rest[1:] if not a.startswith("--get"))):
+            return
     names = {os.path.basename(p) for p in parts[:6]}
     if names & MODEL_CLI_NAMES:
         no_tools = "--tools" in parts and parts[parts.index("--tools") + 1: parts.index("--tools") + 2] == [""]

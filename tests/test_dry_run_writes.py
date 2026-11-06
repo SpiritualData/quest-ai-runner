@@ -94,6 +94,9 @@ def test_subprocess_only_the_toolless_model_cli(on):
         dry.check_process(["claude", "-p", "--dangerously-skip-permissions", "--tools", ""])
     with pytest.raises(dry.DryRunBlocked):
         dry.check_process(["claude", "-p", "--output-format", "json"])
+    dry.check_process(["git", "-C", "/some/repo", "rev-parse", "--short", "HEAD"])
+    with pytest.raises(dry.DryRunBlocked):
+        dry.check_process(["git", "push", "origin", "main"])
     dry.check_process(["claude", "-p", "--output-format", "json", "--tools", "", "--strict-mcp-config"])
     assert dry.RECORDER.model_calls == 1
 
