@@ -28,6 +28,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards impor
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
+from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
     HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, NO_ATTACHMENT_LINE,
@@ -220,6 +221,32 @@ class RunAnswerMixin:
                     last_plan.goal = last_plan.goal or last_plan.deferred_deep.get("goal")
                     last_plan.deep_brief = (last_plan.deep_brief
                                             or last_plan.deferred_deep.get("brief"))
+            # PURSUE BEFORE THE WRAP-UP: the read budget is spent and the last read step returned nothing (a structured count the loop
+            # keeps), so the answer would rest on records nobody opened. Before wrapping up with "I could not find it", the read-only
+            # search runs through Critical Thinking's bounded replan; what it returns answers the turn, else the wrap-up goes ahead
+            # with the one honest line the replan wrote.
+            pursuit_line = ""
+            if (not must_execute and not rs.brainstorm_active and getattr(rs, "empty_read_steps", 0) >= 1 and cfg.deep_before_giving_up
+                    and nets_intent != USER_INTENT_HOLD_OFF and message_is_user_turn and self._search_untried(rs, exec_record, _ctx_meta)):
+                rs.text = getattr(rs, "text", "") or ""
+                rs._last_verdict = {"met": False, "reason": "the reads returned nothing the answer can rest on",
+                                    "next_action": "open the records the question concerns (the quest's collections, by their ids) and read their entries"}
+                try:
+                    pursued = pursue_before_giving_up(
+                        self, rs, _truncate_goal(last_plan.goal or f"Fully address the request: {rs.user_message}"), exec_record, _ctx_meta, emit,
+                        cancel_check, take_resume_session, working_dir_override)
+                    rs.pursuit = pursued["pursuit"]
+                    if pursued["result"] is not None and pursued["result"].kind == "cancelled":
+                        return finish(pursued["result"])
+                    if pursued["pursuit"]["status"] == "met_after_replan" and pursued["result"] is not None:
+                        self._kickoff_card_update(pursued["result"], PlanDecision(action="deep", goal=last_plan.goal), rs.user_message, _ctx_meta, emit,
+                                                  gathered=gathered)
+                        return finish(pursued["result"])
+                    if pursued["pursuit"].get("message") and (pursued["pursuit"]["status"] == "continuing" or pursued["pursuit"].get("replans")):
+                        pursuit_line = pursued["pursuit"]["message"]
+                except Exception:  # noqa: BLE001 -- the net must never break the turn
+                    log.warning("read-budget pursuit failed", exc_info=True)
+                rs._last_verdict = None
             # A planner_only note (a repeated read) is not something gathered.
             if (gathered_content(gathered) or rs.brainstorm_active) and not must_execute:
                 emit.status("Wrapping up with a best-effort answer…")
@@ -235,6 +262,8 @@ class RunAnswerMixin:
                                              rs.model, True, native_blocks=rs.native_blocks,
                                              rep_preamble=rep_preamble,
                                              reply_directive=wrapup_directive)
+                if pursuit_line:
+                    rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit_line
                 return finish(OrchestratorResult(kind="answer", text=rs.text, rationale=rs.plan.rationale,
                                                  partial=True, model=rs.model,
                                                  exit_reason="read_budget"))

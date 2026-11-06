@@ -155,3 +155,28 @@ def test_a_which_quest_question_from_the_deep_run_replaces_the_draft():
     assert own_escalation_adds_nothing(Res()) is False
     Res.deep_results = [DeepResult(met=False, error="mutation_codegen_failed", output="I couldn't turn that")]
     assert own_escalation_adds_nothing(Res()) is True
+
+
+READ_NOTHING = {"action": "read", "rationale": "look it up", "reads": [{"rel_path": "nowhere.md"}], "user_intent": "ask", "model_tier": "sonnet"}
+
+
+def test_a_spent_read_budget_whose_last_read_found_nothing_pursues_the_read_only_search_before_the_wrap_up():
+    """ACC-008 (2026-11-06): every read returned nothing and the budget ended with "I could not find any entries"; the read-only search was never tried."""
+    provider = VerdictProvider([READ_NOTHING, READ_NOTHING, READ_NOTHING], [NOT_MET])
+    runner = StubDeepRunner(met=True, output="Found it: 4 of 5 interviews named lavender")
+    config = OrchestratorConfig(max_steps=2)
+    config.overseer = False
+    res = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=config,
+                       deep_runner=runner).run("What do my interviews say about scent, with counts?")
+    assert runner.calls, "the read-only search was not run"
+    assert "4 of 5" in (res.text or "") or "4 of 5" in "\n".join(d.output for d in (res.deep_results or []))
+
+
+def test_the_same_spent_budget_runs_no_search_when_the_person_held_work_off():
+    provider = VerdictProvider([dict(READ_NOTHING, user_intent="hold_off")] * 3, [NOT_MET])
+    runner = StubDeepRunner(met=True, output="should not run")
+    config = OrchestratorConfig(max_steps=2)
+    config.overseer = False
+    Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=config,
+                 deep_runner=runner).run("Do not change anything. What do my interviews say?")
+    assert runner.calls == []

@@ -38,7 +38,7 @@ class RunCloseMixin:
 
     def _search_untried(self, rs: SimpleNamespace, exec_record: Any, ctx_meta: Dict[str, Any]) -> bool:
         """Whether the read-only deep search is still untried this turn and safe to run: wired, not tried or settled, no change attempted."""
-        return bool(not rs.own_escalation_settled and not rs.brainstorm_active and not ctx_meta.get("deep_attempted")
+        return bool(not getattr(rs, "own_escalation_settled", False) and not rs.brainstorm_active and not ctx_meta.get("deep_attempted")
                     and self._has_deep_execution_capability() and (exec_record is None or not exec_record.any_mutation_attempted))
 
     def keep_landed_work_reported(self, rs: SimpleNamespace, text: str) -> str:
