@@ -3167,9 +3167,21 @@
        "args": {
         "quest_id": "q_fit"
        }
+      },
+      {
+       "name": "list_quest_goals",
+       "args": {
+        "quest_id": "q_biz"
+       }
+      },
+      {
+       "name": "list_quest_goals",
+       "args": {
+        "quest_id": "q_home"
+       }
       }
      ],
-     "rationale": "read open goals",
+     "rationale": "read the open goals of each quest, so every due date the briefing names is in what was read",
      "model_tier": "haiku"
     },
     {
@@ -3457,7 +3469,7 @@
      "model_tier": "haiku"
     }
    ],
-   "reply": "I added the goal 'Plan the running restart from Monday'. I drafted the email to your physio and asked you to approve it, so it has not been sent. I also asked you to approve a physio check-in on Friday from 5pm to 6pm, and it is not on your calendar until you do. Both are waiting in Asks for you."
+   "reply": "I added the goal 'Plan the running restart from Monday'. I drafted the email to your physio and asked you to approve it, so it has not been sent. I also asked you to approve a physio check-in on Friday at 5pm, and it is not on your calendar until you do. Both are waiting in Asks for you."
   },
   "source": "day with Jarvis 5, on the host's two ask-first chat tools (propose_calendar_block, draft_email_for_approval; both switched off by default in production, offered here through world.jarvis_tools): the goal lands, the email and the block are filed as asks that change nothing until approved, and the reply must not say the email was sent or the block scheduled"
  },

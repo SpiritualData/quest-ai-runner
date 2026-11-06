@@ -201,8 +201,13 @@ def test_the_feature_questions_need_the_documented_facts():
         assert reply_ok(cid, BY_ID[cid]["ideal"]["reply"])["ok"], cid
     assert "lacks" in reply_ok("E2E-QUEST-06", "Yes, Quest can track a habit as a number or a time and it is easy to set up for you.")["note"]
     assert not reply_ok("E2E-QUEST-16", "Yes, Quest is available in Spanish, French and German.")["ok"]
-    only_ties_one = "Quest has a daily reflection. " * 4
-    assert "covers" in reply_ok("E2E-QUEST-01", "Good plan for your half marathon and night shifts. " + only_ties_one)["note"]
+    # QUEST-01 scores value, not a feature count (93395af9): one feature that fits the person passes, and a reply naming none fails.
+    one_real_feature = ("Good plan for your half marathon and night shifts. A short daily reflection shows whether you are on pace, "
+                        "and it fits whichever hour your shift ends, so a flipped schedule does not break the plan. "
+                        "Each evening it takes about a minute, and you can see at a glance where the week went. ")
+    assert reply_ok("E2E-QUEST-01", one_real_feature + "Do your shifts change weekly?")["ok"]
+    no_feature = "Good plan for your half marathon and night shifts. " + "It is a lovely goal and you can do it with steady effort. " * 4
+    assert "covers" in reply_ok("E2E-QUEST-01", no_feature)["note"]
 
 
 def test_the_task_type_cases_promise_only_what_exists():
@@ -679,7 +684,10 @@ def test_the_briefing_picks_from_the_persons_quests_and_fails_a_list_of_nothing_
     ideal = BY_ID["E2E-JARVIS-01"]["ideal"]["reply"]
     assert jarvis_out("E2E-JARVIS-01", ideal, route="answer")["ok"]
     assert not jarvis_out("E2E-JARVIS-01", "Focus on whatever matters most to you today, and take a moment to plan.", route="answer")["ok"]
-    assert not jarvis_out("E2E-JARVIS-01", ideal + " Your sales and revenue look strong.", route="answer")["ok"]
+    # the words revenue and sales are allowed (a quest can have a revenue goal, f35c5f59); an invented figure is not
+    assert jarvis_out("E2E-JARVIS-01", ideal + " Revenue can start once the launch is ready.", route="answer")["ok"]
+    assert not jarvis_out("E2E-JARVIS-01", ideal + " The shop made 400 USD in revenue so far.", route="answer")["ok"]
+    assert not jarvis_out("E2E-JARVIS-01", ideal + " Sales reached 400 this week.", route="answer")["ok"]
 
 
 def test_the_voice_reply_fails_markdown_a_list_or_a_missing_note():
