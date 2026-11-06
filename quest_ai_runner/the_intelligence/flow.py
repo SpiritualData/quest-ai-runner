@@ -20,7 +20,7 @@ from quest_ai_runner.the_intelligence.proactivity.interface import PassGating
 from quest_ai_runner.the_intelligence.subconscious.interface import CardRecall
 
 
-@implementation("the-intelligence", "composition")
+@implementation("quest-intelligence", "composition")
 class IntelligenceFlow:
     """A request read against the person's intents, its context prepared, thought through, watched and held to a measure."""
     REQUIRES = ()     # the seats it is handed

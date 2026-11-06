@@ -190,7 +190,7 @@ enabled = true
 # Intents not listed show strong evidence on every edge. Edges without strong evidence, by intent:
 #   the_body: quest-body to quest-account-truth and to intake-sources (quest_client is a function that builds the client, it composes nothing).
 #   the_consciousness: quest-representatives to quest-requests (a third module imports both); quest-consciousness to intent-evolution (no module yet).
-#   the_world: the-world to model-plumbing (the flow asks through the hub's ModelPlumbing seat, which no module of the solution names).
+#   the_world: quest-world to model-plumbing (the flow asks through the hub's ModelPlumbing seat, which no module of the solution names).
 #   internal_context: quest-context to its four members (the code that holds them is the card store's modules and the poller, which name none of them in a seat).
 #   request_intake: quest-requests to its three members (the poller reaches them through the area line in the_consciousness/ways_in.py).
 #   mind: the-mind to show-progress (the sinks are chosen by the terminal, not by a seat of the loop).

@@ -4,7 +4,7 @@
 
 Breadcrumb: [Top](../../esoi/README.md) > Intelligence
 
-This sub-intent arises as the implementation `the-intelligence:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Which request deserves which handling changes as models and the person's intents change, so each part of handling a request is a swappable solution with its own measure.
+This sub-intent arises as the implementation `quest-intelligence:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Which request deserves which handling changes as models and the person's intents change, so each part of handling a request is a swappable solution with its own measure.
 
 ## How the solutions fit together
 
@@ -82,6 +82,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Representative long-view carry-through across assigned quests, with nothing outside its branch (`metric-hold-the-long-view`): leader `separate_stores`, 13 of 15 cases
 - Context handed to the planner (`metric-choose-the-context`): leader `per_lane_assembly`, 2 of 2 cases
 - Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): leader `recency_window`, 4 of 9 cases
+- Quest Intelligence on Quest cases (`metric-quest-intelligence`)
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): leader `quest_decision_sink`, 15 of 15 cases
 
 ## Where to go next
@@ -161,6 +162,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Representative long-view carry-through across assigned quests, with nothing outside its branch (`metric-hold-the-long-view`): `esoi run hold_the_long_view --impl separate_stores`
 - Context handed to the planner (`metric-choose-the-context`): `esoi run context_choice --impl per_lane_assembly`
 - Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): `esoi run admit_to_the_mind --impl recency_window`
+- Quest Intelligence on Quest cases (`metric-quest-intelligence`): `none`
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): `esoi run escalate_to_a_human --impl quest_decision_sink`
 
 

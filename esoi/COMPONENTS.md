@@ -68,11 +68,13 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | package-folders | `package-folders` | the_self | Folders of QAR that hold only sub-folders | quest-self, hand-off-a-goal, choose-the-context |
 | the-consciousness-intent-evolution | `the-consciousness-intent-evolution` | the_consciousness | QAR's code for intent evolution (the consciousness) | intent-evolution |
 | the-consciousness-flow | `the-consciousness-flow` | the_consciousness | The composition of Quest Consciousness | quest-consciousness |
-| the-intelligence-flow | `the-intelligence-flow` | the_intelligence | The composition of Intelligence | the-intelligence |
-| the-world-flow | `the-world-flow` | the_world | The composition of World | the-world |
+| the-intelligence-flow | `the-intelligence-flow` | the_intelligence | The composition of Quest Intelligence | quest-intelligence |
+| the-world-flow | `the-world-flow` | the_world | The composition of Quest World | quest-world |
 | the-body-diagram | `the-body-diagram` | the_body | The generated solution diagram of Quest Body | quest-body |
 | the-consciousness-diagram | `the-consciousness-diagram` | the_consciousness | The generated solution diagram of Quest Consciousness | quest-consciousness |
-| the-intelligence-diagram | `the-intelligence-diagram` | the_intelligence | The generated solution diagram of Intelligence | the-intelligence |
+| the-intelligence-diagram | `the-intelligence-diagram` | the_intelligence | The generated solution diagram of Quest Intelligence | quest-intelligence |
 | the-consciousness-ways-in | `the-consciousness-ways-in` | the_consciousness | The ways a request comes in, handed to one router | quest-requests, take-in-the-world |
 | the-consciousness-prioritization | `the-consciousness-prioritization` | the_consciousness | QAR's code for prioritization (the consciousness) | prioritization |
 | the-consciousness-interface | `the-consciousness-interface` | the_consciousness | The interfaces of Quest Consciousness and Hand Off A Goal | quest-consciousness, hand-off-a-goal |
+| the-intelligence-interface | `the-intelligence-interface` | the_intelligence | The interface of Quest Intelligence | quest-intelligence |
+| the-world-interface | `the-world-interface` | the_world | The interface of Quest World | quest-world |

@@ -18,8 +18,8 @@ An arrow runs from the solution that provides to the solution that builds on it;
 flowchart LR
     s0["Quest Self<br/><i>quest-self</i>"]
     s1["Quest Body<br/><i>quest-body</i>"]
-    s2["Intelligence<br/><i>the-intelligence</i>"]
-    s3["World<br/><i>the-world</i>"]
+    s2["Quest Intelligence<br/><i>quest-intelligence</i>"]
+    s3["Quest World<br/><i>quest-world</i>"]
     s4["Quest Consciousness<br/><i>quest-consciousness</i>"]
     s1 -->|"The Quest client through which every read and write of the person's Quest passes"| s0
     s2 -->|"The response to one request, from its intents, its context, its reasoning and its measure"| s0
@@ -43,16 +43,16 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 |---|---|---|---|---|
 | Quest Self | `quest-self` | `quest_ai_runner.run("quest-self", 'What should I work on first this week?')` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 | Quest Body | `quest-body` | `quest_ai_runner.run("quest-body", 'quest-id')` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
-| Intelligence | `the-intelligence` | no entry declared | `composition` | none yet |
-| World | `the-world` | no entry declared | `composition` | none yet |
+| Quest Intelligence | `quest-intelligence` | `quest_ai_runner.run("quest-intelligence", {'request': 'what is the latest Rust version?'})` | `composition` | Quest Intelligence on Quest cases |
+| Quest World | `quest-world` | `quest_ai_runner.run("quest-world", 'latest Rust version')` | `composition` | Quest World on Quest cases |
 | Quest Consciousness | `quest-consciousness` | `quest_ai_runner.run("quest-consciousness", 'team-1')` | `composition` | Quest Consciousness on Quest cases |
 
 ## Solutions from a library
 
 - [The Self](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-self`): Keeps the five kinds of part working as one whole: the Assembler builds them and reports the coverage, Integrity keeps the whole honest and generic and audits the run record, and Role Understanding says what each part is for. Specializes the library `hub`.
 - [Body](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-body`): The AI system's form and internal context. Specializes the library `hub`.
-- [Intelligence](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`the-intelligence`): How information is processed for one request: the long view is read, the request becomes a measurable goal, the Mind plans and writes the response from what the Subconscious and the World bring, and the result is checked for goal completion and response quality. Adopted from the library `hub`.
-- [World](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`the-world`): Awareness of the outside and interaction with it: public science, the tools of the outside, the models the hub asks, and how current the hub's own research is. Adopted from the library `hub`.
+- [Intelligence](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-intelligence`): How information is processed for one request: the long view is read, the request becomes a measurable goal, the Mind plans and writes the response from what the Subconscious and the World bring, and the result is checked for goal completion and response quality. Specializes the library `hub`.
+- [World](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-world`): Awareness of the outside and interaction with it: public science, the tools of the outside, the models the hub asks, and how current the hub's own research is. Specializes the library `hub`.
 - [Consciousness](https://github.com/SpiritualData/ai-hub-of-hubs-structure/esoi/README.md) (`quest-consciousness`): The humans who interact with the system: AI Representatives act for a person, Prioritization turns the person's priorities into ESOI, Judgment Calls decide when to ask that person, and Feedback Learning applies the person's feedback to specs and metrics. Specializes the library `hub`.
 
 ## Problems and ideals
@@ -119,8 +119,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 |---|---|---|---|
 | Quest Self | `quest-self` | quest-ai-runner library (`library`) | Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score |
 | Quest Body | `quest-body` | Quest HTTP client from the environment (`quest_client`) | Parity of Quest operations across access points |
-| Intelligence | `the-intelligence` | `composition` | none yet |
-| World | `the-world` | `composition` | none yet |
+| Quest Intelligence | `quest-intelligence` | `composition` | Quest Intelligence on Quest cases |
+| Quest World | `quest-world` | `composition` | Quest World on Quest cases |
 | Quest Consciousness | `quest-consciousness` | `composition` | Quest Consciousness on Quest cases |
 
 ### Implementations
@@ -133,8 +133,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](../quest_ai_runner/the_self/respond.py) | [the_self](../quest_ai_runner/the_self/README.md) |
 | Quest HTTP client from the environment | `quest-body:quest_client` | [quest_ai_runner/the_body/area_body.py](../quest_ai_runner/the_body/area_body.py) | [the_body](../quest_ai_runner/the_body/README.md) |
 | Composition | `quest-consciousness:composition` | [quest_ai_runner/the_consciousness/flow.py](../quest_ai_runner/the_consciousness/flow.py) | [the_consciousness](../quest_ai_runner/the_consciousness/README.md) |
-| Composition | `the-intelligence:composition` | [quest_ai_runner/the_intelligence/flow.py](../quest_ai_runner/the_intelligence/flow.py) | [the_intelligence](../quest_ai_runner/the_intelligence/README.md) |
-| Composition | `the-world:composition` | [quest_ai_runner/the_world/flow.py](../quest_ai_runner/the_world/flow.py) | [the_world](../quest_ai_runner/the_world/README.md) |
+| Composition | `quest-intelligence:composition` | [quest_ai_runner/the_intelligence/flow.py](../quest_ai_runner/the_intelligence/flow.py) | [the_intelligence](../quest_ai_runner/the_intelligence/README.md) |
+| Composition | `quest-world:composition` | [quest_ai_runner/the_world/flow.py](../quest_ai_runner/the_world/flow.py) | [the_world](../quest_ai_runner/the_world/README.md) |
 | QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | [quest_ai_runner/the_intelligence/mind/orchestrator.py](../quest_ai_runner/the_intelligence/mind/orchestrator.py) |  |
 | Scripted ideal planner (offline) | `quest-self:reference_script` |  |  |
 | Rules only, no model (floor) | `quest-self:rules_only` |  |  |

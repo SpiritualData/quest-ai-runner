@@ -54,12 +54,12 @@ class Part:
 
 FLOW: Tuple[Part, ...] = (
     Part("quest-requests", "takes the request in, from a chat turn, a queued task or a live channel", LOOP, "quest-consciousness"),
-    Part("quest-intents", "says what the person is working toward, from their quests, goals and intents", LOOP, "the-intelligence"),
-    Part("context-retriever", "chooses the cards, files and conversations the request needs", LOOP, "the-intelligence"),
+    Part("quest-intents", "says what the person is working toward, from their quests, goals and intents", LOOP, "quest-intelligence"),
+    Part("context-retriever", "chooses the cards, files and conversations the request needs", LOOP, "quest-intelligence"),
     Part("the-mind", "reasons step by step over the request and its context, with Body acting and Science answering beyond the person's own material", OWN,
-         "the-intelligence", ("quest-body", "the-world")),
-    Part("nervous-system", "watches the run for risk before anything irreversible is handed on", LOOP, "the-intelligence"),
-    Part("critical-thinking", "holds the work to the metric that serves it and answers a regression", LOOP, "the-intelligence"),
+         "quest-intelligence", ("quest-body", "quest-world")),
+    Part("nervous-system", "watches the run for risk before anything irreversible is handed on", LOOP, "quest-intelligence"),
+    Part("critical-thinking", "holds the work to the metric that serves it and answers a regression", LOOP, "quest-intelligence"),
     Part("intent-evolution", "suggests the option most likely to work for the person's intents, or an experiment when the best option is unknown", PENDING,
          "quest-consciousness"),
 )

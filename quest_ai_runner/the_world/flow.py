@@ -14,7 +14,7 @@ from quest_ai_runner.the_body.hands.quest_operations.interface import ReachClaim
 from quest_ai_runner.the_world.science.interface import KnowingTheWorld
 
 
-@implementation("the-world", "composition")
+@implementation("quest-world", "composition")
 class WorldFlow:
     """Research and reach: the outside world answered from public research, and a request placed inside or outside the readable sources."""
     REQUIRES = ()     # the seats it is handed

@@ -4,7 +4,7 @@
 
 Breadcrumb: [Top](../../esoi/README.md) > World
 
-This sub-intent arises as the implementation `the-world:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Models, search backends and tools change faster than the assistant does, so reaching them through one measured path lets the best one run as they move.
+This sub-intent arises as the implementation `quest-world:composition` of its parent intent [`quest-ai-runner`](../../esoi/README.md). Opportunities: Models, search backends and tools change faster than the assistant does, so reaching them through one measured path lets the best one run as they move.
 
 ## How the solutions fit together
 
@@ -32,6 +32,10 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Science](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/README.md) (`the-science`): Looks up what public research says and returns observations a reader can cite. Adopted from the library `hub`.
 - [Tools](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/README.md) (`the-tools`): What the AI can use or do outside the system, grouped by category. Adopted from the library `hub`.
 
+## Metrics and their leaders
+
+- Quest World on Quest cases (`metric-quest-world`)
+
 ## Where to go next
 
 - Sub-intent: [Model Plumbing](model_plumbing/README.md)
@@ -39,7 +43,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Sub-intent: [Tools](tools/README.md)
 - Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
@@ -69,6 +73,10 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Persisted daily token tracker | `model-plumbing:usage` | [quest_ai_runner/the_world/model_plumbing/spend/usage.py](model_plumbing/spend/usage.py) |  |
 | Snippet-first research with page extraction | `the-science:web_research` | [quest_ai_runner/the_world/tools/web_search/web_research.py](tools/web_search/web_research.py) |  |
 | Web research with the answer's support check (today) | `the-science:web_with_support_check` | [quest_ai_runner/the_world/tools/web_search/area.py](tools/web_search/area.py) | [science](science/README.md) |
+
+### Metrics
+
+- Quest World on Quest cases (`metric-quest-world`): `none`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
