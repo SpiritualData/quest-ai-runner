@@ -155,7 +155,15 @@ def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not()
     assert day_count_errors("On 13 Nov, that leaves you 12 days from today.", evidence) == []
     assert day_count_errors("Finish 3 days before they arrive on 20 Nov.", evidence) == []   # counts from another date: not judged
     assert day_count_errors(wrong, "- Date: Sunday, November 1, 2026") == ["12 days from today to 13 Nov, not 10"]
-    assert day_count_errors("On 13 Nov that is 12 days from today.", "no date here") in ([], [])  # server-date fallback with one day of slack
+    # no date in the evidence: the server's own date counts, with one day of slack (dates computed from the real current date)
+    from datetime import date, timedelta
+    due = date.today() + timedelta(days=12)
+    if due.year != date.today().year:
+        return     # the check counts within the year the text is written in
+    stated = f"{due.day} {due:%b}"
+    assert day_count_errors(f"On {stated} that is 12 days from today.", "no date here") == []
+    assert day_count_errors(f"On {stated} that is 13 days from today.", "no date here") == []     # one day of slack for the person's zone
+    assert day_count_errors(f"On {stated} that is 9 days from today.", "no date here") == [f"12 days from today to {stated}, not 9"]
     measured = measure(wrong, STANDARDS[SHAPE_DEFAULT], evidence)
     assert any(v.kind == "days" for v in measured.violations) and "12 days from today" in measured.hint()
 
@@ -408,3 +416,26 @@ def test_a_decline_of_more_than_two_sentences_breaks_the_decline_standard():
     m = measure(four, STANDARDS["decline"], EVIDENCE)
     assert kinds(m) == {"length"} and "at most 2 sentences" in m.hint()
     assert not measure("I can't move money from your bank. Once you have the refund I can log it as a negative expense.", STANDARDS["decline"], EVIDENCE).failed
+
+
+def test_the_support_standard_limits_sentences_exclamations_and_asks_for_the_date_the_facts_hold():
+    facts = ["Run Log: the physio banned running for 10 days", "Quest note: the race moved to 22 Nov"]
+    evidence = EVIDENCE + " " + " ".join(facts)
+    good = ("That is a hard week. The physio banned running for 10 days, so the missed run is within the plan, and the race is now 22 Nov. "
+            "An easy 30 minute swim or ride today keeps the fitness up.")
+    assert not measure(good, STANDARDS["support"], evidence, facts=facts).failed
+    long_one = "I am so sorry. That is hard. The physio banned running, so it fits. An easy swim is fine today."
+    assert kinds(measure(long_one, STANDARDS["support"], evidence, facts=facts)) >= {"length"}
+    assert "tone" in kinds(measure("That is hard! Rest is part of the plan on 22 Nov.", STANDARDS["support"], evidence, facts=facts))
+    no_date = measure("That is a hard week. The physio banned running, so the missed run fits. Try an easy swim.", STANDARDS["support"], evidence, facts=facts)
+    assert "date" in kinds(no_date) and "22 Nov" in no_date.hint()
+    assert "date" not in kinds(measure("That is a hard week. Try an easy swim.", STANDARDS["support"], EVIDENCE, facts=["no dates in these facts"]))
+
+
+def test_a_length_breach_the_rewrites_did_not_fix_keeps_the_opening_and_the_closing_sentence():
+    draft = "I can't issue a bank refund from here. I can only work with the records in this quest. If you have the refund, I can log it as a negative expense entry."
+    m = measure(draft, STANDARDS["decline"], EVIDENCE)
+    assert m.failed
+    fixed = repair(draft, STANDARDS["decline"], m, EVIDENCE)
+    assert fixed == "I can't issue a bank refund from here. If you have the refund, I can log it as a negative expense entry."
+    assert not measure(fixed, STANDARDS["decline"], EVIDENCE).failed

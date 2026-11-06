@@ -30,7 +30,8 @@ from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
-    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, READ_BUDGET_WRAPUP_HONESTY_NOTE)
+    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, NO_ATTACHMENT_LINE,
+    READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
 
 class RunAnswerMixin:
@@ -142,6 +143,8 @@ class RunAnswerMixin:
 
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs.plan, "asks_first", False):
             reply_directive = ASK_FIRST_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
+        if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
+            reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active
                 and not (rs.plan.act_declined or False)):
             reply_directive = HANDOFF_ANSWER_NOW_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
@@ -412,7 +415,7 @@ class RunAnswerMixin:
                 figure_evidence = evidence_text(rs.user_message, getattr(rs, "transcript", ""),
                                                 (getattr(rs, "context_view", "") or "").replace(getattr(rs, "recent_context_text", "") or "\0", ""),
                                                 gathered, figure_pool)
-                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence)
+                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []))
                 standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
                 log.info("Reply standard %s in force=%s before the verdict: %s", standard.shape, standard_in_force, measured.as_text())
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
@@ -548,8 +551,9 @@ class RunAnswerMixin:
         # re-measured. What still fails after the last round gets the cheapest safe deterministic repair. Never unbounded.
         if standard is not None and standard_in_force:
             try:
-                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence)
-                while measured.failed and repair_rounds < cfg.reply_standard_max_repairs:
+                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []))
+                measurement_rounds = 0     # the overseer's and the constraint's regenerations do not use up the rounds the measurements are owed
+                while measured.failed and measurement_rounds < cfg.reply_standard_max_repairs:
                     if emit is not None:
                         emit.status("Reply standard: refining the answer…")
                     # An address the draft holds is an item the person may have asked for: it outranks a length or list cap.
@@ -558,12 +562,13 @@ class RunAnswerMixin:
                     held = http_addresses(rs.text)
                     candidate = _gen_answer(steering(measured.hint() + keep_addresses_hint(rs.text, held), rs.text))
                     repair_rounds += 1
+                    measurement_rounds += 1
                     if held - http_addresses(candidate):
                         log.info("Reply standard %s: repair dropped %d address(es) the draft held; kept the longer draft",
                                  standard.shape, len(held - http_addresses(candidate)))
                         break
                     rs.text = candidate
-                    measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence)
+                    measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []))
                 if measured.failed:
                     rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence)
                 log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
@@ -587,6 +592,8 @@ class RunAnswerMixin:
         # no work-to-execute flag, no described-work net, no message-intent fallback (planner
         # verdict OR LLM judgment). Describing possible work IS the product in brainstorm.
         # A reply that declines the act on the records (``act_declined``) queues nothing: declining and queuing contradict.
+        if getattr(rs, "no_attachment", False) and rs.plan.action == "answer" and not rs.text.startswith(NO_ATTACHMENT_LINE):
+            rs.text = f"{NO_ATTACHMENT_LINE} {rs.text}".strip()     # code-written: the fact is the turn's own (no attachment object), not the model's wording
         rs.act_declined = bool(rs.plan.act_declined or rs.found_constraint)
         rs.should_defer_deep = (None if (rs.brainstorm_active or rs.act_declined) else rs.plan.deferred_deep)
         # Capability for these nets = inline execution OR a wired deferred queue: everything they

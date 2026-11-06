@@ -32,8 +32,9 @@ SHAPE_ASK_FIRST = "ask_first"
 SHAPE_BRIEF = "brief"
 SHAPE_READBACK = "readback"
 SHAPE_DECLINE = "decline"
+SHAPE_SUPPORT = "support"
 SHAPE_DEFAULT = "default"
-REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_DEFAULT)
+REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ class Standard:
     max_chars: Optional[int] = None
     max_list_lines: Optional[int] = None
     max_sentences: Optional[int] = None
+    max_exclamations: Optional[int] = None
+    states_a_fact_date: bool = False     # when the planner's own ``facts_read`` hold a date, the reply states at least one of them
 
 
 STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
@@ -72,6 +75,11 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "The person asked for something that cannot be done here (move money, change an account): sentence one declines, once, "
              "and sentence two offers the one real alternative. Two sentences, no list, no warning they did not ask for, no repeating.",
              max_questions=1, max_list_lines=0, max_sentences=2),
+    Standard(SHAPE_SUPPORT,
+             "The person is frustrated or wants to quit: sentence one acknowledges the feeling plainly (no lecture, no pep talk, no exclamation "
+             "marks), sentence two gives the real facts from their records that change the picture, with the date the records hold, and "
+             "sentence three is the ONE concrete next step that fits those facts. Three sentences at most, no list, no options menu.",
+             max_questions=1, max_chars=500, max_list_lines=0, max_sentences=3, max_exclamations=0, states_a_fact_date=True),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
@@ -432,8 +440,10 @@ def standard_for(plan: Any) -> Standard:
     return STANDARDS.get(shape or "", STANDARDS[SHAPE_DEFAULT])
 
 
-def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None) -> Measurements:
-    """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing)."""
+def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None,
+            facts: Optional[List[str]] = None) -> Measurements:
+    """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing). ``facts`` are the planner's own
+    ``facts_read`` quotes (structured), used only by a standard that asks the reply to state a date those facts hold."""
     try:
         text = draft or ""
         m = Measurements(shape=standard.shape, questions=text.count("?"), list_lines=len(LIST_LINE.findall(text)), chars=len(text))
@@ -463,6 +473,12 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
                                           "keep the decline and the one alternative, drop the rest"))
         if standard.max_chars is not None and m.chars > standard.max_chars:
             m.violations.append(Violation("length", f"cut it to under {standard.max_chars} characters (it is {m.chars})"))
+        if standard.max_exclamations is not None and text.count("!") > standard.max_exclamations:
+            m.violations.append(Violation("tone", "remove the exclamation marks; keep the tone plain and steady"))
+        if standard.states_a_fact_date:
+            held_dates = [text_of for text_of, _ in dates_in(" ".join(facts or []))]
+            if held_dates and not dates_in(text):
+                m.violations.append(Violation("date", f"state the date your records hold ({held_dates[0]}) in the second sentence"))
         return m
     except Exception:  # noqa: BLE001 -- measuring must never break a turn
         return Measurements(shape=standard.shape)
@@ -508,6 +524,10 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
             relation = computed_sentence(draft, evidence_index)
             if relation:
                 kept.append(relation)
+        if standard.max_sentences is not None and len(kept) > standard.max_sentences >= 2:
+            # Last resort for a length breach the rewrites did not fix: the opening sentences and the closing one (the decline and its
+            # alternative, the acknowledgement and the next step). Position only; no wording is read.
+            kept = kept[:standard.max_sentences - 1] + kept[-1:]
         return " ".join(kept) if kept else draft
     except Exception:  # noqa: BLE001
         return draft

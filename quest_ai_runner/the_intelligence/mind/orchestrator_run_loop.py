@@ -27,6 +27,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import RECORDS_NOT_READ_NOTE
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
@@ -599,6 +600,36 @@ class RunLoopMixin:
                          [c["name"] for c in rs.plan.tool_calls])
                 rs.brainstorm_suppressed_action = rs.brainstorm_suppressed_action or "tool"
                 rs.plan.action = "answer"
+
+            # --- NO-ATTACHMENT GATE: the message refers to a file or photo that did not arrive ------------------------------
+            # The planner reports in a structured field (``refers_to_attachment``) that the message speaks of a photo or file as sent
+            # with it. When the turn holds no attachment object, nothing can be read from it and nothing may be done on its values:
+            # whatever else the planner chose becomes an answer that says so and asks for the values (a structured fact, never the
+            # wording of the planner's or the user's text).
+            if (rs.plan and getattr(rs.plan, "refers_to_attachment", False) and not getattr(rs, "attachments", None) and message_is_user_turn):
+                rs.no_attachment = True
+                rs.plan.act_declined = True
+                rs.plan.deferred_deep = None
+                rs.plan.answer_contains_work_to_execute = False
+                if rs.plan.action in ("deep", "confirm", "tool", "read", "clarify"):
+                    log.info("No-attachment gate: the message refers to an attachment that did not arrive; planner action %r becomes an answer.", rs.plan.action)
+                    rs.plan.action = "answer"
+                    rs.plan.reads = []
+                    rs.plan.tool_calls = []
+
+            # --- RECORDS GATE: an answer the planner says rests on the person's records is not written before any record was read ------
+            # ``needs_records`` is the planner's structured self-report that the reply depends on what the person's notes, logs or
+            # collections hold beyond what CONTEXT shows. When it answers anyway with nothing read this turn (no read, no tool result),
+            # the code hands it back once with a note, so the next planning step reads before answering. Once a turn, inside the step budget.
+            if (rs.plan and rs.plan.action == "answer" and getattr(rs.plan, "needs_records", False) and not getattr(rs, "records_gate_done", False)
+                    and message_is_user_turn and not getattr(rs, "no_attachment", False) and not executed_reads
+                    and not any(str(g.get("locator") or "").startswith("tool:") for g in gathered if isinstance(g, dict))
+                    and step + 1 < cfg.max_steps and not budget_exhausted()):
+                rs.records_gate_done = True
+                log.info("Records gate: the planner says the reply rests on the person's records and none was read; planning again.")
+                gathered.append(planner_note_observation(RECORDS_NOT_READ_NOTE, "records_not_read"))
+                emit.status("Reading your records before answering…")
+                continue
 
             # --- STRUCTURAL SUFFICIENCY GATE: never answer ABOUT a summary you never opened ------
             # The prose SUFFICIENCY gate in the planner prompt asks the model to check, before

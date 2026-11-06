@@ -245,6 +245,9 @@ DECIDE_TOOL: Dict[str, Any] = {
             "act_declined": {"type": "boolean"},
             # Whether an "answer" must ask the person for facts only they hold before any plan; the rubric states it.
             "asks_first": {"type": "boolean"},
+            # Whether the reply rests on records the planner has not read, and whether the message speaks of an attachment; the rubric states both.
+            "needs_records": {"type": "boolean"},
+            "refers_to_attachment": {"type": "boolean"},
             # The shape the reply must take (core/reply_standards.py); the rubric states each value.
             "reply_shape": {"type": "string", "enum": list(REPLY_SHAPES)},
             # The reads this decision still owes: what the planner itself says it has NOT yet

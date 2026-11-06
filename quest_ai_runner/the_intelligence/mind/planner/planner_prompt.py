@@ -120,7 +120,9 @@ answer that declines the act and also queues it contradicts itself. False in eve
 When you choose "answer", set `reply_shape` to the shape the reply must take: `yes_no` (the message is a yes
 or no question; the reply opens with the verdict), `one_step` (they ask where to start or what to do next; the
 reply names ONE step), `ask_first` (as `asks_first`), `brief` (they asked for a quick, short or one-breath
-reply), `readback` (they asked to be told what is stored or was done), `decline` (they asked for something that cannot be done here, such as moving money or changing an account: decline once, offer the one real alternative), otherwise `default`.
+reply), `readback` (they asked to be told what is stored or was done), `decline` (they asked for something that cannot be done here, such as moving money or changing an account: decline once, offer the one real alternative), `support` (they are frustrated, discouraged or want to quit: one plain acknowledging sentence, then the real facts from their records with their date, then ONE next step that fits those facts), otherwise `default`.
+Set `needs_records` true when the reply depends on what the person's own notes, logs, entries or collections hold beyond what CONTEXT shows verbatim: counts or totals over entries ("my interviews", "my expenses"), a date or constraint that may sit in a note or log (an absence, an injury, a moved date), or how they are doing on something they track, or whether a day and time is free (the team's and quest's standing commitments). Then read those records before you answer. False when CONTEXT already holds every fact the reply needs, and for a general question.
+Set `refers_to_attachment` true when the message speaks of a photo, image or file as sent with it ("here is a photo of...", "see the attached"), whether or not you can see one.
 ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
 not opened that your answer depends on, such as a file a listing just showed; a refused path does
 not count. Empty when you are reading this step or hold the content. Choose "answer" only with it empty.
@@ -737,6 +739,20 @@ proposal. The one exception: the user's CURRENT message itself explicitly asks f
 again (a genuine change of mind). Then treat it as a fresh request and act on it normally. Never
 mention this list to the user.
 """
+
+RECORDS_NOT_READ_NOTE = (
+    "RECORDS NOT READ: you set needs_records, but nothing from the person's records was read this turn. Read them now (the quest's notes "
+    "and the entries of the collections linked to it, whichever hold what the reply needs), then answer from what you read.")
+
+NO_ATTACHMENT_DIRECTIVE = """\
+--- NO FILE ARRIVED (set by the system) ---
+The message speaks of a photo or file sent with it, but nothing was attached to this turn. The first sentence of your reply is added for you
+and already says no image or file reached you, so do not repeat that. Then ask them to resend it or to type the values themselves (for a
+receipt, the amount and the vendor). Never describe, guess or invent anything the file would hold, state no figure from it, and do
+not offer to record anything until they give the values. Never use an em dash.
+"""
+
+NO_ATTACHMENT_LINE = "No image or file reached me with that message, so I cannot see it."
 
 ASK_FIRST_DIRECTIVE = """\
 --- THIS REPLY ASKS FIRST (set by the planner) ---
