@@ -343,9 +343,21 @@ def world_task_ids(world):
     Counting it failed correct cases, and deleting it in ``revert`` only made the lane file another
     one before the next case. ``arm_autopilot`` schedules it a month out, so it never runs mid-eval."""
     quest_ids = set(world["quests"].values())
-    return {task_id_of(t): (t.get("text") or "")[:160] for t in all_tasks()
+    return {task_id_of(t): task_line(t) for t in all_tasks()
             if (t.get("goal_id") in quest_ids or TAG in str(t.get("text") or ""))
             and t.get("task_kind") != AUTOPILOT_PASS_KIND}
+
+
+def task_line(task):
+    """A queued task as the side-effect diff shows it: its text, then WHEN it starts when it was
+    scheduled. Without the start the judge could not tell a task set for "tomorrow at 7:30" from
+    one that starts right away, and failed a reply that truthfully stated the start (ACC-015)."""
+    text = (task.get("text") or "")[:160]
+    start = " ".join(str(task.get(k)) for k in ("scheduled_date", "scheduled_time") if task.get(k))
+    recurrence = task.get("recurrence")
+    extra = ", ".join(x for x in (f"starts {start}" if start else "",
+                                  f"repeats {recurrence}" if recurrence else "") if x)
+    return f"{text} [{extra}]" if extra else text
 
 
 def conversation_tasks(conv_id):

@@ -22,3 +22,9 @@ def test_restore_writes_in_process_then_busts_the_server_cache(monkeypatch):
     assert ("PATCH", "/api/quests/quest_x/field") not in calls["api"]
     assert ("POST", "/api/quests/quest_x/notes") in calls["api"]
     assert ("DELETE", "/api/quests/quest_x/notes/n1") in calls["api"]
+
+
+def test_task_line_shows_the_scheduled_start():
+    line = W.task_line({"text": "Draft a note", "scheduled_date": "2026-11-06", "scheduled_time": "07:30"})
+    assert line == "Draft a note [starts 2026-11-06 07:30]"
+    assert W.task_line({"text": "Draft a note"}) == "Draft a note"
