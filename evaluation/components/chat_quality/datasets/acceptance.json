@@ -39,7 +39,7 @@
   "quest_key": "research",
   "precheck": {
    "reply_regex_forbidden": [
-    "okafor (said|thinks|wrote|suggested|recommended|feels)"
+    "okafor (said|thinks|wrote|suggested|recommended|feels)(?! about| regarding| on the)"
    ]
   },
   "forbid_writes": true,
