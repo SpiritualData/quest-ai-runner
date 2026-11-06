@@ -45,7 +45,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Quest Requests | `quest-requests` | `quest_ai_runner.run("quest-requests", 'team-1')` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
 | Quest Representatives | `quest-representatives` | `quest_ai_runner.run("quest-representatives", {'assignee_rep_id': 'rep-1'})` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
 | Quest Decision Requests | `quest-decision-requests` | `quest_ai_runner.run("quest-decision-requests")` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
-| Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | none selected | Intent evolution: the most likely option or a checkable experiment |
+| Intent Evolution | `intent-evolution` | `quest_ai_runner.run("intent-evolution", ...)` | History floor (`history_floor`) | Intent evolution: the most likely option or a checkable experiment |
 | Hand Off A Goal | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
 | Prioritization | `prioritization` | no entry declared | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
@@ -117,7 +117,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Quest Requests | `quest-requests` | Offline lifecycle harness (`qar_runner`) | Task lifecycle correctness over offline cases |
 | Quest Representatives | `quest-representatives` | Persona resolver precedence for queued tasks (today) (`persona_resolver_precedence`) | Representative choice accuracy and thread consistency |
 | Quest Decision Requests | `quest-decision-requests` | Decision-request sink (`quest_decision`) | Escalation delivery and detail completeness |
-| Intent Evolution | `intent-evolution` | none selected | Intent evolution: the most likely option or a checkable experiment |
+| Intent Evolution | `intent-evolution` | History floor (`history_floor`) | Intent evolution: the most likely option or a checkable experiment |
 | Hand Off A Goal | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
 | Prioritization | `prioritization` | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
