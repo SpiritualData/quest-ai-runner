@@ -31,8 +31,9 @@ SHAPE_ONE_STEP = "one_step"
 SHAPE_ASK_FIRST = "ask_first"
 SHAPE_BRIEF = "brief"
 SHAPE_READBACK = "readback"
+SHAPE_DECLINE = "decline"
 SHAPE_DEFAULT = "default"
-REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DEFAULT)
+REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_DEFAULT)
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class Standard:
     max_questions: Optional[int] = None
     max_chars: Optional[int] = None
     max_list_lines: Optional[int] = None
+    max_sentences: Optional[int] = None
 
 
 STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
@@ -66,6 +68,10 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "The person asked to be told what is stored or was done: the first sentence is the read-back itself, using the "
              "records' own names, cadence and dates exactly; nothing the records do not hold.",
              max_chars=900),
+    Standard(SHAPE_DECLINE,
+             "The person asked for something that cannot be done here (move money, change an account): sentence one declines, once, "
+             "and sentence two offers the one real alternative. Two sentences, no list, no warning they did not ask for, no repeating.",
+             max_questions=1, max_list_lines=0, max_sentences=2),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
@@ -120,6 +126,11 @@ MONTH_THEN_DAY = re.compile(
 ISO_DATE = re.compile(r"(?<!\d)(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})(?!\d)")
 CLOCK_TIME = re.compile(r"(?<![\d:.])(?P<h>\d{1,2}):(?P<m>\d{2})(?::\d{2})?\s*(?P<ap>[ap]\.?m\.?)?(?![\d:])", re.IGNORECASE)
 HOUR_AMPM = re.compile(r"(?<![\d:.])(?P<h>\d{1,2})\s*(?P<ap>[ap])\.?m\.?\b", re.IGNORECASE)
+NUMBER = re.compile(r"(?<![\w.])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+FIGURE = re.compile(
+    r"(?:(?P<sym>[$€£])\s?(?P<a>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
+    r"|(?<![\w.])(?P<b>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s?(?:(?P<unit>USD|EUR|GBP|dollars?|euros?|pounds?)\b|(?P<pct>%)))", re.IGNORECASE)
+MAX_FIGURES_COMPARED = 250
 QUOTED_NAME = re.compile(r"[\"“](?P<name>[^\"“”\n]{3,80})[\"”]")
 LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+\S", re.MULTILINE)
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(*\[])|\n+")
@@ -166,6 +177,99 @@ def clocks_in(text: str) -> List[Tuple[str, str]]:
     return found
 
 
+def number_value(token: str) -> float:
+    return float(token.replace(",", ""))
+
+
+def held_figures(evidence: str) -> frozenset:
+    """The whole numbers a text states (a figure held outright), capped so a long text stays cheap to compare."""
+    held = list(dict.fromkeys(number_value(m.group(0)) for m in NUMBER.finditer(evidence or "")))[:MAX_FIGURES_COMPARED * 8]
+    return frozenset(round(v) for v in held)
+
+
+def figure_claims(draft: str) -> List[Tuple[str, float, bool]]:
+    """(text, value, is_percent) for each currency amount or percentage the draft states."""
+    out: List[Tuple[str, float, bool]] = []
+    for m in FIGURE.finditer(draft or ""):
+        token = m.group("a") or m.group("b")
+        out.append((m.group(0).strip(), number_value(token), bool(m.group("pct"))))
+    return out
+
+
+COMPUTED_MARK = "Computed by code"     # a consumer starts a read result's computed block with this line (totals, minimum, maximum, average over the rows read)
+
+
+def computed_figures(text: str) -> frozenset:
+    """The whole numbers in the blocks of ``text`` that begin with COMPUTED_MARK (to the next blank line): numbers a program computed
+    from the rows the turn read, which a reply may build a difference or ratio on."""
+    found = set()
+    for block in re.split(r"\n\s*\n", text or ""):
+        at = block.find(COMPUTED_MARK)
+        if at >= 0:
+            found.update(held_figures(block[at:]))
+    return frozenset(found)
+
+
+def derived_from(value: int, stated: List[int], computed: frozenset, percent: bool) -> bool:
+    """Whether ``value`` is the sum, difference, small multiple (or, for a percentage, the ratio) of a figure the draft states and
+    another figure the draft states or a program computed this turn. Both operands come from the draft or from code, never from
+    the bulk of what was read, so a long read cannot vouch for a wrong figure by coincidence."""
+    for x in stated:
+        for y in list(stated) + list(computed):
+            if percent:
+                if y and (round(100 * x / y) == value or (x and round(100 * y / x) == value)):
+                    return True
+            elif x + y == value or abs(x - y) == value:
+                return True
+        if not percent and x and any(x * k == value for k in range(2, 13)):
+            return True
+    return False
+
+
+def unsupported_figures(draft: str, evidence: "EvidenceIndex") -> List[str]:
+    """Currency amounts and percentages the draft states that the turn neither held nor derives: not in anything it held, and not the sum,
+    difference, small multiple or ratio of a figure the draft states and a number the turn's reads held. Pure arithmetic on numbers; no wording."""
+    claims = figure_claims(draft)
+    amounts = [round(v) for _, v, pct in claims if not pct]
+    out: List[str] = []
+    for text, value, percent in claims:
+        whole = round(value)
+        if whole in evidence.everything:
+            continue
+        if derived_from(whole, [x for x in amounts if x != whole], evidence.computed, percent):
+            continue
+        out.append(text)
+    return out
+
+
+def computed_comparisons(draft: str, evidence: "EvidenceIndex") -> str:
+    """Code-computed differences between the currency amounts the draft states that the turn held, for the writer to use instead of
+    working them out itself: "2,340 - 2,000 = 340 (2,340 is 340 more than 2,000)"."""
+    stated = list(dict.fromkeys(v for _, v, pct in figure_claims(draft) if not pct and round(v) in evidence.everything))[:5]
+    lines: List[str] = []
+    for i, a in enumerate(stated):
+        for b in stated[i + 1:]:
+            hi, lo = max(a, b), min(a, b)
+            lines.append(f"{hi:,.0f} - {lo:,.0f} = {hi - lo:,.0f} ({hi:,.0f} is {hi - lo:,.0f} more than {lo:,.0f}; {lo:,.0f} is {hi - lo:,.0f} less than {hi:,.0f})")
+    return "; ".join(lines)
+
+
+def computed_sentence(draft: str, evidence: "EvidenceIndex") -> str:
+    """One sentence written by code from the two largest currency amounts the draft states that the turn held: "2,340 USD is 340 USD more than 2,000 USD."
+    Empty when the draft states fewer than two. The units are copied from the draft's own figures; nothing in it is a model's arithmetic."""
+    held = [(v, t) for t, v, pct in figure_claims(draft) if not pct and round(v) in evidence.everything]
+    held = sorted(dict(held).items(), key=lambda item: -item[0])[:2]
+    if len(held) < 2 or held[0][0] == held[1][0]:
+        return ""
+    (hi, hi_text), (lo, lo_text) = held
+    gap = f"{hi - lo:,.0f}"
+    unit = hi_text.replace(f"{hi:,.0f}", gap, 1) if f"{hi:,.0f}" in hi_text else gap
+    return f"{hi_text} is {unit} more than {lo_text}."
+
+
+CLAUSE_SPLIT = re.compile(r"(?<=[,;:])\s+")
+
+
 def squash(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
 
@@ -176,16 +280,20 @@ class EvidenceIndex:
     days: frozenset
     clocks: frozenset
     squashed: str
+    everything: frozenset = frozenset()     # every whole number anywhere the turn held
+    computed: frozenset = frozenset()       # the whole numbers a program computed over the rows the turn read (see COMPUTED_MARK)
 
     @classmethod
-    def of(cls, evidence: str) -> "EvidenceIndex":
+    def of(cls, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None) -> "EvidenceIndex":
         days = frozenset(d for _, parts in dates_in(evidence) for d in parts)
         # A clock key with no am/pm marker in the draft matches the same time with either marker in the evidence.
         clocks = set()
         for _, key in clocks_in(evidence):
             clocks.add(key)
             clocks.add(key.rstrip("ap"))
-        return cls(days=days, clocks=frozenset(clocks), squashed=" " + squash(evidence) + " ")
+        everything = held_figures(evidence if figure_basis is None else figure_basis)
+        return cls(days=days, clocks=frozenset(clocks), squashed=" " + squash(evidence) + " ", everything=everything,
+                   computed=computed_figures(reads if reads is not None else evidence))
 
 
 @dataclass
@@ -234,6 +342,7 @@ def unsupported_values(draft: str, evidence: EvidenceIndex) -> List[str]:
         name = squash(m.group("name"))
         if len(name.split()) >= 2 and f" {name} " not in evidence.squashed:
             out.append(m.group("name"))
+    out.extend(unsupported_figures(draft, evidence))
     return list(dict.fromkeys(out))
 
 
@@ -323,16 +432,22 @@ def standard_for(plan: Any) -> Standard:
     return STANDARDS.get(shape or "", STANDARDS[SHAPE_DEFAULT])
 
 
-def measure(draft: str, standard: Standard, evidence: str) -> Measurements:
+def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None) -> Measurements:
     """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing)."""
     try:
         text = draft or ""
         m = Measurements(shape=standard.shape, questions=text.count("?"), list_lines=len(LIST_LINE.findall(text)), chars=len(text))
-        m.unsupported = unsupported_values(text, EvidenceIndex.of(evidence))
+        index = EvidenceIndex.of(evidence, reads, figure_basis)
+        m.unsupported = unsupported_values(text, index)
         if m.unsupported:
             m.violations.append(Violation(
                 "unsupported", "remove " + ", ".join(f"'{v}'" for v in m.unsupported[:4])
                 + " (it is in nothing you were given; say you do not have it, or leave it out)", tuple(m.unsupported)))
+            computed = computed_comparisons(text, index)
+            if computed and any(FIGURE.fullmatch(v) for v in m.unsupported):
+                m.violations[-1] = Violation(
+                    "unsupported", m.violations[-1].detail + ". A figure is wrong because it is not the sum or difference of the figures you were given. "
+                    "Use these computed by code, not your own arithmetic: " + computed, tuple(m.unsupported))
         for wrong in day_count_errors(text, evidence):
             m.violations.append(Violation("days", "correct the day count: it is " + wrong, (wrong,)))
         for wrong in event_offset_errors(text):
@@ -343,6 +458,9 @@ def measure(draft: str, standard: Standard, evidence: str) -> Measurements:
                 f" (you asked {m.questions}); keep the one that lets you act"))
         if standard.max_list_lines is not None and m.list_lines > standard.max_list_lines:
             m.violations.append(Violation("list", f"write it as plain sentences, not a list ({m.list_lines} list lines)"))
+        if standard.max_sentences is not None and len(sentences(text)) > standard.max_sentences:
+            m.violations.append(Violation("length", f"write it in at most {standard.max_sentences} sentences (it has {len(sentences(text))}); "
+                                          "keep the decline and the one alternative, drop the rest"))
         if standard.max_chars is not None and m.chars > standard.max_chars:
             m.violations.append(Violation("length", f"cut it to under {standard.max_chars} characters (it is {m.chars})"))
         return m
@@ -354,7 +472,8 @@ def sentences(text: str) -> List[str]:
     return [s for s in SENTENCE_END.split(text or "") if s and s.strip()]
 
 
-def repair(draft: str, standard: Standard, measurements: Measurements, evidence: str) -> str:
+def repair(draft: str, standard: Standard, measurements: Measurements, evidence: str, reads: Optional[str] = None,
+           figure_basis: Optional[str] = None) -> str:
     """The cheapest deterministic repair that is safe, for a draft that still breaks a measurement after the repair rounds.
 
     Drops each sentence that states an unsupported value and every question after the allowed number. It never empties the reply:
@@ -365,19 +484,30 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
         if not measurements.violations:
             return draft
         parts = sentences(draft)
-        if len(parts) < 2:
-            return draft
-        evidence_index = EvidenceIndex.of(evidence)
+        evidence_index = EvidenceIndex.of(evidence, reads, figure_basis)
         kept: List[str] = []
         asked = 0
+        trimmed_figure = False
         for sentence in parts:
-            if measurements.unsupported and unsupported_values(sentence, evidence_index):
-                continue
+            flagged = unsupported_values(sentence, evidence_index) if measurements.unsupported else []
+            if flagged:
+                trimmed_figure = trimmed_figure or any(FIGURE.fullmatch(v) for v in flagged)
+                # keep the clauses that state nothing unsupported (split at commas, semicolons and colons: punctuation, not wording)
+                clauses = CLAUSE_SPLIT.split(sentence)
+                good = [c for c in clauses if not unsupported_values(c, evidence_index)]
+                if good and len(good) < len(clauses):
+                    sentence = " ".join(good).strip().rstrip(",;:") + "."
+                else:
+                    continue
             if "?" in sentence and standard.max_questions is not None:
                 asked += sentence.count("?")
                 if asked > standard.max_questions:
                     continue
             kept.append(sentence.strip())
+        if kept and trimmed_figure:
+            relation = computed_sentence(draft, evidence_index)
+            if relation:
+                kept.append(relation)
         return " ".join(kept) if kept else draft
     except Exception:  # noqa: BLE001
         return draft

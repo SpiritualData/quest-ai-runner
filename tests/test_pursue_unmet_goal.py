@@ -36,8 +36,10 @@ def test_a_long_search_sends_the_current_reply_with_one_line_then_continues_as_a
     runner = QueueRunner([DeepResult(met=True, output="Queued as task #1", deferred=True)])
     events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner))
     still = [e for e in events if e["type"] == EVENT_MILESTONE and (e.get("data") or {}).get("still_working")]
-    assert len(still) == 1 and "Still working on the rest" in still[0]["text"] and len(runner.briefs) == 1
-    assert "Still working on the rest" in [e for e in events if e["type"] == "result"][-1]["text"]
+    assert len(still) == 1 and "Still working on" in still[0]["text"] and len(runner.briefs) == 1
+    assert "Still working on" in [e for e in events if e["type"] == "result"][-1]["text"]
+    for text in (still[0]["text"], [e for e in events if e["type"] == "result"][-1]["text"]):
+        assert "find it" not in text and "the reply asks for a transcript" not in text      # the verdict's next action and reason never reach the reply
 
 
 def test_a_remark_never_starts_a_queued_follow_up():
@@ -50,7 +52,8 @@ def test_a_search_that_finds_nothing_ends_with_what_was_tried_and_what_is_missin
     runner = Runner([DeepResult(met=False, output="")])
     events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner, pursue_inline_seconds=1000.0))
     text = [e for e in events if e["type"] == "result"][-1]["text"]
-    assert "What is still missing" in text or "nothing further to try" in text
+    assert "could not confirm the rest" in text or "nothing further to try" in text
+    assert "the reply asks for a transcript" not in text      # the checker's reason is its working note, never part of a reply
 
 
 def test_a_turn_that_ended_unmet_becomes_a_candidate_case_only_when_the_folder_is_named(tmp_path):

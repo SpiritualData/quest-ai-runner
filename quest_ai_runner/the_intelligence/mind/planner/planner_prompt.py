@@ -70,7 +70,12 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
      documentation excerpts or says you are in documentation mode, answer it from them now, with
      no read and never "deep": the work they describe is the example, not an instruction to run.
   5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
-     runner can reach: choose "deep" now, with no read first. NOT REACHABLE: buying, paying, ordering
+     runner can reach: choose "deep" now, with no read first. EXCEPTION, A MIXED MESSAGE: when it ALSO
+     asks a question the person's own records settle (which item to cut, how much is left, what the
+     total is) next to work that runs in the background (a script, a file, a long task), the question
+     is not part of the work and must not wait for it: "read" the records first, then choose "answer"
+     WITH deferred_deep for the work only, so the reply carries the figures and the recommendation now
+     and says the work is queued, never "deep" with the question folded into its goal. NOT REACHABLE: buying, paying, ordering
      from a supplier or calling someone for the person spends their money or speaks for them, and
      neither the deep runner nor a tool does it unless a listed service is named for exactly that:
      choose "answer", say plainly that you can't, and offer the nearest thing you can do (a goal,
@@ -115,7 +120,7 @@ answer that declines the act and also queues it contradicts itself. False in eve
 When you choose "answer", set `reply_shape` to the shape the reply must take: `yes_no` (the message is a yes
 or no question; the reply opens with the verdict), `one_step` (they ask where to start or what to do next; the
 reply names ONE step), `ask_first` (as `asks_first`), `brief` (they asked for a quick, short or one-breath
-reply), `readback` (they asked to be told what is stored or was done), otherwise `default`.
+reply), `readback` (they asked to be told what is stored or was done), `decline` (they asked for something that cannot be done here, such as moving money or changing an account: decline once, offer the one real alternative), otherwise `default`.
 ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
 not opened that your answer depends on, such as a file a listing just showed; a refused path does
 not count. Empty when you are reading this step or hold the content. Choose "answer" only with it empty.
@@ -454,6 +459,10 @@ DEEP_ACTION = """\
     measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") -- AND
     code or files: FIX a bug, IMPLEMENT / BUILD / REFACTOR a feature, EDIT or APPLY a change to a
     file (e.g. "fix the back button", "implement the new endpoint", "add a field to the form").
+    A MIXED message, background work (a script, a file) plus a question the person's own records settle
+    (which item to cut, what the total is), is NOT "deep": a "deep" hand-off carries the whole message
+    to the queue and the reply is only a receipt. Read the records, then "answer" WITH deferred_deep
+    for the work alone, so the reply carries the figures and the recommendation now.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
     outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),
@@ -737,6 +746,14 @@ question that would let you act (two only when you cannot act without both). Und
 guidelines or closing target sentence. Never use an em dash.
 """
 
+HANDOFF_ANSWER_NOW_DIRECTIVE = """\
+--- THIS REPLY HANDS WORK OFF (set by the planner) ---
+Part of the message is background work that is queued after this reply. Say that part is queued, never that it is finished. Answer
+every question in the message that the records you were given settle now (the item, the figures, the recommendation), in this same
+reply: a question that follows "when it is done" or "once it is written" is still answered now if the records settle it, and never
+postponed until the work finishes. Never use an em dash.
+"""
+
 READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
 --- THIS REPLY IS THE END OF THE TURN ---
 The read budget is spent, so this reply is the last thing that happens: no tool runs after it, no
@@ -872,7 +889,11 @@ THE ACTIONS:
     `goal` and `brief`. Saying it with `deferred_deep` empty hands off nothing and nothing runs.
   - "deep": fulfilling this means PRODUCING or CHANGING an artifact, or the answer lives somewhere
     your reads cannot reach. Covers the person's own records (create / add / update / edit /
-    delete / mark / set) and code or files (fix, implement, build, refactor, apply). Do not read
+    delete / mark / set) and code or files (fix, implement, build, refactor, apply). NOT when the
+    message ALSO asks a question the person's own records settle (which item to cut, what the total
+    is) next to background work (a script, a file): "deep" would hand the whole message to the queue
+    and the reply would be only a receipt. Read the records, then use "answer" WITH deferred_deep for
+    the work alone, so the reply carries the figures and the recommendation now. Do not read
     the codebase first: the deep runner is a full agent with a shell, the filesystem, the web and
     this deployment's connected services, and it explores and edits itself.
     Set `deep_target`: "quest_data" for the person's own records and fields (these change through

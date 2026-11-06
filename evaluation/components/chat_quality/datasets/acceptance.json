@@ -232,7 +232,7 @@
   "expected_routing": "inline",
   "rubric": [
    "States that tiling must wait until the plumber finishes in the {PLUMBER} window, so earliest is {TILING_FIRST}",
-   "Notes Sam is away {SAM_AWAY}, so the usable window is roughly {TILING_WINDOW_TO} (and the tiles need buying before {TILING_LAST})",
+   "Notes Sam is away {SAM_AWAY}, so the usable window is roughly {TILING_WINDOW_TO} (and the tiles need buying before tiling starts, which is no later than {TILING_LAST})",
    "Gives a recommended start date or range inside that window"
   ],
   "must_use_pivots": [

@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- A reply's currency amounts and percentages are checked by arithmetic at the answer checkpoint: a figure the turn did not hold, and that is not the sum, difference, multiple or ratio of a figure the reply states and a figure a program computed over the rows read (a read block that begins "Computed by code"), is flagged, the reply is regenerated one tier up with the code-computed differences in the hint, and a still-wrong clause is trimmed and replaced by a code-written comparison. Earlier replies kept as recent-turn cards never count as evidence for a figure.
+- The "still working" line and the unmet-goal account are fixed text: a checker's reason or next action is its working note and never reaches a reply.
+- A corrected reply (steered by a check or the verifier) is written one tier up from the fast tier. A new `decline` reply shape (two sentences: decline once, offer the one real alternative) joins the reply standards.
+- The planner prompt keeps a message that mixes background work with a question the records settle out of "deep" (answer with a hand-off), and the reply to a hand-off is told to answer what the records settle now.
+
 ### Added
 - An unmet goal is pursued before the reply is sent: the last net runs the read-only deep search through the hub's bounded replan (`pursue_max_replans`, `pursue_wall_seconds`, `pursue_inline_seconds`, `pursue_deep_seconds`). A long search sends the current reply with one plain "still working" line and continues as a queued follow-up when a queue runner is wired and the planner read the message as a request; a search that finds nothing ends with what was tried and what is missing, and a block only the person can lift is asked about after the search, not before.
 - `QAR_CANDIDATE_CASES_DIR`: when set to a private folder, a turn that ended unmet, empty or pushed back to the person appends a candidate case for the badly handled inputs dataset (default off).

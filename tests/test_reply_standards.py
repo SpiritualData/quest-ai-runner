@@ -334,3 +334,77 @@ def test_a_repair_that_keeps_the_address_is_accepted():
     short = "Call Dana via https://dana.example/book today."
     provider, res = run_turn([longer, short])
     assert res.text.startswith("Call Dana via")
+
+
+SPEND_READS = "Launch budget cap is 2,000 USD.\n\nComputed by code over the 7 entries in this result:\n- amount_usd: total 2340 over 7 entries, min 45, max 900, average 334.29\n\nrows: 900 420"
+SPEND_EVIDENCE = ("Computed by code over the 7 entries: amount_usd total 2340, max 900. Rows: Label printer 900, Starter wax 420, Jars 380. "
+                  "Launch budget cap is 2,000 USD.")
+
+
+def test_a_wrong_difference_is_found_and_the_hint_carries_the_code_computed_values():
+    bad = measure("Your total launch spend is 2,340 USD. That leaves 1,660 USD under your 2,000 USD budget cap.", STANDARDS["default"], SPEND_EVIDENCE, SPEND_READS)
+    assert bad.unsupported == ["1,660 USD"]
+    assert "2,340 - 2,000 = 340" in bad.hint() and "2,340 is 340 more than 2,000" in bad.hint()
+
+
+def test_held_sums_differences_and_percentages_pass_the_figure_check():
+    good = measure("You are 340 USD over the 2,000 USD cap at 2,340 USD. The label printer is 900 USD, about 38% of it.", STANDARDS["default"], SPEND_EVIDENCE, SPEND_READS)
+    assert not good.failed
+
+
+def test_repair_drops_the_sentence_with_the_invented_figure():
+    draft = "Your total launch spend is 2,340 USD. That leaves 1,660 USD under your 2,000 USD budget cap."
+    m = measure(draft, STANDARDS["default"], SPEND_EVIDENCE, SPEND_READS)
+    assert repair(draft, STANDARDS["default"], m, SPEND_EVIDENCE, SPEND_READS) == (
+        "Your total launch spend is 2,340 USD. 2,340 USD is 340 USD more than 2,000 USD.")
+
+
+def test_repair_trims_the_clause_with_the_invented_figure_from_a_single_sentence_and_adds_the_code_computed_relation():
+    draft = "Your total launch spend is 2,340 USD across 7 logged expenses, which leaves 1,660 USD under your 2,000 USD budget cap."
+    m = measure(draft, STANDARDS["default"], SPEND_EVIDENCE, SPEND_READS)
+    assert repair(draft, STANDARDS["default"], m, SPEND_EVIDENCE, SPEND_READS) == (
+        "Your total launch spend is 2,340 USD across 7 logged expenses. 2,340 USD is 340 USD more than 2,000 USD.")
+
+
+def test_a_large_pool_of_read_numbers_does_not_vouch_for_a_wrong_difference_by_coincidence():
+    reads = SPEND_READS + " " + " ".join(str(n) for n in range(1, 300))
+    bad = measure("Your total launch spend is 2,340 USD. That leaves 1,660 USD under your 2,000 USD budget cap.", STANDARDS["default"], reads, reads)
+    assert bad.unsupported == ["1,660 USD"]      # sums of the pool's own numbers do not vouch for it: a derived figure needs an operand the draft states
+
+
+def test_a_figure_an_earlier_reply_stored_does_not_vouch_for_itself():
+    stored = "Earlier reply: you are 1,660 USD under your 2,000 USD cap."
+    evidence = SPEND_EVIDENCE + "\n" + stored
+    draft = "Your total launch spend is 2,340 USD. That leaves 1,660 USD under your 2,000 USD budget cap."
+    assert measure(draft, STANDARDS["default"], evidence, SPEND_READS).unsupported == []        # held in the evidence, so it passes
+    basis = evidence.replace(stored, "")
+    bad = measure(draft, STANDARDS["default"], evidence, SPEND_READS, basis)
+    assert bad.unsupported == ["1,660 USD"] and "2,340 - 2,000 = 340" in bad.hint()
+
+
+def test_a_corrected_reply_is_written_one_tier_up_from_the_fast_tier_and_a_pinned_model_stays():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
+    registry = ModelRegistry(StubProvider([]))
+    host = SimpleNamespace(registry=registry)
+    up = lambda rs: RunAnswerMixin._regeneration_model(host, rs)
+    fast = SimpleNamespace(model="fast-model", model_hint=None, plan=SimpleNamespace(model_tier="fast"))
+    assert up(fast) == registry.resolve_tier("balanced")
+    hinted = SimpleNamespace(model="fast-model", model_hint="fast", plan=SimpleNamespace(model_tier=None))
+    assert up(hinted) == registry.resolve_tier("balanced")
+    pinned = SimpleNamespace(model="claude-x-pinned", model_hint="claude-x-pinned", plan=SimpleNamespace(model_tier=None))
+    assert up(pinned) == "claude-x-pinned"
+    balanced = SimpleNamespace(model="b", model_hint=None, plan=SimpleNamespace(model_tier="balanced"))
+    assert up(balanced) == "b"
+
+
+def test_the_handoff_directive_tells_the_writer_to_answer_what_the_records_settle_now():
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import HANDOFF_ANSWER_NOW_DIRECTIVE
+    assert "queued" in HANDOFF_ANSWER_NOW_DIRECTIVE and "now" in HANDOFF_ANSWER_NOW_DIRECTIVE and "—" not in HANDOFF_ANSWER_NOW_DIRECTIVE
+
+
+def test_a_decline_of_more_than_two_sentences_breaks_the_decline_standard():
+    four = "I can't move money. That goes through your bank. Once you have it I can log it. Tell me the amount."
+    m = measure(four, STANDARDS["decline"], EVIDENCE)
+    assert kinds(m) == {"length"} and "at most 2 sentences" in m.hint()
+    assert not measure("I can't move money from your bank. Once you have the refund I can log it as a negative expense.", STANDARDS["decline"], EVIDENCE).failed

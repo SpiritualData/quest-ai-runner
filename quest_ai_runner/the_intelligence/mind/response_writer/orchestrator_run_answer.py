@@ -10,7 +10,7 @@ from typing import Optional
 
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
-from hubofhubs.api import ProgressEvent
+from hubofhubs.api import ProgressEvent, evidence_text
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_state_block
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
@@ -30,11 +30,22 @@ from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
-    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, READ_BUDGET_WRAPUP_HONESTY_NOTE)
+    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
 
 class RunAnswerMixin:
     """Settling the loop's final action and drafting the answer, with the overseer's answer checkpoint."""
+
+
+    def _regeneration_model(self, rs: SimpleNamespace) -> str:
+        """The model a corrected reply is written with: one tier up when the reply was written on the fast tier, else unchanged (a pinned model id stays pinned)."""
+        try:
+            tier = (rs.model_hint or rs.plan.model_tier or "").strip().lower()
+            if self.registry.is_tier_name(tier) and self.registry.resolve_tier(tier) == self.registry.resolve_tier("fast"):
+                return self.registry.resolve_tier("balanced")
+        except Exception:  # noqa: BLE001 -- choosing a model must never break the turn
+            pass
+        return rs.model
 
     def _run_route_action(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """Route the loop's final action: gates, clarify, confirm, deep, and the first answer draft."""
@@ -131,6 +142,9 @@ class RunAnswerMixin:
 
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs.plan, "asks_first", False):
             reply_directive = ASK_FIRST_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
+        if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active
+                and not (rs.plan.act_declined or False)):
+            reply_directive = HANDOFF_ANSWER_NOW_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
 
         def _answer_grounding(steering: Optional[str] = None) -> str:
             # The L2 grounding EVERY reply this turn is built on.
@@ -309,12 +323,15 @@ class RunAnswerMixin:
             # wrap-up above, and both pass ``brainstorm_ack_note`` as the reply directive, so a
             # latched turn cannot ship a reply that was never told the turn was held.
             cv = _answer_grounding(steering)
+            # A reply that came back for a correction is written one tier up: the cheaper model already missed it once (Joshua's rule: when a
+            # cheaper model fails, retry one tier up rather than the same way).
+            model = rs.model if steering is None else self._regeneration_model(rs)
             if len(rs.plan.subquestions) >= 2:
                 return self._answer_subquestions(rs.user_message, transcript, cv, gathered,
-                                                 rs.model, rs.plan.subquestions, native_blocks=rs.native_blocks,
+                                                 model, rs.plan.subquestions, native_blocks=rs.native_blocks,
                                                  reply_directive=reply_directive,
                                                  rep_preamble=rep_preamble)
-            return self._grounded_answer(rs.user_message, transcript, cv, gathered, rs.model,
+            return self._grounded_answer(rs.user_message, transcript, cv, gathered, model,
                                          False, native_blocks=rs.native_blocks,
                                          rep_preamble=rep_preamble,
                                          reply_directive=reply_directive)
@@ -381,13 +398,21 @@ class RunAnswerMixin:
         # SITUATION STANDARD (core/reply_standards.py): the standard for this reply's situation (selected from the planner's
         # structured ``reply_shape`` / ``asks_first``) and the deterministic measurements of the draft against it. A standard in
         # force gives the checkpoint real authority below: a longer wait for the verdict and code-built repair rounds.
-        standard, measured, standard_evidence, standard_in_force = None, None, "", False
+        standard, measured, standard_evidence, standard_in_force, figure_pool, figure_evidence = None, None, "", False, "", ""
         if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
             try:
                 standard_evidence = (self.link_evidence_for(rs, SimpleNamespace(deep_results=[]))
                                      + "\n" + (exec_record.summary() if exec_record is not None else ""))
                 standard = standard_for(rs.plan)
-                measured = measure(rs.text, standard, standard_evidence)
+                # what the turn READ (the operands a derived figure may use): the person's message, the reads and the execution record
+                figure_pool = evidence_text(rs.user_message, gathered) + "\n" + (exec_record.summary() if exec_record is not None else "")
+                # What may vouch for a FIGURE is narrower than what may vouch for a link: the person's message, this conversation, the context minus
+                # the earlier replies kept as recent-turn cards, and the reads. An earlier model reply (a recent card, or the consumer's whole-history
+                # evidence) is not evidence: a wrong total once stated and stored would vouch for itself when stated again.
+                figure_evidence = evidence_text(rs.user_message, getattr(rs, "transcript", ""),
+                                                (getattr(rs, "context_view", "") or "").replace(getattr(rs, "recent_context_text", "") or "\0", ""),
+                                                gathered, figure_pool)
+                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence)
                 standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
                 log.info("Reply standard %s in force=%s before the verdict: %s", standard.shape, standard_in_force, measured.as_text())
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
@@ -523,7 +548,7 @@ class RunAnswerMixin:
         # re-measured. What still fails after the last round gets the cheapest safe deterministic repair. Never unbounded.
         if standard is not None and standard_in_force:
             try:
-                measured = measure(rs.text, standard, standard_evidence)
+                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence)
                 while measured.failed and repair_rounds < cfg.reply_standard_max_repairs:
                     if emit is not None:
                         emit.status("Reply standard: refining the answer…")
@@ -538,9 +563,9 @@ class RunAnswerMixin:
                                  standard.shape, len(held - http_addresses(candidate)))
                         break
                     rs.text = candidate
-                    measured = measure(rs.text, standard, standard_evidence)
+                    measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence)
                 if measured.failed:
-                    rs.text = repair(rs.text, standard, measured, standard_evidence)
+                    rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence)
                 log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
                 rs.reply_standard = {"shape": standard.shape, "repair_rounds": repair_rounds,
                                      "still_failing": bool(measured.failed), "measured": measured.as_text()}

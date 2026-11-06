@@ -923,6 +923,7 @@ class RunBeginMixin:
                     _recent_survivors, f"{rs.goal_condition} {rs.user_message}",
                     time_range=_ctx_meta.get("time_range"))
                 if _recent_text:
+                    rs.recent_context_text = _recent_text     # earlier model replies kept as cards: not evidence for a figure (see reply_standards)
                     rs.context_view = (_recent_text + "\n\n" + rs.context_view if rs.context_view
                                     else _recent_text)
                 if _recent_survivors:
