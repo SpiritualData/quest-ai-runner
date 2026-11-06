@@ -728,6 +728,22 @@ class RunLoopMixin:
                     rs.plan.reads = _dated
                     emit.status("Looking for files from that day…")
 
+            # --- PAST-ACTIVITY GATE: a message naming someone is searched for what they asked the AI before the question back ------
+            # "Mary's chat went badly, what did she ask?": the planner would ask the person for a title or a date. The consumer's operation
+            # finds the chats and AI tasks the asker may read by person and time, and says what it could not reach. The person's own words
+            # name the person (hard rule #3 reads only the model's output); the code runs the read once a turn and the planner then answers
+            # from it or says what was and was not searched.
+            if (rs.plan and rs.plan.action in ("answer", "clarify") and message_is_user_turn and self.retrieval is not None
+                    and cfg.past_activity_operation and not getattr(rs, "past_activity_gate_done", False)
+                    and step + 1 < cfg.max_steps and not budget_exhausted()):
+                rs.past_activity_gate_done = True
+                _past = tool_guards.past_activity_reads_owed(rs.user_message, rs.plan.action, cfg.past_activity_operation)
+                if _past:
+                    log.info("Past-activity gate: the message names someone; searching what they asked the AI before replying.")
+                    rs.plan.action = "read"
+                    rs.plan.reads = _past
+                    emit.status("Looking for that conversation…")
+
             # --- WEB-READ GATE: a question about the world right now is answered after a web read ------------------------
             # The reach judge (opt in) settles where what the person asks lives. When it says "the world right now", web research is
             # wired and the planner chose to answer without one web read, the code runs the read (``core/tool_guards.py``). Once a turn.

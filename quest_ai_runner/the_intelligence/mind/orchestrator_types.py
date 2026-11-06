@@ -29,6 +29,10 @@ class OrchestratorConfig:
     # the logs and collections the context lists, in the consumer's own read-spec shape). Called only when the planner twice answered
     # an answer it reported as resting on the person's records without reading any this turn; None (the default) leaves the gate at its note.
     owed_record_reads: Optional[Callable[[str], List[Dict[str, Any]]]] = None
+    # PAST-ACTIVITY GATE. The consumer's read-only operation that finds what people asked the AI and how it answered (by person and time),
+    # limited to what the asker may read. When the person's message names someone and the planner would ask them for a title or a date,
+    # the code runs it once first (``tool_guards.past_activity_reads_owed``). None (the default) leaves the gate off.
+    past_activity_operation: Optional[str] = None
     max_parallel: int = DEFAULT_MAX_PARALLEL
     max_subquestions: int = DEFAULT_MAX_SUBQUESTIONS
     max_deep_subtasks: int = DEFAULT_MAX_DEEP_SUBTASKS

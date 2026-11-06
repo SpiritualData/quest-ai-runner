@@ -310,3 +310,47 @@ def dated_file_reads_owed(message: str, retrieval: Any, today: Optional[Any] = N
     aliases = [a.alias for a in members if isinstance(a, RemoteFilesAdapter)]
     phrase = references[0][0]
     return [{"query": {"files": alias, "op": "find", "date": phrase, "max_results": 40}} for alias in aliases[:3]]
+
+
+#: Capitalised words that are not a person's name: weekdays, months and the product's own words.
+NOT_A_NAME = frozenset(("monday tuesday wednesday thursday friday saturday sunday january february march april may june july august "
+                        "september october november december quest claude chat ai").split())
+CAPITALISED_WORD_RE = re.compile(r"\b[A-Z][a-z]{2,}\b")
+#: The most names one message turns into reads, and how far back an undated search looks.
+PAST_ACTIVITY_MAX_NAMES = 2
+PAST_ACTIVITY_DAYS = 30
+
+
+def names_in(message: str) -> List[str]:
+    """The capitalised words of a person's message that could be a person's name: not the first word of a sentence, not a weekday,
+    month or product word. The person's OWN words, never a reply's; a wrong guess costs one read that finds nothing."""
+    names: List[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(message or "")):
+        words = sentence.strip().split(" ", 1)
+        rest = words[1] if len(words) > 1 else ""
+        for word in CAPITALISED_WORD_RE.findall(rest):
+            if word.lower() not in NOT_A_NAME and word not in names:
+                names.append(word)
+    return names
+
+
+def past_activity_reads_owed(message: str, action: str, operation: Optional[str], today: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """The reads of what people asked the AI and how it answered, which the code runs before the planner answers or asks the person for
+    a title or a date, or [].  Owed when the consumer names the operation (``operation``), the person's own message names someone, and
+    the planner is about to ask a question back (``clarify``) or the message points at a time ("last thursday", "this week"). The
+    operation searches only what the asker may read and says what it could not reach; the code reads it once, never the answer.
+    A message that names a time passes that window as ``date``; one that does not looks back ``PAST_ACTIVITY_DAYS`` days."""
+    from datetime import date as calendar_date
+    from quest_ai_runner.the_world.tools.file_reading.date_references import date_references_in
+
+    if not operation or action not in ("answer", "clarify"):
+        return []
+    people = names_in(message)[:PAST_ACTIVITY_MAX_NAMES]
+    references = date_references_in(message, today or calendar_date.today())
+    if not people or (action != "clarify" and not references):
+        return []
+    window: Dict[str, Any] = {"days": PAST_ACTIVITY_DAYS}
+    if references:
+        first, last = references[0][1]
+        window = {"date": f"{first.isoformat()}..{last.isoformat()}"}
+    return [{"operation": operation, "args": {"person": name, "limit": 10, **window}} for name in people]
