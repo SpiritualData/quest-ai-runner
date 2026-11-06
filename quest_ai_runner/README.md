@@ -123,6 +123,7 @@ flowchart LR
 - Intent: [Quest AI Runner](../esoi/README.md)
 - Down: [quest_ai_runner/the_body/configuration](the_body/configuration/README.md)
 - Down: [quest_ai_runner/the_consciousness/feedback_learning](the_consciousness/feedback_learning/README.md)
+- Down: [quest_ai_runner/the_consciousness/intent_evolution](the_consciousness/intent_evolution/README.md)
 - Down: [quest_ai_runner/the_consciousness/prioritization](the_consciousness/prioritization/README.md)
 - Down: [quest_ai_runner/the_consciousness/representatives](the_consciousness/representatives/README.md)
 - Down: [quest_ai_runner/the_intelligence/nervous_system](the_intelligence/nervous_system/README.md)

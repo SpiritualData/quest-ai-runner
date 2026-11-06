@@ -88,7 +88,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Sub-intent: [Quest Requests](request_intake/README.md)
 - Parent intent: [Quest AI Runner](../../esoi/README.md)
 - Repository: [top README](../../README.md)
-- Records beside the code: [quest_ai_runner/the_consciousness/feedback_learning](feedback_learning/README.md), [quest_ai_runner/the_consciousness/prioritization](prioritization/README.md), [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
+- Records beside the code: [quest_ai_runner/the_consciousness/feedback_learning](feedback_learning/README.md), [quest_ai_runner/the_consciousness/intent_evolution](intent_evolution/README.md), [quest_ai_runner/the_consciousness/prioritization](prioritization/README.md), [quest_ai_runner/the_consciousness/representatives](representatives/README.md)
 - Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 - Diagram page: [diagram.md](diagram.md)
 
@@ -144,6 +144,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../the_body/internal_context/quest/client/quest_client.py) |  |
 | Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
 | File-backed feedback ledger | `feedback-learning:ledger` | [quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py](feedback_learning/feedback_ledger.py) |  |
+| History floor | `intent-evolution:history_floor` | [quest_ai_runner/the_consciousness/intent_evolution/history_floor.py](intent_evolution/history_floor.py) |  |
 | Quest ordering | `prioritization:quest_ordering` | [quest_ai_runner/the_consciousness/prioritization/quest_ordering.py](prioritization/quest_ordering.py) |  |
 | Configured persona resolver | `quest-requests:personas` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
 | Persona resolver precedence for queued tasks (today) | `quest-representatives:persona_resolver_precedence` | [quest_ai_runner/the_consciousness/representatives/personas.py](representatives/personas.py) |  |
