@@ -427,17 +427,19 @@ def test_a_run_that_never_started_is_not_measured_after(world, repo):
 # -- selection through resolve -------------------------------------------------------------------------
 
 def test_the_deep_run_arms_and_the_quest_specification_arm_are_declared_and_the_runners_own_measuring_is_selected():
-    assert default_name("esoi-application") == "slice-and-writeback"
-    assert names("esoi-application") == ["generic-doctrine", "quest_spec_records", "slice-and-writeback", "slice-only"]
-    assert resolve("esoi-application") is SliceAndWriteback
-    assert resolve("esoi-application", "slice-only") is SliceOnly
-    assert resolve("esoi-application", "generic-doctrine") is DoctrineOnly
+    assert default_name("run-applies-esoi") == "slice-and-writeback"
+    assert default_name("esoi-application") == "quest_spec_records"
+    assert names("run-applies-esoi") == ["generic-doctrine", "slice-and-writeback", "slice-only"]
+    assert names("esoi-application") == ["quest_spec_records"]
+    assert resolve("run-applies-esoi") is SliceAndWriteback
+    assert resolve("run-applies-esoi", "slice-only") is SliceOnly
+    assert resolve("run-applies-esoi", "generic-doctrine") is DoctrineOnly
 
 
 def test_a_built_orchestrator_follows_the_selection_and_the_doctrine_is_the_off_switch():
     chosen = build_orchestrator(_cfg()).goal_iteration
     assert isinstance(chosen, SliceAndWriteback) and [m.name for m in chosen.meters] == ["recorded_row", "offline_arm"]
-    assert isinstance(build_orchestrator(_cfg(selections={"esoi-application": "generic-doctrine"})).goal_iteration,
+    assert isinstance(build_orchestrator(_cfg(selections={"run-applies-esoi": "generic-doctrine"})).goal_iteration,
                       DoctrineOnly)
 
 

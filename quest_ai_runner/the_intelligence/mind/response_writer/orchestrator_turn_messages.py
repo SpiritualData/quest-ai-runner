@@ -24,7 +24,11 @@ from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import (
 from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import (
     InterimLedger, InterimState, SEND, SKIP_NO_WHY, decide, done_text, interim_event_data, interim_text_of, progress_signature, ungrounded_terms)
 
+from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+from quest_ai_runner.the_world.tools.tools import ToolContext
+
 LEDGER_KEY = "interim_ledger"
+GOAL_READ_TOOL = "list_quest_goals"      # the read-only tool that returns a quest's goal lines, used when the first reading came from context
 
 
 def interim_ledger_for(ctx_meta: Optional[Dict[str, Any]]) -> InterimLedger:
@@ -229,3 +233,139 @@ def turn_outcome(res: Any) -> Dict[str, Any]:
         return {"outcome": "stopped", "stop_reason": "unverified" if (
             verdict.get("blocker") == "evidence_only" or verdict.get("states_requested_facts")) else "attempt_cap"}
     return {"outcome": "met"}
+
+
+# ---- status first, then the work, then the metric before and after (``act_status``)
+
+def mutating_call_count(orch: Any, calls: Sequence[Mapping[str, Any]]) -> int:
+    """How many of the planned tool calls change something (a name the registry does not know counts as changing)."""
+    tools = getattr(orch, "tools", None)
+    count = 0
+    for call in calls or []:
+        spec = tools.get(call.get("name")) if tools is not None else None
+        if spec is None or getattr(spec, "mutates", True):
+            count += 1
+    return count
+
+
+def entries_of(rs: Any, gathered: Sequence[Any]) -> List[Any]:
+    """What the turn has read so far, as records to look a measure up in: the gathered reads, then the assembled context."""
+    return [*gathered, str(getattr(rs, "context_view", "") or "")]
+
+
+def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *, user_turn: bool) -> bool:
+    """MESSAGE 1 of an act request: where it stands (the milestone's measure read from the records, or what the planner listed from
+    its reads), then what happens now. Sent once, as an interim message, before the planned work runs. True when sent.
+
+    The decision is ``act_status.should_send_status``: the planner's ``user_intent`` and a plan that is more than a read."""
+    plan = getattr(rs, "plan", None)
+    cfg = orch.cfg
+    if emit is None or plan is None:
+        return False
+    if not act_status.should_send_status(
+            enabled=bool(getattr(cfg, "interim_replies", False)), user_turn=user_turn, user_intent=getattr(rs, "turn_user_intent", None),
+            action=plan.action, mutating_calls=mutating_call_count(orch, plan.tool_calls or []),
+            already_sent=getattr(rs, "status_first", None) is not None):
+        return False
+    meta = getattr(rs, "_ctx_meta", None) or {}
+    try:
+        records = entries_of(rs, gathered)
+        reading = act_status.pick_reading(act_status.readings_in(records), rs.user_message)
+        measured = begin_turn_metrics(orch, rs)
+        if measured is not None:                      # the metric record's own reading outranks a line parsed from a goal's text
+            reading = act_status.MetricReading(record_id=reading.record_id if reading else "", milestone=reading.milestone if reading else "",
+                                               done_when=str(measured.get("name") or (reading.done_when if reading else "")),
+                                               value=act_status.format_figure(measured.get("before")), call=reading.call if reading else None)
+        evidence = "\n".join([rs.user_message or "", *[str(g.get("text") or "") for g in gathered if isinstance(g, dict)],
+                              str(getattr(rs, "context_view", "") or "")])
+        doing = (plan.goal or "") if plan.action == "deep" else (plan.rationale or "")
+        voice = meta.get("channel") == "voice"
+        texts = act_status.status_texts(reading, list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice)
+        ledger = interim_ledger_for(meta if meta else None)
+        clock = time.monotonic()
+        seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))
+        data = interim_event_data(done=texts["status"], why_more="", next_step=texts["next"], coverage=None, attempt=0, seq=seq)
+        data["status_first"] = True
+        emit.emit(ProgressEvent(type=EVENT_INTERIM, text=texts["text"], data=data))
+        rs.status_first = {"before": reading, "voice": voice}
+        return True
+    except Exception:  # noqa: BLE001 -- a status note must never break a turn
+        return False
+
+
+def begin_turn_metrics(orch: Any, rs: Any) -> Optional[Mapping[str, Any]]:
+    """``every_request_measured``: the turn's metric record starts (the slice found, the cheap meter reads the metric before the work).
+    The row of that reading, or None when the arm is off or nothing was read."""
+    if not getattr(orch.cfg, "measure_every_request", False) or getattr(orch, "goal_iteration", None) is None:
+        return None
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.turn_metrics import TurnMetrics
+    meta = getattr(rs, "_ctx_meta", None) or {}
+    rs.turn_metrics = TurnMetrics(getattr(orch, "tools", None), orch.goal_iteration, str(meta.get("turn_id") or meta.get("task_id") or id(rs)),
+                                  request=rs.user_message or "")
+    return rs.turn_metrics.begin()
+
+
+def reread_metric(orch: Any, rs: Any, before: "act_status.MetricReading") -> Optional["act_status.MetricReading"]:
+    """The same record read again by CODE: the read-only tool call that returned it first (else the goal listing), run now."""
+    tools = getattr(orch, "tools", None)
+    if tools is None:
+        return None
+    call = dict(before.call or {})
+    name = str(call.get("name") or GOAL_READ_TOOL)
+    spec = tools.get(name)
+    if spec is None or getattr(spec, "mutates", True):
+        return None
+    meta = getattr(rs, "_ctx_meta", None) or {}
+    args = dict(call.get("args") or ({"quest_id": rs.quest_id} if getattr(rs, "quest_id", None) else {}))
+    if not args:
+        return None
+    result = tools.invoke(name, args, ToolContext(quest_id=getattr(rs, "quest_id", None), user_id=meta.get("user_id"),
+                                                  task_id=meta.get("task_id"), meta=dict(meta)))
+    if not getattr(result, "ok", False):
+        return None
+    found = act_status.readings_in([{"text": result.text}])
+    return act_status.matching(found, before)
+
+
+def already_in_place(gathered: Sequence[Any]) -> List[str]:
+    """Receipts of calls that found the change already there (status ``noop``) or were not run again (same call, same turn)."""
+    out: List[str] = []
+    for g in gathered:
+        if not isinstance(g, dict) or not str(g.get("locator") or "").startswith("tool:"):
+            continue
+        if g.get("tool_status") == "noop":
+            first = str(g.get("tool_text") or g.get("text") or "").strip().splitlines()
+            out.append((first[0] if first else str(g["locator"])[5:])[:140].rstrip("."))
+    return out
+
+
+def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
+    """MESSAGE 2 of an act request: the reply ends with the metric before and after (read again by code) and anything already in place.
+    Nothing is added to a turn that sent no first message, so an information request or a plain reply stays one message."""
+    sent = getattr(rs, "status_first", None)
+    if not sent or getattr(res, "kind", "") not in ("answer", "deep"):
+        return
+    try:
+        before = sent.get("before")
+        after = None
+        tm = getattr(rs, "turn_metrics", None)
+        if tm is not None and before is not None:     # the record's own second reading (the deep goal's code), else the goal line read again
+            changed = bool(getattr(rs, "tool_calls_ran", False) or getattr(res, "deep_results", None))
+            rows = tm.finish(res, changed=changed)
+            row = next((r for r in rows if r.get("after") is not None), None)
+            if row is not None:
+                after = act_status.MetricReading(before.record_id, before.milestone, before.done_when, act_status.format_figure(row.get("after")))
+        if after is None and before is not None:
+            after = reread_metric(orch, rs, before)
+        tail = act_status.closing_lines(before, after, reread=before is not None, already=already_in_place(rs.gathered),
+                                        voice=bool(sent.get("voice")))
+    except Exception:  # noqa: BLE001 -- the closing lines must never lose the reply
+        return
+    if not tail:
+        return
+    if (res.text or "").strip():
+        res.text = res.text.rstrip() + "\n\n" + tail
+    elif getattr(res, "deep_results", None) and isinstance(getattr(res.deep_results[-1], "output", None), str):
+        res.deep_results[-1].output = (res.deep_results[-1].output or "").rstrip() + "\n\n" + tail
+    else:
+        res.text = tail

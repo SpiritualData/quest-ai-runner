@@ -153,6 +153,9 @@ class OrchestratorConfig:
     # sequence are its to stamp). The ask-on-block path (a ``needs_person`` verdict files one deduplicated decision-
     # request) is NOT behind this switch: it only replaces text that looked like an ask but created nothing.
     interim_replies: bool = False
+    # critical-thinking:every_request_measured -- a chat turn that plans a change reads its metric before and after by the deep goal's own code
+    # (``turn_metrics``). Off keeps ``deep_runs_only``; set from the selection of ``critical-thinking`` (``the_body/configuration/config.py``).
+    measure_every_request: bool = False
     max_interims_per_turn: int = 4
     min_seconds_between_interims: float = 15.0
     # What the consumer's data and code paths CANNOT do, in plain words, handed to the pre-flight plan check so a plan

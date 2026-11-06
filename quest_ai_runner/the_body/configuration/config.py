@@ -789,6 +789,10 @@ def build_orchestrator(
     # the chat UIs read that field to decide whether execution is available; the ladder is the
     # orchestrator's business, not a redefinition of the config field.
     deep_runner_ladder = dry_run_writes.wrap_deep(resolve_deep_runner_ladder(cfg, warn=False))
+    # critical-thinking: ``deep_runs_only`` is selected; ``every_request_measured`` (chat turns that plan a change read their metric before and
+    # after by the deep goal's own code) is switched on by naming it in ``selections``.
+    if (cfg.selections or {}).get("critical-thinking") == "every_request_measured":
+        cfg.orchestrator.measure_every_request = True
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
@@ -811,9 +815,9 @@ def build_orchestrator(
         web=cfg.web_research,
         recipes=cfg.recipe_store or build_recipe_store_from_env(os.environ),
         # How much the code adds around a deep goal: the selected iterate-by-spec implementation (or
-        # ``cfg.selections["esoi-application"]``); the default measures the metric before and after the work,
+        # ``cfg.selections["run-applies-esoi"]``); the default measures the metric before and after the work,
         # and ``generic-doctrine`` (the standing instructions alone) is the off switch.
-        goal_iteration=resolve("esoi-application", overrides=cfg.selections)(),
+        goal_iteration=resolve("run-applies-esoi", overrides=cfg.selections)(),
         edited_files_card_updater=update_cards_from_deep_edits,
         background_thread_registrar=_register_index_thread,
     )

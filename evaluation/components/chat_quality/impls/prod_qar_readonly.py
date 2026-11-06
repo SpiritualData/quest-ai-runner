@@ -246,6 +246,8 @@ def build_arm(meter, bounded):
         record.update(
             seconds=round(time.time() - started, 1), model_calls=run_calls if "run_calls" in locals() else snap["model_calls"],
             calls_by_purpose=dict(Counter(m["label"] for m in snap["model_log"][:(run_calls if "run_calls" in locals() else len(snap["model_log"]))])),
+            call_sequence=[(round(m["t"] - started, 1), m["label"].split(" | ")[0].replace("model.", "").replace("answer_with_reasoning", "awr").replace("plan_with_step", "pws"))
+                           for m in snap["model_log"][:(run_calls if "run_calls" in locals() else len(snap["model_log"]))]],
             housekeeping_skipped=snap["skipped_housekeeping"], context_assemblies=dict(assemblies),
             judge_calls=snap["model_calls"] - (run_calls if "run_calls" in locals() else snap["model_calls"]), performed=snap["performed"], state=record.get("state"), reads=snap["reads"], writes=[w for w in snap["writes"] if not w.get("internal")],
             bookkeeping=sum(1 for w in snap["writes"] if w.get("internal")),
@@ -253,7 +255,7 @@ def build_arm(meter, bounded):
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error", "calls_by_purpose", "housekeeping_skipped", "startup_calls", "context_assemblies")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error", "calls_by_purpose", "call_sequence", "housekeeping_skipped", "startup_calls", "context_assemblies")}
         try:
             meter.record(record["model_calls"])
         except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check

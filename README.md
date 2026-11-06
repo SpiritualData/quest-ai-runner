@@ -170,7 +170,7 @@ The flow of one request is `quest_ai_runner/the_self/respond.py`: Request intake
 | `delegated-agent-sessions` | `DeepSessions` | `run_goal` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
 | `describe-an-attachment` | `AttachmentPreparing` | `prepare` | `quest_ai_runner/the_intelligence/mind/context_intake/attachments.py` |
 | `detect-a-stalled-run` | `StallDetecting` | `review` | `quest_ai_runner/the_intelligence/mind/delegation/interface.py` |
-| `esoi-application` | `GoalIteration` | `slice_for` | `quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py` |
+| `esoi-application` | `RecordsEditing` | `apply` | `quest_ai_runner/the_intelligence/critical_thinking/esoi_application/interface.py` |
 | `feed-context-sources` | `ContextFeeding` | `collect` | `quest_ai_runner/the_body/intake_sources/interface.py` |
 | `feedback-learning` | `FeedbackKeeping` | `open_items` | `quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py` |
 | `file-editing` | `FileWriting` | `read_file` | `quest_ai_runner/the_world/tools/file_editing/interface.py` |
@@ -205,6 +205,7 @@ The flow of one request is `quest_ai_runner/the_self/respond.py`: Request intake
 | `replay-known-operations` | `OperationReplaying` | `match` | `quest_ai_runner/the_intelligence/mind/planner/interface.py` |
 | `reply-in-steps` | `InterimPolicy` | `decide` | `quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py` |
 | `response-quality` | `ReplyGuarding` | `links` | `quest_ai_runner/the_intelligence/critical_thinking/response_quality/interface.py` |
+| `run-applies-esoi` | `GoalIteration` | `slice_for` | `quest_ai_runner/the_intelligence/critical_thinking/goal_iteration_interface.py` |
 | `show-progress` | `ProgressShowing` | `update` | `quest_ai_runner/the_consciousness/terminal/interface.py` |
 | `system-integrity` | `KeepingGeneric` | `audit` | `quest_ai_runner/the_self/integrity/interface.py` |
 | `take-in-the-world` | `RequestTakingIn` | `take_in` | `quest_ai_runner/the_consciousness/request_intake/interface.py` |

@@ -17,7 +17,7 @@ from hubofhubs.api import (
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, send_status_first, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import is_eligible, trace_from_result
@@ -188,6 +188,7 @@ class RunLoopMixin:
             # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
+            close_with_metric(self, rs, res)     # message 2 of an act request ends with the metric before and after, read by code
             if res.kind in ("answer", "deep", "confirm"):
                 res.text = remove_em_dashes(res.text)
                 res.question = remove_em_dashes(res.question)
@@ -830,6 +831,9 @@ class RunLoopMixin:
                 except Exception:  # noqa: BLE001 — the overseer must never break the loop
                     pass
 
+            # STATUS FIRST: an order that will take work beyond one reply says where things stand and what happens now before the work
+            # runs (``act_status``; the decision is the planner's ``user_intent`` plus a plan that changes something).
+            send_status_first(self, emit, rs, gathered, user_turn=message_is_user_turn)
             if rs.plan.action == "tool":
                 self.run_tool_calls(rs.plan.tool_calls, gathered=gathered, exec_record=exec_record,
                                      tool_ok_signatures=tool_ok_signatures, emit=emit,

@@ -120,12 +120,12 @@ def build_orchestrator(arm: Dict[str, Any], workspace: Path, claude: str, timeou
     from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
     from quest_ai_runner.the_self.assembler.resolve import resolve
     cfg = _config_from_env()
-    cfg.selections = {**(cfg.selections or {}), "esoi-application": arm["iteration"]}
+    cfg.selections = {**(cfg.selections or {}), "run-applies-esoi": arm["iteration"]}
     worker_cfg = SubprocessConfig(working_dir=str(workspace), claude_path=claude, timeout_seconds=timeout,
                                   review_interval_seconds=0, extra_path_dirs=[str(common.REPO / ".venv" / "bin")])
     cfg.deep_runner = (runner_factory or SubprocessGoalRunner)(worker_cfg)
     orch = build(cfg)
-    orch.goal_iteration = resolve("esoi-application", overrides=cfg.selections)()
+    orch.goal_iteration = resolve("run-applies-esoi", overrides=cfg.selections)()
     if arm["max_iterations"] is not None:
         orch.cfg.deep_goal_max_iterations = arm["max_iterations"]
     registry = orch.tools

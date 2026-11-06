@@ -6,7 +6,7 @@ import quest_ai_runner
 from quest_ai_runner.the_intelligence.critical_thinking.area import hold_case
 from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
 
-AREA_IDS = ("critical-thinking", "esoi-application", "context-retriever", "goal-completion", "response-quality", "guidance",
+AREA_IDS = ("critical-thinking", "esoi-application", "run-applies-esoi", "context-retriever", "goal-completion", "response-quality", "guidance",
             "delegated-agent-sessions", "detect-a-stalled-run", "metric-translation", "quest-autopilot")
 
 
@@ -26,7 +26,7 @@ def test_each_id_of_the_area_answers_offline(solution_id):
 
 
 def test_the_members_that_need_no_key_return_a_value_offline():
-    for solution_id in ("critical-thinking", "esoi-application", "goal-completion", "response-quality", "context-retriever"):
+    for solution_id in ("critical-thinking", "esoi-application", "run-applies-esoi", "goal-completion", "response-quality", "context-retriever"):
         assert strict_outcome(solution_id) == "ok"
 
 

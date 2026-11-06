@@ -31,8 +31,9 @@ from hubofhubs.api import ModelCalling
 from quest_ai_runner.the_body.internal_context.quest.interface import QuestOperations
 from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_judge
 from quest_ai_runner.the_intelligence.mind.planner import reach_judge
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.interface import GoalIteration
+from quest_ai_runner.the_intelligence.critical_thinking.goal_iteration_interface import GoalIteration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.turn_metrics import TurnMetrics
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import select_specs
 from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.metric_draft import MetricDraft
@@ -83,9 +84,17 @@ class CaseIteration:
         return SpecSlice(root="", solution_id="s", metric_id="m", metric_name="metric")
 
 
-def hold_case(case: Mapping[str, Any]) -> Dict[str, Any]:
+def hold_case(case: Mapping[str, Any], every_request: bool = False) -> Dict[str, Any]:
     """What is on record for one request after the flow ran: the rows kept, whether a change ended with none, and what answered a regression.
-    A chat turn and in-process work pass through nothing today, so they come back with no rows."""
+    A chat turn and in-process work pass through nothing under ``deep_runs_only``, so they come back with no rows; under ``every_request_measured``
+    (``every_request``) they pass the same begin and finish through ``TurnMetrics``."""
+    if case["kind"] != "deep" and every_request:
+        turn = TurnMetrics(None, CaseIteration(case), "run1", request="r")
+        turn.begin()
+        result = SimpleNamespace(metric_results=None)
+        rows = turn.finish(result, changed=bool(case["changed"]))
+        return {"rows": [{"before": row.get("before"), "after": row.get("after"), "source": row.get("source")} for row in rows],
+                "missing": False, "proposed": False, "response": ""}
     if case["kind"] != "deep":
         return {"rows": [], "missing": False, "proposed": False, "response": ""}
     metrics = GoalMetrics(CaseIteration(case), MemoryLedger(), "run1", request="r", gate_applies=True)
@@ -245,3 +254,13 @@ class DeepRunsOnly:
 
     def gate(self, quest_id: str, now: str = "") -> Mapping[str, Any]:
         return self.gates.gate(quest_id, now)
+
+
+@implementation("critical-thinking", "every_request_measured")
+class EveryRequestMeasured(DeepRunsOnly):
+    """Chat turns and in-process work that plan a change pass the same begin and finish as a deep goal (``TurnMetrics``): the metric is read
+    before the work and again when the reply is built, and both readings are rows of the run's ledger. Not selected: ``deep_runs_only`` stays
+    the default until this arm wins on the metric's cases. Switched on in a lane by naming it in ``selections``."""
+
+    def hold(self, case: Mapping[str, Any]) -> Mapping[str, Any]:
+        return hold_case(case, every_request=True)

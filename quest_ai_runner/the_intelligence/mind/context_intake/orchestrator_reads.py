@@ -525,6 +525,7 @@ class ReadsMixin:
                 except Exception:  # noqa: BLE001 -- learning a recipe never breaks a turn
                     pass
             gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": status.value,
+                             "call": {"name": name, "args": dict(args)}, "tool_text": text,
                              "text": f"TOOL {name} {RECEIPT_WORDS[status]} "
                                      f"(args {json.dumps(args, default=str)[:(ACTING_TOOL_ARGS_CHARS if (spec is None or spec.mutates) else 600)]}):\n{text}"})
             held = status is ToolStatus.HELD

@@ -1,0 +1,123 @@
+"""Status first, then the work, then the metric before and after (``act_status``): an order that takes work beyond one reply sends
+two messages in order, a question or a read-only order sends one, and a repeat finds what exists. Offline, scripted."""
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from hubofhubs.api import EVENT_INTERIM, EVENT_RESULT
+from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult
+from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+
+from .conftest import StubProvider, StubRetrieval
+from .test_tools import make_spec
+
+GOAL = "- g1 [open] due 2026-12-01 (month) for Sam: Launch the app release | Done when: 100 installs. Current value: {value}."
+
+
+def registry(state: Dict[str, Any], writes: List[Dict[str, Any]], *, existing: bool = False) -> ToolRegistry:
+    def read(args, ctx):  # noqa: ARG001
+        return ToolResult(ok=True, text="1 matching goals on quest q1\n" + GOAL.format(value=state["value"]))
+
+    def write(args, ctx):  # noqa: ARG001
+        if existing:
+            return ToolResult(ok=True, status=ToolStatus.NOOP, text="The weekly check-in is already on the quest")
+        writes.append(args)
+        state["value"] = args["value"]
+        return ToolResult(ok=True, text="Updated the goal")
+
+    props = {"type": "object", "properties": {"quest_id": {"type": "string"}, "value": {"type": "string"}}}
+    return ToolRegistry([make_spec("list_quest_goals", handler=read, mutates=False, parameters=props),
+                         make_spec("update_goal", handler=write, mutates=True, parameters=props)])
+
+
+def act_plan(intent: str, *calls: Dict[str, Any], rationale: str = "Update the goal now") -> Dict[str, Any]:
+    return {"action": "tool", "rationale": rationale, "user_intent": intent, "tool_calls": list(calls)}
+
+
+READ = {"name": "list_quest_goals", "args": {"quest_id": "q1"}}
+WRITE = {"name": "update_goal", "args": {"quest_id": "q1", "value": "15"}}
+
+
+def run(decisions, tools, message="make progress on the app release", **cfg):
+    provider = StubProvider(decisions=decisions)
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=tools,
+                        config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0, **cfg))
+    events: List[Dict[str, Any]] = []
+    orch.run(message, sink=StreamSink(events.append), quest_id="q1")
+    return events
+
+
+def test_an_act_request_sends_the_status_first_then_the_result_with_the_metric_before_and_after():
+    state, writes = {"value": "12"}, []
+    events = run([act_plan("act", READ), act_plan("act", WRITE), {"action": "answer", "rationale": "done", "user_intent": "act"}],
+                 registry(state, writes))
+    interim = [e for e in events if e["type"] == EVENT_INTERIM]
+    result = [e for e in events if e["type"] == EVENT_RESULT][-1]
+    assert len(interim) == 1 and interim[0]["data"]["status_first"] is True and interim[0]["data"]["seq"] == 1
+    assert "Current value: 12." in interim[0]["text"] and "Done when: 100 installs." in interim[0]["text"]
+    assert interim[0]["text"].startswith("Where this stands:") and "\n\nNow: " in interim[0]["text"]
+    assert events.index(interim[0]) < events.index(result) and writes == [WRITE["args"]]
+    assert "before 12, now 15 (changed)" in result["text"]            # the second reading is a read by code, after the write
+
+
+def test_an_information_request_sends_one_message():
+    state = {"value": "12"}
+    events = run([act_plan("inform", READ), {"action": "answer", "rationale": "say it", "user_intent": "inform"}], registry(state, []))
+    assert not [e for e in events if e["type"] == EVENT_INTERIM]
+    assert "Metric (" not in [e for e in events if e["type"] == EVENT_RESULT][-1]["text"]
+
+
+def test_an_act_request_that_only_reads_sends_one_message():
+    events = run([act_plan("act", READ), {"action": "answer", "rationale": "say it", "user_intent": "act"}], registry({"value": "12"}, []))
+    assert not [e for e in events if e["type"] == EVENT_INTERIM]
+
+
+def test_a_repeated_act_request_reports_what_is_already_there_without_a_second_write():
+    state, writes = {"value": "15"}, []
+    events = run([act_plan("act", READ), act_plan("act", WRITE), {"action": "answer", "rationale": "done", "user_intent": "act"}],
+                 registry(state, writes, existing=True))
+    result = [e for e in events if e["type"] == EVENT_RESULT][-1]
+    assert writes == [] and "Already in place, so nothing was written again: The weekly check-in is already on the quest" in result["text"]
+    assert "before 15, now 15 (unchanged)" in result["text"]
+
+
+def test_no_recorded_value_is_said_not_filled_in():
+    reading = act_status.readings_in([{"text": "- g2 [open] due x (month) for Sam: Plan | Done when: 5 calls"}])[0]
+    assert reading.value == act_status.NOT_RECORDED and not reading.recorded
+    assert "Current value: not recorded yet." in act_status.status_texts(reading, [], "", evidence="")["text"]
+
+
+def test_the_decision_is_structural():
+    base = dict(enabled=True, user_turn=True, user_intent="act", action="tool", mutating_calls=1, already_sent=False)
+    assert act_status.should_send_status(**base)
+    for over in (dict(user_intent="inform"), dict(user_intent=None), dict(mutating_calls=0), dict(action="read"), dict(already_sent=True),
+                 dict(enabled=False), dict(user_turn=False)):
+        assert not act_status.should_send_status(**{**base, **over})
+    assert act_status.should_send_status(**{**base, "action": "deep", "mutating_calls": 0})
+
+
+def test_voice_keeps_each_message_to_a_line_and_a_figure_the_records_lack_is_dropped():
+    reading = act_status.MetricReading("g1", "Launch", "100 installs", "12")
+    short = act_status.status_texts(reading, ["a long fact"], "ship it", evidence="ship it", voice=True)
+    assert "Done when" not in short["status"] and "fact" not in short["status"]
+    kept = act_status.status_texts(reading, [], "Add 40 invented installs", evidence="the request")
+    assert kept["next"] == act_status.GENERIC_NEXT
+
+
+def test_every_request_measured_carries_the_metric_records_own_readings_into_both_messages():
+    from quest_ai_runner.the_intelligence.critical_thinking.area import CaseIteration
+    state = {"value": "0"}                      # no goal line states a figure: the readings come from the metric record
+    provider = StubProvider(decisions=[act_plan("act", WRITE), {"action": "answer", "rationale": "done", "user_intent": "act"}])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=registry(state, []),
+                        goal_iteration=CaseIteration({"has_metric": True, "before": 12.0, "after": 15.0}),
+                        config=OrchestratorConfig(interim_replies=True, overseer=False, measure_every_request=True))
+    events: List[Dict[str, Any]] = []
+    orch.run("make progress on the app release", sink=StreamSink(events.append), quest_id="q1")
+    first = [e for e in events if e["type"] == EVENT_INTERIM][0]
+    result = [e for e in events if e["type"] == EVENT_RESULT][-1]
+    assert "Current value: 12." in first["text"] and "before 12, now 15 (changed)" in result["text"]
+    assert [m["after"] for m in result["data"].get("metrics") or [] if "after" in m] in ([15.0], [])      # the rows ride on the result

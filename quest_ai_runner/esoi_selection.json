@@ -121,6 +121,7 @@
    "replay-known-operations": "quest_ai_runner",
    "reply-in-steps": "quest_ai_runner",
    "response-quality": "quest_ai_runner",
+   "run-applies-esoi": "quest_ai_runner",
    "search-cards-and-specs": "quest_ai_runner",
    "show-progress": "quest_ai_runner",
    "spec-selection": "quest_ai_runner",
@@ -217,12 +218,13 @@
  "critical-thinking": {
   "default": "deep_runs_only",
   "evidence": {
-   "detail": "deep_runs_only leads instruction_only (instruction_only 0.2 against deep_runs_only 0.4; best guess, not yet significant, two-sided exact McNemar test, Holm-adjusted p=0.5, 2 of 10 cases disagree)",
-   "p": 0.5,
-   "verdict": "WIN"
+   "detail": "beaten by every_request_measured: best guess, not yet significant: every_request_measured leads deep_runs_only (every_request_measured 0.583 against deep_runs_only 0.333; two-sided exact McNemar test, Holm-adjusted p=0.75, 5 of 12 cases disagree); more cases would settle it; deep_runs_only leads instruction_only (instruction_only 0.2 against deep_runs_only 0.4; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.75, instruction_only passed 2 of 10, deep_runs_only 4 of 10)",
+   "p": 0.75,
+   "verdict": "LOSS"
   },
   "modules": {
    "deep_runs_only": "quest_ai_runner.the_intelligence.critical_thinking.area",
+   "every_request_measured": "quest_ai_runner.the_intelligence.critical_thinking.area",
    "instruction_only": "quest_ai_runner.the_self.integrity.prompts.standing_instructions"
   }
  },
@@ -266,17 +268,9 @@
   }
  },
  "esoi-application": {
-  "default": "slice-and-writeback",
-  "evidence": {
-   "detail": "beaten by single_attempt: best guess, not yet significant: single_attempt 0.907 against slice_and_writeback 0.826 on the point estimate; no case counts or per-case rows allow a test",
-   "p": null,
-   "verdict": "LOSS"
-  },
+  "default": "quest_spec_records",
   "modules": {
-   "generic-doctrine": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
-   "quest_spec_records": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit",
-   "slice-and-writeback": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
-   "slice-only": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration"
+   "quest_spec_records": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit"
   }
  },
  "feed-context-sources": {
@@ -704,6 +698,19 @@
   },
   "modules": {
    "qar_guards": "quest_ai_runner.the_intelligence.critical_thinking.area"
+  }
+ },
+ "run-applies-esoi": {
+  "default": "slice-and-writeback",
+  "evidence": {
+   "detail": "beaten by single_attempt: best guess, not yet significant: single_attempt 0.907 against slice_and_writeback 0.826 on the point estimate; no case counts or per-case rows allow a test",
+   "p": null,
+   "verdict": "LOSS"
+  },
+  "modules": {
+   "generic-doctrine": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
+   "slice-and-writeback": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration",
+   "slice-only": "quest_ai_runner.the_intelligence.critical_thinking.goal_iteration"
   }
  },
  "search-cards-and-specs": {

@@ -15,7 +15,7 @@ contributes:
 ``slice-and-writeback`` is selected by Joshua's direction of 2026-10-21 that every run's metric result before and after is
 recorded by code; the replay metric of the solution is not built, so that is a direction and not a measured win. A lane turns
 it off with ``ESOI_SELECT_QUEST_AI_RUNNER_ITERATE_BY_SPEC=generic-doctrine`` or its ``selections``. Selection goes through
-``resolve("esoi-application")`` like every swappable part, and ``Orchestrator`` falls back to it when it is built without an
+``resolve("run-applies-esoi")`` like every swappable part, and ``Orchestrator`` falls back to it when it is built without an
 arm, so a consumer that builds the brain itself gets the same default as ``build_orchestrator``.
 
 A repository without ESOI records, or a goal whose working folder is not known, has no slice, and an arm that measures then
@@ -38,7 +38,7 @@ from quest_ai_runner.the_body.configuration.runtime_settings import core_setting
 
 
 
-@implementation("esoi-application", "generic-doctrine")
+@implementation("run-applies-esoi", "generic-doctrine")
 class DoctrineOnly:
     """The standing instructions are the whole method: no slice in the brief and no reading by the runner."""
     name = "generic-doctrine"
@@ -49,15 +49,8 @@ class DoctrineOnly:
     def slice_for(self, request: str, working_dir: Optional[str] = None) -> Optional[SpecSlice]:
         return self.source.slice_for(request, working_dir) if self.source is not None else None
 
-    def apply(self, change: Mapping[str, Any]) -> Mapping[str, Any]:
-        """The solution's entry is applying a proposed edit to the ESOI records; an arm that only iterates a deep goal keeps no records and says so."""
-        return {"applied": False, "reason": "this arm iterates a deep goal by the specification slice and holds no records; select the 'quest_spec_records' arm to edit a quest's specification"}
 
-    def read(self, subject: str = "") -> Mapping[str, Mapping[str, Mapping[str, Any]]]:
-        return {}
-
-
-@implementation("esoi-application", "slice-only")
+@implementation("run-applies-esoi", "slice-only")
 class SliceOnly(DoctrineOnly):
     """The brief gets the slice for the solution the goal serves: its next milestone and the metric that measures it."""
     name = "slice-only"
@@ -66,7 +59,7 @@ class SliceOnly(DoctrineOnly):
         self.source = source or RepoSliceSource(find_root=repo_specs.slice_root, cache_dir=repo_specs.cache_dir())
 
 
-@implementation("esoi-application", "slice-and-writeback")
+@implementation("run-applies-esoi", "slice-and-writeback")
 class SliceAndWriteback(SliceOnly):
     """The slice, and the runner's own readings of its metric before and after the work, written to the run's record."""
     name = "slice-and-writeback"

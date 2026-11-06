@@ -25,4 +25,4 @@ long-term-memory,metric-remember-conversations
 guidance,metric-ground-in-intent
 prioritization,metric-order-quest-work
 feedback-learning,metric-store-feedback
-esoi-application,metric-iterate-by-spec
+run-applies-esoi,metric-iterate-by-spec

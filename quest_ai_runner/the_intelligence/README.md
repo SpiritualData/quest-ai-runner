@@ -138,7 +138,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Periodic reflection on the best tier (proposed) | `quest-intents:periodic_reflection` |  |  |
 | Outcome precedents surfaced at admission (proposed) | `the-subconscious:outcome_precedents` |  |  |
 | Overseer that asks questions of fact (proposed) | `nervous-system:fact_questions` |  |  |
-| Every request measured by code (proposed) | `critical-thinking:every_request_measured` |  |  |
+| Every request measured by code (built, not selected) | `critical-thinking:every_request_measured` | [quest_ai_runner/the_intelligence/critical_thinking/area.py](critical_thinking/area.py) |  |
 | Measured, proposed and answered (proposed) | `critical-thinking:measured_proposed_and_answered` |  |  |
 | Per-risk response chosen by metric (proposed) | `nervous-system:per_risk_response` |  |  |
 | One view per intent, cascading down (proposed) | `quest-intents:per_intent_cascade` |  |  |

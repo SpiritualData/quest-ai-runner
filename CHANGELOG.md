@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Status first for an order that takes work: when the planner reads a message as an order (`user_intent` act) and the plan changes something or escalates to deep work, one interim message says where things stand (the milestone's measure and its current value, or `not recorded yet`) and what happens now; the reply that closes the turn ends with the same metric read again by code (before and after) and what was already in place. Information requests and read-only plans send one message. New `critical-thinking:every_request_measured` arm (not selected; `selections` names it, or `OrchestratorConfig.measure_every_request`) gives chat turns the deep goal's own begin and finish.
+
 ### Changed
 - The planner reports two more structured fields, `needs_records` and `refers_to_attachment`. An answer that rests on the person's records with none read this turn goes back to read once (a `support`-shaped reply counts as resting on them); a planner that answers twice without reading gets the record sources the consumer's `owed_record_reads` names read by the code. A message that refers to a file with no attachment on the turn gets a code-written line that nothing arrived and queues nothing. A new `support` reply shape (acknowledge in one sentence, the real facts with the date they hold, one next step; three sentences, no exclamation marks) joins the reply standards, and a length breach the rewrites did not fix keeps the opening and the closing sentence.
 - A spent read budget whose last read found nothing runs the read-only search through the bounded replan before the wrap-up. The measurement rounds of a reply standard are no longer used up by the overseer's own regeneration. The private case-source digest is written to an untracked `case_sources.local.json`, never into a tracked file.

@@ -88,5 +88,23 @@
   "changed": true,
   "before": 0.5,
   "after": 0.7
+ },
+ {
+  "id": "TCR-11",
+  "area": "chat_change_steady",
+  "kind": "chat",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.5,
+  "after": 0.5
+ },
+ {
+  "id": "TCR-12",
+  "area": "task_change_improved",
+  "kind": "task",
+  "has_metric": true,
+  "changed": true,
+  "before": 0.2,
+  "after": 0.7
  }
 ]
