@@ -7,7 +7,8 @@ It scores only what a planner decision can show, and says so in each row:
   routing      ``expected_routing`` inline: the plan must not hand the work to a background or deep task (a deep action that
                targets the person's own records is a quick in-chat change and counts as inline); deep or delegated: the plan
                must be a deep action (not on records) or an answer that queues deferred deep work; any: always right.
-  write safety ``forbid_writes``: the plan must not be a tool call or a deep action (either would write).
+  write safety ``forbid_writes``: the plan must not call a tool that acts (``ToolSpec.mutates``; a read tool is fine), take a deep
+               action, or queue deep work.
   steps        a multistep case whose steps name an ``expect_tool`` passes only when the plan, if it is a tool plan, calls
                a tool of that name (a plan that is not a tool plan is judged on routing alone).
 It does NOT see context cards, pivot facts, the real tool results or the reply, so grounding, pivots, ``expect_writes`` and the
@@ -38,14 +39,22 @@ def turns(case):
     return case.get("messages") or [case["message"]]
 
 
-def decision_facts(plan):
+def mutating(orch, names):
+    """True when any named tool is declared to act (``ToolSpec.mutates``); an unknown name counts as acting."""
+    registry = getattr(orch, "tools", None)
+    specs = [registry.get(n) if registry else None for n in names]
+    return any(spec is None or spec.mutates for spec in specs)
+
+
+def decision_facts(plan, orch=None):
     queued = bool(getattr(plan, "deferred_deep", None))
     target = getattr(plan, "deep_target", None)
     action = plan.action
     delegated = (action == "deep" and target != "records") or (action == "answer" and queued)
-    writes = action == "tool" or (action == "deep" and target == "records") or delegated
-    return {"action": action, "target": target, "queued": queued, "delegated": delegated, "writes": writes,
-            "tools": [c.get("name") for c in (plan.tool_calls or [])]}
+    tools = [c.get("name") for c in (plan.tool_calls or [])]
+    acting_tool = action == "tool" and (orch is None or mutating(orch, tools))
+    writes = acting_tool or (action == "deep" and target == "records") or delegated
+    return {"action": action, "target": target, "queued": queued, "delegated": delegated, "writes": writes, "tools": tools}
 
 
 def judge_turn(case, facts):
@@ -72,7 +81,7 @@ def build(meter):
         said, problems, seen = [], [], []
         for index, message in enumerate(turns(case)):
             transcript = "\n".join(f"User: {m}" for m in said)
-            facts = decision_facts(orch._plan(message, transcript, view, []))
+            facts = decision_facts(orch._plan(message, transcript, view, []), orch)
             seen.append(facts["action"] + ("+queued" if facts["queued"] else ""))
             problems += [f"turn {index + 1} {p}" for p in judge_turn(case, facts)]
             said.append(message)

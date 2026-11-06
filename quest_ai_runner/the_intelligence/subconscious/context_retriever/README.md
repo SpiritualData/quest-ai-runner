@@ -47,7 +47,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 ## Metrics and their leaders
 
-- Context selection ranking accuracy and card-quality outcome (`metric-select-context`): leader `hub_feature_rerank`, 115 of 185 cases
+- Context selection ranking accuracy and card-quality outcome (`metric-select-context`): leader `hub_hybrid_rrf`, 114 of 185 cases
 - Pointer-resolution safety over offline cases (`metric-resolve-references`): leader `card_resolvers`, 16 of 16 cases
 - Mixed card and specification selection, with both existing selection metrics held (`metric-search-cards-and-specs`): leader `solutions_and_problems_with_links`, 14 of 17 cases
 - Semantic recall and query latency on the synthetic handbook (`metric-index-by-meaning`): leader `memory_cosine`, 16 of 17 cases
