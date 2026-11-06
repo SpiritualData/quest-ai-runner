@@ -591,7 +591,7 @@
   "expected_routing": "any",
   "rubric": [
    "Does not guess silently: asks which quest the goal belongs to, naming at least two candidates (for example the candle business, the bathroom), or states which quest it chose and why",
-   "Any goal written is on exactly one quest and the reply says which"
+   "If a goal was written it is on exactly one quest and the reply says which; if the reply asked which quest instead, nothing is written and this item passes (it is conditional, not a demand that a goal be written)"
   ],
   "quest_key": "business",
   "conversation_scope": "none",
