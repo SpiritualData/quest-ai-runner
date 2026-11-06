@@ -333,6 +333,34 @@ def read_spec_key(spec: Dict[str, Any]) -> str:
         return repr(spec)
 
 
+DISCOVERY_READ_KEYS = ("list_sources", "describe_source", "describe_path", "list_operations",
+                       "describe_operation", "list_guidance", "read_guidance")
+
+
+def split_mixed_reads(reads: Optional[List[Any]]) -> List[Any]:
+    """One single-purpose spec per read.
+
+    A planner often puts a discovery key (``list_sources``) in the SAME spec as the real query. A spec is
+    dispatched by its first recognised key, so the discovery ran and the query beside it was silently dropped
+    (ACC-008: ``{"query": {...Customer Interviews...}, "list_sources": true}`` listed the sources and never read
+    the journal, and the turn then spent its read budget re-discovering). Structural, on the spec's keys only:
+    the discovery keys become their own spec and the rest of the keys stay as the query spec."""
+    out: List[Any] = []
+    for spec in reads or []:
+        if not isinstance(spec, dict):
+            out.append(spec)
+            continue
+        discovery = {k: v for k, v in spec.items() if k in DISCOVERY_READ_KEYS}
+        rest = {k: v for k, v in spec.items() if k not in DISCOVERY_READ_KEYS}
+        real = {k for k in rest if k not in ("time_range", "topic_terms", "actor", "content_kind")}
+        if discovery and real:
+            out.append(discovery)
+            out.append(rest)
+        else:
+            out.append(spec)
+    return out
+
+
 def split_repeated_reads(reads: Optional[List[Any]], executed: Dict[str, int]
                          ) -> Tuple[List[Dict[str, Any]], List[Tuple[Dict[str, Any], int]]]:
     """``(fresh, repeated)``: specs to run now, and specs that already ran this turn paired with

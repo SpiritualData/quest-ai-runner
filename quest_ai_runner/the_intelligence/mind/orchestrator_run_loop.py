@@ -5,6 +5,7 @@ run-local namespace ``rs`` that ``RunMixin.run`` builds and hands from one phase
 """
 from __future__ import annotations
 
+import json
 import time
 from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
@@ -22,7 +23,8 @@ from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation im
 from hubofhubs.api import CardThreadDecision, parse_card_thread
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import deep_metric_data
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
-    planner_full_view_start, planner_note_observation, read_spec_key, repeated_read_observation, split_repeated_reads)
+    planner_full_view_start, planner_note_observation, read_spec_key, repeated_read_observation, split_mixed_reads,
+    split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
@@ -793,7 +795,7 @@ class RunLoopMixin:
                     len(gathered_content(gathered)), cfg.planner_recent_full,
                     cfg.planner_compress_over)
                 fresh_reads, repeated_reads = split_repeated_reads(
-                    rs.plan.reads, {k: ran[0] for k, ran in executed_reads.items()
+                    split_mixed_reads(rs.plan.reads), {k: ran[0] for k, ran in executed_reads.items()
                                  if ran[1] >= visible_from})
                 # The per-step cap _do_reads applies, applied here so a spec it would drop is
                 # never recorded as having run.
@@ -834,6 +836,15 @@ class RunLoopMixin:
                             # one that reads it in full; every later step sees only a reminder.
                             obs["discovery_step"] = step + 1
                     gathered.extend(new_obs)
+                    for _spec, _obs in zip(fresh_reads, new_obs):
+                        log.info("read step %s: spec=%s -> kind=%s locator=%s chars=%s head=%r",
+                                  rs.steps, json.dumps(_spec, default=str)[:300],
+                                  (_obs or {}).get("kind") if isinstance(_obs, dict) else type(_obs).__name__,
+                                  str((_obs or {}).get("locator"))[:100] if isinstance(_obs, dict) else "",
+                                  len(str((_obs or {}).get("text") or (_obs or {}).get("hits") or ""))
+                                  if isinstance(_obs, dict) else 0,
+                                  str((_obs or {}).get("text") or (_obs or {}).get("error") or "")[:160]
+                                  if isinstance(_obs, dict) else "")
                     # Recorded only when each spec's own observation is known and is not an error:
                     # a failed or timed-out read stays retryable.
                     if len(new_obs) == len(fresh_reads):
@@ -907,8 +918,12 @@ class RunLoopMixin:
                                 rs._sources.append(_rp)
                     # What each read asked for (an operation call, a collection filter, a search), so an
                     # observer can verify WHICH helper answered without the read's payload.
-                    locators = [str(_o.get("locator"))[:120] for _o in new_obs
-                                if isinstance(_o, dict) and _o.get("locator")]
+                    locators = []
+                    for _spec in fresh_reads:
+                        _q = _spec.get("query") if isinstance(_spec.get("query"), dict) else {}
+                        _op = _spec.get("operation") or _q.get("operation")
+                        if _op:
+                            locators.append(f"operation({_op})")
                     emit.emit(ProgressEvent(type=EVENT_READ, step=rs.steps,
                                             data={"reads": len(fresh_reads),
                                                   "sources": rs._sources[:8],

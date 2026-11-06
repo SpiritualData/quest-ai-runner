@@ -163,3 +163,15 @@ def test_a_planner_note_on_an_observation_reaches_the_planner_only():
     answer_text = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert "Not answered by" not in answer_text
     assert not any(o.get("planner_only") for o in res.gathered)
+
+
+def test_a_discovery_key_beside_a_query_is_split_so_the_query_runs():
+    """Recorded ACC-008 step 1: the planner sent discovery and the Customer Interviews query in one spec, and only
+    the discovery ran."""
+    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import split_mixed_reads
+    recorded = {"query": {"collection": "collections", "find": "customer interviews"},
+                "topic_terms": ["scent"], "content_kind": "conversations", "list_sources": True}
+    out = split_mixed_reads([recorded, {"grep": "x"}, {"list_operations": True}])
+    assert out[0] == {"list_sources": True}
+    assert out[1]["query"]["find"] == "customer interviews" and "list_sources" not in out[1]
+    assert out[2:] == [{"grep": "x"}, {"list_operations": True}]
