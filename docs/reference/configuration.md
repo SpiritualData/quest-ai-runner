@@ -50,7 +50,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CHANNEL_ALLOWED_SENDERS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHANNEL_NAME` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHANNEL_PROGRESS_MIN_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_PROVIDER` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_PROVIDER` |  | `the_body/configuration/cli_config.py`, `the_self/assembler/hub_requirements.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHANNEL_STATE_PATH` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHANNEL_TURN_TIMEOUT_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_CHAT_HISTORY_DIR` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/interactive_session.py`, `the_intelligence/higher_mind/long_term_memory/chat_conversations.py` | `docs/how-to/chat.md` |
@@ -146,7 +146,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_OPENCLAW_CALL_TIMEOUT` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_OPENCLAW_COMMAND` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
 | `QAR_OPENCLAW_CWD` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_OPENCLAW_TOKEN_FILE` | Fills the 'token_file' option of intake-sources:openclaw; declared by the hub. | `the_body/configuration/cli_config.py`, `the_world/tools/connected_system_operations/openclaw_channel.py` | `docs/how-to/live-channels.md` |
+| `QAR_OPENCLAW_TOKEN_FILE` | Fills the 'token_file' option of intake-sources:openclaw; declared by the hub. | `the_body/configuration/cli_config.py`, `the_world/tools/connected_system_operations/openclaw_channel.py` | `.env.example`, `docs/how-to/live-channels.md` |
 | `QAR_ORG_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_OVERSEER` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
 | `QAR_OVERSEER_MAX_SIGNALS` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |

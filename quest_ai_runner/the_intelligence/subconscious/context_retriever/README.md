@@ -23,7 +23,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Context Retriever | `context-retriever` | `quest_ai_runner.run("context-retriever", 'What should I work on first this week?')` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Context Retriever | `context-retriever` | `quest_ai_runner.run("context-retriever", 'What should I work on first this week?')` | Feature rerank without link and co-change priors (hub) (`hub_feature_rerank_no_priors`) | Context selection ranking accuracy and card-quality outcome |
 | Index By Meaning | `index-by-meaning` | `quest_ai_runner.run("index-by-meaning", 'rust release')` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
 | Spec Selection | `spec-selection` | `esoi spec index --out FILE` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
 | Search Cards And Specs | `search-cards-and-specs` | no entry declared | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
@@ -74,7 +74,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Context Retriever | `context-retriever` | Blind text search (`blind_grep`) | Context selection ranking accuracy and card-quality outcome |
+| Context Retriever | `context-retriever` | Feature rerank without link and co-change priors (hub) (`hub_feature_rerank_no_priors`) | Context selection ranking accuracy and card-quality outcome |
 | Index By Meaning | `index-by-meaning` | Qdrant-backed vector store (`qdrant`) | Semantic recall and query latency on the synthetic handbook |
 | Spec Selection | `spec-selection` | Lexical vector gated (`lexical-vector-gated`) | Specification selection pass rate |
 | Search Cards And Specs | `search-cards-and-specs` | Cards, solutions and problems ranked; intents, ideals and metrics reached through links (`solutions_and_problems_with_links`) | Mixed card and specification selection, with both existing selection metrics held |
