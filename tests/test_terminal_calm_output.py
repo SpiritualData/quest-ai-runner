@@ -236,7 +236,7 @@ def test_verbose_mode_keeps_the_full_record_in_the_transcript_for_any_logger(tmp
                     r"Some library message. With a second sentence.", log.lines[0])
 
 
-def test_a_warning_is_cut_to_the_terminal_width_on_a_clause_or_a_word(tmp_path):
+def test_a_warning_is_shown_whole_at_any_terminal_width_and_wraps_instead_of_being_cut(tmp_path):
     log = RecordingLog()
     app = SimpleNamespace(_ui_thread_id=None, size=SimpleNamespace(width=80))
     handler = _RichLogHandler(app, log, verbosity=0, log_path=tmp_path / "chat.log")
@@ -250,10 +250,12 @@ def test_a_warning_is_cut_to_the_terminal_width_on_a_clause_or_a_word(tmp_path):
         "(prune it with quarantine_cards.py)."))
     handler.close()
     shown = [ln for ln in log.lines if ln.startswith("  ⚠")]
-    assert shown[0] == "  ⚠ Context assembly timed out after 30.0s with no partial result…"
-    assert shown[1] == "  ⚠ Card store has 142781 cards; only the first 1000 are searched by meaning", (
-        "a trailing aside in parentheses is the first thing to go")
-    assert all(len(ln) <= 76 for ln in shown), "no warning line wraps in an 80-column terminal"
+    # The whole first sentence is shown, never ellipsized for the window; the terminal wraps it under its words.
+    assert shown[0] == (
+        "  ⚠ Context assembly timed out after 30.0s with no partial result; turn-start context was dropped "
+        "and this turn proceeds without it (QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust)"), shown[0]
+    assert "…" not in shown[0]
+    assert shown[1] == "  ⚠ Card store has 142781 cards; only the first 1000 are searched by meaning (prune it with quarantine_cards.py)"
 
 
 def test_a_long_first_sentence_is_ellipsized_and_a_multiline_message_uses_its_first_line():

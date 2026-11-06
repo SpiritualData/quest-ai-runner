@@ -127,8 +127,8 @@ class _RichLogConsole(_Console):
 # go to the log file only, counted in one closing line (a few are information, a dozen are noise). An error
 # is never counted away: it is always shown.
 LOG_LINE_CHARS = 110
-# The cap on a wide window: a warning is cut to the window, not to 110 characters, so a large screen shows the
-# whole sentence (110 stays the length when the window's width is unknown).
+# The cap on the first sentence of a warning shown in the transcript. It is not cut to the window: the line wraps
+# under its own words, so a narrow terminal shows the whole sentence on more rows instead of an ellipsis.
 LOG_LINE_CHARS_WIDE = 400
 LOG_LINES_SHOWN = 3
 # Seconds without a new warning after which the closing line is written (a burst is one group).
@@ -318,13 +318,9 @@ class _RichLogHandler(logging.Handler):
         return True
 
     def line_limit(self) -> int:
-        """Longest warning text that still fits one line of this terminal (``LOG_LINE_CHARS_WIDE`` at most)."""
-        try:
-            width = self._app.size.width
-        except Exception:  # noqa: BLE001
-            return LOG_LINE_CHARS
-        # The transcript's padding and scrollbar, then the "  ⚠ " that starts the line.
-        return min(LOG_LINE_CHARS_WIDE, width - 8) if width >= 40 else LOG_LINE_CHARS
+        """Longest warning text shown: the whole first sentence, up to ``LOG_LINE_CHARS_WIDE``. The line wraps
+        under its own words in the transcript, so a narrow window never cuts a warning short."""
+        return LOG_LINE_CHARS_WIDE
 
     def hint(self) -> str:
         """Where the details are."""
