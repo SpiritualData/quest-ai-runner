@@ -347,7 +347,9 @@ TASK_PAGE = 200      # newest tasks of the quest; a fingerprint only needs what 
 def fingerprint_lock(directory=None, blocking=True):
     """One fingerprint read at a time across processes (parallel lane-arm runs share the account's rate limit): an exclusive file lock in the scratch dir."""
     import os
-    path = os.path.join(directory or os.environ.get("QAR_PROD_LOCK_DIR") or tempfile.gettempdir(), LOCK_NAME)
+    # Named per system user: in a sticky /tmp one user cannot open a lock file another user created.
+    name = LOCK_NAME.replace(".lock", f"-{os.getuid()}.lock")
+    path = os.path.join(directory or os.environ.get("QAR_PROD_LOCK_DIR") or tempfile.gettempdir(), name)
     with open(path, "a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         try:
