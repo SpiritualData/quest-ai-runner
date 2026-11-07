@@ -484,6 +484,12 @@ DEEP_ACTION = """\
     is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
     current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
     treat the work outside the quest (a channel, a video, a post) as the thing you were asked to do.
+    A VAGUE CUE TO GET SOMETHING MOVING ("get the store release moving", "move the onboarding test forward", "get the first video going") names a
+    milestone, not a code or file task, even when the milestone's subject is software: the move is to record its NEXT STEP as an owned goal. Read the
+    spec records (read_spec_records) for the milestone's solution, owners and metric, then create_or_update_quest_goal titled "Pn next step: week of
+    <Monday date>" (Pn is the milestone code), assigned to one of the milestone's owners, due this week, with spec_solution_id (and spec_metric_id)
+    set. A deliverable the milestone needs (a script, a question set, a pitch) is written in the reply and recorded the same way under its own short
+    key. Set deep_target to "quest_data". Say the step, who owns it, and what only a person can do.
     ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply
     carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
     keyed by a short stable title ("FB push post A", "FB push post B") with the text, hypothesis and metric in the goal's description and
