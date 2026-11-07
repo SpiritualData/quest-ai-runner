@@ -566,6 +566,7 @@ class RunLoopMixin:
                     gathered.append(lane_gap_observation(str(gap)))
                     if exec_record is not None:
                         exec_record.facts.append(ExecutionFact(goal="tool create_or_update_quest_goal", failed=True, error=str(gap)[:280], phases=["tool_call", "failed"]))
+                gathered.extend(rs.cue_resolved.read_entries())      # what the code step read is part of the turn's reads: the writer, the figure pass and the judge see it
                 rs.cue_resolved.settle_plan(rs.plan, receipt)
             if getattr(rs.plan, "delivery", None):
                 rs.turn_delivery = rs.plan.delivery      # how the reply is delivered (spoken or written): the latest report of any step

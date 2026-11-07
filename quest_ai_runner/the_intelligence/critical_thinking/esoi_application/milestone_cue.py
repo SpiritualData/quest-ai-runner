@@ -389,6 +389,7 @@ class Resolved:
     stage_after: Optional[readiness.Stage] = None        # the same, from the goal as the write read it back
     owner_label: str = ""                                # who owns the step, as the milestone's record names them (with the account name when it differs)
     human_step: str = ""                                 # the step only a person can do, as kept in the goal
+    records_text: str = ""                               # the milestone's record and its metric records as the code read them
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
@@ -432,9 +433,36 @@ class Resolved:
         plan.confirm_question = None
         plan.asks_first = False
 
+    def current_text(self) -> str:
+        """The milestone's current value for a prompt: the fresh reading of its source when the code step has one (with its day and source), else the metric record's first sentence."""
+        if self.reading:
+            return current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"]).removeprefix(CURRENT_VALUE).strip()
+        return self.value or "not recorded yet"
+
     def allowed_text(self) -> str:
-        """Everything a draft may take its figures from: the milestone's record text and the request. A figure outside it is not in the records."""
+        """Everything a draft may take its figures from: the milestone's record text and the request. A figure outside it is not in the records. With a fresh reading the older figure of
+        the metric record (and the fact block that quotes it) is history, not a source for the draft: a draft never states a figure that contradicts the reading."""
+        if self.reading:
+            return " ".join([self.name, self.done_when, self.purpose, self.current_text(), str(self.reading.get("detail") or "")])
         return " ".join([self.name, self.done_when, self.value, self.purpose, self.facts])
+
+    def read_entries(self) -> List[Dict[str, Any]]:
+        """What the code step read, shaped like the tool results the loop gathers (``by_code``), so the writer, the figure pass and the judge see the milestone's record, the metric
+        record's text, the source's reading and the goal as it stood before and after the write."""
+        def entry(tool: str, text: str) -> Dict[str, Any]:
+            return {"kind": "query", "locator": f"tool:{tool}", "text": text, "tool_status": "applied", "by_code": True}
+        out = []
+        if self.records_text:
+            out.append(entry("read_spec_records", self.records_text))
+        if self.reading:
+            out.append(entry(READ_TOOL, current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"])
+                             + (f"\nDetail: {self.reading['detail']}" if self.reading.get("detail") else "")))
+        goal = self.week_goal()
+        if goal:
+            out.append(entry("list_quest_goals", goal_summary(goal) + "\n" + str(goal.get("text") or "")))
+        if self.after_state:
+            out.append(entry("list_quest_goals", "After the write: " + ", ".join(f"{k} {v}" for k, v in self.after_state.items() if v not in (None, ""))))
+        return out
 
     def related_text(self) -> str:
         """The person's own goals for this milestone are linked to only by being named here, in this goal's description; they are never changed."""
@@ -468,7 +496,7 @@ class Resolved:
                   'the next step (a partner pitch); for a milestone about a video, the words to be spoken, not notes about it; for copy to be compared, distinct alternatives with the metric they are '
                   'compared by; for people to be asked, few neutral questions, each a full sentence ready to send; for a new source or channel, one named concrete source with a one-line hypothesis, '
                   'a first test and the milestone metric; for a release or an announcement, the message to be published; a checklist of at most 5 steps only when none of these fits. '
-                  'Use only the facts above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
+                  'Use only the facts above; never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
                   '("I", "we", "our") unless the facts above name who is speaking; never a due date or deadline that is not in the facts above; no em dashes. '
                   'Leave no bracket slot, no angle slot and no blank to fill ("[source name]", "[link]"): fill each from the facts above and the reads; where a fact is unknown, name one concrete '
                   'candidate the records support, labelled as a candidate with why, or write the deliverable so it is sendable as it is (for example neutral questions to the person who knows)')
@@ -511,7 +539,9 @@ class Resolved:
         if not asks:
             return {"owners": [], "goal_id": "", "draft": kept_draft, "human_step": kept_step}
         outputs = str(self.row.get("outputs") or "").strip()[:PURPOSE_CHARS]
-        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
+        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.current_text()}."
+                        + (f" The metric record's older text, history only and not the current value: {self.value}." if self.reading and self.value else "")
+                        + f"\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
                         + (f"What the milestone produces:\n{outputs}\n\n" if outputs else "")
                         + f"Open goals on the same quest:\n{listing}\n\nReturn JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
         data = parse_json(answer)
@@ -704,6 +734,16 @@ def read_through(registry: Any, quest_id: str) -> Tuple[Mapping[str, Any], str]:
     return data.get("records") or {}, str(data.get("time_zone") or "")
 
 
+def records_read(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], rid: str, row: Mapping[str, Any]) -> str:
+    """The milestone's record and its metric records as the code read them, in words a reader of the turn's reads can check a figure or a date against."""
+    parts = [f"Milestone record: {row.get('name') or rid}. Done when: {str(row.get('milestones') or '').strip()}. Purpose: {str(row.get('purpose') or '').strip()}. "
+             f"Outputs: {str(row.get('outputs') or '').strip()}. Measures of success: {str(row.get('measures_of_success') or '').strip()}."]
+    for _, metric in metrics_of(tables, rid):
+        parts.append(f"Metric record: {metric.get('name')}. Recorded: {str(metric.get('record') or '').strip()}. Source: {metric.get('source') or ''}. "
+                     f"Measured through: {metric.get('measured_through') or ''}.")
+    return "\n".join(parts)
+
+
 def goals_through(registry: Any, quest_id: str) -> List[Mapping[str, Any]]:
     """The quest's goals, open and finished, from the lane's ``list_quest_goals`` tool. A lane without it, or a read that fails, is a ``LaneGap``: the reply must not claim a
     step is new when the goals could not be read."""
@@ -749,5 +789,5 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id,
         done_when=str(row.get("milestones") or "").strip()[:VALUE_CHARS].rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
-        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row),
+        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row), records_text=records_read(tables, rid, row),
         record_date=measured_through_of(tables, rid, row) or next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", str(metric.get("record") or ""))), "") if metric else "")

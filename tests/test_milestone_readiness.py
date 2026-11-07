@@ -259,3 +259,28 @@ def test_the_reply_names_the_owner_as_the_record_names_them_wherever_it_writes_t
     res = SimpleNamespace(kind="answer", text="Updated, and SpiritOps owns it.", deep_results=[])
     messages.close_with_metric(SimpleNamespace(tools=None), rs, res)
     assert res.text.startswith("Updated, and Travis (account SpiritOps) owns it.") and "of 5" not in res.text
+
+
+def test_a_draft_is_given_the_fresh_reading_as_current_and_never_states_the_older_figure():
+    calls, reads, asked = [], [], []
+    def decide(prompt):
+        asked.append(prompt)
+        return json.dumps({"draft": "Confirm the current pass rate of 83.3 percent.\nConfirm the subset pass rate of 73.8 percent with the owner.", "human_step": "Confirm the subset."})
+    step = resolved(sourced_tools(calls, reads))
+    step.carry_out(sourced_tools(calls, reads), decide)
+    ask = next(a for a in asked if "Return JSON" in a)
+    assert "Current value: 73.8 percent (as of 2026-11-07, from the coverage report)" in ask
+    assert "history only and not the current value: Provisional 83.3 percent" in ask and "never state a figure that contradicts the current value" in ask
+    assert "83.3" not in calls[0]["description"].split("Draft:")[1] and "73.8 percent" in calls[0]["description"].split("Draft:")[1]
+
+
+def test_what_the_code_step_read_joins_the_turns_gathered_reads():
+    calls, reads = [], []
+    step = resolved(sourced_tools(calls, reads))
+    step.carry_out(sourced_tools(calls, reads), answer_for)
+    entries = step.read_entries()
+    by_tool = {e["locator"]: e["text"] for e in entries}
+    assert all(e["by_code"] and e["kind"] == "query" for e in entries)
+    assert "Provisional 83.3 percent" in by_tool["tool:read_spec_records"] and "Measured through: 2026-10-31" in by_tool["tool:read_spec_records"]
+    assert "Current value: 73.8 percent (as of 2026-11-07, from the coverage report)" in by_tool["tool:read_metric_source"]
+    assert any(e["text"].startswith("After the write:") for e in entries)
