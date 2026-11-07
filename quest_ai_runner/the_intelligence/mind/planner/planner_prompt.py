@@ -490,6 +490,9 @@ DEEP_ACTION = """\
     <Monday date>" (Pn is the milestone code), assigned to one of the milestone's owners, due this week, with spec_solution_id (and spec_metric_id)
     set. A deliverable the milestone needs (a script, a question set, a pitch) is written in the reply and recorded the same way under its own short
     key. Set deep_target to "quest_data". Say the step, who owns it, and what only a person can do.
+    NEVER ASK WHICH MILESTONE. When the chat has no open quest, read_spec_records on the quests listed in context (find_quest lists them), most
+    likely first, and take the milestone whose name best fits the cue (a "first product video" fits "foundational product videos"). Ask only when two
+    milestones fit equally well, and then name both.
     ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply
     carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
     keyed by a short stable title ("FB push post A", "FB push post B") with the text, hypothesis and metric in the goal's description and
