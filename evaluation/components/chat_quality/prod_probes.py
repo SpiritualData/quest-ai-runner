@@ -72,7 +72,7 @@ def matches(item, match, min_len=None):
         value = item if key == "*" else pick_of(item, name) if "." in name else item.get(name, "")
         have = json.dumps(value, default=str) if key == "*" else str(value if value is not None else "")
         for text in (want if isinstance(want, list) else [want]):
-            text = str(text).strip().lower()
+            text = str(text).lstrip().lower() if key.startswith("^") else str(text).strip().lower()      # a prefix keeps its trailing space ("p1 " is not "p10")
             if key.startswith("="):
                 ok = have.strip().lower() == text
             elif key.startswith("^"):

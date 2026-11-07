@@ -203,3 +203,8 @@ def test_pre_existing_applies_only_to_ensure_one_cases_whose_state_already_met_t
     assert P.pre_existing({"group": "milestone"}, checks, [3]) is False
     assert P.pre_existing({"increment_kind": "next_step"}, checks, [3]) is False
     assert P.message_standard({"effect": {"allow": [{"tool": "x"}]}, "already_there": True}) == "single"
+
+
+def test_a_prefix_keeps_its_trailing_space_so_one_milestone_code_is_not_another():
+    assert P.matches({"name": "P1 Onboarding next step"}, {"^name": "P1 "})
+    assert not P.matches({"name": "P10 100 users next step"}, {"^name": "P1 "})
