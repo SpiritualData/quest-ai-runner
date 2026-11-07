@@ -22,7 +22,7 @@ def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys():
     picked = cue.select(TABLES, "lets get the apple store release moving")
     assert picked and picked[0] == "esr_c"
     block = cue.fact_block(TABLES, "lets get the apple store release moving", monday="2026-11-02")
-    assert "esr_c" in block and "esr_mc" in block and "Owners: Cy, Di" in block and "P3 next step: week of 2026-11-02" in block and "No. Apple lookup" in block
+    assert "esr_c" in block and "esr_mc" in block and "Owners: Cy, Di" in block and "P3 next step: week of 2026-11-02" in block and "Current value: No." in block
 
 
 def test_another_cue_finds_another_milestone():
@@ -66,3 +66,10 @@ def test_a_pinned_turn_shows_the_planner_the_cue_facts_and_an_unpinned_one_does_
                      tools=ToolRegistry([spec])).run("lets get the apple store release moving", **kw)
         return provider.plan_prompts[0]
     assert "CUE FACTS" in run(quest_id="q1") and "CUE FACTS" not in run()
+
+
+def test_the_cue_facts_are_read_as_a_milestone_measure_for_the_status_message():
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    block = cue.fact_block(TABLES, "lets get the apple store release moving", monday="2026-11-02")
+    reading = act_status.pick_reading(act_status.readings_in([{"text": block}]), "apple store release")
+    assert reading.milestone.startswith("P3 Mobile app live on the Apple Store") and reading.value.startswith("No") and "App Store" in reading.done_when

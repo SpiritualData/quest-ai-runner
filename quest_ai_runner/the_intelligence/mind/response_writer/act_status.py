@@ -28,6 +28,7 @@ MAX_FACTS = 3
 SEGMENT_END = r"(?=\s+(?:Done when|Current value|Metric|Source|Deadline|Owner|Milestone)\s*:|\s\|\s|\n|$)"
 CURRENT_VALUE = re.compile(r"current value\s*:\s*(.*?)" + SEGMENT_END, re.IGNORECASE)
 DONE_WHEN = re.compile(r"done when\s*:\s*(.*?)" + SEGMENT_END, re.IGNORECASE)
+MILESTONE_LINE = re.compile(r"^\s*-\s+Milestone:\s*(?P<title>.*?)\s\|\s", re.IGNORECASE)
 GOAL_LINE = re.compile(r"^\s*-\s+(?P<id>\S+)\s+\[[^\]]*\].*?\bfor [^:\n]+:\s*(?P<title>.*?)(?:\s\|\s|$)", re.IGNORECASE)
 WORDS = re.compile(r"[a-z]{4,}")
 
@@ -75,10 +76,10 @@ def readings_in(entries: Iterable[Any]) -> List[MetricReading]:
             done = DONE_WHEN.search(line)
             if not value and not done:
                 continue
-            goal = GOAL_LINE.match(line)
+            goal = GOAL_LINE.match(line) or MILESTONE_LINE.match(line)
             figure = (value.group(1).strip().rstrip(".") if value else "")
             out.append(MetricReading(
-                record_id=goal.group("id") if goal else "", milestone=(goal.group("title").strip() if goal else ""),
+                record_id=(goal.groupdict().get("id") or "") if goal else "", milestone=(goal.group("title").strip() if goal else ""),
                 done_when=(done.group(1).strip().rstrip(".") if done else ""), value=figure or NOT_RECORDED, call=call))
     return out
 

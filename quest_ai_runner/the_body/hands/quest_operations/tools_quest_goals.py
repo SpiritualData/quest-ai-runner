@@ -50,6 +50,9 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
                 "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed."}[state]
+        recorded = str(args.get("description") or "").strip()
+        if recorded and state != "unchanged":
+            said += f" Recorded text: {recorded[:500]}"          # the reply restates what was recorded, including each alternative's hypothesis and metric
         if outcome["copies"]:
             said += f" Note: {outcome['copies']} more goal(s) carry the same title; only the first was touched."
         return ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data=data, text=said)

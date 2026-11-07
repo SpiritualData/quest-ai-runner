@@ -125,6 +125,8 @@ def build_arm(meter, bounded):
     if (rules.get("_arm") or {}).get("measure_every_request"):      # the metric of a change is read before and after by code (critical-thinking: every_request_measured)
         cfg.selections = {**(cfg.selections or {}), "critical-thinking": "every_request_measured"}
     session = InteractiveSession(cfg, rep_name=os.environ.get("QAR_REP_NAME") or "Assistant", rep_specified=False, persona_specified=False)
+    if str(os.environ.get("QUEST_AI_INCREMENTAL_REPLIES_ENABLED", "")).strip().lower() in ("1", "true", "yes", "on"):
+        session._orch.cfg.interim_replies = True      # the same switch the Quest app's chat sets (backend incremental_replies), so an act turn sends its status first
     print(f"chat_quality: acting as {acted_as} on {os.environ.get('QUEST_BASE_URL')}")
     print(f"chat_quality: production lane configuration, {'only the case-allowed writes made, the rest' if bounded else 'writes'} blocked, Quest {os.environ.get('QUEST_BASE_URL', '?')}, "
           f"per-case caps {CASE_MODEL_CALL_CAP} model calls / {CASE_SECONDS_CAP}s, run budget "

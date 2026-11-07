@@ -497,7 +497,9 @@ DEEP_ACTION = """\
     ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply
     carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
     keyed by a short stable title ("FB push post A", "FB push post B") with the text, hypothesis and metric in the goal's description and
-    spec_solution_id of the solution they serve (from read_spec_records). Repeating the request updates the same goals. Say they are recorded.
+    spec_solution_id of the solution they serve (from read_spec_records; the solution for acquiring subscribers or users when the posts are for a
+    push). Repeating the request updates the same goals. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
+    compared by ("signups per post from its link"), and says they are recorded.
     DELIVERABLE IN THE REPLY. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
     set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the

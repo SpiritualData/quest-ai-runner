@@ -44,38 +44,54 @@ def solutions_of(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> List[
             if str(row.get("milestones") or "").strip() and (metrics_of(tables, rid) or row.get("measures_of_success"))]
 
 
-def scored(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str) -> List[Tuple[float, str, Mapping[str, Any]]]:
-    solutions = solutions_of(tables)
-    docs: List[Dict[str, set]] = []
-    for rid, row in solutions:
-        linked = [m for _, m in metrics_of(tables, rid)]
-        docs.append({"name": set(words(row.get("name"))),
-                     "metric": set(w for m in linked for w in words(m.get("name"))),
-                     "text": set(w for field in ("milestones", "purpose", "measures_of_success", "outputs") for w in words(row.get(field)))})
+def index_of(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> Dict[str, Any]:
+    """A specification index of the quest's milestones in the shape ``spec-selection`` reads: one ``solution`` entry per milestone (its name as the
+    title, its milestone, purpose and measures as the summary, and the names of the metrics that measure it)."""
+    entries = []
+    for rid, row in solutions_of(tables):
+        linked = metrics_of(tables, rid)
+        entries.append({"id": rid, "kind": "solution", "title": str(row.get("name") or ""),
+                        "summary": " ".join(str(row.get(f) or "") for f in ("milestones", "purpose", "measures_of_success", "outputs")),
+                        "metric_title": " ".join(str(m.get("name") or "") for _, m in linked)})
+    return {"version": 1, "entries": entries}
+
+
+def rank(index: Mapping[str, Any], cue: str) -> List[Tuple[float, Mapping[str, Any]]]:
+    """``(score, entry)`` for the entries the cue fits well enough, in the quest's own order among near-equals: the best, then every entry within ``CLOSE`` of it."""
+    entries = list(index.get("entries") or [])
+    docs = [{"name": set(words(e.get("title"))), "metric": set(words(e.get("metric_title"))), "text": set(words(e.get("summary")))} for e in entries]
     wanted = set(words(cue))
     containing = {w: sum(1 for d in docs if any(w in part for part in d.values())) for w in wanted}
-    result = []
-    for (rid, row), doc in zip(solutions, docs):
+    scores = []
+    for entry, doc in zip(entries, docs):
         score = 0.0
         for w in wanted:
-            if not containing.get(w):
-                continue
-            idf = math.log(1 + len(docs) / containing[w])
-            score += idf * max(NAME_WEIGHT * (w in doc["name"]), METRIC_WEIGHT * (w in doc["metric"]), TEXT_WEIGHT * (w in doc["text"]))
-        result.append((score, rid, row))
-    return result
+            if containing.get(w):
+                idf = math.log(1 + len(docs) / containing[w])
+                score += idf * max(NAME_WEIGHT * (w in doc["name"]), METRIC_WEIGHT * (w in doc["metric"]), TEXT_WEIGHT * (w in doc["text"]))
+        scores.append((score, entry))
+    best = max((sc for sc, _ in scores), default=0.0)
+    if best < MIN_SCORE:
+        return []
+    return [(sc, e) for sc, e in scores if sc >= CLOSE * best]
 
 
 def select(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str) -> Optional[Tuple[str, Mapping[str, Any], List[str]]]:
-    """``(solution id, its row, ids of the close runners-up)`` for the milestone the cue concerns, else None when nothing fits well enough."""
-    ranked = scored(tables, cue)
-    if not ranked:
+    """``(solution id, its row, ids of the close runners-up)`` for the milestone the cue concerns, chosen by the ``spec-selection`` arm for a quest's records
+    (``quest-records-idf``), else None when nothing fits well enough."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection import quest_records_idf
+    chosen = quest_records_idf(cue, index_of(tables)).ids
+    if not chosen:
         return None
-    best = max(score for score, _, _ in ranked)
-    if best < MIN_SCORE:
-        return None
-    close = [(rid, row) for score, rid, row in ranked if score >= CLOSE * best]     # in the quest's own order, so the first is the one it lists first
-    return close[0][0], close[0][1], [rid for rid, _ in close[1:]]
+    solutions = dict(solutions_of(tables))
+    return chosen[0], solutions[chosen[0]], chosen[1:]
+
+
+def first_sentence(text: str, limit: int = 160) -> str:
+    """The start of a recorded value, cut at a sentence end or the limit: enough to say where the measure stands."""
+    text = " ".join(text.split())
+    cut = re.search(r"[.;](\s|$)", text[:limit])
+    return (text[:cut.start()] if cut else text[:limit]).strip()
 
 
 def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, monday: str = "") -> str:
@@ -91,10 +107,11 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
     code = (CODE.match(name) or [None, ""])[1]
     owners = (OWNERS.search(str(row.get("purpose") or "")) or [None, ""])[1].strip()
     owners = re.sub(r"\s*\(rep_\w+\)", "", owners)
+    value = first_sentence(str(metric.get("record") or "")) if metric else ""
     lines = [f"CUE FACTS (found by code from the quest's own records, not by you). The cue concerns the milestone {name!r}, solution {rid}.",
-             f"- Done when: {str(row.get('milestones') or '').strip()[:VALUE_CHARS]}"]
+             f"- Milestone: {name} | Done when: {str(row.get('milestones') or '').strip()[:VALUE_CHARS].rstrip('.')} | Current value: {value or 'not recorded yet'}."]
     if metric:
-        lines.append(f"- Metric {metric_ids[0]} {metric.get('name')!r}, current value as recorded: {str(metric.get('record') or '').strip()[:VALUE_CHARS]}")
+        lines.append(f"- Metric record {metric_ids[0]} ({metric.get('name')}); its full recorded text is in read_spec_records.")
     if owners:
         lines.append(f"- Owners: {owners}")
     if ties:

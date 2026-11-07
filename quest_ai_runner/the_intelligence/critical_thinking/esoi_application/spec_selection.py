@@ -114,6 +114,15 @@ def lexical_only(task: str, index: Dict[str, Any], *, provider: Any = None, mode
     return run("lexical", task, index, None, None, None, k_lexical, k_vector, batch_size, max_workers, expand, kinds)
 
 
+@implementation("spec-selection", "quest-records-idf")
+def quest_records_idf(task: str, index: Dict[str, Any], **ignored: Any) -> SpecSelection:
+    """The milestone records of one quest a short cue concerns: rarity-weighted word overlap with each milestone's name, metric names and text, the best and
+    any near-equal one in the quest's own order. No model and no vector search. ``index`` is ``milestone_cue.index_of`` over the quest's records."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+    found = [search_lib.Found(kind=e["kind"], id=e["id"], source="lexical", title=e.get("title", ""), key=e["id"]) for _, e in milestone_cue.rank(index, task)]
+    return SpecSelection(items=found, candidates=[f.key for f in found], route="lexical")
+
+
 SELECT_SPEC = declare(
     "spec-selection.batch-judge", solution="spec-selection", metric="metric-spec-selection",
     tier="caller", cache_layer="none", template=SELECT_PROMPT)
