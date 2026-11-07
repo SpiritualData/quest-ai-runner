@@ -126,7 +126,7 @@ def test_every_request_measured_carries_the_metric_records_own_readings_into_bot
 
 
 def test_the_closing_metric_line_is_one_clean_line_or_none_and_never_a_piece_of_the_records_text():
-    raw = "Re-read 2026-10-31 22:01 UTC (Payal pass): still No. The listing was checked again and nothing has changed since the earlier pass."
+    raw = "Re-read 2026-10-31 22:01 UTC (Pat pass): still No. The listing was checked again and nothing has changed since the earlier pass."
     sentence = "50.0 percent (5 of 10) of OUTSIDE new sign-ups in the last 30 days have created a first quest"
     fragment = "0 of 6 on the working list (niche videos 1 to 6), read 2026-"
     short = lambda value: act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", value)
@@ -247,11 +247,11 @@ def test_the_already_set_sentence_says_where_it_is_with_the_quests_name_and_no_i
     tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True),
                           make_spec("list_quest_workflows", handler=lambda a, c: ToolResult(ok=True), mutates=False)])
     there = {"kind": "query", "locator": "tool:create_quest_workflow", "tool_status": "noop", "tool_data": WORKFLOW_THERE}
-    read = {"kind": "query", "locator": "tool:list_quest_workflows", "tool_status": "applied", "tool_data": [{"workflow_id": "qwf_1", "quest_name": "1000 Subscribers"}]}
+    read = {"kind": "query", "locator": "tool:list_quest_workflows", "tool_status": "applied", "tool_data": [{"workflow_id": "qwf_1", "quest_name": "Launch Signups"}]}
     res = SimpleNamespace(kind="answer", text="long model text")
     assert settle_already_set(SimpleNamespace(tools=tools), SimpleNamespace(gathered=[read, there], status_first=None), res)
     assert res.text == ("It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November), "
-                        "on the 1000 Subscribers quest's Workflows page.")
+                        "on the Launch Signups quest's Workflows page.")
     assert "quest_" not in res.text and "qwf_" not in res.text
     nameless = SimpleNamespace(kind="answer", text="x")
     settle_already_set(SimpleNamespace(tools=tools), SimpleNamespace(gathered=[{**read, "tool_data": [{"workflow_id": "qwf_1"}]}, there], status_first=None), nameless)
@@ -265,7 +265,7 @@ def test_the_workflow_listing_rows_carry_the_quests_plain_name():
 
     class Named(ListingClient):
         def get_my_quest(self, quest_id):
-            return {"state": {"outcome": "1000 Subscribers: reach one thousand paying subscribers by spring"}}
+            return {"state": {"outcome": "Launch Signups: reach one thousand paying subscribers by spring"}}
     spec = ops.list_quest_workflows_spec({"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "k"}, client_factory=lambda: Named(PRODUCTION_SHAPED))
     rows = spec.handler({}, ToolContext(quest_id="q1")).data
-    assert rows[0]["quest_name"] == "1000 Subscribers"
+    assert rows[0]["quest_name"] == "Launch Signups"

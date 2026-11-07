@@ -105,9 +105,9 @@ def test_the_output_log_adds_a_readable_text_of_every_message(tmp_path):
 
 
 def test_state_checks_count_by_meaning_not_exact_title():
-    step = {"title": "Check how the 1000 subscribers are doing", "timing": {"repeat": {"freq": "weekly", "byWeekday": [0]}}}
+    step = {"title": "Check how the launch signups are doing", "timing": {"repeat": {"freq": "weekly", "byWeekday": [0]}}}
     other = {"title": "Saturday pass", "timing": {"repeat": {"freq": "weekly", "byWeekday": [5]}}}
-    match = {"=timing.repeat.freq": "weekly", "timing.repeat.byWeekday": "[0]", "*": ["1000 SUBSCRIBERS"]}
+    match = {"=timing.repeat.freq": "weekly", "timing.repeat.byWeekday": "[0]", "*": ["LAUNCH SIGNUPS"]}
     assert P.matches(step, match) and not P.matches(other, match)
     assert P.matches({"name": "P1 next step: week of x"}, {"^name": "p1 next step"}) and not P.matches({"name": "Do P1 next step"}, {"^name": "P1 next step"})
 
@@ -163,10 +163,10 @@ def test_interim_replies_are_on_in_the_production_arms_unless_the_environment_tu
 def test_the_after_state_is_the_tools_own_read_back_and_the_accepted_owners_are_the_cases():
     import prod_probes as P
     gathered = [{"locator": "tool:create_or_update_quest_goal", "after_state": {"name": "P3 next step", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc",
-                                                                                  "assignee_name": "Kaja", "period": "2026_W45"}}, {"locator": "x"}, "text"]
+                                                                                  "assignee_name": "Kim", "period": "2026_W45"}}, {"locator": "x"}, "text"]
     assert P.after_states(gathered) == [gathered[0]["after_state"]] and P.after_states(None) == []
-    effect = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"title~": "P3 ", "assignee~": ["Kaja", "Honelign"]}}]}
-    assert P.accepted_owners(effect) == ["Kaja", "Honelign"] and P.accepted_owners({}) == []
+    effect = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"title~": "P3 ", "assignee~": ["Kim", "Hana"]}}]}
+    assert P.accepted_owners(effect) == ["Kim", "Hana"] and P.accepted_owners({}) == []
 
 
 WORKFLOW_STATE_CHECK = {"read": "/api/workflows?quest_id=quest_x", "list_key": "items.steps",

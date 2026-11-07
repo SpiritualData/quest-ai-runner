@@ -109,11 +109,11 @@ def test_apply_spec_edit_rejects_a_malformed_change():
 
 
 def test_allowlist_names_nested_and_prefix_arguments():
-    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title~": "P1 next step: week of ", "assignee": "Zee"}},
+    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title~": "P1 next step: week of ", "assignee": "Sam"}},
                         {"tool": "apply_spec_edit", "args": {"quest_id": "q1", "change.kind": "milestone_add", "change.target": "esr_x"}}])
     try:
-        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "title": "P1 next step: week of 2026-11-02", "assignee": "Zee"})
-        assert not dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "title": "P1 next step: week of 2026-11-02", "assignee": "Kaja"})
+        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "title": "P1 next step: week of 2026-11-02", "assignee": "Sam"})
+        assert not dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "title": "P1 next step: week of 2026-11-02", "assignee": "Kim"})
         assert dry.tool_allowed("apply_spec_edit", {"quest_id": "q1", "change": {"kind": "milestone_add", "target": "esr_x", "key": "k"}})
         assert not dry.tool_allowed("apply_spec_edit", {"quest_id": "q1", "change": {"kind": "record_add", "target": "esr_x"}})
     finally:
@@ -129,10 +129,10 @@ def test_dry_run_tells_a_quest_less_call_to_name_the_quest_not_that_it_was_block
 
 
 def test_a_rule_value_may_be_a_list_of_owners_matched_by_first_name():
-    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "assignee~": ["Kaja", "Honelign"]}}])
+    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "assignee~": ["Kim", "Hana"]}}])
     try:
-        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "Kaja Obinna"})
-        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "honelign"})
+        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "Kim Okoye"})
+        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "hana"})
         assert not dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "Mary"})
     finally:
         dry.set_allowances([])

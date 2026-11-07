@@ -22,7 +22,7 @@ NOTE = "Two email campaigns are ready and awaiting my preview before they go out
 def test_first_person_words_copied_from_a_record_are_found_and_the_assistants_own_are_not():
     assert copied_first_person("Two campaigns are waiting for my preview before they go out.", [NOTE]) == ["my preview before"]
     assert copied_first_person("I could not re-check it after 5 Nov.", [NOTE]) == []
-    assert copied_first_person("Two campaigns await Zee's preview.", [NOTE]) == []
+    assert copied_first_person("Two campaigns await Sam's preview.", [NOTE]) == []
 
 
 def test_the_voice_check_runs_on_information_and_spoken_shapes_and_not_elsewhere():

@@ -458,7 +458,7 @@ CLARIFY_DIRECTIVE = (
 
 VOICE_NOTE = (
     " Records may be written in the first person by whoever authored them: never copy I, my, me or our from a record, say whose it is by name "
-    "(\"waiting for Zee's preview\"). Use \"I\" only for what you yourself did or could not do this turn.")
+    "(\"waiting for Sam's preview\"). Use \"I\" only for what you yourself did or could not do this turn.")
 
 SPOKEN_DIRECTIVE = (
     "--- THIS REPLY IS READ ALOUD (set by the planner) ---\n"
