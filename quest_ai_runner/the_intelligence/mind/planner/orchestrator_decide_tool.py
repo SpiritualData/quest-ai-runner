@@ -265,7 +265,7 @@ DECIDE_TOOL: Dict[str, Any] = {
         },
         # REQUIRED, like card_thread: an optional field is one a model quietly omits, and every
         # omission costs an intent-judge call on an answer turn.
-        "required": ["action", "rationale", "user_intent", "pending_read", "facts_read"],
+        "required": ["action", "rationale", "user_intent", "pending_read", "facts_read", "deep_target"],
     },
 }
 
