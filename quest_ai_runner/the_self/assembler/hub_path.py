@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-HUB_REQUIREMENT = "hubofhubs[locks] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.3.0"
+HUB_REQUIREMENT = "hubofhubs[locks] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.4.0"
 
 
 def sibling_checkout(package_file: str) -> Optional[Path]:

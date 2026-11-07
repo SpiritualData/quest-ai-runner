@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quest-ai-runner"
-version = "0.2.0"
+version = "0.3.0"
 description = "The orchestrator brain (importable core) plus the queued-task executor (runner) for Quest AI tasks. Generic, no consumer-specific logic."
 readme = "README.md"
 requires-python = ">=3.11"  # tomllib (RunnerConfig.from_file) is 3.11+
@@ -48,16 +48,16 @@ dependencies = [
     "openpyxl>=3.1",
     # Declares each swappable implementation beside its code (`@implementation`) and selects one at run time
     # (core/resolve.py) and runs the one-line entry (esoi.entry). Core, since the adapters import it; no dependencies of its own.
-    # Pinned to the release tag v0.4.0, with the string identical to quest-backend's and conceptai's: two different direct URLs
+    # Pinned to the release tag v0.5.0, with the string identical to quest-backend's and conceptai's: two different direct URLs
     # for one package cannot be installed together (the 2026-10-19 production image build failed that way). Every library tag
     # changes in every consumer at once, at each release.
-    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.4.0#subdirectory=implementations/python",
+    "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.5.0#subdirectory=implementations/python",
     # The hub of hubs: the registry of AI-intelligence hubs, the seats (Protocols) and the assembly that wires them. QAR is
     # Quest's connector and the production consumer: quest_ai_runner/the_self/assembler/hub.py imports it at startup and registers QAR's parts.
-    # Required, not an extra, and pinned to the release tag v0.3.0, the same tag in every consumer (pushed to the hub's remote before QAR's tag).
+    # Required, not an extra, and pinned to the release tag v0.4.0, the same tag in every consumer (pushed to the hub's remote before QAR's tag).
     # QAR imports the hub only through `hubofhubs.api` and `hubofhubs.run`. Its own dependency is `esoi` (bare), met by the esoi line above.
     # Dev and tests may use the sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
-    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.3.0",
+    "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.4.0",
 ]
 
 [project.optional-dependencies]
