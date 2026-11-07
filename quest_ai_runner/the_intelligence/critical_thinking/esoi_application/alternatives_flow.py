@@ -9,11 +9,13 @@ created, and what they are compared by. Nothing is decided from the words of the
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 
+log = logging.getLogger("quest-ai-runner.alternatives")
 STATE_WORDS = {"created": "created", "updated": "already tracked, copy updated", "unchanged": "already tracked"}
 
 
@@ -58,25 +60,48 @@ def build_prompt(cue: str, reply: str, goals: Sequence[Mapping[str, Any]], solut
     return ("A person asked for content in their quest's chat:\n" + str(cue).strip()[:800] + "\n\nThe reply written for them:\n" + str(reply).strip()[:5000]
             + "\n\nGoals the quest ALREADY holds for this (id | title | linked solution):\n" + goal_lines + "\n\nThe quest's solutions (solution id | name | metric id | metric name):\n" + solution_lines
             + "\n\nIf the reply holds two or more alternatives of one thing meant to be compared (versions of a post, a headline, a message), return JSON "
-              '{"alternatives":[{"title":"...","goal_id":"...","text":"the alternative in full","hypothesis":"one line","solution_id":"...","metric_id":"..."}]} with one entry per alternative. '
+              '{"alternatives":[{"title":"...","goal_id":"...","starts_with":"the first six words of the alternative exactly as the reply writes them","hypothesis":"one line","solution_id":"...","metric_id":"..."}]} with one entry per alternative, in the order they appear in the reply. '
               "Adopting an existing goal ALWAYS wins over a new title: when a goal above tracks that alternative, or is the next free one of the same series (A, B, C), give its goal_id and keep its title "
               "exactly. Use a new title only when no goal above can hold the alternative, and then continue the series and style of the titles above. Choose solution_id and metric_id from the list above (the solution these alternatives serve), or leave them empty. "
               'Write no em dashes. If the reply does not hold alternatives to compare, return {"alternatives":[]}. Reply with the JSON only.')
 
 
-def parse(answer: str, goal_ids: Sequence[str], solutions: Sequence[Mapping[str, str]]) -> List[Alternative]:
-    """The alternatives in the model's JSON, with every id checked against what it was offered (an id it was not offered is dropped, never trusted)."""
+def segment(reply: str, starts: Sequence[str]) -> List[str]:
+    """Each alternative's text, cut out of the reply: from where its first words occur to where the next one's begin (the last to the end of the reply, at most 1500 characters).
+    "" for one whose first words are not found. The model names only where each begins, so its answer stays short and the text is the reply's own."""
+    low = reply.casefold()
+    positions, cursor = [], 0
+    for start in starts:
+        at = low.find(" ".join(str(start).split()).casefold(), cursor) if str(start).strip() else -1
+        positions.append(at)
+        cursor = at + 1 if at >= 0 else cursor
+    out = []
+    for i, at in enumerate(positions):
+        if at < 0:
+            out.append("")
+            continue
+        following = next((p for p in positions[i + 1:] if p > at), len(reply))
+        out.append(reply[at:following].strip()[:1500])
+    return out
+
+
+def parse(answer: str, goal_ids: Sequence[str], solutions: Sequence[Mapping[str, str]], reply: str = "") -> List[Alternative]:
+    """The alternatives in the model's JSON, with every id checked against what it was offered (an id it was not offered is dropped, never trusted). The text of each is cut from the reply
+    where its first words begin (``segment``), else the text the model gave."""
     text = str(answer or "")
     start, end = text.find("{"), text.rfind("}")
     try:
         data = json.loads(text[start:end + 1]) if start >= 0 and end > start else {}
     except ValueError:
         return []
+    items = [i for i in ((data.get("alternatives") or []) if isinstance(data, dict) else []) if isinstance(i, dict)]
+    cut = segment(reply, [i.get("starts_with") or "" for i in items])
     valid = {(s["solution_id"], s["metric_id"]) for s in solutions}
     solution_ids = {s["solution_id"] for s in solutions}
     out: List[Alternative] = []
-    for item in (data.get("alternatives") or []) if isinstance(data, dict) else []:
-        if not isinstance(item, dict) or not str(item.get("title") or "").strip() or not str(item.get("text") or "").strip():
+    for item, body in zip(items, cut):
+        body = body or str(item.get("text") or "").strip()
+        if not str(item.get("title") or "").strip() or not body:
             continue
         solution, metric = str(item.get("solution_id") or ""), str(item.get("metric_id") or "")
         if solution not in solution_ids:
@@ -84,7 +109,7 @@ def parse(answer: str, goal_ids: Sequence[str], solutions: Sequence[Mapping[str,
         elif metric and (solution, metric) not in valid:
             metric = ""
         goal = str(item.get("goal_id") or "")
-        out.append(Alternative(str(item["title"]).strip(), str(item["text"]).strip(), str(item.get("hypothesis") or "").strip(), goal if goal in goal_ids else "", solution, metric))
+        out.append(Alternative(str(item["title"]).strip(), body, str(item.get("hypothesis") or "").strip(), goal if goal in goal_ids else "", solution, metric))
     return out if len(out) >= 2 else []
 
 
@@ -115,8 +140,10 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     tables, _ = milestone_cue.read_through(registry, quest_id)
     goals = goals_for_cue(milestone_cue.goals_through(registry, quest_id), cue)
     solutions = solutions_listing(tables)
-    alts = parse(decide(build_prompt(cue, reply, goals, solutions)), {str(g.get("id")) for g in goals}, solutions)
+    answer = decide(build_prompt(cue, reply, goals, solutions))
+    alts = parse(answer, {str(g.get("id")) for g in goals}, solutions, reply)
     if not alts:
+        log.info("alternatives flow: no alternatives to keep in the reply (model answer: %r)", str(answer)[:300])
         return ""
     by_title = {str(g.get("title") or "").strip().casefold(): str(g.get("id")) for g in goals}
     taken = {a.goal_id for a in alts if a.goal_id}

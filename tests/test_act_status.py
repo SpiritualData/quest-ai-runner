@@ -84,7 +84,7 @@ def test_a_repeated_act_request_reports_what_is_already_there_without_a_second_w
                  registry(state, writes, existing=True))
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
     assert writes == [] and "It's already set." in result["text"] and "The weekly check-in is already on the quest" not in result["text"]
-    assert "unchanged, still 15." in result["text"]
+    assert "unchanged: 15." in result["text"]
 
 
 def test_no_recorded_value_is_said_not_filled_in():
@@ -132,9 +132,9 @@ def test_the_closing_metric_line_is_one_clean_line_or_none_and_never_a_piece_of_
     short = lambda value: act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", value)
     assert act_status.closing_lines(short(raw), None, reread=True, already=[]) == ""                       # not read again: no line
     assert act_status.closing_lines(short(raw), short(raw), reread=True, already=[]) == ""                 # a sentence is not a value: no line
-    assert act_status.closing_lines(short(sentence), short(sentence), reread=True, already=[]) == ""
-    assert act_status.closing_lines(short(fragment), short(fragment), reread=True, already=[]) == ""       # a cut-off fragment: no line
-    assert act_status.closing_lines(short("No"), short("No"), reread=True, already=[]) == "Metric (P3 Mobile app live): unchanged, still No."
+    assert act_status.closing_lines(short(sentence), short(sentence), reread=True, already=[]) == "Metric (P3 Mobile app live): unchanged: 50.0 percent."     # the leading figure, not the sentence
+    assert act_status.closing_lines(short(fragment), short(fragment), reread=True, already=[]) == "Metric (P3 Mobile app live): unchanged: 0 of 6."          # never a cut-off fragment
+    assert act_status.closing_lines(short("No"), short("No"), reread=True, already=[]) == "Metric (P3 Mobile app live): unchanged: No."
     assert act_status.closing_lines(short("still No"), short("Yes"), reread=True, already=[]) == "Metric (P3 Mobile app live): was No, now Yes."
     assert act_status.closing_lines(short("3"), short("5"), reread=True, already=["It's already set."]) == "Metric (P3 Mobile app live): was 3, now 5.\nIt's already set."
 

@@ -431,6 +431,16 @@ def settle_already_set(orch: Any, rs: Any, res: Any) -> bool:
     return True
 
 
+def metric_written(orch: Any, rs: Any) -> bool:
+    """True when a tool that edits a specification record (the metric's value) ended applied this turn."""
+    tools = getattr(orch, "tools", None)
+    for item in getattr(rs, "gathered", None) or []:
+        locator = str(item.get("locator") or "") if isinstance(item, dict) else ""
+        if locator == "tool:apply_spec_edit" and item.get("tool_status") in ("applied", None):
+            return True
+    return False
+
+
 def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
     """MESSAGE 2 of an act request: the reply ends with the metric before and after (read again by code) and anything already in place.
     Nothing is added to a turn that sent no first message, so an information request or a plain reply stays one message."""
@@ -449,6 +459,8 @@ def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
                 after = act_status.MetricReading(before.record_id, before.milestone, before.done_when, act_status.format_figure(row.get("after")))
         if after is None and before is not None:
             after = reread_metric(orch, rs, before)
+        if after is None and before is not None and not metric_written(orch, rs):
+            after = before       # nothing this turn wrote the metric record, so its value is what was read: unchanged
         tail = act_status.closing_lines(before, after, reread=before is not None, already=already_in_place(rs.gathered),
                                         voice=bool(sent.get("voice")))
     except Exception:  # noqa: BLE001 -- the closing lines must never lose the reply

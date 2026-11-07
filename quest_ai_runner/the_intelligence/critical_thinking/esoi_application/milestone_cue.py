@@ -136,14 +136,21 @@ def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: 
 
 
 def applied_write_ran(gathered: Iterable[Mapping[str, Any]], registry: Any) -> bool:
-    """True when a tool that changes something ended applied or already-there this turn. A write that was refused, blocked or held did not change anything, so it is not a rung taken."""
+    """True when a tool that changes something ended applied or already-there this turn and the write is one that stands in for the step: not a goal the planner wrote for something
+    else (a deliverable goal under its own title is not the milestone's keyed next step). A write that was refused, blocked or held changed nothing."""
+    from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_keyed_next_step
     if registry is None:
         return False
     for item in gathered:
         locator = str(item.get("locator") or "") if isinstance(item, Mapping) else ""
         spec = registry.get(locator[5:]) if locator.startswith("tool:") else None
-        if spec is not None and getattr(spec, "mutates", False) and item.get("tool_status") in ("applied", "noop", None):
-            return True
+        if spec is None or not getattr(spec, "mutates", False) or item.get("tool_status") not in ("applied", "noop", None):
+            continue
+        if locator == "tool:create_or_update_quest_goal" and not item.get("by_code"):
+            title = ((item.get("call") or {}).get("args") or {}).get("title")
+            if title and not is_keyed_next_step(title):
+                continue
+        return True
     return False
 
 
@@ -157,6 +164,21 @@ def parse_json(answer: str) -> Dict[str, Any]:
     except ValueError:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def supported_draft(draft: str, allowed: str) -> str:
+    """The draft without any line that states a figure the records do not hold (a count of its own characters, an invented rate): a figure outside the milestone's record text is
+    unsupported and its line is dropped, so a draft never carries a number that came from nowhere. List numbering and a [bracket] are not figures."""
+    from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import FIGURE
+    held = set(FIGURE.findall(allowed or ""))          # whole figures only: 12 is not held because 2026-12-31 contains it
+    kept = []
+    for line in str(draft or "").splitlines():
+        body = re.sub(r"^\s*(?:[-*\u2022]\s*)?\d+[.)]\s+", "", line)
+        body = re.sub(r"\[[^\]]*\]", "", body)
+        if any(f not in held for f in FIGURE.findall(body)):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def draft_of(goal_text: str) -> str:
@@ -323,10 +345,14 @@ class Resolved:
         plan.confirm_question = None
         plan.asks_first = False
 
+    def allowed_text(self) -> str:
+        """Everything a draft may take its figures from: the milestone's record text and the request. A figure outside it is not in the records."""
+        return " ".join([self.name, self.done_when, self.value, self.purpose, self.facts])
+
     def related_text(self) -> str:
         """The person's own goals for this milestone are linked to only by being named here, in this goal's description; they are never changed."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_keyed_next_step
-        titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not is_keyed_next_step(g.get("title"))][:4]
+        from quest_ai_runner.the_body.hands.quest_operations.goal_links import adoptable
+        titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not adoptable(g.get("title"), next_step_title(self.name, self.week))][:4]
         return (" Related goals on the quest: " + "; ".join(titles) + ".") if titles else ""
 
     def goal_arguments(self) -> Dict[str, Any]:
@@ -351,31 +377,32 @@ class Resolved:
         """The three things that need reading the record text, in ONE cheap call: ``owner`` (when the record's ``tracking_owner`` names nobody, the person the purpose text names as
         doing the work), ``goal_id`` (the keyed next-step goal on the quest that is already this milestone's next step, any week, any older title; only keyed goals are offered,
         a person's goal never is) and ``draft`` (the cheap deliverable for the step, kept in the goal; not asked again when the existing keyed goal already holds one)."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_keyed_next_step
-        keyed = [g for g in self.candidates if is_keyed_next_step(g.get("title"))]
+        from quest_ai_runner.the_body.hands.quest_operations.goal_links import adoptable
+        keyed = [g for g in self.candidates if adoptable(g.get("title"), next_step_title(self.name, self.week))]       # the step's own earlier goals only; a person's goal is never offered
         if decide is None:
-            return {"owner": "", "goal_id": "", "draft": ""}
+            return {"owners": [], "goal_id": "", "draft": ""}
         this_week = next((g for g in keyed if str(g.get("title") or "").strip() == next_step_title(self.name, self.week)), None)
         kept_draft = draft_of(str((this_week or {}).get("text") or ""))
         listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in keyed) or "(none)"
         asks = []
         if not self.owners and self.purpose.strip():
-            asks.append('"owner": one owner\'s name as written in the milestone text above who does the hands-on work (not one who only reviews or approves), or "" when it names no owner')
+            asks.append('"owners": every person named as an owner in the milestone text above, as written (names only, no team names), the one who does the hands-on work first, or [] when it names none')
         if keyed:
             asks.append('"goal_id": the id, exactly as listed, of the open goal below that is already the next step of this milestone (the same work, whatever its title or week), or ""')
         if not kept_draft:
             asks.append('"draft": the deliverable itself, never a plan to write it, finished enough to use as it is, under 150 words, in the form the milestone text calls for: copy that is to be compared comes as distinct alternatives '
                         'with the metric they are compared by; questions to put to people are few, neutral and ready to send as written; a new source or channel is one named concrete '
                         'source with a one-line hypothesis, a first test and the milestone metric; otherwise a checklist of at most 7 steps. Use only the facts above; a [bracket] only for a fact that is truly unknown (a link); '
-                        'no prices, dates, counts or claims that are not given above; no em dashes')
+                        'no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no em dashes')
         if not asks:
-            return {"owner": "", "goal_id": "", "draft": kept_draft}
+            return {"owners": [], "goal_id": "", "draft": kept_draft}
         answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
                         f"Open goals on the same quest:\n{listing}\n\nReturn JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
         data = parse_json(answer)
         goal = str(data.get("goal_id") or "")
-        return {"owner": str(data.get("owner") or "").strip(" .'\""), "goal_id": goal if goal in {str(g.get("id")) for g in keyed} else "",
-                "draft": kept_draft or str(data.get("draft") or "").strip()}
+        named = data.get("owners") if isinstance(data.get("owners"), list) else [data.get("owner")]
+        return {"owners": [str(n).strip(" .'\"") for n in named if n and str(n).strip(" .'\"")], "goal_id": goal if goal in {str(g.get("id")) for g in keyed} else "",
+                "draft": kept_draft or supported_draft(str(data.get("draft") or "").strip(), self.allowed_text())}
 
     def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None) -> Tuple[str, str]:
         """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is
@@ -391,7 +418,7 @@ class Resolved:
             picked = self.choices(decide)
         except Exception as error:      # noqa: BLE001  the choice failed: surfaced, not guessed
             raise LaneGap(f"choosing the owner or the existing goal failed ({type(error).__name__}: {error})") from error
-        owners = list(self.owners) or ([picked["owner"]] if picked["owner"] else [])
+        owners = list(self.owners) or list(picked["owners"])
         if picked["goal_id"]:
             base["adopt_goal_id"] = picked["goal_id"]
         if picked["draft"]:
@@ -416,7 +443,7 @@ class Resolved:
                 return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
                         f"Open the reply with exactly this sentence: \"{lead}\" Then say who owns it and what only a person can do, "
                         "and do not offer to do it or ask whether to. This request is carried out: ask the person nothing, propose no new date, and do not move the milestone's own date. "
-                        "Show the kept draft exactly as given and state no count of its items."), result.status.value
+                        "Show the kept draft exactly as given and state no count of its items. State no figure that is not in the records."), result.status.value
             if owner and "assignee" in str(result.text):
                 refused.append(f"{owner}: {str(result.text).strip()[:160]}")
                 continue

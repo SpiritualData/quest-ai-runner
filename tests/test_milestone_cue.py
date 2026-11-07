@@ -915,3 +915,83 @@ def test_the_reply_is_told_to_ask_nothing_and_never_to_move_the_milestones_own_d
     receipt, _ = resolved.carry_out(registry(calls))
     assert "ask the person nothing, propose no new date" in receipt and "state no count of its items" in receipt
     assert "never means rescheduling the milestone's own date" in resolved.facts
+
+
+# ---- run 3 of the milestone baseline
+
+def test_a_goal_the_flow_wrote_earlier_under_the_milestones_own_title_is_found_and_updated_in_place_never_duplicated_and_a_persons_goal_is_not():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    name = "P3 Mobile app live on the Apple Store"
+    earlier = {"id": "e1", "name": f"{name} mentor ad draft", "spec_solution_id": None, "period": "2026_W44", "description": "old draft"}
+    person = dict(HUMAN)
+    client = GoalClient([dict(earlier), person])
+    done = goal_links.ensure_goal(client, "q1", f"{name} next step: week of 2026-11-02", "2026_W45", {"spec_solution_id": "esr_c"}, None, "e1", True)
+    assert done["state"] == "updated" and client.posts == [] and [p[0] for p in client.puts] == ["e1"]
+    assert goal_links.adoptable(f"{name} anything", f"{name} next step: week of 2026-11-09") and not goal_links.adoptable(HUMAN["name"], f"{name} next step: week of 2026-11-09")
+    assert not goal_links.adoptable("P3", "P3 next step: week of 2026-11-09")       # a bare code is too little to claim a goal
+    client = GoalClient([dict(earlier, spec_solution_id="esr_c")])
+    assert goal_links.ensure_goal(client, "q1", f"{name} next step: week of 2026-11-02", "2026_W45", {"spec_solution_id": "esr_c"}, None, None, True)["state"] == "updated" and client.posts == []
+
+
+def test_a_draft_loses_every_line_that_states_a_figure_the_records_do_not_hold_and_keeps_numbering_and_brackets():
+    allowed = "P12 Announce integrations. Done when: 0 integrations announced. Target 2026-12-31."
+    draft = "Short description (66 characters)\n1. Tested and ready: new integrations\n2. Click-through of 4.2 percent expected\n3. Built for your workflow [link]\nTarget 2026-12-31 stays."
+    kept = cue.supported_draft(draft, allowed)
+    assert kept == "1. Tested and ready: new integrations\n3. Built for your workflow [link]\nTarget 2026-12-31 stays." and "66" not in kept and "4.2" not in kept
+    assert cue.supported_draft("Only 77 percent", allowed) == ""
+
+
+def test_the_kept_draft_never_carries_an_unsupported_figure_even_when_the_model_writes_one():
+    calls = []
+    resolved = cue.resolve(registry(calls), "q1", CUE)
+    resolved.carry_out(registry(calls), lambda prompt: json.dumps({"draft": "Headline A\nHeadline B (about 9 words)\nHeadline C"}))
+    assert calls[0]["description"].endswith("Draft: Headline A\nHeadline C") and "9 words" not in calls[0]["description"]
+
+
+def test_a_deliverable_goal_the_planner_wrote_under_its_own_title_does_not_stand_in_for_the_milestones_next_step():
+    from hubofhubs.api import PlanDecision
+    resolved = cue.resolve(registry(), "q1", CUE)
+    tools = ToolRegistry([ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=lambda a, c: ToolResult(ok=True))])
+    deliverable = {"locator": "tool:create_or_update_quest_goal", "tool_status": "applied", "call": {"name": "create_or_update_quest_goal", "args": {"title": "P3 Mobile app listing copy"}}}
+    keyed = {"locator": "tool:create_or_update_quest_goal", "tool_status": "applied", "call": {"name": "create_or_update_quest_goal", "args": {"title": "P3 next step: week of 2026-11-02"}}}
+    plan = PlanDecision(action="answer")
+    assert resolved.routes_to_code(plan, "act", [deliverable], tools) is True and resolved.routes_to_code(plan, "act", [keyed], tools) is False
+
+
+def test_each_owner_the_record_names_is_tried_in_turn_and_a_team_name_is_not_asked_for():
+    calls, asked = [], []
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Cy, Di."}}}
+    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
+    tools = ToolRegistry([read, list_goals([]), write_goal(calls, refuse=("Cy",))])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owners": ["Cy", "Di"]}))
+    assert [c.get("assignee") for c in calls] == ["Cy", "Di"] and "names only, no team names" in asked[0]
+
+
+def test_the_closing_line_reports_unchanged_from_the_read_when_nothing_wrote_the_metric():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, metric_written
+    before = act_status.MetricReading("esr_c", "P3 Mobile app live on the Apple Store", "App live", "0 of 6 on the working list (niche videos 1 to 6), read 2026-")
+    rs = SimpleNamespace(status_first={"before": before, "voice": False}, gathered=[], turn_metrics=None, quest_id="q1")
+    res = SimpleNamespace(kind="answer", text="I recorded the step.", deep_results=[])
+    close_with_metric(SimpleNamespace(tools=None), rs, res)
+    assert res.text.endswith("Metric (P3 Mobile app live on the Apple Store): unchanged: 0 of 6.") and "niche" not in res.text
+    written = SimpleNamespace(status_first={"before": before, "voice": False}, gathered=[{"locator": "tool:apply_spec_edit", "tool_status": "applied"}], turn_metrics=None, quest_id="q1")
+    assert metric_written(SimpleNamespace(tools=None), written) is True
+    changed = SimpleNamespace(kind="answer", text="Recorded.", deep_results=[])
+    close_with_metric(SimpleNamespace(tools=None), written, changed)
+    assert "Metric" not in changed.text            # a metric that was written and not read again is not claimed unchanged
+
+
+def test_the_alternatives_are_cut_from_the_reply_by_where_each_begins_so_the_models_answer_stays_short():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    reply = ("**Post 1** Spiritual growth does not have to be vague. What if you could set an intention and track it?\n\n**Post 2** Most people quit because nobody walks it with them. "
+             "Quest gives you small daily steps.")
+    answer = json.dumps({"alternatives": [{"title": "Push post A", "starts_with": "Spiritual growth does not have", "hypothesis": "intention hook"},
+                                          {"title": "Push post B", "starts_with": "Most people quit because", "hypothesis": "company hook"}]})
+    alts = alternatives_flow.parse(answer, set(), [], reply)
+    assert [a.title for a in alts] == ["Push post A", "Push post B"]
+    assert alts[0].text.startswith("Spiritual growth") and "Most people" not in alts[0].text and alts[1].text.startswith("Most people") and alts[1].text.endswith("small daily steps.")
+    assert alternatives_flow.parse('{"alternatives": [{"title": "A", "starts_with": "nowhere in the reply"}, {"title": "B", "starts_with": "also nowhere"}]}', set(), [], reply) == []
+    assert alternatives_flow.parse('{"alternatives": [{"title": "A", "starts_wi', set(), [], reply) == []

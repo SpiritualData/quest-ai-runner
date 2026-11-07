@@ -243,25 +243,35 @@ def short_value(value: str) -> str:
 
 
 CLEAN_VALUE_CHARS = 48
+LEADING_FIGURE = re.compile(r"^\s*(\d+(?:[.,]\d+)?\s*(?:%|percent\b|of\s+\d+(?:[.,]\d+)?\b)?)")
+YES_NO = re.compile(r"^\s*(yes|no)\b", re.IGNORECASE)
 
 
 def clean_value(value: str) -> str:
-    """The recorded value as one short figure or phrase, or "" when the record holds a sentence or a fragment (a reader sees a clean value or none, never a cut-off piece of the record)."""
-    text = short_value(value)
-    raw = " ".join(str(value or "").split())
-    return text if text != NOT_RECORDED and len(raw.removeprefix("still ")) <= CLEAN_VALUE_CHARS and raw.count("(") == raw.count(")") else ""
+    """The recorded value as one short figure or phrase, never a piece of the record's sentence: a short record is itself; a longer one gives its leading figure ("0 of 6", "50.0 percent")
+    or its leading Yes or No; anything else gives "" (a reader sees a clean value or none)."""
+    raw = " ".join(str(value or "").split()).removeprefix("still ").strip()
+    if not raw or raw == NOT_RECORDED:
+        return ""
+    if len(raw) <= CLEAN_VALUE_CHARS and raw.count("(") == raw.count(")"):
+        return short_value(raw)
+    for pattern in (LEADING_FIGURE, YES_NO):
+        found = pattern.match(raw)
+        if found:
+            return found.group(1).strip()
+    return ""
 
 
 def closing_lines(before: Optional[MetricReading], after: Optional[MetricReading], *, reread: bool,
                   already: Sequence[str], voice: bool = False) -> str:
-    """The code-written tail of message 2: ONE clean metric line, or none. The metric line needs the value before and after, both short recorded values (the same record read again): the
-    milestone's name, "unchanged, still X" or "was X, now Y". A value that is a sentence or a fragment, or a record that could not be read again, gives no metric line. Then what was already in place."""
+    """The code-written tail of message 2: ONE clean metric line, or none: the milestone's name and the value before and after ("unchanged: 0 of 6" or "was 3, now 5"), each a short value
+    from the record (``clean_value``). No line when the record holds no value that can be shown cleanly. Then what was already in place."""
     lines: List[str] = []
     if before is not None and after is not None:
         was, now = clean_value(before.value), clean_value(after.value)
         label = (before.milestone or before.done_when or "")[:70].strip()
         if was and now and label:
-            lines.append(f"Metric ({label}): unchanged, still {was}." if now == was else f"Metric ({label}): was {was}, now {now}.")
+            lines.append(f"Metric ({label}): unchanged: {was}." if now == was else f"Metric ({label}): was {was}, now {now}.")
     if already and not voice:
         lines.append(" ".join(already[:2]))
     return "\n".join(lines)

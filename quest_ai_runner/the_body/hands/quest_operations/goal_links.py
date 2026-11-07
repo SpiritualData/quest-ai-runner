@@ -87,6 +87,22 @@ def is_keyed_next_step(title: Any) -> bool:
     return bool(KEYED_NEXT_STEP.search(str(title or "")))
 
 
+NEXT_STEP_TAIL = re.compile(r"\s*next step: week of \d{4}-\d{2}-\d{2}\s*$")
+MIN_MILESTONE_TITLE = 8
+
+
+def milestone_of(title: Any) -> str:
+    """The milestone's own title inside a keyed goal title ("<milestone title> next step: week of YYYY-MM-DD"), else the title as it is."""
+    return NEXT_STEP_TAIL.sub("", str(title or "")).strip()
+
+
+def adoptable(target_title: Any, new_title: Any) -> bool:
+    """True when a goal may be taken over by the keyed next step ``new_title``: it is a keyed next step itself, or its title starts with the milestone's own title (a goal this
+    flow wrote for the milestone earlier, such as a deliverable goal). A person's goal, whose title carries neither, is never touched."""
+    milestone = milestone_of(new_title)
+    return is_keyed_next_step(target_title) or (len(milestone) >= MIN_MILESTONE_TITLE and str(target_title or "").strip().casefold().startswith(milestone.casefold()))
+
+
 def is_link_refusal(error: Any) -> bool:
     """True when Quest refused a write because of the strategy or metric link on it (its 400 says the id is not a strategy of the quest, or not the strategy's metric)."""
     text = str(error).lower()
@@ -104,7 +120,7 @@ def linked_open_goal(goals: List[Dict[str, Any]], solution_id: str, title: str) 
     """The id of the open goal already linked to ``solution_id``, the one whose name shares the longest start with ``title`` when several are: code decides this, no model."""
     import os.path
     linked = [g for g in goals if str(g.get("spec_solution_id") or "") == solution_id and not g.get("completed") and not g.get("abandoned")
-              and is_keyed_next_step(g.get("name"))]
+              and adoptable(g.get("name"), title)]
     if not linked:
         return None
     best = max(linked, key=lambda g: len(os.path.commonprefix([str(g.get("name") or ""), title])))
@@ -203,7 +219,7 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
     if not found and link_match and fields.get("spec_solution_id"):
         # Idempotent in code: a goal already linked to this strategy is the goal, updated in place, before any create. The model's pick below is only for older goals with no link.
         adopt_goal_id = linked_open_goal(goals, str(fields["spec_solution_id"]), title) or adopt_goal_id
-    if adopt_goal_id and not is_keyed_next_step(next((g.get("name") for g in goals if str(g.get("id")) == str(adopt_goal_id)), "")):
+    if adopt_goal_id and not adoptable(next((g.get("name") for g in goals if str(g.get("id")) == str(adopt_goal_id)), ""), title):
         adopt_goal_id = None       # never take over a goal that is not a keyed next step: it is a person's, and stays exactly as it is
     if not found and adopt_goal_id:
         # The same work already exists under an older title: it is updated in place (renamed to the key, linked, moved to the period), never duplicated.
