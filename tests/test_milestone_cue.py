@@ -26,7 +26,7 @@ from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, Tool
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 
 CUE = "lets get the apple store release moving"
-GOALS = [{"id": "g1", "title": "esr_c next step: week of 2026-10-26", "spec_solution_id": "esr_c", "completed": True, "abandoned": False, "due": "2026-11-01",
+GOALS = [{"id": "g1", "title": "esr_c next step: week of 2026-10-26", "spec_solution_id": "esr_c", "completed": False, "abandoned": False, "due": "2026-11-01",
           "assignee_name": "Cy"},
          {"id": "g2", "title": "Unrelated", "spec_solution_id": None, "completed": False, "abandoned": False, "due": None}]
 
@@ -60,17 +60,17 @@ def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys_owners_and_goals
     picked = cue.select(TABLES, CUE)
     assert picked and picked[0] == "esr_c"
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02", goals=GOALS, zone="America/Los_Angeles")
-    assert "esr_c" in block and "esr_mc" in block and "Owners the record lists: Cy, Di" in block and "esr_c next step: week of 2026-11-02" in block
-    assert "Current value: No." in block and "Goals already on the quest for this milestone" in block and "already there" in block and "esr_c next step: week of 2026-10-26" in block
+    assert "esr_c" in block and "esr_mc" in block and "tracking_owner: Cy, Di" in block and "esr_c next step: week of 2026-11-02" in block
+    assert "Current value: No." in block and "Open goals on the quest that may be" in block and "already there" in block and "esr_c next step: week of 2026-10-26" in block
     assert "Unrelated" not in block and "America/Los_Angeles" in block
 
 
-def test_the_facts_give_the_increment_order_and_no_owner_is_taken_from_the_purpose_text():
+def test_the_facts_give_the_increment_order_and_the_full_purpose_text_for_the_model_to_assign_from():
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02")
     assert block.index("1. a deliverable") < block.index("2. else a metric value") < block.index("3. else an owned next step")
     tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Zed."}}}
     block = cue.fact_block(tables, CUE)
-    assert "Zed" not in block and "none recorded on the milestone" in block
+    assert "Owners: Zed." in block and "tracking_owner: empty" in block and "never ask who should own it" in block
 
 
 def test_another_cue_finds_another_milestone():
@@ -215,3 +215,63 @@ def test_the_default_arm_of_place_on_a_quest_has_a_module_that_registers_it():
     assert entry["default"] in entry["modules"], "the shipped default names no module that registers it"
     module = importlib.import_module(entry["modules"][entry["default"]])
     assert getattr(module.HostFunction, "__name__", "") == "HostFunction"
+
+
+OLD_GOAL = {"id": "g9", "title": "P3 next step: week of 2026-11-02", "text": "send the listing", "spec_solution_id": None, "completed": False, "abandoned": False, "due": "2026-11-08"}
+
+
+def test_an_old_format_goal_sharing_the_milestones_code_and_words_is_listed_as_a_candidate_and_finished_or_unrelated_ones_are_not():
+    name = "P3 Mobile app live on the Apple Store"
+    done = dict(OLD_GOAL, id="g8", completed=True)
+    other = dict(OLD_GOAL, id="g7", title="Plan the offsite")
+    found = cue.candidate_goals([OLD_GOAL, done, other, *GOALS], "esr_c", name)
+    assert [g["id"] for g in found] == ["g9"]
+    assert "P3 next step: week of 2026-11-02" in cue.fact_block(TABLES, CUE, monday="2026-11-09", goals=[OLD_GOAL])
+
+
+def test_the_model_decides_the_existing_goal_and_the_owner_from_the_record_text_and_the_goal_is_updated_in_place():
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Cy and Di."}}}
+
+    class Tools(ToolRegistry):
+        pass
+    calls = []
+    read = ToolSpec(name="read_spec_records", description="d", mutates=False,
+                    handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
+    tools = ToolRegistry([read, list_goals([OLD_GOAL]), write_goal(calls)])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    asked = []
+
+    def decide(prompt):
+        asked.append(prompt)
+        return "g9" if "Open goals" in prompt else "Cy"
+    receipt, _ = resolved.carry_out(tools, decide)
+    assert len(asked) == 2 and calls[0]["adopt_goal_id"] == "g9" and calls[0]["assignee"] == "Cy" and calls[0]["title"] == "esr_c next step: week of 2026-11-02"
+    calls.clear()
+    resolved.receipt = ""
+    resolved.carry_out(tools, lambda prompt: "NONE")
+    assert "adopt_goal_id" not in calls[0] and "assignee" not in calls[0]       # no owner named, no same goal: created unassigned
+
+
+def test_adopting_an_existing_goal_renames_links_and_moves_it_and_a_repeat_is_already_there():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+
+    class Client:
+        def __init__(self):
+            self.goals = [{"id": "g9", "name": "P3 next step: week of 2026-11-02", "period": "2026_W45", "description": "x"}]
+            self.updates = []
+
+        def list_quest_goals(self, quest_id):
+            return {"period_groups": [{"goals": self.goals}]}
+
+        def update_goal(self, goal_id, fields):
+            self.updates.append((goal_id, fields))
+            self.goals[0]["name"] = fields.get("title", self.goals[0]["name"])
+            self.goals[0].update({k: v for k, v in fields.items() if k != "title"})
+            return object()
+    client = Client()
+    fields = {"description": "d", "spec_solution_id": "esr_c"}
+    first = goal_links.ensure_goal(client, "q1", "esr_c next step: week of 2026-11-09", "2026_W46", fields, None, "g9")
+    assert first["state"] == "updated" and client.updates[0][0] == "g9" and client.updates[0][1]["title"] == "esr_c next step: week of 2026-11-09"
+    assert client.updates[0][1]["spec_solution_id"] == "esr_c" and len(client.goals) == 1
+    again = goal_links.ensure_goal(client, "q1", "esr_c next step: week of 2026-11-09", "2026_W46", fields, None, "g9")
+    assert again["state"] == "unchanged" and len(client.updates) == 1

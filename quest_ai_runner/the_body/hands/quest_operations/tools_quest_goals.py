@@ -35,7 +35,8 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 assignee_id, why = goal_links.resolve_assignee(client, quest_id, args["assignee"])
                 if why:
                     return ToolResult(ok=False, text=f"Nothing was written: {why}")
-            outcome = goal_links.ensure_goal(client, quest_id, title, period, goal_links.link_fields(args), assignee_id)
+            outcome = goal_links.ensure_goal(client, quest_id, title, period, goal_links.link_fields(args), assignee_id,
+                                             str(args.get("adopt_goal_id") or "").strip() or None)
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was written")
         state, writes = outcome["state"], outcome["writes"]
@@ -88,6 +89,9 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 "target_value": {"type": "number", "description": "Target number, when it has one."},
                 "target_unit": {"type": "string", "description": "Unit of the target."},
                 **goal_links.LINK_PARAMS,
+                "adopt_goal_id": {"type": "string",
+                                  "description": ("The id of an existing open goal that is the same work under an older title. When no goal has this exact title, that goal is "
+                                                  "renamed to this title and updated in place instead of a second goal being created.")},
                 "user_asked_for_this_field": {
                     "type": "boolean",
                     "description": ("True when the user's own message asks for the work this goal records: a request to do or write something, "

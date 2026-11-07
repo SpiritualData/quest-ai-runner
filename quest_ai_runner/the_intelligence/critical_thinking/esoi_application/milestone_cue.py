@@ -16,7 +16,7 @@ import datetime
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 STOP = frozenset("""a about all also an and any are as at be been but by can could do does for from get go going had has have how i in into is it its let lets
 make me more my need new next not now of on one or our out please so some than that the their them then there these they this to up us want was we were what
@@ -25,6 +25,7 @@ NAME_WEIGHT, METRIC_WEIGHT, TEXT_WEIGHT = 3.0, 2.0, 1.0
 MIN_SCORE = 2.0
 CLOSE = 0.85           # a runner-up at this share of the best score counts as a tie
 VALUE_CHARS = 220
+PURPOSE_CHARS = 1200
 ACT = "act"
 CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify")    # a plan that, for an act cue, the flow step takes over
 DELIVERABLE_TARGET = "draft_in_chat"                              # the planner reports a deliverable written in the reply: the first rung of the increment order
@@ -138,8 +139,29 @@ def next_step_title(rid: str, week: Week) -> str:
     return f"{rid} next step: week of {week.monday}"
 
 
+def is_open(goal: Mapping[str, Any]) -> bool:
+    return not goal.get("completed") and not goal.get("abandoned")
+
+
+def candidate_goals(goals: Sequence[Mapping[str, Any]], rid: str, name: str) -> List[Mapping[str, Any]]:
+    """The open goals that plausibly belong to the milestone: linked to its solution record, titled with its record id, or sharing words with the milestone's own name
+    (two or more, or its first word, which is its code when it has one). Candidates only: the model decides which of them is the same milestone."""
+    name_words = [w for w in re.findall(r"[a-z0-9]+", name.lower()) if w not in STOP]
+    first = name_words[0] if name_words else ""
+    out = []
+    for goal in goals:
+        if not is_open(goal):
+            continue
+        title_words = set(re.findall(r"[a-z0-9]+", str(goal.get("title") or "").lower()))
+        shared = {w for w in name_words if w in title_words}
+        if (str(goal.get("spec_solution_id") or "") == rid or str(goal.get("title") or "").startswith(rid + " ")
+                or len(shared) >= 2 or (first and first in title_words)):
+            out.append(goal)
+    return out
+
+
 def linked_goals(goals: Sequence[Mapping[str, Any]], rid: str) -> List[Mapping[str, Any]]:
-    """The goals already on the quest for this milestone: linked to its solution record, or titled with its record id (the key every goal of it carries)."""
+    """The goals already on the quest for this milestone by id: linked to its solution record, or titled with its record id (the key every goal of it carries)."""
     return [g for g in goals if str(g.get("spec_solution_id") or "") == rid or str(g.get("title") or "").startswith(rid + " ")]
 
 
@@ -173,12 +195,14 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
              f"- Milestone: {name} | Done when: {str(row.get('milestones') or '').strip()[:VALUE_CHARS].rstrip('.')} | Current value: {value or 'not recorded yet'}."]
     if metric:
         lines.append(f"- Metric record {metric_ids[0]} ({metric.get('name')}); its full recorded text is in read_spec_records.")
-    lines.append("- Owners the record lists: " + (", ".join(owners) if owners else "none recorded on the milestone, so say the step has no recorded owner and name no one"))
+    lines.append(f"- Purpose as recorded (it names the owners): {str(row.get('purpose') or '').strip()[:PURPOSE_CHARS] or 'none recorded'} | tracking_owner: {', '.join(owners) or 'empty'}")
+    lines.append("- Assign from the owners named in that purpose text or tracking_owner; any listed owner is acceptable, so never ask who should own it. Leave it unassigned only when no owner is named anywhere.")
     if ties:
         lines.append("- Close runners-up (the quest lists this one first): " + ", ".join(f"{t} {str((tables['solutions'].get(t) or {}).get('name') or '')[:50]!r}" for t in ties))
-    already = linked_goals(goals, rid)
-    lines.append("- Goals already on the quest for this milestone: " + ("; ".join(goal_summary(g) for g in already) if already
-                 else "none") + (". Say 'already there' for a step or deliverable listed here and do not create it again." if already else "."))
+    already = candidate_goals(goals, rid, name)
+    lines.append("- Open goals on the quest that may be this milestone's (linked to it, keyed with its record id, or sharing its name; the code decides which is the same milestone when it records the step): "
+                 + ("; ".join(goal_summary(g) for g in already) if already else "none")
+                 + (". If the step exists here, it is updated in place, not created again: say 'already there' or 'updated', never that nothing was recorded." if already else "."))
     lines.append(f"- Keys: this week's next step is the goal titled '{rid} next step: week of {monday or '<Monday date>'}'"
                  + (f" (week read in {zone})" if zone else " (the quest records no time zone, so UTC)") + f", linked to spec_solution_id {rid}"
                  + (f" and spec_metric_id {metric_ids[0]}" if metric_ids else "") + f"; a deliverable is a goal titled '{rid} <short name>'. The tool reports created, updated or already there.")
@@ -200,6 +224,8 @@ class Resolved:
     quest_id: str
     done_when: str = ""
     value: str = ""
+    purpose: str = ""
+    candidates: List[Mapping[str, Any]] = field(default_factory=list)
     receipt: str = field(default="")
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
@@ -218,16 +244,45 @@ class Resolved:
             args["spec_metric_id"] = self.metric_ids[0]
         return args
 
-    def carry_out(self, registry: Any) -> Tuple[str, str]:
-        """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. Each listed owner is tried as the assignee in turn; with none that Quest accepts
-        the step is written unassigned and the receipt says so. A tool the lane lacks, or a write that failed or is held, is a ``LaneGap`` carrying the tool's own words."""
+    def choose_assignee(self, decide: Optional[Callable[[str], str]]) -> List[str]:
+        """The names to try as assignee, in order: the record's ``tracking_owner`` people; else, when the purpose text is all the record says, the owner the model picks
+        from that text (it replies one name as written there, or NONE). Empty when no owner is named anywhere."""
+        if self.owners:
+            return list(self.owners)
+        if decide is None or not self.purpose.strip():
+            return []
+        answer = decide("Below is the recorded text of a milestone. It may name the people who own it.\n\n" + self.purpose[:PURPOSE_CHARS]
+                        + "\n\nReply with exactly one owner's name as written there, or the single word NONE when it names no owner. Reply with nothing else.").strip()
+        return [] if not answer or answer.upper().startswith("NONE") else [answer.splitlines()[0].strip(" .'\"")]
+
+    def choose_adoption(self, decide: Optional[Callable[[str], str]]) -> str:
+        """The id of the open goal that is already this milestone's next step (any week, any older title), as the model decides among the candidates; "" when none is."""
+        if decide is None or not self.candidates:
+            return ""
+        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in self.candidates)
+        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}.\n\nOpen goals on the same quest:\n{listing}\n\nIs one of these goals the next step of this milestone "
+                        "(the same work, whatever its title or week)? Reply with that goal's id exactly as listed, or the single word NONE. Reply with nothing else.")
+        return next((str(g.get("id")) for g in self.candidates if str(g.get("id")) and str(g.get("id")) in answer), "")
+
+    def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None) -> Tuple[str, str]:
+        """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is
+        updated in place (renamed to the key, linked, moved to the week), never duplicated; a repeat finds the keyed goal and says it is already there. Each owner is tried as
+        assignee in turn; with none that Quest accepts the step is written unassigned and the receipt says so. A tool the lane lacks, or a write that failed or is held, is a
+        ``LaneGap`` carrying the tool's own words. ``decide(prompt) -> text`` is one cheap model call used for the two choices that need reading the record text."""
         from quest_ai_runner.the_world.tools.tools import ToolContext
         if registry is None or registry.get("create_or_update_quest_goal") is None:
             raise LaneGap("this lane has no create_or_update_quest_goal tool, so the next step could not be recorded")
         ctx = ToolContext(quest_id=self.quest_id)
         base = self.goal_arguments()
+        try:
+            adopt = self.choose_adoption(decide)
+            owners = self.choose_assignee(decide)
+        except Exception as error:      # noqa: BLE001  the choice failed: surfaced, not guessed
+            raise LaneGap(f"choosing the owner or the existing goal failed ({type(error).__name__}: {error})") from error
+        if adopt:
+            base["adopt_goal_id"] = adopt
         refused: List[str] = []
-        for owner in [*self.owners, ""]:
+        for owner in [*owners, ""]:
             args = dict(base, assignee=owner) if owner else dict(base)
             try:
                 result = registry.invoke("create_or_update_quest_goal", args, ctx)
@@ -296,4 +351,5 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week,
         facts=fact_block(tables, cue, week.monday, goals, zone), quest_id=quest_id,
         done_when=str(row.get("milestones") or "").strip()[:VALUE_CHARS].rstrip("."),
-        value=first_sentence(str(metric.get("record") or "")) if metric else "")
+        value=first_sentence(str(metric.get("record") or "")) if metric else "",
+        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)))

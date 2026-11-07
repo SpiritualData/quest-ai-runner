@@ -525,7 +525,7 @@ class RunLoopMixin:
                     and rs.cue_resolved.routes_to_code(rs.plan, rs.turn_user_intent, gathered, self.tools)):
                 rs.cue_step_attempted = True
                 try:
-                    receipt, tool_status = rs.cue_resolved.carry_out(self.tools)
+                    receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision)
                     gathered.append(receipt_observation("create_or_update_quest_goal", receipt, tool_status))
                 except milestone_cue.LaneGap as gap:
                     log.warning("milestone cue: lane gap: %s", gap)

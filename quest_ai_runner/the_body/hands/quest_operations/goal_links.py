@@ -76,13 +76,22 @@ def goal_changes(goal: Mapping[str, Any], wanted: Mapping[str, Any]) -> Dict[str
 
 
 def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Mapping[str, Any],
-                assignee_id: Optional[str]) -> Dict[str, Any]:
+                assignee_id: Optional[str], adopt_goal_id: Optional[str] = None) -> Dict[str, Any]:
     """Make exactly one goal titled ``title`` exist on the quest with these fields. Returns ``{state, goal_id, changed, writes, copies}`` where ``state`` is
     ``created``, ``updated``, ``unchanged`` or ``unknown`` (the quest's goals could not be read, nothing was written). ``writes`` are the client results,
     for the caller to read a held or refused one from. A client that raises on a refused write propagates; the caller reports it."""
     found = existing_goals(client, quest_id, title)
     if found is None:
         return {"state": "unknown", "goal_id": None, "changed": [], "writes": [], "copies": 0}
+    if not found and adopt_goal_id:
+        # The same work already exists under an older title: it is updated in place (renamed to the key, linked, moved to the period), never duplicated.
+        write = client.update_goal(str(adopt_goal_id), {"title": title, "period": period, **{k: v for k, v in fields.items() if k in UPDATABLE}})
+        writes = [write]
+        changed = ["title", "period", *sorted(k for k in fields if k in UPDATABLE)]
+        if assignee_id:
+            writes.append(client.assign_goal(str(adopt_goal_id), assignee_id))
+            changed.append("assignee")
+        return {"state": "updated", "goal_id": str(adopt_goal_id), "changed": changed, "writes": writes, "copies": 0}
     if not found:
         write = client.create_goal(title, period=period, quest_id=quest_id, assigned_to_user_id=assignee_id, **fields)
         goal_id = getattr(write, "id", "") or (getattr(write, "data", None) or {}).get("id")

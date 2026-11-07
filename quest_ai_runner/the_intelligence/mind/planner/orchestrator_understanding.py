@@ -214,6 +214,13 @@ class UnderstandingMixin:
         goal_condition = reply if reply else user_message
         return goal_condition, conv_ctx_text, None
 
+    def cheap_decision(self, prompt: str) -> str:
+        """One cheap-tier model call that answers a narrow question about text the caller supplies (who owns a milestone, which goal is the same work), in the words asked for.
+        Raises when the call fails: the caller surfaces that, it does not guess."""
+        return answer_with_reasoning(
+            self.provider, [{"role": "user", "content": prompt}], model=self.registry.resolve_tier("fast"), step=STEP_UNDERSTAND,
+            system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
+
     def _derive_goal_condition(
         self, user_message: str, *, now: Optional[str] = None
     ) -> Tuple[str, Optional[Dict[str, Any]]]:
