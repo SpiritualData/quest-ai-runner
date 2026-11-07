@@ -46,8 +46,9 @@ def aggregate(rows):
         return "poor_answers absent"
     other = [r for r in rows if r.get("source") != poor_answers.SOURCE]
     share = poor_answers.share()
+    from chat_quality import prod_probes
     return (f"poor_answers {sum(bool(r['ok']) for r in mine)}/{len(mine)} others {sum(bool(r['ok']) for r in other)}/{len(other)} "
-            f"share {share:g} weighted pass rate {poor_answers.rate_of_rows(rows, share):.3f}")
+            f"share {share:g} weighted pass rate {poor_answers.rate_of_rows(rows, share):.3f} | " + prod_probes.speed_summary(mine))
 
 
 def scored(record):
@@ -58,4 +59,5 @@ def scored(record):
     judged = record.get("judged") or {}
     summary = judged.get("summary") or (judged.get("verdict") or {}).get("summary") or ""
     note = "; ".join(hard) if hard else summary[:160]
-    return dict(ok=bool(record.get("passed")), got="score " + ("n/a" if score is None else f"{score:.2f}"), note=note)
+    numbers = {k: record.get(k) for k in ("seconds_total", "tokens_total", "speed_class", "speed_ok", "tokens_ok") if record.get(k) is not None}
+    return dict(ok=bool(record.get("passed")), got="score " + ("n/a" if score is None else f"{score:.2f}"), note=note, id=record.get("id"), **numbers)

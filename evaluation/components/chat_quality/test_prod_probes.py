@@ -119,3 +119,19 @@ def test_distinct_count_and_already_there_standard():
     assert P.read_number({"read": "/x", "list_key": "g", "count": True, "distinct": "d"}, Client()) == 2.0
     case = {"effect": {"allow": [{"tool": "t"}]}}
     assert P.message_standard(case) == "two-role" and P.message_standard(dict(case, already_there=True)) == "single"
+
+
+def test_turn_numbers_time_tokens_targets_and_the_run_summary():
+    msgs = [{"n": 1, "kind": "interim", "t": 4.0, "text": "a"}, {"n": 2, "kind": "final", "t": 61.5, "text": "b"}]
+    case = {"speed_class": "doing", "speed_target_seconds": 120, "token_target": 150000}
+    n = P.turn_numbers(case, msgs, 70.0, 22, 90000, 4000, judge_chars=8000, source="stream")
+    assert (n["seconds_total"], n["seconds_to_first_message"], n["seconds_to_final_message"], n["message_count"]) == (61.5, 4.0, 61.5, 2)
+    assert (n["tokens_total"], n["tokens_estimated"], n["judge_tokens"], n["speed_ok"], n["tokens_ok"], n["numbers_source"]) == (94000, False, 2000, True, True, "stream")
+    slow = P.turn_numbers({"speed_class": "information", "speed_target_seconds": 30, "token_target": 25000}, [{"n": 1, "kind": "final", "t": 48.0, "text": "x"}], 50.0, 9, 0, 0,
+                          estimated_from=["y" * 120000])
+    assert slow["tokens_estimated"] and slow["tokens_total"] == 30000 and slow["speed_ok"] is False and slow["tokens_ok"] is False
+    assert P.turn_numbers({}, msgs, 5.0, 1, 1, 1)["speed_ok"] is None
+    line = P.speed_summary([dict(id="B-1", speed_class="information", seconds_total=20, tokens_total=10000, speed_ok=True, tokens_ok=True),
+                            dict(id="B-2", speed_class="information", seconds_total=60, tokens_total=40000, speed_ok=False, tokens_ok=True),
+                            dict(id="M-1", speed_class="doing", seconds_total=100, tokens_total=200000, speed_ok=True, tokens_ok=False)])
+    assert "information avg 40s / 25000 tokens" in line and "doing avg 100s / 200000 tokens" in line and "over the time target: B-2" in line and "over the token target: M-1" in line

@@ -255,6 +255,43 @@ def reads_text(reads):
     return "\n\n".join(f"## {r['source']}\n{r['text']}" for r in reads)
 
 
+def estimate_tokens(*texts):
+    """A rough token count (four characters to a token) for when the stream and the provider report none. Always reported with ``estimated`` true."""
+    return sum(len(str(t or "")) for t in texts) // 4
+
+
+def turn_numbers(case, messages, end_seconds, model_calls, tokens_in, tokens_out, judge_chars=0, source="", estimated_from=None, cost_usd=None):
+    """The time and token numbers of one turn, one row for every arm.
+
+    ``seconds_total`` is the wall clock from the user message sent to the LAST assistant message of the turn; ``seconds_to_first_message`` and
+    ``seconds_to_final_message`` are the first and last message times. When the stream or provider reported no tokens, ``estimated_from`` (the
+    texts the turn handled) gives an estimate, flagged ``tokens_estimated``. The judge's tokens are reported apart (``judge_tokens``, always an
+    estimate from the prompt size). ``speed_ok`` and ``tokens_ok`` compare with the case's targets and never change the quality pass."""
+    times = [m["t"] for m in messages if m.get("t") is not None]
+    total = max(times) if times else end_seconds
+    estimated = not (tokens_in or tokens_out) and estimated_from is not None
+    tin, tout = (estimate_tokens(*estimated_from), 0) if estimated else (int(tokens_in or 0), int(tokens_out or 0))
+    out = {"seconds_total": total, "seconds_to_first_message": min(times) if times else None, "seconds_to_final_message": max(times) if times else None,
+           "message_count": len(messages), "model_calls": model_calls, "tokens_in": tin, "tokens_out": tout, "tokens_total": tin + tout,
+           "tokens_estimated": estimated, "judge_tokens": judge_chars // 4, "cost_usd": cost_usd, "numbers_source": source,
+           "speed_class": case.get("speed_class"), "speed_target_seconds": case.get("speed_target_seconds"), "token_target": case.get("token_target")}
+    out["speed_ok"] = None if out["speed_target_seconds"] in (None, "") or total is None else total <= float(out["speed_target_seconds"])
+    out["tokens_ok"] = None if out["token_target"] in (None, "") else out["tokens_total"] <= float(out["token_target"])
+    return out
+
+
+def speed_summary(rows):
+    """One line for the end of a run: average seconds and tokens of the information cases against the doing cases, and the cases over a target."""
+    def avg(kind, key):
+        values = [r[key] for r in rows if r.get("speed_class") == kind and r.get(key) is not None]
+        return f"{sum(values) / len(values):.0f}" if values else "n/a"
+    slow = [r.get("id") for r in rows if r.get("speed_ok") is False]
+    heavy = [r.get("id") for r in rows if r.get("tokens_ok") is False]
+    return (f"speed: information avg {avg('information', 'seconds_total')}s / {avg('information', 'tokens_total')} tokens, "
+            f"doing avg {avg('doing', 'seconds_total')}s / {avg('doing', 'tokens_total')} tokens; over the time target: {', '.join(map(str, slow)) or 'none'}; "
+            f"over the token target: {', '.join(map(str, heavy)) or 'none'}")
+
+
 def load_rules(path):
     """``{case id: {"effect", "state_check", "metric_probe"}}`` from the rules file (JSON), or {} without one."""
     if not path:

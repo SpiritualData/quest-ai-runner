@@ -51,12 +51,12 @@ NO_OUTPUT = "no recorded output yet"
 REPLY_LIMIT = 8000
 DATASETS_HEAD = ["Dataset id", "Name", "What it tests", "Owner", "PRIORITY", "Priority set by", "STATUS", "Inputs", "Metrics that use it",
                  "Private or repo", "Source", "How to run", "Notes"]
-INPUTS_HEAD = ["Dataset", "Input id", "Group", "Input text", "Category", "What went wrong", "Ideal handling", "Input note", "Original input text", "PRIORITY", "Priority set by", "Status", "Environment", "BEST ALTERNATIVE",
+INPUTS_HEAD = ["Dataset", "Input id", "Group", "Input text", "Category", "What went wrong", "Ideal handling", "Input note", "Original input text", "PRIORITY", "Priority set by", "Status", "Environment", "Class", "Seconds total", "To first message", "Tokens total", "Speed OK?", "Tokens OK?", "BEST ALTERNATIVE",
                "ITS LAST OUTPUT", "Messages (in order)", "Metric", "Before", "After", "Moved?", "Output from", "Acted as", "Score", "Tokens", "Model calls", "Lane gaps", "Judge reason", "Run date", "Commit", "Notes"]
 EDITABLE = {"Datasets": ["PRIORITY", "Notes"], "Inputs": ["PRIORITY", "Notes"]}
 KEYS = {"Datasets": ("Dataset id",), "Inputs": ("Dataset", "Input id", "Environment")}
 WIDTHS = {"Dataset id": 170, "Name": 200, "What it tests": 320, "Owner": 90, "PRIORITY": 90, "Priority set by": 150, "STATUS": 260, "Inputs": 60,
-          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Group": 110, "Acted as": 170, "Messages (in order)": 520, "Metric": 160, "Before": 70, "After": 70, "Moved?": 120, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
+          "Metrics that use it": 260, "Private or repo": 90, "Source": 260, "Notes": 260, "Dataset": 170, "Input id": 110, "Group": 110, "Acted as": 170, "Class": 90, "Seconds total": 80, "To first message": 80, "Tokens total": 90, "Speed OK?": 80, "Tokens OK?": 80, "Messages (in order)": 520, "Metric": 160, "Before": 70, "After": 70, "Moved?": 120, "Input text": 560, "Environment": 150, "What went wrong": 360, "Ideal handling": 360, "Input note": 260, "Original input text": 360, "How to run": 380,
           "Category": 180, "Status": 80, "BEST ALTERNATIVE": 140, "ITS LAST OUTPUT": 520, "Output from": 120, "Score": 60, "Tokens": 80, "Model calls": 80, "Lane gaps": 140, "Judge reason": 300,
           "Run date": 90, "Commit": 90}
 
@@ -213,6 +213,34 @@ def judge_reason(record: dict) -> str:
     return str(judged.get("summary") or (judged.get("verdict") or {}).get("summary") or "")
 
 
+def yes_no(value) -> str:
+    return "" if value is None else "yes" if value else "no"
+
+
+def speed_cells(entry: dict) -> dict:
+    """The time and token cells of a log line: class, seconds total, seconds to the first message, tokens total (marked when estimated), and whether each met its target."""
+    tokens = entry.get("tokens_total")
+    if tokens is None:
+        tokens = (int(entry.get("tokens_in") or 0) + int(entry.get("tokens_out") or 0)) or None
+    return dict(cls=entry.get("speed_class") or "", seconds=entry.get("seconds_total", ""), first=entry.get("seconds_to_first_message", ""),
+                tokens=("" if tokens is None else f"{tokens}{' (estimated)' if entry.get('tokens_estimated') else ''}"),
+                speed_ok=yes_no(entry.get("speed_ok")), tokens_ok=yes_no(entry.get("tokens_ok")), raw_tokens=tokens, raw_seconds=entry.get("seconds_total"))
+
+
+def averages(states: list, kind: str):
+    """Average seconds and tokens of the states of one speed class, or None."""
+    seconds = [s["speed"]["raw_seconds"] for s in states if s.get("speed", {}).get("cls") == kind and s["speed"]["raw_seconds"] is not None]
+    tokens = [s["speed"]["raw_tokens"] for s in states if s.get("speed", {}).get("cls") == kind and s["speed"]["raw_tokens"] is not None]
+    return (sum(seconds) / len(seconds) if seconds else None, sum(tokens) / len(tokens) if tokens else None)
+
+
+def speed_line(states: list) -> str:
+    """The Datasets status addition: average seconds and tokens for the information cases and the doing cases."""
+    (si, ti), (sd, td) = averages(states, "information"), averages(states, "doing")
+    show = lambda v, unit="": "n/a" if v is None else f"{v:.0f}{unit}"
+    return f"; avg seconds info/doing {show(si)}/{show(sd)}, tokens info/doing {show(ti)}/{show(td)}" if (si is not None or sd is not None) else ""
+
+
 def messages_text(messages) -> str:
     """The assistant messages of a turn in order as one cell: ``(1) first | (2) second``."""
     return " | ".join(f"({m.get('n', i + 1)}) {m.get('text', '')}" for i, m in enumerate(messages or []) if isinstance(m, dict))
@@ -238,7 +266,7 @@ def input_state(dataset: dict, case: dict, arm: str, sources: dict) -> dict:
     if mine:
         last = max(mine, key=lambda e: e.get("timestamp", ""))
         return dict(status="pass" if last.get("passed") else "fail", reply=last.get("reply", ""), source="output log", score=last.get("score", ""),
-                    acted_as=acted_as_text(last.get("acted_as")), messages=messages_text(last.get("messages")), metric=last.get("metric") or {},
+                    acted_as=acted_as_text(last.get("acted_as")), speed=speed_cells(last), messages=messages_text(last.get("messages")), metric=last.get("metric") or {},
                     tokens=sum(int(last.get(k) or 0) for k in ("tokens_in", "tokens_out")) or "", calls=last.get("model_calls", ""),
                     gaps=", ".join(last.get("lane_gaps") or []), reason=last.get("reason", ""), date=str(last.get("timestamp", ""))[:10], commit=last.get("commit", ""),
                     environment=environment_of(last.get("environment"), arm))
@@ -300,14 +328,16 @@ def build_rows(datasets: list[dict], sources: dict, owner: str, command_prefix: 
             for arm, state in shown:
                 by_env.setdefault(state["environment"], []).append(state)
                 irows.append([dataset["id"], case["id"], case.get("group", ""), text, case["category"], ds.clip(case.get("went_wrong", "")), ds.clip(case.get("ideal", "")),
-                              ds.clip(case.get("note", "")), ds.clip(case.get("original", "")), preset, PRESET_NOTE if preset else "", state["status"], state["environment"], arm,
+                              ds.clip(case.get("note", "")), ds.clip(case.get("original", "")), preset, PRESET_NOTE if preset else "", state["status"], state["environment"], (state.get("speed") or {}).get("cls", ""), (state.get("speed") or {}).get("seconds", ""),
+                              (state.get("speed") or {}).get("first", ""), (state.get("speed") or {}).get("tokens", ""), (state.get("speed") or {}).get("speed_ok", ""),
+                              (state.get("speed") or {}).get("tokens_ok", ""), arm,
                               ds.clip(state["reply"])[:REPLY_LIMIT], ds.clip(state.get("messages", ""))[:REPLY_LIMIT], (state.get("metric") or {}).get("name", ""),
                               (state.get("metric") or {}).get("before", ""), (state.get("metric") or {}).get("after", ""), (state.get("metric") or {}).get("moved", ""),
                               state["source"], state.get("acted_as", ""), state["score"], state.get("tokens", ""), state.get("calls", ""),
                               state.get("gaps", ""), state["reason"], state["date"], state["commit"], ""])
         sizes = len(dataset["cases"])
         envs = env_order(set(by_env) | {environment_of("", arm) for arm in arms})
-        status = " | ".join(f"{env}: {dataset_status(states_for(env, arms, dataset, sources))}" for env in envs)
+        status = " | ".join(f"{env}: {dataset_status(states_for(env, arms, dataset, sources))}{speed_line(states_for(env, arms, dataset, sources))}" for env in envs)
         drows.append([dataset["id"], dataset["name"], dataset["what"], owner, preset, PRESET_NOTE if preset else "", status,
                       sizes, dataset["metrics"], "private" if dataset["private"] else "repo", dataset["source"], run_command(dataset, command_prefix), ""])
     return drows, irows

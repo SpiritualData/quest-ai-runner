@@ -225,7 +225,8 @@ def build_arm(meter, bounded):
                 raise RuntimeError(f"not judged: the turn was {why} before it replied")
             reply = (final.text if final is not None and final.text else "") or next(
                 (f.get("text") for f in reversed(frames) if f.get("type") in ("result", "done") and f.get("text")), "") or ""
-            frames.append({"type": "done", "content": reply})
+            end_seconds = P.stamp(started)         # the reply is in: the last assistant message is stamped here
+            frames.append({"type": "done", "content": reply, "t": end_seconds})
             if dry.RECORDER.briefs or (final is not None and final.kind == "deep"):
                 frames.append({"type": "delegated"})
             run_calls = dry.RECORDER.model_calls
@@ -289,6 +290,11 @@ def build_arm(meter, bounded):
             print(f"  {case['id']}: CLEANUP COULD NOT RUN: {e}")
         snap = dry.RECORDER.snapshot()
         types = [f.get("type") for f in frames]
+        judge_chars = int(((record.get("judged") or {}).get("prompt_chars") or 0)) + len(str((record.get("judged") or {}).get("raw") or ""))
+        record.update(P.turn_numbers(
+            case, record.get("messages") or [], P.stamp(started), run_calls if "run_calls" in locals() else snap["model_calls"],
+            getattr(final, "tokens_in", 0) or 0, getattr(final, "tokens_out", 0) or 0, judge_chars, source="orchestrator provider counters (stream)",
+            estimated_from=[str(record.get("reads_seen")), (record.get("evidence") or {}).get("reply", "")]))
         record.update(
             seconds=round(time.time() - started, 1), model_calls=run_calls if "run_calls" in locals() else snap["model_calls"],
             calls_by_purpose=dict(Counter(m["label"] for m in snap["model_log"][:(run_calls if "run_calls" in locals() else len(snap["model_log"]))])),
@@ -298,11 +304,11 @@ def build_arm(meter, bounded):
             housekeeping_skipped=snap["skipped_housekeeping"], context_assemblies=dict(assemblies),
             judge_calls=snap["model_calls"] - (run_calls if "run_calls" in locals() else snap["model_calls"]), performed=snap["performed"], state=record.get("state"), reads=snap["reads"], writes=[w for w in snap["writes"] if not w.get("internal")],
             bookkeeping=sum(1 for w in snap["writes"] if w.get("internal")),
-            tokens_in=getattr(final, "tokens_in", 0) or 0, tokens_out=getattr(final, "tokens_out", 0) or 0, lane_gaps=sorted(set(snap["missing_tools"]) | set(record.get("lane_gaps") or [])),
+            lane_gaps=sorted(set(snap["missing_tools"]) | set(record.get("lane_gaps") or [])),
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies", "cleanup", "unexpected_writes", "cleanup_error")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "seconds_total", "seconds_to_first_message", "seconds_to_final_message", "message_count", "tokens_total", "tokens_estimated", "judge_tokens", "cost_usd", "numbers_source", "speed_class", "speed_target_seconds", "token_target", "speed_ok", "tokens_ok", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies", "cleanup", "unexpected_writes", "cleanup_error")}
         try:
             meter.record(record["model_calls"])
         except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check

@@ -164,3 +164,16 @@ def test_messages_in_order_and_the_metric_before_and_after_are_columns():
     row = {k: v for k, v in zip(irows[0], irows[1])}
     assert row["Messages (in order)"] == "(1) Status now | (2) Did it"
     assert (row["Metric"], row["Before"], row["After"], row["Moved?"]) == ("paid users", 10, 12, "yes")
+
+
+def test_speed_and_token_cells_and_the_datasets_status_line():
+    log = {("chat_quality/acceptance", "A-1"): [dict(arm="prod_qar", environment=qs.BOUNDED_ENV, reply="r", passed=True, timestamp="2026-11-06T01:00:00", speed_class="information",
+                                                     seconds_total=41.5, seconds_to_first_message=40.0, tokens_total=52000, speed_ok=True, tokens_ok=True)],
+           ("chat_quality/acceptance", "A-2"): [dict(arm="prod_qar", environment=qs.BOUNDED_ENV, reply="r", passed=False, timestamp="2026-11-06T01:00:00", speed_class="doing",
+                                                     seconds_total=200.0, seconds_to_first_message=30.0, tokens_in=150000, tokens_out=9000, tokens_estimated=True, speed_ok=False, tokens_ok=False)]}
+    drows, irows = qs.build_rows([dataset()], sources(log=log), "")
+    rows = {d["Input id"]: d for d in (dict(zip(irows[0], r)) for r in irows[1:]) if d["Environment"] == qs.BOUNDED_ENV}
+    one, two = rows["A-1"], rows["A-2"]
+    assert (one["Class"], one["Seconds total"], one["To first message"], one["Tokens total"], one["Speed OK?"], one["Tokens OK?"]) == ("information", 41.5, 40.0, "52000", "yes", "yes")
+    assert (two["Class"], two["Tokens total"], two["Speed OK?"], two["Tokens OK?"]) == ("doing", "159000 (estimated)", "no", "no")
+    assert "avg seconds info/doing 42/200, tokens info/doing 52000/159000" in dict(zip(drows[0], drows[1]))["STATUS"]
