@@ -535,9 +535,10 @@ class RunLoopMixin:
             # The milestone flow owns the goal writes of a milestone cue: the planner's own goal writes (a second goal for a deliverable, an outreach message) are taken out of its plan; the
             # deliverable lives inside the one keyed next-step goal the code step records. A plan left with no call becomes the answer.
             if rs.cue_resolved is not None and getattr(rs.plan, "action", None) == "tool":
-                kept_calls = [c for c in (rs.plan.tool_calls or []) if str((c or {}).get("name") or "") not in milestone_cue.OWNED_WRITES]
+                owned = milestone_cue.OWNED_WRITES + ((milestone_cue.READ_TOOL,) if rs.cue_resolved.source and rs.turn_user_intent == milestone_cue.ACT else ())
+                kept_calls = [c for c in (rs.plan.tool_calls or []) if str((c or {}).get("name") or "") not in owned]
                 if len(kept_calls) != len(rs.plan.tool_calls or []):
-                    log.info("milestone cue: the planner's goal write was taken out of the plan; the code step owns it")
+                    log.info("milestone cue: the planner's goal write or source read was taken out of the plan; the code step owns it")
                     rs.plan.tool_calls = kept_calls
                     if not kept_calls:
                         rs.plan.action = "answer"
