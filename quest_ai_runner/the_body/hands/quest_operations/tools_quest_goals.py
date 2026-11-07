@@ -105,11 +105,12 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 "target_unit": {"type": "string", "description": "Unit of the target."},
                 **goal_links.LINK_PARAMS,
                 "match_by_link": {"type": "boolean",
-                                  "description": ("True for a goal that stands for its strategy's next step: when no goal has this exact title, the open goal already linked to "
-                                                  "spec_solution_id is updated in place (renamed, moved) before any goal is created.")},
+                                  "description": ("True for a goal that stands for its strategy's next step: when no goal has this exact title, the open KEYED next-step goal already linked to "
+                                                  "spec_solution_id is updated in place before any goal is created. A person's own goal linked to it is never touched.")},
                 "adopt_goal_id": {"type": "string",
-                                  "description": ("The id of an existing open goal that is the same work under an older title. When no goal has this exact title, that goal is "
-                                                  "renamed to this title and updated in place instead of a second goal being created.")},
+                                  "description": ("The id of an existing KEYED next-step goal (its title ends 'next step: week of YYYY-MM-DD') that is the same work under an older title. "
+                                                  "When no goal has this exact title, that goal is renamed to this title and updated in place instead of a second goal being created. "
+                                                  "Any other goal belongs to a person and is never renamed, re-described or moved: the id is ignored.")},
                 "user_asked_for_this_field": {
                     "type": "boolean",
                     "description": ("True when the user's own message asks for the work this goal records: a request to do or write something, "

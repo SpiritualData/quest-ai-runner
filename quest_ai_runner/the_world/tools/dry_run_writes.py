@@ -81,11 +81,24 @@ class Recorder:
         self.done: List[str] = []
         self.model_log: List[Dict[str, Any]] = []
         self.skipped_housekeeping = 0
+        self.created_goals: set = set()
+        self.call_titles: set = set()
+        self.unexpected: List[str] = []
+
+    def created_goal(self, goal_id: str) -> None:
+        """A goal this run created: it may be changed again by the same run."""
+        with self.lock:
+            self.created_goals.add(str(goal_id))
+
+    def call_title(self, title: str) -> None:
+        with self.lock:
+            self.call_titles.add(str(title).strip().casefold())
 
     def clear(self) -> None:
         with self.lock:
             self.writes, self.reads, self.model_calls, self.briefs, self.missing_tools, self.done = [], Counter(), 0, [], [], []
             self.model_log, self.skipped_housekeeping = [], 0
+            self.created_goals, self.call_titles, self.unexpected = set(), set(), []
 
     def missing_tool(self, name: str) -> None:
         """The model asked for a tool this deployment does not have: a gap in the lane, reported apart from a model failure."""
@@ -126,7 +139,7 @@ class Recorder:
         with self.lock:
             return {"writes": list(self.writes), "reads": dict(self.reads), "model_calls": self.model_calls,
                     "briefs": list(self.briefs), "missing_tools": list(self.missing_tools), "performed": list(self.done),
-                    "model_log": list(self.model_log), "skipped_housekeeping": self.skipped_housekeeping}
+                    "model_log": list(self.model_log), "skipped_housekeeping": self.skipped_housekeeping, "unexpected": list(self.unexpected)}
 
 
 RECORDER = Recorder()
@@ -165,6 +178,48 @@ def tool_allowed(name: str, args: Mapping[str, Any]) -> bool:
         if rule.get("tool") == name and all(argument_matches(args, k, v) for k, v in (rule.get("args") or {}).items()):
             return True
     return False
+
+
+GOAL_WRITE = re.compile(r"^/api/planning/goals/([^/?]+)(/assign)?$")
+
+
+def set_goal_title_lookup(lookup: Optional[Any]) -> None:
+    """``lookup(goal_id) -> current title or None``: how the guard below reads a goal before a change to it is allowed (the harness gives it a fresh read of the quest's goals)."""
+    STATE["goal_title_lookup"] = lookup
+
+
+def title_prefixes() -> List[str]:
+    """The title starts the case's rules allow a goal to have when it is changed (the ``title~`` / ``title`` argument of an allowed tool call)."""
+    out: List[str] = []
+    for rule in STATE["allowances"]:
+        for key, want in (rule.get("args") or {}).items():
+            if key.rstrip("~") == "title":
+                out += [str(w).strip().casefold() for w in (want if isinstance(want, list) else [want])]
+    return out
+
+
+def goal_write_refusal(method: str, path: str) -> Optional[str]:
+    """Why a PUT to a goal (or its /assign) must not go even inside an allowed tool call, else None. The target's CURRENT title is read first. It may be changed only when this run
+    created it, or its title starts with a title the case allows, or it is the exact title of the allowed call (the keyed goal updated in place). Anything else is a person's goal."""
+    found = GOAL_WRITE.match(path.split("?")[0])
+    if method.upper() != "PUT" or not found:
+        return None
+    goal_id = found.group(1)
+    if goal_id in RECORDER.created_goals:
+        return None
+    lookup = STATE.get("goal_title_lookup")
+    title = None
+    if lookup is not None:
+        try:
+            title = lookup(goal_id)
+        except Exception:  # noqa: BLE001 -- a goal that cannot be read is not changed
+            title = None
+    if title is None:
+        return f"goal {goal_id}: its current title could not be read, so it is not changed"
+    current = str(title).strip().casefold()
+    if current in RECORDER.call_titles or any(prefix and current.startswith(prefix) for prefix in title_prefixes()):
+        return None
+    return f"goal {goal_id} ({str(title)[:80]!r}) is not a goal this case may change"
 
 
 def request_allowed(method: str, path: str) -> bool:
@@ -226,6 +281,14 @@ def quest_exchange(method: str, path: str, body: Any = None):
             RECORDER.read(f"quest {path.split('?')[0]}")
         return None
     if in_allowed_scope() or request_allowed(method, path):
+        refusal = goal_write_refusal(method, path)
+        if refusal:
+            line = f"UNEXPECTED WRITE blocked: {method.upper()} {path.split('?')[0]}: {refusal}"
+            with RECORDER.lock:
+                RECORDER.unexpected.append(line)
+            RECORDER.write("quest api", f"{method.upper()} {path.split('?')[0]} (unexpected: {refusal})")
+            from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+            raise QuestApiError(f"Quest API {method.upper()} {path.split('?')[0]} -> 403: blocked in test mode, nothing was changed ({refusal})", status=403, code="blocked_in_test_mode")
         RECORDER.performed(f"quest api {method.upper()} {path.split('?')[0]}")
         return None
     RECORDER.write("quest api", f"{method.upper()} {path.split('?')[0]} {summarize(body) if body else ''}".strip(), internal=is_internal(path))
@@ -246,6 +309,8 @@ def tool_call(spec: Any, name: str, args: Mapping[str, Any]):
         return None
     if tool_allowed(name, args):
         RECORDER.performed(f"tool {name} {summarize(dict(args))}")
+        if str(args.get("title") or "").strip():
+            RECORDER.call_title(str(args["title"]))
         return None
     unbound = [arg for arg, key in (getattr(spec, "context_args", None) or {}).items() if key == "quest_id" and not args.get(arg)]
     if unbound:     # the call names no quest: the real tool would say so and the planner would find the quest, so test mode says the same instead of "blocked"

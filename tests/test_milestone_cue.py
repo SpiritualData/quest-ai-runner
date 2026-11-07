@@ -642,7 +642,7 @@ B_NEW = {"title": "Launch push post B", "goal_id": "", "text": "Post two in full
 def alt_registry(calls, goals=ALT_GOALS):
     def write(args, ctx):
         calls.append(dict(args))
-        state = "unchanged" if args.get("adopt_goal_id") == "g1" else "created"
+        state = "unchanged" if args.get("title") == "Launch push post A" else "created"
         return ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data={"state": state}, text=state)
     return ToolRegistry([read_spec(), list_goals(goals), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=write)])
 
@@ -653,7 +653,7 @@ def test_alternatives_in_a_reply_are_kept_by_the_quest_one_goal_each_and_the_tai
     tail = alternatives_flow.run(alt_registry(calls), "q1", "write a couple of posts for the push", "the two posts...",
                                  lambda prompt: asked.append(prompt) or alt_answer(A_EXISTING, B_NEW))
     assert len(asked) == 1 and "Launch push post A" in asked[0] and "esr_c | P3 Mobile app live on the Apple Store" in asked[0]
-    assert calls[0]["adopt_goal_id"] == "g1" and calls[0]["title"] == "Launch push post A" and calls[0]["spec_solution_id"] == "esr_c" and calls[0]["spec_metric_id"] == "esr_mc"
+    assert calls[0]["title"] == "Launch push post A" and "adopt_goal_id" not in calls[0] and calls[0]["spec_solution_id"] == "esr_c" and calls[0]["spec_metric_id"] == "esr_mc"
     assert "adopt_goal_id" not in calls[1] and calls[1]["title"] == "Launch push post B" and "Hypothesis: A question hook gets more signups" in calls[1]["description"]
     assert "Compared by: P3 App Store listing live" in calls[1]["description"]
     assert tail == ("On the quest:\n- Launch push post A (already tracked): A story hook gets more clicks\n- Launch push post B (created): A question hook gets more signups\n"
@@ -730,7 +730,7 @@ def test_only_goals_that_overlap_the_request_are_offered_for_adoption_and_a_titl
     new_titles = [dict(A_EXISTING, title="Launch push post A", goal_id=""), dict(B_NEW, title="launch push post b", goal_id="")]
     tail = alternatives_flow.run(alt_registry(calls, goals), "q1", cue, "reply", lambda prompt: asked.append(prompt) or alt_answer(*new_titles))
     assert "Quarterly budget review" not in asked[0] and "ALWAYS wins" in asked[0] and "g9" not in asked[0]
-    assert [c["adopt_goal_id"] for c in calls] == ["g1", "g2"] and tail.count("\n- ") == 2
+    assert [c["title"] for c in calls] == ["Launch push post A", "Launch push post B"] and all("adopt_goal_id" not in c for c in calls) and tail.count("\n- ") == 2
 
 
 def test_the_refusals_own_words_reach_the_reply_without_ids_and_are_kept_in_the_turns_record():
@@ -777,3 +777,46 @@ def test_message_one_for_a_drafted_deliverable_is_the_code_status_and_not_the_pl
     first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
     assert "The quest already tracks 1 goal like this (Launch push post A)" in first and "Now: Writing the versions now and keeping them on the quest." in first
     assert "priority ladder" not in first and "starting on this now" not in first
+
+
+# ---- safety: a person's goal is never taken over, renamed, re-described or re-dated
+
+HUMAN = {"id": "h1", "name": "Submit the app to the store and advance the written feature test pass", "spec_solution_id": "esr_c", "spec_metric_id": None,
+         "period": "2026_Q4", "description": "Kaja's own plan, written by a person", "assigned_to_user_id": "u9", "completed": False}
+
+
+def test_a_goal_with_any_other_title_is_never_adopted_by_a_model_pick_or_by_the_link_and_nothing_is_written_to_it():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    fields = {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "Next step ..."}
+    for kwargs in ({"adopt_goal_id": "h1"}, {"link_match": True}, {"adopt_goal_id": "h1", "link_match": True}):
+        client = GoalClient([dict(HUMAN)])
+        done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", fields, None, kwargs.get("adopt_goal_id"), kwargs.get("link_match", False))
+        assert done["state"] == "created" and len(client.posts) == 1 and client.puts == [] and client.assigns == []
+        assert client.goals[0]["name"] == HUMAN["name"] and client.goals[0]["description"] == HUMAN["description"] and client.goals[0]["period"] == "2026_Q4"
+
+
+def test_only_a_keyed_next_step_goal_can_be_taken_over_and_the_pattern_is_the_one_the_flow_writes():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    for title in ("P3 next step: week of 2026-11-02", "P3 Mobile app live on the Apple Store next step: week of 2026-11-09", "X next step: week of 2026-11-02 "):
+        assert goal_links.is_keyed_next_step(title), title
+    for title in ("Submit the app to the store", "Next step review", "P3 next step: this week", "next step: week of soon", "", None):
+        assert not goal_links.is_keyed_next_step(title), title
+    client = GoalClient([{"id": "k", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "period": "2026_W45"}, dict(HUMAN)])
+    done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", {"spec_solution_id": "esr_c"}, None, "k", True)
+    assert done["state"] == "updated" and [p[0] for p in client.puts] == ["k"] and client.posts == []
+
+
+def test_the_milestone_step_offers_only_keyed_goals_for_adoption_and_names_the_persons_goal_in_its_description():
+    keyed = {"id": "k", "title": "P3 next step: week of 2026-11-02", "text": "", "spec_solution_id": None, "completed": False, "abandoned": False}
+    human = {"id": "h1", "title": "Submit the app to the store and advance the written feature test pass", "text": "", "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
+    tools = ToolRegistry([read_spec(), list_goals([keyed, human]), write_goal([])])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    asked = []
+
+    def decide(prompt):
+        asked.append(prompt)
+        return "h1 k" if "Open goals" in prompt else "NONE"
+    assert resolved.choose_adoption(decide) == "k" and "h1:" not in asked[0] and "k:" in asked[0]
+    assert resolved.choose_adoption(lambda prompt: "h1") == ""
+    description = resolved.goal_arguments()["description"]
+    assert "Related goals on the quest: Submit the app to the store" in description and "k" not in description.split("Related goals")[1]

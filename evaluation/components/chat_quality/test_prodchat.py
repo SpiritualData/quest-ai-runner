@@ -329,3 +329,22 @@ def test_an_extra_workflow_the_run_created_is_deleted_and_named_in_the_cleanup_l
     result, calls = run_cleanup_for(reads(workflows=[{"workflowId": "wf_extra", "createdAt": "2026-11-06T10:00:09"}]),
                                     evidence='{"output": "created wf_extra"}', message="Set a weekly check")
     assert result["deleted"] == ["wf_extra"] and "deleted ['wf_extra']" in PC.cleanup_line(result)
+
+
+def test_a_changed_person_goal_is_an_unexpected_write_even_when_the_case_allows_goal_writes():
+    import prodchat as PC
+    effect = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title~": "P3 "}}]}
+    before = {c: {} for c in PC.CATEGORIES}
+    before["goals"] = {"h1": {"digest": "a", "label": "Submit the Quest app to Google Play"}, "k1": {"digest": "a", "label": "P3 next step: week of 2026-11-02"}}
+    after = {c: {} for c in PC.CATEGORIES}
+    after["goals"] = {"h1": {"digest": "b", "label": "Submit the Quest app to Google Play"}, "k1": {"digest": "b", "label": "P3 Mobile app next step: week of 2026-11-09"},
+                      "n1": {"digest": "c", "label": "P3 Mobile app next step: week of 2026-11-16"}}
+    lines = PC.unexpected_writes(PC.diff_fingerprints(before, after), effect)
+    assert len(lines) == 1 and "goals changed h1" in lines[0] and "a goal the case may not change" in lines[0]
+    # the keyed goal updated in place under its exact call title is explained too
+    effect_no_title = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1"}}]}
+    before["goals"] = {"x": {"digest": "a", "label": "FB push post A"}}
+    after["goals"] = {"x": {"digest": "b", "label": "FB push post A"}}
+    assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title) != []
+    assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, titles={"FB push post A"}) == []
+    assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, zero_writes=True) != []

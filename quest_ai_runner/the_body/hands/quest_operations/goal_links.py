@@ -8,6 +8,7 @@ of created, updated or unchanged happened. It imports no tool registry, so both 
 from __future__ import annotations
 
 import datetime
+import re
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 #: The optional arguments that link a goal to the quest's specification, and the schema the planner sees for them.
@@ -77,10 +78,20 @@ def existing_goals(client: Any, quest_id: str, title: str) -> Optional[List[Dict
     return [g for g in goals if str(g.get("name") or "").strip() == title and not g.get("abandoned")]
 
 
+KEYED_NEXT_STEP = re.compile(r"\bnext step: week of \d{4}-\d{2}-\d{2}\s*$")
+
+
+def is_keyed_next_step(title: Any) -> bool:
+    """True for a title this tool's own flow writes: "<milestone title> next step: week of YYYY-MM-DD" (the legacy "P<n> next step: week of ..." has the same ending). Only such a
+    goal may ever be taken over, renamed, re-described or re-dated by an adoption; a goal with any other title belongs to a person and is never touched."""
+    return bool(KEYED_NEXT_STEP.search(str(title or "")))
+
+
 def linked_open_goal(goals: List[Dict[str, Any]], solution_id: str, title: str) -> Optional[str]:
     """The id of the open goal already linked to ``solution_id``, the one whose name shares the longest start with ``title`` when several are: code decides this, no model."""
     import os.path
-    linked = [g for g in goals if str(g.get("spec_solution_id") or "") == solution_id and not g.get("completed") and not g.get("abandoned")]
+    linked = [g for g in goals if str(g.get("spec_solution_id") or "") == solution_id and not g.get("completed") and not g.get("abandoned")
+              and is_keyed_next_step(g.get("name"))]
     if not linked:
         return None
     best = max(linked, key=lambda g: len(os.path.commonprefix([str(g.get("name") or ""), title])))
@@ -179,6 +190,8 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
     if not found and link_match and fields.get("spec_solution_id"):
         # Idempotent in code: a goal already linked to this strategy is the goal, updated in place, before any create. The model's pick below is only for older goals with no link.
         adopt_goal_id = linked_open_goal(goals, str(fields["spec_solution_id"]), title) or adopt_goal_id
+    if adopt_goal_id and not is_keyed_next_step(next((g.get("name") for g in goals if str(g.get("id")) == str(adopt_goal_id)), "")):
+        adopt_goal_id = None       # never take over a goal that is not a keyed next step: it is a person's, and stays exactly as it is
     if not found and adopt_goal_id:
         # The same work already exists under an older title: it is updated in place (renamed to the key, linked, moved to the period), never duplicated.
         before = next((dict(g) for g in goals if str(g.get("id")) == str(adopt_goal_id)), None)
@@ -192,6 +205,12 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
     if not found:
         write = client.create_goal(title, period=period, quest_id=quest_id, assigned_to_user_id=assignee_id, **fields)
         goal_id = getattr(write, "id", "") or (getattr(write, "data", None) or {}).get("id")
+        try:        # a dry run lets a goal this same run created be changed again; nothing else
+            from quest_ai_runner.the_world.tools import dry_run_writes
+            if dry_run_writes.active() and goal_id:
+                dry_run_writes.RECORDER.created_goal(str(goal_id))
+        except Exception:  # noqa: BLE001 -- bookkeeping of the test harness never breaks a write
+            pass
         return {"state": "created", "goal_id": goal_id, "changed": [], "writes": [write], "copies": 0, "before": None}
     goal = found[0]
     before = dict(goal)      # as listed before any write

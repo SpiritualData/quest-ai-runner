@@ -47,7 +47,13 @@ class TurnSafety:
         ended = self.clock()
         after = self.retry_once(lambda: PC.read_fingerprint(self.client))
         changes = PC.diff_fingerprints(self.before, after, own_conv=own_conv)
-        unexpected = PC.unexpected_writes(changes, self.effect, self.zero)
+        try:
+            from quest_ai_runner.the_world.tools import dry_run_writes
+            titles = set(dry_run_writes.RECORDER.call_titles)
+            blocked = list(dry_run_writes.RECORDER.unexpected)
+        except Exception:  # noqa: BLE001
+            titles, blocked = set(), []
+        unexpected = PC.unexpected_writes(changes, self.effect, self.zero, titles) + blocked
         window = (self.started - 5, ended + 30)
         evidence = json.dumps(frames, default=str) if frames else ""
         plan = PC.plan_cleanup(changes, own_conv, window, self.ai_user_id, self.effect, self.zero, evidence, self.message)

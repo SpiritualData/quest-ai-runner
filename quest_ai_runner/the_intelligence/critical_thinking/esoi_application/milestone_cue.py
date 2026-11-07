@@ -290,10 +290,17 @@ class Resolved:
         plan.confirm_question = None
         plan.asks_first = False
 
+    def related_text(self) -> str:
+        """The person's own goals for this milestone are linked to only by being named here, in this goal's description; they are never changed."""
+        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_keyed_next_step
+        titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not is_keyed_next_step(g.get("title"))][:4]
+        return (" Related goals on the quest: " + "; ".join(titles) + ".") if titles else ""
+
     def goal_arguments(self) -> Dict[str, Any]:
         args: Dict[str, Any] = {
             "quest_id": self.quest_id, "title": next_step_title(self.name, self.week), "period": self.week.period, "due_date": self.week.due,
-            "description": f"Next step for {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.",
+            "description": (f"Next step for {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}."
+                            + self.related_text()),
             "spec_solution_id": self.rid, "match_by_link": True, "user_asked_for_this_field": True}
         if self.metric_ids:
             args["spec_metric_id"] = self.metric_ids[0]
@@ -320,12 +327,14 @@ class Resolved:
 
     def choose_adoption(self, decide: Optional[Callable[[str], str]]) -> str:
         """The id of the open goal that is already this milestone's next step (any week, any older title), as the model decides among the candidates; "" when none is."""
-        if decide is None or not self.candidates:
+        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_keyed_next_step
+        keyed = [g for g in self.candidates if is_keyed_next_step(g.get("title"))]        # only a goal this flow wrote can be taken over; a person's goal is never offered
+        if decide is None or not keyed:
             return ""
-        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in self.candidates)
+        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in keyed)
         answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}.\n\nOpen goals on the same quest:\n{listing}\n\nIs one of these goals the next step of this milestone "
                         "(the same work, whatever its title or week)? Reply with that goal's id exactly as listed, or the single word NONE. Reply with nothing else.")
-        return next((str(g.get("id")) for g in self.candidates if str(g.get("id")) and str(g.get("id")) in answer), "")
+        return next((str(g.get("id")) for g in keyed if str(g.get("id")) and str(g.get("id")) in answer), "")
 
     def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None) -> Tuple[str, str]:
         """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is

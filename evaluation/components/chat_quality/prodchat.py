@@ -398,7 +398,7 @@ def diff_fingerprints(before, after, own_conv=None):
             if item_id not in old:
                 changes.append(dict(meta, category=cat, change="added", id=item_id))
             elif meta.get("digest") != old[item_id].get("digest"):
-                changes.append(dict(meta, category=cat, change="changed", id=item_id))
+                changes.append(dict(meta, category=cat, change="changed", id=item_id, before_label=old[item_id].get("label", "")))
         if cat in KEEP_REMOVED:
             changes += [dict(old[i], category=cat, change="removed", id=i) for i in old if i not in new]
     return changes
@@ -415,16 +415,35 @@ def allowed_categories(effect):
     return {cat for cat, words in ALLOW_WORDS.items() if any(w in text for w in words)} if text and text != "[]" else set()
 
 
-def unexpected_writes(changes, effect=None, zero_writes=False):
+def allowed_title_starts(effect):
+    """The goal title starts a case's allowed calls name (``title~`` / ``title``), lower case."""
+    out = []
+    for rule in (effect or {}).get("allow") or [] if isinstance(effect, dict) else []:
+        for key, want in (rule.get("args") or {}).items():
+            if key.rstrip("~") == "title":
+                out += [str(w).strip().casefold() for w in (want if isinstance(want, list) else [want])]
+    return out
+
+
+def goal_change_explained(change, effect, titles=()):
+    """A changed existing goal is explained only when it was one the case may change: its title BEFORE the run starts with a title the case allows, or equals the title of an allowed
+    call (the keyed goal updated in place). A person's goal whose description, period or date changed is never explained, whatever else the case allows."""
+    before = str(change.get("before_label") or change.get("label") or "").strip().casefold()
+    return before in {str(t).strip().casefold() for t in titles} or any(p and before.startswith(p) for p in allowed_title_starts(effect))
+
+
+def unexpected_writes(changes, effect=None, zero_writes=False, titles=()):
     """The changes the case's allowed writes do not explain. A zero-writes case explains none; otherwise a change is explained when its category is
-    one the ``effect`` allow-list names. Each is returned as a readable ``UNEXPECTED WRITE`` line."""
+    one the ``effect`` allow-list names, and a changed or removed GOAL only when it is a goal the case may change (``goal_change_explained``). Each is returned as a readable
+    ``UNEXPECTED WRITE`` line."""
     allowed = set() if zero_writes else allowed_categories(effect)
     out = []
     for c in changes:
-        if c["category"] in allowed:
+        if c["category"] in allowed and not (c["category"] == "goals" and c["change"] in ("changed", "removed") and not goal_change_explained(c, effect, titles)):
             continue
         extra = ", ".join(f"{k}={c[k]}" for k in ("author", "conv_id", "source", "created_at", "kind") if c.get(k))
-        out.append(f"UNEXPECTED WRITE: {c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" + (f" ({extra})" if extra else ""))
+        was = f" (was {c['before_label']!r}: a goal the case may not change)" if c.get("before_label") and c["category"] == "goals" else ""
+        out.append(f"UNEXPECTED WRITE: {c['category']} {c['change']} {c['id']} {c.get('label', '')!r}{was}" + (f" ({extra})" if extra else ""))
     return out
 
 

@@ -95,9 +95,7 @@ def goal_arguments(quest_id: str, alt: Alternative, metric_name: str) -> Dict[st
         args["spec_solution_id"] = alt.solution_id
     if alt.metric_id:
         args["spec_metric_id"] = alt.metric_id
-    if alt.goal_id:
-        args["adopt_goal_id"] = alt.goal_id
-    return args
+    return args          # an existing goal is reached only through its exact title (see ``run``); no goal is ever taken over by id
 
 
 def compose_tail(results: Sequence[Mapping[str, Any]], metric_name: str) -> str:
@@ -122,11 +120,14 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
         return ""
     by_title = {str(g.get("title") or "").strip().casefold(): str(g.get("id")) for g in goals}
     taken = {a.goal_id for a in alts if a.goal_id}
+    titles = {str(g.get("id")): str(g.get("title") or "").strip() for g in goals}
     for alt in alts:
         same = by_title.get(alt.title.strip().casefold(), "")
         if not alt.goal_id and same and same not in taken:      # a title that is an existing goal's title is that goal, whatever id the model gave
             alt.goal_id = same
             taken.add(same)
+        if alt.goal_id:
+            alt.title = titles.get(alt.goal_id) or alt.title        # the keyed goal is found by its exact title: renaming is never the way in
     from quest_ai_runner.the_world.tools.tools import ToolContext
     names = {(s["solution_id"], s["metric_id"]): s["metric_name"] for s in solutions}
     results = []
