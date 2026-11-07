@@ -214,6 +214,7 @@ class GoalsMixin:
                     spec_solution_id: Optional[str] = None,
                     spec_metric_id: Optional[str] = None,
                     metric_target_value: Optional[float] = None,
+                    scheduled_date: Optional[str] = None,
                     idempotency_key: Optional[str] = None) -> WriteResult:
         """POST a new Goal to /api/planning/goals.
 
@@ -292,6 +293,8 @@ class GoalsMixin:
             body["spec_metric_id"] = spec_metric_id
         if metric_target_value is not None:
             body["metric_target_value"] = metric_target_value
+        if scheduled_date is not None:
+            body["scheduled_date"] = scheduled_date      # the day it is due, inside the period
         return self._write("POST", "/api/planning/goals", body=body, label="Creating the goal",
                            idempotency_key=idempotency_key or new_idempotency_key())
 

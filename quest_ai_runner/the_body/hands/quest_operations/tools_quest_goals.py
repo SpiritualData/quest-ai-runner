@@ -23,10 +23,10 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = _quest_id(args, ctx)
         title = str(args.get("title") or "").strip()
-        period = str(args.get("period") or "").strip()
-        if not quest_id or not title or not period:
-            return ToolResult(ok=False, text="A goal needs a quest, a title and a period; nothing was written." + NO_QUEST_HINT)
-        if not args.get("user_asked_for_this_field"):
+        period = goal_links.normalize_period(args.get("period"))
+        if not quest_id or not title:
+            return ToolResult(ok=False, text="A goal needs a quest and a title; nothing was written." + NO_QUEST_HINT)
+        if args.get("user_asked_for_this_field") is False:       # left out means the order gate decides; an explicit false is only an offer
             return ToolResult(ok=False, text=f"Not written: the user did not ask for the goal {title!r}. Suggest it in your reply instead.")
         try:
             client = factory()
@@ -73,13 +73,13 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                          "instead. Renaming a goal (the title is the key, so a new title is a new goal)."),
         parameters={
             "type": "object",
-            "required": ["title", "period"],
+            "required": ["title"],
             "properties": {
                 "quest_id": _QUEST_ID_PARAM,
                 "title": {"type": "string", "description": "The exact title; it is the key that makes the call safe to repeat."},
                 "period": {"type": "string",
-                           "description": ("YYYY-MM-DD (day), YYYY_W## (week), YYYY_MM (month), YYYY_Q# (quarter) or YYYY (year). "
-                                           "If the goal exists in another period it is moved to this one.")},
+                           "description": ("YYYY-MM-DD (day), YYYY_W## (week), YYYY_MM (month), YYYY_Q# (quarter) or YYYY (year), or the word week, day, month, quarter "
+                                           "or year for the current one. Leave out for this week. If the goal exists in another period it is moved to this one.")},
                 "description": {"type": "string", "description": "The goal's brief; replaced when it differs."},
                 "criteria": {"type": "string", "description": "How anyone can check it is done at period end."},
                 "target_value": {"type": "number", "description": "Target number, when it has one."},

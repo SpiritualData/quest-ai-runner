@@ -136,3 +136,22 @@ def test_a_rule_value_may_be_a_list_of_owners_matched_by_first_name():
         assert not dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "Mary"})
     finally:
         dry.set_allowances([])
+
+
+def test_the_ensure_tool_takes_the_arguments_the_planner_sends_for_a_next_step():
+    client = FakeClient()
+    spec = goals.create_or_update_quest_goal_spec(CREDS, client_factory=lambda: client)
+    args = {"title": "P3 next step: week of 2026-11-02", "assignee": "Ann", "spec_solution_id": "esr_s", "due_date": "2026-11-06", "period": "week"}
+    result = spec.handler(args, ToolContext(quest_id="q1"))          # no period format, no asked flag, a due day
+    assert result.ok and client.calls[0][0] == "create"
+    kw = client.calls[0][2]
+    assert kw["scheduled_date"] == "2026-11-06" and kw["assigned_to_user_id"] == "u1" and kw["period"].count("_W") == 1
+    assert not spec.handler({**args, "user_asked_for_this_field": False}, ToolContext(quest_id="q1")).ok
+
+
+def test_periods_are_normalised():
+    import datetime
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    day = datetime.date(2026, 11, 6)
+    assert goal_links.normalize_period("week", day) == "2026_W45" and goal_links.normalize_period(None, day) == "2026_W45"
+    assert goal_links.normalize_period("2026_W46", day) == "2026_W46" and goal_links.normalize_period("this month", day) == "2026_11"

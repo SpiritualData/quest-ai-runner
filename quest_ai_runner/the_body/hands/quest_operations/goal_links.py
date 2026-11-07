@@ -7,6 +7,7 @@ of created, updated or unchanged happened. It imports no tool registry, so both 
 """
 from __future__ import annotations
 
+import datetime
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 #: The optional arguments that link a goal to the quest's specification, and the schema the planner sees for them.
@@ -15,6 +16,7 @@ LINK_PARAMS: Dict[str, Any] = {
     "assignee": {"type": "string",
                  "description": ("Who owns the goal: a member of this quest by name (or part of it), email or user id. "
                                  "A name that matches nobody, or more than one person, creates nothing and lists the members.")},
+    "due_date": {"type": "string", "description": "The day it is due, YYYY-MM-DD (inside the period); optional."},
     "spec_solution_id": {"type": "string",
                          "description": ("The quest strategy (specification solution record id, esr_...) this goal serves, "
                                          "from get_spec or read_spec_records. Quest refuses an id that is not on the quest.")},
@@ -24,13 +26,28 @@ LINK_PARAMS: Dict[str, Any] = {
                             "description": "The metric's target value by this goal's date; needs spec_metric_id."},
 }
 #: Fields the ensure form may change on a goal that already exists (each is sent to ``PUT /api/planning/goals/{id}``).
-UPDATABLE = ("description", "criteria", "period", "target_value", "target_unit", *LINK_KEYS)
+UPDATABLE = ("description", "criteria", "period", "target_value", "target_unit", "scheduled_date", *LINK_KEYS)
+
+
+def normalize_period(value: Any, today: Optional[datetime.date] = None) -> str:
+    """A period in Quest's formats. A bare scope word ("week", "this week", "day", "today", "month", "quarter", "year") or nothing becomes the current
+    one; a day or any valid period passes through unchanged. Empty input means this week: a next step is a week's goal."""
+    day = today or datetime.date.today()
+    text = str(value or "").strip().lower().replace("_", " ")
+    iso = day.isocalendar()
+    scopes = {"": f"{iso[0]}_W{iso[1]:02d}", "week": f"{iso[0]}_W{iso[1]:02d}", "this week": f"{iso[0]}_W{iso[1]:02d}",
+              "day": day.isoformat(), "today": day.isoformat(), "month": f"{day.year}_{day.month:02d}", "this month": f"{day.year}_{day.month:02d}",
+              "quarter": f"{day.year}_Q{(day.month - 1) // 3 + 1}", "year": str(day.year)}
+    return scopes.get(text, str(value).strip())
 
 
 def link_fields(args: Mapping[str, Any]) -> Dict[str, Any]:
     """The optional goal fields the person-facing arguments name, with empty ones dropped."""
     names = ("description", "criteria", "target_value", "target_unit", *LINK_KEYS)
-    return {k: args[k] for k in names if args.get(k) not in (None, "")}
+    out = {k: args[k] for k in names if args.get(k) not in (None, "")}
+    if args.get("due_date"):
+        out["scheduled_date"] = str(args["due_date"]).strip()
+    return out
 
 
 def resolve_assignee(client: Any, quest_id: str, who: Any) -> Tuple[Optional[str], Optional[str]]:
