@@ -284,3 +284,46 @@ def test_the_title_starts_with_the_milestones_code_and_never_carries_the_record_
     assert [g["id"] for g in resolved.candidates] == ["g9"] and "esr_c next step" not in resolved.facts.split("Keys:")[1].split("\n")[0]
     resolved.carry_out(tools, lambda prompt: "g9" if "Open goals" in prompt else "NONE")
     assert calls[0]["title"].startswith("P3 ") and "esr_" not in calls[0]["title"] and calls[0]["adopt_goal_id"] == "g9" and calls[0]["spec_solution_id"] == "esr_c"
+
+
+def test_settle_plan_turns_a_deep_run_or_a_permission_question_into_the_answer_and_keeps_only_work_beyond_the_write():
+    from hubofhubs.api import PlanDecision
+    resolved = cue.resolve(registry(), "q1", CUE)
+    deep = PlanDecision(action="deep", goal="g", deep_brief="b", deferred_deep={"goal": "x"})
+    resolved.settle_plan(deep, "RECEIPT")
+    assert deep.action == "answer" and deep.deferred_deep is None
+    ask = PlanDecision(action="confirm", confirm_question="Do you want me to?")
+    resolved.settle_plan(ask, "RECEIPT")
+    assert ask.action == "answer" and ask.confirm_question is None
+    read = PlanDecision(action="read")
+    resolved.settle_plan(read, "RECEIPT")
+    assert read.action == "read"
+    code = PlanDecision(action="deep", goal="g", deep_brief="build the page", deep_target="code_or_files")
+    resolved.settle_plan(code, "RECEIPT: step recorded")
+    assert code.action == "deep" and code.deep_brief.startswith("Already done by the runner before this run") and "RECEIPT: step recorded" in code.deep_brief
+
+
+def test_the_first_message_is_composed_from_the_records_before_the_write_and_no_deep_run_is_launched():
+    from hubofhubs.api import EVENT_INTERIM
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    order = []
+    calls = []
+    inner = write_goal(calls)
+
+    def recording(args, ctx):
+        order.append("write")
+        return inner.handler(args, ctx)
+    tools = ToolRegistry([read_spec(), list_goals(), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=recording)])
+    provider = StubProvider([{"action": "deep", "user_intent": "act", "rationale": "r", "pending_read": [], "deep_brief": "carry out the request for real", "goal": "carry it out"}])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=tools,
+                        config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0))
+    events = []
+    result = orch.run(CUE, sink=StreamSink(lambda e: (order.append(e["type"]) if e["type"] == EVENT_INTERIM else None, events.append(e))), quest_id="q1")
+    assert order[:2] == [EVENT_INTERIM, "write"]            # the first message, then the write
+    first = next(e for e in events if e["type"] == EVENT_INTERIM)
+    assert "Where this stands" in first["text"] and "P3 Mobile app live on the Apple Store" in first["text"] and "blocked" not in first["text"].lower()
+    assert "Recording this week's next step" in first["text"]
+    assert result.kind != "deep" and len(calls) == 1

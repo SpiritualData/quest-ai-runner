@@ -253,7 +253,7 @@ def entries_of(rs: Any, gathered: Sequence[Any]) -> List[Any]:
     return [*gathered, str(getattr(rs, "context_view", "") or "")]
 
 
-def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *, user_turn: bool) -> bool:
+def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *, user_turn: bool, doing: str = "", forced: bool = False) -> bool:
     """MESSAGE 1 of an act request: where it stands (the milestone's measure read from the records, or what the planner listed from
     its reads), then what happens now. Sent once, as an interim message, before the planned work runs. True when sent.
 
@@ -264,7 +264,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
         return False
     if not act_status.should_send_status(
             enabled=bool(getattr(cfg, "interim_replies", False)), user_turn=user_turn, user_intent=getattr(rs, "turn_user_intent", None),
-            action=plan.action, mutating_calls=mutating_call_count(orch, plan.tool_calls or []),
+            action="tool" if forced else plan.action, mutating_calls=1 if forced else mutating_call_count(orch, plan.tool_calls or []),
             already_sent=getattr(rs, "status_first", None) is not None):
         return False
     meta = getattr(rs, "_ctx_meta", None) or {}
@@ -278,7 +278,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
                                                value=act_status.format_figure(measured.get("before")), call=reading.call if reading else None)
         evidence = "\n".join([rs.user_message or "", *[str(g.get("text") or "") for g in gathered if isinstance(g, dict)],
                               str(getattr(rs, "context_view", "") or "")])
-        doing = (plan.goal or "") if plan.action == "deep" else (plan.rationale or "")
+        doing = doing or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
         voice = meta.get("channel") == "voice"
         texts = act_status.status_texts(reading, list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice)
         ledger = interim_ledger_for(meta if meta else None)

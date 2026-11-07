@@ -524,16 +524,17 @@ class RunLoopMixin:
             if (rs.cue_resolved is not None and not rs.cue_step_attempted and rs._forced_plan is None
                     and rs.cue_resolved.routes_to_code(rs.plan, rs.turn_user_intent, gathered, self.tools)):
                 rs.cue_step_attempted = True
+                # Order: the first message (where it stands, what happens now) is composed from the records, then the write, then the receipt; the plan is settled to agree
+                # with it. No message is composed from a deep run's outcome.
+                send_status_first(self, emit, rs, gathered, user_turn=message_is_user_turn, doing=rs.cue_resolved.doing(), forced=True)
+                receipt = ""
                 try:
                     receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision)
                     gathered.append(receipt_observation("create_or_update_quest_goal", receipt, tool_status))
                 except milestone_cue.LaneGap as gap:
                     log.warning("milestone cue: lane gap: %s", gap)
                     gathered.append(lane_gap_observation(str(gap)))
-                rs.plan.action = "answer"
-                rs.plan.deferred_deep = None
-                rs.plan.confirm_question = None
-                rs.plan.asks_first = False
+                rs.cue_resolved.settle_plan(rs.plan, receipt)
             if getattr(rs.plan, "delivery", None):
                 rs.turn_delivery = rs.plan.delivery      # how the reply is delivered (spoken or written): the latest report of any step
             if rs.trace is not None and getattr(rs.plan, "facts_read", None):

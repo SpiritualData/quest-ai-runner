@@ -27,7 +27,8 @@ CLOSE = 0.85           # a runner-up at this share of the best score counts as a
 VALUE_CHARS = 220
 PURPOSE_CHARS = 1200
 ACT = "act"
-CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify")    # a plan that, for an act cue, the flow step takes over
+CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify", "read")    # a plan that, for an act cue, the flow step runs before
+BEYOND_THE_WRITE_TARGET = "code_or_files"                                 # work a tool write cannot do: the one case a deep run may follow the receipt
 DELIVERABLE_TARGET = "draft_in_chat"                              # the planner reports a deliverable written in the reply: the first rung of the increment order
 
 
@@ -235,6 +236,23 @@ class Resolved:
         from quest_ai_runner.the_world.tools import tool_guards
         return (not self.receipt and user_intent == ACT and getattr(plan, "action", None) in CODE_ROUTED_ACTIONS
                 and getattr(plan, "deep_target", None) != DELIVERABLE_TARGET and not tool_guards.mutating_tool_ran(gathered, registry))
+
+    def doing(self) -> str:
+        """What happens now, for the first message: stated from the records, before the write."""
+        return f"Recording this week's next step for {self.name}, linked to the milestone, with its owner."
+
+    def settle_plan(self, plan: Any, receipt: str) -> None:
+        """Make the plan agree with what code already did. A read plan is left alone. A deep run stays only when the work needs files or code beyond the tool write, and then its brief
+        starts with what the write already did; every other plan (a deep run, a question, a request for permission) becomes the answer, which reports the receipt."""
+        if getattr(plan, "action", None) == "read":
+            return
+        if getattr(plan, "action", None) == "deep" and (getattr(plan, "deep_target", None) == BEYOND_THE_WRITE_TARGET or getattr(plan, "deep_subtasks", None)):
+            plan.deep_brief = f"Already done by the runner before this run (do not redo it): {receipt}\n\n{plan.deep_brief or plan.goal or ''}"
+            return
+        plan.action = "answer"
+        plan.deferred_deep = None
+        plan.confirm_question = None
+        plan.asks_first = False
 
     def goal_arguments(self) -> Dict[str, Any]:
         args: Dict[str, Any] = {
