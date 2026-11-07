@@ -41,8 +41,9 @@ TABS = ("Datasets", "Inputs", "How to use")
 TAB_IDS = {"Datasets": 9101, "Inputs": 9102, "How to use": 9103}   # TABS is also the tab order: index 0, 1, 2
 DEV_ENV, PROD_ENV, OTHER_ENV = "dev eval world", "production (writes blocked)", "offline or local"
 BOUNDED_ENV = "production (bounded writes)"
-PROD_ARMS = {"chat_quality": ["prod_qar", "prod_qar_readonly"]}   # the arms that answer on production: bounded writes, then every write blocked
-ARM_ENVIRONMENT = {"dev_quest_chat": DEV_ENV, "qar_live": DEV_ENV, "prod_qar_readonly": PROD_ENV, "prod_qar": BOUNDED_ENV}   # for a log line that names no environment
+CHAT_ENV = "production Quest AI chat (as ai@spiritualdata.org)"
+PROD_ARMS = {"chat_quality": ["prod_quest_chat", "prod_qar", "prod_qar_readonly"]}   # the arms that answer on production: bounded writes, then every write blocked
+ARM_ENVIRONMENT = {"dev_quest_chat": DEV_ENV, "qar_live": DEV_ENV, "prod_qar_readonly": PROD_ENV, "prod_qar": BOUNDED_ENV, "prod_quest_chat": CHAT_ENV}   # for a log line that names no environment
 PRIORITIES = ("High", "Medium", "Low")
 PRESET_NOTE = "preset, human may change"
 PRESET_HIGH = ("chat_quality/acceptance", "poor_answers")
@@ -242,7 +243,7 @@ def input_state(dataset: dict, case: dict, arm: str, sources: dict) -> dict:
                     gaps=", ".join(last.get("lane_gaps") or []), reason=last.get("reason", ""), date=str(last.get("timestamp", ""))[:10], commit=last.get("commit", ""),
                     environment=environment_of(last.get("environment"), arm))
     environment = environment_of("", arm)
-    raw = sources["raw"].get(case_id) if component == "chat_quality" and environment not in (PROD_ENV, BOUNDED_ENV) else None
+    raw = sources["raw"].get(case_id) if component == "chat_quality" and environment not in (PROD_ENV, BOUNDED_ENV, CHAT_ENV) else None
     if raw and (raw.get("evidence") or {}).get("reply") is not None and raw.get("passed") is not None:
         return dict(status="pass" if raw["passed"] else "fail", reply=raw["evidence"].get("reply", ""), source="runner raw result",
                     score=raw.get("score") if raw.get("score") is not None else "", reason=judge_reason(raw), date=raw["file_date"], commit="",
@@ -279,7 +280,8 @@ def run_command(dataset: dict, prefix: str) -> str:
     component = dataset["component"]
     if component == "chat_quality" and prefix:
         name = dataset["id"].split("/")[-1]
-        return f"{prefix} {name} prod   (or: {prefix} {name} prod --readonly, or: {prefix} {name} dev)"
+        chat = f"{prefix} {name} prod --chat (the real Quest AI chat), or: " if name == "poor_answers" else ""
+        return f"{prefix} {name} prod   (or: {chat}{prefix} {name} prod --readonly, or: {prefix} {name} dev)"
     if dataset["id"].startswith("context/"):
         return f"esoi run {component} (the private case source is read from its environment variable)"
     return f"esoi run {component} --impl {ANSWER_ARMS.get(component) or '<arm>'}"
@@ -312,7 +314,7 @@ def build_rows(datasets: list[dict], sources: dict, owner: str, command_prefix: 
 
 
 def env_order(envs) -> list[str]:
-    return sorted(envs, key=lambda e: (e != DEV_ENV, e != BOUNDED_ENV, e != PROD_ENV, e))
+    return sorted(envs, key=lambda e: (e != DEV_ENV, e != CHAT_ENV, e != BOUNDED_ENV, e != PROD_ENV, e))
 
 
 def states_for(env: str, arms: list[str], dataset: dict, sources: dict) -> list[dict]:
