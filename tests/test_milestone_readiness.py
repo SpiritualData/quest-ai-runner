@@ -2,10 +2,7 @@
 the reply never ends by asking the chat user. Synthetic records and a fake tool registry stand in for Quest."""
 import datetime
 import json
-import re
 from types import SimpleNamespace
-
-import pytest
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue as cue
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_readiness as readiness
@@ -13,17 +10,6 @@ from quest_ai_runner.the_intelligence.mind.response_writer import act_status
 from quest_ai_runner.the_intelligence.mind.response_writer import orchestrator_turn_messages as messages
 from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
-
-@pytest.fixture(autouse=True)
-def cheap_model(monkeypatch):
-    """The turn's one cheap model call, answered offline: the milestone judgment picks the first candidate listed, any other question is answered NONE."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
-
-    def fake(self, prompt):
-        found = re.search(r"^(esr_\w+):", prompt, re.M) if "These are milestones of the quest" in prompt else None
-        return found.group(1) if found else "NONE"
-    monkeypatch.setattr(Orchestrator, "cheap_decision", fake)
-
 
 TABLES = {
     "solutions": {"esr_c": {"name": "P3 Partner users", "milestones": "100 new users come through a partner.", "owner_user_ids": ["u_ops"],
@@ -128,8 +114,8 @@ def test_the_closing_line_gives_both_stages_and_says_why_an_unchanged_value_did_
     step = resolved(tools(calls))
     step.carry_out(tools(calls), lambda prompt: json.dumps({"draft": "Pitch.", "human_step": "Send it."}))
     line = step.closing("0 of 100", "0 of 100")
-    assert line.startswith("Readiness of the next step: 0 of 5 (none held yet) before, 5 of 5 (") and "Milestone metric (P3 Partner users): unchanged at 0 of 100 (the metric record), because" in line
-    assert "was 0 of 100, now 7 of 100 (the metric record)" in step.closing("0 of 100", "7 of 100") and "\n" not in line
+    assert line.startswith("Readiness of the next step: 0 of 5 (none held yet) before, 5 of 5 (") and "Milestone metric (P3 Partner users): unchanged at 0 of 100, because" in line
+    assert "was 0 of 100, now 7 of 100" in step.closing("0 of 100", "7 of 100") and "\n" not in line
 
 
 def test_the_first_message_says_the_readiness_the_quest_holds():
@@ -154,7 +140,7 @@ def test_close_with_metric_ends_a_recorded_step_with_the_one_line_and_no_questio
     rs = SimpleNamespace(status_first={"before": before, "voice": False}, cue_resolved=step, gathered=[], quest_id="q1", turn_metrics=None, tool_calls_ran=True)
     res = SimpleNamespace(kind="answer", text="Step recorded.\n\nDo you want me to pick a partner?", deep_results=[])
     messages.close_with_metric(SimpleNamespace(tools=None), rs, res)
-    assert "Do you want" not in res.text and res.text.endswith("Milestone metric (P3 Partner users): unchanged at 0 of 100 (the metric record), because it changes only when a person completes the step above.")
+    assert "Do you want" not in res.text and res.text.endswith("Milestone metric (P3 Partner users): unchanged at 0 of 100, because it changes only when a person completes the step above.")
 
 
 def test_a_blocked_ask_is_not_filed_once_the_step_is_recorded_in_the_goal():
@@ -162,78 +148,3 @@ def test_a_blocked_ask_is_not_filed_once_the_step_is_recorded_in_the_goal():
     verdict = {"blocker": "needs_person"}
     assert messages.file_blocked_ask(SimpleNamespace(), None, {"milestone_step_recorded": True}, res, verdict, question="Which source?") is False
     assert res.output == "the reply"
-
-
-SOURCED = {"solutions": TABLES["solutions"],
-           "metrics": {"esr_mc": dict(TABLES["metrics"]["esr_mc"], record="Provisional 83.3 percent", source="cov_source", measured_through="2026-10-31")}}
-
-
-def sourced_tools(calls, reads, goals=(), value="73.8 percent", label="the coverage report"):
-    base = tools(calls, goals)
-    def read(args, ctx):
-        reads.append(dict(args))
-        return ToolResult(ok=True, data={"value": value, "as_of": "2026-11-07", "source": label, "detail": ""}, text="read")
-    registry = ToolRegistry([base.get("read_spec_records"), base.get("list_quest_goals"), base.get("create_or_update_quest_goal"),
-                             ToolSpec(name="read_metric_source", description="d", mutates=False, handler=read)])
-    registry.get("read_spec_records").handler = lambda a, c: ToolResult(ok=True, data={"records": SOURCED, "time_zone": "UTC"}, text="r")
-    return registry
-
-
-def answer_for(prompt):
-    return json.dumps({"draft": "Pitch.", "human_step": "Send it."})
-
-
-def test_without_an_earlier_line_the_record_reading_is_labelled_and_never_the_before():
-    calls, reads = [], []
-    step = resolved(sourced_tools(calls, reads))
-    step.carry_out(sourced_tools(calls, reads), answer_for)
-    line = step.closing("Provisional 83.3 percent", "73.8 percent")
-    assert "now 73.8 percent (as of 2026-11-07, from the coverage report)" in line and "the step had no earlier reading of this measure" in line
-    assert "the metric record's last reading: Provisional 83.3 percent (2026-10-31)" in line and "was Provisional" not in line
-
-
-def test_with_an_earlier_line_from_the_same_source_before_is_that_line_and_an_unchanged_value_says_so():
-    calls, reads = [], []
-    title = "P3 Partner users next step: week of 2026-11-02"
-    goal = dict(FULL, id="k", title=title, completed=False, abandoned=False,
-                text="Next.\nCurrent value: 70.0 percent (as of 2026-11-03, from the coverage report)\nHuman step: Send it.\nDraft: Pitch.")
-    step = resolved(sourced_tools(calls, reads, [goal]))
-    step.carry_out(sourced_tools(calls, reads, [goal]), answer_for)
-    assert "was 70.0 percent (as of 2026-11-03), now 73.8 percent (as of 2026-11-07), both from the coverage report" in step.closing("x", "y")
-    same = dict(goal, text=goal["text"].replace("70.0", "73.8"))
-    step = resolved(sourced_tools(calls, reads, [same]))
-    step.carry_out(sourced_tools(calls, reads, [same]), answer_for)
-    assert "unchanged at 73.8 percent (as of 2026-11-07, from the coverage report)" in step.closing("x", "y")
-    other = dict(goal, text=goal["text"].replace("the coverage report", "an older report"))
-    step = resolved(sourced_tools(calls, reads, [other]))
-    step.carry_out(sourced_tools(calls, reads, [other]), answer_for)
-    assert "another source (an older report), so it is not compared" in step.closing("x", "y")
-
-
-def test_the_planners_source_read_is_taken_out_so_the_source_is_read_once():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from .conftest import StubProvider, StubRetrieval
-    calls, reads = [], []
-    provider = StubProvider([{"action": "tool", "user_intent": "act", "rationale": "r", "tool_calls": [{"name": "read_metric_source", "args": {}}]}])
-    config = OrchestratorConfig()
-    config.overseer = False
-    Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=sourced_tools(calls, reads)).run("get the partner users moving", quest_id="q1")
-    assert reads == [{"name": "cov_source"}] and len(calls) == 1
-
-
-def test_the_first_message_never_carries_the_planners_fact_text_even_when_the_plan_still_reads():
-    from hubofhubs.api import EVENT_INTERIM
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from .conftest import StubProvider, StubRetrieval
-    leak = "CUE FACTS: milestone 'P3', solution esr_c, metric source cov_source. Code reads it via read_metric_source"
-    provider = StubProvider([{"action": "tool", "user_intent": "act", "rationale": "r", "facts_read": [leak],
-                              "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}])
-    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=sourced_tools([], []),
-                        config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0))
-    events = []
-    orch.run("get the partner users moving", sink=StreamSink(events.append), quest_id="q1")
-    first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
-    assert "CUE FACTS" not in first and "esr_" not in first and "read_metric_source" not in first and "Current value" in first

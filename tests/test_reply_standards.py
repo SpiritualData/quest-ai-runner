@@ -439,3 +439,12 @@ def test_a_length_breach_the_rewrites_did_not_fix_keeps_the_opening_and_the_clos
     fixed = repair(draft, STANDARDS["decline"], m, EVIDENCE)
     assert fixed == "I can't issue a bank refund from here. If you have the refund, I can log it as a negative expense entry."
     assert not measure(fixed, STANDARDS["decline"], EVIDENCE).failed
+
+
+def test_a_date_stated_beside_a_figure_must_be_the_date_the_records_give_that_figure():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import EvidenceIndex, unsupported_values
+    evidence = "Current state:\nAs of 5 October 2026:\n- Paid subscribers: 0.\n\nThe next review is on 5 November."
+    index = EvidenceIndex.of(evidence)
+    assert unsupported_values("There are 0 paid subscribers as of 5 October.", index) == []
+    assert unsupported_values("There are 0 paid subscribers as of 5 November.", index) == ["5 November"]
+    assert unsupported_values("The review is on 5 November.", index) == []

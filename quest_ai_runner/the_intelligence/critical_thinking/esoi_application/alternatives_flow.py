@@ -46,7 +46,7 @@ REFERENCE_MAX = 6
 MIN_SHARED_WORDS = 2
 
 
-def goals_like(goals: Sequence[Mapping[str, Any]], cue: str) -> List[Mapping[str, Any]]:
+def goals_like(goals: Sequence[Mapping[str, Any]], cue: str, min_shared: int = MIN_SHARED_WORDS) -> List[Mapping[str, Any]]:
     """The open goals that look like what the request is about, for the model to SEE and for the status line (titles only): at least ``MIN_SHARED_WORDS`` shared meaningful words, ranked
     by how rare they are among the quest's goals, those scoring at least half the best, at most ``REFERENCE_MAX``. They are never changed through this list: a goal is changed only when
     Quest AI keeps it (``goals_kept``) and the tool checks that again."""
@@ -55,7 +55,7 @@ def goals_like(goals: Sequence[Mapping[str, Any]], cue: str) -> List[Mapping[str
     open_goals = [g for g in goals if not g.get("completed") and not g.get("abandoned")]
     bag = {id(g): set(milestone_cue.words(f"{g.get('title') or ''} {g.get('text') or ''}")) for g in open_goals}
     df = {w: sum(1 for g in open_goals if w in bag[id(g)]) for w in wanted}
-    scored = [(sum(math.log(1 + len(open_goals) / df[w]) for w in wanted & bag[id(g)]), g) for g in open_goals if len(wanted & bag[id(g)]) >= MIN_SHARED_WORDS]
+    scored = [(sum(math.log(1 + len(open_goals) / df[w]) for w in wanted & bag[id(g)]), g) for g in open_goals if len(wanted & bag[id(g)]) >= min_shared]
     scored.sort(key=lambda pair: -pair[0])
     best = scored[0][0] if scored else 0.0
     return [g for score, g in scored if score >= REFERENCE_SHARE * best][:REFERENCE_MAX]
@@ -176,7 +176,7 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     everything = milestone_cue.goals_through(registry, quest_id)
     goals = goals_kept(everything)
     solutions = solutions_listing(tables)
-    answer = decide(build_prompt(cue, reply, goals, solutions, goals_like(everything, cue)))
+    answer = decide(build_prompt(cue, reply, goals, solutions, goals_like(everything, cue, min_shared=1)))      # the model sees every goal that shares a rare word, to pick out the series by title
     alts = parse(answer, {str(g.get("id")) for g in goals}, solutions, reply)
     if not alts:
         log.warning("alternatives flow: no alternatives to keep in the reply (model answer: %r)", str(answer)[:400])
@@ -193,19 +193,25 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
             alt.title = titles.get(alt.goal_id) or alt.title        # the keyed goal is found by its exact title: renaming is never the way in
     from quest_ai_runner.the_world.tools.tools import ToolContext
     names = {(s["solution_id"], s["metric_id"]): s["metric_name"] for s in solutions}
-    looks_like = [g for g in goals_like(everything, cue) if str(g.get("id")) not in {str(k.get("id")) for k in goals}]
-    if looks_like:
-        # Goals that look like this series exist and are a person's (Quest AI did not write them): nothing is created beside them and nothing is changed. The reply still carries each
-        # version's hypothesis and what they are compared by, and says the existing goals are there and were left as they are.
-        metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
+    kept_ids = {str(k.get("id")) for k in goals}
+    looks_like = [g for g in goals_like(everything, cue, min_shared=1) if str(g.get("id")) not in kept_ids]
+    metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
+    others = {str(g.get("title") or "").strip().casefold(): g for g in everything if str(g.get("id")) not in kept_ids and not g.get("completed") and not g.get("abandoned")}
+    existing = {id(a): others[a.title.strip().casefold()] for a in alts if not a.goal_id and a.title.strip().casefold() in others}
+    if looks_like and not existing:
+        # Goals that look like this series exist and are a person's (Quest AI did not write them) and the versions name none of them: nothing is created beside them and nothing is
+        # changed. The reply says they are there and were left as they are.
         rows = [{"title": str(looks_like[i].get("title") if i < len(looks_like) else alt.title), "hypothesis": alt.hypothesis, "state": "left_alone"} for i, alt in enumerate(alts)]
         return compose_tail(rows, metric)
+    results = [{"title": str(existing[id(a)].get("title") or a.title), "hypothesis": a.hypothesis, "state": "left_alone"} for a in alts if id(a) in existing]      # a person's goal the version is for: named, never changed
+    alts = [a for a in alts if id(a) not in existing]
+    if not alts:
+        return compose_tail(results, metric)
 
     default = next(((str(g["spec_solution_id"]), m) for g in goals if g.get("spec_solution_id") for m in [next((s["metric_id"] for s in solutions if s["solution_id"] == g["spec_solution_id"]), "")] if m), ("", ""))
     for alt in alts:
         if not alt.solution_id and default[0]:
             alt.solution_id, alt.metric_id = default
-    results = []
     for alt in alts:
         result = registry.invoke("create_or_update_quest_goal", goal_arguments(quest_id, alt, names.get((alt.solution_id, alt.metric_id), "")), ToolContext(quest_id=quest_id))
         if not result.ok:         # the versions and what they are compared by are still reported; the reply says this one was not recorded and why
@@ -213,7 +219,6 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
             results.append({"title": alt.title, "hypothesis": alt.hypothesis, "state": "not_recorded", "why": act_status_scrub(str(result.text))})
             continue
         results.append({"title": alt.title, "hypothesis": alt.hypothesis, "state": str((result.data or {}).get("state") or "created")})
-    metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
     return compose_tail(results, metric)
 
 

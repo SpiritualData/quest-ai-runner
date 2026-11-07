@@ -200,3 +200,23 @@ def test_a_question_that_only_asks_to_be_told_is_assembled_on_the_cheap_path_fir
                         config=OrchestratorConfig(overseer=True))
     orch.run("how many goals are on the big quest?", mode=Mode.LIVE, sink=RecordingSink())
     assert assembler.calls >= 1 and assembler.cheap >= 1
+
+
+def test_a_tool_catalog_search_is_not_evidence_for_the_information_turn_cap():
+    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence
+    menu = {"kind": "query", "locator": "tools(read goals)", "text": "TOOLS MATCHING YOUR SEARCH"}
+    ops = {"kind": "query", "locator": "list_operations", "text": "menu", "discovery": True}
+    read = {"kind": "query", "locator": "tool:list_quest_goals", "text": "595 matching goals"}
+    assert answer_evidence([menu, ops]) == [] and answer_evidence([menu, ops, read]) == [read]
+
+
+def test_a_version_that_names_a_persons_existing_goal_is_reported_under_that_goals_title_and_the_rest_are_created():
+    from .test_milestone_cue import A_EXISTING, B_NEW, alt_answer, alt_registry
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    rows = [{"id": "p1", "title": "Push post A", "text": "a person's goal", "spec_solution_id": None, "completed": False},
+            {"id": "x1", "title": "Budget decision recorded", "text": "other", "spec_solution_id": None, "completed": False}]
+    calls = []
+    named = [dict(A_EXISTING, title="Push post A", goal_id=""), dict(B_NEW, title="Push post B", goal_id="")]
+    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of posts for the push", "reply", lambda prompt: alt_answer(*named))
+    assert "- Push post A (already on the quest, left exactly as it is)" in tail and "Budget decision" not in tail
+    assert all(c.get("title") != "Push post A" for c in calls)

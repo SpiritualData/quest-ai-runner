@@ -32,7 +32,7 @@ from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import ACT_WIT
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
-from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
+from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence, gathered_content
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
@@ -378,7 +378,7 @@ class RunLoopMixin:
             # An information turn re-plans once: after the first plan and one re-plan, the wrap-up answers from what was read (the same exit
             # as a spent read budget). ``cheap_information_turns`` False is the other arm and keeps the full step budget.
             if (step >= 2 and getattr(cfg, "cheap_information_turns", True) and rs.turn_user_intent == "ask"
-                    and gathered_content(gathered) and not (exec_record is not None and exec_record.any_mutation_attempted)):
+                    and (answer_evidence(gathered) or step >= 4) and not (exec_record is not None and exec_record.any_mutation_attempted)):
                 break
             rs.steps = step + 1
             # Cooperative cancellation, checked before starting each new plan/gather/replan step.
@@ -535,10 +535,9 @@ class RunLoopMixin:
             # The milestone flow owns the goal writes of a milestone cue: the planner's own goal writes (a second goal for a deliverable, an outreach message) are taken out of its plan; the
             # deliverable lives inside the one keyed next-step goal the code step records. A plan left with no call becomes the answer.
             if rs.cue_resolved is not None and getattr(rs.plan, "action", None) == "tool":
-                owned = milestone_cue.OWNED_WRITES + ((milestone_cue.READ_TOOL,) if rs.cue_resolved.source and rs.turn_user_intent == milestone_cue.ACT else ())
-                kept_calls = [c for c in (rs.plan.tool_calls or []) if str((c or {}).get("name") or "") not in owned]
+                kept_calls = [c for c in (rs.plan.tool_calls or []) if str((c or {}).get("name") or "") not in milestone_cue.OWNED_WRITES]
                 if len(kept_calls) != len(rs.plan.tool_calls or []):
-                    log.info("milestone cue: the planner's goal write or source read was taken out of the plan; the code step owns it")
+                    log.info("milestone cue: the planner's goal write was taken out of the plan; the code step owns it")
                     rs.plan.tool_calls = kept_calls
                     if not kept_calls:
                         rs.plan.action = "answer"

@@ -163,6 +163,7 @@ FIGURE = re.compile(
     r"(?:(?P<sym>[$€£])\s?(?P<a>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
     r"|(?<![\w.])(?P<b>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s?(?:(?P<unit>USD|EUR|GBP|dollars?|euros?|pounds?)\b|(?P<pct>%)))", re.IGNORECASE)
 MAX_FIGURES_COMPARED = 250
+MAX_WINDOW_LINES = 20000
 QUOTED_NAME = re.compile(r"[\"“](?P<name>[^\"“”\n]{3,80})[\"”]")
 LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+\S", re.MULTILINE)
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(*\[])|\n+")
@@ -314,6 +315,7 @@ class EvidenceIndex:
     squashed: str
     everything: frozenset = frozenset()     # every whole number anywhere the turn held
     computed: frozenset = frozenset()       # the whole numbers a program computed over the rows the turn read (see COMPUTED_MARK)
+    windows: tuple = ()                     # per evidence line with its two lines before it: (the dates it states, the whole numbers it states)
 
     @classmethod
     def of(cls, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None) -> "EvidenceIndex":
@@ -324,8 +326,18 @@ class EvidenceIndex:
             clocks.add(key)
             clocks.add(key.rstrip("ap"))
         everything = held_figures(evidence if figure_basis is None else figure_basis)
+        lines = (evidence or "").splitlines()[:MAX_WINDOW_LINES]
+        windows = []
+        for i in range(len(lines)):
+            back = i
+            while back > max(0, i - 2) and lines[back - 1].strip():      # the two lines before it, never across a blank line
+                back -= 1
+            near = "\n".join(lines[back:i + 1])
+            when = frozenset(d for _, parts in dates_in(near) for d in parts)
+            if when:
+                windows.append((when, held_figures(without_dates(near))))
         return cls(days=days, clocks=frozenset(clocks), squashed=" " + squash(evidence) + " ", everything=everything,
-                   computed=computed_figures(reads if reads is not None else evidence))
+                   computed=computed_figures(reads if reads is not None else evidence), windows=tuple(windows))
 
 
 @dataclass
@@ -375,7 +387,25 @@ def unsupported_values(draft: str, evidence: EvidenceIndex) -> List[str]:
         if len(name.split()) >= 2 and f" {name} " not in evidence.squashed:
             out.append(m.group("name"))
     out.extend(unsupported_figures(draft, evidence))
+    out.extend(misdated_figures(draft, evidence))
     return list(dict.fromkeys(out))
+
+
+def misdated_figures(draft: str, evidence: "EvidenceIndex") -> List[str]:
+    """Dates a sentence of the draft states beside a figure when no place in the turn's evidence (a line and the two before it) states that date near any of that
+    sentence's figures: the date is carried from another fact, not from the reading the figure came from. Pure comparison of dates and numbers; no wording."""
+    if not evidence.windows:
+        return []
+    out: List[str] = []
+    for sentence in sentences(draft):
+        found = dates_in(sentence)
+        numbers = held_figures(without_dates(sentence))
+        if not found or not numbers:
+            continue
+        for text, parts in found:
+            if not any(all(p in when for p in parts) and (numbers & figures) for when, figures in evidence.windows):
+                out.append(text)
+    return out
 
 
 FROM_TODAY = re.compile(r"(?<!\d)(?P<n>\d{1,3})\s+days?\s+(?:away\s+)?from\s+(?:today|now)\b", re.IGNORECASE)

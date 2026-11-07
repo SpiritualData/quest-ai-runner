@@ -510,6 +510,11 @@ def gathered_content(gathered: List[Any]) -> List[Any]:
 
 
 
+def answer_evidence(gathered: List[Any]) -> List[Any]:
+    """What the turn read that an answer can rest on: ``gathered_content`` without a tool-catalog search or a capability menu, which only say how to read."""
+    return [o for o in gathered_content(gathered) if not (isinstance(o, dict) and (o.get("discovery") or str(o.get("locator") or "").startswith("tools(")))]
+
+
 @implementation("the-subconscious", "recency_window")
 class RecencyWindow:
     """What a request recalls: the cards that match its words, read only through the hub's Internal Context (``internal-context``, taken as

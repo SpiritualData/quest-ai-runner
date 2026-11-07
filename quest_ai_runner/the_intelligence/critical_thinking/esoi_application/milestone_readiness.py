@@ -83,8 +83,8 @@ def measure(goal: Optional[Mapping[str, Any]], *, owners: Sequence[str], solutio
     return Stage(tuple(key for key, _ in ITEMS if held[key]))
 
 
-def closing_line(before: Stage, after: Stage, *, label: str, metric: str) -> str:
-    """The one line message 2 ends with: the readiness stage before and after, and the milestone's metric before and after as ``metric`` words them (said by the caller, who knows where
-    each reading came from)."""
+def closing_line(before: Stage, after: Stage, *, label: str, was: str, now: str, why_unchanged: str) -> str:
+    """The one line message 2 ends with: the readiness stage before and after, and the milestone's metric before and after (an unchanged value is said as unchanged, with why)."""
+    metric = (f"unchanged at {was}, because {why_unchanged}" if was == now else f"was {was}, now {now}") if (was and now) else "not recorded, so no before and after can be shown"
     return (f"Readiness of the next step: {before.text()} before, {after.text()} after. "
             f"Milestone metric ({label}): {metric}.")

@@ -389,7 +389,6 @@ class Resolved:
     stage_after: Optional[readiness.Stage] = None        # the same, from the goal as the write read it back
     owner_label: str = ""                                # who owns the step, as the milestone's record names them (with the account name when it differs)
     human_step: str = ""                                 # the step only a person can do, as kept in the goal
-    record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
@@ -573,37 +572,13 @@ class Resolved:
             return f" The metric's value could not be read ({self.reading_gap}). Say that, say which data is missing, and state no value for it."
         return ""
 
-    KEPT_READING = re.compile(r"^Current value:\s*(?P<value>.*?)\s*\(as of (?P<day>[^,)]+), from (?P<source>.*)\)\s*$")
-
-    def metric_sentence(self, before_value: str, after_value: str) -> str:
-        """The milestone value before and after, each from where it came and only ever the same measure against itself. With a source: the goal's previous ``Current value:`` line
-        (same source) against the reading now; with no previous line the step had none, and the metric record's own last reading is given labelled as such, not as a before. With no
-        source the metric record's value is read twice, and an unchanged one is said as unchanged, with why."""
-        if self.reading:
-            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import shown
-            now, day, source = shown(self.reading["value"]), self.reading["as_of"], self.reading["source"]
-            earlier = self.KEPT_READING.match(self.kept_line or "")
-            record = f"the metric record's last reading: {before_value}" + (f" ({self.record_date})" if self.record_date else "")
-            if earlier and earlier.group("source").strip() == str(source).strip():
-                if earlier.group("value") == now:
-                    return f"unchanged at {now} (as of {day}, from {source}), because the source still reads the same as the goal's previous line ({earlier.group('day')})"
-                return f"was {earlier.group('value')} (as of {earlier.group('day')}), now {now} (as of {day}), both from {source}"
-            if earlier:
-                return f"now {now} (as of {day}, from {source}); the goal's previous line came from another source ({earlier.group('source')}), so it is not compared; {record}"
-            return f"now {now} (as of {day}, from {source}); the step had no earlier reading of this measure; {record}"
-        if not (before_value and after_value):
-            return "not recorded, so no before and after can be shown"
-        if before_value == after_value:
-            why = "it changes only when a person completes the step above" if self.human_step else "nothing recorded has moved it"
-            return f"unchanged at {before_value} (the metric record), because {why}"
-        return f"was {before_value}, now {after_value} (the metric record)"
-
     def closing(self, before_value: str, after_value: str) -> str:
         """The one line message 2 ends with once the step is recorded: the readiness stage before and after, and the milestone metric before and after (said as unchanged, with why,
         when it did not move). "" when the step was not recorded."""
         if self.stage_before is None or self.stage_after is None:
             return ""
-        return readiness.closing_line(self.stage_before, self.stage_after, label=self.name, metric=self.metric_sentence(before_value, after_value))
+        why = ("the source still reads the same" if self.reading else "it changes only when a person completes the step above") if self.human_step or self.reading else "nothing recorded has moved it"
+        return readiness.closing_line(self.stage_before, self.stage_after, label=self.name, was=before_value, now=after_value, why_unchanged=why)
 
     def without_questions(self, text: str) -> str:
         """The reply without a closing paragraph that asks the person something: a paragraph outside the kept draft whose last character is a question mark. The draft's own questions (neutral
@@ -741,5 +716,4 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id,
         done_when=str(row.get("milestones") or "").strip()[:VALUE_CHARS].rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
-        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row),
-        record_date=measured_through_of(tables, rid, row) or next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", str(metric.get("record") or ""))), "") if metric else "")
+        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row))
