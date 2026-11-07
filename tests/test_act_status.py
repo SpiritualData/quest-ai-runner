@@ -235,3 +235,34 @@ def test_no_ensure_call_is_built_from_a_read_of_several_workflows_or_none():
     two = {"locator": "tool:list_quest_workflows", "tool_data": [{"workflow_id": "a", "workflow_title": "A", "title": "s"}, {"workflow_id": "b", "workflow_title": "B", "title": "s"}]}
     assert ensure_from_read.call_from_reads([two], tools, "q1") is None and ensure_from_read.call_from_reads([], tools, "q1") is None
     assert ensure_from_read.call_from_reads([two], ToolRegistry([]), "q1") is None
+
+
+def test_the_already_set_sentence_says_where_it_is_with_the_quests_name_and_no_id():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import settle_already_set
+    from .test_tools import make_spec
+    tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True),
+                          make_spec("list_quest_workflows", handler=lambda a, c: ToolResult(ok=True), mutates=False)])
+    there = {"kind": "query", "locator": "tool:create_quest_workflow", "tool_status": "noop", "tool_data": WORKFLOW_THERE}
+    read = {"kind": "query", "locator": "tool:list_quest_workflows", "tool_status": "applied", "tool_data": [{"workflow_id": "qwf_1", "quest_name": "1000 Subscribers"}]}
+    res = SimpleNamespace(kind="answer", text="long model text")
+    assert settle_already_set(SimpleNamespace(tools=tools), SimpleNamespace(gathered=[read, there], status_first=None), res)
+    assert res.text == ("It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November), "
+                        "on the 1000 Subscribers quest's Workflows page.")
+    assert "quest_" not in res.text and "qwf_" not in res.text
+    nameless = SimpleNamespace(kind="answer", text="x")
+    settle_already_set(SimpleNamespace(tools=tools), SimpleNamespace(gathered=[{**read, "tool_data": [{"workflow_id": "qwf_1"}]}, there], status_first=None), nameless)
+    assert nameless.text.endswith("(next: Thursday 12 November).")
+
+
+def test_the_workflow_listing_rows_carry_the_quests_plain_name():
+    from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from .test_create_quest_workflow_tool import PRODUCTION_SHAPED, ListingClient
+
+    class Named(ListingClient):
+        def get_my_quest(self, quest_id):
+            return {"state": {"outcome": "1000 Subscribers: reach one thousand paying subscribers by spring"}}
+    spec = ops.list_quest_workflows_spec({"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "k"}, client_factory=lambda: Named(PRODUCTION_SHAPED))
+    rows = spec.handler({}, ToolContext(quest_id="q1")).data
+    assert rows[0]["quest_name"] == "1000 Subscribers"

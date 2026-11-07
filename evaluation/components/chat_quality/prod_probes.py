@@ -138,6 +138,14 @@ def read_number(spec, client):
     return None
 
 
+def pre_existing(case, checks, before):
+    """True when the state read BEFORE the run already met a state check's expectation for an ensure-one case: its effect allows a write, it names no ``increment_kind`` and is
+    not a milestone case (whose count can include unrelated goals). Decided from the case's data and the counts only. Such a case owes one complete message."""
+    if case.get("group") == "milestone" or str(case.get("increment_kind") or "").strip():
+        return False
+    return bool(checks) and any(b4 >= int(check.get("expect", check.get("expect_min", 1))) for check, b4 in zip(checks, before or []))
+
+
 READBACK_FIELDS = (("name", "title"), ("assignee", "assigned_to_user_id"), ("spec_solution_id",), ("spec_metric_id",), ("period",))
 
 

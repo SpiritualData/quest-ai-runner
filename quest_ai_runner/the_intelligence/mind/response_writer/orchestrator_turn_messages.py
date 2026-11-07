@@ -368,6 +368,10 @@ def settle_already_set(orch: Any, rs: Any, res: Any) -> bool:
     phrases = already_in_place(writes)
     if not phrases:
         return False
+    label = next((str(r.get("quest_name")) for g in receipts if isinstance(g.get("tool_data"), list) for r in g["tool_data"] if isinstance(r, dict) and r.get("quest_name")), "")
+    place = {"create_quest_workflow": "Workflows page"}.get(str(writes[0]["locator"])[5:], "")
+    if label and place and len(phrases) == 1 and phrases[0].endswith("."):
+        phrases = [phrases[0][:-1] + f", on the {label} quest's {place}."]      # where it is, in plain words, from the listing (never an id)
     res.text = " ".join(phrases[:2])
     rs.status_first = None       # the closing metric lines would repeat the sentence
     return True

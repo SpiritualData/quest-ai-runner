@@ -167,3 +167,39 @@ def test_the_after_state_is_the_tools_own_read_back_and_the_accepted_owners_are_
     assert P.after_states(gathered) == [gathered[0]["after_state"]] and P.after_states(None) == []
     effect = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"title~": "P3 ", "assignee~": ["Kaja", "Honelign"]}}]}
     assert P.accepted_owners(effect) == ["Kaja", "Honelign"] and P.accepted_owners({}) == []
+
+
+WORKFLOW_STATE_CHECK = {"read": "/api/workflows?quest_id=quest_x", "list_key": "items.steps",
+                        "match": {"=timing.repeat.freq": "weekly", "timing.repeat.byWeekday": "[3]", "*": "office hour"}, "expect_min": 1}
+WORKFLOWS_LISTING = {"items": [{"workflowId": "qwf_1", "title": "Weekly check-in: Thursday office hour", "steps": [
+    {"stepId": "s1", "title": "Thursday office hour: weekly check-in", "timing": {"kind": "window", "repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}}},
+    {"stepId": "s2", "title": "Monday check", "timing": {"kind": "window", "repeat": {"freq": "weekly", "interval": 1, "byWeekday": [0]}}},
+    {"stepId": "s3", "title": "Thursday office hour: one-off", "timing": {"kind": "window", "repeat": None}}]}]}
+
+
+def test_the_workflow_state_check_reads_a_path_with_a_query_and_matches_the_real_step_shape():
+    import prod_probes as P
+    seen = []
+
+    class Client:
+        def _request(self, method, path):
+            seen.append(path)
+            return WORKFLOWS_LISTING
+    assert P.read_number(dict(WORKFLOW_STATE_CHECK, count=True), Client()) == 1.0 and seen == ["/api/workflows?quest_id=quest_x"]
+    none = {"items": [{"steps": [{"title": "Monday check", "timing": {"repeat": {"freq": "weekly", "byWeekday": [0]}}}]}]}
+
+    class Empty:
+        def _request(self, method, path):
+            return none
+    assert P.read_number(dict(WORKFLOW_STATE_CHECK, count=True), Empty()) == 0.0
+
+
+def test_pre_existing_applies_only_to_ensure_one_cases_whose_state_already_met_the_expectation():
+    import prod_probes as P
+    checks = [WORKFLOW_STATE_CHECK]
+    assert P.pre_existing({"effect": {"allow": [{"tool": "create_quest_workflow"}]}}, checks, [1]) is True
+    assert P.pre_existing({"effect": {"allow": [{"tool": "create_quest_workflow"}]}}, checks, [0]) is False
+    assert P.pre_existing({"effect": {}}, [], []) is False
+    assert P.pre_existing({"group": "milestone"}, checks, [3]) is False
+    assert P.pre_existing({"increment_kind": "next_step"}, checks, [3]) is False
+    assert P.message_standard({"effect": {"allow": [{"tool": "x"}]}, "already_there": True}) == "single"

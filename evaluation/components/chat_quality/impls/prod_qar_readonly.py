@@ -278,6 +278,16 @@ def build_arm(meter, bounded):
                 owners = P.accepted_owners(effect)
                 if owners:
                     judged_case["evidence_notes"] += " Accepted owners for the goal (any one of them is acceptable): " + ", ".join(owners) + ". The after-state carries the assignee's name when the tool could look it up."
+            if "before" in counts and "after" in counts:
+                verdicts = [state_verdict(check, b4, af) for check, b4, af in zip(checks, counts["before"], counts["after"])]
+                record["state"] = dict(counts, ok=all(v[0] for v in verdicts), why="; ".join(v[1] for v in verdicts))
+                judged_case["evidence_notes"] += (f" State check: {counts['before']} matching before the run, {counts['after']} after. Lines marked DONE were really made. "
+                                                  "Only the writes the case allows run; anything else stays blocked.")
+                if P.pre_existing(case, checks, counts["before"]):
+                    judged_case["already_there"] = True      # nothing needs doing: one complete message is the standard (prod_probes.message_standard)
+                    judged_case["evidence_notes"] += " Pre-existing: yes (the state read before the run already met the expectation, so the right reply says it is already set and where)."
+                    judged_case["rubric"] = list(judged_case.get("rubric") or []) + [
+                        "The thing already exists, so the reply says it is already set or already there, and does not claim to have created it again"]
             if case.get("zero_writes"):
                 attempted = [w for w in dry.RECORDER.snapshot()["writes"] if not w.get("internal")] + [{"done": d} for d in dry.RECORDER.snapshot()["performed"]]
                 record["state"] = dict(ok=not attempted, why=("no write attempted" if not attempted else f"{len(attempted)} write(s) attempted on a case that writes nothing"))

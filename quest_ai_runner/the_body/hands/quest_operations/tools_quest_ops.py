@@ -778,6 +778,17 @@ def step_line(row: Mapping[str, Any]) -> str:
             f"{trim(row['title'], 120)}")
 
 
+def quest_label(client: Any, quest_id: str) -> str:
+    """A short plain name for a quest, from its outcome (the first clause, at most 60 characters); "" when it cannot be read. Never its id."""
+    try:
+        outcome = str(((client.get_my_quest(quest_id) or {}).get("state") or {}).get("outcome") or "")
+    except Exception:  # noqa: BLE001  a label is a convenience; without it the sentence names no quest
+        return ""
+    text = " ".join(outcome.split())
+    cut = re.search(r"[.;:](\s|$)", text[:60])
+    return (text[:cut.start()] if cut else text[:60]).strip()
+
+
 def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -797,6 +808,9 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
         names = {str(m.get("user_id")): str(m.get("name") or "")
                  for m in (client.list_assignable_members(quest_id) or []) if m.get("user_id")}
         rows = [r for wf in workflows for r in step_rows(wf, names)]
+        label = quest_label(client, quest_id)
+        for r in rows:
+            r["quest_name"] = label
         total = len(rows)
         if args.get("open_only", True):
             rows = [r for r in rows if r["status"] != "done"]
