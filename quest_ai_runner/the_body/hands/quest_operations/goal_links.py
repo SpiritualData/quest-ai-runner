@@ -87,20 +87,21 @@ def is_keyed_next_step(title: Any) -> bool:
     return bool(KEYED_NEXT_STEP.search(str(title or "")))
 
 
-NEXT_STEP_TAIL = re.compile(r"\s*next step: week of \d{4}-\d{2}-\d{2}\s*$")
-MIN_MILESTONE_TITLE = 8
+MARKER = "Kept by Quest AI:"
 
 
-def milestone_of(title: Any) -> str:
-    """The milestone's own title inside a keyed goal title ("<milestone title> next step: week of YYYY-MM-DD"), else the title as it is."""
-    return NEXT_STEP_TAIL.sub("", str(title or "")).strip()
+def with_marker(description: Any) -> str:
+    """The description this tool writes, beginning with the marker that says the goal is one Quest AI keeps. Without the marker (or a keyed next-step title) a goal is a person's."""
+    text = str(description or "").strip()
+    return text if text.startswith(MARKER) else (f"{MARKER} {text}" if text else MARKER)
 
 
-def adoptable(target_title: Any, new_title: Any) -> bool:
-    """True when a goal may be taken over by the keyed next step ``new_title``: it is a keyed next step itself, or its title starts with the milestone's own title (a goal this
-    flow wrote for the milestone earlier, such as a deliverable goal). A person's goal, whose title carries neither, is never touched."""
-    milestone = milestone_of(new_title)
-    return is_keyed_next_step(target_title) or (len(milestone) >= MIN_MILESTONE_TITLE and str(target_title or "").strip().casefold().startswith(milestone.casefold()))
+def is_owned(goal: Mapping[str, Any]) -> bool:
+    """True when this tool earlier wrote the goal: its title ends in the keyed "next step: week of YYYY-MM-DD" pattern, or its description begins with the marker. Only such a goal may ever be
+    updated, renamed, re-described, re-dated or reassigned by this tool; a goal that merely shares words with a request, or is a person's, is never touched."""
+    title = goal.get("name") if goal.get("name") is not None else goal.get("title")
+    text = goal.get("description") if goal.get("description") is not None else goal.get("text")
+    return is_keyed_next_step(title) or str(text or "").strip().startswith(MARKER)
 
 
 def is_link_refusal(error: Any) -> bool:
@@ -120,7 +121,7 @@ def linked_open_goal(goals: List[Dict[str, Any]], solution_id: str, title: str) 
     """The id of the open goal already linked to ``solution_id``, the one whose name shares the longest start with ``title`` when several are: code decides this, no model."""
     import os.path
     linked = [g for g in goals if str(g.get("spec_solution_id") or "") == solution_id and not g.get("completed") and not g.get("abandoned")
-              and adoptable(g.get("name"), title)]
+              and is_owned(g)]
     if not linked:
         return None
     best = max(linked, key=lambda g: len(os.path.commonprefix([str(g.get("name") or ""), title])))
@@ -160,6 +161,8 @@ def verified(client: Any, quest_id: str, outcome: Mapping[str, Any], title: str,
     for; when it does not, the links are written alone, once, so a refusal comes back with its own words, and that response is read. Returns ``{state, goal, problems, read}``:
     ``state`` is created, updated (only when the goal now differs from before) or unchanged, ``goal`` what is shown, ``problems`` each asked-for thing not shown, and ``read`` False
     when nothing could be read at all."""
+    if outcome["state"] == "left_alone":
+        return {"state": "left_alone", "goal": outcome.get("before"), "problems": [], "read": True}
     listed = fetch_goal(client, quest_id, outcome.get("goal_id"), title)
     written = next((g for g in (from_write(w) for w in reversed(outcome.get("writes") or [])) if g), None)
     goal = written or listed
@@ -219,8 +222,9 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
     if not found and link_match and fields.get("spec_solution_id"):
         # Idempotent in code: a goal already linked to this strategy is the goal, updated in place, before any create. The model's pick below is only for older goals with no link.
         adopt_goal_id = linked_open_goal(goals, str(fields["spec_solution_id"]), title) or adopt_goal_id
-    if adopt_goal_id and not adoptable(next((g.get("name") for g in goals if str(g.get("id")) == str(adopt_goal_id)), ""), title):
-        adopt_goal_id = None       # never take over a goal that is not a keyed next step: it is a person's, and stays exactly as it is
+    fields = dict(fields, description=with_marker(fields.get("description")))
+    if adopt_goal_id and not is_owned(next((g for g in goals if str(g.get("id")) == str(adopt_goal_id)), {})):
+        adopt_goal_id = None       # never take over a goal this tool did not write: it is a person's, and stays exactly as it is
     if not found and adopt_goal_id:
         # The same work already exists under an older title: it is updated in place (renamed to the key, linked, moved to the period), never duplicated.
         before = next((dict(g) for g in goals if str(g.get("id")) == str(adopt_goal_id)), None)
@@ -246,6 +250,9 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
         return {"state": "created", "goal_id": goal_id, "changed": [], "writes": [write], "copies": 0, "before": None}
     goal = found[0]
     before = dict(goal)      # as listed before any write
+    if not is_owned(goal):
+        # A goal with this exact title that this tool did not write is a person's: it is left exactly as it is (no field, no owner, no period, no link), whatever the request says.
+        return {"state": "left_alone", "goal_id": str(goal.get("id")), "changed": [], "writes": [], "copies": len(found) - 1, "before": before}
     goal_id = str(goal.get("id"))
     changes = goal_changes(goal, {**fields, "period": period})
     writes: List[Any] = []

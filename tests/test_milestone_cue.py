@@ -381,7 +381,7 @@ def test_a_goal_already_linked_or_already_titled_is_updated_in_place_and_never_c
     from quest_ai_runner.the_body.hands.quest_operations import goal_links
     fields = {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "d"}
     # the keyed goal exists next to a legacy unlinked one: nothing is created
-    client = GoalClient([{"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "d", "period": "2026_W45"},
+    client = GoalClient([{"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "Kept by Quest AI: d", "period": "2026_W45"},
                          {"id": "old", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "period": "2026_W45"}])
     done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", fields, None, None, True)
     assert done["state"] == "unchanged" and client.posts == [] and client.puts == []
@@ -493,7 +493,7 @@ def test_a_link_the_quest_does_not_show_is_never_reported_as_linked_and_the_link
 
 
 def test_updated_is_said_only_when_the_read_back_differs_from_before_and_a_clean_read_has_no_could_not_be_read_line():
-    held = {"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "period": "2026_W45", "assigned_to_user_id": None}
+    held = {"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "period": "2026_W45", "assigned_to_user_id": None, "description": "Kept by Quest AI:"}
     client = GoalClient([dict(held)])
     result = run_tool(client)
     assert "nothing was changed" in result.text and "linked to solution esr_c" in result.text and "could not be read" not in result.text and client.puts == []
@@ -627,7 +627,7 @@ def test_neutral_messages_of_other_kinds_do_not_even_reach_the_judge_on_these_re
 
 # ---- alternatives written for a quest are kept by it, keyed; the reply says which already were there
 
-ALT_GOALS = [{"id": "g1", "title": "Launch push post A", "spec_solution_id": "esr_c", "completed": False, "abandoned": False},
+ALT_GOALS = [{"id": "g1", "title": "Launch push post A", "text": "Kept by Quest AI: Post one", "spec_solution_id": "esr_c", "completed": False, "abandoned": False},
              {"id": "g2", "title": "Unrelated thing", "spec_solution_id": None, "completed": False, "abandoned": False}]
 
 
@@ -667,7 +667,7 @@ def test_ids_the_model_was_not_offered_are_dropped_and_fewer_than_two_alternativ
     calls = []
     forged = dict(B_NEW, goal_id="g_not_offered", solution_id="esr_not_offered", metric_id="esr_made_up")
     tail = alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer(A_EXISTING, forged))
-    assert "adopt_goal_id" not in calls[1] and "spec_solution_id" not in calls[1] and "spec_metric_id" not in calls[1] and tail
+    assert "adopt_goal_id" not in calls[1] and calls[1].get("spec_solution_id") != "esr_not_offered" and calls[1].get("spec_metric_id") != "esr_made_up" and tail
     calls.clear()
     assert alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer(A_EXISTING)) == "" and calls == []
     assert alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: "not json at all") == "" and calls == []
@@ -732,21 +732,6 @@ def test_the_reply_voice_keeps_prices_and_optional_questions_out_of_drafted_cont
     assert "Never state a price, a plan name, a tier" in REPLY_VOICE_SYSTEM and "no question about an optional choice" in REPLY_VOICE_SYSTEM and "no list of what you could not confirm" in REPLY_VOICE_SYSTEM
 
 
-def test_only_goals_that_overlap_the_request_are_offered_for_adoption_and_a_title_that_is_an_existing_goals_title_adopts_it():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
-    goals = [{"id": "g1", "title": "Launch push post A", "text": "", "spec_solution_id": None, "completed": False},
-             {"id": "g2", "title": "Launch push post B", "text": "", "spec_solution_id": None, "completed": False},
-             {"id": "g9", "title": "Quarterly budget review", "text": "", "spec_solution_id": None, "completed": False},
-             {"id": "g8", "title": "Launch push post Z", "text": "", "spec_solution_id": None, "completed": True}]
-    cue = "write a couple of posts for the launch push"
-    assert [g["id"] for g in alternatives_flow.goals_for_cue(goals, cue)] == ["g1", "g2"]
-    calls, asked = [], []
-    new_titles = [dict(A_EXISTING, title="Launch push post A", goal_id=""), dict(B_NEW, title="launch push post b", goal_id="")]
-    tail = alternatives_flow.run(alt_registry(calls, goals), "q1", cue, "reply", lambda prompt: asked.append(prompt) or alt_answer(*new_titles))
-    assert "Quarterly budget review" not in asked[0] and "ALWAYS wins" in asked[0] and "g9" not in asked[0]
-    assert [c["title"] for c in calls] == ["Launch push post A", "Launch push post B"] and all("adopt_goal_id" not in c for c in calls) and tail.count("\n- ") == 2
-
-
 def test_a_drafted_deliverable_is_shown_once_in_the_final_message_with_no_milestone_copy_and_no_deep_run():
     from hubofhubs.api import EVENT_RESULT
     from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
@@ -767,7 +752,7 @@ def test_message_one_for_a_drafted_deliverable_is_the_code_status_and_not_the_pl
     from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
-    goals = [dict(ALT_GOALS[0], text="")]
+    goals = [dict(ALT_GOALS[0])]
     plan_read = {"action": "tool", "rationale": "I will read the priority ladder and the quest sync file", "user_intent": "act", "deep_target": "draft_in_chat",
                  "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}
     provider = StubProvider([plan_read, {"action": "answer", "rationale": "r", "user_intent": "act", "deep_target": "draft_in_chat"}])
@@ -919,20 +904,6 @@ def test_the_reply_is_told_to_ask_nothing_and_never_to_move_the_milestones_own_d
 
 # ---- run 3 of the milestone baseline
 
-def test_a_goal_the_flow_wrote_earlier_under_the_milestones_own_title_is_found_and_updated_in_place_never_duplicated_and_a_persons_goal_is_not():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
-    name = "P3 Mobile app live on the Apple Store"
-    earlier = {"id": "e1", "name": f"{name} mentor ad draft", "spec_solution_id": None, "period": "2026_W44", "description": "old draft"}
-    person = dict(HUMAN)
-    client = GoalClient([dict(earlier), person])
-    done = goal_links.ensure_goal(client, "q1", f"{name} next step: week of 2026-11-02", "2026_W45", {"spec_solution_id": "esr_c"}, None, "e1", True)
-    assert done["state"] == "updated" and client.posts == [] and [p[0] for p in client.puts] == ["e1"]
-    assert goal_links.adoptable(f"{name} anything", f"{name} next step: week of 2026-11-09") and not goal_links.adoptable(HUMAN["name"], f"{name} next step: week of 2026-11-09")
-    assert not goal_links.adoptable("P3", "P3 next step: week of 2026-11-09")       # a bare code is too little to claim a goal
-    client = GoalClient([dict(earlier, spec_solution_id="esr_c")])
-    assert goal_links.ensure_goal(client, "q1", f"{name} next step: week of 2026-11-02", "2026_W45", {"spec_solution_id": "esr_c"}, None, None, True)["state"] == "updated" and client.posts == []
-
-
 def test_a_draft_loses_every_line_that_states_a_figure_the_records_do_not_hold_and_keeps_numbering_and_brackets():
     allowed = "P12 Announce integrations. Done when: 0 integrations announced. Target 2026-12-31."
     draft = "Short description (66 characters)\n1. Tested and ready: new integrations\n2. Click-through of 4.2 percent expected\n3. Built for your workflow [link]\nTarget 2026-12-31 stays."
@@ -998,16 +969,6 @@ def test_the_alternatives_are_cut_from_the_reply_by_where_each_begins_so_the_mod
 
 
 # ---- run 4 of the milestone baseline
-
-def test_goals_that_only_share_the_quests_own_subject_with_the_request_are_not_the_goals_it_concerns():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
-    goals = [{"id": f"g{n}", "title": f"Reach 1000 subscribers: item {n} for the project", "text": "", "completed": False} for n in range(12)]
-    goals += [{"id": "fa", "title": "Launch push post A", "text": "", "completed": False}, {"id": "fb", "title": "Launch push post B", "text": "", "completed": False}]
-    held = alternatives_flow.goals_for_cue(goals, "write a couple of posts for the 1000 subscribers push")
-    assert [g["id"] for g in held] == ["fa", "fb"]
-    few = [{"id": "x", "title": "Reach 1000 subscribers", "text": "", "completed": False}]
-    assert [g["id"] for g in alternatives_flow.goals_for_cue(few, "plan the 1000 subscribers push")] == ["x"]       # with few goals nothing is common
-
 
 def test_an_alternative_is_found_in_the_reply_through_curly_quotes_markdown_and_spacing():
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
@@ -1077,21 +1038,6 @@ def test_the_draft_prompt_names_sendable_questions_and_a_short_pitch_and_limits_
     assert "a checklist of at most 5 steps only when none of those fits" in text and "under 120 words" in text
 
 
-def test_existing_goals_win_over_new_titles_when_the_quest_holds_a_series_for_the_request():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
-    goals = [{"id": f"o{n}", "title": f"Reach 1000 subscribers: item {n}", "text": "", "spec_solution_id": None, "completed": False} for n in range(14)]
-    goals += [{"id": "fa", "title": "Launch push post A", "text": "", "spec_solution_id": "esr_c", "completed": False},
-              {"id": "fb", "title": "Launch push post B", "text": "", "spec_solution_id": "esr_c", "completed": False}]
-    cue_text = "write a couple of posts for the 1000 subscribers launch push"
-    assert [g["id"] for g in alternatives_flow.goals_for_cue(goals, cue_text)] == ["fa", "fb"]
-    calls = []
-    new_texts = [dict(A_EXISTING, title="Launch push 1000 post A", goal_id="", solution_id="", metric_id=""), dict(B_NEW, title="Launch push 1000 post B", goal_id="", solution_id="", metric_id="")]
-    tail = alternatives_flow.run(alt_registry(calls, goals), "q1", cue_text, "reply", lambda prompt: alt_answer(*new_texts))
-    assert [c["title"] for c in calls] == ["Launch push post A", "Launch push post B"]            # the held goals are updated with the new texts; no new title is created
-    assert all(c.get("spec_solution_id") == "esr_c" and c.get("spec_metric_id") == "esr_mc" for c in calls) and "Compared by: P3 App Store listing live." in tail
-    assert "1000 post" not in tail
-
-
 def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_deliverable_stays_in_the_one_keyed_goal():
     from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
@@ -1110,3 +1056,59 @@ def test_the_draft_prompt_forbids_first_person_unsourced_dates_and_notes_in_plac
     asked = []
     cue.resolve(registry([]), "q1", CUE).carry_out(registry([]), lambda prompt: asked.append(prompt) or "{}")
     assert 'no first person ("I", "we", "our")' in asked[0] and "never a due date or deadline that is not in the facts above" in asked[0] and "the words to be spoken, not notes about it" in asked[0]
+
+
+# ---- SAFETY run 6: a person's goal that merely shares words with a request is never updated
+
+REAL_GOALS = [{"id": "r1", "name": "Every lead pool has received a subscription offer, and paid subscribers from leads are counted weekly", "description": "All 1,369 distinct leads (Facebook interest-form, webinar)",
+               "spec_solution_id": None, "period": "2026_Q4", "completed": False, "abandoned": False, "assigned_to_user_id": "u1"},
+              {"id": "r2", "name": "A named project owner for the 1000 subscribers project is confirmed, after trialing candidates", "description": "Joshua's execution lead goal",
+               "spec_solution_id": None, "period": "2026_Q4", "completed": False, "abandoned": False, "assigned_to_user_id": "u2"}]
+
+
+def test_a_goal_that_is_not_one_quest_ai_keeps_is_left_exactly_as_it_is_even_when_the_call_carries_its_own_title():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    for goal in REAL_GOALS:
+        client = GoalClient([dict(goal)])
+        done = goal_links.ensure_goal(client, "q1", goal["name"], "2026_W45", {"description": "Post copy ...", "spec_solution_id": "esr_c"}, "u9", goal["id"], True, True)
+        assert done["state"] == "left_alone" and client.puts == [] and client.posts == [] and client.assigns == []
+        assert client.goals[0]["description"] == goal["description"] and client.goals[0]["period"] == "2026_Q4"
+    result = run_tool(GoalClient([dict(REAL_GOALS[0])]), title=REAL_GOALS[0]["name"], description="Post copy")
+    assert result.ok and "left exactly as it is" in result.text and result.data["state"] == "left_alone"
+
+
+def test_what_the_tool_creates_is_marked_as_kept_by_quest_ai_and_only_such_a_goal_is_updated_later():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    client = GoalClient([])
+    goal_links.ensure_goal(client, "q1", "Launch push post A", "2026_W45", {"description": "Post one"}, None)
+    assert client.posts[0][1]["description"] == "Kept by Quest AI: Post one"
+    kept = {"id": "m1", "name": "Launch push post A", "description": "Kept by Quest AI: Post one", "period": "2026_W45", "completed": False, "abandoned": False}
+    again = GoalClient([dict(kept)])
+    done = goal_links.ensure_goal(again, "q1", "Launch push post A", "2026_W45", {"description": "Post one, revised"}, None)
+    assert done["state"] == "updated" and again.puts[0][1]["description"] == "Kept by Quest AI: Post one, revised"
+    assert goal_links.is_owned(kept) and goal_links.is_owned({"name": "P3 next step: week of 2026-11-02"}) and not goal_links.is_owned(REAL_GOALS[1])
+    assert not goal_links.is_owned({"name": "P3 Mobile app live on the Apple Store mentor ad draft", "description": ""})        # sharing the milestone's title is not enough
+
+
+def test_the_alternatives_flow_never_offers_or_changes_a_goal_that_merely_shares_words_with_the_request():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    rows = [{"id": g["id"], "title": g["name"], "text": g["description"], "spec_solution_id": None, "completed": False, "abandoned": False} for g in REAL_GOALS]
+    rows.append({"id": "k1", "title": "Launch push post A", "text": "Kept by Quest AI: Post one", "spec_solution_id": "esr_c", "completed": False, "abandoned": False})
+    assert [g["id"] for g in alternatives_flow.goals_kept(rows)] == ["k1"]
+    calls, asked = [], []
+    forged = [dict(A_EXISTING, goal_id="r1", title=REAL_GOALS[0]["name"]), dict(B_NEW, goal_id="r2", title=REAL_GOALS[1]["name"])]
+    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the 1000 subscribers push", "reply",
+                                 lambda prompt: asked.append(prompt) or alt_answer(*forged))
+    assert REAL_GOALS[0]["name"] not in asked[0] and "r1 |" not in asked[0] and "k1 | Launch push post A" in asked[0]
+    # the model named the persons goals by title: the tool is asked, and it leaves them alone (this fake tool stands in for it)
+    assert all(c.get("adopt_goal_id") is None for c in calls)
+    assert tail
+
+
+def test_a_milestone_cue_never_offers_a_persons_goal_for_adoption():
+    person = {"id": "h1", "title": "P3 Mobile app live on the Apple Store mentor ad draft", "text": "a person's plan", "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
+    tools = ToolRegistry([read_spec(), list_goals([person]), write_goal([])])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    asked = []
+    picked = resolved.choices(lambda prompt: asked.append(prompt) or json.dumps({"goal_id": "h1"}))
+    assert picked["goal_id"] == "" and "h1:" not in asked[0]

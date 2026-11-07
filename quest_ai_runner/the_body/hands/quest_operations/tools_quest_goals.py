@@ -74,7 +74,8 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 "goal": {k: shown.get(k) for k in ("id", "name", "assigned_to_user_id", "assignee_name", "spec_solution_id", "spec_metric_id", "period")} if shown else None}
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
-                "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed."}[state]
+                "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed.",
+                "left_alone": f"A goal titled {title!r} already exists and is not one Quest AI keeps, so it was left exactly as it is; nothing was written."}[state]
         try:
             said += " " + goal_links.read_back_text(client, quest_id, check)
         except Exception as error:  # noqa: BLE001  a read that failed is said with its cause
@@ -86,7 +87,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
             said += f" Quest did not accept the link to the milestone ({goal_links.refusal_reason(links_refused)}), so the goal was written without it and names the milestone in its description."
         if outcome["copies"]:
             said += f" Note: {outcome['copies']} more goal(s) carry the same title; only the first was touched."
-        return ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data=data, text=said)
+        return ToolResult(ok=True, status=ToolStatus.NOOP if state in ("unchanged", "left_alone") else ToolStatus.APPLIED, data=data, text=said)
 
     return ToolSpec(
         name="create_or_update_quest_goal",

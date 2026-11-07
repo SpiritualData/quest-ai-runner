@@ -36,14 +36,27 @@ def test_a_goal_whose_current_title_starts_with_the_allowed_title_is_allowed(gua
     assert put("k1") is None and put("k1", "/assign") is None and dry.RECORDER.snapshot()["unexpected"] == []
 
 
-def test_the_exact_title_of_the_allowed_call_and_a_goal_created_by_this_run_are_allowed(guarded):
-    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1"}}])
+def test_a_title_that_merely_equals_the_allowed_calls_title_is_no_reason_a_goal_created_by_this_run_and_a_kept_goal_are_allowed(guarded):
+    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1"}}])         # a rule with only a quest: it allows creating a goal, never updating one
+    dry.RECORDER.call_title("FB push post A")
     with pytest.raises(QuestApiError):
         put("x1")
-    dry.RECORDER.call_title("FB push post A")
-    assert put("x1") is None
+    TITLES["kept"] = {"title": "Launch push post A", "description": "Kept by Quest AI: Post one"}
+    assert put("kept") is None
     dry.RECORDER.created_goal("new-1")
     assert put("new-1") is None
+
+
+def test_run_6_scenario_two_real_goals_sharing_words_with_the_cue_cannot_be_changed_by_a_rule_with_only_a_quest(guarded):
+    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1"}}])
+    TITLES["real1"] = {"title": "Every lead pool has received a subscription offer, and paid subscribers from leads are counted weekly", "description": "All 1,369 distinct leads (Facebook)"}
+    TITLES["real2"] = {"title": "A named project owner for the 1000 subscribers project is confirmed, after trialing candidates", "description": "Joshua's execution lead goal"}
+    for goal_id in ("real1", "real2"):
+        dry.RECORDER.call_title(TITLES[goal_id]["title"])         # even a call that carries the target's own title
+        for suffix in ("", "/assign"):
+            with pytest.raises(QuestApiError, match="not a goal this case may change"):
+                put(goal_id, suffix)
+    assert len(dry.RECORDER.snapshot()["unexpected"]) == 4
 
 
 def test_a_goal_whose_title_cannot_be_read_is_not_changed_and_reads_and_other_paths_are_untouched(guarded):

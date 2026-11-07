@@ -323,7 +323,7 @@ def fingerprint_from(reads):
                                   "author_id": note.get("author_id"), "created_at": note.get("created_at")}
     for goal in reads.get("goals") or []:
         fp["goals"][goal.get("id")] = {"digest": digest(goal.get("name"), goal.get("completed"), goal.get("criteria"), goal.get("description"), goal.get("deadline"), goal.get("scheduled_date")),
-                                       "label": str(goal.get("name") or "")[:80]}
+                                       "label": str(goal.get("name") or "")[:80], "kept": str(goal.get("description") or "").strip().startswith("Kept by Quest AI:")}
     for wf in reads.get("workflows") or []:
         fp["workflows"][wf.get("workflowId")] = {"digest": digest(wf.get("title"), wf.get("status"), wf.get("updatedAt"), wf.get("steps")), "label": str(wf.get("title") or "")[:80], "created_at": wf.get("createdAt")}
     for rec in reads.get("spec_records") or []:
@@ -398,7 +398,7 @@ def diff_fingerprints(before, after, own_conv=None):
             if item_id not in old:
                 changes.append(dict(meta, category=cat, change="added", id=item_id))
             elif meta.get("digest") != old[item_id].get("digest"):
-                changes.append(dict(meta, category=cat, change="changed", id=item_id, before_label=old[item_id].get("label", "")))
+                changes.append(dict(meta, category=cat, change="changed", id=item_id, before_label=old[item_id].get("label", ""), before_kept=bool(old[item_id].get("kept"))))
         if cat in KEEP_REMOVED:
             changes += [dict(old[i], category=cat, change="removed", id=i) for i in old if i not in new]
     return changes
@@ -426,10 +426,11 @@ def allowed_title_starts(effect):
 
 
 def goal_change_explained(change, effect, titles=()):
-    """A changed existing goal is explained only when it was one the case may change: its title BEFORE the run starts with a title the case allows, or equals the title of an allowed
-    call (the keyed goal updated in place). A person's goal whose description, period or date changed is never explained, whatever else the case allows."""
-    before = str(change.get("before_label") or change.get("label") or "").strip().casefold()
-    return before in {str(t).strip().casefold() for t in titles} or any(p and before.startswith(p) for p in allowed_title_starts(effect))
+    """A changed existing goal is explained only when it was one the case may change: it was a goal Quest AI keeps (its description began with the marker, or its title ended in the keyed
+    "next step: week of …" pattern) before the run, or its title BEFORE the run starts with a title the case's rule allows. A title that merely equals the title of an allowed call is
+    no reason (``titles`` is accepted for old callers and not used): a rule with no title constraint allows creating a goal, never changing one."""
+    before = str(change.get("before_label") or "").strip()
+    return bool(change.get("before_kept")) or bool(re.search(r"next step: week of \d{4}-\d{2}-\d{2}\s*$", before)) or any(p and before.casefold().startswith(p) for p in allowed_title_starts(effect))
 
 
 def unexpected_writes(changes, effect=None, zero_writes=False, titles=()):

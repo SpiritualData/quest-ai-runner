@@ -208,3 +208,20 @@ def test_pre_existing_applies_only_to_ensure_one_cases_whose_state_already_met_t
 def test_a_prefix_keeps_its_trailing_space_so_one_milestone_code_is_not_another():
     assert P.matches({"name": "P1 Onboarding next step"}, {"^name": "P1 "})
     assert not P.matches({"name": "P10 100 users next step"}, {"^name": "P1 "})
+
+
+def test_an_unexpected_write_stops_the_whole_run_and_every_later_case_is_refused():
+    import sys
+    from pathlib import Path
+    from types import SimpleNamespace
+    sys.path.insert(0, str(Path(__file__).parent / "impls"))
+    import prod_qar_readonly as arm
+    dry = SimpleNamespace(RECORDER=SimpleNamespace(snapshot=lambda: {"unexpected": []}))
+    arm.RUN_STOPPED["why"] = ""
+    assert arm.stop_after_unexpected_write({"case_id": "X-1", "unexpected_writes": []}, dry) == ""
+    reason = arm.stop_after_unexpected_write({"case_id": "X-2", "unexpected_writes": ["UNEXPECTED WRITE: goals changed g1 'A person goal'"]}, dry)
+    assert "X-2 made an unexpected write" in reason and "the run is stopped" in reason
+    blocked = SimpleNamespace(RECORDER=SimpleNamespace(snapshot=lambda: {"unexpected": ["UNEXPECTED WRITE blocked: PUT /api/planning/goals/g2"]}))
+    arm.RUN_STOPPED["why"] = ""
+    assert "blocked: PUT" in arm.stop_after_unexpected_write({"case_id": "X-3"}, blocked)
+    arm.RUN_STOPPED["why"] = ""

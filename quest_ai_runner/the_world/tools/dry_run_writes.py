@@ -199,8 +199,10 @@ def title_prefixes() -> List[str]:
 
 
 def goal_write_refusal(method: str, path: str) -> Optional[str]:
-    """Why a PUT to a goal (or its /assign) must not go even inside an allowed tool call, else None. The target's CURRENT title is read first. It may be changed only when this run
-    created it, or its title starts with a title the case allows, or it is the exact title of the allowed call (the keyed goal updated in place). Anything else is a person's goal."""
+    """Why a PUT to a goal (or its /assign) must not go even inside an allowed tool call, else None. The target's CURRENT title and description are read first. It may be changed only when this
+    run created it, or its title starts with a title the case's rule allows (a rule with no title constraint allows creating a goal, never updating one), or its title ends in the keyed
+    "next step: week of YYYY-MM-DD" pattern, or its description begins with the marker Quest AI writes on the goals it keeps. A title that merely equals the allowed call's title is no
+    reason: that is how a person's goal would be changed by a call carrying its own title."""
     found = GOAL_WRITE.match(path.split("?")[0])
     if method.upper() != "PUT" or not found:
         return None
@@ -208,18 +210,21 @@ def goal_write_refusal(method: str, path: str) -> Optional[str]:
     if goal_id in RECORDER.created_goals:
         return None
     lookup = STATE.get("goal_title_lookup")
-    title = None
+    goal = None
     if lookup is not None:
         try:
-            title = lookup(goal_id)
+            goal = lookup(goal_id)
         except Exception:  # noqa: BLE001 -- a goal that cannot be read is not changed
-            title = None
-    if title is None:
+            goal = None
+    if goal is None:
         return f"goal {goal_id}: its current title could not be read, so it is not changed"
-    current = str(title).strip().casefold()
-    if current in RECORDER.call_titles or any(prefix and current.startswith(prefix) for prefix in title_prefixes()):
+    title = str(goal.get("title") if isinstance(goal, Mapping) else goal)
+    description = str(goal.get("description") or "") if isinstance(goal, Mapping) else ""
+    from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
+    current = title.strip().casefold()
+    if is_owned({"name": title, "description": description}) or any(prefix and current.startswith(prefix) for prefix in title_prefixes()):
         return None
-    return f"goal {goal_id} ({str(title)[:80]!r}) is not a goal this case may change"
+    return f"goal {goal_id} ({title[:80]!r}) is not a goal this case may change"
 
 
 def request_allowed(method: str, path: str) -> bool:

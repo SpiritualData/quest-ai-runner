@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 
 log = logging.getLogger("quest-ai-runner.alternatives")
-STATE_WORDS = {"not_recorded": "not recorded on the quest", "created": "created", "updated": "already tracked, copy updated", "unchanged": "already tracked"}
+STATE_WORDS = {"not_recorded": "not recorded on the quest", "left_alone": "already on the quest, left exactly as it is", "created": "created", "updated": "already tracked, copy updated", "unchanged": "already tracked"}
 
 
 @dataclass
@@ -30,30 +30,15 @@ class Alternative:
     metric_id: str = ""
 
 
-MIN_SHARED_WORDS = 2
+HELD_MAX = 12
 
 
-HELD_SHARE = 0.5
-HELD_MAX = 6
-
-
-def goals_for_cue(goals: Sequence[Mapping[str, Any]], cue: str) -> List[Mapping[str, Any]]:
-    """The open goals the quest already holds for this request: those sharing at least ``MIN_SHARED_WORDS`` of its meaningful words, ranked by how rare the shared words are among the quest's
-    goals (a word every goal carries says little about which goal this is), keeping the ones scoring at least half of the best, at most ``HELD_MAX``. Model-free, by the same word
-    weighting the milestone cue uses."""
-    import math
-    wanted = set(milestone_cue.words(cue))
-    open_goals = [g for g in goals if not g.get("completed") and not g.get("abandoned")]
-    bag = {id(g): set(milestone_cue.words(f"{g.get('title') or ''} {g.get('text') or ''}")) for g in open_goals}
-    df = {w: sum(1 for g in open_goals if w in bag[id(g)]) for w in wanted}
-    scored = []
-    for g in open_goals:
-        shared = wanted & bag[id(g)]
-        if len(shared) >= MIN_SHARED_WORDS:
-            scored.append((sum(math.log(1 + len(open_goals) / df[w]) for w in shared), g))
-    scored.sort(key=lambda pair: -pair[0])
-    best = scored[0][0] if scored else 0.0
-    return [g for score, g in scored if score >= HELD_SHARE * best][:HELD_MAX]
+def goals_kept(goals: Sequence[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
+    """The open goals Quest AI itself keeps as alternatives: those whose description begins with the marker this tool writes, and that are not a milestone's keyed next step. Never chosen by
+    words shared with the request: a goal that merely mentions the same things belongs to a person and is neither offered nor changed."""
+    from quest_ai_runner.the_body.hands.quest_operations.goal_links import MARKER, is_keyed_next_step
+    return [g for g in goals if not g.get("completed") and not g.get("abandoned") and str(g.get("text") or g.get("description") or "").strip().startswith(MARKER)
+            and not is_keyed_next_step(g.get("title") or g.get("name"))][:HELD_MAX]
 
 
 def solutions_listing(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> List[Dict[str, str]]:
@@ -69,11 +54,11 @@ def build_prompt(cue: str, reply: str, goals: Sequence[Mapping[str, Any]], solut
     goal_lines = "\n".join(f"{g.get('id')} | {g.get('title')} | solution {g.get('spec_solution_id') or 'none'}" for g in goals) or "(none)"
     solution_lines = "\n".join(f"{s['solution_id']} | {s['name']} | metric {s['metric_id']} | {s['metric_name']}" for s in solutions) or "(none)"
     return ("A person asked for content in their quest's chat:\n" + str(cue).strip()[:800] + "\n\nThe reply written for them:\n" + str(reply).strip()[:5000]
-            + "\n\nGoals the quest ALREADY holds for this (id | title | linked solution):\n" + goal_lines + "\n\nThe quest's solutions (solution id | name | metric id | metric name):\n" + solution_lines
+            + "\n\nGoals Quest AI already keeps for versions like these (id | title | linked solution):\n" + goal_lines + "\n\nThe quest's solutions (solution id | name | metric id | metric name):\n" + solution_lines
             + "\n\nIf the reply holds two or more alternatives of one thing meant to be compared (versions of a post, a headline, a message), return JSON "
               '{"alternatives":[{"title":"...","goal_id":"...","starts_with":"the first six words of the alternative exactly as the reply writes them","hypothesis":"one line","solution_id":"...","metric_id":"..."}]} with one entry per alternative, in the order they appear in the reply. '
-              "Adopting an existing goal ALWAYS wins over a new title: when a goal above tracks that alternative, or is the next free one of the same series (A, B, C), give its goal_id and keep its title "
-              "exactly. Use a new title only when no goal above can hold the alternative, and then continue the series and style of the titles above. Choose solution_id and metric_id from the list above (the solution these alternatives serve), or leave them empty. "
+              "When a goal above already keeps that alternative, or is the next free one of the same series (A, B, C), give its goal_id and keep its title exactly. Use a new title only when no goal "
+              "above can hold the alternative, and then continue the series and style of the titles above. Choose solution_id and metric_id from the list above (the solution these alternatives serve), or leave them empty. "
               'Write no em dashes. If the reply does not hold alternatives to compare, return {"alternatives":[]}. Reply with the JSON only.')
 
 
@@ -166,7 +151,7 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     if registry is None or not quest_id or registry.get("create_or_update_quest_goal") is None:
         return ""
     tables, _ = milestone_cue.read_through(registry, quest_id)
-    goals = goals_for_cue(milestone_cue.goals_through(registry, quest_id), cue)
+    goals = goals_kept(milestone_cue.goals_through(registry, quest_id))
     solutions = solutions_listing(tables)
     answer = decide(build_prompt(cue, reply, goals, solutions))
     alts = parse(answer, {str(g.get("id")) for g in goals}, solutions, reply)
@@ -185,13 +170,6 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
             alt.title = titles.get(alt.goal_id) or alt.title        # the keyed goal is found by its exact title: renaming is never the way in
     from quest_ai_runner.the_world.tools.tools import ToolContext
     names = {(s["solution_id"], s["metric_id"]): s["metric_name"] for s in solutions}
-    # Existing goals win: an alternative the model gave no goal for takes the next held goal nobody claimed (the series the quest already keeps), in the order held; a new goal is created
-    # only when the quest holds fewer goals than there are alternatives.
-    unclaimed = [g for g in goals if str(g.get("id")) not in taken]
-    for alt in alts:
-        if not alt.goal_id and unclaimed:
-            held = unclaimed.pop(0)
-            alt.goal_id, alt.title = str(held.get("id")), str(held.get("title") or "").strip()
     default = next(((str(g["spec_solution_id"]), m) for g in goals if g.get("spec_solution_id") for m in [next((s["metric_id"] for s in solutions if s["solution_id"] == g["spec_solution_id"]), "")] if m), ("", ""))
     for alt in alts:
         if not alt.solution_id and default[0]:
@@ -216,7 +194,7 @@ def act_status_scrub(text: str) -> str:
 def status_line(registry: Any, quest_id: str, cue: str) -> str:
     """What the quest already holds for this request, in plain words, for message 1: the goals that overlap it (titles), and, when they are linked to a plan solution, the solution and the
     metric it moves. "" when the quest holds none or cannot be read."""
-    held = goals_for_cue(milestone_cue.goals_through(registry, quest_id), cue)
+    held = goals_kept(milestone_cue.goals_through(registry, quest_id))
     if not held:
         return ""
     titles = ", ".join(str(g.get("title")) for g in held[:3])

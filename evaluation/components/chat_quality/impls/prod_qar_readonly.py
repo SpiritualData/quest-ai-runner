@@ -81,6 +81,17 @@ def state_verdict(check, before, after):
     return True, f"{before} before, {after} after"
 
 
+RUN_STOPPED = {"why": ""}
+
+
+def stop_after_unexpected_write(record, dry):
+    """After a case: an unexpected write (reported by the harness, or blocked by the guard) stops the WHOLE run, so one bug cannot reach several goals. Returns the reason, else ""."""
+    found = list(record.get("unexpected_writes") or []) + list(dry.RECORDER.snapshot().get("unexpected") or [])
+    if found:
+        RUN_STOPPED["why"] = f"{record.get('case_id') or 'a case'} made an unexpected write ({found[0][:200]}); the run is stopped"
+    return RUN_STOPPED["why"]
+
+
 def interim_replies_on(environ):
     """Interim replies (the status-first message) are on in this arm as in the Quest app's chat, unless the environment turns them off."""
     return str(environ.get("QUEST_AI_INCREMENTAL_REPLIES_ENABLED", "")).strip().lower() not in ("0", "false", "no", "off")
@@ -128,10 +139,11 @@ def build_arm(meter, bounded):
     dry.set_allowances([], harness_paths)
 
     def current_goal_title(goal_id):
-        """The goal's title as the quest holds it now (a fresh read of the pinned quest's goals; the guard in ``dry_run_writes`` calls this before any change to a goal)."""
+        """The goal as the quest holds it now (title and description, a fresh read of the pinned quest's goals; the guard in ``dry_run_writes`` calls this before any change to a goal)."""
         quest, team = PC.target("QAR_PROD_QUEST_ID"), PC.target("QAR_PROD_TEAM_ID")
-        body = safety_client.send_request("GET", f"/api/teams/{team}/quests/{quest}/goals") or {}
-        return next((g.get("name") for group in body.get("period_groups") or [] for g in group.get("goals") or [] if str(g.get("id")) == str(goal_id)), None)
+        body = safety_client._request("GET", f"/api/teams/{team}/quests/{quest}/goals") or {}
+        return next(({"title": g.get("name"), "description": g.get("description")} for group in body.get("period_groups") or [] for g in group.get("goals") or []
+                     if str(g.get("id")) == str(goal_id)), None)
     dry.set_goal_title_lookup(current_goal_title)
     import judge as J
     import prod_probes as P
@@ -168,6 +180,9 @@ def build_arm(meter, bounded):
     startup = {"calls": len(dry.RECORDER.snapshot()["model_log"])}      # model processes the build and its background work started before any turn
 
     def converse(case):
+        if RUN_STOPPED["why"]:
+            return {"id": case["id"], "dataset": case.get("dataset"), "area": case.get("area"), "environment": environment, "score": None, "passed": False,
+                    "error": f"not run: {RUN_STOPPED['why']}", "log_extra": {"environment": environment}}
         if meter.max_calls is not None and meter.calls >= meter.max_calls:
             from common import BudgetExceeded
             raise BudgetExceeded(f"model-call budget {meter.max_calls} reached before {case['id']}")
@@ -341,6 +356,11 @@ def build_arm(meter, bounded):
             if "outcome" not in locals():           # the turn failed before the cleanup ran: compare and clean now
                 outcome = safety.finish(own_conv=None, frames=frames)
             safety.apply(record, outcome)
+            reason = stop_after_unexpected_write(dict(record, case_id=case["id"]), dry)
+            if reason:
+                record["passed"] = False             # an unexpected write fails the case whatever the verdict says, and stops the run
+                record["unexpected_writes"] = list(record.get("unexpected_writes") or []) or list(dry.RECORDER.snapshot().get("unexpected") or [])
+                print(f"  {case['id']}: UNEXPECTED WRITE, THE RUN IS STOPPED: {reason}")
         except Exception as e:  # noqa: BLE001
             record.update(passed=False, cleanup_error=f"{type(e).__name__}: {e}", lane_gaps=[f"cleanup could not run: {e}"])
             print(f"  {case['id']}: CLEANUP COULD NOT RUN: {e}")

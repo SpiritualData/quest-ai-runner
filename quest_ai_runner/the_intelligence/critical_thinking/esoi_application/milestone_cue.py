@@ -355,8 +355,8 @@ class Resolved:
 
     def related_text(self) -> str:
         """The person's own goals for this milestone are linked to only by being named here, in this goal's description; they are never changed."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import adoptable
-        titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not adoptable(g.get("title"), next_step_title(self.name, self.week))][:4]
+        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
+        titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not is_owned(g)][:4]
         return (" Related goals on the quest: " + "; ".join(titles) + ".") if titles else ""
 
     def goal_arguments(self) -> Dict[str, Any]:
@@ -381,8 +381,8 @@ class Resolved:
         """The three things that need reading the record text, in ONE cheap call: ``owner`` (when the record's ``tracking_owner`` names nobody, the person the purpose text names as
         doing the work), ``goal_id`` (the keyed next-step goal on the quest that is already this milestone's next step, any week, any older title; only keyed goals are offered,
         a person's goal never is) and ``draft`` (the cheap deliverable for the step, kept in the goal; not asked again when the existing keyed goal already holds one)."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import adoptable
-        keyed = [g for g in self.candidates if adoptable(g.get("title"), next_step_title(self.name, self.week))]       # the step's own earlier goals only; a person's goal is never offered
+        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
+        keyed = [g for g in self.candidates if is_owned(g)]       # goals this flow wrote earlier only; a person's goal is never offered
         if decide is None:
             return {"owners": [], "goal_id": "", "draft": ""}
         this_week = next((g for g in keyed if str(g.get("title") or "").strip() == next_step_title(self.name, self.week)), None)

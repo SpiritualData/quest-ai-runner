@@ -346,7 +346,10 @@ def test_a_changed_person_goal_is_an_unexpected_write_even_when_the_case_allows_
     before["goals"] = {"x": {"digest": "a", "label": "FB push post A"}}
     after["goals"] = {"x": {"digest": "b", "label": "FB push post A"}}
     assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title) != []
-    assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, titles={"FB push post A"}) == []
+    assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, titles={"FB push post A"}) != []       # a title equal to the call's is no reason to change a goal
+    after["goals"] = {"x": {"digest": "b", "label": "FB push post A", "kept": True}}
+    before["goals"] = {"x": {"digest": "a", "label": "FB push post A", "kept": True}}
+    assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title) == []          # a goal Quest AI keeps (marked) may be updated
     assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, zero_writes=True) != []
 
 
