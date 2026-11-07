@@ -225,7 +225,7 @@ def test_an_old_format_goal_sharing_the_milestones_code_and_words_is_listed_as_a
     done = dict(OLD_GOAL, id="g8", completed=True)
     other = dict(OLD_GOAL, id="g7", title="Plan the offsite")
     found = cue.candidate_goals([OLD_GOAL, done, other, *GOALS], "esr_c", name)
-    assert [g["id"] for g in found] == ["g9"]
+    assert [g["id"] for g in found] == ["g9", "g1"]      # g1 is linked by id; the finished, unrelated and unlinked ones are not listed
     assert "P3 next step: week of 2026-11-02" in cue.fact_block(TABLES, CUE, monday="2026-11-09", goals=[OLD_GOAL])
 
 
