@@ -108,3 +108,46 @@ def test_a_tool_that_raises_on_argument_shape_reports_a_plain_message():
     registry = ToolRegistry([ToolSpec(name="t", description="d", mutates=False, handler=boom)])
     result = registry.invoke("t", {}, ToolContext())
     assert not result.ok and "could not use the arguments as given" in result.text and "iterable" not in result.text
+
+
+THURSDAY = {"title": "Run the weekly check-in", "assignee": "Ann", "starts_at": "", "ends_at": "", "repeat": "weekly", "by_weekday": [3]}
+
+
+class ZonedClient(ListingClient):
+    def get_quest_autopilot(self, quest_id):
+        return {"autopilot": {"run_timezone": "America/Los_Angeles"}}
+
+
+def test_a_weekly_step_with_its_weekday_and_empty_times_is_created_as_the_whole_day_in_the_quests_zone():
+    import datetime
+    client = ZonedClient([])
+    result = call(client, title="Weekly check-in", steps=[THURSDAY])
+    assert result.ok and client.calls and "one or two short sentences" in result.text
+    timing = client.calls[0][2][0]["timing"]
+    assert timing["kind"] == "window" and timing["repeat"]["byWeekday"] == [3] and timing["repeat"]["tz"] == "America/Los_Angeles"
+    start, end = datetime.datetime.fromisoformat(timing["startsAt"]), datetime.datetime.fromisoformat(timing["endsAt"])
+    assert start.weekday() == 3 and end.weekday() == 3 and (start.hour, start.minute, end.hour, end.minute) == (0, 0, 23, 59) and start.utcoffset() is not None
+
+
+def test_the_all_day_window_is_the_next_such_weekday_today_counting():
+    now = ops.dt.datetime(2026, 11, 4, 10, 0, tzinfo=ops.dt.timezone.utc)         # a Wednesday
+    assert ops.all_day_window(3, "", now)[0].startswith("2026-11-05T00:00")
+    assert ops.all_day_window(2, "", now)[0].startswith("2026-11-04T00:00")
+    late_sunday_utc = ops.dt.datetime(2026, 11, 9, 3, 0, tzinfo=ops.dt.timezone.utc)   # still Sunday in Los Angeles
+    assert ops.all_day_window(6, "America/Los_Angeles", late_sunday_utc)[0].startswith("2026-11-08T00:00")
+
+
+def test_a_repeat_creates_nothing_the_second_time_and_a_step_with_no_weekday_still_needs_its_times():
+    client = ListingClient([])
+    first = call(client, title="Weekly check-in", steps=[THURSDAY])
+    assert first.ok and len(client.calls) == 1
+    client.existing = [{"workflowId": "qwf_1", "title": "Weekly check-in", "steps": []}]
+    again = call(client, title="Weekly check-in", steps=[THURSDAY])
+    assert again.ok and len(client.calls) == 1 and "Already there" in again.text
+    refused = call(ListingClient([]), title="W", steps=[{"title": "x", "assignee": "Ann", "starts_at": "", "ends_at": ""}])
+    assert not refused.ok and "needs starts_at and ends_at" in refused.text and "a weekly step may give repeat weekly and by_weekday" in refused.text
+
+
+def test_the_planner_is_told_a_missing_optional_detail_never_blocks_a_create_request():
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
+    assert "A MISSING OPTIONAL DETAIL NEVER BLOCKS" in DEEP_ACTION and "one or two short" in DEEP_ACTION and "change the call" in DEEP_ACTION

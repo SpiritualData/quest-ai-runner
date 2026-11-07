@@ -478,6 +478,11 @@ DEEP_ACTION = """\
     the write that is keyed by an exact title or record id (create_or_update_quest_goal, apply_spec_edit, create_quest_workflow,
     edit_spec_record), then say plainly whether it was created, updated, or was already there. A request to "make progress" on a
     milestone is such a write: read the milestone's records, then record its current value or create its keyed next step.
+    A MISSING OPTIONAL DETAIL NEVER BLOCKS A CREATE OR ENSURE REQUEST. When asked to set up, create or make sure something exists (a workflow, a recurring step, a goal), look at what
+    exists, then make the write with what the request and the records give: a clock time, a time zone or a duration that nobody stated is left to the tool's default (a
+    weekly step with only its weekday is that whole day), not asked for. Ask only for a REQUIRED field that cannot be known from the request or the records. When a write is
+    refused, the refusal's own words say what to change: change the call and make it again before asking anyone. After the write the final reply is one or two short
+    sentences saying what now exists and where, with no questions and no list of what could not be done.
     MOVING A MILESTONE. A request to make progress on, move or advance a milestone or priority of the quest is a write to its specification, not
     advice and not a question back: read_spec_records to find the milestone's solution and its metric record; read the data that gives the metric's
     current number (the reads and tools you have: users, funnel, evaluation results); then apply_spec_edit the metric's record with that number, its

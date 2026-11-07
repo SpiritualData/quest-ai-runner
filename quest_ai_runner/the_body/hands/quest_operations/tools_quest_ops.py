@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import threading
+import datetime as dt
 from datetime import date, timedelta
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -872,9 +873,21 @@ def workflow_already_there(workflows: List[Mapping[str, Any]], title: str, steps
     return None
 
 
-def workflow_step_body(index: int, raw: Mapping[str, Any], members: List[Mapping[str, Any]]) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
+def all_day_window(weekday: int, zone: str, now: Optional[dt.datetime] = None) -> "tuple[str, str]":
+    """``(starts_at, ends_at)`` of the whole next day that falls on ``weekday`` (0 Monday), in ``zone`` (UTC when none): today counts when it is that day. A weekly step with a
+    weekday and no clock time is this window, repeated."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(zone) if zone else dt.timezone.utc
+    today = (now or dt.datetime.now(dt.timezone.utc)).astimezone(tz).date()
+    day = today + timedelta(days=(int(weekday) - today.weekday()) % 7)
+    return (dt.datetime.combine(day, dt.time(0, 0), tzinfo=tz).isoformat(), dt.datetime.combine(day, dt.time(23, 59), tzinfo=tz).isoformat())
+
+
+def workflow_step_body(index: int, raw: Mapping[str, Any], members: List[Mapping[str, Any]], zone: str = "",
+                       now: Optional[dt.datetime] = None) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
     """One step in the wire shape. A human step (``assignee``) has a window (``starts_at`` to
-    ``ends_at``); an AI step (``rep_id``) runs at ``run_at``. Either may repeat."""
+    ``ends_at``); an AI step (``rep_id``) runs at ``run_at``. Either may repeat. A weekly step that names its weekday but no clock time is the whole of that day, in the
+    step's ``tz`` else the quest's ``zone``: a missing clock time never blocks a recurring step."""
     title = str(raw.get("title") or "").strip()
     label = f"step {index + 1}"
     if not title:
@@ -896,11 +909,20 @@ def workflow_step_body(index: int, raw: Mapping[str, Any], members: List[Mapping
         user_id, why = resolve_member(raw.get("assignee"), members)
         if why:
             return None, f"{label} ({title!r}): {why}"
-        if not (raw.get("starts_at") and raw.get("ends_at")):
-            return None, f"{label} ({title!r}) is a person's step and needs starts_at and ends_at"
+        starts, ends = str(raw.get("starts_at") or ""), str(raw.get("ends_at") or "")
+        if not (starts and ends):
+            days = (repeat or {}).get("byWeekday")
+            if not (repeat and repeat.get("freq") == "weekly" and days):
+                return None, (f"{label} ({title!r}) is a person's step and needs starts_at and ends_at (ISO date-times with a zone); "
+                              "a weekly step may give repeat weekly and by_weekday instead, and is then the whole day")
+            try:
+                starts, ends = all_day_window(days[0], str(raw.get("tz") or zone), now)
+            except Exception as error:  # noqa: BLE001  an unknown zone name is said with its cause
+                return None, f"{label} ({title!r}): the time zone {raw.get('tz') or zone!r} is not one this lane knows ({type(error).__name__})"
+            if raw.get("tz") or zone:
+                repeat.setdefault("tz", str(raw.get("tz") or zone))
         actor = {"kind": "human", "userId": user_id}
-        timing = {"kind": "window", "startsAt": str(raw["starts_at"]), "endsAt": str(raw["ends_at"]),
-                  "repeat": repeat}
+        timing = {"kind": "window", "startsAt": starts, "endsAt": ends, "repeat": repeat}
     return {"stepId": f"s{index + 1}", "title": title, "actor": actor,
             "instructions": str(raw.get("instructions") or ""), "timing": timing}, None
 
@@ -918,9 +940,12 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
             return ToolResult(ok=False, text="A workflow needs a title and at least one step.")
         client = factory()
         members = client.list_assignable_members(quest_id) or []
+        zone = ""
+        if any(isinstance(r, dict) and not (r.get("starts_at") and r.get("ends_at")) for r in raw_steps) and hasattr(client, "get_quest_autopilot"):
+            zone = str((((client.get_quest_autopilot(quest_id) or {}).get("autopilot")) or {}).get("run_timezone") or "")      # the quest's own zone, for a step with a weekday and no clock time
         steps: List[Dict[str, Any]] = []
         for i, raw in enumerate(raw_steps):
-            body, why = workflow_step_body(i, raw if isinstance(raw, dict) else {}, members)
+            body, why = workflow_step_body(i, raw if isinstance(raw, dict) else {}, members, zone)
             if why:
                 return ToolResult(ok=False, text=f"Nothing was created: {why}.")
             steps.append(body)
@@ -941,7 +966,7 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
                 return ToolResult(ok=True, status=ToolStatus.NOOP, data=dict(there), text=(
                     f"Already there: the workflow {there.get('title')!r} ({there.get('workflowId')}) on quest {quest_id} already has "
                     f"{'this' if squash(there.get('title')) == squash(title) else 'every one of these steps, on this schedule'}. Nothing was created; "
-                    "say it is already set and where (the quest's Workflows page)."))
+                    "say it is already set and where (the quest's Workflows page), in one or two short sentences, and ask for nothing."))
         try:
             made = client.create_quest_workflow(quest_id, title, steps, edges=edges,
                                                 status=str(args.get("status") or "") or None)
@@ -952,7 +977,7 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
             return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was created: Quest returned no workflow.")
         return ToolResult(ok=True, data=data_of(made), text=(
             f"Created the workflow {title!r} ({ident}) on quest {quest_id} with {len(steps)} steps. "
-            f"It is on the Workflows page for the quest's members."))
+            f"It is on the Workflows page for the quest's members. Reply in one or two short sentences: what now exists and where, and ask for nothing."))
 
     return ToolSpec(
         name="create_quest_workflow",
@@ -979,7 +1004,8 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
                 "Ordered steps. A person's step: title, assignee (a name, email or user id of a quest "
                 "member), starts_at and ends_at (ISO date-times with a zone). An AI step: title, rep_id "
                 "and run_at. Both may carry instructions, repeat (daily, weekly or monthly), by_weekday "
-                "(0 Monday to 6 Sunday, weekly only) and tz (IANA zone)."), "items": {
+                "(0 Monday to 6 Sunday, weekly only) and tz (IANA zone). A weekly step may leave out starts_at and ends_at: it is then the whole of its weekday, "
+                "so a missing clock time is never a reason to ask."), "items": {
                     "type": "object", "required": ["title"], "properties": {
                         "title": {"type": "string"}, "instructions": {"type": "string"},
                         "assignee": {"type": "string"}, "rep_id": {"type": "string"},
