@@ -181,7 +181,8 @@ def resolve_context_assembler_stack(base_or_cfg: Any, cfg: Optional[RunnerConfig
             _log.info("context: per-rep context_prefs layer ON")
         except Exception as e:  # noqa: BLE001 -- an optional layer never blocks a lane
             _log.warning("rep_context_prefs unavailable (%s); continuing without it", e)
-    return base
+    from quest_ai_runner.the_intelligence.subconscious.context_retriever.cached_context_assembler import CachedContextAssembler
+    return CachedContextAssembler(base)
 
 
 def quest_client_from_config(cfg: RunnerConfig, *, timeout: float = 30.0) -> Any:

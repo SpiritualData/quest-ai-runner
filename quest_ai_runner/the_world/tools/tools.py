@@ -626,6 +626,9 @@ class ToolRegistry:
             result = box.get("result") or ToolResult(ok=False, text=f"{name} returned nothing")
         if dropped and result.ok:
             result.text = f"(Ignored arguments this tool does not take: {', '.join(sorted(map(str, dropped)))}.)\n{result.text}"
+        if spec.mutates:
+            from hubofhubs.api import clear_resolution_memo      # a write changes the data references point at: nothing remembered outlives it
+            clear_resolution_memo()
         if len(result.text) > MAX_RESULT_CHARS:
             result.text = result.text[:MAX_RESULT_CHARS] + " …[truncated]"
         if self.ledger is not None:

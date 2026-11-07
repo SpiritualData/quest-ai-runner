@@ -27,7 +27,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     planner_full_view_start, planner_note_observation, read_spec_key, repeated_read_observation, split_mixed_reads,
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text, is_information_turn
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import ACT_WITHOUT_TOOL_NOTE, DEEP_FOR_TOOL_WORK_NOTE, RECORDS_NOT_READ_NOTE
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
@@ -302,7 +302,7 @@ class RunLoopMixin:
                         cards=rs.explain_cards, sources=rs.explain_sources)
                     if is_eligible(_trace):
                         _explanation = self.write_answer_explanation(
-                            _trace, prose=not (getattr(cfg, "cheap_information_turns", True) and is_information_turn(rs.turn_user_intent, rs.plan)))
+                            _trace, prose=not (getattr(cfg, "cheap_information_turns", True) and rs.turn_user_intent in ("ask", "inform")))
                         if _explanation:
                             res.explanation = _explanation
                             emit.emit(ProgressEvent(type=EVENT_EXPLANATION, data=_explanation))
@@ -360,6 +360,11 @@ class RunLoopMixin:
         if _scope_note:
             rs.context_view = _scope_note + ("\n\n" + rs.context_view if rs.context_view else "")
         for step in range(cfg.max_steps):
+            # An information turn re-plans once: after the first plan and one re-plan, the wrap-up answers from what was read (the same exit
+            # as a spent read budget). ``cheap_information_turns`` False is the other arm and keeps the full step budget.
+            if (step >= 2 and getattr(cfg, "cheap_information_turns", True) and rs.turn_user_intent == "ask"
+                    and gathered_content(gathered) and not (exec_record is not None and exec_record.any_mutation_attempted)):
+                break
             rs.steps = step + 1
             # Cooperative cancellation, checked before starting each new plan/gather/replan step.
             if cancel_check is not None and cancel_check():

@@ -23,7 +23,7 @@ from hubofhubs.api import ExecutionRecord
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, message_forbids_new_task, restates_meaningfully
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_needs_records
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import Narrator, TurnCardCache, _Emitter
@@ -169,6 +169,8 @@ class RunBeginMixin:
         # call): the nets then ask ``judge_execution_directive`` instead.
         rs.turn_user_intent: Optional[str] = None
         rs.turn_delivery: Optional[str] = None
+        rs.turn_needs_records: Optional[bool] = None
+        rs.records_free = False
         if hold_off_active:
             log.info("User message forbids opening a task this turn; running under the no-action "
                      "gate (planner deep/confirm will degrade to answer).")
@@ -559,6 +561,16 @@ class RunBeginMixin:
             # round trip that runs before any context is even fetched, and it used to be silent.
             emit.status("Working out what you're asking for…")
             rs.goal_condition, rs.retrieval_constraints = self._derive_goal_condition(rs.user_message, now=now)
+            rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
+            if is_small_talk(rs.user_message):
+                rs.turn_needs_records = False      # a greeting needs none of the person's records
+            if (rs.turn_needs_records is False and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None
+                    and not attachments and rs.message_is_user_turn):
+                # A definition, a how-to or a greeting needs nothing of the person's: no context is assembled, no planner step runs,
+                # and the reply is written from the question alone (``records_free``).
+                rs.records_free = True
+                rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
+                                               rationale="A general question: answered from the question alone.")
             if restates_meaningfully(rs.goal_condition, rs.user_message) or rs.retrieval_constraints:
                 _event_data: Dict[str, Any] = {"goal_condition": rs.goal_condition, "internal": True}
                 if rs.retrieval_constraints:
@@ -757,7 +769,7 @@ class RunBeginMixin:
         # We keep them in ``quality_standards`` so the goal loop can verify the done-standard against
         # the same standards the planner was given (see _run_deep / _verify_goal).
         rs.quality_standards: Optional[str] = None
-        if self.guidance is not None:
+        if self.guidance is not None and not rs.records_free:      # a general question is written from the question alone: no guidance is selected
             # Bounded, like the concurrent context-assembly fetch above: select() is a
             # caller-supplied GuidanceProvider implementation that may block on I/O (a
             # dynamic_guidance_loader hitting a DB/network, or its own LLM filtering call)

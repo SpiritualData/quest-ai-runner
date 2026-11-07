@@ -52,6 +52,7 @@ class Standard:
     max_exclamations: Optional[int] = None
     forbid_markup: bool = False          # no markdown, no quotation marks (a reply that is read aloud)
     max_figures: Optional[int] = None    # at most this many figures (dates excluded) in the reply
+    voice_check: bool = False            # no first-person words copied from a record; every sentence with a figure or date traces to what was asked
     states_a_fact_date: bool = False     # when the planner's own ``facts_read`` hold a date, the reply states at least one of them
 
 
@@ -92,11 +93,11 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
     Standard(SHAPE_SPOKEN,
              "The reply will be read aloud: at most three plain spoken sentences, the answer first, no list, no markdown, no quotation marks, "
              "no question, and no more than two figures. Say each date as a person would say it.",
-             max_questions=0, max_list_lines=0, max_sentences=3, forbid_markup=True, max_figures=2),
+             max_questions=0, max_list_lines=0, max_sentences=3, forbid_markup=True, max_figures=2, voice_check=True),
     Standard(SHAPE_INFORMATION,
              "A question answered from the person's records: the answer first, at most four sentences, only what was asked, every figure "
              "with the date it was read.",
-             max_sentences=4),
+             max_sentences=4, voice_check=True),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
@@ -455,11 +456,22 @@ CLARIFY_DIRECTIVE = (
     "topics, no list, no guess, and do not greet them by a name.")
 
 
+VOICE_NOTE = (
+    " Records may be written in the first person by whoever authored them: never copy I, my, me or our from a record, say whose it is by name "
+    "(\"waiting for Zee's preview\"). Use \"I\" only for what you yourself did or could not do this turn.")
+
 SPOKEN_DIRECTIVE = (
     "--- THIS REPLY IS READ ALOUD (set by the planner) ---\n"
     "The person will read your reply out loud. Write at most three plain sentences a person can say without stumbling: the answer first, "
     "then the one fact that matters most with the date it was read (\"as of 5 November\", said as a person would). No list, no markdown, "
-    "no quotation marks, no question, no more than two figures, nothing that must be seen on a page. Never use an em dash.")
+    "no quotation marks, no question, no more than two figures, nothing that must be seen on a page. Never use an em dash."
+    + VOICE_NOTE)
+
+
+GENERAL_ANSWER_DIRECTIVE = (
+    "The person asked a general question (a definition, how to use the product, or a greeting). You are given nothing about them or their work, "
+    "on purpose. Answer it from what you know about the subject in one or two plain sentences, the answer first, with no example drawn from "
+    "their goals, notes or numbers, no offer to look anything up and no remark about what you were not given. Never use an em dash.")
 
 
 def is_clarify(plan: Any) -> bool:
@@ -484,7 +496,7 @@ def standard_for(plan: Any, *, user_intent: Optional[str] = None, delivery: Opti
 
 
 def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None,
-            facts: Optional[List[str]] = None, resolved: Any = None) -> Measurements:
+            facts: Optional[List[str]] = None, resolved: Any = None, question: Optional[str] = None) -> Measurements:
     """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing). ``facts`` are the planner's own
     ``facts_read`` quotes (structured), used only by a standard that asks the reply to state a date those facts hold."""
     try:
@@ -520,6 +532,18 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
                                           "keep the part that answers, drop the rest"))
         if standard.max_chars is not None and m.chars > standard.max_chars:
             m.violations.append(Violation("length", f"cut it to under {standard.max_chars} characters (it is {m.chars})"))
+        if standard.voice_check:
+            copied = copied_first_person(text, [evidence, figure_basis or ""])
+            if copied:
+                m.violations.append(Violation(
+                    "voice", "you copied first-person words from a record (" + ", ".join(f"'{c}'" for c in copied[:3]) + "): the record's author is "
+                    "not you. Say whose it is by name (for example the person or team the record names), or write \"we\" only when the speaker is "
+                    "the team; use \"I\" only for what you yourself did or could not do this turn", tuple(copied)))
+            if question:
+                for stray in unrelated_sentences(text, question, facts):
+                    m.violations.append(Violation("unrelated", f"remove or tie to the question this sentence, which names a figure or date the "
+                                                  f"question did not ask about: {stray[:100]!r}", (stray,)))
+                    break
         if standard.forbid_markup and re.search(r"[*#`_>]|[\"“”]", text):
             m.violations.append(Violation("format", "write plain words only, with no asterisks, hashes, backticks, underscores or quotation marks"))
         if standard.max_figures is not None:
@@ -543,6 +567,43 @@ def _without_dates(text: str) -> str:
     return text
 
 
+FIRST_PERSON = frozenset(("i", "my", "me", "mine", "myself", "our", "ours"))
+OVERLAP_STOP = frozenset("that this with from have were been what when where which their there about would could should your they them then than also into over only just more most some very much many".split())
+
+
+def copied_first_person(draft: str, evidence_texts: List[str]) -> List[str]:
+    """First-person words the draft took from a record: a first-person word with the two words after it, said the same way in the evidence.
+    The assistant speaking about its own action this turn is not copied from a record, so it never matches; text authored in the first
+    person by someone else ("awaiting my preview before it goes out") does. Compares the words of the draft with the evidence; reads no meaning."""
+    held = " " + " ".join(squash(t) for t in evidence_texts if t) + " "
+    words = re.findall(r"[A-Za-z']+", draft or "")
+    out: List[str] = []
+    for i, word in enumerate(words):
+        if word.lower() in FIRST_PERSON and i + 2 < len(words):
+            stretch = " ".join(words[i:i + 3])
+            if f" {squash(stretch)} " in held:
+                out.append(stretch)
+    return list(dict.fromkeys(out))
+
+
+def topic_words(text: str) -> frozenset:
+    return frozenset(w for w in squash(text).split() if len(w) >= 4 and w not in OVERLAP_STOP)
+
+
+def unrelated_sentences(draft: str, question: str, facts: Optional[List[str]]) -> List[str]:
+    """Sentences that state a figure or a date and share no topic word with what the question asked or with the facts the planner reported
+    reading for it (``facts_read``, its own structured account of what bears on the request). Needs the facts: with none reported there is
+    no basis and nothing is flagged."""
+    basis = topic_words(question) | topic_words(" ".join(facts or []))
+    if not facts or not basis:
+        return []
+    out: List[str] = []
+    for sentence in sentences(draft):
+        if (dates_in(sentence) or NUMBER.search(_without_dates(sentence))) and not (topic_words(sentence) & basis):
+            out.append(sentence.strip())
+    return out
+
+
 def sentences(text: str) -> List[str]:
     return [s for s in SENTENCE_END.split(text or "") if s and s.strip()]
 
@@ -558,7 +619,8 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
     try:
         if not measurements.violations:
             return draft
-        parts = sentences(draft)
+        stray = {x.strip() for v in measurements.violations if v.kind == "unrelated" for x in v.values}
+        parts = [x for x in sentences(draft) if x.strip() not in stray] or sentences(draft)
         evidence_index = EvidenceIndex.of(evidence, reads, figure_basis)
         kept: List[str] = []
         asked = 0

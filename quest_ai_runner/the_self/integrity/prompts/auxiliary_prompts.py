@@ -887,6 +887,10 @@ Reply with ONE OR TWO LINES, nothing else:
       "actor": "me" | "rep" | "team" -- who the message is about, only when it names one.
       "content_kind": "tasks_done" | "decisions" | "conversations" | "files" -- the kind of content
         asked for, only when the message names one.
+      "needs_records": false -- ONLY when the message needs nothing from the person's own notes, goals,
+        quests or history to be answered well: a definition or general-knowledge question ("what is
+        a quest?"), a how-to-use-the-product question, or a greeting. Omit it for anything about
+        their own work, plans, people or numbers, and whenever unsure.
     Never invent a filter the message does not support. When unsure, omit line 2 entirely.
 
 {now_block}

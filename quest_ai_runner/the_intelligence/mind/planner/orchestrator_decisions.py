@@ -616,9 +616,20 @@ def parse_goal_condition_reply(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]
             if (isinstance(content_kind, str)
                     and content_kind.strip().lower() in _CONSTRAINT_CONTENT_KIND_VALUES):
                 cleaned["content_kind"] = content_kind.strip().lower()
+            if obj.get("needs_records") is False:
+                cleaned["needs_records"] = False      # not a retrieval filter: the caller takes it out (``take_needs_records``)
             if cleaned:
                 constraints = cleaned
     return goal_condition, constraints
+
+
+def take_needs_records(constraints: Optional[Dict[str, Any]]) -> Tuple[Optional[bool], Optional[Dict[str, Any]]]:
+    """Take the request analyser's ``needs_records`` report out of the parsed constraints: ``(False or None, the filters left or None)``.
+    Only an explicit false is a report; a missing or any other value is None (the turn keeps its context)."""
+    if not constraints or "needs_records" not in constraints:
+        return None, constraints
+    rest = {k: v for k, v in constraints.items() if k != "needs_records"}
+    return (False if constraints.get("needs_records") is False else None), (rest or None)
 
 
 # A message that carries no request to resolve: a greeting, a thanks, an acknowledgement.

@@ -157,8 +157,8 @@ class RepContextAssembler(ContextAssemblerBase):
 
     # --- read half -------------------------------------------------------------------------
 
-    def _rep_block(self) -> str:
-        stashed = current_rep()
+    def _rep_block(self, stashed: Optional[Dict[str, Any]] = None) -> str:
+        stashed = stashed or current_rep()      # the caller's rep is thread-local: a worker thread is handed it
         if not stashed:
             return ""
         user_id = stashed.get("user_id")
@@ -179,11 +179,19 @@ class RepContextAssembler(ContextAssemblerBase):
 
     def assemble(self, task_text: str,
                  *, meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
+        # The rep's profile is fetched while the inner assembler works (two independent reads), not after it.
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(max_workers=1)
+        profile_future = pool.submit(self._rep_block, current_rep())
+        pool.shutdown(wait=False)
         try:
             inner = self._inner.assemble(task_text, meta=meta)
         except Exception:  # noqa: BLE001 -- a failing inner assembler still gets the rep block
             inner = AssembledContext()
-        block = self._rep_block()
+        try:
+            block = profile_future.result()
+        except Exception:  # noqa: BLE001
+            block = ""
         if not block:
             return inner
         view = block if not inner.context_view else f"{block}\n\n{inner.context_view}"
