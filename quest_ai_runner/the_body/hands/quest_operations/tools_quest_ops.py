@@ -988,7 +988,7 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
                      "for a person is a one-step workflow: a human step for them that repeats."),
         when_to_use=("A person asks for a workflow, routine, recurring reminder or repeating process on a quest. "
                      "List the quest's workflows first and do not make a second with the same title. Name people "
-                     "as they are named on the quest (a first name is enough); read it back afterwards with "
+                     "as they are named on the quest (a first name is enough); assign a step to the owner the quest's records name for it, and to the requester only when they name nobody; read it back afterwards with "
                      "list_quest_workflows."),
         when_not_to_use=("A goal, habit or one-off task (create_quest_goal, create_task). Changing or "
                          "deleting a workflow that exists."),

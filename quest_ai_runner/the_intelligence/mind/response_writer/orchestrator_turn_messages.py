@@ -282,7 +282,8 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
         voice = meta.get("channel") == "voice"
         # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
         # ids and owner text) is left out.
-        texts = act_status.status_texts(reading, [] if forced else list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice)
+        texts = act_status.status_texts(reading, [] if (forced or reading is None) else list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice,
+                                        found=act_status.read_summary(gathered))
         ledger = interim_ledger_for(meta if meta else None)
         clock = time.monotonic()
         seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))
@@ -330,14 +331,16 @@ def reread_metric(orch: Any, rs: Any, before: "act_status.MetricReading") -> Opt
 
 
 def already_in_place(gathered: Sequence[Any]) -> List[str]:
-    """Receipts of calls that found the change already there (status ``noop``) or were not run again (same call, same turn)."""
+    """One plain sentence per call that found the change already there (status ``noop``): the title and schedule from the tool's own data, never its text or ids.
+    The code step's own receipt is led by its sentence in the reply and is not listed again."""
     out: List[str] = []
     for g in gathered:
         if not isinstance(g, dict) or not str(g.get("locator") or "").startswith("tool:"):
             continue
-        if g.get("tool_status") == "noop" and not g.get("by_code"):      # the code step's own receipt is led by its sentence in the reply; it is not listed again
-            first = str(g.get("tool_text") or g.get("text") or "").strip().splitlines()
-            out.append((first[0] if first else str(g["locator"])[5:])[:140].rstrip("."))
+        if g.get("tool_status") == "noop" and not g.get("by_code"):
+            phrase = act_status.already_phrase(g)
+            if phrase not in out:
+                out.append(phrase)
     return out
 
 

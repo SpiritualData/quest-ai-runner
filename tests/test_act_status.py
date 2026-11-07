@@ -81,7 +81,7 @@ def test_a_repeated_act_request_reports_what_is_already_there_without_a_second_w
     events = run([act_plan("act", READ), act_plan("act", WRITE), {"action": "answer", "rationale": "done", "user_intent": "act"}],
                  registry(state, writes, existing=True))
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
-    assert writes == [] and "Already in place, so nothing was written again: The weekly check-in is already on the quest" in result["text"]
+    assert writes == [] and "It's already set." in result["text"] and "The weekly check-in is already on the quest" not in result["text"]
     assert "unchanged, still 15." in result["text"]
 
 
@@ -139,4 +139,29 @@ def test_the_code_steps_own_receipt_is_not_listed_again_as_already_in_place():
     from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
     code = receipt_observation("create_or_update_quest_goal", "RECEIPT written by code for X. This week's next step for X was already set.", "noop")
     other = {"kind": "query", "locator": "tool:update_goal", "tool_status": "noop", "text": "The weekly check-in is already on the quest"}
-    assert already_in_place([code, other]) == ["The weekly check-in is already on the quest"]
+    assert already_in_place([code, other]) == ["It's already set."]
+
+
+def test_an_already_there_workflow_is_said_in_one_plain_sentence_with_its_title_and_schedule_and_no_ids_or_tool_text():
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
+    receipt = {"kind": "query", "locator": "tool:create_quest_workflow", "tool_status": "noop",
+               "text": "TOOL create_quest_workflow: Already there: the workflow 'Weekly check-in' (qwf_d9df4f414728) on quest quest_e8257dd0aa3d already has every one of these steps",
+               "tool_data": {"workflowId": "qwf_d9df4f414728", "title": "Weekly check-in: Thursday office hour",
+                             "steps": [{"title": "s", "timing": {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}}}]}}
+    assert already_in_place([receipt]) == ["It's already set: Weekly check-in: Thursday office hour, weekly on Thursdays."]
+    goal = {"locator": "tool:create_or_update_quest_goal", "tool_status": "noop", "tool_data": {"state": "unchanged", "goal": {"name": "Ship the release next step"}}}
+    assert already_in_place([goal]) == ["It's already set: Ship the release next step."]
+    leaky = {"locator": "tool:x", "tool_status": "noop", "tool_data": {"title": "esr_fbcc56e182f7 thing"}}
+    assert already_in_place([leaky]) == ["It's already set."]
+    tail = act_status.closing_lines(None, None, reread=False, already=already_in_place([receipt]))
+    assert tail == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursdays." and "qwf_" not in tail and "quest_" not in tail
+
+
+def test_the_first_message_without_a_milestone_is_a_plain_line_of_what_the_turn_looked_at_never_the_planners_fact_dump():
+    gathered = [{"locator": "tool:list_quest_workflows", "tool_status": "applied"}, {"locator": "tool:create_quest_workflow", "tool_status": "refused"}]
+    found = act_status.read_summary(gathered)
+    assert found == "I looked at quest workflows."
+    texts = act_status.status_texts(None, ["s1 [pending] for Someone, window 2026-11-12T08:00:00+00:00 to 2026-11-12T09:00:00+00:00"], "Create the step esr_ab12cd34ef56",
+                                    evidence="s1 [pending] 2026-11-12T08:00:00+00:00 esr_ab12cd34ef56", found=found)
+    assert "2026-11-12T" not in texts["text"] and "esr_" not in texts["text"] and texts["status"] == "I looked at quest workflows."
+    assert act_status.read_summary([]) == ""

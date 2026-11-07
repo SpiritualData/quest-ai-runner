@@ -120,7 +120,56 @@ def grounded_line(text: str, *allowed: str) -> str:
     return text if text and not ungrounded_terms(text, "\n".join(allowed)) else ""
 
 
-def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: str, *, evidence: str, voice: bool = False) -> dict:
+IDENTIFIER = re.compile(r"\b(?:[a-z]+_[0-9a-f]{6,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f-]{12,}|\d{4}-\d{2}-\d{2}T[\d:.+Z-]+)\b", re.IGNORECASE)
+WEEKDAYS = ("Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays")
+
+
+def plain(text: str) -> str:
+    """``text`` for a reader, or "" when it carries a record id or a timestamp (a raw fact is not a sentence to show)."""
+    text = " ".join((text or "").split())
+    return "" if IDENTIFIER.search(text) else text
+
+
+def humanize_tool(name: str) -> str:
+    words = [w for w in str(name).split("_") if w]
+    return " ".join(words[1:] if words and words[0] in ("list", "read", "get", "find", "search", "show") and len(words) > 1 else words)
+
+
+def read_summary(gathered: Iterable[Any]) -> str:
+    """A plain line for what the turn has looked at so far (the read tools it ran), or "" when it has read nothing: "I looked at the quest workflows."."""
+    names: List[str] = []
+    for entry in gathered:
+        locator = str(entry.get("locator") or "") if isinstance(entry, Mapping) else ""
+        if locator.startswith("tool:") and entry.get("tool_status") not in ("refused",) and not entry.get("by_code"):
+            name = humanize_tool(locator[5:])
+            if name and name not in names:
+                names.append(name)
+    return ("I looked at " + ", ".join(names[:3]) + ".") if names else ""
+
+
+def schedule_phrase(data: Mapping[str, Any]) -> str:
+    """How often a recorded routine repeats, from its steps' own timing: "weekly on Thursdays"; "" when it does not repeat or the data does not say."""
+    for step in data.get("steps") or []:
+        repeat = ((step.get("timing") or {}).get("repeat")) if isinstance(step, Mapping) else None
+        if repeat and repeat.get("freq"):
+            days = [WEEKDAYS[int(d)] for d in repeat.get("byWeekday") or [] if str(d).isdigit() and 0 <= int(d) <= 6]
+            return f"{repeat['freq']} on {' and '.join(days)}" if days else str(repeat["freq"])
+    return ""
+
+
+def already_phrase(entry: Mapping[str, Any]) -> str:
+    """One plain sentence for a write that found everything already there: "It's already set: <title>, weekly on Thursdays." Built from the tool's own data (title, schedule);
+    never the tool's text, and no ids."""
+    data = entry.get("tool_data") if isinstance(entry.get("tool_data"), Mapping) else {}
+    goal = data.get("goal") if isinstance(data.get("goal"), Mapping) else {}
+    title = plain(str(data.get("title") or goal.get("name") or ""))
+    when = schedule_phrase(data)
+    if not title:
+        return "It's already set."
+    return f"It's already set: {title}" + (f", {when}" if when else "") + "."
+
+
+def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: str, *, evidence: str, voice: bool = False, found: str = "") -> dict:
     """``{"status", "next", "text"}`` of message 1. The status is code-written from the reading and the planner's listed facts (each kept
     only when its figures and names are in ``evidence``); ``doing`` is kept only when grounded the same way, else the plain default."""
     parts: List[str] = []
@@ -133,8 +182,8 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
     if not voice:
         kept = [grounded_line(f, evidence) for f in list(facts)[:MAX_FACTS]]
         parts.extend(f.rstrip(".") + "." for f in kept if f)
-    status = " ".join(parts) or NO_STATUS
-    nxt = grounded_line(doing, evidence).rstrip(".")
+    status = " ".join(parts) or found or NO_STATUS
+    nxt = plain(grounded_line(doing, evidence)).rstrip(".")
     nxt = (nxt + ".") if nxt else GENERIC_NEXT
     return {"status": status, "next": nxt, "text": f"Where this stands: {status}\n\nNow: {nxt}"}
 
@@ -168,5 +217,5 @@ def closing_lines(before: Optional[MetricReading], after: Optional[MetricReading
         else:
             lines.append(f"Metric ({label}): was {was}; " + ("it could not be read again just now." if reread else "it was not read again this turn."))
     if already and not voice:
-        lines.append("Already in place, so nothing was written again: " + "; ".join(already[:3]) + ".")
+        lines.append(" ".join(already[:2]))
     return "\n".join(lines)

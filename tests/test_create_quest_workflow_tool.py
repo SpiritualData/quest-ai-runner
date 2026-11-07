@@ -151,3 +151,10 @@ def test_a_repeat_creates_nothing_the_second_time_and_a_step_with_no_weekday_sti
 def test_the_planner_is_told_a_missing_optional_detail_never_blocks_a_create_request():
     from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
     assert "A MISSING OPTIONAL DETAIL NEVER BLOCKS" in DEEP_ACTION and "one or two short" in DEEP_ACTION and "change the call" in DEEP_ACTION
+
+
+def test_the_planner_and_the_tool_say_the_named_owner_not_the_requester_owns_a_recurring_thing():
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
+    assert "THE OWNER OF A RECURRING THING IS THE PERSON THE RECORDS NAME" in DEEP_ACTION and "Never change the owner of something that already exists" in DEEP_ACTION
+    spec = ops.create_quest_workflow_spec(CREDS, client_factory=lambda: FakeClient())
+    assert "assign a step to the owner the quest's records name" in spec.when_to_use

@@ -483,6 +483,9 @@ DEEP_ACTION = """\
     weekly step with only its weekday is that whole day), not asked for. Ask only for a REQUIRED field that cannot be known from the request or the records. When a write is
     refused, the refusal's own words say what to change: change the call and make it again before asking anyone. After the write the final reply is one or two short
     sentences saying what now exists and where, with no questions and no list of what could not be done.
+    THE OWNER OF A RECURRING THING IS THE PERSON THE RECORDS NAME, NOT THE PERSON WHO ASKED. When you set up a workflow step, a reminder or a goal for something the quest's
+    records already give an owner (its notes, goals, workflows, context or the milestone's recorded owners), assign it to that named person. The requester is the owner only
+    when the records name nobody. Never change the owner of something that already exists.
     MOVING A MILESTONE. A request to make progress on, move or advance a milestone or priority of the quest is a write to its specification, not
     advice and not a question back: read_spec_records to find the milestone's solution and its metric record; read the data that gives the metric's
     current number (the reads and tools you have: users, funnel, evaluation results); then apply_spec_edit the metric's record with that number, its

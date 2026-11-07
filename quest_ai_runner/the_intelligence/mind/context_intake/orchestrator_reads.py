@@ -526,6 +526,7 @@ class ReadsMixin:
                     pass
             gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": status.value,
                              "call": {"name": name, "args": dict(args)}, "tool_text": text,
+                             "tool_data": (result.data if result is not None and isinstance(result.data, dict) else None),
                              "text": f"TOOL {name} {RECEIPT_WORDS[status]} "
                                      f"(args {json.dumps(args, default=str)[:(ACTING_TOOL_ARGS_CHARS if (spec is None or spec.mutates) else 600)]}):\n{text}"})
             held = status is ToolStatus.HELD
