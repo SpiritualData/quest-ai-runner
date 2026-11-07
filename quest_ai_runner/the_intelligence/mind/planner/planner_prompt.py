@@ -497,6 +497,8 @@ DEEP_ACTION = """\
     holds a CUE FACTS block, the milestone was found by code from the quest's own records: use it, never ask which milestone, and take the increment in the
     order the block gives (a deliverable you can write, else a metric value you can read, else the owned next step). The owned next step is recorded by code
     under its key, with its receipt returned to you: do not choose a deep run for it, do not write it with a tool yourself, and never ask whether to do it.
+    An order to move a milestone is never answered with a question to the person: the records settle what to do, the step is recorded, and the reply says what was recorded and what only a person can do.
+    Never rewrite a metric record with the value it already holds, and record a metric value only when you have computed a NEW one from data you read (its source and date with it).
     Without a CUE FACTS block, read_spec_records for the milestone's solution, owners and metric, then create_or_update_quest_goal titled with the milestone's own title, then 'next step: week of <Monday>', linked by spec_solution_id
     and the week, assigned to one of the owners the record lists, with spec_solution_id (and spec_metric_id) set. A deliverable the milestone needs is written
     in the reply and recorded the same way under its own short key (the milestone's title, then the name). Say the step, who owns it, and what only a person can do.

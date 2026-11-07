@@ -19,6 +19,7 @@ TABLES = {
 
 
 import datetime
+import json
 
 import pytest
 
@@ -255,9 +256,9 @@ def test_the_model_decides_the_existing_goal_and_the_owner_from_the_record_text_
 
     def decide(prompt):
         asked.append(prompt)
-        return "g9" if "Open goals" in prompt else "Cy"
+        return json.dumps({"owner": "Cy", "goal_id": "g9", "draft": ""})
     receipt, _ = resolved.carry_out(tools, decide)
-    assert len(asked) == 2 and calls[0]["adopt_goal_id"] == "g9" and calls[0]["assignee"] == "Cy" and calls[0]["title"] == "P3 Mobile app live on the Apple Store next step: week of 2026-11-02"
+    assert len(asked) == 1 and calls[0]["adopt_goal_id"] == "g9" and calls[0]["assignee"] == "Cy" and calls[0]["title"] == "P3 Mobile app live on the Apple Store next step: week of 2026-11-02"
     calls.clear()
     resolved.receipt = ""
     resolved.carry_out(tools, lambda prompt: "NONE")
@@ -294,7 +295,7 @@ def test_the_title_starts_with_the_milestones_code_and_never_carries_the_record_
     tools = ToolRegistry([read_spec(), list_goals([OLD_GOAL]), write_goal(calls)])
     resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc))
     assert [g["id"] for g in resolved.candidates] == ["g9"] and "esr_c next step" not in resolved.facts.split("Keys:")[1].split("\n")[0]
-    resolved.carry_out(tools, lambda prompt: "g9" if "Open goals" in prompt else "NONE")
+    resolved.carry_out(tools, lambda prompt: json.dumps({"goal_id": "g9"}))
     assert calls[0]["title"].startswith("P3 ") and "esr_" not in calls[0]["title"] and calls[0]["adopt_goal_id"] == "g9" and calls[0]["spec_solution_id"] == "esr_c"
 
 
@@ -815,8 +816,77 @@ def test_the_milestone_step_offers_only_keyed_goals_for_adoption_and_names_the_p
 
     def decide(prompt):
         asked.append(prompt)
-        return "h1 k" if "Open goals" in prompt else "NONE"
-    assert resolved.choose_adoption(decide) == "k" and "h1:" not in asked[0] and "k:" in asked[0]
-    assert resolved.choose_adoption(lambda prompt: "h1") == ""
+        return json.dumps({"goal_id": "k"})
+    assert resolved.choices(decide)["goal_id"] == "k" and "h1:" not in asked[0] and "k:" in asked[0]
+    assert resolved.choices(lambda prompt: json.dumps({"goal_id": "h1"}))["goal_id"] == ""
     description = resolved.goal_arguments()["description"]
     assert "Related goals on the quest: Submit the app to the store" in description and "k" not in description.split("Related goals")[1]
+
+
+# ---- the group fixes of the milestone baseline
+
+def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_repeat_reuses_the_kept_draft():
+    calls, asked = [], []
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Cy and Di."}}}
+    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
+    tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
+    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
+    resolved = cue.resolve(tools, "q1", CUE, now)
+    receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action [link]"}))
+    assert len(asked) == 1 and "script outline" in asked[0] and "no em dashes" in asked[0]
+    assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action [link]")
+    assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
+    kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action [link]",
+            "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
+    again = cue.resolve(ToolRegistry([read, list_goals([kept]), write_goal(calls)]), "q1", CUE, now)
+    asked.clear()
+    again.carry_out(ToolRegistry([read, list_goals([kept]), write_goal(calls)]), lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy"}))
+    assert "draft" not in asked[0].split("Return JSON")[1] and calls[-1]["description"].endswith("Draft: Opening, three product points, call to action [link]")
+
+
+def test_a_cue_that_names_a_word_family_of_the_milestone_resolves_it():
+    tables = {"solutions": {"esr_a": {"name": "P7 Quest AI reliable yet cheap", "milestones": "Offline pass rate holds.", "tracking_owner": "Ann"},
+                            "esr_b": {"name": "P8 100 Quest users from YouTube", "milestones": "100 new users.", "tracking_owner": "Bo"}},
+              "metrics": {"esr_ma": {"name": "P7 pass rate", "record": "80 percent", "solution_ids": ["esr_a"]}, "esr_mb": {"name": "P8 users", "record": "0", "solution_ids": ["esr_b"]}}}
+    assert cue.candidates(tables, "lets make progress on quest ai reliability")[0] == "esr_a"
+    assert cue.candidates(tables, "get the niche youtube users going")[0] == "esr_b"
+    assert cue.candidates(tables, "announcements of integrations") == []
+
+
+def test_the_code_step_runs_after_a_write_that_was_refused_but_not_after_one_that_was_applied():
+    from hubofhubs.api import PlanDecision
+    resolved = cue.resolve(registry(), "q1", CUE)
+    tools = ToolRegistry([ToolSpec(name="apply_spec_edit", description="d", mutates=True, handler=lambda a, c: ToolResult(ok=True))])
+    blocked = {"locator": "tool:apply_spec_edit", "tool_status": "refused"}
+    applied = {"locator": "tool:apply_spec_edit", "tool_status": "applied"}
+    plan = PlanDecision(action="clarify")
+    assert resolved.routes_to_code(plan, "act", [blocked], tools) is True and resolved.routes_to_code(plan, "act", [applied], tools) is False
+
+
+def link_client(refuse_links):
+    class Client(GoalClient):
+        def create_goal(self, title, **kw):
+            if refuse_links and (kw.get("spec_solution_id") or kw.get("spec_metric_id")):
+                raise RuntimeError("Creating the goal was refused by Quest (400): esr_x is not a strategy of this quest.")
+            return super().create_goal(title, **kw)
+    return Client([])
+
+
+def test_a_refused_strategy_link_is_retried_once_without_the_links_and_the_milestone_is_named_in_the_description():
+    client = link_client(True)
+    result = run_tool(client, description="Next step ...", spec_metric_id="esr_mc")
+    assert result.ok and len(client.posts) == 1 and "spec_solution_id" not in client.posts[0][1] and "spec_metric_id" not in client.posts[0][1]
+    assert "Milestone record: esr_c" in client.posts[0][1]["description"]
+    assert "Quest did not accept the link to the milestone" in result.text and "is not a strategy of this quest" in result.text and "linked to solution esr_c" not in result.text
+    assert result.data["links_refused"] and result.data["state"] == "created"
+
+
+def test_other_refusals_are_not_retried_and_an_accepted_link_is_untouched():
+    class Refusing(GoalClient):
+        def create_goal(self, title, **kw):
+            raise RuntimeError("Creating the goal was refused by Quest (403): you may not edit this quest")
+    result = run_tool(Refusing([]))
+    assert not result.ok and "may not edit" in result.text
+    accepted = link_client(False)
+    done = run_tool(accepted)
+    assert done.ok and accepted.posts[0][1]["spec_solution_id"] == "esr_c" and not done.data.get("links_refused")

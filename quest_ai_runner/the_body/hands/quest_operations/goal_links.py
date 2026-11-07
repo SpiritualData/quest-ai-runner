@@ -87,6 +87,19 @@ def is_keyed_next_step(title: Any) -> bool:
     return bool(KEYED_NEXT_STEP.search(str(title or "")))
 
 
+def is_link_refusal(error: Any) -> bool:
+    """True when Quest refused a write because of the strategy or metric link on it (its 400 says the id is not a strategy of the quest, or not the strategy's metric)."""
+    text = str(error).lower()
+    return "refused" in text and ("not a strategy" in text or "not the metric" in text or "metric target" in text)
+
+
+def refusal_reason(text: str) -> str:
+    """Quest's own words for a refusal, without the wrapper and without record ids."""
+    import re as regex
+    detail = str(text).split("):", 1)[-1] if "):" in str(text) else str(text)
+    return " ".join(regex.sub(r"\b[a-z]+_[0-9a-f]{6,}\b", "it", detail).split()).strip(" .")
+
+
 def linked_open_goal(goals: List[Dict[str, Any]], solution_id: str, title: str) -> Optional[str]:
     """The id of the open goal already linked to ``solution_id``, the one whose name shares the longest start with ``title`` when several are: code decides this, no model."""
     import os.path

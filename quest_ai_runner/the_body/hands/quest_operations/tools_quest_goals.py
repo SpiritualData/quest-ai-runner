@@ -35,8 +35,21 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 assignee_id, why = goal_links.resolve_assignee(client, quest_id, args["assignee"])
                 if why:
                     return ToolResult(ok=False, text=f"Nothing was written: {why}")
-            outcome = goal_links.ensure_goal(client, quest_id, title, period, goal_links.link_fields(args), assignee_id,
-                                             str(args.get("adopt_goal_id") or "").strip() or None, bool(args.get("match_by_link")))
+            fields = goal_links.link_fields(args)
+            adopt, link_match = str(args.get("adopt_goal_id") or "").strip() or None, bool(args.get("match_by_link"))
+            links_refused = ""
+            try:
+                outcome = goal_links.ensure_goal(client, quest_id, title, period, fields, assignee_id, adopt, link_match)
+            except Exception as refusal:  # noqa: BLE001
+                if not (fields.get("spec_solution_id") or fields.get("spec_metric_id")) or not goal_links.is_link_refusal(refusal):
+                    raise
+                # The quest refused the link to the strategy or metric (and so the whole write): write the goal once without the links, naming the milestone in its description,
+                # and say plainly that the link was not accepted.
+                links_refused = str(refusal)[:300]
+                bare = {k: v for k, v in fields.items() if k not in ("spec_solution_id", "spec_metric_id", "metric_target_value")}
+                bare["description"] = (str(bare.get("description") or "").rstrip() + f"\nMilestone record: {fields.get('spec_solution_id') or fields.get('spec_metric_id')}").strip()
+                outcome = goal_links.ensure_goal(client, quest_id, title, period, bare, assignee_id, adopt, False)
+                fields = bare
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was written")
         state, writes = outcome["state"], outcome["writes"]
@@ -48,7 +61,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
             return ToolResult(ok=False, status=ToolStatus.HELD, data={"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"]}, text=(
                 f"Not applied yet: the change to the goal {title!r} is waiting for a person to approve it. It is NOT done."))
         # Only what the quest shows after the write is reported: "updated" when the read-back differs from before, links and owner as read.
-        check = goal_links.verified(client, quest_id, outcome, title, goal_links.link_fields(args), assignee_id)
+        check = goal_links.verified(client, quest_id, outcome, title, fields, assignee_id)
         state = check["state"]
         shown = dict(check.get("goal") or {})
         if shown.get("assigned_to_user_id"):
@@ -57,7 +70,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                                                if str(m.get("user_id")) == str(shown["assigned_to_user_id"])), None)
             except Exception:  # noqa: BLE001  the name is a convenience for the reader; the id stays
                 shown["assignee_name"] = None
-        data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"], "problems": check["problems"],
+        data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"], "problems": check["problems"], "links_refused": links_refused,
                 "goal": {k: shown.get(k) for k in ("id", "name", "assigned_to_user_id", "assignee_name", "spec_solution_id", "spec_metric_id", "period")} if shown else None}
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
@@ -69,6 +82,8 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         recorded = str(args.get("description") or "").strip()
         if recorded and state != "unchanged":
             said += f" Recorded text: {recorded[:500]}"          # the reply restates what was recorded, including each alternative's hypothesis and metric
+        if links_refused:
+            said += f" Quest did not accept the link to the milestone ({goal_links.refusal_reason(links_refused)}), so the goal was written without it and names the milestone in its description."
         if outcome["copies"]:
             said += f" Note: {outcome['copies']} more goal(s) carry the same title; only the first was touched."
         return ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data=data, text=said)

@@ -912,7 +912,7 @@ class RunLoopMixin:
             # and its read budget bounds it: the in-loop consult is skipped, while the checkpoint on the draft answer below stays.
             read_only_information = bool(getattr(cfg, "cheap_information_turns", True) and rs.turn_user_intent == "ask"
                                          and not (exec_record is not None and exec_record.any_mutation_attempted))
-            if (cfg.overseer and rs.plan.action == "read" and rs.pending_oversee is None and not read_only_information
+            if (cfg.overseer and rs.plan.action == "read" and rs.pending_oversee is None and not read_only_information and rs.cue_resolved is None
                     and rs.steps >= cfg.overseer_min_step
                     and rs.steps % max(1, cfg.overseer_every_steps) == 0
                     and rs.overseer_submitted < cfg.overseer_max_signals):

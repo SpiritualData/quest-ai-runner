@@ -16,11 +16,12 @@ import datetime
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 STOP = frozenset("""a about all also an and any are as at be been but by can could do does for from get go going had has have how i in into is it its let lets
 make me more my need new next not now of on one or our out please so some than that the their them then there these they this to up us want was we were what
 when which who will with would you your""".split())
+STEM = 6
 NAME_WEIGHT, METRIC_WEIGHT, TEXT_WEIGHT = 3.0, 2.0, 1.0
 MIN_SCORE = 2.0
 CLOSE = 0.85           # a runner-up at this share of the best score counts as a tie
@@ -41,7 +42,7 @@ def words(text: Any) -> List[str]:
     for token in re.findall(r"[a-z0-9]+", str(text or "").lower()):
         token = token[:-1] if len(token) > 3 and token.endswith("s") else token
         if token not in STOP and len(token) > 2:
-            out.append(token)
+            out.append(token[:STEM] if len(token) > STEM else token)      # one stem for a word family: reliable and reliability, integration and integrations
     return out
 
 
@@ -132,6 +133,36 @@ def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: 
                     f"Reply {NONE} if the message is about something else (a reminder, a workflow, a recurring meeting, writing content, preparing for a call, a question, "
                     "a status check). Reply with nothing else.")
     return next((rid for rid in ids if rid in str(answer)), None)
+
+
+def applied_write_ran(gathered: Iterable[Mapping[str, Any]], registry: Any) -> bool:
+    """True when a tool that changes something ended applied or already-there this turn. A write that was refused, blocked or held did not change anything, so it is not a rung taken."""
+    if registry is None:
+        return False
+    for item in gathered:
+        locator = str(item.get("locator") or "") if isinstance(item, Mapping) else ""
+        spec = registry.get(locator[5:]) if locator.startswith("tool:") else None
+        if spec is not None and getattr(spec, "mutates", False) and item.get("tool_status") in ("applied", "noop", None):
+            return True
+    return False
+
+
+def parse_json(answer: str) -> Dict[str, Any]:
+    """The JSON object in a model's reply ({} when there is none): a structured answer is read as data, never searched for words."""
+    import json
+    text = str(answer or "")
+    start, end = text.find("{"), text.rfind("}")
+    try:
+        data = json.loads(text[start:end + 1]) if start >= 0 and end > start else {}
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def draft_of(goal_text: str) -> str:
+    """The draft a keyed goal already holds in its description (after its ``Draft:`` line), else "": a repeat reuses it, so it never rewrites the goal."""
+    head, sep, rest = str(goal_text or "").partition("Draft:")
+    return rest.strip() if sep else ""
 
 
 def first_sentence(text: str, limit: int = 160) -> str:
@@ -264,14 +295,14 @@ class Resolved:
     purpose: str = ""
     candidates: List[Mapping[str, Any]] = field(default_factory=list)
     receipt: str = field(default="")
+    draft: str = ""
     after_state: Optional[Mapping[str, Any]] = None      # the goal as the tool read it back after the write (id, name, assignee id, links, period)
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the increment is the third rung: the person asked for something to be done (the planner's ``user_intent``), no deliverable is being written in the
         reply (``deep_target``), no tool has already changed something this turn, and the plan is one the flow step takes over. Structured fields only."""
-        from quest_ai_runner.the_world.tools import tool_guards
         return (not self.receipt and user_intent == ACT and getattr(plan, "action", None) in CODE_ROUTED_ACTIONS
-                and getattr(plan, "deep_target", None) != DELIVERABLE_TARGET and not tool_guards.mutating_tool_ran(gathered, registry))
+                and getattr(plan, "deep_target", None) != DELIVERABLE_TARGET and not applied_write_ran(gathered, registry))
 
     def doing(self) -> str:
         """What happens now, for the first message: stated from the records, before the write."""
@@ -314,27 +345,34 @@ class Resolved:
         """The plain statement of what the write did, composed by code from the tool's typed state: created, updated in place, or already set."""
         return self.LEADS.get(state, "I recorded this week's next step for {name}.").format(name=self.name)
 
-    def choose_assignee(self, decide: Optional[Callable[[str], str]]) -> List[str]:
-        """The names to try as assignee, in order: the record's ``tracking_owner`` people; else, when the purpose text is all the record says, the owner the model picks
-        from that text (it replies one name as written there, or NONE). Empty when no owner is named anywhere."""
-        if self.owners:
-            return list(self.owners)
-        if decide is None or not self.purpose.strip():
-            return []
-        answer = decide("Below is the recorded text of a milestone. It may name the people who own it.\n\n" + self.purpose[:PURPOSE_CHARS]
-                        + "\n\nReply with exactly one owner's name as written there, or the single word NONE when it names no owner. Reply with nothing else.").strip()
-        return [] if not answer or answer.upper().startswith("NONE") else [answer.splitlines()[0].strip(" .'\"")]
-
-    def choose_adoption(self, decide: Optional[Callable[[str], str]]) -> str:
-        """The id of the open goal that is already this milestone's next step (any week, any older title), as the model decides among the candidates; "" when none is."""
+    def choices(self, decide: Optional[Callable[[str], str]]) -> Dict[str, str]:
+        """The three things that need reading the record text, in ONE cheap call: ``owner`` (when the record's ``tracking_owner`` names nobody, the person the purpose text names as
+        doing the work), ``goal_id`` (the keyed next-step goal on the quest that is already this milestone's next step, any week, any older title; only keyed goals are offered,
+        a person's goal never is) and ``draft`` (the cheap deliverable for the step, kept in the goal; not asked again when the existing keyed goal already holds one)."""
         from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_keyed_next_step
-        keyed = [g for g in self.candidates if is_keyed_next_step(g.get("title"))]        # only a goal this flow wrote can be taken over; a person's goal is never offered
-        if decide is None or not keyed:
-            return ""
-        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in keyed)
-        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}.\n\nOpen goals on the same quest:\n{listing}\n\nIs one of these goals the next step of this milestone "
-                        "(the same work, whatever its title or week)? Reply with that goal's id exactly as listed, or the single word NONE. Reply with nothing else.")
-        return next((str(g.get("id")) for g in keyed if str(g.get("id")) and str(g.get("id")) in answer), "")
+        keyed = [g for g in self.candidates if is_keyed_next_step(g.get("title"))]
+        if decide is None:
+            return {"owner": "", "goal_id": "", "draft": ""}
+        this_week = next((g for g in keyed if str(g.get("title") or "").strip() == next_step_title(self.name, self.week)), None)
+        kept_draft = draft_of(str((this_week or {}).get("text") or ""))
+        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in keyed) or "(none)"
+        asks = []
+        if not self.owners and self.purpose.strip():
+            asks.append('"owner": one owner\'s name as written in the milestone text above who does the hands-on work (not one who only reviews or approves), or "" when it names no owner')
+        if keyed:
+            asks.append('"goal_id": the id, exactly as listed, of the open goal below that is already the next step of this milestone (the same work, whatever its title or week), or ""')
+        if not kept_draft:
+            asks.append('"draft": the next deliverable for this milestone that a person can use as it is (a short script outline, three alternative headlines, a checklist of at most 7 items '
+                        'or a set of at most 5 questions, whichever the milestone calls for), under 150 words, using only the facts above, with [brackets] where a fact is unknown, '
+                        'no prices, dates, counts or claims that are not given above, and no em dashes')
+        if not asks:
+            return {"owner": "", "goal_id": "", "draft": kept_draft}
+        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
+                        f"Open goals on the same quest:\n{listing}\n\nReturn JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
+        data = parse_json(answer)
+        goal = str(data.get("goal_id") or "")
+        return {"owner": str(data.get("owner") or "").strip(" .'\""), "goal_id": goal if goal in {str(g.get("id")) for g in keyed} else "",
+                "draft": kept_draft or str(data.get("draft") or "").strip()}
 
     def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None) -> Tuple[str, str]:
         """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is
@@ -347,12 +385,15 @@ class Resolved:
         ctx = ToolContext(quest_id=self.quest_id)
         base = self.goal_arguments()
         try:
-            adopt = self.choose_adoption(decide)
-            owners = self.choose_assignee(decide)
+            picked = self.choices(decide)
         except Exception as error:      # noqa: BLE001  the choice failed: surfaced, not guessed
             raise LaneGap(f"choosing the owner or the existing goal failed ({type(error).__name__}: {error})") from error
-        if adopt:
-            base["adopt_goal_id"] = adopt
+        owners = list(self.owners) or ([picked["owner"]] if picked["owner"] else [])
+        if picked["goal_id"]:
+            base["adopt_goal_id"] = picked["goal_id"]
+        if picked["draft"]:
+            base["description"] = base["description"] + f"\nDraft: {picked['draft']}"
+            self.draft = picked["draft"]
         refused: List[str] = []
         for owner in [*owners, ""]:
             args = dict(base, assignee=owner) if owner else dict(base)
@@ -367,6 +408,8 @@ class Resolved:
                 lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
                 if (result.data or {}).get("problems"):
                     note += " The quest does not show everything that was asked for (" + "; ".join(result.data["problems"]) + "): say exactly that, and do not say it is linked or owned."
+                if self.draft:
+                    note += f" The draft kept in the goal, to show in the reply: {self.draft}"
                 return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
                         f"Open the reply with exactly this sentence: \"{lead}\" Then say who owns it and what only a person can do, "
                         "and do not offer to do it or ask whether to."), result.status.value
