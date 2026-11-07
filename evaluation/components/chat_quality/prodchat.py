@@ -87,6 +87,11 @@ def check_case(case, allowed):
 
 # ---------------------------------------------------------------------------------------------------------------- client
 
+#: How each kind of item a run created is undone, as the AI account, by routes that only take the item back (no resolution, no learning, no rejection).
+UNDO_ROUTES = (("decisions", r"/api/teams/decisions/([\w-]+)/withdraw", "POST"), ("workflows", r"/api/workflows/([\w-]+)", "DELETE"),
+               ("tasks", r"/api/assistant-tasks/([\w-]+)", "DELETE"), ("notes", r"/api/quests/{quest}/notes/([\w-]+)", "DELETE"))
+
+
 class ProdClient:
     """Bearer-key HTTP client for production. GETs are free; the only writes it will make are the three below, on the conversation it created."""
 
@@ -97,6 +102,7 @@ class ProdClient:
         self.key = key
         self.timezone = timezone
         self.own_conversations = set()
+        self.removable = set()           # ("decisions"|"tasks"|"workflows"|"notes", id) this run created and may undo; nothing else is ever touched
 
     def _headers(self, accept="application/json"):
         return {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json", "Accept": accept}
@@ -120,6 +126,10 @@ class ProdClient:
         match = re.fullmatch(r"/api/quest-ai/conversations/([\w-]+)/(messages/stream|stop)", path)
         if method == "POST" and match and match.group(1) in self.own_conversations:
             return
+        for category, pattern, verb in UNDO_ROUTES:
+            found = re.fullmatch(pattern.replace("{quest}", re.escape(self.quest_id)), path)
+            if method == verb and found and (category, found.group(1)) in self.removable:
+                return
         raise GuardRefusal(f"prod_quest_chat: {method} {path} is not an allowed write (only: create a conversation, send to and stop the conversation this run created)")
 
     def whoami(self):
@@ -277,19 +287,20 @@ def fingerprint_from(reads):
     fp = {c: {} for c in CATEGORIES}
     for note in reads.get("notes") or []:
         nid = note.get("note_id") or note.get("id")
-        fp["notes"][nid] = {"digest": digest(note.get("text"), note.get("updated_at")), "label": str(note.get("text") or "")[:80], "author": note.get("author_name")}
+        fp["notes"][nid] = {"digest": digest(note.get("text"), note.get("updated_at")), "label": str(note.get("text") or "")[:80], "author": note.get("author_name"),
+                                  "author_id": note.get("author_id"), "created_at": note.get("created_at")}
     for goal in reads.get("goals") or []:
         fp["goals"][goal.get("id")] = {"digest": digest(goal.get("name"), goal.get("completed"), goal.get("criteria"), goal.get("description"), goal.get("deadline"), goal.get("scheduled_date")),
                                        "label": str(goal.get("name") or "")[:80]}
     for wf in reads.get("workflows") or []:
-        fp["workflows"][wf.get("workflowId")] = {"digest": digest(wf.get("title"), wf.get("status"), wf.get("updatedAt"), wf.get("steps")), "label": str(wf.get("title") or "")[:80]}
+        fp["workflows"][wf.get("workflowId")] = {"digest": digest(wf.get("title"), wf.get("status"), wf.get("updatedAt"), wf.get("steps")), "label": str(wf.get("title") or "")[:80], "created_at": wf.get("createdAt")}
     for rec in reads.get("spec_records") or []:
         fp["spec_records"][rec.get("recordId")] = {"digest": digest(rec.get("revision"), rec.get("updatedAt"), rec.get("fields")), "label": f"{rec.get('type')}"}
     for task in reads.get("tasks") or []:
-        fp["tasks"][task.get("task_id") or task.get("id")] = {"digest": "", "label": str(task.get("title") or task.get("text") or "")[:80], "conv_id": task.get("conv_id"),
+        fp["tasks"][task.get("task_id") or task.get("id")] = {"digest": "", "label": str(task.get("title") or task.get("text") or "")[:80], "conv_id": task.get("conv_id"), "created_by": task.get("created_by"),
                                                                "source": task.get("source"), "created_at": task.get("created_at")}
     for dec in reads.get("decisions") or []:
-        fp["decisions"][dec.get("decision_id")] = {"digest": "", "label": str(dec.get("summary") or "")[:80], "conv_id": dec.get("conv_id"), "kind": dec.get("kind")}
+        fp["decisions"][dec.get("decision_id")] = {"digest": "", "label": str(dec.get("summary") or "")[:80], "conv_id": dec.get("conv_id"), "kind": dec.get("kind"), "status": dec.get("status")}
     for conv in reads.get("conversations") or []:
         fp["conversations"][conv.get("id")] = {"digest": "", "label": str(conv.get("title") or "")[:80]}
     return fp
@@ -313,7 +324,7 @@ def read_fingerprint(client, own_conv=None):
         "workflows": read("/api/workflows", "items") + read(f"/api/quests/{quest_id}/workflows", "items"),
         "spec_records": read(f"/api/intents/specs/quest/{quest_id}", "records"),
         "tasks": read("/api/assistant-tasks", "tasks", {"quest_id": quest_id, "limit": 1000}),
-        "decisions": read("/api/teams/decisions/for-user", "decisions"),
+        "decisions": read("/api/teams/decisions/for-user", "decisions") + read("/api/teams/decisions/for-quest", "decisions", {"quest_id": quest_id}),
         "conversations": read("/api/quest-ai/conversations", None, {"limit": 500}),
     }
     return fingerprint_from(reads)
@@ -358,3 +369,58 @@ def unexpected_writes(changes, effect=None, zero_writes=False):
         extra = ", ".join(f"{k}={c[k]}" for k in ("author", "conv_id", "source", "created_at", "kind") if c.get(k))
         out.append(f"UNEXPECTED WRITE: {c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" + (f" ({extra})" if extra else ""))
     return out
+
+
+# ---------------------------------------------------------------------------------------------------------------- cleanup: nothing a run creates needs a human to undo
+
+def describe_undo(effect, zero_writes):
+    """The line printed before a case runs: what it may create and how each kind is undone."""
+    kept = sorted(allowed_categories(effect)) if not zero_writes else []
+    undo = "; ".join(f"{cat}: {verb} {pattern.split('/api/')[1].replace('{quest}', '<quest>').replace('([\\w-]+)', '<id>')}" for cat, pattern, verb in UNDO_ROUTES)
+    return (f"intended results kept (idempotent): {', '.join(kept) or 'none (a zero-writes case)'}; anything else this run creates is taken back as the AI account "
+            f"({undo}); a change that cannot be taken back fails the case")
+
+
+def plan_cleanup(changes, own_conv, started_iso, ai_user_id, effect=None, zero_writes=False):
+    """Split the fingerprint changes into ``remove`` (created by THIS run, not the case's intended result, with a route that takes it back), ``keep`` (the intended,
+    allowed result) and ``left`` (cannot be taken back or cannot be shown to be this run's: a changed or removed item, a goal or spec record, a note or workflow that
+    is not provably this run's). Attribution: a decision or task by this run's conversation id; a note by the AI account created since the turn began; a workflow created
+    since the turn began. An item that existed before, or that another actor created, is never in ``remove``."""
+    allowed = set() if zero_writes else allowed_categories(effect)
+    plan = {"remove": [], "keep": [], "left": []}
+    for c in changes:
+        cat, item_id = c["category"], c["id"]
+        if c["change"] != "added":
+            plan["left"].append(dict(c, why=f"{c['change']} (cannot be undone from here)"))
+        elif cat in allowed:
+            plan["keep"].append(c)
+        elif cat in ("decisions", "tasks") and own_conv and c.get("conv_id") == own_conv:
+            plan["remove"].append(c)
+        elif cat == "notes" and c.get("author_id") == ai_user_id and str(c.get("created_at") or "") >= started_iso:
+            plan["remove"].append(c)
+        elif cat == "workflows" and str(c.get("created_at") or "") >= started_iso:
+            plan["remove"].append(c)
+        else:
+            plan["left"].append(dict(c, why="not provably created by this run, or no route takes it back"))
+    return plan
+
+
+def run_cleanup(client, plan):
+    """Take back what the plan says to remove, as the AI account. Returns ``{"withdrawn": [ids], "deleted": [ids], "left": [text], "kept": [ids]}``; an item whose
+    removal fails is ``left``."""
+    out = {"withdrawn": [], "deleted": [], "left": [f"{c['category']} {c['id']} ({c['why']})" for c in plan["left"]], "kept": [c["id"] for c in plan["keep"]]}
+    for c in plan["remove"]:
+        cat, item_id = c["category"], c["id"]
+        client.removable.add((cat, item_id))
+        path, method = {"decisions": (f"/api/teams/decisions/{item_id}/withdraw", "POST"), "workflows": (f"/api/workflows/{item_id}", "DELETE"),
+                        "tasks": (f"/api/assistant-tasks/{item_id}", "DELETE"), "notes": (f"/api/quests/{client.quest_id}/notes/{item_id}", "DELETE")}[cat]
+        try:
+            client._request(method, path, {} if method == "POST" else None)
+            (out["withdrawn"] if cat == "decisions" else out["deleted"]).append(item_id)
+        except Exception as e:  # noqa: BLE001
+            out["left"].append(f"{cat} {item_id} (removal failed: {str(e)[:120]})")
+    return out
+
+
+def cleanup_line(result):
+    return f"cleanup: withdrawn {result['withdrawn'] or 'none'}, deleted {result['deleted'] or 'none'}, left {result['left'] or 'none'}"

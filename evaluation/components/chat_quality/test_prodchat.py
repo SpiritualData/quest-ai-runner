@@ -88,3 +88,69 @@ def test_changed_removed_and_queued_items_are_all_seen():
     kinds = {(c["category"], c["change"]) for c in PC.diff_fingerprints(before, after, own_conv="own")}
     assert kinds == {("goals", "removed"), ("spec_records", "changed"), ("tasks", "added"), ("decisions", "added")}
     assert PC.diff_fingerprints(before, before) == []
+
+
+# ---- cleanup: nothing a run creates may need a human to undo
+
+class FakeApi(PC.ProdClient):
+    """The client with the network replaced by a record of the calls; ``fail`` names ids whose removal is refused."""
+    def __init__(self, fail=()):
+        super().__init__(BASE, "k")
+        self.calls, self.fail = [], set(fail)
+
+    def _request(self, method, path, body=None, params=None, timeout=60):
+        if method != "GET":
+            self.allow_write(method, path)
+            if any(f in path for f in self.fail):
+                raise RuntimeError("403 forbidden")
+        self.calls.append((method, path))
+        return {}
+
+
+def run_cleanup_for(fp_after, fail=(), effect=None, zero=True, own="own"):
+    before = PC.fingerprint_from(reads(decisions=[{"decision_id": "d_old", "conv_id": "someone-else", "status": "open"}]))
+    after = PC.fingerprint_from(fp_after)
+    changes = PC.diff_fingerprints(before, after, own_conv=own)
+    plan = PC.plan_cleanup(changes, own, "2026-11-06T10:00:00", UID, effect, zero)
+    api = FakeApi(fail)
+    return PC.run_cleanup(api, plan), api.calls
+
+
+def test_a_created_ask_is_withdrawn_and_a_pre_existing_ask_is_untouched():
+    result, calls = run_cleanup_for(reads(decisions=[{"decision_id": "d_old", "conv_id": "someone-else", "status": "open"},
+                                                     {"decision_id": "d_new", "conv_id": "own", "kind": "blocker", "status": "open"}]))
+    assert result["withdrawn"] == ["d_new"] and result["left"] == []
+    assert calls == [("POST", "/api/teams/decisions/d_new/withdraw")]
+    assert PC.cleanup_line(result) == "cleanup: withdrawn ['d_new'], deleted none, left none"
+
+
+def test_a_duplicate_workflow_a_queued_task_and_the_runs_note_are_deleted_but_another_actors_are_not():
+    result, calls = run_cleanup_for(reads(
+        workflows=[{"workflowId": "wf_dup", "createdAt": "2026-11-06T10:00:09"}, {"workflowId": "wf_old_new", "createdAt": "2026-11-01T00:00:00"}],
+        tasks=[{"task_id": "t1", "title": "old"}, {"task_id": "t_mine", "conv_id": "own"}, {"task_id": "t_other", "conv_id": "another"}],
+        notes=[{"note_id": "n1", "text": "a", "updated_at": "1"}, {"note_id": "n_mine", "author_id": UID, "created_at": "2026-11-06T10:00:07"},
+               {"note_id": "n_human", "author_id": "human", "created_at": "2026-11-06T10:00:07"}]))
+    assert sorted(result["deleted"]) == ["n_mine", "t_mine", "wf_dup"]
+    assert sorted(c[1] for c in calls) == ["/api/assistant-tasks/t_mine", "/api/quests/quest_x/notes/n_mine", "/api/workflows/wf_dup"]
+    assert len(result["left"]) == 3 and not any("t_mine" in x or "n_mine" in x for x in result["left"])      # the other actors' items are left alone, and reported
+
+
+def test_an_item_that_cannot_be_removed_is_left_and_a_change_that_cannot_be_undone_is_left():
+    result, _ = run_cleanup_for(reads(decisions=[{"decision_id": "d_old", "conv_id": "someone-else"}, {"decision_id": "d_new", "conv_id": "own"}],
+                                      spec_records=[{"recordId": "r1", "revision": 2, "fields": {"a": 2}}]), fail=("d_new",))
+    assert result["withdrawn"] == [] and len(result["left"]) == 2        # the refused withdrawal and the changed spec record
+    assert any("removal failed" in x for x in result["left"]) and any("spec_records" in x for x in result["left"])
+
+
+def test_the_intended_result_of_a_case_is_kept_not_removed():
+    result, calls = run_cleanup_for(reads(notes=[{"note_id": "n1", "text": "a", "updated_at": "1"}, {"note_id": "n_new", "author_id": UID, "created_at": "2026-11-06T10:00:07"}]),
+                                    effect={"allow": [{"tool": "add_quest_note"}]}, zero=False)
+    assert result["kept"] == ["n_new"] and calls == []
+
+
+def test_the_client_refuses_to_undo_anything_it_was_not_told_this_run_created():
+    api = FakeApi()
+    for method, path in (("POST", "/api/teams/decisions/d_old/withdraw"), ("DELETE", "/api/workflows/wf_old"), ("DELETE", "/api/quests/quest_x/notes/n1")):
+        with pytest.raises(PC.GuardRefusal):
+            api._request(method, path)
+    assert "undo" in PC.describe_undo({"allow": [{"tool": "add_quest_note"}]}, False) or "taken back" in PC.describe_undo(None, True)
