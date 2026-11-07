@@ -489,9 +489,9 @@ DEEP_ACTION = """\
     holds a CUE FACTS block, the milestone was found by code from the quest's own records: use it, never ask which milestone, and take the increment in the
     order the block gives (a deliverable you can write, else a metric value you can read, else the owned next step). The owned next step is recorded by code
     under its key, with its receipt returned to you: do not choose a deep run for it, do not write it with a tool yourself, and never ask whether to do it.
-    Without a CUE FACTS block, read_spec_records for the milestone's solution, owners and metric, then create_or_update_quest_goal keyed by the solution's record id
+    Without a CUE FACTS block, read_spec_records for the milestone's solution, owners and metric, then create_or_update_quest_goal titled with the milestone's own title, then 'next step: week of <Monday>', linked by spec_solution_id
     and the week, assigned to one of the owners the record lists, with spec_solution_id (and spec_metric_id) set. A deliverable the milestone needs is written
-    in the reply and recorded the same way under its own short key (the record id, then the name). Say the step, who owns it, and what only a person can do.
+    in the reply and recorded the same way under its own short key (the milestone's title, then the name). Say the step, who owns it, and what only a person can do.
     NEVER ASK WHICH MILESTONE. When the chat has no open quest, read_spec_records on the quests listed in context (find_quest lists them), most
     likely first, and take the milestone whose name best fits the cue. Ask only when two milestones fit equally well, and then name both.
     ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply

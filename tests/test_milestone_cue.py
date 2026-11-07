@@ -60,7 +60,7 @@ def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys_owners_and_goals
     picked = cue.select(TABLES, CUE)
     assert picked and picked[0] == "esr_c"
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02", goals=GOALS, zone="America/Los_Angeles")
-    assert "esr_c" in block and "esr_mc" in block and "tracking_owner: Cy, Di" in block and "esr_c next step: week of 2026-11-02" in block
+    assert "esr_c" in block and "esr_mc" in block and "tracking_owner: Cy, Di" in block and "P3 Mobile app live on the Apple Store next step: week of 2026-11-02" in block
     assert "Current value: No." in block and "Open goals on the quest that may be" in block and "already there" in block and "esr_c next step: week of 2026-10-26" in block
     assert "Unrelated" not in block and "America/Los_Angeles" in block
 
@@ -114,7 +114,7 @@ def test_the_flow_step_writes_the_keyed_next_step_to_an_owner_and_returns_the_re
     resolved = cue.resolve(registry(calls), "q1", CUE, datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc))
     receipt, status = resolved.carry_out(registry(calls))
     assert status == "applied" and "RECEIPT written by code" in receipt and "do not offer to do it" in receipt
-    assert calls[0]["title"] == "esr_c next step: week of 2026-11-02" and calls[0]["assignee"] == "Cy" and calls[0]["spec_solution_id"] == "esr_c"
+    assert calls[0]["title"] == "P3 Mobile app live on the Apple Store next step: week of 2026-11-02" and calls[0]["assignee"] == "Cy" and calls[0]["spec_solution_id"] == "esr_c"
     assert calls[0]["spec_metric_id"] == "esr_mc" and calls[0]["period"] == "2026_W45" and calls[0]["due_date"] == "2026-11-08"
 
 
@@ -160,7 +160,7 @@ def test_a_pinned_turn_skips_the_broad_retrieval_and_the_code_records_the_step_a
     config.overseer = False
     result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config,
                           tools=registry(calls)).run(CUE, quest_id="q1")
-    assert calls and calls[0]["title"].startswith("esr_c next step: week of ") and result.kind != "deep"
+    assert calls and calls[0]["title"].startswith("P3 Mobile app live on the Apple Store next step: week of ") and result.kind != "deep"
     assert "CUE FACTS (found by code" in provider.plan_prompts[0]
 
 
@@ -225,7 +225,7 @@ def test_an_old_format_goal_sharing_the_milestones_code_and_words_is_listed_as_a
     done = dict(OLD_GOAL, id="g8", completed=True)
     other = dict(OLD_GOAL, id="g7", title="Plan the offsite")
     found = cue.candidate_goals([OLD_GOAL, done, other, *GOALS], "esr_c", name)
-    assert [g["id"] for g in found] == ["g9", "g1"]      # g1 is linked by id; the finished, unrelated and unlinked ones are not listed
+    assert [g["id"] for g in found] == ["g1", "g9"]      # g1 is linked by the record and comes first; the finished, unrelated and unlinked ones are not listed
     assert "P3 next step: week of 2026-11-02" in cue.fact_block(TABLES, CUE, monday="2026-11-09", goals=[OLD_GOAL])
 
 
@@ -245,7 +245,7 @@ def test_the_model_decides_the_existing_goal_and_the_owner_from_the_record_text_
         asked.append(prompt)
         return "g9" if "Open goals" in prompt else "Cy"
     receipt, _ = resolved.carry_out(tools, decide)
-    assert len(asked) == 2 and calls[0]["adopt_goal_id"] == "g9" and calls[0]["assignee"] == "Cy" and calls[0]["title"] == "esr_c next step: week of 2026-11-02"
+    assert len(asked) == 2 and calls[0]["adopt_goal_id"] == "g9" and calls[0]["assignee"] == "Cy" and calls[0]["title"] == "P3 Mobile app live on the Apple Store next step: week of 2026-11-02"
     calls.clear()
     resolved.receipt = ""
     resolved.carry_out(tools, lambda prompt: "NONE")
@@ -275,3 +275,12 @@ def test_adopting_an_existing_goal_renames_links_and_moves_it_and_a_repeat_is_al
     assert client.updates[0][1]["spec_solution_id"] == "esr_c" and len(client.goals) == 1
     again = goal_links.ensure_goal(client, "q1", "esr_c next step: week of 2026-11-09", "2026_W46", fields, None, "g9")
     assert again["state"] == "unchanged" and len(client.updates) == 1
+
+
+def test_the_title_starts_with_the_milestones_code_and_never_carries_the_record_id_and_the_old_unlinked_goal_is_found_and_adopted():
+    calls = []
+    tools = ToolRegistry([read_spec(), list_goals([OLD_GOAL]), write_goal(calls)])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc))
+    assert [g["id"] for g in resolved.candidates] == ["g9"] and "esr_c next step" not in resolved.facts.split("Keys:")[1].split("\n")[0]
+    resolved.carry_out(tools, lambda prompt: "g9" if "Open goals" in prompt else "NONE")
+    assert calls[0]["title"].startswith("P3 ") and "esr_" not in calls[0]["title"] and calls[0]["adopt_goal_id"] == "g9" and calls[0]["spec_solution_id"] == "esr_c"

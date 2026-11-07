@@ -135,8 +135,9 @@ def today_in(zone: str, now: Optional[datetime.datetime] = None) -> datetime.dat
         raise LaneGap(f"the quest's time zone {zone!r} is not a zone this lane knows ({type(error).__name__}), so the week could not be dated") from error
 
 
-def next_step_title(rid: str, week: Week) -> str:
-    return f"{rid} next step: week of {week.monday}"
+def next_step_title(milestone_title: str, week: Week) -> str:
+    """The title a person reads: the milestone record's own title (which starts with its code), then the week. The record id is the link, never part of the title."""
+    return f"{milestone_title} next step: week of {week.monday}"
 
 
 def is_open(goal: Mapping[str, Any]) -> bool:
@@ -144,7 +145,7 @@ def is_open(goal: Mapping[str, Any]) -> bool:
 
 
 def candidate_goals(goals: Sequence[Mapping[str, Any]], rid: str, name: str) -> List[Mapping[str, Any]]:
-    """The open goals that plausibly belong to the milestone: linked to its solution record, titled with its record id, or sharing words with the milestone's own name
+    """The open goals that plausibly belong to the milestone: linked to its solution record, titled with its record id (older keys), or sharing words with the milestone's own name
     (two or more, or its first word, which is its code when it has one). Candidates only: the model decides which of them is the same milestone."""
     name_words = [w for w in re.findall(r"[a-z0-9]+", name.lower()) if w not in STOP]
     first = name_words[0] if name_words else ""
@@ -157,7 +158,7 @@ def candidate_goals(goals: Sequence[Mapping[str, Any]], rid: str, name: str) -> 
         if (str(goal.get("spec_solution_id") or "") == rid or str(goal.get("title") or "").startswith(rid + " ")
                 or len(shared) >= 2 or (first and first in title_words)):
             out.append(goal)
-    return out
+    return sorted(out, key=lambda g: str(g.get("spec_solution_id") or "") != rid)      # linked by the record first
 
 
 def linked_goals(goals: Sequence[Mapping[str, Any]], rid: str) -> List[Mapping[str, Any]]:
@@ -172,7 +173,7 @@ def goal_summary(goal: Mapping[str, Any]) -> str:
 
 INCREMENT_ORDER = ("Increment order, the first that applies (one increment per turn): "
                    "1. a deliverable the milestone needs that you can write from what you have: write it in the reply (deep_target draft_in_chat) and record it as a goal keyed "
-                   "{rid} followed by a short name; "
+                   "{title} followed by a short name; "
                    "2. else a metric value you can read from the data your tools reach: record it with the metric's record id and its source and date; "
                    "3. else an owned next step that names what only a person can do. Code records that step for you under its key and returns the receipt, "
                    "so do not choose a deep run, do not call create_or_update_quest_goal for it, and never ask permission to do it.")
@@ -200,13 +201,13 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
     if ties:
         lines.append("- Close runners-up (the quest lists this one first): " + ", ".join(f"{t} {str((tables['solutions'].get(t) or {}).get('name') or '')[:50]!r}" for t in ties))
     already = candidate_goals(goals, rid, name)
-    lines.append("- Open goals on the quest that may be this milestone's (linked to it, keyed with its record id, or sharing its name; the code decides which is the same milestone when it records the step): "
+    lines.append("- Open goals on the quest that may be this milestone's (linked by spec_solution_id, or sharing its name or code, whatever the title or week; the code decides which is the same milestone when it records the step): "
                  + ("; ".join(goal_summary(g) for g in already) if already else "none")
                  + (". If the step exists here, it is updated in place, not created again: say 'already there' or 'updated', never that nothing was recorded." if already else "."))
-    lines.append(f"- Keys: this week's next step is the goal titled '{rid} next step: week of {monday or '<Monday date>'}'"
+    lines.append(f"- Keys: this week's next step is the goal titled '{next_step_title(name, Week(monday or '<Monday date>', '', ''))}'"
                  + (f" (week read in {zone})" if zone else " (the quest records no time zone, so UTC)") + f", linked to spec_solution_id {rid}"
-                 + (f" and spec_metric_id {metric_ids[0]}" if metric_ids else "") + f"; a deliverable is a goal titled '{rid} <short name>'. The tool reports created, updated or already there.")
-    lines.append(INCREMENT_ORDER.replace("{rid}", rid))
+                 + (f" and spec_metric_id {metric_ids[0]}" if metric_ids else "") + f"; a deliverable is a goal titled '{name} <short name>'. The record id is only the link (spec_solution_id). The tool reports created, updated or already there.")
+    lines.append(INCREMENT_ORDER.replace("{title}", name))
     lines.append("Use them: do not ask which milestone, and do not ask for facts listed here.")
     return "\n".join(lines)
 
@@ -237,7 +238,7 @@ class Resolved:
 
     def goal_arguments(self) -> Dict[str, Any]:
         args: Dict[str, Any] = {
-            "quest_id": self.quest_id, "title": next_step_title(self.rid, self.week), "period": self.week.period, "due_date": self.week.due,
+            "quest_id": self.quest_id, "title": next_step_title(self.name, self.week), "period": self.week.period, "due_date": self.week.due,
             "description": f"Next step for {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.",
             "spec_solution_id": self.rid, "user_asked_for_this_field": True}
         if self.metric_ids:
