@@ -9,7 +9,7 @@ Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../../../quest
 
 ## Where to go next
 
-- Owning intent: [Quest Intents](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
+- Owning intent: [Quest Intents](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/README.md)
 - Repository: [top README](../../../../README.md)
 
 *Generated from the records of the intents that own these arms by `esoi readmes`. Edit those records, not this page.*
