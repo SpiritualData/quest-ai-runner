@@ -4,7 +4,6 @@ Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../../../quest
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Words and meaning candidates, the model picks | `place-on-a-quest:hybrid-candidate-ranker` | [`evaluation/components/place_on_a_quest/impls/hybrid_candidate_ranker.py`](hybrid_candidate_ranker.py) | selected |
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [`evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py`](shared_quest_ranker.py) |  |
 
 ## Where to go next
