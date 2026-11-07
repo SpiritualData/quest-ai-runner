@@ -222,6 +222,9 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
     if not found and link_match and fields.get("spec_solution_id"):
         # Idempotent in code: a goal already linked to this strategy is the goal, updated in place, before any create. The model's pick below is only for older goals with no link.
         adopt_goal_id = linked_open_goal(goals, str(fields["spec_solution_id"]), title) or adopt_goal_id
+    # The marker rides on a description this call writes. A call that names no description leaves a kept goal's description alone (writing the bare marker over it would make a
+    # repeat with nothing new an update); a goal created or adopted below always gets the marker, so it is recognised as one Quest AI keeps.
+    wants_description = bool(str(fields.get("description") or "").strip())
     fields = dict(fields, description=with_marker(fields.get("description")))
     if adopt_goal_id and not is_owned(next((g for g in goals if str(g.get("id")) == str(adopt_goal_id)), {})):
         adopt_goal_id = None       # never take over a goal this tool did not write: it is a person's, and stays exactly as it is
@@ -254,7 +257,10 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
         # A goal with this exact title that this tool did not write is a person's: it is left exactly as it is (no field, no owner, no period, no link), whatever the request says.
         return {"state": "left_alone", "goal_id": str(goal.get("id")), "changed": [], "writes": [], "copies": len(found) - 1, "before": before}
     goal_id = str(goal.get("id"))
-    changes = goal_changes(goal, {**fields, "period": period})
+    wanted = {**fields, "period": period}
+    if not wants_description:
+        wanted.pop("description", None)
+    changes = goal_changes(goal, wanted)
     writes: List[Any] = []
     changed = sorted(changes)
     if changes:

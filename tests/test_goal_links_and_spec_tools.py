@@ -83,6 +83,15 @@ def test_ensure_unchanged_when_all_match():
     assert result.ok and result.data["state"] == "unchanged" and client.calls == [] and result.status is ToolStatus.NOOP
 
 
+def test_ensure_repeat_with_same_description_is_unchanged_and_marker_is_kept():
+    existing = {"id": "g1", "name": ARGS["title"], "period": "2026_W45", "assigned_to_user_id": "u1", "spec_solution_id": "esr_s",
+                "spec_metric_id": "esr_m", "metric_target_value": 5, "description": "Kept by Quest AI: Next step."}
+    client = FakeClient([existing])
+    result = ensure(client, description="Next step.")
+    assert result.data["state"] == "unchanged" and client.calls == []
+    assert ensure(FakeClient(), description="Next step.").ok
+
+
 def test_ensure_does_not_write_when_goals_unreadable_or_held_is_not_done():
     assert not ensure(FakeClient(listing_ok=False)).ok
     existing = {"id": "g1", "name": ARGS["title"], "period": "2026_W45", "assigned_to_user_id": "u1"}
