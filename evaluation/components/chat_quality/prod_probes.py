@@ -29,8 +29,8 @@ def structured(value):
 def message_standard(case):
     """``"single"`` or ``"two-role"``, from the case's own data and never from the reply. A case that writes nothing (``zero_writes``) or to which ESOI
     does not apply (``esoi.esoi_applies`` false) is a reply-only case: one message is complete. A case whose effect allows a write, that names an
-    ``increment_kind`` or that is a milestone case acts, so it owes a status message first and a report after."""
-    if case.get("zero_writes") or (isinstance(case.get("esoi"), dict) and case["esoi"].get("esoi_applies") is False):
+    ``increment_kind`` or that is a milestone case acts (unless the state read before the run showed the thing already there: ``already_there``, one complete message), so it owes a status message first and a report after."""
+    if case.get("zero_writes") or case.get("already_there") or (isinstance(case.get("esoi"), dict) and case["esoi"].get("esoi_applies") is False):
         return "single"
     effect = case.get("effect")
     allows = bool(effect.get("allow")) if isinstance(effect, dict) else effect not in (None, "") and not str(effect).strip().lower().startswith("none")
@@ -62,13 +62,25 @@ def items_of(payload, list_key=""):
 
 
 def matches(item, match, min_len=None):
-    """True when every ``match`` text is in the item's field (``*`` is the whole item; ``=field`` must equal exactly) and every ``min_len`` field is long enough."""
+    """True when every ``match`` text is in the item's field (``*`` is the whole item; ``=field`` must equal exactly; ``^field`` must start with the text)
+    and every ``min_len`` field is long enough. A field may be a dotted path into nested objects ("timing.repeat.freq"), and a text may be a list, all of
+    whose entries must be in the field (case-insensitive)."""
     if not isinstance(item, dict):
         return False
     for key, want in (match or {}).items():
-        have = str(item if key == "*" else item.get(key.lstrip("="), ""))
-        if (key.startswith("=") and have.strip().lower() != str(want).strip().lower()) or (not key.startswith("=") and str(want).lower() not in have.lower()):
-            return False
+        name = key.lstrip("=^")
+        value = item if key == "*" else pick_of(item, name) if "." in name else item.get(name, "")
+        have = json.dumps(value, default=str) if key == "*" else str(value if value is not None else "")
+        for text in (want if isinstance(want, list) else [want]):
+            text = str(text).strip().lower()
+            if key.startswith("="):
+                ok = have.strip().lower() == text
+            elif key.startswith("^"):
+                ok = have.strip().lower().startswith(text)
+            else:
+                ok = text in have.lower()
+            if not ok:
+                return False
     return all(len(str(item.get(field) or "")) >= int(need) for field, need in (min_len or {}).items())
 
 
@@ -110,6 +122,9 @@ def read_number(spec, client):
     payload = client._request("GET", str(spec["read"]))
     items = [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"), spec.get("min_len"))] if (spec.get("match") or spec.get("list_key")) else [payload]
     if spec.get("count"):
+        if spec.get("distinct"):     # one per distinct normalised first line of this field: two goals holding the same text count once
+            first = lambda i: re.sub(r"\W+", " ", str(pick_of(i, spec["distinct"]) or "").strip().split("\n")[0]).strip().lower()
+            return float(len({first(i) for i in items}))
         return float(len(items))
     for item in items:
         value = pick_of(item, spec.get("pick"))

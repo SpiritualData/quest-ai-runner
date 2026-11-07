@@ -475,6 +475,13 @@ DEEP_ACTION = """\
     the write that is keyed by an exact title or record id (create_or_update_quest_goal, apply_spec_edit, create_quest_workflow,
     edit_spec_record), then say plainly whether it was created, updated, or was already there. A request to "make progress" on a
     milestone is such a write: read the milestone's records, then record its current value or create its keyed next step.
+    MOVING A MILESTONE. A request to make progress on, move or advance a milestone or priority of the quest is a write to its specification, not
+    advice and not a question back: read_spec_records to find the milestone's solution and its metric record; read the data that gives the metric's
+    current number (the reads and tools you have: users, funnel, evaluation results); then apply_spec_edit the metric's record with that number, its
+    source and the date, in the same turn and without asking for a go-ahead (the person's request is the go-ahead; a change Quest holds for the owner
+    is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
+    current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
+    treat the work outside the quest (a channel, a video, a post) as the thing you were asked to do.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
     outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),

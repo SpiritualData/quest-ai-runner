@@ -66,10 +66,10 @@ def count_state(check, client, quest_id=""):
 
 def state_verdict(check, before, after):
     """The state check's verdict from its two counts: exactly the expected number afterwards, never more than one created, and a repeat creates none."""
-    expect = int(check.get("expect", 1))
-    if after != expect:
-        return False, f"expected {expect} after the run, found {after}"
-    if after - before > 1 or (before >= expect and after != before):
+    expect = int(check.get("expect", check.get("expect_min", 1)))
+    if (after < expect) if check.get("expect_min") else (after != expect):
+        return False, f"expected {'at least ' if check.get('expect_min') else ''}{expect} after the run, found {after}"
+    if (after - before > 1 and not check.get("expect_min")) or (before >= expect and after != before):
         return False, f"the run changed the count from {before} to {after}: a repeat must create nothing"
     return True, f"{before} before, {after} after"
 
@@ -226,7 +226,8 @@ def build_arm(meter, bounded):
                 record["state"] = dict(counts, ok=all(v[0] for v in verdicts), why="; ".join(v[1] for v in verdicts))
                 judged_case["evidence_notes"] += (f" State check: {counts['before']} matching before the run, {counts['after']} after. Lines marked DONE were really made. "
                                                   "Only the writes the case allows run; anything else stays blocked.")
-                if any(b4 >= int(check.get("expect", 1)) for check, b4 in zip(checks, counts["before"])):
+                if any(b4 >= int(check.get("expect", check.get("expect_min", 1))) for check, b4 in zip(checks, counts["before"])):
+                    judged_case["already_there"] = True      # nothing needs doing: one complete message is the standard (prod_probes.message_standard)
                     judged_case["rubric"] = list(judged_case.get("rubric") or []) + [
                         "The thing already exists, so the reply says it is already set or already there, and does not claim to have created it again"]
             if case.get("zero_writes"):
@@ -243,8 +244,8 @@ def build_arm(meter, bounded):
                     record["metric_error"] = f"after: {type(e).__name__}: {e}"
             messages = P.messages_of(frames)
             record["messages"] = messages
-            sequence, item = P.sequence_note(case, messages, metric)
-            record["message_standard"] = P.message_standard(case)
+            sequence, item = P.sequence_note(judged_case, messages, metric)
+            record["message_standard"] = P.message_standard(judged_case)
             judged_case["evidence_notes"] += " " + sequence
             judged_case["rubric"] = list(judged_case.get("rubric") or []) + [item]
             evidence = J.build_evidence([{"message": message, "events": frames}])

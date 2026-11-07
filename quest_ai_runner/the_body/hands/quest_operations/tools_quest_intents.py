@@ -322,7 +322,8 @@ def read_spec_records_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         when_not_to_use="Searching across quests or repositories (find_specs). Reading a quest's goals.",
         parameters={"type": "object", "properties": {"quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."}}},
         mutates=False, origin="standard",
-        keywords=("spec", "specification", "records", "solution", "milestone", "metric", "esoi", "read"),
+        keywords=("spec", "specification", "records", "solution", "milestone", "metric", "esoi", "read", "progress", "priority",
+                  "value", "current", "number", "advance", "move"),
         context_args={"quest_id": "quest_id"}, timeout_seconds=45.0)
 
 
@@ -364,14 +365,17 @@ def apply_spec_edit_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                      "strategy: how}} adds a milestone to a solution's ladder once. Result status: applied, already there, proposed (waiting for the "
                      "owner: NOT done) or refused (the message says why, for example a field the person edited). No em dashes in any value."),
         when_to_use=("A record, metric or milestone of the quest's specification needs to exist or change, and repeating the call must not duplicate it. "
-                     "Read the records first with read_spec_records."),
+                     "Read the records first with read_spec_records. A request to move or make progress on a milestone is this: work out the "
+                     "metric's current value from data you can read, then set the metric record's value with it (change kind metric_edit, "
+                     "field record), with its source and date. Do it without asking; a row Quest holds for its owner comes back as proposed."),
         when_not_to_use=("A field the person wrote or edited. A change the person did not ask for and the autopilot brief does not call for. "
                          "Linking a goal to a milestone (that is create_or_update_quest_goal's spec_solution_id)."),
         parameters={"type": "object", "required": ["change"], "properties": {
             "quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."},
             "change": {"type": "object", "description": "The one change, in one of the three shapes above."}}},
-        mutates=True, workflow_step=False, origin="standard", on_request_only=True,
-        keywords=("spec", "specification", "record", "edit", "milestone", "metric", "solution", "esoi", "add"),
+        mutates=True, workflow_step=False, origin="standard",
+        keywords=("spec", "specification", "record", "edit", "milestone", "metric", "solution", "esoi", "add", "progress", "priority",
+                  "value", "current", "number", "advance", "move", "update"),
         context_args={"quest_id": "quest_id"}, timeout_seconds=60.0)
 
 

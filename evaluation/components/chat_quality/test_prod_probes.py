@@ -102,3 +102,20 @@ def test_the_output_log_adds_a_readable_text_of_every_message(tmp_path):
                       extra={"messages": [{"n": 1, "kind": "interim", "t": 2.0, "text": "Status"}, {"n": 2, "kind": "final", "t": 9.0, "text": "Done"}], "message_standard": "two-role"})
     text = (tmp_path / "poor_answers" / "X-1.txt").read_text()
     assert "[1] (interim, t=2.0) Status" in text and "[2] (final, t=9.0) Done" in text and "standard=two-role" in text
+
+
+def test_state_checks_count_by_meaning_not_exact_title():
+    step = {"title": "Check how the 1000 subscribers are doing", "timing": {"repeat": {"freq": "weekly", "byWeekday": [0]}}}
+    other = {"title": "Saturday pass", "timing": {"repeat": {"freq": "weekly", "byWeekday": [5]}}}
+    match = {"=timing.repeat.freq": "weekly", "timing.repeat.byWeekday": "[0]", "*": ["1000 SUBSCRIBERS"]}
+    assert P.matches(step, match) and not P.matches(other, match)
+    assert P.matches({"name": "P1 next step: week of x"}, {"^name": "p1 next step"}) and not P.matches({"name": "Do P1 next step"}, {"^name": "P1 next step"})
+
+
+def test_distinct_count_and_already_there_standard():
+    class Client:
+        def _request(self, method, path):
+            return {"g": [{"d": "Post A\nmore"}, {"d": "post   a"}, {"d": "Post B"}]}
+    assert P.read_number({"read": "/x", "list_key": "g", "count": True, "distinct": "d"}, Client()) == 2.0
+    case = {"effect": {"allow": [{"tool": "t"}]}}
+    assert P.message_standard(case) == "two-role" and P.message_standard(dict(case, already_there=True)) == "single"

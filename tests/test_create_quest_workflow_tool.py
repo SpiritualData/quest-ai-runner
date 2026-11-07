@@ -59,3 +59,32 @@ def test_a_refusal_is_reported_not_swallowed():
 def test_registered_as_a_write():
     spec = build_tool_registry(CREDS).get("create_quest_workflow")
     assert spec is not None and spec.mutates is True
+
+
+class ListingClient(FakeClient):
+    def __init__(self, existing):
+        super().__init__()
+        self.existing = existing
+
+    def list_quest_workflows(self, quest_id):
+        return self.existing
+
+
+def existing_weekly():
+    return [{"workflowId": "qwf_9", "title": "Check progress", "steps": [
+        {"title": "Check how it is going", "timing": {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [0]}}}]}]
+
+
+def test_the_same_routine_under_another_title_is_already_there_and_nothing_is_created():
+    client = ListingClient(existing_weekly())
+    step = {**STEP, "title": "Check how it is going", "repeat": "weekly", "by_weekday": [0]}
+    result = call(client, title="Monday check", steps=[step])
+    assert result.ok and "Already there" in result.text and "qwf_9" in result.text and client.calls == []
+
+
+def test_a_different_schedule_or_an_unreadable_listing_is_not_a_match():
+    step = {**STEP, "title": "Check how it is going", "repeat": "weekly", "by_weekday": [3]}
+    client = ListingClient(existing_weekly())
+    assert call(client, title="Thursday check", steps=[step]).ok and len(client.calls) == 1
+    unreadable = ListingClient(None)
+    assert not call(unreadable, title="W", steps=[STEP]).ok and unreadable.calls == []

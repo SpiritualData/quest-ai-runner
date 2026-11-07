@@ -844,6 +844,27 @@ def resolve_member(who: Any, members: List[Mapping[str, Any]]) -> "tuple[Optiona
     return None, (f"{who!r} matches {len(hits)} people on this quest. Members: {roster}.")
 
 
+def squash(text: Any) -> str:
+    return re.sub(r"\W+", " ", str(text or "")).strip().lower()
+
+
+def schedule_of(timing: Mapping[str, Any]) -> tuple:
+    repeat = (timing or {}).get("repeat") or {}
+    return (repeat.get("freq"), tuple(repeat.get("byWeekday") or ()), repeat.get("interval") or 1) if repeat else (None, (), 1)
+
+
+def workflow_already_there(workflows: List[Mapping[str, Any]], title: str, steps: List[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
+    """The workflow on the quest that already does what a new one would: it has the same title, or every new step is in it under the same
+    step title and the same schedule (the weekday and frequency of its repeat). Whose step it is does not matter; the same routine twice is a duplicate."""
+    for workflow in workflows:
+        if squash(workflow.get("title")) == squash(title):
+            return workflow
+        have = {(squash(s.get("title")), schedule_of(s.get("timing") or {})) for s in workflow.get("steps") or []}
+        if steps and all((squash(s.get("title")), schedule_of(s.get("timing") or {})) in have for s in steps):
+            return workflow
+    return None
+
+
 def workflow_step_body(index: int, raw: Mapping[str, Any], members: List[Mapping[str, Any]]) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
     """One step in the wire shape. A human step (``assignee``) has a window (``starts_at`` to
     ``ends_at``); an AI step (``rep_id``) runs at ``run_at``. Either may repeat."""
@@ -897,6 +918,18 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
             steps.append(body)
         edges = ([{"fromStepId": a["stepId"], "toStepId": b["stepId"]} for a, b in zip(steps, steps[1:])]
                  if args.get("chain") else [])
+        lister = getattr(client, "list_quest_workflows", None)
+        if lister is not None:
+            existing = lister(quest_id)
+            if existing is None:
+                return ToolResult(ok=False, status=ToolStatus.UNKNOWN, text=(
+                    f"Nothing was created: the workflows of quest {quest_id} could not be read, so it is not known whether {title!r} already exists. Try again."))
+            there = workflow_already_there(existing, title, steps)
+            if there is not None:
+                return ToolResult(ok=True, status=ToolStatus.NOOP, data=dict(there), text=(
+                    f"Already there: the workflow {there.get('title')!r} ({there.get('workflowId')}) on quest {quest_id} already has "
+                    f"{'this' if squash(there.get('title')) == squash(title) else 'every one of these steps, on this schedule'}. Nothing was created; "
+                    "say it is already set and where (the quest's Workflows page)."))
         try:
             made = client.create_quest_workflow(quest_id, title, steps, edges=edges,
                                                 status=str(args.get("status") or "") or None)
