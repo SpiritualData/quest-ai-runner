@@ -64,3 +64,25 @@ def test_a_turn_that_ended_unmet_becomes_a_candidate_case_only_when_the_folder_i
     line = json.loads(path.read_text().splitlines()[0])
     assert line["dataset"] == "poorly_answered_inputs" and line["input"] == "what should Mary do next?" and line["passed"] is False
     assert turn_signals({"met": True}, "fine", None) == {"unmet": False, "empty_reply": False, "pushed_back": False}
+
+
+def test_a_reply_that_is_the_one_clarifying_question_is_terminal_one_message_no_pursuit_no_follow_up():
+    """A cut-off or ambiguous message: the planner's own ``asks_first`` says the reply is the question, so the goal condition (the person supplies the missing
+    piece) is satisfied by asking. No search runs, no 'still working' or 'tried' line is added, no follow-up is queued, and the same text is not sent twice."""
+    runner = QueueRunner([DeepResult(met=True, output="Queued as task #1", deferred=True)])
+    events = run(build(Provider([dict(plan("inform"), asks_first=True)], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner))
+    results = [e for e in events if e["type"] == "result"]
+    text = results[-1]["text"]
+    assert runner.briefs == [] and not [e for e in events if (e.get("data") or {}).get("still_working")]
+    assert "Still working on" not in text and "I tried" not in text and "could not confirm" not in text
+    texts = [e["text"] for e in events if e["type"] in ("result", EVENT_MILESTONE) and e.get("text")]
+    assert len(texts) == len(set(texts))
+
+
+def test_the_verifiers_asks_person_flag_on_a_remark_is_terminal_but_an_order_is_still_pursued():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import turn_awaits_person
+    asked = SimpleNamespace(plan=SimpleNamespace(asks_first=False, reply_shape=None), _last_verdict={"met": False, "asks_person": True}, turn_user_intent="inform")
+    ordered = SimpleNamespace(plan=SimpleNamespace(asks_first=False, reply_shape=None), _last_verdict={"met": False, "asks_person": True}, turn_user_intent="act")
+    unmet = SimpleNamespace(plan=SimpleNamespace(asks_first=False, reply_shape=None), _last_verdict=dict(ASKS_TO_PASTE), turn_user_intent="ask")
+    assert turn_awaits_person(asked) and not turn_awaits_person(ordered) and not turn_awaits_person(unmet)

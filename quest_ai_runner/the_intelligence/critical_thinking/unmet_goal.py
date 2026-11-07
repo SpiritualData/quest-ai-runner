@@ -30,6 +30,17 @@ def background_runner_wired(orchestrator: Any) -> bool:
     return any(runner_starts_background_work(r) for r in runners)
 
 
+def turn_awaits_person(rs: SimpleNamespace) -> bool:
+    """True when the turn's structured outcome is a question to the person: a terminal, satisfied state, because the goal condition of a cut-off or
+    ambiguous message is that the person supplies the missing piece. The facts: the planner's ``asks_first`` / ``ask_first`` reply shape, a clarify or
+    parked decision, or the verifier's ``asks_person`` boolean on a turn that is not an order to act. Never the words of the reply."""
+    plan = getattr(rs, "plan", None)
+    verdict = getattr(rs, "_last_verdict", None) or {}
+    return bool(getattr(plan, "asks_first", False) or getattr(plan, "reply_shape", None) == "ask_first" or getattr(rs, "final", None) == "clarify"
+                or getattr(rs, "_decision_parked", False)
+                or (verdict.get("asks_person") is True and not user_ordered_work(getattr(rs, "turn_user_intent", None))))
+
+
 def pursue_before_giving_up(orchestrator: Any, rs: SimpleNamespace, goal: str, exec_record: Any, ctx_meta: Dict[str, Any], emit: Any, cancel_check: Any,
                             take_resume_session: Any, working_dir_override: Any) -> Dict[str, Any]:
     """Runs the hub's bounded replan over the deep search. Returns ``pursuit`` (the hub's result), ``result`` (the deep OrchestratorResult that answers the
@@ -42,13 +53,18 @@ def pursue_before_giving_up(orchestrator: Any, rs: SimpleNamespace, goal: str, e
     # A remark (``inform``) or a hold-off never starts a queued follow-up; a request (``act`` or ``ask``) that is still unmet may.
     ordered = rs.turn_user_intent in ("act", "ask")     # the planner's structured reading: the person asked for something, so the follow-up is theirs
 
+    awaiting = turn_awaits_person(rs)
+
     def check(outcome: Any) -> Mapping[str, Any]:
+        if awaiting and not isinstance(outcome, Mapping):
+            return {"met": False, "awaiting_person": True, "reason": "the person supplies the missing piece"}
         if isinstance(outcome, Mapping):
             return {"met": bool(outcome.get("met")), "reason": str(outcome.get("reason") or gap)}
         return {"met": False, "reason": str(gap)}
 
     def announce(line: str) -> None:
-        if emit is not None:
+        if emit is not None and not held.get("announced"):
+            held["announced"] = True
             emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=((rs.text or "").rstrip() + "\n\n" + line).strip(), data={"still_working": True}))
 
     def attempt(step: Mapping[str, Any]) -> Mapping[str, Any]:

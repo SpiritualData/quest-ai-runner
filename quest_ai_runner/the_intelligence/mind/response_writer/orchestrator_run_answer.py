@@ -28,7 +28,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards impor
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
-from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
+from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up, turn_awaits_person
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_information_turn
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
@@ -231,7 +231,7 @@ class RunAnswerMixin:
             # search runs through Critical Thinking's bounded replan; what it returns answers the turn, else the wrap-up goes ahead
             # with the one honest line the replan wrote.
             pursuit_line = ""
-            if (not must_execute and not rs.brainstorm_active and getattr(rs, "empty_read_steps", 0) >= 1 and cfg.deep_before_giving_up
+            if (not must_execute and not turn_awaits_person(rs) and not rs.brainstorm_active and getattr(rs, "empty_read_steps", 0) >= 1 and cfg.deep_before_giving_up
                     and nets_intent != USER_INTENT_HOLD_OFF and message_is_user_turn and self._search_untried(rs, exec_record, _ctx_meta)):
                 rs.text = getattr(rs, "text", "") or ""
                 rs._last_verdict = {"met": False, "reason": "the reads returned nothing the answer can rest on",

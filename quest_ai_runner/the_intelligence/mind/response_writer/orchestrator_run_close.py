@@ -29,7 +29,7 @@ from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_pr
 from hubofhubs.api import normalize_url_for_match
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import NOT_QUEUED_NOTE
 from quest_ai_runner.the_world.tools.tools_status import fact_is_held
-from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
+from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up, turn_awaits_person
 from quest_ai_runner.the_consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
 
 
@@ -422,6 +422,12 @@ class RunCloseMixin:
                             rs._parked_decision_id = asked.decision_id
                             rs._decision_parked = True
                             break
+                    # A REPLY THAT IS THE ONE QUESTION THE TURN NEEDS (a cut-off or ambiguous message; the planner's ``asks_first``, a clarify,
+                    # or the verifier's ``asks_person`` on a turn that is not an order) is terminal and satisfied: the goal condition is that the
+                    # person supplies the missing piece. Regenerating it or pursuing a search would only add lines to a question already asked.
+                    if verdict is not None and not verdict.get("met") and turn_awaits_person(rs):
+                        rs._last_verdict = dict(verdict, met=True, awaiting_person=True)
+                        break
                     if verdict is not None and verdict.get("met"):
                         if emit is not None:
                             emit.status("Answer verified against the goal.")
