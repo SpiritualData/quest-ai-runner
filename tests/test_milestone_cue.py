@@ -394,14 +394,14 @@ def test_a_goal_already_linked_or_already_titled_is_updated_in_place_and_never_c
     assert goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", fields, None, None, True)["state"] == "created" and len(client.posts) == 1
 
 
-def test_the_receipt_states_the_assignee_name_solution_and_metric_as_read_back_after_the_write():
+def test_the_receipt_states_the_assignee_name_solution_and_metric_as_read_back_after_the_write(monkeypatch):
     from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
     from quest_ai_runner.the_world.tools.tools import ToolContext
     client = GoalClient([{"id": "old", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "period": "2026_W45"}])
     spec = create_or_update_quest_goal_spec({}, client_factory=lambda: client)
     client.members = [{"user_id": "u1", "name": "Cy Owner", "email": "x"}]
     import quest_ai_runner.the_body.hands.quest_operations.goal_links as gl
-    gl.resolve_assignee = lambda c, q, who: ("u1", None)
+    monkeypatch.setattr(gl, "resolve_assignee", lambda c, q, who: ("u1", None))      # undone at the end of the test, so no other test sees it
     result = spec.handler({"quest_id": "q1", "title": KEYED, "assignee": "Cy", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True,
                            "adopt_goal_id": "old", "user_asked_for_this_field": True}, ToolContext(quest_id="q1"))
     assert result.ok and "assigned to Cy Owner" in result.text and "solution esr_c" in result.text and "metric esr_mc" in result.text and client.posts == []
@@ -783,7 +783,7 @@ def test_message_one_for_a_drafted_deliverable_is_the_code_status_and_not_the_pl
 # ---- safety: a person's goal is never taken over, renamed, re-described or re-dated
 
 HUMAN = {"id": "h1", "name": "Submit the app to the store and advance the written feature test pass", "spec_solution_id": "esr_c", "spec_metric_id": None,
-         "period": "2026_Q4", "description": "Kaja's own plan, written by a person", "assigned_to_user_id": "u9", "completed": False}
+         "period": "2026_Q4", "description": "Kim's own plan, written by a person", "assigned_to_user_id": "u9", "completed": False}
 
 
 def test_a_goal_with_any_other_title_is_never_adopted_by_a_model_pick_or_by_the_link_and_nothing_is_written_to_it():
@@ -833,7 +833,7 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
     resolved = cue.resolve(tools, "q1", CUE, now)
     receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action [link]"}))
-    assert len(asked) == 1 and "never a plan to write it" in asked[0] and "three distinct alternative headlines" in asked[0] and "at most 5 neutral questions" in asked[0] and "no em dashes" in asked[0]
+    assert len(asked) == 1 and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few, neutral and ready to send as written" in asked[0] and "no em dashes" in asked[0]
     assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action [link]")
     assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
     kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action [link]",

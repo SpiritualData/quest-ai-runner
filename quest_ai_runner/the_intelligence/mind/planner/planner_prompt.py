@@ -488,7 +488,7 @@ DEEP_ACTION = """\
     when the records name nobody. Never change the owner of something that already exists.
     MOVING A MILESTONE. A request to make progress on, move or advance a milestone or priority of the quest is a write to its specification, not
     advice and not a question back: read_spec_records to find the milestone's solution and its metric record; read the data that gives the metric's
-    current number (the reads and tools you have: users, funnel, evaluation results); then apply_spec_edit the metric's record with that number, its
+    current number (whatever counts or results your reads and tools return); then apply_spec_edit the metric's record with that number, its
     source and the date, in the same turn and without asking for a go-ahead (the person's request is the go-ahead; a change Quest holds for the owner
     is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
     current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
@@ -508,7 +508,7 @@ DEEP_ACTION = """\
     carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
     keyed by a short stable title (the same key plus "A", "B") with the text, hypothesis and metric in the goal's description and
     spec_solution_id of the solution they serve (from read_spec_records). Repeating the request updates the same goals. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
-    compared by ("signups per post from its link"), and says they are recorded.
+    compared by (the metric's own unit, such as replies per message), and says they are recorded.
     DELIVERABLE IN THE REPLY. When it is several versions of one thing for a quest (two posts, three headlines), each has a one-line hypothesis and the metric they are compared by, and the quest keeps them (code records each as a goal and adds what was already tracked). Never put a price, plan name or date in the copy unless the context holds it as a fact for this purpose. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
     set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
@@ -833,7 +833,7 @@ INFORMATION_ANSWER_DIRECTIVE = """\
 The person asked a question to be answered from their records. Answer it first, in two to four short sentences: name the item the records
 point to and the figure that shows where it stands, with its date. Only what was asked: no unrelated blockers, no list of other items,
 no offer or question at the end. Never use an em dash. Records may be written in the first person by whoever authored them: never copy
-I, my, me or our from a record, say whose it is by name ("waiting for Zee's preview"); use "I" only for what you yourself did or could not do this turn.
+I, my, me or our from a record, say whose it is by name ("waiting for Sam's preview"); use "I" only for what you yourself did or could not do this turn.
 """
 
 HANDOFF_ANSWER_NOW_DIRECTIVE = """\

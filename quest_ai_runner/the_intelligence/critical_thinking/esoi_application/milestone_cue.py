@@ -364,10 +364,9 @@ class Resolved:
         if keyed:
             asks.append('"goal_id": the id, exactly as listed, of the open goal below that is already the next step of this milestone (the same work, whatever its title or week), or ""')
         if not kept_draft:
-            asks.append('"draft": the deliverable itself, never a plan to write it, finished enough to use as it is, under 150 words: for advertising or outreach copy, three distinct alternative '
-                        'headlines and the metric they are compared by; for confirming something with people, at most 5 neutral questions that can be sent as written; for a new source or '
-                        'channel, one named concrete source, a one-line hypothesis, a first test and the milestone metric; for a video, a script with an opening, three points and a call to action; '
-                        'otherwise a checklist of at most 7 steps. Use only the facts above; a [bracket] only for a fact that is truly unknown (a link); '
+            asks.append('"draft": the deliverable itself, never a plan to write it, finished enough to use as it is, under 150 words, in the form the milestone text calls for: copy that is to be compared comes as distinct alternatives '
+                        'with the metric they are compared by; questions to put to people are few, neutral and ready to send as written; a new source or channel is one named concrete '
+                        'source with a one-line hypothesis, a first test and the milestone metric; otherwise a checklist of at most 7 steps. Use only the facts above; a [bracket] only for a fact that is truly unknown (a link); '
                         'no prices, dates, counts or claims that are not given above; no em dashes')
         if not asks:
             return {"owner": "", "goal_id": "", "draft": kept_draft}
