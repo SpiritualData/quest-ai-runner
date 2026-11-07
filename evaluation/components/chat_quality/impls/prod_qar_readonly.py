@@ -193,7 +193,8 @@ def build_arm(meter, bounded):
                 return record
             safety.begin()
         except Exception as e:  # noqa: BLE001 -- never run a turn whose quest state before it cannot be read
-            record.update(error=f"not run: the quest state before the turn cannot be read: {type(e).__name__}: {e}", score=None, passed=False, acted_as=acted_as)
+            why = "rate limited (the API answered 429 after waiting and one retry; not a result of the product)" if isinstance(e, PC.RateLimited) else f"the quest state before the turn cannot be read: {type(e).__name__}: {e}"
+            record.update(error=f"not run: {why}", score=None, passed=False, acted_as=acted_as)
             record["log_extra"] = {"environment": environment, "acted_as": acted_as}
             return record
         started = time.time()
@@ -232,7 +233,14 @@ def build_arm(meter, bounded):
             run_calls = dry.RECORDER.model_calls
             changes = [f"WOULD HAVE (blocked, not executed): {line.removeprefix('would have done: ')}" for line in dry.RECORDER.lines()]
             changes += [f"DONE (allowed by the case): {line}" for line in dry.RECORDER.snapshot()["performed"]]
-            note = BLOCKED_NOTE
+            # What really changed, read from Quest: a DONE line is a call the case allowed to run, not proof that it created anything (a tool may refuse a duplicate).
+            # The cleanup runs now, so the state check and the judge see the quest as it stands AFTER the run's own extras were taken back.
+            outcome = safety.finish(own_conv=None, frames=frames)
+            changes = [c.replace("DONE (allowed by the case):", "ATTEMPTED (allowed to run, effect not shown by this line):") for c in changes]
+            changes += [f"CONFIRMED by reading the quest before and after: {c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" for c in outcome["changes"]]
+            changes.append("CONFIRMED by reading the quest before and after: no change" if not outcome["changes"] else outcome["line"])
+            note = BLOCKED_NOTE + (" ATTEMPTED lines are calls the case allowed to run; only the CONFIRMED lines show what the quest really holds now, so judge what was created by the "
+                                   "CONFIRMED lines and the state counts, never by an ATTEMPTED line. The state counts are read after the cleanup.")
             judged_case = dict(case, evidence_notes=f"{case.get('evidence_notes', '')} {note}".strip())
             if "before" in counts:
                 try:
@@ -284,7 +292,9 @@ def build_arm(meter, bounded):
         except Exception as e:  # noqa: BLE001
             record.update(error=f"{type(e).__name__}: {e}", score=None, passed=False)
         try:
-            safety.apply(record, safety.finish(own_conv=None, frames=frames))
+            if "outcome" not in locals():           # the turn failed before the cleanup ran: compare and clean now
+                outcome = safety.finish(own_conv=None, frames=frames)
+            safety.apply(record, outcome)
         except Exception as e:  # noqa: BLE001
             record.update(passed=False, cleanup_error=f"{type(e).__name__}: {e}", lane_gaps=[f"cleanup could not run: {e}"])
             print(f"  {case['id']}: CLEANUP COULD NOT RUN: {e}")

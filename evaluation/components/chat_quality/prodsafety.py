@@ -18,15 +18,26 @@ class TurnSafety:
         self.before = None
         self.started = None
 
+    RATE_WAIT = 60
+
+    def retry_once(self, read):
+        """A rate-limited read is not a result: wait, then try once more; a second 429 raises ``RateLimited`` (the arm reports 'not run: rate limited')."""
+        try:
+            return read()
+        except PC.RateLimited as first:
+            self.say(f"  {self.case_id}: rate limited ({first}); waiting {self.RATE_WAIT}s and retrying once")
+            self.sleep(self.RATE_WAIT)
+            return read()
+
     def gate(self):
         """None when the case may start; otherwise the 'autopilot window' reason (a write-capable case only, after waiting up to 15 minutes in short sleeps)."""
         if self.zero:
             return None
-        return PC.wait_for_clear(self.client, now=self.clock, sleep=self.sleep)
+        return self.retry_once(lambda: PC.wait_for_clear(self.client, now=self.clock, sleep=self.sleep))
 
     def begin(self):
         self.say(f"  {self.case_id}: {PC.describe_undo(self.effect, self.zero)}")
-        self.before = PC.read_fingerprint(self.client)
+        self.before = self.retry_once(lambda: PC.read_fingerprint(self.client))
         self.started = self.clock()
         return self.before
 
@@ -34,7 +45,7 @@ class TurnSafety:
         """Compare, clean and report. ``frames`` is everything the turn emitted (its text is searched for ids). Returns a dict with ``changes``, ``unexpected``,
         ``cleanup`` (the result), ``line`` (the cleanup text) and ``failed`` (anything left, or any unexpected write)."""
         ended = self.clock()
-        after = PC.read_fingerprint(self.client)
+        after = self.retry_once(lambda: PC.read_fingerprint(self.client))
         changes = PC.diff_fingerprints(self.before, after, own_conv=own_conv)
         unexpected = PC.unexpected_writes(changes, self.effect, self.zero)
         window = (self.started - 5, ended + 30)

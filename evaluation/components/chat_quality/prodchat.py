@@ -10,7 +10,11 @@ a conversation, send a message to the conversation this run created, stop that c
 fingerprint (notes, goals, workflows, spec records, tasks, decision-requests, the account's chat conversations) is read before and after
 a case, and any change the case's ``effect`` allow-list does not explain is an UNEXPECTED WRITE that fails the case.
 """
+import fcntl
 import hashlib
+import random
+import tempfile
+from contextlib import contextmanager
 import json
 import re
 import time
@@ -35,6 +39,20 @@ def environment_label():
 
 CASE_MODEL_CALL_CAP = 60                   # model calls the stream reports (one "tokens" frame per call)
 CASE_SECONDS_CAP = 360                     # 6 minutes per case
+
+
+class RateLimited(RuntimeError):
+    """The API kept answering 429 after the backoff budget: the run is 'not run: rate limited', never a failure of the product."""
+
+
+MAX_BACKOFF = 90          # seconds of waiting on 429 answers before a call gives up
+
+
+def backoff_delay(attempt, retry_after=None, jitter=0.0, remaining=MAX_BACKOFF):
+    """Seconds to wait before retry ``attempt`` (0-based): the server's Retry-After when it sent one, else 2, 4, 8 ... up to 30, plus up to 25 percent jitter; never
+    more than the budget ``remaining``."""
+    base = float(retry_after) if retry_after else min(30.0, 2.0 ** (attempt + 1))
+    return max(0.0, min(remaining, base * (1 + 0.25 * jitter)))
 
 
 class GuardRefusal(SystemExit):
@@ -102,6 +120,7 @@ class ProdClient:
         self.key = key
         self.timezone = timezone
         self.own_conversations = set()
+        self.sleep, self.jitter = time.sleep, random.random
         self.removable = set()           # ("decisions"|"tasks"|"workflows"|"notes", id) this run created and may undo; nothing else is ever touched
 
     def _headers(self, accept="application/json"):
@@ -112,13 +131,26 @@ class ProdClient:
         if method != "GET":
             self.allow_write(method, path)
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
-        req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method=method, headers=self._headers())
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw = resp.read().decode()
-                return json.loads(raw) if raw.strip() else None
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(f"{method} {path}: {e.code} {e.read().decode()[:300]}") from None
+        waited = 0.0
+        for attempt in range(1000):
+            req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method=method, headers=self._headers())
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    raw = resp.read().decode()
+                    return json.loads(raw) if raw.strip() else None
+            except urllib.error.HTTPError as e:
+                if e.code != 429:
+                    raise RuntimeError(f"{method} {path}: {e.code} {e.read().decode()[:300]}") from None
+                header = e.headers.get("Retry-After") if e.headers else None
+                try:
+                    retry_after = float(header) if header else None
+                except ValueError:
+                    retry_after = None
+                if waited >= MAX_BACKOFF:
+                    raise RateLimited(f"{method} {path}: 429 Too many requests after waiting {waited:.0f}s") from None
+                delay = backoff_delay(attempt, retry_after, self.jitter(), MAX_BACKOFF - waited) or 1.0
+                self.sleep(delay)
+                waited += delay
 
     def allow_write(self, method, path):
         if method == "POST" and path == "/api/quest-ai/conversations":
@@ -307,11 +339,35 @@ def fingerprint_from(reads):
     return fp
 
 
+LOCK_NAME = "prod-fingerprint-read.lock"
+TASK_PAGE = 200      # newest tasks of the quest; a fingerprint only needs what is new, and a smaller page is kinder to the rate limit
+
+
+@contextmanager
+def fingerprint_lock(directory=None, blocking=True):
+    """One fingerprint read at a time across processes (parallel lane-arm runs share the account's rate limit): an exclusive file lock in the scratch dir."""
+    import os
+    path = os.path.join(directory or os.environ.get("QAR_PROD_LOCK_DIR") or tempfile.gettempdir(), LOCK_NAME)
+    with open(path, "a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        try:
+            yield path
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def read_fingerprint(client, own_conv=None):
-    """Read the quest as the account sees it right now (GETs only)."""
+    """Read the quest as the account sees it right now (GETs only), holding the cross-process lock."""
+    with fingerprint_lock():
+        return read_fingerprint_unlocked(client, own_conv)
+
+
+def read_fingerprint_unlocked(client, own_conv=None):
     def read(path, key=None, params=None):
         try:
             body = client._request("GET", path, params=params)
+        except RateLimited:
+            raise
         except Exception as e:  # noqa: BLE001 -- an unreadable category must fail loudly, never look like "unchanged"
             raise RuntimeError(f"fingerprint read failed: {path}: {e}") from None
         if key and isinstance(body, dict):
@@ -324,7 +380,7 @@ def read_fingerprint(client, own_conv=None):
         "goals": [g for group in goals_body.get("period_groups") or [] for g in group.get("goals") or []],
         "workflows": read("/api/workflows", "items") + read(f"/api/quests/{quest_id}/workflows", "items"),
         "spec_records": read(f"/api/intents/specs/quest/{quest_id}", "records"),
-        "tasks": read("/api/assistant-tasks", "tasks", {"quest_id": quest_id, "limit": 1000}),
+        "tasks": read("/api/assistant-tasks", "tasks", {"quest_id": quest_id, "limit": TASK_PAGE}),
         "decisions": read("/api/teams/decisions/for-user", "decisions") + read("/api/teams/decisions/for-quest", "decisions", {"quest_id": quest_id}),
         "conversations": read("/api/quest-ai/conversations", None, {"limit": 500}),
     }
@@ -466,7 +522,7 @@ def run_cleanup(client, plan):
 
 
 def cleanup_line(result):
-    return f"cleanup: withdrawn {result['withdrawn'] or 'none'}, deleted {result['deleted'] or 'none'}, left {result['left'] or 'none'}"
+    return f"cleanup: withdrawn {result['withdrawn'] or 'none'}, deleted {result['deleted'] or 'none'}, left {result['left'] or 'none'}, kept (the case's intended result) {result['kept'] or 'none'}"
 
 
 # ---------------------------------------------------------------------------------------------------------------- autopilot window
@@ -517,9 +573,10 @@ def wait_for_clear(client, now=time.time, sleep=time.sleep, max_wait=900, step=3
     """None when no autopilot or lane run is active or due within ``minutes``; waits up to ``max_wait`` seconds in ``step`` sleeps; the last reason when it never clears."""
     waited = 0
     while True:
-        state = client._request("GET", f"/api/quests/{client.quest_id}/state") or {}
+        with fingerprint_lock():
+            state = client._request("GET", f"/api/quests/{client.quest_id}/state") or {}
+            tasks = (client._request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": TASK_PAGE}) or {}).get("tasks") or []
         autopilot = (state.get("state") or state).get("autopilot") or {}
-        tasks = (client._request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": 1000}) or {}).get("tasks") or []
         reason = autopilot_window(now(), autopilot, tasks, minutes)
         if reason is None or waited >= max_wait:
             return reason

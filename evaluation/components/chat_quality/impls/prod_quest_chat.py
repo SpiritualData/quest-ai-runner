@@ -75,7 +75,8 @@ def build(meter):
             if probe:
                 metric_before = P.read_metric(probe, client)
         except Exception as e:  # noqa: BLE001 -- never send a message when the state before cannot be read
-            record.update(error=f"not run: the quest state before the turn cannot be read: {type(e).__name__}: {e}", score=None, passed=False)
+            why = "rate limited (the API answered 429 after waiting and one retry; not a result of the product)" if isinstance(e, PC.RateLimited) else f"the quest state before the turn cannot be read: {type(e).__name__}: {e}"
+            record.update(error=f"not run: {why}", score=None, passed=False)
             record["log_extra"] = {"environment": environment, "acted_as": acted_as}
             return record
         references = {}

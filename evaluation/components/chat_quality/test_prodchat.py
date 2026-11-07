@@ -125,7 +125,7 @@ def test_a_created_ask_is_withdrawn_and_a_pre_existing_ask_is_untouched():
                                                      {"decision_id": "d_new", "conv_id": "own", "kind": "blocker", "status": "open"}]))
     assert result["withdrawn"] == ["d_new"] and result["left"] == []
     assert calls == [("POST", "/api/teams/decisions/d_new/withdraw")]
-    assert PC.cleanup_line(result) == "cleanup: withdrawn ['d_new'], deleted none, left none"
+    assert PC.cleanup_line(result) == "cleanup: withdrawn ['d_new'], deleted none, left none, kept (the case's intended result) none"
 
 
 def test_a_duplicate_workflow_a_queued_task_and_the_runs_note_are_deleted_only_on_a_strong_match():
@@ -242,3 +242,88 @@ def test_the_lane_arms_share_the_safety_net_an_ask_the_lane_run_raised_is_withdr
     outcome = safe.finish(own_conv=None, frames=[{"type": "done", "content": "created ask d_lane"}])
     assert outcome["cleanup"]["withdrawn"] == ["d_lane"] and outcome["failed"] and outcome["unexpected"]      # taken back, and still a failure of the case
     assert ("POST", "/api/teams/decisions/d_lane/withdraw") in api.calls
+
+
+# ---- rate limits, the cross-process lock, and an allowed call that changed nothing
+
+import io
+import urllib.error
+
+
+def http_429(retry_after=None):
+    headers = {"Retry-After": str(retry_after)} if retry_after else {}
+    return urllib.error.HTTPError("u", 429, "Too many requests", headers, io.BytesIO(b"slow down"))
+
+
+class FakeResponse:
+    def __init__(self, body):
+        self.body = body
+
+    def read(self):
+        return self.body.encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_429_honours_retry_after_then_backs_off_with_jitter_and_gives_up_as_rate_limited(monkeypatch):
+    answers = [http_429(7), http_429(None), FakeResponse('{"ok": 1}')]
+    monkeypatch.setattr(PC.urllib.request, "urlopen", lambda req, timeout=0: (_ for _ in ()).throw(answers.pop(0)) if isinstance(answers[0], Exception) else answers.pop(0))
+    api = PC.ProdClient(BASE, "k")
+    slept = []
+    api.sleep, api.jitter = slept.append, lambda: 1.0
+    assert api._request("GET", "/x") == {"ok": 1}
+    assert slept[0] == 7 * 1.25 and slept[1] == 4 * 1.25              # the server's Retry-After first, then 2^(attempt+1), each with 25 percent jitter
+    monkeypatch.setattr(PC.urllib.request, "urlopen", lambda req, timeout=0: (_ for _ in ()).throw(http_429(40)))
+    slept.clear()
+    with pytest.raises(PC.RateLimited):
+        api._request("GET", "/x")
+    assert sum(slept) <= PC.MAX_BACKOFF + 1                             # never waits past the 90 second budget
+
+
+def test_the_fingerprint_lock_serialises_readers(tmp_path):
+    with PC.fingerprint_lock(str(tmp_path)):
+        with pytest.raises(BlockingIOError):
+            with PC.fingerprint_lock(str(tmp_path), blocking=False):
+                pass
+    with PC.fingerprint_lock(str(tmp_path), blocking=False):            # released: the next reader gets it
+        pass
+
+
+def test_a_rate_limited_read_is_retried_once_after_waiting_and_a_second_429_is_not_run_rate_limited():
+    import prodsafety as PS
+    calls, slept = [], []
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise PC.RateLimited("429")
+        return "read"
+    safe = PS.TurnSafety(FakeApi(), UID, "M-08", {"allow": []}, True, "m", sleep=slept.append, say=lambda *_: None)
+    assert safe.retry_once(flaky) == "read" and slept == [PS.TurnSafety.RATE_WAIT]
+    def always():
+        raise PC.RateLimited("429")
+    with pytest.raises(PC.RateLimited):
+        safe.retry_once(always)
+
+
+class NoChange(FakeApi):
+    pass
+
+
+def test_an_allowed_call_that_created_nothing_shows_no_change_and_no_cleanup():
+    """BAD-03: the lane's tool call was allowed to run (a DONE line) but the tool refused the duplicate; the before/after read is the truth."""
+    import prodsafety as PS
+    clock = iter([T0, T0 + 20])
+    safe = PS.TurnSafety(NoChange(), UID, "BAD-03", {"allow": [{"tool": "create_quest_workflow"}]}, False, "m", clock=lambda: next(clock), say=lambda *_: None)
+    safe.begin()
+    outcome = safe.finish(own_conv=None, frames=[])
+    assert outcome["changes"] == [] and outcome["failed"] is False and outcome["cleanup"] == {"withdrawn": [], "deleted": [], "left": [], "kept": []}
+
+
+def test_an_extra_workflow_the_run_created_is_deleted_and_named_in_the_cleanup_line_before_the_state_is_counted():
+    result, calls = run_cleanup_for(reads(workflows=[{"workflowId": "wf_extra", "createdAt": "2026-11-06T10:00:09"}]),
+                                    evidence='{"output": "created wf_extra"}', message="Set a weekly check")
+    assert result["deleted"] == ["wf_extra"] and "deleted ['wf_extra']" in PC.cleanup_line(result)
