@@ -25,7 +25,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text imp
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
-    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
@@ -68,7 +68,7 @@ class RunAnswerMixin:
             resolved = self._resolved_facts_of(rs, gathered)
             measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
             rounds = 0
-            while measured.failed and rounds < cfg.reply_standard_max_repairs:
+            while measured.failed and rounds < repair_limit(cfg, standard):
                 text = write(steering(measured.hint(), text)) or text
                 rounds += 1
                 measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
@@ -672,7 +672,7 @@ class RunAnswerMixin:
                 measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
                                    resolved=turn_resolved, question=rs.user_message)
                 measurement_rounds = 0     # the overseer's and the constraint's regenerations do not use up the rounds the measurements are owed
-                while measured.failed and measurement_rounds < cfg.reply_standard_max_repairs:
+                while measured.failed and measurement_rounds < repair_limit(cfg, standard):
                     if emit is not None:
                         emit.status("Reply standard: refining the answer…")
                     # An address the draft holds is an item the person may have asked for: it outranks a length or list cap.

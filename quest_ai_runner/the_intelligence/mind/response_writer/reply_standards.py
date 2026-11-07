@@ -657,6 +657,15 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
         return draft
 
 
+def repair_limit(cfg: Any, standard: Standard) -> int:
+    """How many regeneration rounds a reply may spend on its measurements: an information or spoken reply is rewritten once (each rewrite is a
+    full model call on the person's wait), the other situations keep the configured number. ``cheap_information_turns`` False keeps it for all."""
+    configured = int(getattr(cfg, "reply_standard_max_repairs", 2))
+    if getattr(cfg, "cheap_information_turns", True) and standard.shape in (SHAPE_INFORMATION, SHAPE_SPOKEN):
+        return min(configured, 1)
+    return configured
+
+
 def steering(hint: str, previous: str) -> str:
     """The text a regeneration is steered with: the reviewer's hint and the answer it concerns."""
     return f"A reviewer flagged this for one correction: {hint}\n\n--- YOUR PREVIOUS ANSWER ---\n{previous}"

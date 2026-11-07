@@ -151,3 +151,11 @@ def test_the_rep_profile_is_read_while_the_inner_assembler_works():
     started = time.monotonic()
     out = rep.assemble("q")
     assert time.monotonic() - started < 0.55 and "REP" in out.context_view and "inner" in out.context_view
+
+
+def test_an_information_or_spoken_reply_is_rewritten_once_and_the_other_arm_keeps_the_configured_rounds():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import repair_limit
+    info = standard_for(PlanDecision(action="answer", user_intent="ask"))
+    one_step = standard_for(PlanDecision(action="answer", reply_shape="one_step"))
+    assert repair_limit(OrchestratorConfig(), info) == 1 and repair_limit(OrchestratorConfig(), one_step) == 2
+    assert repair_limit(OrchestratorConfig(cheap_information_turns=False), info) == 2
