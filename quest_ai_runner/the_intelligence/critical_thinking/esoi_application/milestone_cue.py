@@ -28,6 +28,7 @@ NAME_WEIGHT, METRIC_WEIGHT, TEXT_WEIGHT = 3.0, 2.0, 1.0
 MIN_SCORE = 2.0
 CLOSE = 0.85           # a runner-up at this share of the best score counts as a tie
 VALUE_CHARS = 220
+FULL_VALUE_CHARS = 1500       # a metric record's whole text goes to a draft's prompt up to this size, clipped at a boundary
 PURPOSE_CHARS = 1200
 ACT = "act"
 OWNED_WRITES = ("create_or_update_quest_goal", "create_quest_goal")       # goal writes of a milestone cue belong to the code step, which keeps the deliverable inside one keyed goal
@@ -129,7 +130,7 @@ def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: 
     """The one cheap model judgment: which of the candidate milestones, if any, is the message asking to move forward. NONE is a first-class answer (the message is about
     something else: a reminder, a workflow, a recurring meeting, writing, a question). The reply is matched to the ids offered; anything that names none of them is NONE."""
     solutions = dict(solutions_of(tables))
-    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {str(solutions[rid].get('milestones') or '').strip()[:VALUE_CHARS]}" for rid in ids if rid in solutions)
+    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {clip(solutions[rid].get('milestones'), VALUE_CHARS)}" for rid in ids if rid in solutions)
     answer = decide("A person wrote this message in their quest's chat:\n\n" + str(cue).strip()[:1500]
                     + "\n\nThese are milestones of the quest:\n" + listing
                     + "\n\nIs the message asking to move one of these milestones forward (make progress on it, get it going)? Reply with that milestone's id exactly as listed. "
@@ -169,6 +170,17 @@ def parse_json(answer: str) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+IDENTIFIER_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]")
+
+
+def truncated_tokens(text: str, allowed: str) -> List[str]:
+    """The identifier-like tokens of ``text`` (they hold a hyphen, an underscore or a dot between characters) that are not a token of ``allowed`` but are the start of one: a cut identifier
+    (a source name that lost its end). Plain words are not looked at, since a word is often the start of a longer one."""
+    known = {t.lower() for t in IDENTIFIER_TOKEN.findall(allowed or "")}
+    return [t for t in IDENTIFIER_TOKEN.findall(text or "")
+            if re.search(r"[A-Za-z0-9][_.-][A-Za-z0-9]", t) and t.lower() not in known and any(k.startswith(t.lower()) for k in known)]
+
+
 def supported_draft(draft: str, allowed: str) -> str:
     """The draft without any line that states a figure the records do not hold (a count of its own characters, an invented rate): a figure outside the milestone's record text is
     unsupported and its line is dropped, so a draft never carries a number that came from nowhere. List numbering and a [bracket] are not figures."""
@@ -178,7 +190,7 @@ def supported_draft(draft: str, allowed: str) -> str:
     for line in str(draft or "").splitlines():
         body = re.sub(r"^\s*(?:[-*\u2022]\s*)?\d+[.)]\s+", "", line)
         body = re.sub(r"\[[^\]]*\]", "", body)
-        if any(f not in held for f in FIGURE.findall(body)):
+        if any(f not in held for f in FIGURE.findall(body)) or truncated_tokens(body, allowed):
             continue
         kept.append(line)
     return "\n".join(kept).strip()
@@ -190,11 +202,27 @@ def draft_of(goal_text: str) -> str:
     return rest.strip() if sep else ""
 
 
+def clip(text: Any, limit: int) -> str:
+    """``text`` shortened to at most ``limit`` characters without ever cutting inside a word or an identifier: it ends at a sentence end, else at a clause break (a comma, semicolon or
+    opening bracket) in the second half, else at the last whole word. A text that fits is returned whole (whitespace collapsed)."""
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    if not text[limit].isspace():
+        head = head.rsplit(" ", 1)[0] if " " in head else head      # the limit fell inside a token: the token is left out, never cut
+    sentence = [m.start() for m in re.finditer(r"[.;:](?=\s)", head)]
+    if sentence:
+        return head[:sentence[-1]].rstrip()
+    clause = [m.start() for m in re.finditer(r",\s|\s\(", head) if m.start() > limit // 2]
+    return (head[:clause[-1]] if clause else head).rstrip(" ,;:(")
+
+
 def first_sentence(text: str, limit: int = 160) -> str:
-    """The start of a recorded value, cut at a sentence end or the limit: enough to say where the measure stands."""
-    text = " ".join(text.split())
-    cut = re.search(r"[.;](\s|$)", text[:limit])
-    return (text[:cut.start()] if cut else text[:limit]).strip()
+    """The start of a recorded value: its first sentence when that fits the limit, else the text clipped at a clause break (``clip``), never inside a word or an identifier."""
+    text = " ".join(str(text or "").split())
+    cut = re.search(r"[.;](\s|$)", text[:limit + 1])
+    return (text[:cut.start()] if cut else clip(text, limit)).strip()
 
 
 def owners_of(row: Mapping[str, Any]) -> List[str]:
@@ -337,10 +365,10 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
     owners = owners_of(row)
     value = first_sentence(str(metric.get("record") or "")) if metric else ""
     lines = [f"CUE FACTS (found by code from the quest's own records, not by you). The cue concerns the milestone {name!r}, solution {rid}.",
-             f"- Milestone: {name} | Done when: {str(row.get('milestones') or '').strip()[:VALUE_CHARS].rstrip('.')} | Current value: {value or 'not recorded yet'}."]
+             f"- Milestone: {name} | Done when: {clip(row.get('milestones'), VALUE_CHARS).rstrip('.')} | Current value: {value or 'not recorded yet'}."]
     if metric:
         lines.append(f"- Metric record {metric_ids[0]} ({metric.get('name')}); its full recorded text is in read_spec_records.")
-    lines.append(f"- Purpose as recorded (it names the owners): {str(row.get('purpose') or '').strip()[:PURPOSE_CHARS] or 'none recorded'} | owner_user_ids: {', '.join(owners) or 'empty'}")
+    lines.append(f"- Purpose as recorded (it names the owners): {clip(row.get('purpose'), PURPOSE_CHARS) or 'none recorded'} | owner_user_ids: {', '.join(owners) or 'empty'}")
     lines.append("- Code assigns the step to a user in owner_user_ids; any listed owner is acceptable, so never ask who should own it. With none listed, the owner is the person the purpose text names; leave it unassigned only when no owner is named anywhere.")
     source = source_of(tables, rid, row)
     if source:
@@ -388,7 +416,9 @@ class Resolved:
     stage_before: Optional[readiness.Stage] = None       # the readiness stage of the next step as the quest held it before the write
     stage_after: Optional[readiness.Stage] = None        # the same, from the goal as the write read it back
     owner_label: str = ""                                # who owns the step, as the milestone's record names them (with the account name when it differs)
+    people: Tuple[str, ...] = ()                         # the people the milestone text names, as it writes them
     human_step: str = ""                                 # the step only a person can do, as kept in the goal
+    value_full: str = ""                                 # the metric record's whole text (whitespace collapsed): what a draft is written from, never a cut of it
     records_text: str = ""                               # the milestone's record and its metric records as the code read them
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
 
@@ -437,14 +467,14 @@ class Resolved:
         """The milestone's current value for a prompt: the fresh reading of its source when the code step has one (with its day and source), else the metric record's first sentence."""
         if self.reading:
             return current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"]).removeprefix(CURRENT_VALUE).strip()
-        return self.value or "not recorded yet"
+        return clip(self.value_full, FULL_VALUE_CHARS) or self.value or "not recorded yet"
 
     def allowed_text(self) -> str:
         """Everything a draft may take its figures from: the milestone's record text and the request. A figure outside it is not in the records. With a fresh reading the older figure of
         the metric record (and the fact block that quotes it) is history, not a source for the draft: a draft never states a figure that contradicts the reading."""
         if self.reading:
             return " ".join([self.name, self.done_when, self.purpose, self.current_text(), str(self.reading.get("detail") or "")])
-        return " ".join([self.name, self.done_when, self.value, self.purpose, self.facts])
+        return " ".join([self.name, self.done_when, self.value, self.value_full, self.purpose, self.facts])
 
     def read_entries(self) -> List[Dict[str, Any]]:
         """What the code step read, shaped like the tool results the loop gathers (``by_code``), so the writer, the figure pass and the judge see the milestone's record, the metric
@@ -506,7 +536,7 @@ class Resolved:
         slots = readiness.placeholder_slots(draft)
         if not slots:
             return draft
-        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\nThis draft has slots left to fill: "
+        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}.\n\nThe milestone text:\n{clip(self.purpose, PURPOSE_CHARS) or '(none)'}\n\nThis draft has slots left to fill: "
                         + ", ".join(slots) + f"\n\nDraft:\n{draft}\n\nReturn JSON with this key only: " + self.DRAFT_FORM + ". Reply with the JSON only.")
         fixed = supported_draft(str(parse_json(answer).get("draft") or "").strip(), self.allowed_text())
         return "" if readiness.placeholder_slots(fixed) else fixed
@@ -526,7 +556,7 @@ class Resolved:
         if readiness.placeholder_slots(kept_draft):
             kept_draft = ""          # a kept draft with a slot left in it is written again
         kept_step = readiness.human_step_in(kept_text)
-        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in keyed) or "(none)"
+        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {clip(g.get('text'), 200)}" for g in keyed) or "(none)"
         asks = []
         if not self.owners and self.purpose.strip():
             asks.append('"owners": every person named as an owner in the milestone text above, as written (names only, no team names), the one who does the hands-on work first, or [] when it names none')
@@ -536,12 +566,14 @@ class Resolved:
             asks.append(self.DRAFT_FORM)
         if not kept_step:
             asks.append('"human_step": the one next step only a person can do toward this milestone, one full sentence from the done-when and the text above, naming what is done and by whom when the text says')
+        if asks and len(self.owners) == 1 and self.purpose.strip():       # asked in the same call, only when the call is made anyway
+            asks.append('"people": every person the milestone text above names, as the text writes the name (no team names, no roles), or []')
         if not asks:
             return {"owners": [], "goal_id": "", "draft": kept_draft, "human_step": kept_step}
-        outputs = str(self.row.get("outputs") or "").strip()[:PURPOSE_CHARS]
+        outputs = clip(self.row.get("outputs"), PURPOSE_CHARS)
         answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.current_text()}."
                         + (f" The metric record's older text, history only and not the current value: {self.value}." if self.reading and self.value else "")
-                        + f"\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
+                        + f"\n\nThe milestone text:\n{clip(self.purpose, PURPOSE_CHARS) or '(none)'}\n\n"
                         + (f"What the milestone produces:\n{outputs}\n\n" if outputs else "")
                         + f"Open goals on the same quest:\n{listing}\n\nReturn JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
         data = parse_json(answer)
@@ -551,20 +583,27 @@ class Resolved:
         if draft and not kept_draft:
             draft = self.asks_for_fix(draft, decide)
         step = kept_step or " ".join(str(data.get("human_step") or "").split())
+        people = data.get("people") if isinstance(data.get("people"), list) else []
+        self.people = tuple(dict.fromkeys(str(n).strip(" .'\"") for n in people if str(n).strip(" .'\"")))
         return {"owners": [str(n).strip(" .'\"") for n in named if n and str(n).strip(" .'\"")], "goal_id": goal if goal in {str(g.get("id")) for g in keyed} else "",
                 "draft": draft, "human_step": step}
 
     def name_owner(self, shown: Mapping[str, Any], decide: Optional[Callable[[str], str]]) -> str:
         """Who owns the step, as a reader recognises them: the name the milestone's record uses for the person, with the account's own name in parentheses when it differs ("Ann (account
-        Ann Ops)"). When the account name shares a word with the record's text it is the person; otherwise one cheap call asks which name in the text is theirs, and an answer that is
-        not a name in the text is discarded (the account name alone is then shown)."""
+        Ann Ops)"). An account name sharing a whole word with the record's text is the person. When the record lists one owner and its text names one person, that is the name, with no
+        model call. Otherwise one cheap call asks which name in the text is theirs, and an answer that is not a name in the text is discarded (the account name alone is then shown)."""
         account = str(shown.get("assignee_name") or "").strip()
         if not account:
             return ""
-        if decide is None or set(words(account)) & set(words(self.purpose)):
+        whole = lambda text: {w for w in re.findall(r"[a-z0-9]+", str(text).lower()) if len(w) > 2}
+        if whole(account) & whole(self.purpose):
+            return account
+        if len(self.owners) == 1 and len(self.people) == 1 and self.people[0].lower() in self.purpose.lower() and not whole(self.people[0]) & whole(account):
+            return f"{self.people[0]} (account {account})"
+        if decide is None:
             return account
         try:
-            answer = " ".join(str(decide(f"Milestone text:\n{self.purpose[:PURPOSE_CHARS]}\n\nWhich name in this text refers to the person whose Quest account is named {account!r}? "
+            answer = " ".join(str(decide(f"Milestone text:\n{clip(self.purpose, PURPOSE_CHARS)}\n\nWhich name in this text refers to the person whose Quest account is named {account!r}? "
                                          "Reply with that name exactly as the text writes it, or NONE if no name in the text is theirs.") or "").split()).strip(" .'\"")
         except Exception:  # noqa: BLE001  a name is a convenience for the reader; the account name stands
             return account
@@ -787,7 +826,8 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
     return Resolved(
         rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week,
         facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id,
-        done_when=str(row.get("milestones") or "").strip()[:VALUE_CHARS].rstrip("."),
+        done_when=clip(row.get("milestones"), VALUE_CHARS).rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
+        value_full=" ".join(str(metric.get("record") or "").split()) if metric else "",
         purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row), records_text=records_read(tables, rid, row),
         record_date=measured_through_of(tables, rid, row) or next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", str(metric.get("record") or ""))), "") if metric else "")

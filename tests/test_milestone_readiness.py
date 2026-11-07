@@ -284,3 +284,48 @@ def test_what_the_code_step_read_joins_the_turns_gathered_reads():
     assert "Provisional 83.3 percent" in by_tool["tool:read_spec_records"] and "Measured through: 2026-10-31" in by_tool["tool:read_spec_records"]
     assert "Current value: 73.8 percent (as of 2026-11-07, from the coverage report)" in by_tool["tool:read_metric_source"]
     assert any(e["text"].startswith("After the write:") for e in entries)
+
+
+def test_record_text_is_never_cut_inside_a_word_or_an_identifier():
+    text = "none 344, botswana 14 (existing pool, not the new source), mentee-launch 0, and more words after that"
+    for limit in range(20, len(text)):
+        cut = cue.clip(text, limit)
+        assert len(cut) <= limit and all(token in text.replace(",", " ").replace("(", " ").replace(")", " ").split() or token.rstrip(",)") in text for token in cut.split())
+        assert not text.startswith(cut) or text[len(cut):len(cut) + 1] in ("", " ", ",", ";", ".", ":", "(")
+    assert cue.first_sentence(text, 60) == "none 344, botswana 14 (existing pool"
+    assert cue.first_sentence("Short value. More.") == "Short value"
+    assert cue.clip("fits", 10) == "fits"
+
+
+def test_the_prompt_for_a_draft_gets_the_whole_record_value_and_a_cut_identifier_is_rejected():
+    long_record = "Reading: " + "none 344, botswana 14 (existing pool, not the new source), " * 3 + "mentee-launch 0"
+    tables = {"solutions": TABLES["solutions"], "metrics": {"esr_mc": dict(TABLES["metrics"]["esr_mc"], record=long_record)}}
+    base = tools([])
+    base.get("read_spec_records").handler = lambda a, c: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="r")
+    asked, calls = [], []
+    registry = ToolRegistry([base.get("read_spec_records"), base.get("list_quest_goals"), tools(calls).get("create_or_update_quest_goal")])
+    step = cue.resolve(registry, "q1", "get the partner users moving", NOW, decide=None)
+    assert step.value_full == long_record
+    def decide(prompt):
+        asked.append(prompt)
+        return json.dumps({"draft": "Test the source mentee-la first.\nTest the source mentee-launch first.", "human_step": "Pick it."})
+    step.carry_out(registry, decide)
+    assert "mentee-launch 0" in next(a for a in asked if "Return JSON" in a)
+    kept = calls[0]["description"].split("Draft:")[1]
+    assert "mentee-la " not in kept and "mentee-launch" in kept
+    assert cue.truncated_tokens("pick mentee-la now", "the mentee-launch source") == ["mentee-la"]
+    assert cue.truncated_tokens("sources and users", "source users") == []
+
+
+def test_one_listed_owner_and_one_person_named_in_the_text_make_the_label_without_another_call():
+    tables = {"solutions": {"esr_c": dict(TABLES["solutions"]["esr_c"], purpose="Travis runs partner outreach for Spiritual Data.")}, "metrics": TABLES["metrics"]}
+    base = tools([], member="SpiritOperations")
+    base.get("read_spec_records").handler = lambda a, c: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="r")
+    asked = []
+    def decide(prompt):
+        asked.append(prompt)
+        assert "Which name in this text" not in prompt
+        return json.dumps({"draft": "Pitch.", "human_step": "Send it.", "people": ["Travis"]})
+    step = cue.resolve(base, "q1", "get the partner users moving", NOW, decide=None)
+    step.carry_out(base, decide)
+    assert step.owner_label == "Travis (account SpiritOperations)"
