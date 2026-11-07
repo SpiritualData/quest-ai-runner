@@ -21,20 +21,23 @@ class QueueRunner(Runner):
     starts_background_work = True
 
 
+FULL_CHECK = {"cheap_information_turns": False}       # the cheap information arm (the default) never verifies a plain question, so it never pursues; these cases measure the arm that checks every turn
+
+
 def plan(intent: str) -> Dict[str, Any]:
     return dict(LOOKUP, user_intent=intent)
 
 
 def test_a_reply_that_asks_for_what_the_search_can_find_is_replaced_by_the_search():
     runner = Runner([DeepResult(met=True, output="Next step for Mary: send the two follow-ups agreed in the office hour.")])
-    events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), {"met": True}]), runner, pursue_inline_seconds=1000.0))
+    events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), {"met": True}]), runner, pursue_inline_seconds=1000.0, **FULL_CHECK))
     assert len(runner.briefs) == 1 and "read-only search" in runner.briefs[0]
     assert "office hour" in [e for e in events if e["type"] == "result"][-1]["text"]
 
 
 def test_a_long_search_sends_the_current_reply_with_no_added_line_then_continues_as_a_follow_up():
     runner = QueueRunner([DeepResult(met=True, output="Queued as task #1", deferred=True)])
-    events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner))
+    events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner, **FULL_CHECK))
     still = [e for e in events if e["type"] == EVENT_MILESTONE and (e.get("data") or {}).get("still_working")]
     assert still == [] and len(runner.briefs) == 1
     text = [e for e in events if e["type"] == "result"][-1]["text"]
@@ -49,7 +52,7 @@ def test_a_remark_never_starts_a_queued_follow_up():
 
 def test_a_search_that_finds_nothing_ends_with_what_was_tried_and_what_is_missing():
     runner = Runner([DeepResult(met=False, output="")])
-    events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner, pursue_inline_seconds=1000.0))
+    events = run(build(Provider([plan("ask")], verdicts=[dict(ASKS_TO_PASTE), dict(ASKS_TO_PASTE)]), runner, pursue_inline_seconds=1000.0, **FULL_CHECK))
     text = [e for e in events if e["type"] == "result"][-1]["text"]
     assert "could not confirm" not in text and "I tried" not in text and "nothing further to try" not in text
     assert "the reply asks for a transcript" not in text      # the checker's reason is its working note, never part of a reply
