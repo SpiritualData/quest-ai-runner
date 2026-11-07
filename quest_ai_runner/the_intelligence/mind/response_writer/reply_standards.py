@@ -35,6 +35,8 @@ SHAPE_READBACK = "readback"
 SHAPE_DECLINE = "decline"
 SHAPE_SUPPORT = "support"
 SHAPE_DEFAULT = "default"
+SHAPE_SPOKEN = "spoken"            # selected from the planner's ``delivery`` field, not offered as a ``reply_shape``
+SHAPE_INFORMATION = "information"  # selected from the planner's ``user_intent`` (ask) on a default shape
 REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
 
 
@@ -48,6 +50,8 @@ class Standard:
     max_list_lines: Optional[int] = None
     max_sentences: Optional[int] = None
     max_exclamations: Optional[int] = None
+    forbid_markup: bool = False          # no markdown, no quotation marks (a reply that is read aloud)
+    max_figures: Optional[int] = None    # at most this many figures (dates excluded) in the reply
     states_a_fact_date: bool = False     # when the planner's own ``facts_read`` hold a date, the reply states at least one of them
 
 
@@ -85,6 +89,14 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "marks), sentence two gives the real facts from their records that change the picture, with the date the records hold, and "
              "sentence three is the ONE concrete next step that fits those facts. Three sentences at most, no list, no options menu.",
              max_questions=1, max_chars=500, max_list_lines=0, max_sentences=3, max_exclamations=0, states_a_fact_date=True),
+    Standard(SHAPE_SPOKEN,
+             "The reply will be read aloud: at most three plain spoken sentences, the answer first, no list, no markdown, no quotation marks, "
+             "no question, and no more than two figures. Say each date as a person would say it.",
+             max_questions=0, max_list_lines=0, max_sentences=3, forbid_markup=True, max_figures=2),
+    Standard(SHAPE_INFORMATION,
+             "A question answered from the person's records: the answer first, at most four sentences, only what was asked, every figure "
+             "with the date it was read.",
+             max_sentences=4),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
@@ -443,22 +455,36 @@ CLARIFY_DIRECTIVE = (
     "topics, no list, no guess, and do not greet them by a name.")
 
 
+SPOKEN_DIRECTIVE = (
+    "--- THIS REPLY IS READ ALOUD (set by the planner) ---\n"
+    "The person will read your reply out loud. Write at most three plain sentences a person can say without stumbling: the answer first, "
+    "then the one fact that matters most with the date it was read (\"as of 5 November\", said as a person would). No list, no markdown, "
+    "no quotation marks, no question, no more than two figures, nothing that must be seen on a page. Never use an em dash.")
+
+
 def is_clarify(plan: Any) -> bool:
     """True when the planner's structured reply shape says the reply is the one question a cut-off or ambiguous message needs (no known candidates to choose
     between: a CHOICE among known candidates is ``ask_first``, which keeps its context)."""
     return getattr(plan, "action", None) == "answer" and getattr(plan, "reply_shape", None) == SHAPE_CLARIFY
 
 
-def standard_for(plan: Any) -> Standard:
-    """The standard that applies to this reply, from the planner's structured fields only."""
+def standard_for(plan: Any, *, user_intent: Optional[str] = None, delivery: Optional[str] = None) -> Standard:
+    """The standard that applies to this reply, from the planner's structured fields only. ``user_intent`` and ``delivery`` are the turn's
+    latest reports from any planner step (the last step may be a read that did not repeat them); they default to the plan's own."""
+    user_intent = user_intent or getattr(plan, "user_intent", None)
+    delivery = delivery or getattr(plan, "delivery", None)
     shape = getattr(plan, "reply_shape", None)
     if getattr(plan, "asks_first", False) and shape != SHAPE_CLARIFY:
         shape = SHAPE_ASK_FIRST
+    if delivery == "spoken" and shape not in (SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_DECLINE, SHAPE_SUPPORT):
+        shape = SHAPE_SPOKEN
+    if shape in (None, SHAPE_DEFAULT) and user_intent == "ask":
+        shape = SHAPE_INFORMATION
     return STANDARDS.get(shape or "", STANDARDS[SHAPE_DEFAULT])
 
 
 def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None,
-            facts: Optional[List[str]] = None) -> Measurements:
+            facts: Optional[List[str]] = None, resolved: Any = None) -> Measurements:
     """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing). ``facts`` are the planner's own
     ``facts_read`` quotes (structured), used only by a standard that asks the reply to state a date those facts hold."""
     try:
@@ -475,6 +501,10 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
                 m.violations[-1] = Violation(
                     "unsupported", m.violations[-1].detail + ". A figure is wrong because it is not the sum or difference of the figures you were given. "
                     "Use these computed by code, not your own arithmetic: " + computed, tuple(m.unsupported))
+        if resolved:      # facts that had two dated readings (``fact_supersession``): a draft stating an older one as current breaks
+            m.violations.extend(resolved.violations(text))
+        elif resolved is not None:
+            m.violations.extend(resolved.contradictions(text))
         for wrong in day_count_errors(text, evidence):
             m.violations.append(Violation("days", "correct the day count: it is " + wrong, (wrong,)))
         for wrong in event_offset_errors(text):
@@ -487,9 +517,15 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
             m.violations.append(Violation("list", f"write it as plain sentences, not a list ({m.list_lines} list lines)"))
         if standard.max_sentences is not None and len(sentences(text)) > standard.max_sentences:
             m.violations.append(Violation("length", f"write it in at most {standard.max_sentences} sentences (it has {len(sentences(text))}); "
-                                          "keep the decline and the one alternative, drop the rest"))
+                                          "keep the part that answers, drop the rest"))
         if standard.max_chars is not None and m.chars > standard.max_chars:
             m.violations.append(Violation("length", f"cut it to under {standard.max_chars} characters (it is {m.chars})"))
+        if standard.forbid_markup and re.search(r"[*#`_>]|[\"“”]", text):
+            m.violations.append(Violation("format", "write plain words only, with no asterisks, hashes, backticks, underscores or quotation marks"))
+        if standard.max_figures is not None:
+            said_figures = len(NUMBER.findall(_without_dates(text)))
+            if said_figures > standard.max_figures:
+                m.violations.append(Violation("figures", f"state at most {standard.max_figures} figures (you stated {said_figures}); keep the one that matters most"))
         if standard.max_exclamations is not None and text.count("!") > standard.max_exclamations:
             m.violations.append(Violation("tone", "remove the exclamation marks; keep the tone plain and steady"))
         if standard.states_a_fact_date:
@@ -499,6 +535,12 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
         return m
     except Exception:  # noqa: BLE001 -- measuring must never break a turn
         return Measurements(shape=standard.shape)
+
+
+def _without_dates(text: str) -> str:
+    for stated, _ in dates_in(text or ""):
+        text = text.replace(stated, " ")
+    return text
 
 
 def sentences(text: str) -> List[str]:
@@ -545,7 +587,10 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
             # Last resort for a length breach the rewrites did not fix: the opening sentences and the closing one (the decline and its
             # alternative, the acknowledgement and the next step). Position only; no wording is read.
             kept = kept[:standard.max_sentences - 1] + kept[-1:]
-        return " ".join(kept) if kept else draft
+        fixed = " ".join(kept) if kept else draft
+        if standard.forbid_markup:      # the last resort for a reply read aloud: the marks go, the words stay
+            fixed = re.sub(r"[*#`_>]|[\"“”]", "", fixed)
+        return fixed
     except Exception:  # noqa: BLE001
         return draft
 

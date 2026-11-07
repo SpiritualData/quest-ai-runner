@@ -506,6 +506,8 @@ class RunLoopMixin:
                 rs.plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             if getattr(rs.plan, "user_intent", None):
                 rs.turn_user_intent = rs.plan.user_intent
+            if getattr(rs.plan, "delivery", None):
+                rs.turn_delivery = rs.plan.delivery      # how the reply is delivered (spoken or written): the latest report of any step
             if rs.trace is not None and getattr(rs.plan, "facts_read", None):
                 rs.trace.facts_noted(rs.plan.facts_read)     # which selected records the plan took a fact from
 

@@ -168,6 +168,7 @@ class RunBeginMixin:
         # None = no planner step gave a usable verdict (planner error, a path with no planner
         # call): the nets then ask ``judge_execution_directive`` instead.
         rs.turn_user_intent: Optional[str] = None
+        rs.turn_delivery: Optional[str] = None
         if hold_off_active:
             log.info("User message forbids opening a task this turn; running under the no-action "
                      "gate (planner deep/confirm will degrade to answer).")

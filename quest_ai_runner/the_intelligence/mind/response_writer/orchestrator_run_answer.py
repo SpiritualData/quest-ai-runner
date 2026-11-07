@@ -25,12 +25,13 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text imp
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
-    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
 from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up, turn_awaits_person
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_information_turn
+from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve as resolve_facts
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
     HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, NO_ATTACHMENT_LINE,
@@ -40,6 +41,36 @@ from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
 class RunAnswerMixin:
     """Settling the loop's final action and drafting the answer, with the overseer's answer checkpoint."""
 
+
+    def _hold_to_standard(self, rs: SimpleNamespace, text: str, gathered: Any, write: Any) -> str:
+        """Hold a reply written outside the answer stage (the read-budget wrap-up) to its situation standard: measure it against the
+        turn's reads, regenerate with the measurement's own hint up to ``reply_standard_max_repairs`` times, then the deterministic repair.
+        The same measurements the answer stage uses (figures, dates, superseded readings, length, spoken shape). Never raises."""
+        cfg = self.cfg
+        if not getattr(cfg, "reply_standards", False) or rs.plan is None or not (text or "").strip():
+            return text
+        try:
+            standard = standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery)
+            exec_record = rs.exec_record
+            record = exec_record.summary() if exec_record is not None else ""
+            pool = evidence_text(rs.user_message, gathered) + "\n" + record
+            evidence = self.link_evidence_for(rs, SimpleNamespace(deep_results=[])) + "\n" + record
+            recent = getattr(rs, "recent_context_text", "") or "\0"
+            basis = evidence_text(rs.user_message, getattr(rs, "transcript", ""),
+                                  (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered, pool)
+            facts = list(getattr(rs.plan, "facts_read", None) or [])
+            resolved = rs._resolved_facts()
+            measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved)
+            rounds = 0
+            while measured.failed and rounds < cfg.reply_standard_max_repairs:
+                text = write(steering(measured.hint(), text)) or text
+                rounds += 1
+                measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved)
+            if measured.failed:
+                text = repair(text, standard, measured, evidence, pool, basis)
+            return text
+        except Exception:  # noqa: BLE001 -- a standard must never break the turn
+            return text
 
     def _regeneration_model(self, rs: SimpleNamespace) -> str:
         """The model a corrected reply is written with: one tier up when the reply was written on the fast tier, else unchanged (a pinned model id stays pinned)."""
@@ -148,8 +179,11 @@ class RunAnswerMixin:
             reply_directive = ASK_FIRST_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and not getattr(rs.plan, "asks_first", False)
                 and is_information_turn(rs.turn_user_intent, rs.plan)
-                and getattr(rs.plan, "reply_shape", None) in (None, "default")):
+                and getattr(rs.plan, "reply_shape", None) in (None, "default") and rs.turn_delivery != "spoken"):
             reply_directive = INFORMATION_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # short by default
+        if (rs.plan is not None and rs.plan.action == "answer" and not getattr(rs.plan, "asks_first", False)
+                and standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_SPOKEN):
+            reply_directive = SPOKEN_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # read aloud: speakable, three sentences
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
             reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active
@@ -264,10 +298,19 @@ class RunAnswerMixin:
                 # is over, so what is left is named as left rather than promised.
                 wrapup_directive = (reply_directive + "\n\n" + READ_BUDGET_WRAPUP_HONESTY_NOTE
                                     if reply_directive else READ_BUDGET_WRAPUP_HONESTY_NOTE)
-                rs.text = self._grounded_answer(rs.user_message, transcript, _answer_grounding(), gathered,
-                                             rs.model, True, native_blocks=rs.native_blocks,
-                                             rep_preamble=rep_preamble,
-                                             reply_directive=wrapup_directive)
+                try:
+                    wrapup_facts = rs._resolved_facts().block()
+                except Exception:  # noqa: BLE001
+                    wrapup_facts = ""
+                if wrapup_facts:
+                    wrapup_directive = wrapup_facts + "\n" + wrapup_directive
+
+                def write_wrapup(steer: Optional[str] = None) -> str:
+                    return self._grounded_answer(rs.user_message, transcript, _answer_grounding(steer), gathered,
+                                                 rs.model, True, native_blocks=rs.native_blocks,
+                                                 rep_preamble=rep_preamble,
+                                                 reply_directive=wrapup_directive)
+                rs.text = self._hold_to_standard(rs, write_wrapup(), gathered, write_wrapup)
                 if pursuit_line:
                     rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit_line
                 return finish(OrchestratorResult(kind="answer", text=rs.text, rationale=rs.plan.rationale,
@@ -354,6 +397,14 @@ class RunAnswerMixin:
             text=f"Replying with the {reply_tier} tier ({rs.model}).",
             data={"response_model": {"tier": reply_tier, "model": rs.model}}))
 
+        def resolved_facts():
+            """The facts the turn's records gave at more than one date, resolved by date (``fact_supersession``)."""
+            recent = getattr(rs, "recent_context_text", "") or "\0"
+            return resolve_facts(evidence_text(rs.user_message, getattr(rs, "transcript", ""),
+                                               (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered))
+
+        rs._resolved_facts = resolved_facts
+
         def _gen_answer(steering: Optional[str]) -> str:
             # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
             # plus why it fell short + what to fix) folded into the grounding context. EVERY reply
@@ -369,15 +420,24 @@ class RunAnswerMixin:
             # A reply that came back for a correction is written one tier up: the cheaper model already missed it once (Joshua's rule: when a
             # cheaper model fails, retry one tier up rather than the same way).
             model = rs.model if steering is None else self._regeneration_model(rs)
+            directive = reply_directive
+            if rs.plan.action == "answer":
+                # Facts the records give at two dates are resolved by date in code; the writer is told only the latest and its date.
+                try:
+                    block = resolved_facts().block()
+                except Exception:  # noqa: BLE001 -- resolving never breaks a reply
+                    block = ""
+                if block:
+                    directive = block + ("\n\n" + directive if directive else "")
             if len(rs.plan.subquestions) >= 2:
                 return self._answer_subquestions(rs.user_message, transcript, cv, gathered,
                                                  model, rs.plan.subquestions, native_blocks=rs.native_blocks,
-                                                 reply_directive=reply_directive,
+                                                 reply_directive=directive,
                                                  rep_preamble=rep_preamble)
             return self._grounded_answer(rs.user_message, transcript, cv, gathered, model,
                                          False, native_blocks=rs.native_blocks,
                                          rep_preamble=rep_preamble,
-                                         reply_directive=reply_directive)
+                                         reply_directive=directive)
         rs._gen_answer = _gen_answer
 
         emit.status(f"Answering {len(rs.plan.subquestions)} parts in parallel…"
@@ -442,11 +502,13 @@ class RunAnswerMixin:
         # structured ``reply_shape`` / ``asks_first``) and the deterministic measurements of the draft against it. A standard in
         # force gives the checkpoint real authority below: a longer wait for the verdict and code-built repair rounds.
         standard, measured, standard_evidence, standard_in_force, figure_pool, figure_evidence = None, None, "", False, "", ""
+        turn_resolved = None
         if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
             try:
                 standard_evidence = (self.link_evidence_for(rs, SimpleNamespace(deep_results=[]))
                                      + "\n" + (exec_record.summary() if exec_record is not None else ""))
-                standard = standard_for(rs.plan)
+                standard = standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery)
+                turn_resolved = rs._resolved_facts()
                 # what the turn READ (the operands a derived figure may use): the person's message, the reads and the execution record
                 figure_pool = evidence_text(rs.user_message, gathered) + "\n" + (exec_record.summary() if exec_record is not None else "")
                 # What may vouch for a FIGURE is narrower than what may vouch for a link: the person's message, this conversation, the context minus
@@ -455,7 +517,8 @@ class RunAnswerMixin:
                 figure_evidence = evidence_text(rs.user_message, getattr(rs, "transcript", ""),
                                                 (getattr(rs, "context_view", "") or "").replace(getattr(rs, "recent_context_text", "") or "\0", ""),
                                                 gathered, figure_pool)
-                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []))
+                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
+                                   resolved=turn_resolved)
                 standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
                 log.info("Reply standard %s in force=%s before the verdict: %s", standard.shape, standard_in_force, measured.as_text())
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
@@ -597,7 +660,8 @@ class RunAnswerMixin:
         # re-measured. What still fails after the last round gets the cheapest safe deterministic repair. Never unbounded.
         if standard is not None and standard_in_force:
             try:
-                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []))
+                measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
+                                   resolved=turn_resolved)
                 measurement_rounds = 0     # the overseer's and the constraint's regenerations do not use up the rounds the measurements are owed
                 while measured.failed and measurement_rounds < cfg.reply_standard_max_repairs:
                     if emit is not None:
@@ -614,7 +678,8 @@ class RunAnswerMixin:
                                  standard.shape, len(held - http_addresses(candidate)))
                         break
                     rs.text = candidate
-                    measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []))
+                    measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
+                                   resolved=turn_resolved)
                 if measured.failed:
                     rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence)
                 log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
