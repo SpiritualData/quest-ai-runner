@@ -263,6 +263,14 @@ class Resolved:
             args["spec_metric_id"] = self.metric_ids[0]
         return args
 
+    LEADS = {"created": "I created this week's next step for {name}.",
+             "updated": "I updated the existing next step for {name} in place (no second goal was made).",
+             "unchanged": "This week's next step for {name} was already set, so nothing was changed."}
+
+    def lead_sentence(self, state: str) -> str:
+        """The plain statement of what the write did, composed by code from the tool's typed state: created, updated in place, or already set."""
+        return self.LEADS.get(state, "I recorded this week's next step for {name}.").format(name=self.name)
+
     def choose_assignee(self, decide: Optional[Callable[[str], str]]) -> List[str]:
         """The names to try as assignee, in order: the record's ``tracking_owner`` people; else, when the purpose text is all the record says, the owner the model picks
         from that text (it replies one name as written there, or NONE). Empty when no owner is named anywhere."""
@@ -310,7 +318,9 @@ class Resolved:
             if result.ok:
                 self.receipt = result.text
                 note = f" The owner could not be set ({'; '.join(refused)})." if refused and not owner else ""
-                return (f"RECEIPT written by code for {self.name!r}: {result.text}{note} It is recorded: say so as done, say who owns it and what only a person can do, "
+                lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
+                return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
+                        f"Open the reply with exactly this sentence: \"{lead}\" Then say who owns it and what only a person can do, "
                         "and do not offer to do it or ask whether to."), result.status.value
             if owner and "assignee" in str(result.text):
                 refused.append(f"{owner}: {str(result.text).strip()[:160]}")

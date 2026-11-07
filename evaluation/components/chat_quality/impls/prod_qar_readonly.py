@@ -15,6 +15,7 @@ PAID in subscription calls (``claude -p``), no API dollars. ``--max-calls`` boun
 ``CASE_MODEL_CALL_CAP`` model calls (default 45, ``QAR_PROD_CASE_MODEL_CALLS``; a plain read-and-answer turn on this path measured 16 to 32, of which about half is the context engine) or ``CASE_SECONDS_CAP`` seconds (default 300, ``QAR_PROD_CASE_SECONDS``).
 A tool the lane lacks is listed in ``lane_gaps`` and judged apart from the model; a blocked write is never a failure by itself."""
 PAID = True
+import json
 import os
 import sys
 from collections import Counter
@@ -64,6 +65,12 @@ def count_state(check, client, quest_id=""):
     return int(prod_probes.read_number(dict(check, count=True, read=str(check["read"]).replace("{quest_id}", quest_id or str(check.get("quest_id") or ""))), client) or 0)
 
 
+def state_readback(check, client, quest_id=""):
+    """The goals the state check counts, as they stand now: name, assignee id, solution and metric links, period (``prod_probes.readback``)."""
+    import prod_probes
+    return prod_probes.readback(dict(check, read=str(check["read"]).replace("{quest_id}", quest_id or str(check.get("quest_id") or ""))), client)
+
+
 def state_verdict(check, before, after):
     """The state check's verdict from its two counts: exactly the expected number afterwards, never more than one created, and a repeat creates none."""
     expect = int(check.get("expect", check.get("expect_min", 1)))
@@ -72,6 +79,11 @@ def state_verdict(check, before, after):
     if (after - before > 1 and not check.get("expect_min")) or (before >= expect and after != before):
         return False, f"the run changed the count from {before} to {after}: a repeat must create nothing"
     return True, f"{before} before, {after} after"
+
+
+def interim_replies_on(environ):
+    """Interim replies (the status-first message) are on in this arm as in the Quest app's chat, unless the environment turns them off."""
+    return str(environ.get("QUEST_AI_INCREMENTAL_REPLIES_ENABLED", "")).strip().lower() not in ("0", "false", "no", "off")
 
 
 def build(meter):
@@ -125,8 +137,8 @@ def build_arm(meter, bounded):
     if (rules.get("_arm") or {}).get("measure_every_request"):      # the metric of a change is read before and after by code (critical-thinking: every_request_measured)
         cfg.selections = {**(cfg.selections or {}), "critical-thinking": "every_request_measured"}
     session = InteractiveSession(cfg, rep_name=os.environ.get("QAR_REP_NAME") or "Assistant", rep_specified=False, persona_specified=False)
-    if str(os.environ.get("QUEST_AI_INCREMENTAL_REPLIES_ENABLED", "")).strip().lower() in ("1", "true", "yes", "on"):
-        session._orch.cfg.interim_replies = True      # the same switch the Quest app's chat sets (backend incremental_replies), so an act turn sends its status first
+    if interim_replies_on(os.environ):
+        session._orch.cfg.interim_replies = True      # on unless the environment turns it off: the Quest app's chat sets it (backend incremental_replies), so an act turn sends its status first
     print(f"chat_quality: acting as {acted_as} on {os.environ.get('QUEST_BASE_URL')}")
     print(f"chat_quality: production lane configuration, {'only the case-allowed writes made, the rest' if bounded else 'writes'} blocked, Quest {os.environ.get('QUEST_BASE_URL', '?')}, "
           f"per-case caps {CASE_MODEL_CALL_CAP} model calls / {CASE_SECONDS_CAP}s, run budget "
@@ -254,6 +266,12 @@ def build_arm(meter, bounded):
                     counts["after"] = [count_state(check, state_client) for check in checks]
                 except Exception as e:  # noqa: BLE001
                     record["state_error"] = f"{type(e).__name__}: {e}"
+                try:
+                    record["readback"] = [state_readback(check, state_client) for check in checks]
+                    judged_case["evidence_notes"] += (" Read back from the quest after the run (the goals the state check counts: name, assignee id, solution link, metric link, period): "
+                                                      + json.dumps(record["readback"], default=str)[:1500] + ".")
+                except Exception as e:  # noqa: BLE001
+                    record["readback_error"] = f"{type(e).__name__}: {e}"
             if "before" in counts and "after" in counts:
                 verdicts = [state_verdict(check, b4, af) for check, b4, af in zip(checks, counts["before"], counts["after"])]
                 record["state"] = dict(counts, ok=all(v[0] for v in verdicts), why="; ".join(v[1] for v in verdicts))

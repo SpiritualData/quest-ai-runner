@@ -407,3 +407,30 @@ def test_the_code_step_is_in_the_execution_record_so_no_net_re_runs_the_work_as_
     result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([])).run(CUE, quest_id="q1")
     record = result.execution_record
     assert record is not None and record.any_success and any("create_or_update_quest_goal" in f.goal for f in record.facts)
+
+
+def test_the_receipt_leads_with_created_updated_or_already_set_from_the_tools_typed_state():
+    resolved = cue.resolve(registry(), "q1", CUE)
+    leads = {state: resolved.lead_sentence(state) for state in ("created", "updated", "unchanged")}
+    assert "already set" in leads["unchanged"] and "nothing was changed" in leads["unchanged"] and "updated" in leads["updated"] and "created" in leads["created"]
+    for state, lead in leads.items():
+        noop = ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
+                        handler=lambda args, ctx, state=state: ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data={"state": state}, text="done"))
+        receipt, _ = resolved.carry_out(ToolRegistry([noop]))
+        assert f'Open the reply with exactly this sentence: "{lead}"' in receipt
+        resolved.receipt = ""
+
+
+def test_a_milestone_act_cue_sends_two_messages_the_status_first_and_the_result():
+    from hubofhubs.api import EVENT_INTERIM, EVENT_RESULT
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=registry([]),
+                        config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0))
+    events = []
+    orch.run(CUE, sink=StreamSink(events.append), quest_id="q1")
+    kinds = [e["type"] for e in events if e["type"] in (EVENT_INTERIM, EVENT_RESULT)]
+    assert kinds[:1] == [EVENT_INTERIM] and kinds.count(EVENT_INTERIM) == 1 and EVENT_RESULT in kinds

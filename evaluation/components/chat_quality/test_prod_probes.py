@@ -135,3 +135,26 @@ def test_turn_numbers_time_tokens_targets_and_the_run_summary():
                             dict(id="B-2", speed_class="information", seconds_total=60, tokens_total=40000, speed_ok=False, tokens_ok=True),
                             dict(id="M-1", speed_class="doing", seconds_total=100, tokens_total=200000, speed_ok=True, tokens_ok=False)])
     assert "information avg 40s / 25000 tokens" in line and "doing avg 100s / 200000 tokens" in line and "over the time target: B-2" in line and "over the token target: M-1" in line
+
+
+def test_the_readback_lists_the_goals_a_state_check_counts_with_their_links_and_owner_id_only():
+    import prod_probes as P
+
+    class Client:
+        def _request(self, method, path):
+            return {"period_groups": [{"goals": [
+                {"name": "P3 Mobile app next step: week of 2026-11-02", "description": "private text", "assigned_to_user_id": "u1", "spec_solution_id": "esr_c",
+                 "spec_metric_id": "esr_mc", "period": "2026_W45"},
+                {"name": "Unrelated", "assigned_to_user_id": None}]}]}
+    rows = P.readback({"read": "/goals", "list_key": "period_groups.goals", "match": {"name": "P3 "}}, Client())
+    assert rows == [{"name": "P3 Mobile app next step: week of 2026-11-02", "assignee": "u1", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "period": "2026_W45"}]
+    assert "private text" not in str(rows)
+
+
+def test_interim_replies_are_on_in_the_production_arms_unless_the_environment_turns_them_off():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent / "impls"))
+    import prod_qar_readonly as arm
+    assert arm.interim_replies_on({}) and arm.interim_replies_on({"QUEST_AI_INCREMENTAL_REPLIES_ENABLED": "1"})
+    assert not arm.interim_replies_on({"QUEST_AI_INCREMENTAL_REPLIES_ENABLED": "0"})

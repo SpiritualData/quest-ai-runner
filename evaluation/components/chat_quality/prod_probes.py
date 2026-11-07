@@ -138,6 +138,20 @@ def read_number(spec, client):
     return None
 
 
+READBACK_FIELDS = (("name", "title"), ("assignee", "assigned_to_user_id"), ("spec_solution_id",), ("spec_metric_id",), ("period",))
+
+
+def readback(spec, client, limit=5):
+    """The goals a state check counts, read again after the run: name, assignee id, spec_solution_id, spec_metric_id and period of each (no description text), by the same
+    GET and match ``read_number`` uses, so the judge sees what the quest really holds and not a count."""
+    payload = client._request("GET", str(spec["read"]))
+    items = [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"), spec.get("min_len"))] if (spec.get("match") or spec.get("list_key")) else [payload]
+    rows = []
+    for item in items[:limit]:
+        rows.append({names[0]: next((item.get(n) for n in names + (names[0],) if item.get(n) not in (None, "")), None) for names in READBACK_FIELDS})
+    return rows
+
+
 def read_value(spec, client):
     """A reference value for the judge: a number (``read_number``), or with ``text`` the picked text (clipped), or with ``file`` and ``grep`` the
     first line of a file containing the grep text."""
