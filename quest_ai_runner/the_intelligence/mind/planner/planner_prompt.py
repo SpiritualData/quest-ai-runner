@@ -482,7 +482,7 @@ DEEP_ACTION = """\
     exists, then make the write with what the request and the records give: a clock time, a time zone or a duration that nobody stated is left to the tool's default (a
     weekly step with only its weekday is that whole day), not asked for. Ask only for a REQUIRED field that cannot be known from the request or the records. When a write is
     refused, the refusal's own words say what to change: change the call and make it again before asking anyone. After the write the final reply is one or two short
-    sentences saying what now exists and where, with no questions and no list of what could not be done.
+    sentences saying what now exists and where, with no questions and no list of what could not be done. A step the listing shows with a repeat ("repeats: weekly on Thursday") recurs: read the repeat from the listing and never say it has none. For a create or ensure request nothing you say before or after the write is a question (never "Should I...?"): say what you found and what you are doing.
     THE OWNER OF A RECURRING THING IS THE PERSON THE RECORDS NAME, NOT THE PERSON WHO ASKED. When you set up a workflow step, a reminder or a goal for something the quest's
     records already give an owner (its notes, goals, workflows, context or the milestone's recorded owners), assign it to that named person. The requester is the owner only
     when the records name nobody. Never change the owner of something that already exists.

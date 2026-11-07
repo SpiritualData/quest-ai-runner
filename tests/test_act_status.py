@@ -148,13 +148,13 @@ def test_an_already_there_workflow_is_said_in_one_plain_sentence_with_its_title_
                "text": "TOOL create_quest_workflow: Already there: the workflow 'Weekly check-in' (qwf_d9df4f414728) on quest quest_e8257dd0aa3d already has every one of these steps",
                "tool_data": {"workflowId": "qwf_d9df4f414728", "title": "Weekly check-in: Thursday office hour",
                              "steps": [{"title": "s", "timing": {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}}}]}}
-    assert already_in_place([receipt]) == ["It's already set: Weekly check-in: Thursday office hour, weekly on Thursdays."]
+    assert already_in_place([receipt]) == ["It's already set: Weekly check-in: Thursday office hour, weekly on Thursday."]
     goal = {"locator": "tool:create_or_update_quest_goal", "tool_status": "noop", "tool_data": {"state": "unchanged", "goal": {"name": "Ship the release next step"}}}
     assert already_in_place([goal]) == ["It's already set: Ship the release next step."]
     leaky = {"locator": "tool:x", "tool_status": "noop", "tool_data": {"title": "esr_fbcc56e182f7 thing"}}
     assert already_in_place([leaky]) == ["It's already set."]
     tail = act_status.closing_lines(None, None, reread=False, already=already_in_place([receipt]))
-    assert tail == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursdays." and "qwf_" not in tail and "quest_" not in tail
+    assert tail == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday." and "qwf_" not in tail and "quest_" not in tail
 
 
 def test_the_first_message_without_a_milestone_is_a_plain_line_of_what_the_turn_looked_at_never_the_planners_fact_dump():

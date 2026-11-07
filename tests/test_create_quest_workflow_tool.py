@@ -158,3 +158,39 @@ def test_the_planner_and_the_tool_say_the_named_owner_not_the_requester_owns_a_r
     assert "THE OWNER OF A RECURRING THING IS THE PERSON THE RECORDS NAME" in DEEP_ACTION and "Never change the owner of something that already exists" in DEEP_ACTION
     spec = ops.create_quest_workflow_spec(CREDS, client_factory=lambda: FakeClient())
     assert "assign a step to the owner the quest's records name" in spec.when_to_use
+
+
+PRODUCTION_SHAPED = [{"workflowId": "qwf_1", "title": "Weekly check-in: Thursday office hour", "steps": [{
+    "stepId": "s1", "title": "Thursday office hour: weekly check-in", "status": "pending", "actor": {"kind": "human", "userId": "u1"},
+    "timing": {"kind": "window", "startsAt": "2026-11-12T08:00:00+00:00", "endsAt": "2026-11-13T07:59:00+00:00",
+               "repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}},
+    "window": {"startsAt": "2026-11-12T08:00:00+00:00", "endsAt": "2026-11-13T07:59:00+00:00"}}]}]
+
+
+def test_the_listing_states_each_steps_timing_and_its_repeat_in_words_derived_from_the_structured_repeat():
+    client = ListingClient(PRODUCTION_SHAPED)
+    spec = ops.list_quest_workflows_spec(CREDS, client_factory=lambda: client)
+    result = spec.handler({}, ToolContext(quest_id="q1"))
+    row = result.data[0]
+    assert row["repeats"] == "weekly on Thursday" and row["timing_kind"] == "window" and row["starts_at"].startswith("2026-11-12") and row["ends_at"].startswith("2026-11-13")
+    assert row["assignee_name"] == "Ann Example"
+    assert "repeats: weekly on Thursday" in result.text and "timing window 2026-11-12" in result.text and "repeats: none" not in result.text
+
+
+def test_repeat_words_for_each_shape_and_none_only_when_there_is_no_repeat():
+    words = ops.repeat_words
+    assert words(None) == "none" and words({}) == "none" and words({"freq": None}) == "none"
+    assert words({"freq": "weekly", "interval": 1, "byWeekday": [3]}) == "weekly on Thursday"
+    assert words({"freq": "weekly", "interval": 2, "byWeekday": [0]}) == "every 2 weeks on Monday"
+    assert words({"freq": "weekly", "interval": 1, "byWeekday": [0, 2, 4]}) == "weekly on Monday, Wednesday and Friday"
+    assert words({"freq": "weekly", "interval": 1, "byWeekday": [0, 4]}) == "weekly on Monday and Friday"
+    assert words({"freq": "daily", "interval": 1}) == "daily" and words({"freq": "monthly", "interval": 3}) == "every 3 months"
+    assert words({"freq": "weekly", "interval": 1, "byWeekday": [3], "tz": "America/Los_Angeles"}) == "weekly on Thursday (America/Los_Angeles)"
+
+
+def test_a_status_line_is_never_a_question_and_the_planner_is_told_so():
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    texts = act_status.status_texts(None, [], "Should I set it to repeat weekly?", evidence="Should I set it to repeat weekly?", found="I looked at quest workflows.")
+    assert "?" not in texts["text"] and texts["status"] == "I looked at quest workflows."
+    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
+    assert 'repeats: weekly on Thursday' in DEEP_ACTION and 'never "Should I...?"' in DEEP_ACTION

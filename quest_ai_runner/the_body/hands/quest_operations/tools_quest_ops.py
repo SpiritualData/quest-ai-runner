@@ -728,6 +728,27 @@ def step_actor_name(actor: Mapping[str, Any], names: Mapping[str, str]) -> str:
     return actor.get("label") or actor.get("seat") or "nobody named"
 
 
+WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+UNIT_WORDS = {"daily": ("day", "daily"), "weekly": ("week", "weekly"), "monthly": ("month", "monthly"), "yearly": ("year", "yearly")}
+
+
+def repeat_words(repeat: Optional[Mapping[str, Any]]) -> str:
+    """A step's repeat in plain words from its structured fields, never guessed: ``none`` when it has no repeat; else ``weekly on Thursday``, ``every 2 weeks on Monday and Friday``,
+    ``daily``, ``monthly``, with the zone when the repeat names one."""
+    if not repeat or not repeat.get("freq"):
+        return "none"
+    freq = str(repeat["freq"])
+    unit, adverb = UNIT_WORDS.get(freq, (freq, freq))
+    interval = int(repeat.get("interval") or 1)
+    days = repeat.get("byWeekday") or []
+    days = days if isinstance(days, (list, tuple)) else [days]
+    named = [WEEKDAY_NAMES[int(d)] for d in days if str(d).lstrip("-").isdigit() and 0 <= int(d) <= 6]
+    text = adverb if interval == 1 else f"every {interval} {unit}s"
+    if named:
+        text += " on " + (named[0] if len(named) == 1 else ", ".join(named[:-1]) + " and " + named[-1])
+    return text + (f" ({repeat['tz']})" if repeat.get("tz") else "")
+
+
 def step_rows(workflow: Mapping[str, Any], names: Mapping[str, str]) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for step in workflow.get("steps") or []:
@@ -743,13 +764,17 @@ def step_rows(workflow: Mapping[str, Any], names: Mapping[str, str]) -> List[Dic
             "assignee_name": step_actor_name(actor, names),
             "status": str(step.get("status") or ""), "window_starts": window.get("startsAt"),
             "due": window.get("endsAt") or window.get("startsAt"),
+            "timing_kind": (step.get("timing") or {}).get("kind"),
+            "starts_at": (step.get("timing") or {}).get("startsAt") or (step.get("timing") or {}).get("runAt"), "ends_at": (step.get("timing") or {}).get("endsAt"),
+            "repeats": repeat_words((step.get("timing") or {}).get("repeat")),
             "completed_at": step.get("completedAt")})
     return rows
 
 
 def step_line(row: Mapping[str, Any]) -> str:
     window = f"{row.get('window_starts') or '?'} to {row.get('due') or '?'}"
-    return (f"- {row['step_id']} [{row['status'] or 'unknown'}] for {row['assignee_name']}, window {window}: "
+    timing = f", timing {row['timing_kind']} {row.get('starts_at') or '?'} to {row.get('ends_at') or '?'}" if row.get("timing_kind") else ""
+    return (f"- {row['step_id']} [{row['status'] or 'unknown'}] for {row['assignee_name']}, window {window}{timing}, repeats: {row.get('repeats') or 'none'}: "
             f"{trim(row['title'], 120)}")
 
 
@@ -802,8 +827,8 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
         name="list_quest_workflows",
         handler=handler,
         description=("List the steps of the workflows on a quest: step id, title, who it belongs to "
-                     "(a name), its window, its status (pending, open, done, late or missed) and "
-                     "when it is due. Filter by person, status or words; one page at a time."),
+                     "(a name), its window, how it repeats in words (\"weekly on Thursday\", \"none\"), its status (pending, open, done, late or missed) and "
+                     "when it is due. A step that says it repeats is recurring: never say it does not. Filter by person, status or words; one page at a time."),
         when_to_use=("You need what a workflow still asks of someone: the approvals or steps waiting "
                      "on a person, what is late or due soon, or a step found by its words. Read it "
                      "BEFORE writing any message that says what is waiting."),

@@ -148,12 +148,12 @@ def read_summary(gathered: Iterable[Any]) -> str:
 
 
 def schedule_phrase(data: Mapping[str, Any]) -> str:
-    """How often a recorded routine repeats, from its steps' own timing: "weekly on Thursdays"; "" when it does not repeat or the data does not say."""
+    """How often a recorded routine repeats, from its steps' own timing, in the words the workflow listing uses ("weekly on Thursday"); "" when it does not repeat."""
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import repeat_words
     for step in data.get("steps") or []:
         repeat = ((step.get("timing") or {}).get("repeat")) if isinstance(step, Mapping) else None
         if repeat and repeat.get("freq"):
-            days = [WEEKDAYS[int(d)] for d in repeat.get("byWeekday") or [] if str(d).isdigit() and 0 <= int(d) <= 6]
-            return f"{repeat['freq']} on {' and '.join(days)}" if days else str(repeat["freq"])
+            return repeat_words(repeat)
     return ""
 
 
@@ -184,6 +184,8 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
         parts.extend(f.rstrip(".") + "." for f in kept if f)
     status = " ".join(parts) or found or NO_STATUS
     nxt = plain(grounded_line(doing, evidence)).rstrip(".")
+    if "?" in nxt:
+        nxt = ""         # message 1 is a status: a question is never what is being done
     nxt = (nxt + ".") if nxt else GENERIC_NEXT
     return {"status": status, "next": nxt, "text": f"Where this stands: {status}\n\nNow: {nxt}"}
 
