@@ -710,7 +710,7 @@ class RunBeginMixin:
         rs.cue_step_attempted = False
         if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None:
             try:
-                rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message)
+                rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message, decide=self.cheap_decision)
             except milestone_cue.LaneGap as gap:
                 rs.cue_gap = str(gap)
                 log.warning("milestone cue: lane gap: %s", gap)

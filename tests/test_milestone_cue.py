@@ -26,6 +26,18 @@ from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, Tool
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 
 CUE = "lets get the apple store release moving"
+
+
+@pytest.fixture(autouse=True)
+def cheap_model(monkeypatch):
+    """The turn's one cheap model call, answered offline: the milestone judgment picks the first candidate listed, any other question is answered NONE."""
+    import re
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+
+    def fake(self, prompt):
+        found = re.search(r"^(esr_\w+):", prompt, re.M) if "These are milestones of the quest" in prompt else None
+        return found.group(1) if found else "NONE"
+    monkeypatch.setattr(Orchestrator, "cheap_decision", fake)
 GOALS = [{"id": "g1", "title": "esr_c next step: week of 2026-10-26", "spec_solution_id": "esr_c", "completed": False, "abandoned": False, "due": "2026-11-01",
           "assignee_name": "Cy"},
          {"id": "g2", "title": "Unrelated", "spec_solution_id": None, "completed": False, "abandoned": False, "due": None}]
@@ -549,3 +561,64 @@ def test_the_receipt_entry_of_the_code_step_carries_the_goal_as_the_tool_read_it
     entries = [g for g in (result.gathered or []) if isinstance(g, dict) and g.get("after_state")]
     assert entries and entries[0]["after_state"]["spec_solution_id"] == "esr_c" and entries[0]["after_state"]["spec_metric_id"] == "esr_mc"
     assert entries[0]["after_state"]["assignee_name"] == "Cy Owner"
+
+
+NEUTRAL_CUES = ("what is the weather like this week", "remind me to call the dentist on friday", "help me prepare for tomorrow's call with the new advisor",
+                "write a short post about gratitude for our newsletter", "how are we doing on the quest overall?", "set up a recurring weekly team meeting on thursdays",
+                "summarize the notes from yesterday")
+
+
+def test_the_judgment_says_none_for_a_message_about_something_else_and_the_resolver_returns_nothing():
+    asked = []
+
+    def decide(prompt):
+        asked.append(prompt)
+        return "NONE"
+    assert cue.resolve(registry(), "q1", CUE, decide=decide) is None
+    assert len(asked) == 1 and "NONE" in asked[0] and "a recurring meeting" in asked[0] and "esr_c" in asked[0]
+
+
+def test_the_judgment_names_the_milestone_only_from_the_candidates_offered():
+    assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: "I think it is esr_c").rid == "esr_c"
+    assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: "esr_not_offered") is None
+    assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: "") is None
+
+
+def test_the_judgment_sees_only_a_few_model_free_candidates_and_no_call_is_made_when_none_clears_the_gate():
+    asked = []
+    assert cue.resolve(registry(), "q1", "write me a poem about tea", decide=lambda prompt: asked.append(prompt) or "esr_c") is None and asked == []
+    prompt_ids = []
+    cue.resolve(registry(), "q1", "get the mobile app live", decide=lambda prompt: prompt_ids.append(prompt) or "NONE")
+    assert prompt_ids and prompt_ids[0].count("\nesr_") <= cue.CANDIDATES
+
+
+def test_a_failed_judgment_is_a_lane_gap_not_a_guess():
+    def down(prompt):
+        raise RuntimeError("model unavailable")
+    with pytest.raises(cue.LaneGap, match="deciding which milestone"):
+        cue.resolve(registry(), "q1", CUE, decide=down)
+
+
+def test_neutral_messages_of_other_kinds_never_resolve_a_milestone_when_the_judge_says_none():
+    for message in NEUTRAL_CUES:
+        assert cue.resolve(registry(), "q1", message, decide=lambda prompt: "NONE") is None, message
+
+
+def test_a_none_judgment_leaves_the_turn_without_cue_facts_or_a_write():
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    import pytest as pt
+    calls = []
+    provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
+    config = OrchestratorConfig(interim_replies=True)
+    config.overseer = False
+    with pt.MonkeyPatch.context() as patch:
+        patch.setattr(Orchestrator, "cheap_decision", lambda self, prompt: "NONE")
+        result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry(calls)).run(CUE, quest_id="q1")
+    assert calls == [] and "CUE FACTS (found by code" not in provider.plan_prompts[0] and result is not None
+
+
+def test_neutral_messages_of_other_kinds_do_not_even_reach_the_judge_on_these_records():
+    for message in NEUTRAL_CUES:
+        assert cue.candidates(TABLES, message) == [], message

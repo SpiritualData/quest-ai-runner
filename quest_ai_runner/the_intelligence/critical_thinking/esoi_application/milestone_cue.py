@@ -99,6 +99,41 @@ def select(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str) -> O
     return chosen[0], solutions[chosen[0]], chosen[1:]
 
 
+CANDIDATES = 3
+NONE = "NONE"
+
+
+def candidates(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, limit: int = CANDIDATES) -> List[str]:
+    """The ids of the milestones the cue might concern, best first: the few that clear the rarity-weighted overlap gate (model-free). Empty when none does."""
+    index = index_of(tables)
+    entries = list(index.get("entries") or [])
+    docs = [{"name": set(words(e.get("title"))), "metric": set(words(e.get("metric_title"))), "text": set(words(e.get("summary")))} for e in entries]
+    wanted = set(words(cue))
+    containing = {w: sum(1 for d in docs if any(w in part for part in d.values())) for w in wanted}
+    scored = []
+    for entry, doc in zip(entries, docs):
+        score = sum(math.log(1 + len(docs) / containing[w]) * max(NAME_WEIGHT * (w in doc["name"]), METRIC_WEIGHT * (w in doc["metric"]), TEXT_WEIGHT * (w in doc["text"]))
+                    for w in wanted if containing.get(w))
+        scored.append((score, entry["id"]))
+    scored.sort(key=lambda pair: -pair[0])
+    if not scored or scored[0][0] < MIN_SCORE:
+        return []
+    return [rid for score, rid in scored if score >= MIN_SCORE][:limit]
+
+
+def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: Sequence[str], decide: Callable[[str], str]) -> Optional[str]:
+    """The one cheap model judgment: which of the candidate milestones, if any, is the message asking to move forward. NONE is a first-class answer (the message is about
+    something else: a reminder, a workflow, a recurring meeting, writing, a question). The reply is matched to the ids offered; anything that names none of them is NONE."""
+    solutions = dict(solutions_of(tables))
+    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {str(solutions[rid].get('milestones') or '').strip()[:VALUE_CHARS]}" for rid in ids if rid in solutions)
+    answer = decide("A person wrote this message in their quest's chat:\n\n" + str(cue).strip()[:1500]
+                    + "\n\nThese are milestones of the quest:\n" + listing
+                    + "\n\nIs the message asking to move one of these milestones forward (make progress on it, get it going)? Reply with that milestone's id exactly as listed. "
+                    f"Reply {NONE} if the message is about something else (a reminder, a workflow, a recurring meeting, writing content, preparing for a call, a question, "
+                    "a status check). Reply with nothing else.")
+    return next((rid for rid in ids if rid in str(answer)), None)
+
+
 def first_sentence(text: str, limit: int = 160) -> str:
     """The start of a recorded value, cut at a sentence end or the limit: enough to say where the measure stands."""
     text = " ".join(text.split())
@@ -181,9 +216,9 @@ INCREMENT_ORDER = ("Increment order, the first that applies (one increment per t
 
 
 def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, monday: str = "", goals: Sequence[Mapping[str, Any]] = (),
-               zone: str = "") -> str:
-    """The facts for the planner, or "" when no milestone fits the cue."""
-    picked = select(tables, cue)
+               zone: str = "", rid: str = "") -> str:
+    """The facts for the planner, or "" when no milestone fits the cue. ``rid`` names the milestone when it was already judged to be the one."""
+    picked = (rid, dict(solutions_of(tables)).get(rid) or {}, []) if rid else select(tables, cue)
     if picked is None:
         return ""
     rid, row, ties = picked
@@ -364,7 +399,7 @@ def goals_through(registry: Any, quest_id: str) -> List[Mapping[str, Any]]:
     return [g for g in (result.data or []) if isinstance(g, Mapping)]
 
 
-def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datetime] = None) -> Optional[Resolved]:
+def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datetime] = None, decide: Optional[Callable[[str], str]] = None) -> Optional[Resolved]:
     """The milestone a turn pinned to ``quest_id`` concerns, with its facts; None when the lane keeps no specifications, nothing was asked, or no milestone fits.
     Raises ``LaneGap`` when the records or goals cannot be read."""
     if registry is None or not quest_id or not str(cue or "").strip():
@@ -372,17 +407,26 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
     tables, zone = read_through(registry, quest_id)
     if not tables:
         return None
-    picked = select(tables, cue)
-    if picked is None:
+    ids = candidates(tables, cue)
+    if not ids:
         return None
-    rid, row, _ = picked
+    rid = ids[0]
+    if decide is not None:
+        # The candidates are model-free; one cheap judgment says whether the message is asking to move one of them, and NONE is an answer.
+        try:
+            rid = judge(tables, cue, ids, decide)
+        except Exception as error:      # noqa: BLE001  a judgment that failed is a gap, not a guess either way
+            raise LaneGap(f"deciding which milestone the message concerns failed ({type(error).__name__}: {error})") from error
+        if rid is None:
+            return None
+    row = dict(solutions_of(tables))[rid]
     week = Week.of(today_in(zone, now), zone)
     goals = goals_through(registry, quest_id)
     linked = metrics_of(tables, rid)
     metric = linked[0][1] if linked else None
     return Resolved(
         rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week,
-        facts=fact_block(tables, cue, week.monday, goals, zone), quest_id=quest_id,
+        facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id,
         done_when=str(row.get("milestones") or "").strip()[:VALUE_CHARS].rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
         purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)))
