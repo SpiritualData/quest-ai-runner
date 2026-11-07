@@ -28,6 +28,7 @@ CLOSE = 0.85           # a runner-up at this share of the best score counts as a
 VALUE_CHARS = 220
 PURPOSE_CHARS = 1200
 ACT = "act"
+OWNED_WRITES = ("create_or_update_quest_goal", "create_quest_goal")       # goal writes of a milestone cue belong to the code step, which keeps the deliverable inside one keyed goal
 CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify", "read")    # a plan that, for an act cue, the flow step runs before
 BEYOND_THE_WRITE_TARGET = "code_or_files"                                 # work a tool write cannot do: the one case a deep run may follow the receipt
 DELIVERABLE_TARGET = "draft_in_chat"                              # the planner reports a deliverable written in the reply: the first rung of the increment order
@@ -398,7 +399,8 @@ class Resolved:
                         'as written; something addressed to an outside party is a short message stating what they get and the ask; a new source or channel is one named concrete '
                         'source with a one-line hypothesis, a first test and the milestone metric; a checklist of at most 5 steps only when none of those fits. Use only the facts above; '
                         'a [bracket] only for a fact that is truly unknown (a link); no prices, dates, counts, rates or claims that are not given above, and never a count of its own '
-                        'characters, words or items; no em dashes')
+                        'characters, words or items; no first person ("I", "we", "our") unless the facts above name who is speaking; a video script is the words to be spoken, not notes about it; '
+                        'never a due date or deadline that is not in the facts above; no em dashes')
         if not asks:
             return {"owners": [], "goal_id": "", "draft": kept_draft}
         answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
@@ -440,7 +442,7 @@ class Resolved:
                 self.receipt = result.text
                 self.after_state = (result.data or {}).get("goal")
                 named = ", ".join(owners)
-                note = (f" The owner could not be set ({'; '.join(refused)}), so the goal is left unassigned. Say who should own it ({named}, as the record names them) and ask nothing."
+                note = (f" The owner could not be set ({'; '.join(refused)}), so the goal is left unassigned. Say plainly that the record names {named} but the quest cannot assign the goal to them, say who should own it, and ask nothing."
                         if refused and not owner else "")
                 lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
                 if (result.data or {}).get("problems"):

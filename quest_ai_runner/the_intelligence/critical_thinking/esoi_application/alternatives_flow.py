@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 
 log = logging.getLogger("quest-ai-runner.alternatives")
-STATE_WORDS = {"created": "created", "updated": "already tracked, copy updated", "unchanged": "already tracked"}
+STATE_WORDS = {"not_recorded": "not recorded on the quest", "created": "created", "updated": "already tracked, copy updated", "unchanged": "already tracked"}
 
 
 @dataclass
@@ -33,19 +33,27 @@ class Alternative:
 MIN_SHARED_WORDS = 2
 
 
-COMMON_SHARE = 0.2
+HELD_SHARE = 0.5
+HELD_MAX = 6
 
 
 def goals_for_cue(goals: Sequence[Mapping[str, Any]], cue: str) -> List[Mapping[str, Any]]:
-    """The open goals the quest already holds that overlap the request: at least ``MIN_SHARED_WORDS`` of its meaningful words occur in the goal's title and text, not counting a word
-    that most goals carry (the quest's own subject says nothing about which goal this is). Model-free, by the same word weighting the milestone cue uses."""
+    """The open goals the quest already holds for this request: those sharing at least ``MIN_SHARED_WORDS`` of its meaningful words, ranked by how rare the shared words are among the quest's
+    goals (a word every goal carries says little about which goal this is), keeping the ones scoring at least half of the best, at most ``HELD_MAX``. Model-free, by the same word
+    weighting the milestone cue uses."""
+    import math
     wanted = set(milestone_cue.words(cue))
     open_goals = [g for g in goals if not g.get("completed") and not g.get("abandoned")]
     bag = {id(g): set(milestone_cue.words(f"{g.get('title') or ''} {g.get('text') or ''}")) for g in open_goals}
-    if len(open_goals) >= 10:
-        common = {w for w in wanted if sum(1 for g in open_goals if w in bag[id(g)]) > COMMON_SHARE * len(open_goals)}
-        wanted -= common
-    return [g for g in open_goals if len(wanted & bag[id(g)]) >= MIN_SHARED_WORDS]
+    df = {w: sum(1 for g in open_goals if w in bag[id(g)]) for w in wanted}
+    scored = []
+    for g in open_goals:
+        shared = wanted & bag[id(g)]
+        if len(shared) >= MIN_SHARED_WORDS:
+            scored.append((sum(math.log(1 + len(open_goals) / df[w]) for w in shared), g))
+    scored.sort(key=lambda pair: -pair[0])
+    best = scored[0][0] if scored else 0.0
+    return [g for score, g in scored if score >= HELD_SHARE * best][:HELD_MAX]
 
 
 def solutions_listing(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> List[Dict[str, str]]:
@@ -147,7 +155,7 @@ def compose_tail(results: Sequence[Mapping[str, Any]], metric_name: str) -> str:
     """The plain tail: one line per alternative saying whether the quest already tracked it, and what they are compared by. No ids."""
     lines = ["On the quest:"]
     for r in results:
-        lines.append(f"- {r['title']} ({STATE_WORDS.get(r['state'], r['state'])})" + (f": {r['hypothesis']}" if r.get("hypothesis") else ""))
+        lines.append(f"- {r['title']} ({STATE_WORDS.get(r['state'], r['state'])}{': ' + r['why'] if r.get('why') else ''})" + (f": {r['hypothesis']}" if r.get("hypothesis") else ""))
     if metric_name:
         lines.append(f"Compared by: {metric_name}.")
     return "\n".join(lines)
@@ -177,14 +185,32 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
             alt.title = titles.get(alt.goal_id) or alt.title        # the keyed goal is found by its exact title: renaming is never the way in
     from quest_ai_runner.the_world.tools.tools import ToolContext
     names = {(s["solution_id"], s["metric_id"]): s["metric_name"] for s in solutions}
+    # Existing goals win: an alternative the model gave no goal for takes the next held goal nobody claimed (the series the quest already keeps), in the order held; a new goal is created
+    # only when the quest holds fewer goals than there are alternatives.
+    unclaimed = [g for g in goals if str(g.get("id")) not in taken]
+    for alt in alts:
+        if not alt.goal_id and unclaimed:
+            held = unclaimed.pop(0)
+            alt.goal_id, alt.title = str(held.get("id")), str(held.get("title") or "").strip()
+    default = next(((str(g["spec_solution_id"]), m) for g in goals if g.get("spec_solution_id") for m in [next((s["metric_id"] for s in solutions if s["solution_id"] == g["spec_solution_id"]), "")] if m), ("", ""))
+    for alt in alts:
+        if not alt.solution_id and default[0]:
+            alt.solution_id, alt.metric_id = default
     results = []
     for alt in alts:
         result = registry.invoke("create_or_update_quest_goal", goal_arguments(quest_id, alt, names.get((alt.solution_id, alt.metric_id), "")), ToolContext(quest_id=quest_id))
-        if not result.ok:
-            raise milestone_cue.LaneGap(f"{alt.title!r} could not be recorded: {str(result.text).strip()[:300]}")
+        if not result.ok:         # the versions and what they are compared by are still reported; the reply says this one was not recorded and why
+            log.warning("alternatives flow: %r not recorded: %s", alt.title, str(result.text)[:300])
+            results.append({"title": alt.title, "hypothesis": alt.hypothesis, "state": "not_recorded", "why": act_status_scrub(str(result.text))})
+            continue
         results.append({"title": alt.title, "hypothesis": alt.hypothesis, "state": str((result.data or {}).get("state") or "created")})
     metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
     return compose_tail(results, metric)
+
+
+def act_status_scrub(text: str) -> str:
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    return act_status.scrub(text)[:160]
 
 
 def status_line(registry: Any, quest_id: str, cue: str) -> str:

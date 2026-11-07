@@ -674,16 +674,29 @@ def test_ids_the_model_was_not_offered_are_dropped_and_fewer_than_two_alternativ
     assert alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer()) == ""
 
 
-def test_a_refused_write_is_a_lane_gap_and_the_turn_says_so_in_one_plain_sentence():
+def test_a_refused_write_still_leaves_the_versions_their_hypotheses_and_the_metric_in_the_reply_and_says_which_were_not_recorded():
     from types import SimpleNamespace
     from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
     refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
                                                                          handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: not allowed"))])
     orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
-    rs = SimpleNamespace(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="write posts")
+    rs = SimpleNamespace(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="write posts for the launch push")
     res = SimpleNamespace(kind="answer", text="the posts", deep_results=[])
     assert track_alternatives(orch, rs, res) is True
-    assert res.text.startswith("the posts") and "I could not keep these on the quest:" in res.text and "not allowed" in res.text
+    assert res.text.startswith("the posts") and "(not recorded on the quest: Nothing was written: not allowed)" in res.text
+    assert "A story hook gets more clicks" in res.text and "A question hook gets more signups" in res.text and "Compared by: P3 App Store listing live." in res.text
+
+
+def test_the_refusals_own_words_reach_the_reply_without_ids():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
+                                                                         handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: Quest refused it (esr_fbcc56e182f7 is not a strategy of this quest)"))])
+    orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
+    rs = SimpleNamespace(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="write posts for the push")
+    res = SimpleNamespace(kind="answer", text="the posts", deep_results=[])
+    track_alternatives(orch, rs, res)
+    assert "is not a strategy of this quest" in res.text and "esr_" not in res.text
 
 
 def test_the_tracking_step_runs_only_for_a_drafted_deliverable_ordered_by_the_person():
@@ -732,19 +745,6 @@ def test_only_goals_that_overlap_the_request_are_offered_for_adoption_and_a_titl
     tail = alternatives_flow.run(alt_registry(calls, goals), "q1", cue, "reply", lambda prompt: asked.append(prompt) or alt_answer(*new_titles))
     assert "Quarterly budget review" not in asked[0] and "ALWAYS wins" in asked[0] and "g9" not in asked[0]
     assert [c["title"] for c in calls] == ["Launch push post A", "Launch push post B"] and all("adopt_goal_id" not in c for c in calls) and tail.count("\n- ") == 2
-
-
-def test_the_refusals_own_words_reach_the_reply_without_ids_and_are_kept_in_the_turns_record():
-    from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
-    refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
-                                                                         handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: Quest refused it (esr_fbcc56e182f7 is not a strategy of this quest)"))])
-    orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
-    rs = SimpleNamespace(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="write posts for the push")
-    res = SimpleNamespace(kind="answer", text="the posts", deep_results=[])
-    track_alternatives(orch, rs, res)
-    assert "is not a strategy of this quest" in res.text and "esr_" not in res.text and "could not be updated just now" not in res.text
-    assert any(g.get("locator") == "lane_gap" and "esr_fbcc56e182f7" in g["text"] for g in rs.gathered)
 
 
 def test_a_drafted_deliverable_is_shown_once_in_the_final_message_with_no_milestone_copy_and_no_deep_run():
@@ -1051,7 +1051,7 @@ def test_when_no_named_owner_can_be_set_the_goal_is_left_unassigned_and_the_repl
     resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
     receipt, _ = resolved.carry_out(tools)
     assert calls[-1].get("clear_assignee") is True and "assignee" not in calls[-1]
-    assert "left unassigned. Say who should own it (Cy, Di, as the record names them) and ask nothing" in receipt
+    assert "left unassigned. Say plainly that the record names Cy, Di but the quest cannot assign the goal to them, say who should own it, and ask nothing" in receipt
 
 
 def test_the_closing_line_reads_the_milestones_metric_record_again_after_the_write():
@@ -1075,3 +1075,38 @@ def test_the_draft_prompt_names_sendable_questions_and_a_short_pitch_and_limits_
     text = asked[0]
     assert "few, neutral, each a full sentence ready to send as written" in text and "a short message stating what they get and the ask" in text
     assert "a checklist of at most 5 steps only when none of those fits" in text and "under 120 words" in text
+
+
+def test_existing_goals_win_over_new_titles_when_the_quest_holds_a_series_for_the_request():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    goals = [{"id": f"o{n}", "title": f"Reach 1000 subscribers: item {n}", "text": "", "spec_solution_id": None, "completed": False} for n in range(14)]
+    goals += [{"id": "fa", "title": "Launch push post A", "text": "", "spec_solution_id": "esr_c", "completed": False},
+              {"id": "fb", "title": "Launch push post B", "text": "", "spec_solution_id": "esr_c", "completed": False}]
+    cue_text = "write a couple of posts for the 1000 subscribers launch push"
+    assert [g["id"] for g in alternatives_flow.goals_for_cue(goals, cue_text)] == ["fa", "fb"]
+    calls = []
+    new_texts = [dict(A_EXISTING, title="Launch push 1000 post A", goal_id="", solution_id="", metric_id=""), dict(B_NEW, title="Launch push 1000 post B", goal_id="", solution_id="", metric_id="")]
+    tail = alternatives_flow.run(alt_registry(calls, goals), "q1", cue_text, "reply", lambda prompt: alt_answer(*new_texts))
+    assert [c["title"] for c in calls] == ["Launch push post A", "Launch push post B"]            # the held goals are updated with the new texts; no new title is created
+    assert all(c.get("spec_solution_id") == "esr_c" and c.get("spec_metric_id") == "esr_mc" for c in calls) and "Compared by: P3 App Store listing live." in tail
+    assert "1000 post" not in tail
+
+
+def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_deliverable_stays_in_the_one_keyed_goal():
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    calls = []
+    extra = {"name": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title": "P3 Mobile app live on the Apple Store outreach message", "description": "x"}}
+    provider = StubProvider([{"action": "tool", "user_intent": "act", "rationale": "r", "tool_calls": [extra]}])
+    config = OrchestratorConfig()
+    config.overseer = False
+    Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry(calls)).run(CUE, quest_id="q1")
+    assert [c["title"] for c in calls] == ["P3 Mobile app live on the Apple Store next step: week of " + calls[0]["title"].rsplit(" ", 1)[1]] and len(calls) == 1
+    assert "outreach" not in calls[0]["title"]
+
+
+def test_the_draft_prompt_forbids_first_person_unsourced_dates_and_notes_in_place_of_a_script():
+    asked = []
+    cue.resolve(registry([]), "q1", CUE).carry_out(registry([]), lambda prompt: asked.append(prompt) or "{}")
+    assert 'no first person ("I", "we", "our")' in asked[0] and "never a due date or deadline that is not in the facts above" in asked[0] and "the words to be spoken, not notes about it" in asked[0]

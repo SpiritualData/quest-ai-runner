@@ -497,7 +497,7 @@ def strongly_this_turns(item, window, ai_user_id, evidence, words):
     return sum(1 for w in words if w in label) >= 2
 
 
-def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes=False, evidence="", message=""):
+def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes=False, evidence="", message="", titles=()):
     """Split the fingerprint changes into ``remove``, ``keep`` and ``left``. ``remove`` is only what is provably this run's and not the case's intended result: a
     decision or task carrying this run's conversation id, or a note, workflow, decision or task that passes ``strongly_this_turns``. ``keep`` is the intended,
     allowed result. ``left`` is everything else: a changed or removed item, an item with no route that takes it back (a goal, a spec record, another conversation),
@@ -508,7 +508,9 @@ def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes
     plan = {"remove": [], "keep": [], "left": []}
     for c in changes:
         cat = c["category"]
-        if c["change"] != "added":
+        if c["change"] == "changed" and cat == "goals" and cat in allowed and goal_change_explained(c, effect, titles):
+            plan["keep"].append(c)          # the keyed goal the case allows, updated in place: that is the intended result, not something left behind
+        elif c["change"] != "added":
             plan["left"].append(dict(c, why=f"{c['change']}: cannot be undone from here"))
         elif cat in allowed:
             plan["keep"].append(c)

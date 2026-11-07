@@ -348,3 +348,12 @@ def test_a_changed_person_goal_is_an_unexpected_write_even_when_the_case_allows_
     assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title) != []
     assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, titles={"FB push post A"}) == []
     assert PC.unexpected_writes(PC.diff_fingerprints(before, after), effect_no_title, zero_writes=True) != []
+
+
+def test_a_goal_the_case_allows_updated_in_place_is_the_intended_result_and_is_not_left_behind():
+    import prodchat as PC
+    effect = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title~": "P2 "}}]}
+    changes = [{"category": "goals", "change": "changed", "id": "g1", "label": "P2 Mobile app next step: week of 2026-11-09", "before_label": "P2 Mobile app next step: week of 2026-11-02"},
+               {"category": "goals", "change": "changed", "id": "g2", "label": "Submit the app", "before_label": "Submit the app"}]
+    plan = PC.plan_cleanup(changes, "conv", (0, 1), "ai", effect, False, "", "", ())
+    assert [c["id"] for c in plan["keep"]] == ["g1"] and [c["id"] for c in plan["left"]] == ["g2"]

@@ -288,6 +288,13 @@ def build_arm(meter, bounded):
             if "before" in counts and "after" in counts:
                 verdicts = [state_verdict(check, b4, af) for check, b4, af in zip(checks, counts["before"], counts["after"])]
                 record["state"] = dict(counts, ok=all(v[0] for v in verdicts), why="; ".join(v[1] for v in verdicts))
+                for check, b4, af in zip(checks, counts["before"], counts["after"]):
+                    expect = int(check.get("expect", check.get("expect_min", 1)))
+                    if not check.get("expect_min") and af > max(b4, expect):
+                        extra = f"UNEXPECTED WRITE: the state count rose from {b4} to {af} where exactly {expect} is expected: this run created {af - max(b4, expect)} extra goal(s)"
+                        record["unexpected_writes"] = list(record.get("unexpected_writes") or []) + [extra]
+                        judged_case["evidence_notes"] += " " + extra + "."
+                        record["passed"] = False
                 judged_case["evidence_notes"] += (f" State check: {counts['before']} matching before the run, {counts['after']} after. Lines marked DONE were really made. "
                                                   "Only the writes the case allows run; anything else stays blocked.")
                 if P.pre_existing(case, checks, counts["before"]):

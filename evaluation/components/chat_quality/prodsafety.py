@@ -56,7 +56,7 @@ class TurnSafety:
         unexpected = PC.unexpected_writes(changes, self.effect, self.zero, titles) + blocked
         window = (self.started - 5, ended + 30)
         evidence = json.dumps(frames, default=str) if frames else ""
-        plan = PC.plan_cleanup(changes, own_conv, window, self.ai_user_id, self.effect, self.zero, evidence, self.message)
+        plan = PC.plan_cleanup(changes, own_conv, window, self.ai_user_id, self.effect, self.zero, evidence, self.message, titles)
         result = PC.run_cleanup(self.client, plan)
         return dict(changes=changes, unexpected=unexpected, cleanup=result, line=PC.cleanup_line(result), failed=bool(result["left"] or unexpected))
 

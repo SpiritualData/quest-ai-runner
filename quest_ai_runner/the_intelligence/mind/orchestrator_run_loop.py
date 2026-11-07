@@ -522,6 +522,15 @@ class RunLoopMixin:
                 rs.turn_user_intent = rs.plan.user_intent
             if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
                 rs.draft_in_chat = True
+            # The milestone flow owns the goal writes of a milestone cue: the planner's own goal writes (a second goal for a deliverable, an outreach message) are taken out of its plan; the
+            # deliverable lives inside the one keyed next-step goal the code step records. A plan left with no call becomes the answer.
+            if rs.cue_resolved is not None and getattr(rs.plan, "action", None) == "tool":
+                kept_calls = [c for c in (rs.plan.tool_calls or []) if str((c or {}).get("name") or "") not in milestone_cue.OWNED_WRITES]
+                if len(kept_calls) != len(rs.plan.tool_calls or []):
+                    log.info("milestone cue: the planner's goal write was taken out of the plan; the code step owns it")
+                    rs.plan.tool_calls = kept_calls
+                    if not kept_calls:
+                        rs.plan.action = "answer"
             # ESOI Application's flow step, in code and not a planner choice: once the milestone is resolved and the person asked for something to be done, the keyed next
             # step is written and its receipt returned, unless a higher rung of the increment order is taken (a deliverable written in the reply, a metric value
             # recorded). No deep run and no permission asking: the plan becomes the answer, which tells the person what was recorded.
