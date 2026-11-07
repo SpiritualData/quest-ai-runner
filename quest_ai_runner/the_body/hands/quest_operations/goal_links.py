@@ -208,7 +208,7 @@ def goal_changes(goal: Mapping[str, Any], wanted: Mapping[str, Any]) -> Dict[str
 
 
 def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Mapping[str, Any],
-                assignee_id: Optional[str], adopt_goal_id: Optional[str] = None, link_match: bool = False) -> Dict[str, Any]:
+                assignee_id: Optional[str], adopt_goal_id: Optional[str] = None, link_match: bool = False, clear_assignee: bool = False) -> Dict[str, Any]:
     """Make exactly one goal titled ``title`` exist on the quest with these fields. Returns ``{state, goal_id, changed, writes, copies}`` where ``state`` is
     ``created``, ``updated``, ``unchanged`` or ``unknown`` (the quest's goals could not be read, nothing was written). ``writes`` are the client results,
     for the caller to read a held or refused one from. A client that raises on a refused write propagates; the caller reports it."""
@@ -230,6 +230,9 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
         if assignee_id:
             writes.append(client.assign_goal(str(adopt_goal_id), assignee_id))
             changed.append("assignee")
+        elif clear_assignee and (before or {}).get("assigned_to_user_id"):
+            writes.append(client.assign_goal(str(adopt_goal_id), None))
+            changed.append("assignee cleared")
         return {"state": "updated", "goal_id": str(adopt_goal_id), "changed": changed, "writes": writes, "copies": 0, "before": before}
     if not found:
         write = client.create_goal(title, period=period, quest_id=quest_id, assigned_to_user_id=assignee_id, **fields)
@@ -252,5 +255,8 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
     if assignee_id and goal.get("assigned_to_user_id") != assignee_id:
         writes.append(client.assign_goal(goal_id, assignee_id))
         changed.append("assignee")
+    elif clear_assignee and not assignee_id and goal.get("assigned_to_user_id"):
+        writes.append(client.assign_goal(goal_id, None))          # the owner the record names could not be set: the goal is left unassigned, not with someone the record does not name
+        changed.append("assignee cleared")
     return {"state": "updated" if writes else "unchanged", "goal_id": goal_id, "changed": changed, "writes": writes,
             "copies": len(found) - 1, "before": before}

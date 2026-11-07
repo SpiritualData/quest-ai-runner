@@ -214,7 +214,7 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
             parts.append(f"Milestone: {reading.milestone}.")
         if reading.done_when and not voice:
             parts.append(f"Done when: {reading.done_when}.")
-        parts.append(f"Current value: {short_value(reading.value)}.")
+        parts.append(f"Current value: {status_value(reading.value)}.")
     if not voice:
         kept = [grounded_line(f, evidence) for f in list(facts)[:MAX_FACTS]]
         parts.extend(f.rstrip(".") + "." for f in kept if f)
@@ -242,8 +242,24 @@ def short_value(value: str) -> str:
     return (text[:cut.start()] if cut else text[:VALUE_CHARS]).strip() or NOT_RECORDED
 
 
+URL = re.compile(r"\bhttps?://\S+")
+
+
+def status_value(value: str) -> str:
+    """The recorded value for message 1: a clean short value if the record has one (``clean_value``), else its first clause with links taken out, cut at a word and never mid-word
+    or mid-link ("public listing returned an error", not "public listing https://play.google.com/store/apps/details?id")."""
+    clean = clean_value(value)
+    if clean:
+        return clean
+    text = " ".join(URL.sub("a link", str(value or "")).split())
+    first = re.split(r"[.;](?:\s|$)| \(", text, maxsplit=1)[0].strip()
+    if len(first) > 60:
+        first = first[:60].rsplit(" ", 1)[0]
+    return first or NOT_RECORDED
+
+
 CLEAN_VALUE_CHARS = 48
-LEADING_FIGURE = re.compile(r"^\s*(\d+(?:[.,]\d+)?\s*(?:%|percent\b|of\s+\d+(?:[.,]\d+)?\b)?)")
+LEADING_FIGURE = re.compile(r"^\s*(\d+(?:[.,]\d+)?\s*(?:%|percent\b|of\s+\d+(?:[.,]\d+)?\b))")      # a figure with its unit; a bare number followed by words is part of a sentence
 YES_NO = re.compile(r"^\s*(yes|no)\b", re.IGNORECASE)
 
 

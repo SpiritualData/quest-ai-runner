@@ -833,7 +833,7 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
     resolved = cue.resolve(tools, "q1", CUE, now)
     receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action [link]"}))
-    assert len(asked) == 1 and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few, neutral and ready to send as written" in asked[0] and "no em dashes" in asked[0]
+    assert len(asked) == 1 and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few, neutral, each a full sentence ready to send as written" in asked[0] and "no em dashes" in asked[0]
     assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action [link]")
     assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
     kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action [link]",
@@ -995,3 +995,83 @@ def test_the_alternatives_are_cut_from_the_reply_by_where_each_begins_so_the_mod
     assert alts[0].text.startswith("Spiritual growth") and "Most people" not in alts[0].text and alts[1].text.startswith("Most people") and alts[1].text.endswith("small daily steps.")
     assert alternatives_flow.parse('{"alternatives": [{"title": "A", "starts_with": "nowhere in the reply"}, {"title": "B", "starts_with": "also nowhere"}]}', set(), [], reply) == []
     assert alternatives_flow.parse('{"alternatives": [{"title": "A", "starts_wi', set(), [], reply) == []
+
+
+# ---- run 4 of the milestone baseline
+
+def test_goals_that_only_share_the_quests_own_subject_with_the_request_are_not_the_goals_it_concerns():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    goals = [{"id": f"g{n}", "title": f"Reach 1000 subscribers: item {n} for the project", "text": "", "completed": False} for n in range(12)]
+    goals += [{"id": "fa", "title": "Launch push post A", "text": "", "completed": False}, {"id": "fb", "title": "Launch push post B", "text": "", "completed": False}]
+    held = alternatives_flow.goals_for_cue(goals, "write a couple of posts for the 1000 subscribers push")
+    assert [g["id"] for g in held] == ["fa", "fb"]
+    few = [{"id": "x", "title": "Reach 1000 subscribers", "text": "", "completed": False}]
+    assert [g["id"] for g in alternatives_flow.goals_for_cue(few, "plan the 1000 subscribers push")] == ["x"]       # with few goals nothing is common
+
+
+def test_an_alternative_is_found_in_the_reply_through_curly_quotes_markdown_and_spacing():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    reply = "**Post 1**\n\nSpiritual growth doesn’t have to mean taking things on faith.  What if you could\nexplore it?\n\n**Post 2**\n\nAI can’t do your inner work for you."
+    cut = alternatives_flow.segment(reply, ["Spiritual growth doesn't have to mean", "AI can't do your inner work"])
+    assert cut[0].startswith("Spiritual growth") and "AI can" not in cut[0] and cut[1].startswith("AI can")
+    short = alternatives_flow.segment(reply, ["Spiritual growth doesn't have to mean something else entirely"])
+    assert short[0].startswith("Spiritual growth")          # the first words still find it when the model's tail differs
+    assert alternatives_flow.segment(reply, ["nothing like this"]) == [""]
+
+
+def test_message_one_shows_a_clean_current_value_never_a_fragment_or_a_link():
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    assert act_status.status_value("public listing https://play.google.com/store/apps/details?id=com.example.app returned HTTP 404. More text.") == "public listing a link returned HTTP 404"
+    assert act_status.status_value("50.0 percent (5 of 10) of OUTSIDE new sign-ups in the last 30 days") == "50.0 percent"
+    assert act_status.status_value("0 integrations announced, 0 recorded as passed testing (Quest checked it)") == "0 integrations announced, 0 recorded as passed testing"
+    assert act_status.status_value("") == act_status.NOT_RECORDED
+
+
+def test_message_one_says_the_step_already_exists_when_this_weeks_goal_is_on_the_quest():
+    keyed = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "", "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
+    tools = ToolRegistry([read_spec(), list_goals([keyed]), write_goal([])])
+    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
+    assert "which is already on the quest" in cue.resolve(tools, "q1", CUE, now).doing()
+    assert cue.resolve(registry(), "q1", CUE, now).doing().startswith("Recording this week's next step")
+
+
+def test_when_no_named_owner_can_be_set_the_goal_is_left_unassigned_and_the_reply_says_who_should_own_it():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    existing = {"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "period": "2026_W45", "assigned_to_user_id": "team-account"}
+    client = GoalClient([dict(existing)])
+    client.assign_goal = lambda goal_id, user_id: client.assigns.append((goal_id, user_id)) or type("W", (), {"status": None})()
+    done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}, None, None, False, True)
+    assert client.assigns == [("k", None)] and "assignee cleared" in done["changed"]
+    untouched = GoalClient([dict(existing)])
+    untouched.assign_goal = lambda goal_id, user_id: untouched.assigns.append((goal_id, user_id)) or type("W", (), {"status": None})()
+    goal_links.ensure_goal(untouched, "q1", KEYED, "2026_W45", {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}, None, None, False, False)
+    assert untouched.assigns == []           # without the flag a goal keeps whoever it has
+    calls = []
+    tools = ToolRegistry([read_spec(), list_goals([]), write_goal(calls, refuse=("Cy", "Di"))])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    receipt, _ = resolved.carry_out(tools)
+    assert calls[-1].get("clear_assignee") is True and "assignee" not in calls[-1]
+    assert "left unassigned. Say who should own it (Cy, Di, as the record names them) and ask nothing" in receipt
+
+
+def test_the_closing_line_reads_the_milestones_metric_record_again_after_the_write():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric
+    now_tables = {**TABLES, "metrics": {**TABLES["metrics"], "esr_mc": {**TABLES["metrics"]["esr_mc"], "record": "Yes. Listing live since this morning."}}}
+    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda a, c: ToolResult(ok=True, data={"records": now_tables, "time_zone": "UTC"}, text="read"))
+    tools = ToolRegistry([read_spec(), list_goals([]), write_goal([])])
+    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    before = act_status.MetricReading("esr_c", resolved.name, resolved.done_when, resolved.value)
+    rs = SimpleNamespace(status_first={"before": before, "voice": False}, gathered=[], turn_metrics=None, quest_id="q1", cue_resolved=resolved)
+    res = SimpleNamespace(kind="answer", text="Recorded.", deep_results=[])
+    close_with_metric(SimpleNamespace(tools=ToolRegistry([read])), rs, res)
+    assert res.text.endswith("Metric (P3 Mobile app live on the Apple Store): was No, now Yes.")
+
+
+def test_the_draft_prompt_names_sendable_questions_and_a_short_pitch_and_limits_a_checklist_to_when_nothing_else_fits():
+    asked = []
+    cue.resolve(registry([]), "q1", CUE).carry_out(registry([]), lambda prompt: asked.append(prompt) or "{}")
+    text = asked[0]
+    assert "few, neutral, each a full sentence ready to send as written" in text and "a short message stating what they get and the ask" in text
+    assert "a checklist of at most 5 steps only when none of those fits" in text and "under 120 words" in text

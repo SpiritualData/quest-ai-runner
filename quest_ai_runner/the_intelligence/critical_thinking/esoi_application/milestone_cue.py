@@ -330,7 +330,10 @@ class Resolved:
 
     def doing(self) -> str:
         """What happens now, for the first message: stated from the records, before the write."""
-        return f"Recording this week's next step for {self.name}, linked to the milestone, with its owner."
+        week = next_step_title(self.name, self.week)
+        exists = any(str(g.get("title") or "").strip() == week for g in self.candidates)
+        return (f"Updating this week's next step for {self.name}, which is already on the quest, and keeping its owner and draft." if exists
+                else f"Recording this week's next step for {self.name}, linked to the milestone, with its owner.")
 
     def settle_plan(self, plan: Any, receipt: str) -> None:
         """Make the plan agree with what code already did. A read plan is left alone. A deep run stays only when the work needs files or code beyond the tool write, and then its brief
@@ -390,10 +393,12 @@ class Resolved:
         if keyed:
             asks.append('"goal_id": the id, exactly as listed, of the open goal below that is already the next step of this milestone (the same work, whatever its title or week), or ""')
         if not kept_draft:
-            asks.append('"draft": the deliverable itself, never a plan to write it, finished enough to use as it is, under 150 words, in the form the milestone text calls for: copy that is to be compared comes as distinct alternatives '
-                        'with the metric they are compared by; questions to put to people are few, neutral and ready to send as written; a new source or channel is one named concrete '
-                        'source with a one-line hypothesis, a first test and the milestone metric; otherwise a checklist of at most 7 steps. Use only the facts above; a [bracket] only for a fact that is truly unknown (a link); '
-                        'no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no em dashes')
+            asks.append('"draft": the deliverable itself, never a plan to write it, short enough to send or use as it is, under 120 words, in the form the milestone text calls for: copy that is '
+                        'to be compared comes as distinct alternatives with the metric they are compared by; questions to put to people are few, neutral, each a full sentence ready to send '
+                        'as written; something addressed to an outside party is a short message stating what they get and the ask; a new source or channel is one named concrete '
+                        'source with a one-line hypothesis, a first test and the milestone metric; a checklist of at most 5 steps only when none of those fits. Use only the facts above; '
+                        'a [bracket] only for a fact that is truly unknown (a link); no prices, dates, counts, rates or claims that are not given above, and never a count of its own '
+                        'characters, words or items; no em dashes')
         if not asks:
             return {"owners": [], "goal_id": "", "draft": kept_draft}
         answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
@@ -426,7 +431,7 @@ class Resolved:
             self.draft = picked["draft"]
         refused: List[str] = []
         for owner in [*owners, ""]:
-            args = dict(base, assignee=owner) if owner else dict(base)
+            args = dict(base, assignee=owner) if owner else dict(base, clear_assignee=True) if refused else dict(base)
             try:
                 result = registry.invoke("create_or_update_quest_goal", args, ctx)
             except Exception as error:      # noqa: BLE001  surfaced as a gap, with the cause
@@ -434,7 +439,9 @@ class Resolved:
             if result.ok:
                 self.receipt = result.text
                 self.after_state = (result.data or {}).get("goal")
-                note = f" The owner could not be set ({'; '.join(refused)})." if refused and not owner else ""
+                named = ", ".join(owners)
+                note = (f" The owner could not be set ({'; '.join(refused)}), so the goal is left unassigned. Say who should own it ({named}, as the record names them) and ask nothing."
+                        if refused and not owner else "")
                 lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
                 if (result.data or {}).get("problems"):
                     note += " The quest does not show everything that was asked for (" + "; ".join(result.data["problems"]) + "): say exactly that, and do not say it is linked or owned."

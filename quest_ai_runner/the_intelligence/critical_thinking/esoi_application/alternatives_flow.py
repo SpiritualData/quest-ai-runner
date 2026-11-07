@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
@@ -32,17 +33,19 @@ class Alternative:
 MIN_SHARED_WORDS = 2
 
 
+COMMON_SHARE = 0.2
+
+
 def goals_for_cue(goals: Sequence[Mapping[str, Any]], cue: str) -> List[Mapping[str, Any]]:
-    """The open goals the quest already holds that overlap the request (at least ``MIN_SHARED_WORDS`` of its meaningful words occur in the goal's title and text): the only goals an
-    alternative may be adopted into. Model-free, by the same word weighting the milestone cue uses."""
+    """The open goals the quest already holds that overlap the request: at least ``MIN_SHARED_WORDS`` of its meaningful words occur in the goal's title and text, not counting a word
+    that most goals carry (the quest's own subject says nothing about which goal this is). Model-free, by the same word weighting the milestone cue uses."""
     wanted = set(milestone_cue.words(cue))
-    out = []
-    for g in goals:
-        if g.get("completed") or g.get("abandoned"):
-            continue
-        if len(wanted & set(milestone_cue.words(f"{g.get('title') or ''} {g.get('text') or ''}"))) >= MIN_SHARED_WORDS:
-            out.append(g)
-    return out
+    open_goals = [g for g in goals if not g.get("completed") and not g.get("abandoned")]
+    bag = {id(g): set(milestone_cue.words(f"{g.get('title') or ''} {g.get('text') or ''}")) for g in open_goals}
+    if len(open_goals) >= 10:
+        common = {w for w in wanted if sum(1 for g in open_goals if w in bag[id(g)]) > COMMON_SHARE * len(open_goals)}
+        wanted -= common
+    return [g for g in open_goals if len(wanted & bag[id(g)]) >= MIN_SHARED_WORDS]
 
 
 def solutions_listing(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> List[Dict[str, str]]:
@@ -66,15 +69,32 @@ def build_prompt(cue: str, reply: str, goals: Sequence[Mapping[str, Any]], solut
               'Write no em dashes. If the reply does not hold alternatives to compare, return {"alternatives":[]}. Reply with the JSON only.')
 
 
+def tokens(text: str) -> List[Any]:
+    """The words of ``text`` in order, each with where it begins: quotes, markdown marks and spacing do not matter when two texts are compared by their words."""
+    return [(m.group(0).casefold().replace("\u2019", "'"), m.start()) for m in re.finditer(r"[\w'\u2019]+", text)]
+
+
 def segment(reply: str, starts: Sequence[str]) -> List[str]:
     """Each alternative's text, cut out of the reply: from where its first words occur to where the next one's begin (the last to the end of the reply, at most 1500 characters).
-    "" for one whose first words are not found. The model names only where each begins, so its answer stays short and the text is the reply's own."""
-    low = reply.casefold()
+    "" for one whose first words are not found. Words are compared, not characters, so a curly quote or a markdown mark in the reply does not hide a match; a start is looked for with
+    all its words, then with its first four, then its first two. The model names only where each begins, so its answer stays short and the text is the reply's own."""
+    reply_tokens = tokens(reply)
+    words = [w for w, _ in reply_tokens]
     positions, cursor = [], 0
     for start in starts:
-        at = low.find(" ".join(str(start).split()).casefold(), cursor) if str(start).strip() else -1
+        wanted = [w for w, _ in tokens(str(start))]
+        at = -1
+        for size in (len(wanted), 4, 2):
+            if size < 1 or size > len(wanted):
+                continue
+            for i in range(cursor, len(words) - size + 1):
+                if words[i:i + size] == wanted[:size]:
+                    at = reply_tokens[i][1]
+                    break
+            if at >= 0:
+                break
         positions.append(at)
-        cursor = at + 1 if at >= 0 else cursor
+        cursor = next((i for i, (_, p) in enumerate(reply_tokens) if p > at), cursor) if at >= 0 else cursor
     out = []
     for i, at in enumerate(positions):
         if at < 0:
@@ -143,7 +163,7 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     answer = decide(build_prompt(cue, reply, goals, solutions))
     alts = parse(answer, {str(g.get("id")) for g in goals}, solutions, reply)
     if not alts:
-        log.info("alternatives flow: no alternatives to keep in the reply (model answer: %r)", str(answer)[:300])
+        log.warning("alternatives flow: no alternatives to keep in the reply (model answer: %r)", str(answer)[:400])
         return ""
     by_title = {str(g.get("title") or "").strip().casefold(): str(g.get("id")) for g in goals}
     taken = {a.goal_id for a in alts if a.goal_id}

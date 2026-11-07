@@ -338,6 +338,23 @@ def begin_turn_metrics(orch: Any, rs: Any) -> Optional[Mapping[str, Any]]:
     return rs.turn_metrics.begin()
 
 
+def reread_cue_metric(orch: Any, rs: Any, before: "act_status.MetricReading") -> Optional["act_status.MetricReading"]:
+    """For a resolved milestone: its metric record read again now, by code, through the lane's records tool (a real second reading, taken after the write), as the same short value
+    the first reading used. None when the lane has no such tool, the read fails, or the milestone has no metric record."""
+    cue = getattr(rs, "cue_resolved", None)
+    if cue is None or getattr(orch, "tools", None) is None or not cue.metric_ids:
+        return None
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+    try:
+        tables, _ = milestone_cue.read_through(orch.tools, rs.quest_id)
+    except milestone_cue.LaneGap:
+        return None
+    metric = (tables.get("metrics") or {}).get(cue.metric_ids[0])
+    if not metric:
+        return None
+    return act_status.MetricReading(before.record_id, before.milestone, before.done_when, milestone_cue.first_sentence(str(metric.get("record") or "")) or act_status.NOT_RECORDED)
+
+
 def reread_metric(orch: Any, rs: Any, before: "act_status.MetricReading") -> Optional["act_status.MetricReading"]:
     """The same record read again by CODE: the read-only tool call that returned it first (else the goal listing), run now."""
     tools = getattr(orch, "tools", None)
@@ -458,7 +475,7 @@ def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
             if row is not None:
                 after = act_status.MetricReading(before.record_id, before.milestone, before.done_when, act_status.format_figure(row.get("after")))
         if after is None and before is not None:
-            after = reread_metric(orch, rs, before)
+            after = reread_cue_metric(orch, rs, before) or reread_metric(orch, rs, before)
         if after is None and before is not None and not metric_written(orch, rs):
             after = before       # nothing this turn wrote the metric record, so its value is what was read: unchanged
         tail = act_status.closing_lines(before, after, reread=before is not None, already=already_in_place(rs.gathered),

@@ -39,7 +39,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
             adopt, link_match = str(args.get("adopt_goal_id") or "").strip() or None, bool(args.get("match_by_link"))
             links_refused = ""
             try:
-                outcome = goal_links.ensure_goal(client, quest_id, title, period, fields, assignee_id, adopt, link_match)
+                outcome = goal_links.ensure_goal(client, quest_id, title, period, fields, assignee_id, adopt, link_match, bool(args.get("clear_assignee")))
             except Exception as refusal:  # noqa: BLE001
                 if not (fields.get("spec_solution_id") or fields.get("spec_metric_id")) or not goal_links.is_link_refusal(refusal):
                     raise
@@ -48,7 +48,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 links_refused = str(refusal)[:300]
                 bare = {k: v for k, v in fields.items() if k not in ("spec_solution_id", "spec_metric_id", "metric_target_value")}
                 bare["description"] = (str(bare.get("description") or "").rstrip() + f"\nMilestone record: {fields.get('spec_solution_id') or fields.get('spec_metric_id')}").strip()
-                outcome = goal_links.ensure_goal(client, quest_id, title, period, bare, assignee_id, adopt, False)
+                outcome = goal_links.ensure_goal(client, quest_id, title, period, bare, assignee_id, adopt, False, bool(args.get("clear_assignee")))
                 fields = bare
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was written")
@@ -119,6 +119,9 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 "target_value": {"type": "number", "description": "Target number, when it has one."},
                 "target_unit": {"type": "string", "description": "Unit of the target."},
                 **goal_links.LINK_PARAMS,
+                "clear_assignee": {"type": "boolean",
+                                   "description": ("True when no assignee is given because none could be set: an existing goal this tool updates is then left unassigned instead of keeping an "
+                                                   "assignee the record does not name.")},
                 "match_by_link": {"type": "boolean",
                                   "description": ("True for a goal that stands for its strategy's next step: when no goal has this exact title, the open KEYED next-step goal already linked to "
                                                   "spec_solution_id is updated in place before any goal is created. A person's own goal linked to it is never touched.")},
