@@ -35,3 +35,8 @@ def test_the_planner_rubric_asks_what_only_the_person_knows_instead_of_handing_o
 
 def test_the_closing_sentence_is_left_out_when_nothing_moved():
     assert "nothing moved" in LONG_TERM_GUIDANCE and "never ends with the sentence" in LONG_TERM_GUIDANCE
+
+
+def test_a_confirmation_of_something_set_up_carries_no_closing_sentence():
+    assert "asked you to set something up" in LONG_TERM_GUIDANCE and "one or two short sentences with nothing added" in LONG_TERM_GUIDANCE
+    assert "—" not in LONG_TERM_GUIDANCE
