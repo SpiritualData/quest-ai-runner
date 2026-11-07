@@ -126,6 +126,13 @@ def build_arm(meter, bounded):
     components = Path(__file__).resolve().parents[2]
     harness_paths = [os.environ.get("QAR_EVAL_OUTPUT_DIR"), str(components), str(components.parents[1] / "esoi")]
     dry.set_allowances([], harness_paths)
+
+    def current_goal_title(goal_id):
+        """The goal's title as the quest holds it now (a fresh read of the pinned quest's goals; the guard in ``dry_run_writes`` calls this before any change to a goal)."""
+        quest, team = PC.target("QAR_PROD_QUEST_ID"), PC.target("QAR_PROD_TEAM_ID")
+        body = safety_client._request("GET", f"/api/teams/{team}/quests/{quest}/goals") or {}
+        return next((g.get("name") for group in body.get("period_groups") or [] for g in group.get("goals") or [] if str(g.get("id")) == str(goal_id)), None)
+    dry.set_goal_title_lookup(current_goal_title)
     import judge as J
     import prod_probes as P
     rules = P.load_rules(os.environ.get("QAR_PROD_CASE_RULES_FILE"))
