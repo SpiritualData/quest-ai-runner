@@ -16,6 +16,6 @@ flowchart LR
     s5["proactivity"]
     s0 -->|"The cards and files a request needs, ready before it is asked for"| s1
     s3 -->|"Run or skip, with the reason"| s2
-    s4 -->|"The quest the message serves and the intent frame for the work"| s0
+    s4 -->|"The intent frame for the work"| s0
     s5 -->|"The triggers that are due now, each with why it is due"| s3
 ```

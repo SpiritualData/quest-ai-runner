@@ -24,7 +24,7 @@ flowchart LR
     s5["proactivity"]
     s0 -->|"The cards and files a request needs, ready before it is asked for"| s1
     s3 -->|"Run or skip, with the reason"| s2
-    s4 -->|"The quest the message serves and the intent frame for the work"| s0
+    s4 -->|"The intent frame for the work"| s0
     s5 -->|"The triggers that are due now, each with why it is due"| s3
 ```
 
@@ -150,8 +150,6 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Rebuilt prompt per step with the context re-sent from cache | `the-mind:rebuilt_full_context` | [quest_ai_runner/the_intelligence/mind/planner/orchestrator_planning.py](mind/planner/orchestrator_planning.py) |  |
 | Start-of-run card filter and a recency window (today) | `the-subconscious:recency_window` | [quest_ai_runner/the_intelligence/mind/context_intake/planner_context.py](mind/context_intake/planner_context.py) | [subconscious](subconscious/README.md) |
 | No overseer (configuration off) | `nervous-system:no_overseer` | [quest_ai_runner/the_intelligence/mind/orchestrator_types.py](mind/orchestrator_types.py) |  |
-| Shared quest ranker | `quest-intents:shared-quest-ranker` |  |  |
-| Rank quests by words and meaning, with evidence | `quest-intents:hybrid-candidate-ranker` |  |  |
 | Standing instruction alone (floor) | `critical-thinking:instruction_only` | [quest_ai_runner/the_self/integrity/prompts/standing_instructions.py](../the_self/integrity/prompts/standing_instructions.py) |  |
 | Digest-driven overseer | `nervous-system:overseer` | [quest_ai_runner/the_intelligence/nervous_system/area.py](nervous_system/area.py) |  |
 | Eligibility gate mixin | `quest-autopilot:autopilot_gates` | [quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py](proactivity/autopilot_gates.py) |  |

@@ -689,6 +689,11 @@ class JudgesMixin:
         fallback = home_quest_id if home_quest_id in known else None
         if not known:
             return None
+        if self.quest_placement is not None:
+            # The host places the message (its standard function over the person's own quests); an answer outside the listed quests, or no
+            # answer, means no quest fits, so the caller asks one short question.
+            placed = self.quest_placement.place(user_message, previous_message, home_quest_id)
+            return next((qid for qid in placed.get("picked") or [] if qid in known), None)
         try:
             model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
         except Exception as e:  # noqa: BLE001

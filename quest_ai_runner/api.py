@@ -75,6 +75,8 @@ from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_contex
 # Objectives (hold-the-intents): quests and goals as live objectives
 from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_field_instructions import ITEM_INSTRUCTIONS, field_instructions_text
 from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_judge import JUDGE_WINDOW, clip_text
+# Place on a quest: the host hands the function that places a message on one of the person's quests (its standard function) to the orchestrator as ``quest_placement``
+from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_placement import HostFunction
 
 # Guidance: use-case instructions a host supplies
 from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceCard
@@ -149,6 +151,7 @@ __all__ = [
     "GuidanceCard",
     "GuidanceCardManager",
     "GuidanceProviderBase",
+    "HostFunction",
     "HybridContextAssembler",
     "IN_FORCE",
     "IN_PROGRESS",

@@ -59,6 +59,7 @@ from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import (
     VERIFY_GOAL_TOOL, VERIFY_GOAL_PROMPT, VERIFY_DONE_EVIDENCE_NOTE, PREFLIGHT_PLAN_PROMPT, PREFLIGHT_PLAN_TOOL, MODE_RELEASE_TOOL,
     MODE_RELEASE_PROMPT, FUTURE_CONTEXT_DELIMITER, DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, QUEST_DATA_WRITE_SURFACE_INSTRUCTION, REPLY_VOICE_SYSTEM)
 from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import RecentContextStore
+from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import QuestPlacing
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, DEFERRED_DEEP_INLINE_SEMANTICS, DEFERRED_DEEP_QUEUED_SEMANTICS,
     PLANNER_DECISION_RUBRIC, PLANNER_PROFILES, PLANNER_PROMPT, PLANNER_PROMPT_COMPACT)
@@ -115,6 +116,7 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         input_inbox: Optional["InputInbox"] = None,
         conversation_store: Optional[ConversationStore] = None,
         recent_context: Optional[RecentContextStore] = None,
+        quest_placement: Optional[QuestPlacing] = None,
         anticipator: Optional[Anticipator] = None,
         tools: Optional[ToolRegistry] = None,
         web: Optional[Any] = None,
@@ -195,6 +197,9 @@ class Orchestrator(ReadsMixin, RecipesMixin, PlanningMixin, AnsweringMixin, Judg
         # as a hint to the consolidating LLM pass when a card is re-found by fresh assembly. Never
         # raises. None = exactly today's behavior (no recent-turn fallback).
         self.recent_context = recent_context
+        # Which quest an unpinned message belongs to: the host's function (the Quest backend's standard placement) when it supplies one,
+        # else the library judge over the quests the caller lists. A conversation the person pinned to a quest is never placed.
+        self.quest_placement = quest_placement
         # Optional ANTICIPATION ENGINE (see core/anticipation.py). Only consulted when BOTH an
         # Anticipator is wired here AND ``cfg.anticipation_enabled`` is True; otherwise the run is
         # byte-for-byte identical (zero calls, zero threads, zero events). Never raises: every

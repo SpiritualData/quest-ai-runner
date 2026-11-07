@@ -123,6 +123,18 @@ weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
 cost_per_case_usd = 0.044
 seconds_per_case = 10
 
+# The quest placement (metric-place-on-a-quest, evaluation/components/place_on_a_quest): which quest a message belongs to, or none. One number at
+# every stage: accuracy 70% (the share of cases placed on exactly the labelled quests, the empty list included), cost 15%, time 15%. A
+# placement is worth at most half a cent and ten seconds, the wait of a chat turn or a form that picks a quest before it does anything else;
+# an arm that spends the whole of either gets zero for it, so a model call has to buy its price in accuracy. Fixed here before any arm was scored.
+# The one conditional private source, real labelled placements (evaluation/components/place_on_a_quest/private_cases.py), carries `source_shares.real`
+# of the accuracy when a machine holds them, a share fixed here before any of them was scored; absent, the number is the public cases' alone.
+[balance.place_on_a_quest]
+weights = { accuracy = 0.70, cost = 0.15, time = 0.15 }
+cost_per_case_usd = 0.005
+seconds_per_case = 10
+source_shares = { real = 0.20 }
+
 # The chat-quality pass rate (metric-answer-a-turn, evaluation/components/chat_quality). The recorded number stays the pass rate: cost and time carry
 # no weight here (a turn is judged on its answer, and its price is read beside it). The one addition is a case source: the private poorly answered
 # inputs (QAR_PRIVATE_POOR_ANSWERS_DATASET, evaluation/components/chat_quality/poor_answers.py), present only on a machine that holds them. When they

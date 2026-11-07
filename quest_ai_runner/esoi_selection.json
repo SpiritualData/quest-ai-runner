@@ -99,6 +99,7 @@
    "model-tier-chooser": "quest_ai_runner",
    "nervous-system": "quest_ai_runner",
    "persist-cards": "quest_ai_runner",
+   "place-on-a-quest": "quest_ai_runner",
    "planner": "quest_ai_runner",
    "prioritization": "quest_ai_runner",
    "proactivity": "quest_ai_runner",
@@ -468,6 +469,17 @@
    "quest_api": "quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository"
   }
  },
+ "place-on-a-quest": {
+  "default": "hybrid-candidate-ranker",
+  "evidence": {
+   "detail": "hybrid_candidate_ranker_model leads hybrid_candidate_ranker (hybrid_candidate_ranker 0.692 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.405, 50 of 50 cases disagree); hybrid_candidate_ranker_model is better than library_quest_judge (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=9.07e-12, 50 of 50 cases disagree); hybrid_candidate_ranker_model leads shared_quest_ranker (shared_quest_ranker 0.593 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.48, 50 of 50 cases disagree); hybrid_candidate_ranker_model leads shared_quest_ranker_model (shared_quest_ranker_model 0.899 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.357, 50 of 50 cases disagree)",
+   "p": 0.0,
+   "verdict": "WIN"
+  },
+  "modules": {
+   "library-quest-judge": "quest_ai_runner.the_intelligence.higher_mind.objectives.quest_placement"
+  }
+ },
  "planner": {
   "default": "planner_route",
   "evidence": {
@@ -747,7 +759,8 @@
   "modules": {
    "lexical-only": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
    "lexical-vector-gated": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
-   "lexical-vector-llm": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection"
+   "lexical-vector-llm": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection",
+   "quest-records-idf": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.spec_selection"
   }
  },
  "system-integrity": {
