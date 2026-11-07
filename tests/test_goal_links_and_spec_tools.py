@@ -126,3 +126,13 @@ def test_dry_run_tells_a_quest_less_call_to_name_the_quest_not_that_it_was_block
     before = len(dry.RECORDER.writes)
     result = dry.tool_call(spec, spec.name, {"title": "t"})
     assert not result.ok and "no quest is known" in result.text and len(dry.RECORDER.writes) == before
+
+
+def test_a_rule_value_may_be_a_list_of_owners_matched_by_first_name():
+    dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "assignee~": ["Kaja", "Honelign"]}}])
+    try:
+        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "Kaja Obinna"})
+        assert dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "honelign"})
+        assert not dry.tool_allowed("create_or_update_quest_goal", {"quest_id": "q1", "assignee": "Mary"})
+    finally:
+        dry.set_allowances([])

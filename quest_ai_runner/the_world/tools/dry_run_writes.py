@@ -149,11 +149,20 @@ def argument_at(args: Mapping[str, Any], dotted: str) -> Any:
     return value
 
 
+def argument_matches(args: Mapping[str, Any], key: str, want: Any) -> bool:
+    """One argument test of a rule: equal to the value, or (a key ending in ``~``) starting with it. A list of values means any of them."""
+    prefix = key.endswith("~")
+    have = str(argument_at(args, key[:-1] if prefix else key)).strip().lower()
+    for value in (want if isinstance(want, list) else [want]):
+        value = str(value).strip().lower()
+        if (have.startswith(value) if prefix else have == value):
+            return True
+    return False
+
+
 def tool_allowed(name: str, args: Mapping[str, Any]) -> bool:
     for rule in STATE["allowances"]:
-        if rule.get("tool") == name and all(
-                str(argument_at(args, k[:-1])).startswith(str(v)) if k.endswith("~") else str(argument_at(args, k)) == str(v)
-                for k, v in (rule.get("args") or {}).items()):
+        if rule.get("tool") == name and all(argument_matches(args, k, v) for k, v in (rule.get("args") or {}).items()):
             return True
     return False
 
