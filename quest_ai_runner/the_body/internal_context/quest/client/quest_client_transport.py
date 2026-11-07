@@ -298,6 +298,11 @@ class TransportMixin:
         ceiling = min(self.retry_max_delay, BACKOFF_BASE_SECONDS * (2 ** attempt))
         return ceiling / 2 + self.jitter(0, ceiling / 2)
 
+    def send_request(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
+                     body: Optional[Dict[str, Any]] = None, timeout_override: Optional[float] = None) -> Any:
+        """One authenticated call to Quest with the client's retries; the public entry the evaluation harness and tools use."""
+        return self._request(method, path, params=params, body=body, timeout_override=timeout_override)
+
     def _request(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
                  body: Optional[Dict[str, Any]] = None, timeout_override: Optional[float] = None) -> Any:
         self._require()
