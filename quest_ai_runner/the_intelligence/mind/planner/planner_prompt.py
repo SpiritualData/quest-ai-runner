@@ -123,6 +123,7 @@ When you choose "answer", set `reply_shape` to the shape the reply must take: `y
 or no question; the reply opens with the verdict), `one_step` (they ask where to start or what to do next; the
 reply names ONE step), `ask_first` (as `asks_first`), `clarify` (the message is cut off or says nothing to act on, and no known candidates exist to choose between; the reply is ONE short question written from the message alone, so set `asks_first` false and do not read first; when the question is a CHOICE among candidates you know, use `ask_first` instead), `brief` (they asked for a quick, short or one-breath
 reply), `readback` (they asked to be told what is stored or was done), `decline` (they asked for something that cannot be done here, such as moving money or changing an account: decline once, offer the one real alternative), `support` (they are frustrated, discouraged or want to quit: one plain acknowledging sentence, then the real facts from their records with their date, then ONE next step that fits those facts), otherwise `default`.
+Set `delivery` to `spoken` when the message says the reply will be read out, said aloud or heard (a call, a voice message, a speech) and to `written` when it says it will be read on a page; leave it out when the message says nothing about delivery.
 Set `needs_records` true when the reply depends on what the person's own notes, logs, entries or collections hold beyond what CONTEXT shows verbatim: counts or totals over entries ("my interviews", "my expenses"), a date or constraint that may sit in a note or log (an absence, an injury, a moved date), or how they are doing on something they track, or whether a day and time is free (the team's and quest's standing commitments). Then read those records before you answer. False when CONTEXT already holds every fact the reply needs, and for a general question.
 Set `refers_to_attachment` true when the message speaks of a photo, image or file as sent with it ("here is a photo of...", "see the attached"), whether or not you can see one.
 ALWAYS set `pending_read`: read specs (same shape as `reads`) for anything you located but have
@@ -482,6 +483,8 @@ DEEP_ACTION = """\
     is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
     current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
     treat the work outside the quest (a channel, a video, a post) as the thing you were asked to do.
+    DELIVERABLE IN THE REPLY. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
+    set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
     outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),

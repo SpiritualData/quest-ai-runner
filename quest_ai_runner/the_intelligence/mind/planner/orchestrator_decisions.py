@@ -198,7 +198,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
     # failure never changes ladder routing.
     deep_target_raw = raw.get("deep_target")
     if isinstance(deep_target_raw, str) and deep_target_raw.strip().lower() in (
-            "quest_data", "code_or_files", "other"):
+            "quest_data", "code_or_files", "draft_in_chat", "other"):
         deep_target = deep_target_raw.strip().lower()
     else:
         deep_target = None
@@ -282,6 +282,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         needs_records=raw.get("needs_records") is True,
         refers_to_attachment=raw.get("refers_to_attachment") is True,
         reply_shape=(raw.get("reply_shape") if raw.get("reply_shape") in REPLY_SHAPES else None),
+        delivery=(raw.get("delivery") if raw.get("delivery") in ("spoken", "written") else None),
         clarification=clarification,
         mode_signal=mode_signal,
         card_thread=card_thread_raw,

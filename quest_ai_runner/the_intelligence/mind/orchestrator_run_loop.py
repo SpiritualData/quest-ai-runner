@@ -417,6 +417,17 @@ class RunLoopMixin:
                         elif _psig.signal in ("escalate_deep", "escalate_human") and rs.brainstorm_active:
                             # Brainstorm mode: escalations may not ADD actions; treat as proceed.
                             pass
+                        elif _psig.signal == "escalate_deep" and (_route := tool_guards.escalation_route(
+                                rs.plan, rs.turn_user_intent, self.tools, bool(getattr(rs, "deep_to_tool_runs", 0)),
+                                tool_guards.mutating_tool_ran(gathered, self.tools))) != tool_guards.ROUTE_DEEP:
+                            # The overseer's escalation is accepted only for files, code, long research or many steps. A tool-sized order goes
+                            # back to the planner once; a reply-sized one is answered inline.
+                            log.info("Overseer escalation to deep not accepted: routed %s.", _route)
+                            if _route == tool_guards.ROUTE_TOOL and step + 1 < cfg.max_steps:
+                                rs.deep_to_tool_runs = getattr(rs, "deep_to_tool_runs", 0) + 1
+                                gathered.append(planner_note_observation(ACT_WITHOUT_TOOL_NOTE, "act_without_tool"))
+                                emit.status("Planning this as a direct change…")
+                                continue
                         elif _psig.signal == "escalate_deep":
                             rs.plan = rs.plan or PlanDecision(action="answer")
                             rs.plan.action = "deep"
@@ -604,6 +615,14 @@ class RunLoopMixin:
                 rs.brainstorm_suppressed_action = rs.brainstorm_suppressed_action or "tool"
                 rs.plan.action = "answer"
 
+            # --- DRAFT-IN-CHAT GATE: a deliverable that is text for the reply is never a deep run -------------------------------------
+            # The planner's structured ``deep_target`` says the deliverable is text written in the reply (a caption, a post, an outline). A deep
+            # run would try to write it somewhere and the person would be sent a status instead of the text; it is answered inline.
+            if rs.plan and rs.plan.action == "deep" and rs.plan.deep_target == "draft_in_chat" and message_is_user_turn and not rs.plan.deep_subtasks:
+                log.info("Draft-in-chat gate: the planner chose a deep run for text the reply carries; answering inline.")
+                rs.plan.action = "answer"
+                rs.plan.deferred_deep = None
+
             # --- TOOL-SIZED WORK GATE: a deep run is for files, code, long research or many steps ------------------------------------
             # A change to the person's own Quest records that a registered tool performs is a tool plan: read what exists, then the
             # keyed write. When the planner chose "deep" for such work (its own structured deep_target and the tool set say so,
@@ -619,11 +638,12 @@ class RunLoopMixin:
                 continue
 
             # The same hand-back for an order answered with a description: the planner's own user_intent says "act", it chose "answer", nothing
-            # changed and a tool could (``tool_guards.act_answered_without_a_write``). Without it the answer's overseer escalated this to a deep run.
-            if (rs.plan and message_is_user_turn and not getattr(rs, "deep_to_tool_runs", 0)
-                    and tool_guards.act_answered_without_a_write(rs.plan, rs.turn_user_intent, self.tools, getattr(rs, "tool_calls_ran", False))
+            # was changed and a tool could change something (``tool_guards.act_answered_without_a_write``). At most twice, and only while no tool
+            # that changes something has run (a read between the two is progress, not the work). Without it the answer's overseer escalated this to a deep run.
+            if (rs.plan and message_is_user_turn and getattr(rs, "deep_to_tool_runs", 0) < 2
+                    and tool_guards.act_answered_without_a_write(rs.plan, rs.turn_user_intent, self.tools, tool_guards.mutating_tool_ran(gathered, self.tools))
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
-                rs.deep_to_tool_runs = 1
+                rs.deep_to_tool_runs = getattr(rs, "deep_to_tool_runs", 0) + 1
                 log.info("Tool-sized work gate: the planner answered an order with no change made and a tool could make it; planning again as tool steps.")
                 gathered.append(planner_note_observation(ACT_WITHOUT_TOOL_NOTE, "act_without_tool"))
                 emit.status("Planning this as a direct change…")

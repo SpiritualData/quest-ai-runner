@@ -24,6 +24,7 @@ call. ``core`` imports no runner code; the Quest client arrives through the fact
 from __future__ import annotations
 
 import re
+import threading
 from datetime import date, timedelta
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -844,6 +845,9 @@ def resolve_member(who: Any, members: List[Mapping[str, Any]]) -> "tuple[Optiona
     return None, (f"{who!r} matches {len(hits)} people on this quest. Members: {roster}.")
 
 
+CREATE_LOCK = threading.Lock()
+
+
 def squash(text: Any) -> str:
     return re.sub(r"\W+", " ", str(text or "")).strip().lower()
 
@@ -919,6 +923,10 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
         edges = ([{"fromStepId": a["stepId"], "toStepId": b["stepId"]} for a, b in zip(steps, steps[1:])]
                  if args.get("chain") else [])
         lister = getattr(client, "list_quest_workflows", None)
+        with CREATE_LOCK:     # the read and the create are one step in this process: two calls cannot both find nothing and both create
+            return create_unless_there(client, lister, quest_id, title, steps, edges, args)
+
+    def create_unless_there(client, lister, quest_id, title, steps, edges, args):
         if lister is not None:
             existing = lister(quest_id)
             if existing is None:

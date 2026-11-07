@@ -102,3 +102,35 @@ def test_an_order_answered_twice_stands_and_a_question_or_decline_is_not_handed_
     provider = StubProvider([answered()])
     orch(provider, None).run("make progress on the funnel")
     assert not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts)
+
+
+def overseer_provider(plans, signal="escalate_deep"):
+    return StubProvider(plans)
+
+
+def test_escalation_route_from_structured_facts():
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+    route = tool_guards.escalation_route
+    plan = lambda target, **extra: normalize_decision({**answered(), "deep_target": target, **extra}, OrchestratorConfig())
+    assert route(plan("draft_in_chat"), "act", registry(), False, False) == "inline"
+    assert route(plan("code_or_files"), "act", registry(), False, False) == "deep"
+    assert route(plan("quest_data"), "act", registry(), False, False) == "tool"
+    assert route(plan("quest_data"), "act", registry(), True, False) == "inline"
+    assert route(plan("quest_data"), "act", registry(), False, True) == "inline"
+    assert route(plan(None), "act", registry(), False, False) == "tool"
+    assert route(plan(None), "ask", registry(), False, False) == "deep"
+    assert route(plan("quest_data"), "act", None, False, False) == "deep"
+    assert route(plan("other"), "act", registry(), False, False) == "deep"
+
+
+def test_a_deep_choice_for_text_the_reply_carries_is_answered_inline():
+    RAN.clear()
+    provider = StubProvider([deep("draft_in_chat"), DONE])
+    res = orch(provider, registry()).run("create an instagram post about quest")
+    assert res.kind != "deep" and RAN == []
+
+
+def test_mutating_tool_ran_reads_the_receipts():
+    reg = registry()
+    assert tool_guards.mutating_tool_ran([{"locator": "tool:create_quest_workflow"}], reg)
+    assert not tool_guards.mutating_tool_ran([{"locator": "tool:list_quest_workflows"}, {"locator": "x"}], reg)

@@ -11,6 +11,7 @@ from typing import Optional
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
 from hubofhubs.api import ProgressEvent, evidence_text
+from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_state_block
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
@@ -493,6 +494,12 @@ class RunAnswerMixin:
                 if rs.brainstorm_active and _bsig.signal in ("escalate_deep", "escalate_human"):
                     # Brainstorm mode: overseer escalations may not ADD actions; ship the draft.
                     pass
+                elif (_bsig.signal == "escalate_deep" and tool_guards.escalation_route(
+                        rs.plan, rs.turn_user_intent, self.tools, bool(getattr(rs, "deep_to_tool_runs", 0)),
+                        tool_guards.mutating_tool_ran(gathered, self.tools)) != tool_guards.ROUTE_DEEP):
+                    # Accepted only for files, code, long research or many steps (``tool_guards.escalation_route``): a reply-sized or
+                    # tool-sized order keeps its draft, which is the reply, rather than becoming a deep run the person is only told about.
+                    log.info("Overseer escalation to deep not accepted at the answer; the draft ships.")
                 elif _bsig.signal == "escalate_deep" and self._has_deep_execution_capability():
                     if emit is not None:
                         emit.status("Overseer: this needs real execution, running it now…")

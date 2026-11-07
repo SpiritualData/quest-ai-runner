@@ -191,9 +191,10 @@ DECIDE_TOOL: Dict[str, Any] = {
             },
             "deep_target": {
                 "type": ["string", "null"],
-                "enum": ["quest_data", "code_or_files", "other", None],
-                "description": "When action='deep' or deferred_deep is set: WHAT the change "
-                               "lands on. 'quest_data' = the person's own Quest records and "
+                "enum": ["quest_data", "code_or_files", "draft_in_chat", "other", None],
+                "description": "On every decision for a request to DO something (and always when action='deep' or deferred_deep is set): WHAT the change "
+                               "lands on. 'draft_in_chat' = the deliverable is text written in the reply (a caption, post, email, outline, plan): "
+                               "answered inline, never a deep run. 'quest_data' = the person's own Quest records and "
                                "fields (the quest's outcome or vision statement, measurable "
                                "outcomes, acceptance criteria, current state, preferences, "
                                "goals, habits, collection entries): these change through "
@@ -250,6 +251,8 @@ DECIDE_TOOL: Dict[str, Any] = {
             "refers_to_attachment": {"type": "boolean"},
             # The shape the reply must take (core/reply_standards.py); the rubric states each value.
             "reply_shape": {"type": "string", "enum": list(REPLY_SHAPES)},
+            # How the reply is delivered when the message says so (read aloud or written); the rubric states it.
+            "delivery": {"type": "string", "enum": ["spoken", "written"]},
             # The reads this decision still owes: what the planner itself says it has NOT yet
             # opened. Honored structurally by the loop (see ``PlanDecision.pending_read``). The
             # rubric at the top of both planner profiles states it, so the schema stays bare.

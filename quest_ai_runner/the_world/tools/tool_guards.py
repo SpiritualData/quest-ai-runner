@@ -375,3 +375,37 @@ def act_answered_without_a_write(plan: Any, user_intent: Optional[str], registry
             or getattr(plan, "reply_shape", None) in ("decline", "support")):
         return False
     return any(getattr(spec, "mutates", False) for spec in registry.all())
+
+
+def mutating_tool_ran(gathered: Iterable[Mapping[str, Any]], registry: Any) -> bool:
+    """True when a tool that changes something has run this turn (its receipt is in what was gathered, locator ``tool:<name>``)."""
+    if registry is None:
+        return False
+    for item in gathered:
+        locator = str(item.get("locator") or "") if isinstance(item, Mapping) else ""
+        if locator.startswith("tool:"):
+            spec = registry.get(locator[len("tool:"):])
+            if spec is not None and getattr(spec, "mutates", False):
+                return True
+    return False
+
+
+ROUTE_DEEP, ROUTE_TOOL, ROUTE_INLINE = "deep", "tool", "inline"
+
+
+def escalation_route(plan: Any, user_intent: Optional[str], registry: Any, handed_back: bool, wrote: bool) -> str:
+    """Where an escalation to a deep run goes, from structured facts only: the plan's ``deep_target`` (what the deliverable lands on), its staged
+    subtasks, the person's ``user_intent`` and the tool set. A deliverable that is text for the reply (``draft_in_chat``) is answered inline. Code
+    or files, or staged work of many runs, is deep. Quest-record work (``quest_data``) or an order with no stated target, while a tool could act and
+    none has yet, goes back to the planner once to plan a tool step; after that hand-back, or once a write ran, the answer stands. Anything else is deep."""
+    target = getattr(plan, "deep_target", None) if plan is not None else None
+    if target == "draft_in_chat":
+        return ROUTE_INLINE
+    if target == "code_or_files" or (plan is not None and getattr(plan, "deep_subtasks", None)):
+        return ROUTE_DEEP
+    can_act = registry is not None and any(getattr(spec, "mutates", False) for spec in registry.all())
+    if can_act and target in ("quest_data", None) and (target == "quest_data" or user_intent == "act"):
+        if wrote:
+            return ROUTE_INLINE
+        return ROUTE_INLINE if handed_back else ROUTE_TOOL
+    return ROUTE_DEEP
