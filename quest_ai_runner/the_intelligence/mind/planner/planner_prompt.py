@@ -90,7 +90,8 @@ DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below on
 ALWAYS set `user_intent`: what the CURRENT message asks of YOU. It describes the message, not your
 next step, so an order you will read up on first is still "act". "act" = do, produce, send or
 change something now (a polite "can you", or a bare report of a defect in something you can
-change, counts); "ask" = a question, or asking to be told, shown or given something you can say in
+change, counts; so do "can we", "could we", "lets" and "we should" followed by something to get done, and a cue to get something moving, even
+as a question mark); "ask" = a question, or asking to be told, shown or given something you can say in
 the reply; "inform" = news, context, or what the user will do THEMSELVES; "hold_off" = about your
 own work itself: do not open a task, answer here, not yet, stop or cancel runs.
 ANSWER WHAT YOU ALREADY HOLD. Before any rule above sends you to read, search or hand off: when
