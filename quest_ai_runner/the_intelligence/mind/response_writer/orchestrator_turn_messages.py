@@ -344,6 +344,25 @@ def already_in_place(gathered: Sequence[Any]) -> List[str]:
     return out
 
 
+def settle_already_set(orch: Any, rs: Any, res: Any) -> bool:
+    """The final reply of an ensure-style turn whose writes all found everything already there is the code-composed sentence ("It's already set: <title>, weekly on Thursday
+    (next: Thursday 12 November)."), not the model's text. Decided from the tools' structured receipts only: at least one tool that changes something ended ``noop``, none ended
+    any other way, no write was made by the code step, and the turn answered. True when the reply was replaced."""
+    if getattr(res, "kind", "") != "answer" or (getattr(rs, "status_first", None) or {}).get("before") is not None:
+        return False      # a turn that reads a milestone's measure keeps its metric before and after
+    tools = getattr(orch, "tools", None)
+    receipts = [g for g in (getattr(rs, "gathered", None) or []) if isinstance(g, dict) and str(g.get("locator") or "").startswith("tool:")]
+    writes = [g for g in receipts if (tools.get(str(g["locator"])[5:]) is not None and getattr(tools.get(str(g["locator"])[5:]), "mutates", False))]
+    if not writes or any(g.get("tool_status") != "noop" or g.get("by_code") for g in writes):
+        return False
+    phrases = already_in_place(writes)
+    if not phrases:
+        return False
+    res.text = " ".join(phrases[:2])
+    rs.status_first = None       # the closing metric lines would repeat the sentence
+    return True
+
+
 def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
     """MESSAGE 2 of an act request: the reply ends with the metric before and after (read again by code) and anything already in place.
     Nothing is added to a turn that sent no first message, so an information request or a plain reply stays one message."""

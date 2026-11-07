@@ -165,3 +165,39 @@ def test_the_first_message_without_a_milestone_is_a_plain_line_of_what_the_turn_
                                     evidence="s1 [pending] 2026-11-12T08:00:00+00:00 esr_ab12cd34ef56", found=found)
     assert "2026-11-12T" not in texts["text"] and "esr_" not in texts["text"] and texts["status"] == "I looked at quest workflows."
     assert act_status.read_summary([]) == ""
+
+
+WORKFLOW_THERE = {"workflowId": "qwf_1", "title": "Weekly check-in: Thursday office hour", "steps": [{
+    "stepId": "s1", "status": "pending", "timing": {"kind": "window", "startsAt": "2026-11-12T08:00:00+00:00", "endsAt": "2026-11-13T07:59:00+00:00",
+                                                   "repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}},
+    "window": {"startsAt": "2026-11-12T08:00:00+00:00", "endsAt": "2026-11-13T07:59:00+00:00"}}]}
+
+
+def test_the_already_there_sentence_carries_the_schedule_and_the_next_occurrence_from_the_structured_step():
+    entry = {"locator": "tool:create_quest_workflow", "tool_status": "noop", "tool_data": WORKFLOW_THERE}
+    assert act_status.already_phrase(entry) == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November)."
+
+
+def test_the_final_reply_of_an_ensure_turn_that_found_everything_there_is_exactly_the_code_sentence_and_nothing_else_changes_it():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import settle_already_set
+    from quest_ai_runner.the_world.tools.tools import ToolRegistry
+    from .test_tools import make_spec
+    tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True),
+                          make_spec("list_quest_workflows", handler=lambda a, c: ToolResult(ok=True), mutates=False)])
+    orch = SimpleNamespace(tools=tools)
+    there = {"kind": "query", "locator": "tool:create_quest_workflow", "tool_status": "noop", "tool_data": WORKFLOW_THERE}
+    read = {"kind": "query", "locator": "tool:list_quest_workflows", "tool_status": "applied"}
+    reply = "It's already on the quest as a weekly check-in, assigned to you, pending, and repeats every Thursday. The next one is Thursday, so I did not add a duplicate."
+    rs, res = SimpleNamespace(gathered=[read, there], status_first=None), SimpleNamespace(kind="answer", text=reply)
+    assert settle_already_set(orch, rs, res) is True
+    assert res.text == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November)."
+    # a write that was applied, or refused, or made by the code step keeps the model's text
+    for other in ({**there, "tool_status": "applied"}, {**there, "tool_status": "refused"}, {**there, "by_code": True}):
+        kept = SimpleNamespace(kind="answer", text=reply)
+        assert settle_already_set(orch, SimpleNamespace(gathered=[read, other], status_first=None), kept) is False and kept.text == reply
+    # a read only, a non-answer, or a turn that reads a milestone's measure keep it too
+    for rs_other, res_other in ((SimpleNamespace(gathered=[read], status_first=None), SimpleNamespace(kind="answer", text=reply)),
+                                (SimpleNamespace(gathered=[read, there], status_first=None), SimpleNamespace(kind="confirm", text=reply)),
+                                (SimpleNamespace(gathered=[read, there], status_first={"before": object()}), SimpleNamespace(kind="answer", text=reply))):
+        assert settle_already_set(orch, rs_other, res_other) is False and res_other.text == reply

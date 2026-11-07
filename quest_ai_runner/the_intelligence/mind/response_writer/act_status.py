@@ -157,6 +157,26 @@ def schedule_phrase(data: Mapping[str, Any]) -> str:
     return ""
 
 
+def next_occurrence(data: Mapping[str, Any]) -> str:
+    """The date of the recorded routine's current or next occurrence ("Thursday 12 November"), from its structured step (its window or timing start, as written, no zone
+    conversion); "" when the step carries none."""
+    import datetime
+    for step in data.get("steps") or []:
+        if not isinstance(step, Mapping):
+            continue
+        raw = ((step.get("window") or {}).get("startsAt")) or ((step.get("timing") or {}).get("startsAt"))
+        try:
+            day = datetime.datetime.fromisoformat(str(raw)).date()
+        except (TypeError, ValueError):
+            continue
+        return f"{WEEKDAY_ENGLISH[day.weekday()]} {day.day} {MONTH_ENGLISH[day.month - 1]}"
+    return ""
+
+
+WEEKDAY_ENGLISH = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+MONTH_ENGLISH = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+
+
 def already_phrase(entry: Mapping[str, Any]) -> str:
     """One plain sentence for a write that found everything already there: "It's already set: <title>, weekly on Thursdays." Built from the tool's own data (title, schedule);
     never the tool's text, and no ids."""
@@ -166,7 +186,8 @@ def already_phrase(entry: Mapping[str, Any]) -> str:
     when = schedule_phrase(data)
     if not title:
         return "It's already set."
-    return f"It's already set: {title}" + (f", {when}" if when else "") + "."
+    upcoming = next_occurrence(data)
+    return f"It's already set: {title}" + (f", {when}" if when else "") + (f" (next: {upcoming})" if upcoming else "") + "."
 
 
 def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: str, *, evidence: str, voice: bool = False, found: str = "") -> dict:
