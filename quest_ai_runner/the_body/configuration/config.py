@@ -91,7 +91,7 @@ _FILE_SCALAR_FIELDS = {
     "context_updates_relay_log_path",
     "rep_context_prefs", "context_preamble_doctrine", "vector_store", "selections", "mcp_drive",
     "context_sources_map", "context_sources_file", "drive_comments_auth", "inbound_mail_auth",
-    "notion", "google_chat",
+    "notion", "google_chat", "metric_sources",
     "feedback_ledger", "feedback_ledger_path",
     "quest_folder_map_file",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
@@ -628,6 +628,10 @@ class RunnerConfig:
     # wires nothing and logs why, because a domain-wide-delegation credential can otherwise read
     # every space its subject is in. Resolved into ``google_chat_adapter``.
     google_chat: Optional[Dict[str, Any]] = None
+    # {source_name = {command = [...], label = "...", timeout_seconds = 60}}: where a metric's current value is read. A metric or solution record names its
+    # source in its ``source`` column; this table maps that name to a READ-ONLY command that prints one JSON object {"value", "as_of", "source", "detail"}.
+    # The ``read_metric_source`` tool runs it. Exported to ``QAR_METRIC_SOURCES`` (JSON) before the tools are built, so deep runs see it too.
+    metric_sources: Optional[Dict[str, Dict[str, Any]]] = None
     # A JSON file holding {quest_id: folder}. ``quest_folder_map`` takes the dict itself and there
     # was no pointer form, which is the one reason several lanes still read a JSON file in Python.
     quest_folder_map_file: Optional[str] = None

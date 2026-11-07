@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-236 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+237 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -97,7 +97,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_WORKING_DIR` |  | `the_body/configuration/config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_DRY_RUN_SCRATCH` | Folder a dry run (QAR_DRY_RUN_WRITES=1) redirects file writes into; default a new folder under the system temp folder. | `the_world/tools/dry_run_writes.py` | - |
-| `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (the_world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `the_world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md` |
+| `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (the_world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `the_world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md`, `docs/how-to/tools.md` |
 | `QAR_EMBEDDER_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py`, `the_body/internal_context/card_store/qdrant_embedders.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
 | `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
@@ -139,6 +139,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest one reading of a metric may take before and after a deep goal (default 15); an offline arm is stopped at that limit, and a reading that has not finished gives no value, with a note on the row. | `the_body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
 | `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `the_intelligence/critical_thinking/metric_translation/tools_metric_results.py` | `docs/explanation/metric-results.md` |
 | `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `the_body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
+| `QAR_METRIC_SOURCES` | JSON map {source name: {command, label, timeout_seconds}} of the read-only commands that give a metric its current value; set from the metric_sources tables of the config file, which is where to write it. Unset offers no read_metric_source tool. | `the_body/configuration/config_environment.py`, `the_intelligence/critical_thinking/esoi_application/tools_metric_source.py` | - |
 | `QAR_MIN_FREE_MEMORY_MB` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MODEL_BACKEND` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` +1 | `.env.example`, `docs/how-to/adapters.md` |
 | `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |

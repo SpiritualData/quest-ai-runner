@@ -490,7 +490,8 @@ DEEP_ACTION = """\
     advice and not a question back: read_spec_records to find the milestone's solution and its metric record; read the data that gives the metric's
     current number (whatever counts or results your reads and tools return); then apply_spec_edit the metric's record with that number, its
     source and the date, in the same turn and without asking for a go-ahead (the person's request is the go-ahead; a change Quest holds for the owner
-    is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
+    is reported as proposed, waiting for approval). When the metric's record names a source (CUE FACTS says so, or read_metric_source is offered), the number is what read_metric_source
+    returns for that source name, with its date and source label exactly as returned, never an estimate; the keyed next step records it. If the record already holds that number, change nothing and say in one message that it is already
     current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
     treat the work outside the quest as the thing you were asked to do.
     A VAGUE CUE TO GET SOMETHING MOVING names a milestone of the quest, not a code or file task, even when the milestone's subject is software. When the context

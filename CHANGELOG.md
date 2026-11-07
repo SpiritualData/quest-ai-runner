@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Metric sources. A metric or solution record names where its current value is read in a `source` column (and the day the recorded value covers in `measured_through`); the lane's config file maps each source name to a read-only command in `[metric_sources.<name>]` (`command`, optional `label` and `timeout_seconds`), exported to `QAR_METRIC_SOURCES`. The new `read_metric_source` tool runs the mapped command and returns exactly the `{value, as_of, source, detail}` it printed, or the reason it could not. The milestone flow reads the source of the milestone it resolves and keeps one `Current value: <value> (as of <date>, from <source label>)` line in the keyed next-step goal, replaced in place on a repeat. A dry run lets exactly the configured commands start.
+- Structured owners. A solution record's `owner_user_ids` (Quest user ids) replaces the free-text `tracking_owner`; the milestone flow assigns the keyed next step to a listed user, and falls back to the owner the record's text names only when the list is empty.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added

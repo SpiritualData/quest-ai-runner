@@ -289,3 +289,21 @@ until a person approves), the quest field tools and `add_quest_measurable_outcom
 write into an ask for the owner). Withheld: `create_quest_goal`, `add_quest_strategy`,
 `create_quest_habit`, `create_quest_experiment`, `update_quest_experiment`, `delete_quest_experiment` (each refuses without the
 user's own say-so, which a scheduled step cannot assert) and every read tool.
+
+
+## Reading a metric's current value: `read_metric_source`
+
+A metric (or solution) record names the source of its value in its `source` column. The lane's config file maps each source name to a read-only command:
+
+```toml
+[metric_sources.funnel]
+command = ["python3", "-I", "/path/to/read_funnel.py"]   # argv, no shell
+label = "Funnel report"                                    # used when the command prints no source label
+timeout_seconds = 60
+```
+
+The command prints one JSON object and nothing else that is not that object on its last line: `{"value": ..., "as_of": "YYYY-MM-DD", "source": "<label>", "detail": {...}}`,
+where `as_of` is the day the value covers. `read_metric_source(name)` runs it and returns those fields unchanged; a failing, slow or malformed command comes back as
+the reason, never as a value. The config is the author's statement that the command only reads, and a dry run (`QAR_DRY_RUN_WRITES`) lets exactly those commands start.
+The milestone flow uses the tool when the milestone it resolves names a source: it keeps a single `Current value: <value> (as of <date>, from <source label>)` line in the
+keyed next-step goal, replacing it in place on every repeat and keeping the previous line when the source cannot be read.

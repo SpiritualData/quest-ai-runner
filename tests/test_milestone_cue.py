@@ -3,10 +3,10 @@ from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import 
 
 TABLES = {
     "solutions": {
-        "esr_a": {"name": "P1 Onboarding that captivates", "milestones": "Onboarding test passes on web and mobile.", "tracking_owner": "Ann; Bo"},
-        "esr_b": {"name": "P2 Mobile app live on the Play Store", "milestones": "App live in the Play Store.", "tracking_owner": "Cy"},
-        "esr_c": {"name": "P3 Mobile app live on the Apple Store", "milestones": "App live in the App Store.", "tracking_owner": "Cy, Di"},
-        "esr_d": {"name": "P5 Foundational product videos published", "milestones": "The agreed videos are published.", "tracking_owner": "Ann, Ed"},
+        "esr_a": {"name": "P1 Onboarding that captivates", "milestones": "Onboarding test passes on web and mobile.", "owner_user_ids": ["Ann", "Bo"]},
+        "esr_b": {"name": "P2 Mobile app live on the Play Store", "milestones": "App live in the Play Store.", "owner_user_ids": ["Cy"]},
+        "esr_c": {"name": "P3 Mobile app live on the Apple Store", "milestones": "App live in the App Store.", "owner_user_ids": ["Cy", "Di"]},
+        "esr_d": {"name": "P5 Foundational product videos published", "milestones": "The agreed videos are published.", "owner_user_ids": ["Ann", "Ed"]},
         "esr_x": {"name": "Ann: daily check", "milestones": "", "purpose": ""},
     },
     "metrics": {
@@ -73,7 +73,7 @@ def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys_owners_and_goals
     picked = cue.select(TABLES, CUE)
     assert picked and picked[0] == "esr_c"
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02", goals=GOALS, zone="America/Los_Angeles")
-    assert "esr_c" in block and "esr_mc" in block and "tracking_owner: Cy, Di" in block and "P3 Mobile app live on the Apple Store next step: week of 2026-11-02" in block
+    assert "esr_c" in block and "esr_mc" in block and "owner_user_ids: Cy, Di" in block and "P3 Mobile app live on the Apple Store next step: week of 2026-11-02" in block
     assert "Current value: No." in block and "Open goals on the quest that may be" in block and "already there" in block and "esr_c next step: week of 2026-10-26" in block
     assert "Unrelated" not in block and "America/Los_Angeles" in block
 
@@ -81,9 +81,9 @@ def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys_owners_and_goals
 def test_the_facts_give_the_increment_order_and_the_full_purpose_text_for_the_model_to_assign_from():
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02")
     assert block.index("1. a deliverable") < block.index("2. else a metric value") < block.index("3. else an owned next step")
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Zed."}}}
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Zed."}}}
     block = cue.fact_block(tables, CUE)
-    assert "Owners: Zed." in block and "tracking_owner: empty" in block and "never ask who should own it" in block
+    assert "Owners: Zed." in block and "owner_user_ids: empty" in block and "never ask who should own it" in block
 
 
 def test_another_cue_finds_another_milestone():
@@ -210,14 +210,14 @@ def test_reading_a_pinned_quests_records_goes_through_no_placement_and_carries_t
 
     class Client:
         def get_spec(self, subject_type, subject):
-            return {"records": [{"type": "solution", "recordId": "esr_1", "fields": {"name": "A", "tracking_owner": "Ann"}}]}
+            return {"records": [{"type": "solution", "recordId": "esr_1", "fields": {"name": "A", "owner_user_ids": ["Ann"]}}]}
 
         def get_quest_autopilot(self, quest_id):
             return {"autopilot": {"run_timezone": "Asia/Kolkata"}}
     monkeypatch.setattr(api, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the assembly (and quest placement) must not run for a pinned read")))
     spec = read_spec_records_spec({}, client_factory=Client)
     done = spec.handler({}, ToolContext(quest_id="q1"))
-    assert done.ok and done.data["time_zone"] == "Asia/Kolkata" and done.data["records"]["solutions"]["esr_1"]["tracking_owner"] == "Ann"
+    assert done.ok and done.data["time_zone"] == "Asia/Kolkata" and done.data["records"]["solutions"]["esr_1"]["owner_user_ids"] == ["Ann"]
 
 
 def test_the_default_arm_of_place_on_a_quest_has_a_module_that_registers_it():
@@ -243,7 +243,7 @@ def test_an_old_format_goal_sharing_the_milestones_code_and_words_is_listed_as_a
 
 
 def test_the_model_decides_the_existing_goal_and_the_owner_from_the_record_text_and_the_goal_is_updated_in_place():
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Cy and Di."}}}
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Cy and Di."}}}
 
     class Tools(ToolRegistry):
         pass
@@ -812,7 +812,7 @@ def test_the_milestone_step_offers_only_keyed_goals_for_adoption_and_names_the_p
 
 def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_repeat_reuses_the_kept_draft():
     calls, asked = [], []
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Cy and Di."}}}
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Cy and Di."}}}
     read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
     tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
@@ -830,8 +830,8 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
 
 
 def test_a_cue_that_names_a_word_family_of_the_milestone_resolves_it():
-    tables = {"solutions": {"esr_a": {"name": "P7 Quest AI reliable yet cheap", "milestones": "Offline pass rate holds.", "tracking_owner": "Ann"},
-                            "esr_b": {"name": "P8 100 Quest users from YouTube", "milestones": "100 new users.", "tracking_owner": "Bo"}},
+    tables = {"solutions": {"esr_a": {"name": "P7 Quest AI reliable yet cheap", "milestones": "Offline pass rate holds.", "owner_user_ids": ["Ann"]},
+                            "esr_b": {"name": "P8 100 Quest users from YouTube", "milestones": "100 new users.", "owner_user_ids": ["Bo"]}},
               "metrics": {"esr_ma": {"name": "P7 pass rate", "record": "80 percent", "solution_ids": ["esr_a"]}, "esr_mb": {"name": "P8 users", "record": "0", "solution_ids": ["esr_b"]}}}
     assert cue.candidates(tables, "lets make progress on quest ai reliability")[0] == "esr_a"
     assert cue.candidates(tables, "get the niche youtube users going")[0] == "esr_b"
@@ -931,7 +931,7 @@ def test_a_deliverable_goal_the_planner_wrote_under_its_own_title_does_not_stand
 
 def test_each_owner_the_record_names_is_tried_in_turn_and_a_team_name_is_not_asked_for():
     calls, asked = [], []
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "tracking_owner": "", "purpose": "Owners: Cy, Di."}}}
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Cy, Di."}}}
     read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
     tools = ToolRegistry([read, list_goals([]), write_goal(calls, refuse=("Cy",))])
     resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))

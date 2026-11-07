@@ -91,6 +91,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Rubric-based model judge | `response-quality:model_judge` | [evaluation/components/esoi_judge/impls/model_judge.py](../../../evaluation/components/esoi_judge/impls/model_judge.py) |  |
 | Regex-check floor | `response-quality:regex_only` | [evaluation/components/esoi_judge/impls/regex_only.py](../../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
 | Edit a quest's specification in Quest | `esoi-application:quest_spec_records` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/quest_spec_edit.py](esoi_application/quest_spec_edit.py) |  |
+| Read a metric's current value from its named source | `esoi-application:metric_source` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/tools_metric_source.py](esoi_application/tools_metric_source.py) |  |
 
 ### Metrics
 

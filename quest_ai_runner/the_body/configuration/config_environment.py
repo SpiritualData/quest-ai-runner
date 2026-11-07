@@ -68,6 +68,10 @@ def apply_config_environment(file_cfg: Optional[RunnerConfig]) -> None:
         if not os.environ.get(str(key)) and str(value):
             os.environ[str(key)] = str(value)
 
+    if file_cfg.metric_sources and not os.environ.get("QAR_METRIC_SOURCES"):
+        import json
+        os.environ["QAR_METRIC_SOURCES"] = json.dumps(file_cfg.metric_sources)
+
 
 def _load_env_file_truthy(path: str) -> None:
     """Load ``KEY=VALUE`` lines into ``os.environ``, treating a BLANK value as not set.

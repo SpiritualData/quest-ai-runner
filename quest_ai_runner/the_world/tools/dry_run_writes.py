@@ -143,7 +143,7 @@ class Recorder:
 
 
 RECORDER = Recorder()
-STATE: Dict[str, Any] = {"installed": False, "scratch": None, "originals": {}, "allowances": [], "harness_paths": []}
+STATE: Dict[str, Any] = {"installed": False, "scratch": None, "originals": {}, "allowances": [], "harness_paths": [], "read_commands": set()}
 LOCAL = threading.local()
 
 
@@ -400,8 +400,16 @@ def check_request(method: str, url: str) -> None:
     raise DryRunBlocked(f"dry run: {method} {parsed.hostname}{parsed.path} was not sent")
 
 
+def declare_read_command(argv: Any) -> None:
+    """Let exactly this command line start in a dry run: the lane's configuration declared it a read (a metric source). Any other process stays refused."""
+    STATE["read_commands"].add(tuple(str(a) for a in argv))
+
+
 def check_process(argv: Any) -> None:
     parts = [str(a) for a in (argv if isinstance(argv, (list, tuple)) else [argv])]
+    if tuple(parts) in STATE["read_commands"]:
+        RECORDER.read("metric source")
+        return
     if parts and os.path.basename(parts[0]) in READ_PROCESSES:
         return
     if parts and os.path.basename(parts[0]) == "git":

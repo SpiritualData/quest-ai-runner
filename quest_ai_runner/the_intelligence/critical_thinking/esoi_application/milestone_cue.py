@@ -196,8 +196,60 @@ def first_sentence(text: str, limit: int = 160) -> str:
 
 
 def owners_of(row: Mapping[str, Any]) -> List[str]:
-    """The people the milestone's record lists as responsible, from the record's own ``tracking_owner`` column, separated by ``;`` or ``,``."""
-    return [part.strip() for part in re.split(r"[;,]", str(row.get("tracking_owner") or "")) if part.strip()]
+    """The Quest user ids of the people the milestone's record lists as responsible, from its structured ``owner_user_ids`` column. A user id is accepted as the
+    assignee of a goal as it stands, so no name is matched here."""
+    raw = row.get("owner_user_ids") or []
+    items = raw if isinstance(raw, (list, tuple)) else re.split(r"[;,]", str(raw))
+    return [str(part).strip() for part in items if str(part).strip()]
+
+
+CURRENT_VALUE = "Current value:"
+VALUE_LINE = re.compile(r"(?m)^Current value:.*$")
+READ_TOOL = "read_metric_source"
+
+
+def current_value_line(value: Any, as_of: str, source: str) -> str:
+    """The one line a keyed goal holds for a measured value: ``Current value: <value> (as of <YYYY-MM-DD>, from <source label>)``."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import shown
+    return f"{CURRENT_VALUE} {shown(value)} (as of {as_of}, from {source})"
+
+
+def value_line_of(text: str) -> str:
+    """The ``Current value:`` line a goal's text already holds, else ""."""
+    found = VALUE_LINE.search(str(text or ""))
+    return found.group(0).strip() if found else ""
+
+
+def with_value_line(description: str, line: str) -> str:
+    """``description`` holding exactly one ``Current value:`` line, ``line``: an existing one is replaced in place, a missing one is added after the first line, never a second."""
+    lines = str(description or "").split("\n")
+    kept, placed = [], False
+    for text in lines:
+        if text.startswith(CURRENT_VALUE):
+            if not placed:
+                kept.append(line)
+                placed = True
+            continue
+        kept.append(text)
+    if not placed:
+        kept.insert(1 if kept else 0, line)
+    return "\n".join(kept)
+
+
+def source_of(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], rid: str, row: Mapping[str, Any]) -> str:
+    """The name of the source the milestone's value is read from: its metric record's ``source`` column, else the solution record's own."""
+    for _, metric in metrics_of(tables, rid):
+        if str(metric.get("source") or "").strip():
+            return str(metric["source"]).strip()
+    return str(row.get("source") or "").strip()
+
+
+def measured_through_of(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], rid: str, row: Mapping[str, Any]) -> str:
+    """The day the milestone's recorded value covers (``measured_through``), from its metric record, else the solution record; "" when none."""
+    for _, metric in metrics_of(tables, rid):
+        if str(metric.get("measured_through") or "").strip():
+            return str(metric["measured_through"]).strip()
+    return str(row.get("measured_through") or "").strip()
 
 
 @dataclass(frozen=True)
@@ -264,7 +316,7 @@ def goal_summary(goal: Mapping[str, Any]) -> str:
 INCREMENT_ORDER = ("Increment order, the first that applies (one increment per turn): "
                    "1. a deliverable the milestone needs that you can write from what you have: write it in the reply (deep_target draft_in_chat) and record it as a goal keyed "
                    "{title} followed by a short name; "
-                   "2. else a metric value you can read from the data your tools reach: record it with the metric's record id and its source and date; "
+                   "2. else a metric value you can read from the data your tools reach: record it with the metric's record id and its source and date (when the facts name a metric source, code reads it and records the value in the keyed next step); "
                    "3. else an owned next step that names what only a person can do. Code records that step for you under its key and returns the receipt, "
                    "so do not choose a deep run, do not call create_or_update_quest_goal for it, and never ask permission to do it.")
 
@@ -286,8 +338,14 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
              f"- Milestone: {name} | Done when: {str(row.get('milestones') or '').strip()[:VALUE_CHARS].rstrip('.')} | Current value: {value or 'not recorded yet'}."]
     if metric:
         lines.append(f"- Metric record {metric_ids[0]} ({metric.get('name')}); its full recorded text is in read_spec_records.")
-    lines.append(f"- Purpose as recorded (it names the owners): {str(row.get('purpose') or '').strip()[:PURPOSE_CHARS] or 'none recorded'} | tracking_owner: {', '.join(owners) or 'empty'}")
-    lines.append("- Assign from the owners named in that purpose text or tracking_owner; any listed owner is acceptable, so never ask who should own it. Leave it unassigned only when no owner is named anywhere.")
+    lines.append(f"- Purpose as recorded (it names the owners): {str(row.get('purpose') or '').strip()[:PURPOSE_CHARS] or 'none recorded'} | owner_user_ids: {', '.join(owners) or 'empty'}")
+    lines.append("- Code assigns the step to a user in owner_user_ids; any listed owner is acceptable, so never ask who should own it. With none listed, the owner is the person the purpose text names; leave it unassigned only when no owner is named anywhere.")
+    source = source_of(tables, rid, row)
+    if source:
+        through = measured_through_of(tables, rid, row)
+        lines.append(f"- Metric source: {source}. Code reads it (read_metric_source) and records the line 'Current value: <value> (as of <date>, from <source>)' in the keyed next step, replacing the line in place on a repeat; "
+                     "do not edit the metric record for the value, and state the value, its date and its source in the reply, exactly as the receipt gives them."
+                     + (f" The metric record's own value covers through {through}." if through else ""))
     if ties:
         lines.append("- Close runners-up (the quest lists this one first): " + ", ".join(f"{t} {str((tables['solutions'].get(t) or {}).get('name') or '')[:50]!r}" for t in ties))
     already = candidate_goals(goals, rid, name)
@@ -321,6 +379,10 @@ class Resolved:
     receipt: str = field(default="")
     draft: str = ""
     after_state: Optional[Mapping[str, Any]] = None      # the goal as the tool read it back after the write (id, name, assignee id, links, period)
+    source: str = ""                                     # the name of the metric source the record gives ("" when it names none)
+    reading: Optional[Mapping[str, Any]] = None          # what read_metric_source returned: value, as_of, source (label), detail
+    reading_gap: str = ""                                # why the source could not be read, in the tool's words
+    kept_line: str = ""                                  # the Current value line the keyed goal already holds
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
@@ -357,13 +419,14 @@ class Resolved:
         """The person's own goals for this milestone are linked to only by being named here, in this goal's description; they are never changed."""
         from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
         titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not is_owned(g)][:4]
-        return (" Related goals on the quest: " + "; ".join(titles) + ".") if titles else ""
+        return ("\nRelated goals on the quest: " + "; ".join(titles) + ".") if titles else ""
 
     def goal_arguments(self) -> Dict[str, Any]:
+        line = (current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"]) if self.reading
+                else self.kept_line or f"{CURRENT_VALUE} {self.value or 'not recorded yet'}")
         args: Dict[str, Any] = {
             "quest_id": self.quest_id, "title": next_step_title(self.name, self.week), "period": self.week.period, "due_date": self.week.due,
-            "description": (f"Next step for {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}."
-                            + self.related_text()),
+            "description": with_value_line(f"Next step for {self.name}. Done when: {self.done_when}.", line) + self.related_text(),
             "spec_solution_id": self.rid, "match_by_link": True, "user_asked_for_this_field": True}
         if self.metric_ids:
             args["spec_metric_id"] = self.metric_ids[0]
@@ -411,6 +474,39 @@ class Resolved:
         return {"owners": [str(n).strip(" .'\"") for n in named if n and str(n).strip(" .'\"")], "goal_id": goal if goal in {str(g.get("id")) for g in keyed} else "",
                 "draft": kept_draft or supported_draft(str(data.get("draft") or "").strip(), self.allowed_text())}
 
+    def read_source(self, registry: Any) -> None:
+        """Read the milestone's metric source, when its record names one, through the lane's ``read_metric_source`` tool. A reading is kept for the goal's one
+        ``Current value:`` line; a source that cannot be read leaves the line the goal already holds and is said in the receipt, never replaced by a guess."""
+        goal = next((g for g in self.candidates if str(g.get("title") or "").strip() == next_step_title(self.name, self.week)), None) \
+            or next((g for g in self.candidates if str(g.get("spec_solution_id") or "") == self.rid), None)
+        existing = value_line_of(str((goal or {}).get("text") or (goal or {}).get("description") or ""))
+        self.kept_line = existing if "(as of " in existing else ""
+        if not self.source:
+            return
+        from quest_ai_runner.the_world.tools.tools import ToolContext
+        if registry is None or registry.get(READ_TOOL) is None:
+            self.reading_gap = f"this lane has no {READ_TOOL} tool, so the source {self.source!r} could not be read"
+            return
+        try:
+            result = registry.invoke(READ_TOOL, {"name": self.source}, ToolContext(quest_id=self.quest_id))
+        except Exception as error:      # noqa: BLE001  surfaced in the receipt with its cause
+            self.reading_gap = f"reading the source {self.source!r} failed ({type(error).__name__}: {error})"
+            return
+        if result.ok and isinstance(result.data, Mapping) and result.data.get("as_of"):
+            self.reading = {k: result.data[k] for k in ("value", "as_of", "source", "detail") if k in result.data}
+        else:
+            self.reading_gap = str(result.text).strip()[:300]
+
+    def reading_note(self) -> str:
+        """What the receipt tells the reply about the measured value."""
+        if self.reading:
+            line = current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"])
+            return (f" The metric's current value was read from its source and the goal's one line now reads: \"{line}\". "
+                    "State the value, the date it covers and the source label in the reply, exactly as that line gives them, and no other figure for it.")
+        if self.source:
+            return f" The metric's value could not be read ({self.reading_gap}). Say that, say which data is missing, and state no value for it."
+        return ""
+
     def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None) -> Tuple[str, str]:
         """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is
         updated in place (renamed to the key, linked, moved to the week), never duplicated; a repeat finds the keyed goal and says it is already there. Each owner is tried as
@@ -420,6 +516,7 @@ class Resolved:
         if registry is None or registry.get("create_or_update_quest_goal") is None:
             raise LaneGap("this lane has no create_or_update_quest_goal tool, so the next step could not be recorded")
         ctx = ToolContext(quest_id=self.quest_id)
+        self.read_source(registry)
         base = self.goal_arguments()
         try:
             picked = self.choices(decide)
@@ -447,6 +544,7 @@ class Resolved:
                 lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
                 if (result.data or {}).get("problems"):
                     note += " The quest does not show everything that was asked for (" + "; ".join(result.data["problems"]) + "): say exactly that, and do not say it is linked or owned."
+                note += self.reading_note()
                 if self.draft:
                     note += f" The draft kept in the goal, to show in the reply: {self.draft}"
                 return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
@@ -521,4 +619,4 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id,
         done_when=str(row.get("milestones") or "").strip()[:VALUE_CHARS].rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
-        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)))
+        purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row))
