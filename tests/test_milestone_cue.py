@@ -434,3 +434,67 @@ def test_a_milestone_act_cue_sends_two_messages_the_status_first_and_the_result(
     orch.run(CUE, sink=StreamSink(events.append), quest_id="q1")
     kinds = [e["type"] for e in events if e["type"] in (EVENT_INTERIM, EVENT_RESULT)]
     assert kinds[:1] == [EVENT_INTERIM] and kinds.count(EVENT_INTERIM) == 1 and EVENT_RESULT in kinds
+
+
+def test_the_first_message_names_no_record_id_and_none_of_the_planners_fact_blob():
+    from hubofhubs.api import EVENT_INTERIM
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": [],
+                              "facts_read": ["Metric record esr_mc (P3 App Store listing live)", "Owners named: Cy, Di"]}])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=registry([]),
+                        config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0))
+    events = []
+    orch.run(CUE, sink=StreamSink(events.append), quest_id="q1")
+    first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
+    assert "esr_" not in first and "Owners named" not in first and "Metric record" not in first
+    assert "P3 Mobile app live on the Apple Store" in first and "App Store" in first and "Current value" in first and "Now:" in first
+
+
+class StaleListingClient(GoalClient):
+    """A Quest that accepts a write and reports success but whose goal keeps no links: the read-back must say so."""
+
+    def update_goal(self, goal_id, fields):
+        self.puts.append((goal_id, fields))
+        goal = next(g for g in self.goals if g["id"] == goal_id)
+        goal.update({("name" if k == "title" else k): v for k, v in fields.items() if k not in ("spec_solution_id", "spec_metric_id")})
+        return type("W", (), {"status": None})()
+
+
+def run_tool(client, **extra):
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    spec = create_or_update_quest_goal_spec({}, client_factory=lambda: client)
+    args = {"quest_id": "q1", "title": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True, "user_asked_for_this_field": True, **extra}
+    return spec.handler(args, ToolContext(quest_id="q1"))
+
+
+def test_a_link_the_quest_does_not_show_is_never_reported_as_linked_and_the_link_is_retried_alone_once():
+    client = StaleListingClient([{"id": "old", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "spec_metric_id": None, "period": "2026_W45"}])
+    result = run_tool(client, adopt_goal_id="old")
+    assert "not linked to a solution" in result.text and "NOT confirmed" in result.text and "solution link is not on the goal" in result.text
+    assert "linked to solution esr_c" not in result.text
+    assert client.puts[-1][1] == {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}       # the links alone, once, so a refusal would carry its reason
+
+
+def test_updated_is_said_only_when_the_read_back_differs_from_before_and_a_clean_read_has_no_could_not_be_read_line():
+    held = {"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "period": "2026_W45", "assigned_to_user_id": None}
+    client = GoalClient([dict(held)])
+    result = run_tool(client)
+    assert "nothing was changed" in result.text and "linked to solution esr_c" in result.text and "could not be read" not in result.text and client.puts == []
+    client = GoalClient([dict(held, spec_solution_id=None, spec_metric_id=None)])
+    result = run_tool(client)
+    assert "updated in place" in result.text and "linked to solution esr_c" in result.text and "metric esr_mc" in result.text and "NOT confirmed" not in result.text
+
+
+def test_a_failed_read_is_the_only_time_the_receipt_says_the_goals_could_not_be_read():
+    class Unreadable(GoalClient):
+        calls = 0
+
+        def list_quest_goals(self, quest_id):
+            Unreadable.calls += 1
+            return {"period_groups": [{"goals": self.goals}]} if Unreadable.calls == 1 else {}
+    result = run_tool(Unreadable([{"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}]))
+    assert "could not be read again" in result.text

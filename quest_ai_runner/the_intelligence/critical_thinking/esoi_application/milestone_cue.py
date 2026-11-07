@@ -319,6 +319,8 @@ class Resolved:
                 self.receipt = result.text
                 note = f" The owner could not be set ({'; '.join(refused)})." if refused and not owner else ""
                 lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
+                if (result.data or {}).get("problems"):
+                    note += " The quest does not show everything that was asked for (" + "; ".join(result.data["problems"]) + "): say exactly that, and do not say it is linked or owned."
                 return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
                         f"Open the reply with exactly this sentence: \"{lead}\" Then say who owns it and what only a person can do, "
                         "and do not offer to do it or ask whether to."), result.status.value

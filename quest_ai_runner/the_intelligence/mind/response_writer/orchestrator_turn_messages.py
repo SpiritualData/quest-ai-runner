@@ -280,7 +280,9 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
                               str(getattr(rs, "context_view", "") or "")])
         doing = doing or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
         voice = meta.get("channel") == "voice"
-        texts = act_status.status_texts(reading, list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice)
+        # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
+        # ids and owner text) is left out.
+        texts = act_status.status_texts(reading, [] if forced else list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice)
         ledger = interim_ledger_for(meta if meta else None)
         clock = time.monotonic()
         seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))

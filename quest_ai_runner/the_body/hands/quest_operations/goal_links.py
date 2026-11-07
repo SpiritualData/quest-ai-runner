@@ -87,19 +87,64 @@ def linked_open_goal(goals: List[Dict[str, Any]], solution_id: str, title: str) 
     return str(best.get("id"))
 
 
-def read_back(client: Any, quest_id: str, goal_id: Optional[str], title: str) -> str:
-    """What the quest holds for the goal after the write, read again: its assignee (by name), the strategy and the metric it is linked to. Words that say so when it could not be read."""
+SEEN_FIELDS = ("name", "assigned_to_user_id", "spec_solution_id", "spec_metric_id", "period", "description")
+
+
+def fetch_goal(client: Any, quest_id: str, goal_id: Optional[str], title: str) -> Optional[Dict[str, Any]]:
+    """The goal as the quest lists it now, found by id and else by exact title; ``None`` only when the goals could not be read or the goal is not there."""
     goals = all_goals(client, quest_id)
     if goals is None:
-        return "Read back: the goal could not be read again, so its owner and links are not confirmed."
-    goal = next((g for g in goals if goal_id and str(g.get("id")) == str(goal_id)), None) or next((g for g in goals if str(g.get("name") or "").strip() == title), None)
+        return None
+    return next((g for g in goals if goal_id and str(g.get("id")) == str(goal_id)), None) or next((g for g in goals if str(g.get("name") or "").strip() == title), None)
+
+
+def differs(before: Optional[Mapping[str, Any]], after: Mapping[str, Any]) -> bool:
+    """True when what the quest holds for the goal now is not what it listed before the write (a goal with no before is new)."""
+    return before is None or any(before.get(f) != after.get(f) for f in SEEN_FIELDS)
+
+
+def verified(client: Any, quest_id: str, outcome: Mapping[str, Any], title: str, wanted: Mapping[str, Any], assignee_id: Optional[str]) -> Dict[str, Any]:
+    """The write checked against the quest. Reads the goal again; when a link that was asked for is not on it, writes the links alone once, so a refusal comes back
+    with its reason, and reads again. Returns ``{state, goal, problems, read}`` where ``state`` is created, updated (only when the read-back differs from before) or unchanged,
+    ``goal`` is the goal as read, ``problems`` lists each asked-for thing the quest does not show, and ``read`` is False when the goals could not be read at all."""
+    goal = fetch_goal(client, quest_id, outcome.get("goal_id"), title)
+    if goal is None:
+        return {"state": outcome["state"], "goal": None, "problems": [], "read": False}
+    links = {k: wanted[k] for k in ("spec_solution_id", "spec_metric_id") if wanted.get(k)}
+    problems: List[str] = []
+    if any(goal.get(k) != v for k, v in links.items()):
+        try:
+            client.update_goal(str(goal.get("id")), links)
+        except Exception as error:  # noqa: BLE001  the refusal's own words are the reason
+            problems.append(f"the link was refused by Quest ({str(error)[:200]})")
+        goal = fetch_goal(client, quest_id, goal.get("id"), title) or goal
+    for k, label in (("spec_solution_id", "solution"), ("spec_metric_id", "metric")):
+        if links.get(k) and goal.get(k) != links[k]:
+            problems.append(f"the {label} link is not on the goal as read back")
+    if assignee_id and goal.get("assigned_to_user_id") != assignee_id:
+        problems.append("the owner is not on the goal as read back")
+    state = "created" if outcome["state"] == "created" else ("updated" if differs(outcome.get("before"), goal) else "unchanged")
+    return {"state": state, "goal": goal, "problems": problems, "read": True}
+
+
+def read_back_text(client: Any, quest_id: str, check: Mapping[str, Any]) -> str:
+    """The read-back in words, only what the quest shows: the owner by name, the solution and metric ids it holds, the period; and each thing asked for that it does not show."""
+    goal = check.get("goal")
+    if not check.get("read"):
+        return "Read back: the goals could not be read again, so the owner and links are not confirmed."
     if goal is None:
         return "Read back: the goal was not found when read again."
     assignee = goal.get("assigned_to_user_id")
     names = {str(m.get("user_id")): str(m.get("name") or "") for m in (client.list_assignable_members(quest_id) or []) if m.get("user_id")}
     who = (names.get(str(assignee)) or f"user {assignee}") if assignee else "nobody (unassigned)"
-    return (f"Read back from the quest: goal {goal.get('name')!r} is assigned to {who}, linked to solution {goal.get('spec_solution_id') or 'none'} "
-            f"and metric {goal.get('spec_metric_id') or 'none'}, period {goal.get('period') or 'none'}.")
+    seen = [f"assigned to {who}"]
+    seen.append(f"linked to solution {goal['spec_solution_id']}" if goal.get("spec_solution_id") else "not linked to a solution")
+    seen.append(f"metric {goal['spec_metric_id']}" if goal.get("spec_metric_id") else "no metric link")
+    seen.append(f"period {goal.get('period') or 'none'}")
+    text = f"Read back from the quest: goal {goal.get('name')!r} is " + ", ".join(seen) + "."
+    if check.get("problems"):
+        text += " NOT confirmed: " + "; ".join(check["problems"]) + "."
+    return text
 
 
 def goal_changes(goal: Mapping[str, Any], wanted: Mapping[str, Any]) -> Dict[str, Any]:
@@ -121,18 +166,20 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
         adopt_goal_id = linked_open_goal(goals, str(fields["spec_solution_id"]), title) or adopt_goal_id
     if not found and adopt_goal_id:
         # The same work already exists under an older title: it is updated in place (renamed to the key, linked, moved to the period), never duplicated.
+        before = next((dict(g) for g in goals if str(g.get("id")) == str(adopt_goal_id)), None)
         write = client.update_goal(str(adopt_goal_id), {"title": title, "period": period, **{k: v for k, v in fields.items() if k in UPDATABLE}})
         writes = [write]
         changed = ["title", "period", *sorted(k for k in fields if k in UPDATABLE)]
         if assignee_id:
             writes.append(client.assign_goal(str(adopt_goal_id), assignee_id))
             changed.append("assignee")
-        return {"state": "updated", "goal_id": str(adopt_goal_id), "changed": changed, "writes": writes, "copies": 0}
+        return {"state": "updated", "goal_id": str(adopt_goal_id), "changed": changed, "writes": writes, "copies": 0, "before": before}
     if not found:
         write = client.create_goal(title, period=period, quest_id=quest_id, assigned_to_user_id=assignee_id, **fields)
         goal_id = getattr(write, "id", "") or (getattr(write, "data", None) or {}).get("id")
-        return {"state": "created", "goal_id": goal_id, "changed": [], "writes": [write], "copies": 0}
+        return {"state": "created", "goal_id": goal_id, "changed": [], "writes": [write], "copies": 0, "before": None}
     goal = found[0]
+    before = dict(goal)      # as listed before any write
     goal_id = str(goal.get("id"))
     changes = goal_changes(goal, {**fields, "period": period})
     writes: List[Any] = []
@@ -143,4 +190,4 @@ def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Map
         writes.append(client.assign_goal(goal_id, assignee_id))
         changed.append("assignee")
     return {"state": "updated" if writes else "unchanged", "goal_id": goal_id, "changed": changed, "writes": writes,
-            "copies": len(found) - 1}
+            "copies": len(found) - 1, "before": before}

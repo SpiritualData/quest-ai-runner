@@ -44,17 +44,20 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
             return ToolResult(ok=False, status=ToolStatus.UNKNOWN, text=(
                 f"Not written: the goals of quest {quest_id} could not be read, so it is not known whether {title!r} already exists. Try again."))
         held = [w for w in writes if getattr(w, "status", None) is ToolStatus.HELD]
-        data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"]}
         if held:
-            return ToolResult(ok=False, status=ToolStatus.HELD, data=data, text=(
+            return ToolResult(ok=False, status=ToolStatus.HELD, data={"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"]}, text=(
                 f"Not applied yet: the change to the goal {title!r} is waiting for a person to approve it. It is NOT done."))
+        # Only what the quest shows after the write is reported: "updated" when the read-back differs from before, links and owner as read.
+        check = goal_links.verified(client, quest_id, outcome, title, goal_links.link_fields(args), assignee_id)
+        state = check["state"]
+        data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"], "problems": check["problems"]}
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
                 "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed."}[state]
         try:
-            said += " " + goal_links.read_back(client, quest_id, outcome["goal_id"], title)
-        except Exception:  # noqa: BLE001  the write is done; the read-back failing is said, not hidden
-            said += " Read back: the goal could not be read again, so its owner and links are not confirmed."
+            said += " " + goal_links.read_back_text(client, quest_id, check)
+        except Exception as error:  # noqa: BLE001  a read that failed is said with its cause
+            said += f" Read back failed ({type(error).__name__}), so the owner and links are not confirmed."
         recorded = str(args.get("description") or "").strip()
         if recorded and state != "unchanged":
             said += f" Recorded text: {recorded[:500]}"          # the reply restates what was recorded, including each alternative's hypothesis and metric
