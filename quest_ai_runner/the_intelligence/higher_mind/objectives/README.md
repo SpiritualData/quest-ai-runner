@@ -18,7 +18,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Guidance (solution with no page of its own, its implementations are in this intent's records)
 - Recall Recent Context (solution with no page of its own, its implementations are in this intent's records): Hands the next turn of a conversation the cards its last turns already found, so a short follow-up needs no restating.
 - Guide Toward The Long-Term Goal (solution with no page of its own, its implementations are in this intent's records): Keeps the person moving toward the end they are working for, without hijacking a simple question or nagging.
-- Place On A Quest (solution with no page of its own, its implementations are in this intent's records): Say which of the person's quests a message, goal, note or task belongs to, or none, the same way on every surface that picks one.
+- [Place On A Quest](place_on_a_quest/README.md) (solution with implementations): Say which of the person's quests a message, goal, note or task belongs to, or none, the same way on every surface that picks one.
 
 ## Solutions at a glance
 
@@ -63,7 +63,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 - Parent intent: [Intelligence](../../README.md)
 - Repository: [top README](../../../../README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records beside the code: [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest](place_on_a_quest/README.md)
+- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
@@ -103,7 +104,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Long-term guidance section in the reply voice | `guide-toward-the-long-term-goal:guided_v2` | [quest_ai_runner/the_self/integrity/prompts/auxiliary_prompts.py](../../../the_self/integrity/prompts/auxiliary_prompts.py) |  |
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py) |  |
 | Words and meaning candidates, the model picks | `place-on-a-quest:hybrid-candidate-ranker` | [evaluation/components/place_on_a_quest/impls/hybrid_candidate_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/hybrid_candidate_ranker.py) |  |
-| The library judge over the quests it is given | `place-on-a-quest:library-quest-judge` | [quest_ai_runner/the_intelligence/higher_mind/objectives/quest_placement.py](quest_placement.py) |  |
+| The library judge over the quests it is given | `place-on-a-quest:library-quest-judge` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
 
 ### Metrics
 

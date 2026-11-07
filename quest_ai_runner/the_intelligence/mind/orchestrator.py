@@ -59,7 +59,7 @@ from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import (
     VERIFY_GOAL_TOOL, VERIFY_GOAL_PROMPT, VERIFY_DONE_EVIDENCE_NOTE, PREFLIGHT_PLAN_PROMPT, PREFLIGHT_PLAN_TOOL, MODE_RELEASE_TOOL,
     MODE_RELEASE_PROMPT, FUTURE_CONTEXT_DELIMITER, DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, QUEST_DATA_WRITE_SURFACE_INSTRUCTION, REPLY_VOICE_SYSTEM)
 from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.interface import RecentContextStore
-from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import QuestPlacing
+from quest_ai_runner.the_intelligence.higher_mind.objectives.place_on_a_quest.interface import QuestPlacing
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, DEFERRED_DEEP_INLINE_SEMANTICS, DEFERRED_DEEP_QUEUED_SEMANTICS,
     PLANNER_DECISION_RUBRIC, PLANNER_PROFILES, PLANNER_PROMPT, PLANNER_PROMPT_COMPACT)

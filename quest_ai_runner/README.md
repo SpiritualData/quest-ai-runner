@@ -68,6 +68,7 @@ Let each Quest user grow with an AI aligned to them.
 - [World](the_world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.
 - [Feedback Learning](the_consciousness/feedback_learning/README.md) (solution with implementations)
 - [Write Through MCP](the_world/tools/connected_system_operations/README.md) (solution with implementations): Carry out one named change on an external tool server, and only when an explicit allowlist permits that operation.
+- [Place On A Quest](the_intelligence/higher_mind/objectives/place_on_a_quest/README.md) (solution with implementations): Say which of the person's quests a message, goal, note or task belongs to, or none, the same way on every surface that picks one.
 
 ## Diagram
 
@@ -147,6 +148,7 @@ flowchart LR
 - Down: [quest_ai_runner/the_world/tools/connected_system_operations](the_world/tools/connected_system_operations/README.md)
 - Down: [quest_ai_runner/the_world/tools/delegated_agent_sessions](the_world/tools/delegated_agent_sessions/README.md)
 - Down: [quest_ai_runner/the_world/tools/file_editing](the_world/tools/file_editing/README.md)
+- Down: [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest](the_intelligence/higher_mind/objectives/place_on_a_quest/README.md)
 - Repository: [top README](../README.md)
 
 *Generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*

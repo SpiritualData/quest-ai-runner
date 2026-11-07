@@ -1,6 +1,6 @@
 """``place-on-a-quest``: the port the host fills and the library arm for a runner with no host."""
-from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import QuestPlacing
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_placement import HostFunction, LibraryQuestJudge
+from quest_ai_runner.the_intelligence.higher_mind.objectives.place_on_a_quest.interface import QuestPlacing
+from quest_ai_runner.the_intelligence.higher_mind.objectives.place_on_a_quest.quest_placement import HostFunction, LibraryQuestJudge
 
 QUESTS = [{"quest_id": "a", "title": "Ship the app", "state": ""}, {"quest_id": "b", "title": "Run a marathon", "state": ""}]
 

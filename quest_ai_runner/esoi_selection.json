@@ -477,7 +477,7 @@
    "verdict": "WIN"
   },
   "modules": {
-   "library-quest-judge": "quest_ai_runner.the_intelligence.higher_mind.objectives.quest_placement"
+   "library-quest-judge": "quest_ai_runner.the_intelligence.higher_mind.objectives.place_on_a_quest.quest_placement"
   }
  },
  "planner": {
