@@ -128,7 +128,7 @@ class TurnContextStore:
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
     ) -> Any:
         """Return relevant past turns as context_view. Never raises."""
-        from hubofhubs.api import AssembledContext
+        from hubofhubs.api import AssembledContext, retrieve_only
 
         try:
             cards = self._load_cards()
@@ -181,7 +181,10 @@ class TurnContextStore:
             selected_indices.add(len(cards) - 1)
 
             # LLM filter over the selected set (optional, falls back silently).
-            if self._provider is not None and selected_indices:
+            # Cheap first: the model filter only earns its call when the scoring had a choice to make, that is more matching past turns than the
+            # store keeps. Within that number every match is already kept, and the cheap path always keeps the scored selection.
+            if (self._provider is not None and selected_indices and not retrieve_only(meta)
+                    and len(overlapping) > self._max_older):
                 try:
                     from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import filter_cards_by_relevance
                     # Each candidate is named by its opening, not its whole text: a past turn's

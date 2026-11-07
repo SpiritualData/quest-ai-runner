@@ -238,6 +238,11 @@ class OrchestratorConfig:
     # flag the result partial (so a background task maps to needs_you/failed, not done). ON by
     # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
+    # CHEAP INFORMATION TURNS: a turn that only asks to be told something (the planner's ``user_intent`` is ``ask``, it answers, it
+    # changes nothing) spends few model calls. Later context reads in the turn search and score without the model passes and
+    # escalate to the full assembly only when the cheap result is weak or empty; the goal-verifier loop is skipped; the "how I got
+    # this" panel is built from the turn's record without its prose call. False is the other arm: every turn takes the full path.
+    cheap_information_turns: bool = True
     max_remediations: int = 1
     # SUPPORT CHECK, folded into the SAME verdict as ``verify_claims`` (no extra call): the verdict
     # also flags factual claims or advice the reply states as certain that nothing this turn

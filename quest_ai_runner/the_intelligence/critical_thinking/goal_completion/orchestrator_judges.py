@@ -449,7 +449,7 @@ class JudgesMixin:
             getattr(rs, "attachments", None), deep_text, getattr(rs, "rep_preamble", ""),
             (getattr(rs, "context_meta", None) or {}).get("link_evidence"))
 
-    def write_answer_explanation(self, trace: TurnTrace) -> Optional[Dict[str, Any]]:
+    def write_answer_explanation(self, trace: TurnTrace, *, prose: bool = True) -> Optional[Dict[str, Any]]:
         """Write the user-facing "how I got this" payload for a turn that already answered.
 
         ONE cheap-tier call, constrained to ``trace``'s real record (see
@@ -461,8 +461,12 @@ class JudgesMixin:
         half the panel: ``used``, ``signals`` and ``metrics`` are assembled from the trace and are
         true whatever the model writes. A failed, unusable or impossible call (no tier resolves)
         therefore does NOT drop the panel; it returns the trace-only payload, with no further call.
+        ``prose=False`` builds the trace-only payload with no model call (an information turn: the facts panel is enough).
         Never raises.
         """
+        if not prose:
+            payload = build_payload(trace, None)
+            return payload if has_renderable_content(payload) else None
         record = render_record_for_prompt(trace)
         prompt = render_prompt(
             "explain-an-answer.how-i-got-this",

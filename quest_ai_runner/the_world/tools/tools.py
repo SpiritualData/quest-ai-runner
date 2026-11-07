@@ -564,6 +564,14 @@ class ToolRegistry:
         resolved = self.resolve_args(spec, args or {}, ctx)
         props = spec.properties()
         unknown = [a for a in resolved if props and a not in props]
+        if unknown and not spec.mutates:
+            # A read tool given an argument it does not have (the planner invents one) still reads: the unknown keys are dropped here,
+            # in code, instead of failing and costing a re-plan. A tool that changes something still refuses an argument it does not know.
+            resolved = {a: v for a, v in resolved.items() if a not in unknown}
+            dropped = unknown
+            unknown = []
+        else:
+            dropped = []
         if unknown:
             return ToolResult(ok=False, text=f"{name}: unknown argument(s) {unknown}; "
                                              f"accepted: {sorted(props)}")
@@ -613,6 +621,8 @@ class ToolRegistry:
                                      f"(it may still complete; check before retrying)")
         else:
             result = box.get("result") or ToolResult(ok=False, text=f"{name} returned nothing")
+        if dropped and result.ok:
+            result.text = f"(Ignored arguments this tool does not take: {', '.join(sorted(map(str, dropped)))}.)\n{result.text}"
         if len(result.text) > MAX_RESULT_CHARS:
             result.text = result.text[:MAX_RESULT_CHARS] + " …[truncated]"
         if self.ledger is not None:

@@ -29,9 +29,10 @@ from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards impor
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
 from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_information_turn
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
-    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, NO_ATTACHMENT_LINE,
+    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, NO_ATTACHMENT_LINE,
     READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
 
@@ -144,6 +145,10 @@ class RunAnswerMixin:
 
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs.plan, "asks_first", False):
             reply_directive = ASK_FIRST_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
+        if (rs.plan is not None and rs.plan.action == "answer" and not getattr(rs.plan, "asks_first", False)
+                and is_information_turn(rs.turn_user_intent, rs.plan)
+                and getattr(rs.plan, "reply_shape", None) in (None, "default")):
+            reply_directive = INFORMATION_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # short by default
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
             reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active

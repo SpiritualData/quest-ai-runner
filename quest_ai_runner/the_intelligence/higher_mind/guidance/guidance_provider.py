@@ -219,7 +219,9 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         candidates = [card for _, _, _, card in scored[: limit * 2]]
 
         # LLM filter: verify candidates are genuinely relevant to user_message
-        if self._provider is not None and user_message and candidates:
+        # Cheap first: the model filter only earns its call when it has a choice to make, that is when more candidates scored
+        # than the limit. Within the limit the structured scores (scope, operation, tags, keywords) have already chosen them all.
+        if self._provider is not None and user_message and len(candidates) > limit:
             try:
                 from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import filter_cards_by_relevance
                 candidate_dicts = [

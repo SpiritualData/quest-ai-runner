@@ -15,9 +15,18 @@ Covers the two call-reduction changes in ``core/card_filter.py``:
 from __future__ import annotations
 
 import gc
+
+import pytest
 from typing import Any, Dict, List
 
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import consolidate_context, filter_cards_by_relevance
+from hubofhubs.api import card_selection as card_selection_module
+
+
+@pytest.fixture(autouse=True)
+def rank_every_card_with_files(monkeypatch):
+    """These tests pin the ranking call itself, so they run on the arm that ranks every card that has files."""
+    monkeypatch.setattr(card_selection_module, "RANK_ONLY_ABOVE", 0)
 
 
 class _CountingProvider:
@@ -285,3 +294,12 @@ class TestNoProviderFallback:
         prov = _CountingProvider([_STAGE1_KEEP_ALL, _STAGE2_RANKING])
         filter_cards_by_relevance("billing task", _cards(), model_provider=prov)
         assert prov.answer_calls == 2
+
+
+def test_a_card_with_no_more_files_than_the_ranking_keeps_is_not_ranked(monkeypatch):
+    """Cheap first: ranking keeps a card's top five files, so a card of five or fewer has nothing to choose between and costs no call."""
+    monkeypatch.setattr(card_selection_module, "RANK_ONLY_ABOVE", card_selection_module.RANKED_FILES_KEPT)
+    prov = _CountingProvider([_STAGE1_KEEP_ALL])
+    cards = [{"id": "card-a", "title": "Billing", "files": ["a1.py", "a2.py", "a3.py"], "adapter": "keyword"}]
+    out = filter_cards_by_relevance("billing task", cards, model_provider=prov)
+    assert prov.answer_calls == 1 and out[0].files == ["a1.py", "a2.py", "a3.py"]

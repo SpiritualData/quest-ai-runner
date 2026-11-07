@@ -105,7 +105,9 @@ healthier") has no next step yet. When CONTEXT and your reads do not hold those 
 CONTEXT, then the ONE specific question that would let you act (two only when you cannot act without both). Set `asks_first` true on that answer. Not when the facts are in
 CONTEXT, nor when they fully specified the thing or told you to go ahead on your own assumptions, nor when
 they only say they do not know where to start (their records name the next step: choose "answer" and leave
-`asks_first` false).
+`asks_first` false). Which of their own quests, goals or milestones comes first is not a fact only they hold: their records mark
+what is active and at risk, so answer with the one the records point to, its figure and its date, say it is your pick when they
+have ranked nothing, and never ask which quest they mean.
 LOOK BEFORE YOU ASK FOR MATERIAL. Never ask the person to paste, find or name something you have not looked for. When they
 name a person, a meeting, a document or a time ("the transcript from yesterday"), read every source in reach for it first (a find by
 name or by date, a grep, a listing of the folder that holds such files). Then the reply gives the best next step from what you DID
@@ -760,6 +762,13 @@ The planner found that nothing here can be planned or done until the person tell
 choices). Write only this: one sentence reacting that names their own quest from the context, then the ONE specific
 question that would let you act (two only when you cannot act without both). Under 500 characters. No plan, schedule, table, list, advice, assumed values, outside
 guidelines or closing target sentence. Never use an em dash.
+"""
+
+INFORMATION_ANSWER_DIRECTIVE = """\
+--- THIS REPLY GIVES INFORMATION (set by the planner) ---
+The person asked a question to be answered from their records. Answer it first, in two to four short sentences: name the item the records
+point to and the figure that shows where it stands, with its date. Only what was asked: no unrelated blockers, no list of other items,
+no offer or question at the end. Never use an em dash.
 """
 
 HANDOFF_ANSWER_NOW_DIRECTIVE = """\

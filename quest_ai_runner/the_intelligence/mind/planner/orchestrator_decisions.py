@@ -832,6 +832,14 @@ def message_forbids_new_task(message: Optional[str]) -> bool:
         return False
 
 
+def is_information_turn(user_intent: Optional[str], plan: Any) -> bool:
+    """A turn that only asks to be told something: the planner's structured ``user_intent`` is ``ask``, it answers (changes nothing), and its
+    reply shape is not one of the situations that need the full check (a decline, support for a frustrated person, a question back). A fact over the planner's fields, never the user's words."""
+    return (user_intent == "ask" and getattr(plan, "action", None) == "answer"
+            and getattr(plan, "reply_shape", None) not in ("decline", "support") and not getattr(plan, "deferred_deep", False)
+            and not getattr(plan, "asks_first", False))
+
+
 def user_ordered_work(user_intent: Optional[str]) -> bool:
     """True when the planner's structured verdict says the user's CURRENT message asks the
     assistant to do or change something now (``user_intent == "act"``). Missing is False here;

@@ -275,6 +275,7 @@ class RunBeginMixin:
             transcript_tail=transcript,
             system_prompt=cfg.narration_system_prompt,
             enabled=bool(cfg.narrate or cfg.instant_ack),
+            model_ack=not getattr(cfg, "cheap_information_turns", True),   # the cheap arm opens with the code-written status, not a model call
             prior_narration=prior_narration,
         )
         rs.narrator = narrator
@@ -682,6 +683,7 @@ class RunBeginMixin:
         # all fresh context for the whole turn. It carries ``emit`` so a mid-loop card read can emit
         # EVENT_CONTEXT. Closed in ``finish()``.
         card_context = TurnCardCache(self.context_assembler, _ctx_meta)
+        card_context.cheap_followups = bool(getattr(cfg, "cheap_information_turns", True))
         rs.card_context = card_context
         card_context.emit = emit
         card_context.trace = rs.trace

@@ -303,8 +303,12 @@ def _fuse_vector_arm(cfg: RunnerConfig, keyword: Any) -> Any:
             query_embedder=make_voyage_embedder(input_type="query"),
             collection_prefix=str(spec.get("collection_prefix") or "qar_ctx"),
         )
+        # The same resolved fast-tier model the base assembler's own vector arm uses, so the two arms that generate queries for the same
+        # task share one model call (the selection memo is keyed by model) instead of each paying for it.
+        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+        query_model = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None).resolve_tier("fast")
         vector = VectorContextAssembler(
-            store, provider=cfg.model_provider,
+            store, provider=cfg.model_provider, query_model=query_model,
             seed_source=getattr(keyword, "export_for_embedding", None))
         _log.info("context: semantic vector arm ON (hybrid with the keyword arm)")
         return HybridContextAssembler(keyword=keyword, vector=vector)

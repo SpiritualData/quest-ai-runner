@@ -27,7 +27,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     planner_full_view_start, planner_note_observation, read_spec_key, repeated_read_observation, split_mixed_reads,
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text, is_information_turn
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import RECORDS_NOT_READ_NOTE
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
@@ -301,7 +301,8 @@ class RunLoopMixin:
                         res, user_message=rs.user_message, goal_condition=rs.goal_condition,
                         cards=rs.explain_cards, sources=rs.explain_sources)
                     if is_eligible(_trace):
-                        _explanation = self.write_answer_explanation(_trace)
+                        _explanation = self.write_answer_explanation(
+                            _trace, prose=not (getattr(cfg, "cheap_information_turns", True) and is_information_turn(rs.turn_user_intent, rs.plan)))
                         if _explanation:
                             res.explanation = _explanation
                             emit.emit(ProgressEvent(type=EVENT_EXPLANATION, data=_explanation))
@@ -807,7 +808,11 @@ class RunLoopMixin:
             # free non-LLM pre-filter inside ``_submit_oversee`` (``gate=True``, the default) that
             # skips the consult entirely unless something actually looks worth a look. Wrapped so it
             # can NEVER break the loop. Off by default.
-            if (cfg.overseer and rs.plan.action == "read" and rs.pending_oversee is None
+            # An information turn (the planner's ``ask`` intent, nothing changed so far) is read-only, so a long read loop cannot do harm
+            # and its read budget bounds it: the in-loop consult is skipped, while the checkpoint on the draft answer below stays.
+            read_only_information = bool(getattr(cfg, "cheap_information_turns", True) and rs.turn_user_intent == "ask"
+                                         and not (exec_record is not None and exec_record.any_mutation_attempted))
+            if (cfg.overseer and rs.plan.action == "read" and rs.pending_oversee is None and not read_only_information
                     and rs.steps >= cfg.overseer_min_step
                     and rs.steps % max(1, cfg.overseer_every_steps) == 0
                     and rs.overseer_submitted < cfg.overseer_max_signals):

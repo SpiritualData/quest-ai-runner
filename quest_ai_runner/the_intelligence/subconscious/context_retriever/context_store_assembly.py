@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 from datetime import datetime, timezone
 
-from hubofhubs.api import AssembledContext
+from hubofhubs.api import AssembledContext, retrieve_only
 from hubofhubs.api import Pacer
 from hubofhubs.api import content_item_text, filter_content_by_time_range, mark_items_used, normalize_content, render_card_content_blocks, tokenize
 from hubofhubs.api import card_origin
@@ -487,7 +487,7 @@ class AssemblyMixin:
         # Also ranks the files within each kept card by relevance and returns only
         # the relevant ones.
         llm_meta_map: Dict[str, Any] = {}  # card_id -> CardMetadata from LLM filter
-        if self._provider is not None and idf_candidates:
+        if self._provider is not None and idf_candidates and not retrieve_only(meta):     # the cheap path keeps the IDF ranking
             try:
                 from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import filter_cards_by_relevance
                 # The filter judges a card by its TITLE and the FILES it covers. A learned
@@ -521,7 +521,8 @@ class AssemblyMixin:
             except Exception:  # noqa: BLE001
                 _log.debug("LLM card filter failed, using IDF ranking", exc_info=True)
 
-        top_cards = idf_candidates[: self._max_cards]
+        # The cheap path returns the best half: with no model pass to cull them, fewer cards keep the top-up small.
+        top_cards = idf_candidates[: max(1, self._max_cards // 2) if retrieve_only(meta) else self._max_cards]
         if priority_cards:
             priority_ids = {c.get("id", "") for c in priority_cards}
             rest = [c for c in top_cards if c.get("id", "") not in priority_ids]

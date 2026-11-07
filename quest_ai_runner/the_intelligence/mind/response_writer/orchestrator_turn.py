@@ -83,8 +83,10 @@ class Narrator:
     def __init__(self, *, provider: Any, model: str, emit: "_Emitter",
                  persona: str = "", transcript_tail: str = "",
                  system_prompt: Optional[str] = None, enabled: bool = True,
-                 prior_narration: Optional[List[str]] = None):
+                 prior_narration: Optional[List[str]] = None, model_ack: bool = True):
         self._provider = provider
+        # False skips the one model call that writes the opening ack; the later beats are the planner's own rationale (no call) either way.
+        self._model_ack = bool(model_ack)
         self._model = model
         self._emit = emit
         self._persona = (persona or "").strip()
@@ -161,7 +163,7 @@ class Narrator:
         by ``flush_first()`` (a join barrier the orchestrator runs before the planner loop emits any
         relay beat), so the ack always precedes the planner's rationale.
         """
-        if not self.enabled:
+        if not self.enabled or not self._model_ack:
             return
         # The whole message when it is a normal one; a longer one is cut WITH a marker, because an unmarked cut
         # ends mid-sentence and the one-line ack then tells the user their message was cut off.

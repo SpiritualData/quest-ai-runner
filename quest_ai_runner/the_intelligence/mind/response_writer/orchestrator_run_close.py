@@ -16,7 +16,7 @@ from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import blocks_o
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import log, result_landed_work
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import (
     DEFERRED_RUNNER_KEY, OWN_ESCALATION_KEPT_STATUS, own_escalation_adds_nothing)
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, user_ordered_work
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_information_turn, user_ordered_work
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _strip_future_context, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import (
@@ -354,7 +354,11 @@ class RunCloseMixin:
                 rs.text = adopted.output
                 rs._parked_decision_id = adopted.decision_id
                 rs._decision_parked = True
-        if (not rs._deferred_handoff_confirmed and not rs._decision_parked and not rs.deferred_unconfirmed
+        # An information turn (the planner's ``ask`` intent, a plain answer, nothing changed) ships its grounded answer without the
+        # goal-verifier loop: ``cheap_information_turns`` False is the other arm and verifies every turn.
+        information_turn = bool(getattr(self.cfg, "cheap_information_turns", True)
+                                and is_information_turn(rs.turn_user_intent, rs.plan) and not (exec_record is not None and exec_record.any_mutation_attempted))
+        if (not rs._deferred_handoff_confirmed and not rs._decision_parked and not rs.deferred_unconfirmed and not information_turn
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
                 # Verify against the turn's DERIVED GOAL CONDITION (the checkable done-standard
