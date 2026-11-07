@@ -360,3 +360,32 @@ def test_a_goal_the_case_allows_updated_in_place_is_the_intended_result_and_is_n
                {"category": "goals", "change": "changed", "id": "g2", "label": "Submit the app", "before_label": "Submit the app"}]
     plan = PC.plan_cleanup(changes, "conv", (0, 1), "ai", effect, False, "", "", ())
     assert [c["id"] for c in plan["keep"]] == ["g1"] and [c["id"] for c in plan["left"]] == ["g2"]
+
+
+# ---- concurrent writes by the same account (in-process arm only)
+
+def test_an_addition_no_executed_write_could_have_made_is_concurrent_and_the_http_arm_stays_strict():
+    added = [{"category": "tasks", "change": "added", "id": "t1", "label": "Run autopilot"}, {"category": "conversations", "change": "added", "id": "c1", "label": "hi"},
+             {"category": "notes", "change": "added", "id": "n1", "label": "x"}, {"category": "goals", "change": "changed", "id": "g1", "label": "g"}]
+    mine, other = PC.split_concurrent(added, [])
+    assert [c["id"] for c in other] == ["t1", "c1", "n1"] and [c["id"] for c in mine] == ["g1"]      # a changed item is never called concurrent
+    mine, other = PC.split_concurrent(added, ["tool add_quest_note {}"])
+    assert [c["id"] for c in other] == ["t1", "c1"] and "n1" in [c["id"] for c in mine]
+    mine, other = PC.split_concurrent(added, ["quest api POST /api/assistant-tasks"])
+    assert [c["id"] for c in other] == ["c1", "n1"]                          # a task write does not reach decisions or notes
+    assert PC.split_concurrent(added, None) == (added, [])                  # the HTTP arm cannot see the turn's calls
+    assert all(l.startswith("CONCURRENT WRITE") for l in PC.concurrent_lines(other))
+
+
+def test_the_safety_net_reports_concurrent_writes_apart_leaves_them_and_does_not_fail_the_case():
+    import prodsafety as PS
+    clock = iter([T0, T0 + 20, T0 + 21])
+    ask = {"decision_id": "d_other", "created_by": UID, "created_at": "2026-11-06T10:00:10", "kind": "blocker", "summary": "Another lane's ask", "status": "open"}
+    api = Changing(ask)
+    safe = PS.TurnSafety(api, UID, "X-1", {"allow": []}, True, "Write a caption", clock=lambda: next(clock), say=lambda *_: None)
+    safe.begin()
+    outcome = safe.finish(own_conv=None, frames=[], executed=[])
+    assert outcome["unexpected"] == [] and outcome["failed"] is False and len(outcome["concurrent"]) == 1
+    assert not any(c[0] != "GET" for c in api.calls)                         # nothing was taken back
+    record = safe.apply({"passed": True}, outcome)
+    assert record["passed"] is True and record["concurrent_writes"] == outcome["concurrent"] and record["unexpected_writes"] == []

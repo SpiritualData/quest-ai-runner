@@ -41,12 +41,13 @@ class TurnSafety:
         self.started = self.clock()
         return self.before
 
-    def finish(self, own_conv=None, frames=None):
+    def finish(self, own_conv=None, frames=None, executed=None):
         """Compare, clean and report. ``frames`` is everything the turn emitted (its text is searched for ids). Returns a dict with ``changes``, ``unexpected``,
-        ``cleanup`` (the result), ``line`` (the cleanup text) and ``failed`` (anything left, or any unexpected write)."""
+        ``cleanup`` (the result), ``line`` (the cleanup text), ``concurrent`` (additions no executed write could have made, reported and left alone) and ``failed`` (anything left, or any unexpected write). ``executed`` is the dry-run guard's list of writes it let through (in-process arm); None (HTTP arm) keeps every change strict."""
         ended = self.clock()
         after = self.retry_once(lambda: PC.read_fingerprint(self.client))
         changes = PC.diff_fingerprints(self.before, after, own_conv=own_conv)
+        changes, concurrent = PC.split_concurrent(changes, executed)
         try:
             from quest_ai_runner.the_world.tools import dry_run_writes
             titles = set(dry_run_writes.RECORDER.call_titles)
@@ -58,12 +59,15 @@ class TurnSafety:
         evidence = json.dumps(frames, default=str) if frames else ""
         plan = PC.plan_cleanup(changes, own_conv, window, self.ai_user_id, self.effect, self.zero, evidence, self.message, titles)
         result = PC.run_cleanup(self.client, plan)
-        return dict(changes=changes, unexpected=unexpected, cleanup=result, line=PC.cleanup_line(result), failed=bool(result["left"] or unexpected))
+        return dict(changes=changes, concurrent=PC.concurrent_lines(concurrent), unexpected=unexpected, cleanup=result, line=PC.cleanup_line(result), failed=bool(result["left"] or unexpected))
 
     def apply(self, record, outcome):
         """Write the outcome into the case's record: the cleanup line (in 'Lane gaps', the sheet column an arm may fill; 'Notes' is a human's), the unexpected writes, and the
         failure rule (anything left, or any write the case did not authorise, fails the case). A failed cleanup is printed loudly."""
         record["cleanup"], record["unexpected_writes"] = outcome["line"], outcome["unexpected"]
+        record["concurrent_writes"] = list(outcome.get("concurrent") or [])
+        if record["concurrent_writes"]:
+            self.say(f"  {self.case_id}: concurrent writes by the same account, not this turn's, left alone: {record['concurrent_writes']}")
         gaps = [outcome["line"]] if (outcome["cleanup"]["withdrawn"] or outcome["cleanup"]["deleted"] or outcome["cleanup"]["left"]) else []
         record["lane_gaps"] = sorted(set(list(record.get("lane_gaps") or []) + gaps))
         if outcome["failed"]:

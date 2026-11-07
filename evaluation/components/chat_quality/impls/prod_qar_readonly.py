@@ -307,7 +307,7 @@ def build_arm(meter, bounded):
             changes += [f"DONE (allowed by the case): {line}" for line in dry.RECORDER.snapshot()["performed"]]
             # What really changed, read from Quest: a DONE line is a call the case allowed to run, not proof that it created anything (a tool may refuse a duplicate).
             # The cleanup runs now, so the state check and the judge see the quest as it stands AFTER the run's own extras were taken back.
-            outcome = safety.finish(own_conv=None, frames=frames)
+            outcome = safety.finish(own_conv=None, frames=frames, executed=dry.RECORDER.snapshot()["performed"])
             changes = [c.replace("DONE (allowed by the case):", "ATTEMPTED (allowed to run, effect not shown by this line):") for c in changes]
             changes += [f"CONFIRMED by reading the quest before and after: {c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" for c in outcome["changes"]]
             changes.append("CONFIRMED by reading the quest before and after: no change" if not outcome["changes"] else outcome["line"])
@@ -385,7 +385,7 @@ def build_arm(meter, bounded):
             record.update(error=f"{type(e).__name__}: {e}", score=None, passed=False)
         try:
             if "outcome" not in locals():           # the turn failed before the cleanup ran: compare and clean now
-                outcome = safety.finish(own_conv=None, frames=frames)
+                outcome = safety.finish(own_conv=None, frames=frames, executed=dry.RECORDER.snapshot()["performed"])
             safety.apply(record, outcome)
             reason = stop_after_unexpected_write(dict(record, case_id=case["id"]), dry)
             if reason:
@@ -415,7 +415,7 @@ def build_arm(meter, bounded):
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "seconds_total", "seconds_to_first_message", "seconds_to_final_message", "message_count", "tokens_total", "tokens_estimated", "judge_tokens", "cost_usd", "numbers_source", "speed_class", "speed_target_seconds", "token_target", "speed_ok", "tokens_ok", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies", "cleanup", "unexpected_writes", "cleanup_error")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "seconds_total", "seconds_to_first_message", "seconds_to_final_message", "message_count", "tokens_total", "tokens_estimated", "judge_tokens", "cost_usd", "numbers_source", "speed_class", "speed_target_seconds", "token_target", "speed_ok", "tokens_ok", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies", "cleanup", "unexpected_writes", "concurrent_writes", "cleanup_error")}
         try:
             meter.record(record["model_calls"])
         except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check

@@ -435,6 +435,36 @@ def goal_change_explained(change, effect, titles=()):
     return bool(change.get("before_kept")) or bool(re.search(r"next step: week of \d{4}-\d{2}-\d{2}\s*$", before)) or any(p and before.casefold().startswith(p) for p in allowed_title_starts(effect))
 
 
+def executed_categories(executed):
+    """The fingerprint categories the turn's EXECUTED writes could have created, from the dry-run guard's record of what it let through (``RECORDER.performed``:
+    ``tool <name> ...`` and ``quest api <METHOD> <path>``). Matched by word start on the tool name and path words, so ``add_quest_note`` reaches notes and
+    ``/api/assistant-tasks`` reaches tasks, and ``task`` never reaches decisions."""
+    tokens = [t for line in executed or [] for t in re.split(r"[^a-z0-9]+", str(line).lower()) if t]
+    return {cat for cat, words in ALLOW_WORDS.items() if any(t.startswith(w) for t in tokens for w in words)}
+
+
+def split_concurrent(changes, executed=None):
+    """``(this turn's possible changes, concurrent additions)``. Only an in-process arm can tell: every real write it makes goes through the dry-run guard, so an ADDED item
+    whose category no executed write could have created is provably not this turn's (another lane writing as the same account). ``executed=None`` (the HTTP arm,
+    which cannot see the turn's calls) keeps every change strict. A changed or removed item is never called concurrent."""
+    if executed is None:
+        return list(changes), []
+    could = executed_categories(executed)
+    mine, other = [], []
+    for c in changes:
+        (other if c["change"] == "added" and c["category"] not in could else mine).append(c)
+    return mine, other
+
+
+def concurrent_lines(changes):
+    """Readable ``CONCURRENT WRITE`` lines for the additions that are not this turn's: reported, never counted as the turn's and never touched by cleanup."""
+    out = []
+    for c in changes:
+        extra = ", ".join(f"{k}={c[k]}" for k in ("author", "conv_id", "source", "created_at", "kind") if c.get(k))
+        out.append(f"CONCURRENT WRITE (not this turn's, no executed write could have made it): {c['category']} added {c['id']} {c.get('label', '')!r}" + (f" ({extra})" if extra else ""))
+    return out
+
+
 def unexpected_writes(changes, effect=None, zero_writes=False, titles=()):
     """The changes the case's allowed writes do not explain. A zero-writes case explains none; otherwise a change is explained when its category is
     one the ``effect`` allow-list names, and a changed or removed GOAL only when it is a goal the case may change (``goal_change_explained``). Each is returned as a readable
