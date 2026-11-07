@@ -52,11 +52,12 @@ def test_the_planner_that_still_chooses_deep_after_the_note_is_not_asked_again()
     assert res is not None and sum("TOOL-SIZED WORK" in p for p in provider.plan_prompts) == len(provider.plan_prompts) - 1
 
 
-def test_a_code_or_file_job_still_escalates_without_a_second_plan():
+def test_a_code_or_file_job_is_asked_once_and_still_escalates_when_the_planner_insists():
     RAN.clear()
-    provider = StubProvider([deep("code_or_files"), DONE])
+    provider = StubProvider([deep("code_or_files"), deep("code_or_files"), DONE])
     orch(provider, registry()).run("fix the back button in the app")
-    assert RAN == [] and not any("TOOL-SIZED WORK" in p for p in provider.plan_prompts)
+    assert RAN == [] and sum("CHECK THE DEEP TARGET" in p for p in provider.plan_prompts) >= 1
+    assert not any("TOOL-SIZED WORK" in p for p in provider.plan_prompts)
 
 
 def test_guard_facts():
@@ -69,7 +70,7 @@ def test_guard_facts():
     assert not tool_guards.deep_is_tool_sized(plan, registry())
     assert tool_guards.deep_is_tool_sized(normalize_decision(deep(None), OrchestratorConfig()), registry())
     code = normalize_decision(deep("code_or_files"), OrchestratorConfig())
-    assert not tool_guards.deep_is_tool_sized(code, registry())
+    assert tool_guards.deep_is_tool_sized(code, registry())
 
 
 def answered(**over):

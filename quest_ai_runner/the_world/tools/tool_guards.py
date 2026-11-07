@@ -358,11 +358,9 @@ def past_activity_reads_owed(message: str, action: str, operation: Optional[str]
 
 def deep_is_tool_sized(plan: Any, registry: Any) -> bool:
     """True when a planned deep run may be work a registered tool performs, so the planner is asked once to plan it as tool steps: one run (no staged
-    ``deep_subtasks``), a target that is not code or files, and a registry offering at least one tool that acts. A planner that still chooses deep after
+    ``deep_subtasks``), any target (a code or files target is asked once whether it is really a cue about a milestone or record), and a registry offering at least one tool that acts. A planner that still chooses deep after
     the hand-back is accepted. Facts about the plan and the tool set only, never a word of the request or of the plan's prose."""
     if registry is None or getattr(plan, "action", None) != "deep" or getattr(plan, "deep_subtasks", None):
-        return False
-    if getattr(plan, "deep_target", None) == "code_or_files":
         return False
     return any(getattr(spec, "mutates", False) for spec in registry.all())
 

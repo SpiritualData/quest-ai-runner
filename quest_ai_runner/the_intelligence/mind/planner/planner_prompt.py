@@ -785,6 +785,12 @@ ACT_WITHOUT_TOOL_NOTE = (
     "one keyed goal each with its hypothesis and comparison metric. If no tool can do it, or the order is not the person's to give "
     "here, answer and say why.")
 
+DEEP_FOR_CODE_CHECK_NOTE = (
+    "CHECK THE DEEP TARGET: you chose a deep run on code or files. Before it starts, check whether the request is really a cue about a quest's "
+    "milestone, goal or record (\"get the release moving\", \"move the test forward\"): then the move is to record the next step as an owned goal "
+    "or to record a metric value, planned as tool steps (read_spec_records first, then create_or_update_quest_goal or apply_spec_edit), with deep_target "
+    "quest_data. If the person really asked for a change to code or files, choose deep again and it starts.")
+
 RECORDS_NOT_READ_NOTE = (
     "RECORDS NOT READ: you set needs_records, but nothing from the person's records was read this turn. Read them now (the quest's notes "
     "and the entries of the collections linked to it, whichever hold what the reply needs), then answer from what you read.")
