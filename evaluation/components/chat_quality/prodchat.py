@@ -300,7 +300,8 @@ def fingerprint_from(reads):
         fp["tasks"][task.get("task_id") or task.get("id")] = {"digest": "", "label": str(task.get("title") or task.get("text") or "")[:80], "conv_id": task.get("conv_id"), "created_by": task.get("created_by"),
                                                                "source": task.get("source"), "created_at": task.get("created_at")}
     for dec in reads.get("decisions") or []:
-        fp["decisions"][dec.get("decision_id")] = {"digest": "", "label": str(dec.get("summary") or "")[:80], "conv_id": dec.get("conv_id"), "kind": dec.get("kind"), "status": dec.get("status")}
+        fp["decisions"][dec.get("decision_id")] = {"digest": "", "label": str(dec.get("summary") or "")[:80], "conv_id": dec.get("conv_id"), "kind": dec.get("kind"), "status": dec.get("status"),
+                                                   "created_by": dec.get("created_by"), "created_at": dec.get("created_at")}
     for conv in reads.get("conversations") or []:
         fp["conversations"][conv.get("id")] = {"digest": "", "label": str(conv.get("title") or "")[:80]}
     return fp
@@ -381,27 +382,69 @@ def describe_undo(effect, zero_writes):
             f"({undo}); a change that cannot be taken back fails the case")
 
 
-def plan_cleanup(changes, own_conv, started_iso, ai_user_id, effect=None, zero_writes=False):
-    """Split the fingerprint changes into ``remove`` (created by THIS run, not the case's intended result, with a route that takes it back), ``keep`` (the intended,
-    allowed result) and ``left`` (cannot be taken back or cannot be shown to be this run's: a changed or removed item, a goal or spec record, a note or workflow that
-    is not provably this run's). Attribution: a decision or task by this run's conversation id; a note by the AI account created since the turn began; a workflow created
-    since the turn began. An item that existed before, or that another actor created, is never in ``remove``."""
+STOPWORDS = {"about", "after", "again", "could", "every", "should", "their", "there", "these", "those", "which", "would", "please", "quest", "write", "other", "where", "while", "being"}
+
+
+def keywords_of(message):
+    """The case's key words: its distinct words of five letters or more, minus common ones."""
+    return sorted({w for w in re.findall(r"[a-z][a-z\-']{4,}", str(message or "").lower()) if w not in STOPWORDS})
+
+
+def parse_time(value):
+    """A timestamp (ISO text with or without a zone, or epoch seconds) as epoch seconds, else None. A zone-less text is UTC."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    import datetime
+    try:
+        moment = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (moment if moment.tzinfo else moment.replace(tzinfo=datetime.timezone.utc)).timestamp()
+
+
+def strongly_this_turns(item, window, ai_user_id, evidence, words):
+    """True only when the item passes every test that ties it to THIS turn: created inside the window ``(start, end + 30s)``, authored by the AI account
+    when the record carries an author or creator, and either its id appears in the turn's own stream frames or its text shares at least two of the case's
+    key words. An item with no author or creator field (a workflow) needs its id in the frames. Nothing is guessed."""
+    created = parse_time(item.get("created_at"))
+    if created is None or not (window[0] <= created <= window[1]):
+        return False
+    owner = item.get("author_id") or item.get("created_by")
+    if owner is not None and owner != ai_user_id:
+        return False
+    if str(item["id"]).lower() in evidence:
+        return True
+    if owner is None:
+        return False
+    label = str(item.get("label") or "").lower()
+    return sum(1 for w in words if w in label) >= 2
+
+
+def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes=False, evidence="", message=""):
+    """Split the fingerprint changes into ``remove``, ``keep`` and ``left``. ``remove`` is only what is provably this run's and not the case's intended result: a
+    decision or task carrying this run's conversation id, or a note, workflow, decision or task that passes ``strongly_this_turns``. ``keep`` is the intended,
+    allowed result. ``left`` is everything else: a changed or removed item, an item with no route that takes it back (a goal, a spec record, another conversation),
+    and any item created in the window that the tests do not tie to this turn, marked ``AMBIGUOUS: left`` (it may be a concurrent autopilot write by the same account;
+    nothing is guessed, a human is told, and the case fails). ``window`` is ``(turn start, turn end + 30s)`` in epoch seconds."""
     allowed = set() if zero_writes else allowed_categories(effect)
+    evidence, words = str(evidence or "").lower(), keywords_of(message)
     plan = {"remove": [], "keep": [], "left": []}
     for c in changes:
-        cat, item_id = c["category"], c["id"]
+        cat = c["category"]
         if c["change"] != "added":
-            plan["left"].append(dict(c, why=f"{c['change']} (cannot be undone from here)"))
+            plan["left"].append(dict(c, why=f"{c['change']}: cannot be undone from here"))
         elif cat in allowed:
             plan["keep"].append(c)
         elif cat in ("decisions", "tasks") and own_conv and c.get("conv_id") == own_conv:
             plan["remove"].append(c)
-        elif cat == "notes" and c.get("author_id") == ai_user_id and str(c.get("created_at") or "") >= started_iso:
+        elif cat in ("decisions", "tasks", "notes", "workflows") and strongly_this_turns(c, window, ai_user_id, evidence, words):
             plan["remove"].append(c)
-        elif cat == "workflows" and str(c.get("created_at") or "") >= started_iso:
-            plan["remove"].append(c)
+        elif cat in ("decisions", "tasks", "notes", "workflows") and window[0] <= (parse_time(c.get("created_at")) or 0) <= window[1]:
+            plan["left"].append(dict(c, why="AMBIGUOUS: left. Created in the turn window but not tied to this turn (it may be a concurrent write by the same account)"))
         else:
-            plan["left"].append(dict(c, why="not provably created by this run, or no route takes it back"))
+            plan["left"].append(dict(c, why="no route takes it back or it is not provably this run's"))
     return plan
 
 
@@ -424,3 +467,61 @@ def run_cleanup(client, plan):
 
 def cleanup_line(result):
     return f"cleanup: withdrawn {result['withdrawn'] or 'none'}, deleted {result['deleted'] or 'none'}, left {result['left'] or 'none'}"
+
+
+# ---------------------------------------------------------------------------------------------------------------- autopilot window
+
+TERMINAL_TASK = {"done", "failed", "cancelled", "completed", "error", "dismissed", "incomplete", "needs_you", "withdrawn"}
+
+
+def autopilot_window(now, autopilot, tasks, minutes=10):
+    """Why a write-capable case must not start now, else None. ``now`` is epoch seconds. A reason when: a task on the quest is active (neither queued nor finished),
+    a queued task has no schedule (it is runnable now) or is scheduled up to ``minutes`` ahead (in the autopilot's time zone or in UTC; either counts), or the quest's
+    daily autopilot run time falls in the next ``minutes`` or began within the last ``minutes``."""
+    import datetime
+    horizon = now + minutes * 60
+    for task in tasks or []:
+        status = str(task.get("status") or "").lower()
+        if status in TERMINAL_TASK:
+            continue
+        if status != "queued":
+            return f"autopilot window: task {task.get('task_id')} is {status}"
+        date, clock = task.get("scheduled_date"), task.get("scheduled_time")
+        if not date:
+            return f"autopilot window: queued task {task.get('task_id')} has no schedule and is runnable now"
+        for zone in (autopilot or {}).get("run_timezone") and [autopilot["run_timezone"], "UTC"] or ["UTC"]:
+            when = local_epoch(date, clock or "00:00", zone)
+            if when is not None and when <= horizon:
+                return f"autopilot window: queued task {task.get('task_id')} is scheduled for {date} {clock} ({zone})"
+    run_time, zone = (autopilot or {}).get("run_time"), (autopilot or {}).get("run_timezone") or "UTC"
+    if run_time and (autopilot or {}).get("cadence"):
+        for offset in (-1, 0, 1):
+            day = (datetime.datetime.fromtimestamp(now, datetime.timezone.utc) + datetime.timedelta(days=offset)).date().isoformat()
+            when = local_epoch(day, run_time, zone)
+            if when is not None and now - minutes * 60 <= when <= horizon:
+                return f"autopilot window: the daily autopilot run time {run_time} ({zone}) is within {minutes} minutes"
+    return None
+
+
+def local_epoch(date, clock, zone):
+    import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        naive = datetime.datetime.fromisoformat(f"{date}T{clock}")
+        return naive.replace(tzinfo=ZoneInfo(zone)).timestamp()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def wait_for_clear(client, now=time.time, sleep=time.sleep, max_wait=900, step=30, minutes=10):
+    """None when no autopilot or lane run is active or due within ``minutes``; waits up to ``max_wait`` seconds in ``step`` sleeps; the last reason when it never clears."""
+    waited = 0
+    while True:
+        state = client._request("GET", f"/api/quests/{client.quest_id}/state") or {}
+        autopilot = (state.get("state") or state).get("autopilot") or {}
+        tasks = (client._request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": 1000}) or {}).get("tasks") or []
+        reason = autopilot_window(now(), autopilot, tasks, minutes)
+        if reason is None or waited >= max_wait:
+            return reason
+        sleep(step)
+        waited += step

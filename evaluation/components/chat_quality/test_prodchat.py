@@ -107,11 +107,15 @@ class FakeApi(PC.ProdClient):
         return {}
 
 
-def run_cleanup_for(fp_after, fail=(), effect=None, zero=True, own="own"):
+T0 = PC.parse_time("2026-11-06T10:00:00")
+WINDOW = (T0, T0 + 60)
+
+
+def run_cleanup_for(fp_after, fail=(), effect=None, zero=True, own="own", evidence="", message=""):
     before = PC.fingerprint_from(reads(decisions=[{"decision_id": "d_old", "conv_id": "someone-else", "status": "open"}]))
     after = PC.fingerprint_from(fp_after)
     changes = PC.diff_fingerprints(before, after, own_conv=own)
-    plan = PC.plan_cleanup(changes, own, "2026-11-06T10:00:00", UID, effect, zero)
+    plan = PC.plan_cleanup(changes, own, WINDOW, UID, effect, zero, evidence, message)
     api = FakeApi(fail)
     return PC.run_cleanup(api, plan), api.calls
 
@@ -124,15 +128,74 @@ def test_a_created_ask_is_withdrawn_and_a_pre_existing_ask_is_untouched():
     assert PC.cleanup_line(result) == "cleanup: withdrawn ['d_new'], deleted none, left none"
 
 
-def test_a_duplicate_workflow_a_queued_task_and_the_runs_note_are_deleted_but_another_actors_are_not():
+def test_a_duplicate_workflow_a_queued_task_and_the_runs_note_are_deleted_only_on_a_strong_match():
     result, calls = run_cleanup_for(reads(
         workflows=[{"workflowId": "wf_dup", "createdAt": "2026-11-06T10:00:09"}, {"workflowId": "wf_old_new", "createdAt": "2026-11-01T00:00:00"}],
         tasks=[{"task_id": "t1", "title": "old"}, {"task_id": "t_mine", "conv_id": "own"}, {"task_id": "t_other", "conv_id": "another"}],
-        notes=[{"note_id": "n1", "text": "a", "updated_at": "1"}, {"note_id": "n_mine", "author_id": UID, "created_at": "2026-11-06T10:00:07"},
-               {"note_id": "n_human", "author_id": "human", "created_at": "2026-11-06T10:00:07"}]))
+        notes=[{"note_id": "n1", "text": "a", "updated_at": "1"},
+               {"note_id": "n_mine", "text": "Instagram caption about subscribers growth", "author_id": UID, "created_at": "2026-11-06T10:00:07"},
+               {"note_id": "n_human", "text": "Instagram caption about subscribers growth", "author_id": "human", "created_at": "2026-11-06T10:00:07"}]),
+        evidence='{"event": "exec", "output": "created workflow wf_dup"}', message="Write an Instagram caption about subscribers growth")
     assert sorted(result["deleted"]) == ["n_mine", "t_mine", "wf_dup"]
     assert sorted(c[1] for c in calls) == ["/api/assistant-tasks/t_mine", "/api/quests/quest_x/notes/n_mine", "/api/workflows/wf_dup"]
-    assert len(result["left"]) == 3 and not any("t_mine" in x or "n_mine" in x for x in result["left"])      # the other actors' items are left alone, and reported
+    assert not any("t_mine" in x or "n_mine" in x or "wf_dup" in x for x in result["left"])      # the other actors' items are left alone, and reported
+
+
+def test_a_note_in_the_window_that_is_not_tied_to_the_turn_is_ambiguous_left_and_never_deleted():
+    result, calls = run_cleanup_for(reads(notes=[{"note_id": "n1", "text": "a", "updated_at": "1"},
+                                                  {"note_id": "n_auto", "text": "Weekly KPI baseline refreshed", "author_id": UID, "created_at": "2026-11-06T10:00:07"}],
+                                          workflows=[{"workflowId": "wf_x", "createdAt": "2026-11-06T10:00:08"}]),
+                                    evidence="{}", message="Write an Instagram caption about subscribers growth")
+    assert calls == [] and result["deleted"] == []
+    assert len(result["left"]) == 2 and all("AMBIGUOUS" in x for x in result["left"])      # a workflow has no author, so only its id in the turn's frames ties it
+    outcome = {"cleanup": result, "line": PC.cleanup_line(result), "unexpected": [], "failed": True}
+    import prodsafety as PS
+    record = PS.TurnSafety(FakeApi(), UID, "BAD-X", {"allow": []}, True, "m", say=lambda *_: None).apply({"passed": True}, outcome)
+    assert record["passed"] is False and "AMBIGUOUS" in record["lane_gaps"][0]
+
+
+AUTOPILOT = {"cadence": "daily", "run_time": "14:30", "run_timezone": "America/Los_Angeles"}
+NOON_PT = PC.local_epoch("2026-11-06", "12:00", "America/Los_Angeles")
+
+
+def test_autopilot_window_blocks_when_a_run_is_active_queued_unscheduled_or_due_soon():
+    assert PC.autopilot_window(NOON_PT, AUTOPILOT, []) is None
+    assert PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "done"}, {"task_id": "b", "status": "needs_you"}]) is None
+    assert "running" in PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "running"}])
+    assert "runnable now" in PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "queued"}])
+    assert PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "queued", "scheduled_date": "2026-11-06", "scheduled_time": "12:05"}])
+    assert PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "queued", "scheduled_date": "2026-11-07", "scheduled_time": "12:05"}]) is None
+    assert PC.autopilot_window(PC.local_epoch("2026-11-06", "14:25", "America/Los_Angeles"), AUTOPILOT, [])      # the daily run time is five minutes away
+    assert PC.autopilot_window(PC.local_epoch("2026-11-06", "14:35", "America/Los_Angeles"), AUTOPILOT, [])      # and just began
+
+
+class ClockApi(FakeApi):
+    def __init__(self, busy_reads):
+        super().__init__()
+        self.busy_reads = busy_reads
+
+    def _request(self, method, path, body=None, params=None, timeout=60):
+        if path.endswith("/state"):
+            return {"state": {"autopilot": AUTOPILOT}}
+        if path == "/api/assistant-tasks":
+            self.busy_reads -= 1
+            return {"tasks": [{"task_id": "a", "status": "running"}] if self.busy_reads >= 0 else []}
+        return super()._request(method, path, body, params, timeout)
+
+
+def test_a_write_capable_case_waits_for_the_window_then_runs_or_is_skipped_as_an_autopilot_window():
+    import prodsafety as PS
+    sleeps = []
+    clock = [NOON_PT]
+    def sleep(n):
+        sleeps.append(n)
+        clock[0] += n
+    safe = PS.TurnSafety(ClockApi(busy_reads=2), UID, "M-01", {"allow": [{"tool": "x"}]}, False, "m", clock=lambda: clock[0], sleep=sleep, say=lambda *_: None)
+    assert safe.gate() is None and sleeps == [30, 30]                  # busy twice, then clear
+    stuck = PS.TurnSafety(ClockApi(busy_reads=10 ** 6), UID, "M-01", {"allow": [{"tool": "x"}]}, False, "m", clock=lambda: clock[0], sleep=sleep, say=lambda *_: None)
+    assert "autopilot window" in stuck.gate() and sum(sleeps) >= 900   # waited the full 15 minutes, then skipped
+    zero = PS.TurnSafety(ClockApi(busy_reads=10 ** 6), UID, "BAD-02", {"allow": []}, True, "m", clock=lambda: clock[0], sleep=sleep, say=lambda *_: None)
+    assert zero.gate() is None                                          # a zero-writes case does not wait
 
 
 def test_an_item_that_cannot_be_removed_is_left_and_a_change_that_cannot_be_undone_is_left():
@@ -154,3 +217,28 @@ def test_the_client_refuses_to_undo_anything_it_was_not_told_this_run_created():
         with pytest.raises(PC.GuardRefusal):
             api._request(method, path)
     assert "undo" in PC.describe_undo({"allow": [{"tool": "add_quest_note"}]}, False) or "taken back" in PC.describe_undo(None, True)
+
+
+class Changing(FakeApi):
+    """GET /decisions/for-quest answers nothing before the turn and one ask after it (what a lane arm sees: no conversation id, the AI account as creator)."""
+    def __init__(self, ask):
+        super().__init__()
+        self.ask, self.reads = ask, 0
+
+    def _request(self, method, path, body=None, params=None, timeout=60):
+        if method == "GET" and path == "/api/teams/decisions/for-quest":
+            self.reads += 1
+            return [self.ask] if self.reads > 1 else []
+        return super()._request(method, path, body, params, timeout)
+
+
+def test_the_lane_arms_share_the_safety_net_an_ask_the_lane_run_raised_is_withdrawn_and_the_case_fails():
+    import prodsafety as PS
+    clock = iter([T0, T0 + 20, T0 + 21])
+    ask = {"decision_id": "d_lane", "created_by": UID, "created_at": "2026-11-06T10:00:10", "kind": "blocker", "summary": "Should the post invite people", "status": "open"}
+    api = Changing(ask)
+    safe = PS.TurnSafety(api, UID, "BAD-07", {"allow": []}, True, "Write a caption", clock=lambda: next(clock), say=lambda *_: None)
+    safe.begin()
+    outcome = safe.finish(own_conv=None, frames=[{"type": "done", "content": "created ask d_lane"}])
+    assert outcome["cleanup"]["withdrawn"] == ["d_lane"] and outcome["failed"] and outcome["unexpected"]      # taken back, and still a failure of the case
+    assert ("POST", "/api/teams/decisions/d_lane/withdraw") in api.calls

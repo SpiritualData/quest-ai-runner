@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import prodchat as PC  # noqa: E402
+import prodsafety as PS  # noqa: E402
 
 
 def configured():
@@ -62,8 +63,14 @@ def build(meter):
             return record
         probe = P.structured(case.get("metric_probe"))
         metric_before = None
+        safety = PS.TurnSafety(client, acted_as["user_id"], case["id"], effect, zero, message)
         try:
-            fp_before = PC.read_fingerprint(client)
+            window = safety.gate()
+            if window:
+                record.update(error=f"not run: {window}", score=None, passed=False)
+                record["log_extra"] = {"environment": environment, "acted_as": acted_as}
+                return record
+            safety.begin()
             counts_before = [base.count_state(c, client, client.quest_id) for c in checks] if checks else None
             if probe:
                 metric_before = P.read_metric(probe, client)
@@ -78,10 +85,8 @@ def build(meter):
             except Exception as e:  # noqa: BLE001
                 references[ref["name"]] = f"unreadable ({type(e).__name__})"
         started = time.time()
-        started_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(started - 5))      # a few seconds early: a clock difference must not hide this run's own item
-        print(f"  {case['id']}: {PC.describe_undo(effect, zero)}")
         conv, events = None, []
-        cleanup = None
+        outcome = None
         try:
             conv = client.create_conversation()
             record["conversation"] = conv
@@ -93,11 +98,9 @@ def build(meter):
             if capped:
                 raise RuntimeError(f"not judged: {capped}")
             time.sleep(2.0)                             # let the server finish persisting the turn
-            fp_after = PC.read_fingerprint(client)
             conversation = client._request("GET", f"/api/quest-ai/conversations/{conv}", params={"include_interim": "true"})
-            changes = PC.diff_fingerprints(fp_before, fp_after, own_conv=conv)
-            unexpected = PC.unexpected_writes(changes, effect, zero)
-            cleanup = PC.run_cleanup(client, PC.plan_cleanup(changes, conv, started_iso, acted_as["user_id"], effect, zero))
+            outcome = safety.finish(own_conv=conv, frames=events)
+            changes, unexpected = outcome["changes"], outcome["unexpected"]
             usage = PC.usage_of(events)
             frames = PC.frames_of(events)
             reply = next((f.get("content") for f in reversed(frames) if f["type"] == "done" and f.get("content")), "") or "".join(
@@ -137,7 +140,7 @@ def build(meter):
             record["reads_seen"], record["unsupported_figures"] = reads_seen, unsupported
             pre = J.precheck(judged_case, evidence, {}, {}, changes_text)
             judged = J.judge(judged_case, evidence, changes_text, pre, truth, {}, None, production=True)
-            passed = J.case_passed(judged_case, pre, judged) and not unexpected and not cleanup["left"]
+            passed = J.case_passed(judged_case, pre, judged) and not outcome["failed"]
             if record.get("state"):
                 passed = passed and record["state"]["ok"]
             if metric and metric.get("matches_computed") is False:
@@ -146,23 +149,15 @@ def build(meter):
                           messages=messages, stored_messages=stored, fingerprint_changes=changes)
         except Exception as e:  # noqa: BLE001
             record.update(error=f"{type(e).__name__}: {e}", score=None, passed=False)
-            try:                                         # the quest is still compared and cleaned, so a write made by a turn that failed is reported and taken back
-                failed_changes = PC.diff_fingerprints(fp_before, PC.read_fingerprint(client), own_conv=conv)
-                record["unexpected_writes"] = PC.unexpected_writes(failed_changes, effect, zero)
-                if cleanup is None:
-                    cleanup = PC.run_cleanup(client, PC.plan_cleanup(failed_changes, conv, started_iso, acted_as["user_id"], effect, zero))
-            except Exception as inner:  # noqa: BLE001
-                record["cleanup_error"] = f"{type(inner).__name__}: {inner}"
-        if cleanup is not None:
-            record["cleanup"] = PC.cleanup_line(cleanup)
-            record["lane_gaps"] = [record["cleanup"]] if (cleanup["withdrawn"] or cleanup["deleted"] or cleanup["left"]) else []
-            if cleanup["left"]:
-                record["passed"] = False
-                print(f"  {case['id']}: CLEANUP FAILED, a human must look: {record['cleanup']}")
-        elif record.get("cleanup_error"):
-            record["passed"] = False
-            record["lane_gaps"] = [f"cleanup could not run: {record['cleanup_error']}"]
-            print(f"  {case['id']}: CLEANUP COULD NOT RUN: {record['cleanup_error']}")
+            if outcome is None and safety.before is not None:       # the quest is still compared and cleaned, so a write made by a turn that failed is reported and taken back
+                try:
+                    outcome = safety.finish(own_conv=conv, frames=events)
+                except Exception as inner:  # noqa: BLE001
+                    record["cleanup_error"] = f"{type(inner).__name__}: {inner}"
+                    record["lane_gaps"] = [f"cleanup could not run: {record['cleanup_error']}"]
+                    print(f"  {case['id']}: CLEANUP COULD NOT RUN: {record['cleanup_error']}")
+        if outcome is not None:
+            safety.apply(record, outcome)
         usage = PC.usage_of(events)
         names = [PC.event_name(e) for e in events]
         record.update(seconds=round(time.time() - started, 1), model_calls=usage["model_calls"], tokens_in=usage["tokens_in"], tokens_out=usage["tokens_out"],

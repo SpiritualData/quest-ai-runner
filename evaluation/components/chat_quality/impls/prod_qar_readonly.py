@@ -98,6 +98,9 @@ def build_arm(meter, bounded):
     from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
     state_client = QuestClient(os.environ.get("QUEST_BASE_URL", ""), os.environ.get("QUEST_API_KEY", ""), team_id=(os.environ.get("QUEST_TEAM_ID") or ""))
     environment = ENVIRONMENT_BOUNDED if bounded else ENVIRONMENT
+    import prodchat as PC
+    import prodsafety as PS
+    safety_client = PC.ProdClient(os.environ.get("QUEST_BASE_URL", ""), os.environ.get("QUEST_API_KEY", ""))     # refuses any base URL but the production API; reads, and takes back what a run created
     try:
         who = state_client.whoami() or {}
     except Exception as e:  # noqa: BLE001
@@ -107,6 +110,7 @@ def build_arm(meter, bounded):
     if (bounded and not expected) or (expected and expected not in {str(v).lower() for v in acted_as.values()}):
         raise SystemExit(f"chat_quality: this run acts as {acted_as or 'an unknown account'}, but QAR_PROD_EXPECT_ACCOUNT is "
                          f"{expected or 'not set (required for bounded writes)'}; refusing to run")
+    PC.check_account(safety_client.whoami())          # the user id and email the wrapper exports (QAR_PROD_EXPECT_USER_ID, QAR_PROD_EXPECT_ACCOUNT)
     components = Path(__file__).resolve().parents[2]
     harness_paths = [os.environ.get("QAR_EVAL_OUTPUT_DIR"), str(components), str(components.parents[1] / "esoi")]
     dry.set_allowances([], harness_paths)
@@ -179,6 +183,19 @@ def build_arm(meter, bounded):
                 references[ref["name"]] = P.read_value(ref, state_client)
             except Exception as e:  # noqa: BLE001
                 references[ref["name"]] = f"unreadable ({type(e).__name__})"
+        zero_case = bool(case.get("zero_writes")) or not bounded           # a writes-blocked arm may create nothing real, whatever the case's effect says
+        safety = PS.TurnSafety(safety_client, PC.target("QAR_PROD_EXPECT_USER_ID"), case["id"], effect if bounded else None, zero_case, message)
+        try:
+            window_reason = safety.gate()
+            if window_reason:
+                record.update(error=f"not run: {window_reason}", score=None, passed=False, acted_as=acted_as)
+                record["log_extra"] = {"environment": environment, "acted_as": acted_as}
+                return record
+            safety.begin()
+        except Exception as e:  # noqa: BLE001 -- never run a turn whose quest state before it cannot be read
+            record.update(error=f"not run: the quest state before the turn cannot be read: {type(e).__name__}: {e}", score=None, passed=False, acted_as=acted_as)
+            record["log_extra"] = {"environment": environment, "acted_as": acted_as}
+            return record
         started = time.time()
         frames, final = [], None
         try:
@@ -265,6 +282,11 @@ def build_arm(meter, bounded):
             record.update(evidence=evidence, changes=changes, precheck=pre, judged=judged, score=J.final_score(pre, judged), passed=passed)
         except Exception as e:  # noqa: BLE001
             record.update(error=f"{type(e).__name__}: {e}", score=None, passed=False)
+        try:
+            safety.apply(record, safety.finish(own_conv=None, frames=frames))
+        except Exception as e:  # noqa: BLE001
+            record.update(passed=False, cleanup_error=f"{type(e).__name__}: {e}", lane_gaps=[f"cleanup could not run: {e}"])
+            print(f"  {case['id']}: CLEANUP COULD NOT RUN: {e}")
         snap = dry.RECORDER.snapshot()
         types = [f.get("type") for f in frames]
         record.update(
@@ -276,11 +298,11 @@ def build_arm(meter, bounded):
             housekeeping_skipped=snap["skipped_housekeeping"], context_assemblies=dict(assemblies),
             judge_calls=snap["model_calls"] - (run_calls if "run_calls" in locals() else snap["model_calls"]), performed=snap["performed"], state=record.get("state"), reads=snap["reads"], writes=[w for w in snap["writes"] if not w.get("internal")],
             bookkeeping=sum(1 for w in snap["writes"] if w.get("internal")),
-            tokens_in=getattr(final, "tokens_in", 0) or 0, tokens_out=getattr(final, "tokens_out", 0) or 0, lane_gaps=sorted(set(snap["missing_tools"])),
+            tokens_in=getattr(final, "tokens_in", 0) or 0, tokens_out=getattr(final, "tokens_out", 0) or 0, lane_gaps=sorted(set(snap["missing_tools"]) | set(record.get("lane_gaps") or [])),
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies", "cleanup", "unexpected_writes", "cleanup_error")}
         try:
             meter.record(record["model_calls"])
         except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check
