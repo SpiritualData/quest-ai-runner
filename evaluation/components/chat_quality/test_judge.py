@@ -351,3 +351,24 @@ def test_a_long_conversation_keeps_every_reply_for_the_judge():
     assert len(text) <= J.EVIDENCE_JUDGE_CHARS
     for i in range(6):
         assert f"reply number {i}" in text
+
+
+def test_a_production_prompt_is_grounded_in_the_turns_own_reads_and_consults_no_dev_pivots():
+    import prod_probes as P
+    case = dict(id="PROD-1", dataset="poor_answers", message="where are we?", rubric=["States only figures from the records"], conversation_scope="none",
+                must_use_pivots=["SOME_DEV_PIVOT"], expected_routing="any")
+    reads = P.reads_text(P.reads_of([{"locator": "tool:list_quest_goals", "text": "Paid subscribers 0; budget 12,000 dollars; target 10"}], ["Context: P1 at 50.0%"]))
+    evidence = dict(reply="Zero subscribers, a 12,000 budget and a target of 10.", kind="answer", actions=[], tools=[], errors=[], turns=[])
+    prompt = J.build_prompt(case, evidence, [], dict(checks=[], hard_failures=[]), reads, {}, production=True)
+    assert "THE TURN'S OWN READS" in prompt and "budget 12,000 dollars" in prompt and "P1 at 50.0%" in prompt
+    assert "what was seeded" not in prompt and "SOME_DEV_PIVOT" not in prompt and "a production run has no seeded pivots" in prompt
+    dev = J.build_prompt(case, evidence, [], dict(checks=[], hard_failures=[]), "seeded truth", {"SOME_DEV_PIVOT": dict(quest_key="q", where="w", description="d", exact_values={})})
+    assert "what was seeded" in dev and "SOME_DEV_PIVOT" in dev
+
+
+def test_a_figure_present_in_the_reads_is_verified_and_one_absent_is_unsupported():
+    import prod_probes as P
+    reads = P.reads_text([{"source": "tool:x", "text": "Paid subscribers 0. Budget $12,000. Target 10 users. P1 is at 50.0%."}])
+    assert P.unsupported_figures("We have 0 paid subscribers, a $12,000 budget and a target of 10; P1 is 50%.", reads, "") == []
+    assert P.unsupported_figures("We have 0 subscribers and a $15,000 budget.", reads, "") == ["15000"]
+    assert P.unsupported_figures("You said 7 posts.", reads, "write 7 posts") == []

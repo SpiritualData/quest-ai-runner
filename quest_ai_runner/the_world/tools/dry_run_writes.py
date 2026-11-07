@@ -135,7 +135,7 @@ LOCAL = threading.local()
 
 
 def set_allowances(rules: Optional[List[Mapping[str, Any]]], harness_paths: Optional[List[str]] = None) -> None:
-    """The writes this run may really make. A rule is ``{"tool": name, "args": {k: v}}`` (the tool, when every listed argument is equal) or
+    """The writes this run may really make. A rule is ``{"tool": name, "args": {k: v}}`` (the tool, when every listed argument is equal; a key ending in ``~`` means "starts with") or
     ``{"method": "POST", "path": "<regex>"}`` (a Quest request). ``harness_paths`` are folders the measuring harness writes its own record to."""
     STATE["allowances"] = [dict(r) for r in rules or []]
     STATE["harness_paths"] = [str(p) for p in harness_paths or [] if p]
@@ -143,7 +143,8 @@ def set_allowances(rules: Optional[List[Mapping[str, Any]]], harness_paths: Opti
 
 def tool_allowed(name: str, args: Mapping[str, Any]) -> bool:
     for rule in STATE["allowances"]:
-        if rule.get("tool") == name and all(str(args.get(k)) == str(v) for k, v in (rule.get("args") or {}).items()):
+        if rule.get("tool") == name and all(
+                str(args.get(k[:-1])).startswith(str(v)) if k.endswith("~") else str(args.get(k)) == str(v) for k, v in (rule.get("args") or {}).items()):
             return True
     return False
 

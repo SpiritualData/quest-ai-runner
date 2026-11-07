@@ -60,3 +60,24 @@ def test_structured_rules_from_a_file_are_laid_over_prose_and_never_over_a_struc
     merged = P.with_rules({"id": "M-1", "effect": "prose", "state_check": {"read": "/mine"}}, rules)
     assert merged["effect"] == {"allow": [{"tool": "t"}]} and merged["state_check"] == {"read": "/mine"}
     assert P.with_rules({"id": "other", "effect": "prose"}, rules)["effect"] == "prose"
+
+
+def test_dotted_lists_pick_yes_no_count_and_placeholders():
+    client = Client({"/g": {"period_groups": [{"goals": [{"name": "P1 next step: week of 2026-11-02", "description": "x" * 150}, {"name": "A"}]}, {"goals": [{"name": "B"}]}]},
+                     "/s": {"records": [{"recordId": "m1", "fields": {"record": "No (2026-10-31): still not live"}}, {"recordId": "m2", "fields": {"record": "50.0 percent (5 of 10)"}}]}})
+    assert P.read_number({"read": "/g", "list_key": "period_groups.goals", "count": True}, client) == 3.0
+    assert P.read_number({"read": "/g", "list_key": "period_groups.goals", "match": {"=name": "a"}, "count": True}, client) == 1.0
+    assert P.read_number({"read": "/g", "list_key": "period_groups.goals", "match": {"name": "P1 next step"}, "min_len": {"description": 100}, "count": True}, client) == 1.0
+    assert P.read_number({"read": "/g", "list_key": "period_groups.goals", "match": {"name": "P1 next step"}, "min_len": {"description": 500}, "count": True}, client) == 0.0
+    assert P.read_number({"read": "/s", "list_key": "records", "match": {"recordId": "m1"}, "pick": "fields.record", "yes_no": True}, client) == 0.0
+    assert P.read_number({"read": "/s", "list_key": "records", "match": {"recordId": "m2"}, "pick": "fields.record"}, client) == 50.0
+    import datetime
+    assert P.expand("P1 next step: week of {monday}", datetime.date(2026, 11, 6)) == "P1 next step: week of 2026-11-02"
+    assert P.expand({"t": "{week}"}, datetime.date(2026, 11, 6)) == {"t": "2026_W45"}
+
+
+def test_the_default_number_skips_dates_and_a_yes_no_is_found_after_a_lead_in():
+    client = Client({"/s": {"records": [{"recordId": "a", "fields": {"record": "Not yet counted (2026-10-23)."}}, {"recordId": "b", "fields": {"record": "Re-read 2026-10-31 22:01 UTC (pass): still No."}},
+                                         {"recordId": "c", "fields": {"record": "Provisional 83.3 percent (35 of 42), read 2026-10-31"}}, {"recordId": "d", "fields": {"record": "0 of 6 stages (2026-10-31)"}}]}})
+    read = lambda rid, **kw: P.read_number(dict({"read": "/s", "list_key": "records", "match": {"=recordId": rid}, "pick": "fields.record"}, **kw), client)
+    assert read("a") is None and read("b", yes_no=True) == 0.0 and read("c") == 83.3 and read("d") == 0.0

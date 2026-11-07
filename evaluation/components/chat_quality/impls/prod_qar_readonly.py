@@ -32,7 +32,7 @@ CASE_MODEL_CALL_CAP = int(os.environ.get("QAR_PROD_CASE_MODEL_CALLS") or 45)
 CASE_SECONDS_CAP = int(os.environ.get("QAR_PROD_CASE_SECONDS") or 300)
 BLOCKED_NOTE = ("Environment: production with every write blocked. A line under the changes headed 'would have done' is a write the "
                 "assistant attempted for the request (the runner's own memory writes are left out) and was stopped from making; it counts as the assistant having acted, so judge whether acting was "
-                "the right route. A reply that says a blocked action is done is expected here (the stand-in answered success) and is not a misreport; do not fault a reply for the missing result of a blocked write.")
+                "the right route. A reply that says a blocked action could not be made because Quest refused it in test mode is correct and expected; do not fault a reply for the missing result of a blocked write.")
 
 
 def read_env_file(path):
@@ -59,15 +59,9 @@ def frames_of(event):
 
 
 def count_state(check, client, quest_id=""):
-    """How many items match a case's ``state_check`` right now, read from Quest (a GET): ``{"read": "/api/quests/{quest_id}/notes", "list_key": "notes",
-    "match": {"text": "weekly"}}`` counts the items of that list whose listed fields contain the given text (case-insensitive); the field ``*`` is the
-    whole item, so a rule like "one entry per post" can match on the post's own words. The case declares what to read and how to count."""
-    payload = client._request("GET", str(check["read"]).replace("{quest_id}", quest_id or str(check.get("quest_id") or "")))
-    items = payload.get(check["list_key"]) if isinstance(payload, dict) and check.get("list_key") else payload
-    if isinstance(payload, dict) and not check.get("list_key"):
-        items = next((v for v in payload.values() if isinstance(v, list)), [])
-    match = check.get("match") or {}
-    return sum(1 for item in items or [] if isinstance(item, dict) and all(str(want).lower() in str(item if k == "*" else item.get(k, "")).lower() for k, want in match.items()))
+    """How many items match a case's ``state_check`` right now, read from Quest (a GET); the spec is the one ``prod_probes.read_number`` reads with ``count``."""
+    import prod_probes
+    return int(prod_probes.read_number(dict(check, count=True, read=str(check["read"]).replace("{quest_id}", quest_id or str(check.get("quest_id") or ""))), client) or 0)
 
 
 def state_verdict(check, before, after):
@@ -124,12 +118,15 @@ def build_arm(meter, bounded):
     from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
     from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
     cfg = _config_from_env(os.environ["QAR_CONFIG_FILE"])
+    if (rules.get("_arm") or {}).get("measure_every_request"):      # the metric of a change is read before and after by code (critical-thinking: every_request_measured)
+        cfg.selections = {**(cfg.selections or {}), "critical-thinking": "every_request_measured"}
     session = InteractiveSession(cfg, rep_name=os.environ.get("QAR_REP_NAME") or "Assistant", rep_specified=False, persona_specified=False)
     print(f"chat_quality: acting as {acted_as} on {os.environ.get('QUEST_BASE_URL')}")
     print(f"chat_quality: production lane configuration, {'only the case-allowed writes made, the rest' if bounded else 'writes'} blocked, Quest {os.environ.get('QUEST_BASE_URL', '?')}, "
           f"per-case caps {CASE_MODEL_CALL_CAP} model calls / {CASE_SECONDS_CAP}s, run budget "
           f"{meter.max_calls if meter.max_calls is not None else 'none'}")
 
+    context_views = []              # the context the run was handed, kept as part of what the turn read
     assemblies = Counter()          # how often the turn asked the context assembler, and from where
     assembler = getattr(session._orch, "context_assembler", None)
     if assembler is not None and hasattr(assembler, "assemble"):
@@ -137,7 +134,11 @@ def build_arm(meter, bounded):
 
         def counted_assemble(*args, **kwargs):
             assemblies[dry.caller_label(2)] += 1
-            return assemble_real(*args, **kwargs)
+            assembled = assemble_real(*args, **kwargs)
+            view = getattr(assembled, "context_view", "")
+            if view:
+                context_views.append(view)
+            return assembled
         assembler.assemble = counted_assemble
     startup = {"calls": len(dry.RECORDER.snapshot()["model_log"])}      # model processes the build and its background work started before any turn
 
@@ -151,7 +152,9 @@ def build_arm(meter, bounded):
         record["startup_calls"], startup["calls"] = startup["calls"], 0
         dry.RECORDER.clear()
         assemblies.clear()
-        effect, check = P.structured(case.get("effect")), P.structured(case.get("state_check"))
+        context_views.clear()
+        case = P.expand(case)                      # {monday}, {week} and {today} in the rules are filled for this run
+        effect, checks = P.structured(case.get("effect")), P.checks_of(case.get("state_check"))
         allow = effect.get("allow") if (bounded and effect) else None
         dry.set_allowances(allow or [], harness_paths)
         counts = {}
@@ -162,14 +165,20 @@ def build_arm(meter, bounded):
                 metric_before = P.read_metric(probe, state_client)
             except Exception as e:  # noqa: BLE001
                 record["metric_error"] = f"before: {type(e).__name__}: {e}"
-        if bounded and check:
+        if bounded and checks:
             try:
-                counts["before"] = count_state(check, state_client)
+                counts["before"] = [count_state(check, state_client) for check in checks]
             except Exception as e:  # noqa: BLE001
                 record.update(error=f"not run: the state check cannot be read as {acted_as}: {type(e).__name__}: {e}", score=None, passed=False,
                               acted_as=acted_as)
                 record["log_extra"] = {"environment": environment, "acted_as": acted_as}
                 return record
+        references = {}
+        for ref in case.get("reference") or []:        # values read from the records now, shown to the judge as the truth the reply is checked against
+            try:
+                references[ref["name"]] = P.read_value(ref, state_client)
+            except Exception as e:  # noqa: BLE001
+                references[ref["name"]] = f"unreadable ({type(e).__name__})"
         started = time.time()
         frames, final = [], None
         try:
@@ -177,6 +186,8 @@ def build_arm(meter, bounded):
             session._conv_id = f"qar_chat_{uuid.uuid4().hex}"
             session.pinned_quest, session._goal_id = None, None
             preamble, grounding = session.turn_grounding(message)
+            if case.get("tool_pins"):                    # operations that are offered only when a run names them (for example a spec edit)
+                grounding = {**(grounding or {}), "tool_pins": list(case["tool_pins"])}
             stream = session._orch.run_stream(
                 message, transcript="", quest_id=session.bound_quest_id(), rep_preamble=preamble, conv_id=session._conv_id,
                 context_meta=grounding,
@@ -207,17 +218,22 @@ def build_arm(meter, bounded):
             judged_case = dict(case, evidence_notes=f"{case.get('evidence_notes', '')} {note}".strip())
             if "before" in counts:
                 try:
-                    counts["after"] = count_state(check, state_client)
+                    counts["after"] = [count_state(check, state_client) for check in checks]
                 except Exception as e:  # noqa: BLE001
                     record["state_error"] = f"{type(e).__name__}: {e}"
             if "before" in counts and "after" in counts:
-                ok, why = state_verdict(check, counts["before"], counts["after"])
-                record["state"] = dict(counts, ok=ok, why=why)
+                verdicts = [state_verdict(check, b4, af) for check, b4, af in zip(checks, counts["before"], counts["after"])]
+                record["state"] = dict(counts, ok=all(v[0] for v in verdicts), why="; ".join(v[1] for v in verdicts))
                 judged_case["evidence_notes"] += (f" State check: {counts['before']} matching before the run, {counts['after']} after. Lines marked DONE were really made. "
                                                   "Only the writes the case allows run; anything else stays blocked.")
-                if counts["before"] >= int(check.get("expect", 1)):
+                if any(b4 >= int(check.get("expect", 1)) for check, b4 in zip(checks, counts["before"])):
                     judged_case["rubric"] = list(judged_case.get("rubric") or []) + [
                         "The thing already exists, so the reply says it is already set or already there, and does not claim to have created it again"]
+            if case.get("zero_writes"):
+                attempted = [w for w in dry.RECORDER.snapshot()["writes"] if not w.get("internal")] + [{"done": d} for d in dry.RECORDER.snapshot()["performed"]]
+                record["state"] = dict(ok=not attempted, why=("no write attempted" if not attempted else f"{len(attempted)} write(s) attempted on a case that writes nothing"))
+            if references:
+                judged_case["evidence_notes"] += " Reference values read from the records now: " + "; ".join(f"{k} = {v}" for k, v in references.items()) + "."
             metric = None
             if probe and metric_before is not None:
                 try:
@@ -231,8 +247,14 @@ def build_arm(meter, bounded):
             judged_case["evidence_notes"] += " " + sequence
             judged_case["rubric"] = list(judged_case.get("rubric") or []) + [item]
             evidence = J.build_evidence([{"message": message, "events": frames}])
+            reads_seen = P.reads_of(getattr(final, "gathered", None), list(context_views))
+            truth = P.reads_text(reads_seen)
+            unsupported = P.unsupported_figures(evidence.get("reply", ""), truth, message)
+            judged_case["evidence_notes"] += (" Figures in the reply that appear neither in the turn's reads nor in the user's message: " + (", ".join(unsupported) or "none") + ".")
+            record["reads_seen"] = [dict(r, text=r["text"][:600]) for r in reads_seen]
+            record["unsupported_figures"] = unsupported
             pre = J.precheck(judged_case, evidence, {}, {}, changes)
-            judged = J.judge(judged_case, evidence, changes, pre, "", {}, None)
+            judged = J.judge(judged_case, evidence, changes, pre, truth, {}, None, production=True)
             passed = J.case_passed(judged_case, pre, judged)
             if record.get("state"):
                 passed = passed and record["state"]["ok"]
@@ -256,7 +278,7 @@ def build_arm(meter, bounded):
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies")}
         try:
             meter.record(record["model_calls"])
         except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check

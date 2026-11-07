@@ -35,26 +35,96 @@ def is_action_case(case):
 
 
 def items_of(payload, list_key=""):
+    """The list a read points at. ``list_key`` may be a dotted path whose lists are flattened ("period_groups.goals")."""
     if isinstance(payload, dict) and list_key:
-        return payload.get(list_key) or []
+        nodes = [payload]
+        for part in str(list_key).split("."):
+            following = []
+            for node in nodes:
+                value = node.get(part) if isinstance(node, dict) else None
+                following.extend(value if isinstance(value, list) else [] if value is None else [value])
+            nodes = following
+        return nodes
     if isinstance(payload, dict):
         return next((v for v in payload.values() if isinstance(v, list)), [payload])
     return payload if isinstance(payload, list) else []
 
 
-def matches(item, match):
-    return isinstance(item, dict) and all(str(want).lower() in str(item if key == "*" else item.get(key, "")).lower() for key, want in (match or {}).items())
+def matches(item, match, min_len=None):
+    """True when every ``match`` text is in the item's field (``*`` is the whole item; ``=field`` must equal exactly) and every ``min_len`` field is long enough."""
+    if not isinstance(item, dict):
+        return False
+    for key, want in (match or {}).items():
+        have = str(item if key == "*" else item.get(key.lstrip("="), ""))
+        if (key.startswith("=") and have.strip().lower() != str(want).strip().lower()) or (not key.startswith("=") and str(want).lower() not in have.lower()):
+            return False
+    return all(len(str(item.get(field) or "")) >= int(need) for field, need in (min_len or {}).items())
+
+
+def expand(value, today=None):
+    """Placeholders in a rule: ``{monday}`` (ISO date of this week's Monday), ``{week}`` (YYYY_W##), ``{today}``."""
+    import datetime
+    day = today or datetime.date.today()
+    monday = day - datetime.timedelta(days=day.weekday())
+    iso = day.isocalendar()
+    fill = {"{monday}": monday.isoformat(), "{week}": f"{iso[0]}_W{iso[1]:02d}", "{today}": day.isoformat()}
+    if isinstance(value, str):
+        for mark, text in fill.items():
+            value = value.replace(mark, text)
+        return value
+    if isinstance(value, dict):
+        return {k: expand(v, day) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand(v, day) for v in value]
+    return value
+
+
+def pick_of(item, path):
+    """The value at a dotted path inside an item ("fields.record"), else the item itself."""
+    for part in str(path or "").split("."):
+        if part:
+            item = item.get(part) if isinstance(item, dict) else None
+    return item
 
 
 def read_number(spec, client):
-    """The number a read spec points at (``read``, ``list_key``, ``match``, ``regex``), or None when nothing matches."""
+    """The number a read spec points at, or None when nothing matches. ``read`` is a GET path (or ``command`` a program printing text, run by the
+    harness, never the model); ``list_key``/``match`` pick the item; ``pick`` a field inside it; ``count`` counts the matching items instead of
+    reading a number; ``yes_no`` reads a text that starts Yes or No as 1 or 0; ``regex`` captures the number (the first number by default)."""
+    if spec.get("command"):
+        import subprocess
+        text = subprocess.run(list(spec["command"]), capture_output=True, text=True, timeout=int(spec.get("timeout", 120)), check=False).stdout
+        found = re.search(spec.get("regex") or NUMBER, text)
+        return float(found.group(1).replace(",", "")) if found else None
     payload = client._request("GET", str(spec["read"]))
-    items = [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"))] if spec.get("match") else [payload]
+    items = [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"), spec.get("min_len"))] if (spec.get("match") or spec.get("list_key")) else [payload]
+    if spec.get("count"):
+        return float(len(items))
     for item in items:
-        found = re.search(spec.get("regex") or r"(-?\d[\d,]*\.?\d*)", json.dumps(item, default=str) if not isinstance(item, str) else item)
+        value = pick_of(item, spec.get("pick"))
+        text = value if isinstance(value, str) else json.dumps(value, default=str)
+        if spec.get("yes_no"):
+            found = re.search(r"\b(yes|no)\b", str(value or ""), re.I)
+            return None if not found else 1.0 if found.group(1).lower() == "yes" else 0.0
+        found = re.search(spec.get("regex") or NUMBER, text)
         if found:
             return float(found.group(1).replace(",", ""))
     return None
+
+
+def read_value(spec, client):
+    """A reference value for the judge: a number (``read_number``), or with ``text`` the picked text (clipped), or with ``file`` and ``grep`` the
+    first line of a file containing the grep text."""
+    if spec.get("file"):
+        with open(spec["file"], encoding="utf-8") as handle:
+            return next((line.strip()[:400] for line in handle if str(spec.get("grep", "")).lower() in line.lower()), None)
+    if spec.get("text"):
+        payload = client._request("GET", str(spec["read"]))
+        for item in [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"))]:
+            value = pick_of(item, spec.get("pick"))
+            return str(value)[:400] if value is not None else None
+        return None
+    return read_number(spec, client)
 
 
 def read_metric(probe, client):
@@ -113,6 +183,51 @@ def sequence_note(case, messages, metric=None):
     return " ".join(lines), (TWO_MESSAGE_ITEM if is_action_case(case) else SINGLE_MESSAGE_ITEM)
 
 
+#: The first plain number of a text: not a part of a date or a time (a digit run followed by "-", ":" or "/" is skipped).
+NUMBER = r"(?<![\d.-])(\d[\d,]*\.?\d*)(?![\d,.]*[-:/])"
+FIGURE = re.compile(r"[$]?\d[\d,]*(?:\.\d+)?%?")
+
+
+def figures_in(text):
+    """The numbers a text states (amounts, counts, percentages, dates' digits), as plain strings without thousands separators or symbols."""
+    found = set()
+    for token in FIGURE.findall(str(text or "")):
+        digits = token.strip("$%").replace(",", "")
+        if digits and digits.replace(".", "", 1).isdigit():
+            found.add(digits.rstrip("0").rstrip(".") if "." in digits else digits)
+    return found
+
+
+def unsupported_figures(reply, reads_text, message=""):
+    """The figures a reply states that appear neither in the turn's own reads nor in the user's message: unsupported until shown otherwise."""
+    return sorted(figures_in(reply) - figures_in(reads_text) - figures_in(message), key=lambda f: (len(f), f))
+
+
+def reads_of(gathered, context_views, per_item=2500, total=24000):
+    """What the turn actually read, as ``[{"source", "text"}]`` trimmed for the judge and the private log: each tool result or read observation
+    the loop gathered, then the context the run was handed. Nothing here comes from any test data."""
+    items = []
+    for observation in gathered or []:
+        if isinstance(observation, dict):
+            text = observation.get("tool_text") or observation.get("text") or observation.get("content") or ""
+            if str(text).strip():
+                items.append({"source": str(observation.get("locator") or observation.get("rel_path") or observation.get("kind") or "read"), "text": str(text)[:per_item]})
+    for view in context_views or []:
+        if str(view).strip():
+            items.append({"source": "context handed to the run", "text": str(view)[:per_item * 2]})
+    out, used = [], 0
+    for item in items:
+        if used + len(item["text"]) > total:
+            break
+        out.append(item)
+        used += len(item["text"])
+    return out
+
+
+def reads_text(reads):
+    return "\n\n".join(f"## {r['source']}\n{r['text']}" for r in reads)
+
+
 def load_rules(path):
     """``{case id: {"effect", "state_check", "metric_probe"}}`` from the rules file (JSON), or {} without one."""
     if not path:
@@ -121,12 +236,19 @@ def load_rules(path):
         return json.load(handle)
 
 
+def checks_of(value):
+    """The structured state checks of a case as a list (a single dict, a list of dicts, or none)."""
+    if isinstance(value, dict):
+        return [value]
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
+
 def with_rules(case, rules):
     """The case with the structured rules of its id laid over a prose value (a structured value already on the case wins)."""
     extra = rules.get(case.get("id")) or {}
     merged = dict(case)
-    for key in ("effect", "state_check", "metric_probe"):
-        if key in extra and structured(case.get(key)) is None:
+    for key in ("effect", "state_check", "metric_probe", "reference", "zero_writes", "tool_pins", "known_gaps"):
+        if key in extra and (key in ("reference", "zero_writes", "tool_pins", "known_gaps") or structured(case.get(key)) is None):
             merged[key] = extra[key]
     return merged
 

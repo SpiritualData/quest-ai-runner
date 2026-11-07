@@ -580,20 +580,29 @@ def render_scope(case):
     return f"conversation pinned to: {pinned}{target}"
 
 
-def build_prompt(case, evidence, changes, pre, truth, pivots):
+PRODUCTION_TRUTH_HEADER = ("# THE TURN'S OWN READS: what the assistant actually read this turn (tool results, records, context). This is the ONLY ground truth "
+                           "on a production run. A figure, name or date that appears here is VERIFIED. One that does not appear here is UNSUPPORTED. "
+                           "Never mark a real figure wrong because it is absent from any test or seeded data: there is none on production")
+PRODUCTION_TEMPLATE = PROMPT_TEMPLATE.replace("# GROUND TRUTH: what was seeded in the user's quests and collections", PRODUCTION_TRUTH_HEADER)
+PRODUCTION_SCOPE = ("production run: the assistant is the team's AI answering a message sent from the account it is signed in as; no quest is pinned and "
+                    "no test data was seeded")
+
+
+def build_prompt(case, evidence, changes, pre, truth, pivots, production=False):
+    """``production`` swaps the dev world's framing (seeded ground truth, pinned quest, pivots) for the turn's own reads."""
     messages = case.get("messages") or [case["message"]]
     rubric_items = case.get("rubric") or []
-    return PROMPT_TEMPLATE.format(
+    return (PRODUCTION_TEMPLATE if production else PROMPT_TEMPLATE).format(
         id=case["id"], dataset=case.get("dataset", ""), area=case.get("area", ""),
-        scope=render_scope(case),
+        scope=PRODUCTION_SCOPE if production else render_scope(case),
         expected_routing=case.get("expected_routing", "any"),
         observed_routing=evidence.get("kind", "unknown"),
         forbid_writes=bool(case.get("forbid_writes")),
         messages="\n".join(f"[turn {i}] {m}" for i, m in enumerate(messages, 1)),
         n_items=len(rubric_items),
         rubric=numbered(rubric_items),
-        pivots=render_pivots(case, pivots),
-        bonus_pivots=render_pivots(case, pivots, "bonus_pivots"),
+        pivots="(none: a production run has no seeded pivots)" if production else render_pivots(case, pivots),
+        bonus_pivots="(none)" if production else render_pivots(case, pivots, "bonus_pivots"),
         forbidden=case.get("forbidden_side_effects") or "(none stated)",
         steps=json.dumps(case.get("steps") or [], indent=1)[:3000],
         evidence_notes=case.get("evidence_notes") or "(none)",
@@ -837,7 +846,7 @@ def write_cached_verdict(cache_path, raw):
 
 
 def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None,
-          model=JUDGE_MODEL):
+          model=JUDGE_MODEL, production=False):
     """Run the LLM judge. Never raises: a failure returns {"error": ...} so a case is reported as
     UNJUDGED rather than silently passed.
 
@@ -847,8 +856,8 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
     defines. If the second attempt is ALSO short, the case is still reported unjudged, never
     silently scored from the incomplete response (the rule this exists to protect).
     """
-    truth = truth + other_account_data_section(world)
-    prompt = build_prompt(case, evidence, changes, pre, truth, pivots)
+    truth = truth if production else truth + other_account_data_section(world)     # the dev account's listing is never consulted on production
+    prompt = build_prompt(case, evidence, changes, pre, truth, pivots, production=production)
     cache_path = judge_cache_path(model, prompt)
     cached = read_cached_verdict(cache_path, case)
     if cached:
