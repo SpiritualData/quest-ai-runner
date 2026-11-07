@@ -275,6 +275,7 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
                  + (f" (week read in {zone})" if zone else " (the quest records no time zone, so UTC)") + f", linked to spec_solution_id {rid}"
                  + (f" and spec_metric_id {metric_ids[0]}" if metric_ids else "") + f"; a deliverable is a goal titled '{name} <short name>'. The record id is only the link (spec_solution_id). The tool reports created, updated or already there.")
     lines.append(INCREMENT_ORDER.replace("{title}", name))
+    lines.append("This cue asks to move the milestone forward by recording its next step. It never means rescheduling the milestone's own date, and it is not a question to the person.")
     lines.append("Use them: do not ask which milestone, and do not ask for facts listed here.")
     return "\n".join(lines)
 
@@ -299,10 +300,11 @@ class Resolved:
     after_state: Optional[Mapping[str, Any]] = None      # the goal as the tool read it back after the write (id, name, assignee id, links, period)
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
-        """True when the increment is the third rung: the person asked for something to be done (the planner's ``user_intent``), no deliverable is being written in the
-        reply (``deep_target``), no tool has already changed something this turn, and the plan is one the flow step takes over. Structured fields only."""
+        """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
+        and the plan is one the flow step takes over. A deliverable the planner means to write in the reply does not exempt it: the step records the owned next step with its own draft, so a
+        reply that fails to record anything still ends with the step kept. Structured fields only."""
         return (not self.receipt and user_intent == ACT and getattr(plan, "action", None) in CODE_ROUTED_ACTIONS
-                and getattr(plan, "deep_target", None) != DELIVERABLE_TARGET and not applied_write_ran(gathered, registry))
+                and not applied_write_ran(gathered, registry))
 
     def doing(self) -> str:
         """What happens now, for the first message: stated from the records, before the write."""
@@ -362,9 +364,11 @@ class Resolved:
         if keyed:
             asks.append('"goal_id": the id, exactly as listed, of the open goal below that is already the next step of this milestone (the same work, whatever its title or week), or ""')
         if not kept_draft:
-            asks.append('"draft": the next deliverable for this milestone that a person can use as it is (a short script outline, three alternative headlines, a checklist of at most 7 items '
-                        'or a set of at most 5 questions, whichever the milestone calls for), under 150 words, using only the facts above, with [brackets] where a fact is unknown, '
-                        'no prices, dates, counts or claims that are not given above, and no em dashes')
+            asks.append('"draft": the deliverable itself, never a plan to write it, finished enough to use as it is, under 150 words: for advertising or outreach copy, three distinct alternative '
+                        'headlines and the metric they are compared by; for confirming something with people, at most 5 neutral questions that can be sent as written; for a new source or '
+                        'channel, one named concrete source, a one-line hypothesis, a first test and the milestone metric; for a video, a script with an opening, three points and a call to action; '
+                        'otherwise a checklist of at most 7 steps. Use only the facts above; a [bracket] only for a fact that is truly unknown (a link); '
+                        'no prices, dates, counts or claims that are not given above; no em dashes')
         if not asks:
             return {"owner": "", "goal_id": "", "draft": kept_draft}
         answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.\n\nThe milestone text:\n{self.purpose[:PURPOSE_CHARS] or '(none)'}\n\n"
@@ -412,7 +416,8 @@ class Resolved:
                     note += f" The draft kept in the goal, to show in the reply: {self.draft}"
                 return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
                         f"Open the reply with exactly this sentence: \"{lead}\" Then say who owns it and what only a person can do, "
-                        "and do not offer to do it or ask whether to."), result.status.value
+                        "and do not offer to do it or ask whether to. This request is carried out: ask the person nothing, propose no new date, and do not move the milestone's own date. "
+                        "Show the kept draft exactly as given and state no count of its items."), result.status.value
             if owner and "assignee" in str(result.text):
                 refused.append(f"{owner}: {str(result.text).strip()[:160]}")
                 continue

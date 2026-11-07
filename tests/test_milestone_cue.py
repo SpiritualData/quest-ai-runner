@@ -158,7 +158,7 @@ def test_the_third_rung_runs_only_for_an_act_turn_that_took_no_higher_rung():
     assert resolved.routes_to_code(PlanDecision(action="deep"), "act", [], tools)
     assert resolved.routes_to_code(PlanDecision(action="confirm"), "act", [], tools)          # no permission asking for an action cue
     assert not resolved.routes_to_code(PlanDecision(action="answer"), "ask", [], tools)       # a question changes nothing
-    assert not resolved.routes_to_code(PlanDecision(action="answer", deep_target="draft_in_chat"), "act", [], tools)   # rung 1: a deliverable in the reply
+    assert resolved.routes_to_code(PlanDecision(action="answer", deep_target="draft_in_chat"), "act", [], tools)      # a deliverable meant for the reply does not exempt the kept step
     assert not resolved.routes_to_code(PlanDecision(action="tool"), "act", [], tools)
     assert not resolved.routes_to_code(PlanDecision(action="answer"), "act", [{"locator": "tool:create_or_update_quest_goal"}], tools)   # rung 2 ran: a write is done
 
@@ -833,7 +833,7 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
     resolved = cue.resolve(tools, "q1", CUE, now)
     receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action [link]"}))
-    assert len(asked) == 1 and "script outline" in asked[0] and "no em dashes" in asked[0]
+    assert len(asked) == 1 and "never a plan to write it" in asked[0] and "three distinct alternative headlines" in asked[0] and "at most 5 neutral questions" in asked[0] and "no em dashes" in asked[0]
     assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action [link]")
     assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
     kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action [link]",
@@ -890,3 +890,28 @@ def test_other_refusals_are_not_retried_and_an_accepted_link_is_untouched():
     accepted = link_client(False)
     done = run_tool(accepted)
     assert done.ok and accepted.posts[0][1]["spec_solution_id"] == "esr_c" and not done.data.get("links_refused")
+
+
+def test_the_first_message_for_a_resolved_milestone_is_read_from_its_record_fields_not_parsed_out_of_a_reads_text():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import send_status_first
+    resolved = cue.resolve(registry(), "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
+    sent = []
+    emit = SimpleNamespace(emit=lambda event: sent.append(event), status=lambda text: None)
+    garbled = {"kind": "query", "locator": "tool:read_spec_records", "text": "Milestone 'P3', solution esr_c, metric esr_mc, Current value: 12 percent of OUTSIDE sign-ups in the last 3. Owners named: Joshua (rep_f7eb490263d2)."}
+    orch = SimpleNamespace(cfg=SimpleNamespace(interim_replies=True), tools=registry())
+    rs = SimpleNamespace(plan=SimpleNamespace(action="answer", goal="", rationale="plan dump", facts_read=["Owners named: Joshua (rep_f7eb490263d2)"], tool_calls=[]),
+                         turn_user_intent="act", user_message=CUE, _ctx_meta={}, gathered=[garbled], context_view="", status_first=None, cue_resolved=resolved, quest_id="q1",
+                         draft_in_chat=False)
+    assert send_status_first(orch, emit, rs, [garbled], user_turn=True, forced=True)
+    text = sent[0].text
+    assert "Milestone: P3 Mobile app live on the Apple Store" in text and "Current value: No." in text and "esr_" not in text and "rep_" not in text and "OUTSIDE" not in text
+    assert "Now: Recording this week's next step" in text
+
+
+def test_the_reply_is_told_to_ask_nothing_and_never_to_move_the_milestones_own_date():
+    calls = []
+    resolved = cue.resolve(registry(calls), "q1", CUE)
+    receipt, _ = resolved.carry_out(registry(calls))
+    assert "ask the person nothing, propose no new date" in receipt and "state no count of its items" in receipt
+    assert "never means rescheduling the milestone's own date" in resolved.facts

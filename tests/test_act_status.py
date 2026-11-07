@@ -125,15 +125,18 @@ def test_every_request_measured_carries_the_metric_records_own_readings_into_bot
     assert [m["after"] for m in result["data"].get("metrics") or [] if "after" in m] in ([15.0], [])      # the rows ride on the result
 
 
-def test_the_closing_metric_line_names_the_metric_and_never_pastes_the_records_raw_text():
+def test_the_closing_metric_line_is_one_clean_line_or_none_and_never_a_piece_of_the_records_text():
     raw = "Re-read 2026-10-31 22:01 UTC (Payal pass): still No. The listing was checked again and nothing has changed since the earlier pass."
-    before = act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", raw)
-    gone = act_status.closing_lines(before, None, reread=True, already=[])
-    assert gone == "Metric (App Store listing live): was No; it could not be read again just now."
-    same = act_status.closing_lines(before, act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", raw), reread=True, already=[])
-    assert same == "Metric (App Store listing live): unchanged, still No."
-    moved = act_status.closing_lines(before, act_status.MetricReading("g1", "", "", "Yes"), reread=True, already=[])
-    assert moved == "Metric (App Store listing live): was No, now Yes." and "Payal" not in moved and "UTC" not in moved
+    sentence = "50.0 percent (5 of 10) of OUTSIDE new sign-ups in the last 30 days have created a first quest"
+    fragment = "0 of 6 on the working list (niche videos 1 to 6), read 2026-"
+    short = lambda value: act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", value)
+    assert act_status.closing_lines(short(raw), None, reread=True, already=[]) == ""                       # not read again: no line
+    assert act_status.closing_lines(short(raw), short(raw), reread=True, already=[]) == ""                 # a sentence is not a value: no line
+    assert act_status.closing_lines(short(sentence), short(sentence), reread=True, already=[]) == ""
+    assert act_status.closing_lines(short(fragment), short(fragment), reread=True, already=[]) == ""       # a cut-off fragment: no line
+    assert act_status.closing_lines(short("No"), short("No"), reread=True, already=[]) == "Metric (P3 Mobile app live): unchanged, still No."
+    assert act_status.closing_lines(short("still No"), short("Yes"), reread=True, already=[]) == "Metric (P3 Mobile app live): was No, now Yes."
+    assert act_status.closing_lines(short("3"), short("5"), reread=True, already=["It's already set."]) == "Metric (P3 Mobile app live): was 3, now 5.\nIt's already set."
 
 
 def test_the_code_steps_own_receipt_is_not_listed_again_as_already_in_place():

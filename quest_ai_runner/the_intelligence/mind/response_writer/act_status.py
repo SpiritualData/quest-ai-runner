@@ -242,18 +242,26 @@ def short_value(value: str) -> str:
     return (text[:cut.start()] if cut else text[:VALUE_CHARS]).strip() or NOT_RECORDED
 
 
+CLEAN_VALUE_CHARS = 48
+
+
+def clean_value(value: str) -> str:
+    """The recorded value as one short figure or phrase, or "" when the record holds a sentence or a fragment (a reader sees a clean value or none, never a cut-off piece of the record)."""
+    text = short_value(value)
+    raw = " ".join(str(value or "").split())
+    return text if text != NOT_RECORDED and len(raw.removeprefix("still ")) <= CLEAN_VALUE_CHARS and raw.count("(") == raw.count(")") else ""
+
+
 def closing_lines(before: Optional[MetricReading], after: Optional[MetricReading], *, reread: bool,
                   already: Sequence[str], voice: bool = False) -> str:
-    """The code-written tail of message 2: the metric (its name), the value before and after (the same record read again), then what was already in place."""
+    """The code-written tail of message 2: ONE clean metric line, or none. The metric line needs the value before and after, both short recorded values (the same record read again): the
+    milestone's name, "unchanged, still X" or "was X, now Y". A value that is a sentence or a fragment, or a record that could not be read again, gives no metric line. Then what was already in place."""
     lines: List[str] = []
-    if before is not None:
-        label = before.done_when or before.milestone or "the milestone's measure"
-        was = short_value(before.value)
-        if after is not None:
-            now = short_value(after.value)
+    if before is not None and after is not None:
+        was, now = clean_value(before.value), clean_value(after.value)
+        label = (before.milestone or before.done_when or "")[:70].strip()
+        if was and now and label:
             lines.append(f"Metric ({label}): unchanged, still {was}." if now == was else f"Metric ({label}): was {was}, now {now}.")
-        else:
-            lines.append(f"Metric ({label}): was {was}; " + ("it could not be read again just now." if reread else "it was not read again this turn."))
     if already and not voice:
         lines.append(" ".join(already[:2]))
     return "\n".join(lines)

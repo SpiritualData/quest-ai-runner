@@ -295,6 +295,10 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
     try:
         records = entries_of(rs, gathered)
         reading = act_status.pick_reading(act_status.readings_in(records), rs.user_message)
+        cue = getattr(rs, "cue_resolved", None)
+        if cue is not None:        # a resolved milestone is read from its record's own fields, never parsed out of the text of a read
+            reading = act_status.MetricReading(record_id=cue.rid, milestone=cue.name, done_when=cue.done_when, value=cue.value or act_status.NOT_RECORDED, call=None)
+            doing = doing or cue.doing()
         measured = begin_turn_metrics(orch, rs)
         if measured is not None:                      # the metric record's own reading outranks a line parsed from a goal's text
             reading = act_status.MetricReading(record_id=reading.record_id if reading else "", milestone=reading.milestone if reading else "",
@@ -302,6 +306,8 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
                                                value=act_status.format_figure(measured.get("before")), call=reading.call if reading else None)
         evidence = "\n".join([rs.user_message or "", *[str(g.get("text") or "") for g in gathered if isinstance(g, dict)],
                               str(getattr(rs, "context_view", "") or "")])
+        if cue is not None:
+            evidence += "\n" + cue.doing()      # what is being done is composed from the record by code, so it is its own evidence
         doing = doing or ("Writing the versions now and keeping them on the quest." if getattr(rs, "draft_in_chat", False) else "") or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
         voice = meta.get("channel") == "voice"
         # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
