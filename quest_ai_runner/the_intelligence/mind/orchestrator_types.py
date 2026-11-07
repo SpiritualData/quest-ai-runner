@@ -163,7 +163,7 @@ class OrchestratorConfig:
     # separate count; generated code cannot call a model"). Free text, consumer-written, empty = no stated limits.
     consumer_limits: str = ""
     # Absolute folders this deployment works in (the corpus root, the deep worker's folder). A final reply shows a path under one of
-    # them relative to it, and the folder itself as "the working folder" (``core/path_pass.py``). Empty = nothing hidden.
+    # them relative to it, and the folder itself as "the working folder" (the hub's machine path helper). Empty = nothing hidden.
     private_path_roots: List[str] = field(default_factory=list)
     planner_cascade: bool = False
     planner_cascade_tier: str = "balanced"

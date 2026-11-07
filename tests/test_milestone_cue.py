@@ -1147,22 +1147,6 @@ def test_a_goal_that_cannot_be_read_blocks_the_write_but_is_a_lane_gap_not_an_un
         dry.RECORDER.clear()
 
 
-def test_a_sentence_stating_a_figure_no_read_of_the_turn_holds_is_taken_out_and_the_rest_of_the_reply_stays():
-    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.figure_pass import evidence_of, strip_unsupported
-    reads = [{"locator": "tool:list_quest_goals", "text": "595 matching goals on quest q1 (595 in all)"}]
-    evidence = evidence_of(reads, "", "how many goals does the quest have?")
-    reply = "The quest has **595 goals**, open and done combined. That is newer than the earlier counts of 573 and 542, so go by 595. I did not get the open versus completed split."
-    text, dropped = strip_unsupported(reply, evidence)
-    assert text == "The quest has **595 goals**, open and done combined. I did not get the open versus completed split." and dropped == ["573", "542"]
-    status = "As of 5 November, the quest still has 0 paid subscribers.\n- P1 onboarding (at risk, due 15 November): 50.0% completion, target 66.7%.\nI have no reading for today, 7 November."
-    held = evidence_of([{"locator": "x", "text": "5 November report: 0 paid subscribers; P1 onboarding 50.0% completion"}], "", "status?")
-    kept, dropped = strip_unsupported(status, held)
-    assert kept == "As of 5 November, the quest still has 0 paid subscribers." and sorted(dropped) == ["15", "66.7", "7"]
-    only_bad = "It is 573."
-    assert strip_unsupported(only_bad, evidence) == (only_bad, [])        # never an empty reply
-    assert strip_unsupported("1. First step\n2. Second step", evidence)[0] == "1. First step\n2. Second step"        # list numbering is not a figure
-
-
 def test_the_figure_pass_does_not_touch_a_drafted_deliverable_or_a_reply_whose_figures_were_read():
     from types import SimpleNamespace
     from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig

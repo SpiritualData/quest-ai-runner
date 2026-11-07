@@ -306,7 +306,7 @@ def test_why_only_you_is_written_from_the_assignee_never_from_the_verifier_reaso
 
 
 def test_a_final_never_carries_the_machine_folder_the_worker_wrote_in():
-    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.path_pass import relativize
+    from hubofhubs.api import relativize
     root = "/srv/qar/run-7"
     assert relativize(f"I read {root}/.quest-context/club.json and {root}/notes.md.", [root]) == "I read .quest-context/club.json and notes.md."
     assert relativize(f"saved in {root}", [root]) == "saved in the working folder"

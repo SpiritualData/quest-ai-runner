@@ -71,7 +71,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.em_dash_pass import clean_value
+from hubofhubs.api import clean_value
 from quest_ai_runner.the_intelligence.mind.delegation.requester import apply_requester_env, requester_from_meta
 from quest_ai_runner.the_body.configuration.runtime_settings import process_environment
 from quest_ai_runner.the_world.tools.tools_status import (

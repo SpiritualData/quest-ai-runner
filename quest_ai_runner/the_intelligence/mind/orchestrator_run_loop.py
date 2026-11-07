@@ -36,9 +36,7 @@ from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.em_dash_pass import remove_em_dashes
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.figure_pass import evidence_of, strip_unsupported
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.path_pass import relativize
+from hubofhubs.api import evidence_of, relativize, remove_em_dashes, strip_unsupported
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
 
@@ -187,11 +185,11 @@ class RunLoopMixin:
             if rs.trace is not None:
                 rs.trace.links_checked(res.link_checks)
                 rs.trace.finish("\n".join([str(res.text or "")] + [str(getattr(d, "output", "") or "") for d in res.deep_results]))
-            # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
+            # --- EM DASH PASS (the hub's Response Quality em_dash_free arm): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
             if res.kind == "answer" and not getattr(rs, "draft_in_chat", False) and (res.text or "").strip():
-                # Every figure in a status or answer reply must be one this turn read (``figure_pass``): a sentence that states one it did not is taken out.
+                # Every figure in a status or answer reply must be one this turn read (the hub's grounded_figures arm): a sentence that states one it did not is taken out.
                 res.text, dropped = strip_unsupported(res.text, evidence_of(rs.gathered, rs.context_view, rs.user_message))
                 if dropped:
                     log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
@@ -204,7 +202,7 @@ class RunLoopMixin:
                 for _d in res.deep_results:
                     if isinstance(getattr(_d, "output", None), str):
                         _d.output = remove_em_dashes(_d.output)
-                # MACHINE PATHS (core/path_pass.py): a folder this deployment works in is shown relative to it.
+                # MACHINE PATHS (the hub's Response Quality machine path helper): a folder this deployment works in is shown relative to it.
                 _roots = list(getattr(cfg, "private_path_roots", None) or [])
                 if _roots:
                     res.text = relativize(res.text, _roots)

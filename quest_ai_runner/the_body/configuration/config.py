@@ -776,7 +776,7 @@ def build_orchestrator(
     from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
     input_inbox = getattr(cfg, "input_inbox", None) or InMemoryInbox()
 
-    if not cfg.orchestrator.private_path_roots:   # hide the folders this deployment works in from a reply (core/path_pass.py)
+    if not cfg.orchestrator.private_path_roots:   # hide the folders this deployment works in from a reply (the hub's machine path helper)
         import tempfile   # the hub's claude_cli completions run in this fixed neutral folder, and a model that sees its cwd repeats it
         cfg.orchestrator.private_path_roots = [r for r in (cfg.corpus_root, os.getenv("QAR_DEEP_WORKING_DIR"),
                                                            os.path.join(tempfile.gettempdir(), "hubofhubs-cli-completion")) if r]

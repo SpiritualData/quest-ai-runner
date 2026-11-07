@@ -148,7 +148,8 @@ def test_an_iso_timestamp_in_the_evidence_supports_that_day_and_not_the_day_befo
 
 
 def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import STANDARDS, SHAPE_DEFAULT, day_count_errors, measure
+    from hubofhubs.api import day_count_errors
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import STANDARDS, SHAPE_DEFAULT, measure
     evidence = "Current date: 2026-11-01 (Sunday). The in-laws arrive 20 Nov."
     wrong = "If they arrive a week early, on 13 Nov, that leaves you 10 days from today instead of 19."
     assert day_count_errors(wrong, evidence) == ["12 days from today to 13 Nov, not 10"]
@@ -169,7 +170,7 @@ def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not()
 
 
 def test_a_day_offset_from_an_event_date_the_paragraph_states_is_checked():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import event_offset_errors
+    from hubofhubs.api import event_offset_errors
     wrong = ("If they arrive a week early they would come on 13 Nov, which leaves you until 10 Nov, and your own "
              "target is already 3 days before arrival (17 Nov). That squeezes the work.")
     errors = event_offset_errors(wrong)

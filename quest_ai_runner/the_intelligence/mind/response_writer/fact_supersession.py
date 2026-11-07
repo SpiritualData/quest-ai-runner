@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import FrozenSet, List, Optional, Tuple
 
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
-    DAY_THEN_MONTH, MONTHS, MONTH_NUMBER, MONTH_THEN_DAY, NUMBER, SENTENCE_END, Violation, dates_in)
+from hubofhubs.api import DAY_THEN_MONTH, MONTHS, MONTH_NUMBER, MONTH_THEN_DAY, dates_in
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import NUMBER, SENTENCE_END, Violation
 
 WORD = re.compile(r"[a-z]{3,}")
 STOP = frozenset("the and for with from that this was were are has have had not but its our your their per out new all one two as of on at by".split())
