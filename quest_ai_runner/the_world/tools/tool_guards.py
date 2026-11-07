@@ -397,7 +397,7 @@ def escalation_route(plan: Any, user_intent: Optional[str], registry: Any, hande
     or files, or staged work of many runs, is deep. Quest-record work (``quest_data``) or an order with no stated target, while a tool could act and
     none has yet, goes back to the planner once to plan a tool step; after that hand-back, or once a write ran, the answer stands. Anything else is deep."""
     target = getattr(plan, "deep_target", None) if plan is not None else None
-    if target == "draft_in_chat":
+    if target == "draft_in_chat" or user_intent == "ask":      # text for the reply, or a question: answered inline, never a background run
         return ROUTE_INLINE
     if target == "code_or_files" or (plan is not None and getattr(plan, "deep_subtasks", None)):
         return ROUTE_DEEP

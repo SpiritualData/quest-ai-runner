@@ -159,3 +159,44 @@ def test_an_information_or_spoken_reply_is_rewritten_once_and_the_other_arm_keep
     one_step = standard_for(PlanDecision(action="answer", reply_shape="one_step"))
     assert repair_limit(OrchestratorConfig(), info) == 1 and repair_limit(OrchestratorConfig(), one_step) == 2
     assert repair_limit(OrchestratorConfig(cheap_information_turns=False), info) == 2
+
+
+def test_a_question_is_never_routed_to_a_deep_run_and_an_order_report_is_held_to_two_sentences():
+    from quest_ai_runner.the_world.tools import tool_guards
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_SETTLED
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import take_information_only
+    assert tool_guards.escalation_route(PlanDecision(action="deep"), "ask", None, False, False) == tool_guards.ROUTE_INLINE
+    assert tool_guards.escalation_route(PlanDecision(action="deep"), None, None, False, False) == tool_guards.ROUTE_DEEP
+    assert standard_for(PlanDecision(action="answer", user_intent="act")).shape == SHAPE_SETTLED
+    assert standard_for(PlanDecision(action="answer", user_intent="act", deep_target="draft_in_chat")).shape != SHAPE_SETTLED
+    three = "It is set. It repeats weekly. The next one is Monday."
+    assert measure(three, standard_for(PlanDecision(action="answer", user_intent="act")), three).failed
+    _, constraints = parse_goal_condition_reply('Tell the count.\n{"information_only": true}')
+    assert take_information_only(constraints) == (True, None)
+    assert take_information_only({"topic_terms": ["x"]}) == (False, {"topic_terms": ["x"]})
+
+
+class AskingProvider(GeneralProvider):
+    def answer(self, messages, *, model=None, system=None):
+        text = "\n".join(str(m.get("content")) for m in messages) + (system or "")
+        if "request analyser" in text:
+            return 'Tell the count.\n{"information_only": true}'
+        return "Four."
+
+
+class FullOnlyAssembler(CountingAssembler):
+    def assemble(self, task_text, *, meta=None):
+        from hubofhubs.api import retrieve_only
+        self.calls += 1
+        self.cheap = getattr(self, "cheap", 0) + (1 if retrieve_only(meta) else 0)
+        return AssembledContext(context_view="GOALS: four", card_metadata=[{"relevance_score": 0.9}])
+
+
+def test_a_question_that_only_asks_to_be_told_is_assembled_on_the_cheap_path_first():
+    provider = AskingProvider()
+    provider.decisions = [{"action": "answer", "rationale": "have it", "user_intent": "ask"}]
+    assembler = FullOnlyAssembler()
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), context_assembler=assembler,
+                        config=OrchestratorConfig(overseer=True))
+    orch.run("how many goals are on the big quest?", mode=Mode.LIVE, sink=RecordingSink())
+    assert assembler.calls >= 1 and assembler.cheap >= 1

@@ -37,6 +37,7 @@ SHAPE_SUPPORT = "support"
 SHAPE_DEFAULT = "default"
 SHAPE_SPOKEN = "spoken"            # selected from the planner's ``delivery`` field, not offered as a ``reply_shape``
 SHAPE_INFORMATION = "information"  # selected from the planner's ``user_intent`` (ask) on a default shape
+SHAPE_SETTLED = "settled"          # selected from the planner's ``user_intent`` (act) when it answers on a default shape without a deliverable written in the reply
 REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
 
 
@@ -95,9 +96,14 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "no question, and no more than two figures. Say each date as a person would say it.",
              max_questions=0, max_list_lines=0, max_sentences=3, forbid_markup=True, max_figures=2, voice_check=True),
     Standard(SHAPE_INFORMATION,
-             "A question answered from the person's records: the answer first, at most four sentences, only what was asked, every figure "
-             "with the date it was read.",
-             max_sentences=4, voice_check=True),
+             "A question answered from the person's records: the answer first (for a status, the current value of its key measure with the date it was "
+             "read; for a count, the count), at most three plain sentences, only what was asked, every figure with the date it was read. No list, no "
+             "offer, no question back, no extra readings or suggestions.",
+             max_sentences=3, max_list_lines=0, voice_check=True),
+    Standard(SHAPE_SETTLED,
+             "An order that was carried out or found already in place: the first sentence says what is now so (done, or already there, with where it is "
+             "and when it next happens), at most two sentences in all. No offer, no question, no list, nothing that was not asked.",
+             max_questions=1, max_list_lines=0, max_sentences=2, voice_check=True),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
@@ -492,6 +498,9 @@ def standard_for(plan: Any, *, user_intent: Optional[str] = None, delivery: Opti
         shape = SHAPE_SPOKEN
     if shape in (None, SHAPE_DEFAULT) and user_intent == "ask":
         shape = SHAPE_INFORMATION
+    elif (shape in (None, SHAPE_DEFAULT) and user_intent == "act" and getattr(plan, "action", None) == "answer"
+          and getattr(plan, "deep_target", None) != "draft_in_chat" and not getattr(plan, "deferred_deep", None)):
+        shape = SHAPE_SETTLED
     return STANDARDS.get(shape or "", STANDARDS[SHAPE_DEFAULT])
 
 
@@ -658,10 +667,10 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
 
 
 def repair_limit(cfg: Any, standard: Standard) -> int:
-    """How many regeneration rounds a reply may spend on its measurements: an information or spoken reply is rewritten once (each rewrite is a
+    """How many regeneration rounds a reply may spend on its measurements: an information, settled or spoken reply is rewritten once (each rewrite is a
     full model call on the person's wait), the other situations keep the configured number. ``cheap_information_turns`` False keeps it for all."""
     configured = int(getattr(cfg, "reply_standard_max_repairs", 2))
-    if getattr(cfg, "cheap_information_turns", True) and standard.shape in (SHAPE_INFORMATION, SHAPE_SPOKEN):
+    if getattr(cfg, "cheap_information_turns", True) and standard.shape in (SHAPE_INFORMATION, SHAPE_SPOKEN, SHAPE_SETTLED):
         return min(configured, 1)
     return configured
 

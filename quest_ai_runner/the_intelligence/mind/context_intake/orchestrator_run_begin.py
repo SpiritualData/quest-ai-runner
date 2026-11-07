@@ -24,7 +24,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_needs_records
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import Narrator, TurnCardCache, _Emitter
@@ -171,6 +171,7 @@ class RunBeginMixin:
         rs.turn_user_intent: Optional[str] = None
         rs.turn_delivery: Optional[str] = None
         rs.turn_needs_records: Optional[bool] = None
+        rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
         rs.records_free = False
         if hold_off_active:
             log.info("User message forbids opening a task this turn; running under the no-action "
@@ -563,9 +564,10 @@ class RunBeginMixin:
             emit.status("Working out what you're asking for…")
             rs.goal_condition, rs.retrieval_constraints = self._derive_goal_condition(rs.user_message, now=now)
             rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
+            rs.turn_information_only, rs.retrieval_constraints = take_information_only(rs.retrieval_constraints)
             if is_small_talk(rs.user_message):
                 rs.turn_needs_records = False      # a greeting needs none of the person's records
-            if (rs.turn_needs_records is False and not rs.quest_id and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None
+            if (rs.turn_needs_records is False and not rs.quest_id and not self._meta_quest_ids(_ctx_meta) and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None
                     and not attachments and rs.message_is_user_turn):
                 # A definition, a how-to or a greeting needs nothing of the person's: no context is assembled, no planner step runs,
                 # and the reply is written from the question alone (``records_free``).
@@ -709,7 +711,7 @@ class RunBeginMixin:
         rs.cue_gap = ""
         rs.cue_step_attempted = False
         rs.draft_in_chat = False      # set when a plan reports a deliverable written in the reply
-        if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None:
+        if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None and not rs.turn_information_only:      # a question only asks to be told: no cue to find
             try:
                 rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message, decide=self.cheap_decision)
             except milestone_cue.LaneGap as gap:
@@ -750,6 +752,10 @@ class RunBeginMixin:
                     # own context assembly runs well after the planner already blocked on this
                     # same verdict.
                     self.gate_docs_fallback(assemble_meta, rs.user_message)
+                    if rs.turn_information_only and getattr(cfg, "cheap_information_turns", True):
+                        # A question that only asks to be told something is searched and scored without the model passes (generated queries, review, card
+                        # filter, consolidation); the full assembly runs only when the cheap result is empty or weak.
+                        return card_context.assemble_cheap_first(_ctx_assembler, _ctx_msg, assemble_meta)
                     return _ctx_assembler.assemble(_ctx_msg, meta=assemble_meta)
 
                 _ctx_executor = ThreadPoolExecutor(max_workers=1)

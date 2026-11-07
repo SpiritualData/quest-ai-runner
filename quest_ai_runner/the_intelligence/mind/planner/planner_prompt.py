@@ -506,10 +506,10 @@ DEEP_ACTION = """\
     NEVER ASK WHICH MILESTONE. When the chat has no open quest, read_spec_records on the quests listed in context (find_quest lists them), most
     likely first, and take the milestone whose name best fits the cue. Ask only when two milestones fit equally well, and then name both.
     ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply
-    carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
-    keyed by a short stable title (the same key plus "A", "B") with the text, hypothesis and metric in the goal's description and
-    spec_solution_id of the solution they serve (from read_spec_records). Repeating the request updates the same goals. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
-    compared by (the metric's own unit, such as replies per message), and says they are recorded.
+    carries each in full with its hypothesis and the metric they are compared by. Do not write goals for them yourself: after the reply, code records each
+    alternative as a goal linked to the plan solution it serves, leaves any goal of the quest that already looks like them as it is, and adds a plain tail
+    saying which were already there and which were created. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
+    compared by (the metric's own unit, such as replies per message).
     DELIVERABLE IN THE REPLY. When it is several versions of one thing for a quest (two posts, three headlines), each has a one-line hypothesis and the metric they are compared by, and the quest keeps them (code records each as a goal and adds what was already tracked). Never put a price, plan name or date in the copy unless the context holds it as a fact for this purpose. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
     set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
@@ -831,10 +831,18 @@ guidelines or closing target sentence. Never use an em dash.
 
 INFORMATION_ANSWER_DIRECTIVE = """\
 --- THIS REPLY GIVES INFORMATION (set by the planner) ---
-The person asked a question to be answered from their records. Answer it first, in two to four short sentences: name the item the records
-point to and the figure that shows where it stands, with its date. Only what was asked: no unrelated blockers, no list of other items,
-no offer or question at the end. Never use an em dash. Records may be written in the first person by whoever authored them: never copy
+The person asked a question to be answered from their records. Answer it first, in at most three short sentences: for a status, the current value
+of the key measure the records hold, with its date, then at most one fact about what moved or is stuck; for a count, the count; for a priority, the one item.
+Only what was asked: no unrelated blockers, no list of other items, no extra readings, no suggestion of what to do next, no offer or question at the end.
+A definition or how-to question is answered in general terms, with nothing drawn from their goals, dates or counts. Never use an em dash. Records may be written in the first person by whoever authored them: never copy
 I, my, me or our from a record, say whose it is by name ("waiting for Sam's preview"); use "I" only for what you yourself did or could not do this turn.
+"""
+
+SETTLED_ANSWER_DIRECTIVE = """\
+--- THIS REPLY REPORTS AN ORDER (set by the planner) ---
+The person asked for something to be done and the turn's tools carried it out or found it already in place. Say in the first sentence what is now so
+(done, or already there, where it is and when it next happens) and stop: at most two sentences, no offer, no question, no list, no restating of the request.
+Never say something was created or changed unless a tool receipt in this turn says so. Never use an em dash.
 """
 
 HANDOFF_ANSWER_NOW_DIRECTIVE = """\

@@ -683,6 +683,16 @@ class RunLoopMixin:
                 rs.plan.action = "answer"
                 rs.plan.deferred_deep = None
 
+            # --- INFORMATION GATE: a question is answered, never started as a background run ----------------------------------------
+            # The planner's structured ``user_intent`` says the message only asks to be told something. A deep run for it is turned into
+            # an answer from what the turn read (or from what it could not find, said plainly).
+            if (rs.plan and rs.plan.action == "deep" and message_is_user_turn and rs.turn_user_intent == "ask" and getattr(cfg, "cheap_information_turns", True)
+                    and not (exec_record is not None and exec_record.any_mutation_attempted)):
+                log.info("Information gate: the planner chose a deep run for a question; answering from what the turn read.")
+                rs.plan.action = "answer"
+                rs.plan.deferred_deep = None
+                rs.plan.deep_brief = ""
+
             # --- TOOL-SIZED WORK GATE: a deep run is for files, code, long research or many steps ------------------------------------
             # A change to the person's own Quest records that a registered tool performs is a tool plan: read what exists, then the
             # keyed write. When the planner chose "deep" for such work (its own structured deep_target and the tool set say so,
@@ -888,8 +898,8 @@ class RunLoopMixin:
                         f"Planner stuck in read loop after {rs.steps} steps / {rs.consecutive_reads} reads. "
                         f"Force-escalating to {'answer' if rs.brainstorm_active else 'deep'} with gathered context."
                     )
-                    if rs.brainstorm_active:
-                        # Brainstorm may not act: wrap up with a grounded answer instead.
+                    if rs.brainstorm_active or rs.turn_user_intent == "ask":
+                        # Brainstorm may not act, and a question is never started as a background run: wrap up with a grounded answer instead.
                         rs.plan.action = "answer"
                     else:
                         rs.plan.action = "deep"

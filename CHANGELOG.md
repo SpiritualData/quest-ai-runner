@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Information and order-report turns. The request analyser also reports `information_only` (the message only asks to be told something); such a turn assembles its context on the cheap retrieve path first (full assembly only when that is empty or weak), skips the milestone cue judge and the answer overseer. A question is never started as a background run (planner gate, forced read-loop escalation, read-budget wrap-up and the overseer's escalation route all answer instead). The `needs_records` false report is not honoured for a turn bound to a quest by its scope, and the analyser is told that counts, status and named quests need records. The information standard is three sentences, no list, status opens with the key measure; a new `settled` standard (two sentences, no offer) covers an order reported by an answer; a single piece of drafted content carries no hypothesis or metric section; the planner no longer writes alternatives' goals itself (code records them).
+
 ## [0.4.0] - 2026-11-07
 
 ### Added

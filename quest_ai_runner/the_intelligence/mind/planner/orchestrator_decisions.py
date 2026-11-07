@@ -618,9 +618,20 @@ def parse_goal_condition_reply(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]
                 cleaned["content_kind"] = content_kind.strip().lower()
             if obj.get("needs_records") is False:
                 cleaned["needs_records"] = False      # not a retrieval filter: the caller takes it out (``take_needs_records``)
+            if obj.get("information_only") is True:
+                cleaned["information_only"] = True      # not a retrieval filter either: the caller takes it out (``take_information_only``)
             if cleaned:
                 constraints = cleaned
     return goal_condition, constraints
+
+
+def take_information_only(constraints: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Take the request analyser's ``information_only`` report out of the parsed constraints: ``(True or False, the filters left or None)``.
+    Only an explicit true is a report (the message just asks to be told something); anything else leaves the turn on the full path."""
+    if not constraints or "information_only" not in constraints:
+        return False, constraints
+    rest = {k: v for k, v in constraints.items() if k != "information_only"}
+    return constraints.get("information_only") is True, (rest or None)
 
 
 def take_needs_records(constraints: Optional[Dict[str, Any]]) -> Tuple[Optional[bool], Optional[Dict[str, Any]]]:
