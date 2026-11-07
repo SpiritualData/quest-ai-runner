@@ -823,7 +823,8 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
             "offset": {"type": "integer", "description": "Skip this many matches (next page)."}}},
         mutates=False, workflow_step=False, origin="standard",
         keywords=("workflow", "workflows", "steps", "step", "approval", "approvals", "waiting", "late",
-                  "missed", "pending", "due", "assigned", "window", "schedule", "cadence"),
+                  "missed", "pending", "due", "assigned", "window", "schedule", "cadence", "remind", "reminder",
+                  "reminders", "recurring", "every", "monday", "morning", "check"),
         context_args={"quest_id": "quest_id"})
 
 
@@ -913,8 +914,10 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
         handler=handler,
         description=("Create a workflow on a quest, the entry that appears on the Workflows page: a "
                      "title and ordered steps, each for a named person (a human step with a window) or "
-                     "an AI rep (an AI step that runs at a time), optionally repeating daily or weekly."),
-        when_to_use=("A person asks for a workflow, routine or repeating process on a quest. Name people "
+                     "an AI rep (an AI step that runs at a time), optionally repeating daily or weekly. A recurring reminder "
+                     "for a person is a one-step workflow: a human step for them that repeats."),
+        when_to_use=("A person asks for a workflow, routine, recurring reminder or repeating process on a quest. "
+                     "List the quest's workflows first and do not make a second with the same title. Name people "
                      "as they are named on the quest (a first name is enough); read it back afterwards with "
                      "list_quest_workflows."),
         when_not_to_use=("A goal, habit or one-off task (create_quest_goal, create_task). Changing or "
@@ -941,7 +944,8 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
                         "tz": {"type": "string"}}}}}},
         mutates=True, workflow_step=False, origin="standard",
         keywords=("workflow", "workflows", "create", "routine", "process", "steps", "repeat", "daily",
-                  "weekly", "assistant", "schedule", "cadence"),
+                  "weekly", "assistant", "schedule", "cadence", "remind", "reminder", "reminders", "recurring",
+                  "every", "monday", "morning", "check", "recur"),
         context_args={"quest_id": "quest_id"}, timeout_seconds=60.0)
 
 

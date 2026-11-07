@@ -70,3 +70,29 @@ def test_guard_facts():
     assert not tool_guards.deep_is_tool_sized(normalize_decision(deep(None), OrchestratorConfig()), registry())
     code = normalize_decision(deep("code_or_files"), OrchestratorConfig())
     assert not tool_guards.deep_is_tool_sized(code, registry())
+
+
+def answered(**over):
+    return {"action": "answer", "user_intent": "act", "rationale": "describe", "pending_read": [], **over}
+
+
+def test_an_order_answered_with_a_description_is_handed_back_once_to_plan_tool_steps():
+    RAN.clear()
+    provider = StubProvider([answered(), LIST, WRITE, DONE])
+    orch(provider, registry()).run("make progress on the funnel")
+    assert [name for name, _ in RAN] == ["list_quest_workflows", "create_quest_workflow"]
+    assert "ORDER NOT CARRIED OUT" in provider.plan_prompts[1]
+
+
+def test_an_order_answered_twice_stands_and_a_question_or_decline_is_not_handed_back():
+    provider = StubProvider([answered(), answered()])
+    orch(provider, registry()).run("make progress on the funnel")
+    assert not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts[:1])
+    assert provider.plan_prompts[-1].count("ORDER NOT CARRIED OUT: your user_intent") <= 1
+    for plan in (answered(user_intent="ask"), answered(act_declined=True), answered(reply_shape="decline"), answered(asks_first=True)):
+        provider = StubProvider([plan])
+        orch(provider, registry()).run("what is the funnel?")
+        assert not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts)
+    provider = StubProvider([answered()])
+    orch(provider, None).run("make progress on the funnel")
+    assert not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts)

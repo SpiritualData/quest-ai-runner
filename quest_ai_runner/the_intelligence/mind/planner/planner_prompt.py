@@ -756,6 +756,13 @@ DEEP_FOR_TOOL_WORK_NOTE = (
     "(for example list the workflows, read the spec records, list the goals); then make the write keyed by exact title or record id, "
     "and report whether it was created, updated or already there.")
 
+ACT_WITHOUT_TOOL_NOTE = (
+    "ORDER NOT CARRIED OUT: your user_intent is act, you chose to answer, and nothing has been changed this turn, while a tool in the TOOLS block can "
+    "make a change in the person's Quest records. An answer that only restates a plan or asks which step to take is not the work. Plan a tool step now: "
+    "if you have not yet read what exists, call the read-only tool first (the spec records, the goals, the workflows); then make the write keyed by exact "
+    "title or record id, and report whether it was created, updated or already there. If no tool can do it, or the order is not the person's to give "
+    "here, answer and say why.")
+
 RECORDS_NOT_READ_NOTE = (
     "RECORDS NOT READ: you set needs_records, but nothing from the person's records was read this turn. Read them now (the quest's notes "
     "and the entries of the collections linked to it, whichever hold what the reply needs), then answer from what you read.")
