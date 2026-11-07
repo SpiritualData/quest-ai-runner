@@ -116,6 +116,9 @@ def read_number(spec, client):
     reading a number; ``yes_no`` reads a text that starts Yes or No as 1 or 0; ``regex`` captures the number (the first number by default)."""
     if spec.get("command"):
         import subprocess
+        from quest_ai_runner.the_world.tools import dry_run_writes
+        if dry_run_writes.active():
+            dry_run_writes.declare_read_command(spec["command"])      # the harness's own measurement is a declared read, never a write of the turn
         text = subprocess.run(list(spec["command"]), capture_output=True, text=True, timeout=int(spec.get("timeout", 120)), check=False).stdout
         found = re.search(spec.get("regex") or NUMBER, text)
         return float(found.group(1).replace(",", "")) if found else None
