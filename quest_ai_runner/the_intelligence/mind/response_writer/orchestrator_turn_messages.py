@@ -488,10 +488,10 @@ def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
                 after = act_status.MetricReading(before.record_id, before.milestone, before.done_when, act_status.format_figure(cue.reading["value"]))
             shown = lambda reading: act_status.clean_value(reading.value) or act_status.status_value(reading.value)
             tail = cue.closing(shown(before), shown(after if after is not None else before))
-            res.text = cue.without_questions(res.text)
+            res.text = cue.apply_owner_label(cue.without_questions(res.text))
             for part in getattr(res, "deep_results", None) or []:
                 if isinstance(getattr(part, "output", None), str):
-                    part.output = cue.without_questions(part.output)
+                    part.output = cue.apply_owner_label(cue.without_questions(part.output))
         else:
             tail = act_status.closing_lines(before, after, reread=before is not None, already=already_in_place(rs.gathered),
                                             voice=bool(sent.get("voice")))

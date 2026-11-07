@@ -46,6 +46,12 @@ def test_the_stage_counts_each_item_from_the_goal_and_names_it():
     assert "human_step" not in measure(dict(FULL, text="Draft: Hello.")).met
     assert measure(FULL).text().startswith("5 of 5 (an owner from the milestone's record; a due date this week;")
     assert measure(None).text() == "0 of 5 (none held yet)"
+    assert measure(None).describe() == "none held"
+    assert measure(FULL).describe() == ("all held: an owner from the milestone's record, a due date this week, the solution and metric links, a concrete kept draft, the human step named")
+    partial = measure(dict(FULL, due="2026-11-20", text="Draft: Hello."))
+    assert partial.describe() == ("held: an owner from the milestone's record, the solution and metric links, a concrete kept draft; "
+                                  "still missing: a due date this week, the human step named")
+    assert not any(ch.isdigit() for ch in partial.describe())
 
 
 def test_a_goal_as_a_write_returns_it_reads_the_same_as_one_as_the_listing_carries_it():
@@ -128,12 +134,13 @@ def test_the_closing_line_gives_both_stages_and_says_why_an_unchanged_value_did_
     step = resolved(tools(calls))
     step.carry_out(tools(calls), lambda prompt: json.dumps({"draft": "Pitch.", "human_step": "Send it."}))
     line = step.closing("0 of 100", "0 of 100")
-    assert line.startswith("Readiness of the next step: 0 of 5 (none held yet) before, 5 of 5 (") and "Milestone metric (P3 Partner users): unchanged at 0 of 100 (the metric record), because" in line
+    assert line.startswith("Readiness of the next step: before, none held; after, all held: an owner from the milestone's record") and "Milestone metric (P3 Partner users): unchanged at 0 of 100 (the metric record), because" in line
     assert "was 0 of 100, now 7 of 100 (the metric record)" in step.closing("0 of 100", "7 of 100") and "\n" not in line
 
 
 def test_the_first_message_says_the_readiness_the_quest_holds():
-    assert "Its readiness is 0 of 5 (none held yet) now." in resolved(tools([])).doing()
+    doing = resolved(tools([])).doing()
+    assert "Readiness of the step now: none held." in doing and "of 5" not in doing
 
 
 def test_the_reply_loses_a_closing_question_but_keeps_the_questions_of_the_draft():
@@ -237,3 +244,18 @@ def test_the_first_message_never_carries_the_planners_fact_text_even_when_the_pl
     orch.run("get the partner users moving", sink=StreamSink(events.append), quest_id="q1")
     first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
     assert "CUE FACTS" not in first and "esr_" not in first and "read_metric_source" not in first and "Current value" in first
+
+
+def test_the_reply_names_the_owner_as_the_record_names_them_wherever_it_writes_the_account_alone():
+    calls = []
+    step = resolved(tools(calls))
+    step.carry_out(tools(calls), lambda prompt: "Travis" if "Which name in this text" in prompt else answer_for(prompt))
+    assert step.apply_owner_label("It was updated in place, and SpiritOps owns it. Only Travis can send it.") == (
+        "It was updated in place, and Travis (account SpiritOps) owns it. Only Travis can send it.")
+    assert step.apply_owner_label("Travis (account SpiritOps) owns it.") == "Travis (account SpiritOps) owns it."
+    assert step.apply_owner_label("Nobody is named.") == "Nobody is named."
+    rs = SimpleNamespace(status_first={"before": act_status.MetricReading(step.rid, step.name, step.done_when, "0 of 100"), "voice": False}, cue_resolved=step, gathered=[],
+                         quest_id="q1", turn_metrics=None, tool_calls_ran=True)
+    res = SimpleNamespace(kind="answer", text="Updated, and SpiritOps owns it.", deep_results=[])
+    messages.close_with_metric(SimpleNamespace(tools=None), rs, res)
+    assert res.text.startswith("Updated, and Travis (account SpiritOps) owns it.") and "of 5" not in res.text

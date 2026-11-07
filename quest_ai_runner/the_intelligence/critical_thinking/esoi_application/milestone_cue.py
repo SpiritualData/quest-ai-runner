@@ -417,7 +417,7 @@ class Resolved:
         stage = self.measure_stage(self.week_goal())
         return ((f"Updating this week's next step for {self.name}, which is already on the quest, and keeping its owner and draft." if exists
                  else f"Recording this week's next step for {self.name}, linked to the milestone, with its owner.")
-                + f" Its readiness is {stage.text()} now.")
+                + f" Readiness of the step now: {stage.describe()}.")
 
     def settle_plan(self, plan: Any, receipt: str) -> None:
         """Make the plan agree with what code already did. A read plan is left alone. A deep run stays only when the work needs files or code beyond the tool write, and then its brief
@@ -604,6 +604,14 @@ class Resolved:
         if self.stage_before is None or self.stage_after is None:
             return ""
         return readiness.closing_line(self.stage_before, self.stage_after, label=self.name, metric=self.metric_sentence(before_value, after_value))
+
+    def apply_owner_label(self, text: str) -> str:
+        """The reply naming the owner as the record names them: where the reply writes the account's own name alone, the name with the account beside it ("Ann (account Ann Ops)").
+        Text that already carries the label, or an owner whose account name is the name, is returned as it was."""
+        account = str((self.after_state or {}).get("assignee_name") or "").strip()
+        if not self.owner_label or not account or self.owner_label == account or self.owner_label in str(text or ""):
+            return text
+        return re.sub(re.escape(account) + r"(?! \(account)", self.owner_label.replace("\\", "\\\\"), str(text or ""))
 
     def without_questions(self, text: str) -> str:
         """The reply without a closing paragraph that asks the person something: a paragraph outside the kept draft whose last character is a question mark. The draft's own questions (neutral

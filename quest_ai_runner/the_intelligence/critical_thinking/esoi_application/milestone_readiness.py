@@ -3,7 +3,7 @@
 Role: a first stage of the milestone metric in ESOI Application (a cascading stage). A milestone's own value (a count of people, a listing that is live) often cannot move
 in one turn because it needs people. What an increment can move is how ready the next step is to be done, and that is measurable from the goal the quest keeps for it:
 the step is ready when it has an owner the milestone's record lists, a due date inside this week, the links to the solution and to the metric, a concrete kept deliverable
-(no placeholder slot left in it), and the one step only a person can do named. The stage is reported as ``<n> of <total>`` with what each item is, read from the goal before
+(no placeholder slot left in it), and the one step only a person can do named. The stage is measured as ``<n> of <total>`` (``Stage.text``) and worded in a reply by its items with no count (``Stage.describe``), read from the goal before
 the write and after it, and the milestone's own value is said beside it as moved or unchanged. A goal is read as the quest's listing carries it
 (``assignee_user_id``, ``due``, ``text``) or as a write returns it (``assigned_to_user_id``, ``scheduled_date``, ``description``).
 """
@@ -19,9 +19,9 @@ DRAFT = "Draft:"
 ITEMS: Tuple[Tuple[str, str], ...] = (
     ("owner", "an owner from the milestone's record"),
     ("due", "a due date this week"),
-    ("links", "the solution link and the metric link"),
-    ("deliverable", "a concrete kept deliverable"),
-    ("human_step", "the step only a person can do, named"),
+    ("links", "the solution and metric links"),
+    ("deliverable", "a concrete kept draft"),
+    ("human_step", "the human step named"),
 )
 #: A checkbox mark or a markdown link is not a slot to fill.
 SLOT = re.compile(r"\{\{[^}\n]*\}\}|\[(?![ xX]?\])[^\]\n]{1,80}\](?!\()")
@@ -37,9 +37,18 @@ class Stage:
         return len(ITEMS)
 
     def text(self) -> str:
-        """``<n> of <total>`` with the held items named, or ``none held`` when none is."""
+        """``<n> of <total>`` with the held items named: the measurement, kept for records and tests. It is not what a reply says (``describe``), because the total is computed by code
+        and a reader of the reply cannot find it in any read."""
         names = [what for key, what in ITEMS if key in self.met]
         return f"{len(self.met)} of {self.total} ({'; '.join(names) if names else 'none held yet'})"
+
+    def describe(self) -> str:
+        """The stage as a reply words it, by its items with no count: ``none held``, ``all held: ...``, or ``held: ...; still missing: ...``."""
+        held = [what for key, what in ITEMS if key in self.met]
+        missing = [what for key, what in ITEMS if key not in self.met]
+        if not held:
+            return "none held"
+        return f"all held: {', '.join(held)}" if not missing else f"held: {', '.join(held)}; still missing: {', '.join(missing)}"
 
 
 def placeholder_slots(text: Any) -> Tuple[str, ...]:
@@ -86,5 +95,5 @@ def measure(goal: Optional[Mapping[str, Any]], *, owners: Sequence[str], solutio
 def closing_line(before: Stage, after: Stage, *, label: str, metric: str) -> str:
     """The one line message 2 ends with: the readiness stage before and after, and the milestone's metric before and after as ``metric`` words them (said by the caller, who knows where
     each reading came from)."""
-    return (f"Readiness of the next step: {before.text()} before, {after.text()} after. "
+    return (f"Readiness of the next step: before, {before.describe()}; after, {after.describe()}. "
             f"Milestone metric ({label}): {metric}.")
