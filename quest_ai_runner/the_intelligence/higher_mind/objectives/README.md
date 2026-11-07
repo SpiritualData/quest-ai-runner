@@ -103,7 +103,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Plain answer only (floor) | `guide-toward-the-long-term-goal:no_nudge` |  |  |
 | Long-term guidance section in the reply voice | `guide-toward-the-long-term-goal:guided_v2` | [quest_ai_runner/the_self/integrity/prompts/auxiliary_prompts.py](../../../the_self/integrity/prompts/auxiliary_prompts.py) |  |
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py) |  |
-| Words and meaning candidates, the model picks | `place-on-a-quest:hybrid-candidate-ranker` | [evaluation/components/place_on_a_quest/impls/hybrid_candidate_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/hybrid_candidate_ranker.py) |  |
+| Words and meaning candidates, the model picks | `place-on-a-quest:hybrid-candidate-ranker` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
 | The library judge over the quests it is given | `place-on-a-quest:library-quest-judge` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
 
 ### Metrics

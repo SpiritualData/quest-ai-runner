@@ -28,8 +28,9 @@ def answer(picked: Sequence[Any], ranked: Sequence[Any]) -> Dict[str, List[str]]
     return {"picked": list(dict.fromkeys(chosen)), "ranked": ordered}
 
 
+@implementation("place-on-a-quest", "hybrid-candidate-ranker")
 class HostFunction:
-    """The adapter for the placement the host supplies (not an alternative of its own: the host's function is one of the solution's arms, run in the host): ``place_message(message=, previous=, home_quest_id=, max_quests=)`` returns a mapping with ``picked``
+    """The selected arm, run in the host: the candidates ranked by words and meaning, then the model's pick, which only the host can do because it owns the quests, their words and their embeddings. This is the runner's side of it, the adapter that calls the function the host supplies: ``place_message(message=, previous=, home_quest_id=, max_quests=)`` returns a mapping with ``picked``
     and ``ranked``. A failure of the host function is no placement (``picked`` empty), never a guess."""
     REQUIRES = ()     # the host hands the function in
 
