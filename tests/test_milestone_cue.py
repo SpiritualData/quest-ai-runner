@@ -498,3 +498,36 @@ def test_a_failed_read_is_the_only_time_the_receipt_says_the_goals_could_not_be_
             return {"period_groups": [{"goals": self.goals}]} if Unreadable.calls == 1 else {}
     result = run_tool(Unreadable([{"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}]))
     assert "could not be read again" in result.text
+
+
+class CachedListingClient(GoalClient):
+    """The backend's per-process cache: a listing right after a write still shows the old goal, but the write's own response returns the saved goal."""
+
+    def __init__(self, goals):
+        super().__init__(goals)
+        self.stale = [dict(g) for g in goals]
+        self.saved = {g["id"]: dict(g) for g in goals}
+
+    def list_quest_goals(self, quest_id):
+        return {"period_groups": [{"goals": self.stale}]}
+
+    def update_goal(self, goal_id, fields):
+        self.puts.append((goal_id, fields))
+        goal = self.saved[goal_id]
+        goal.update({("name" if k == "title" else k): v for k, v in fields.items()})
+        return type("W", (), {"status": None, "data": {"id": goal_id, "title": goal["name"], "specSolutionId": goal.get("spec_solution_id"),
+                                                       "specMetricId": goal.get("spec_metric_id"), "assignedToUserId": goal.get("assigned_to_user_id"),
+                                                       "period": goal.get("period")}})()
+
+
+def test_a_found_goal_without_the_links_gets_them_written_and_the_write_response_is_the_read_back_not_a_cached_listing():
+    client = CachedListingClient([{"id": "k", "name": KEYED, "spec_solution_id": None, "spec_metric_id": None, "period": "2026_W45", "assigned_to_user_id": "u1"}])
+    result = run_tool(client)
+    assert any(p[1].get("spec_solution_id") == "esr_c" and p[1].get("spec_metric_id") == "esr_mc" for p in client.puts)
+    assert "linked to solution esr_c" in result.text and "metric esr_mc" in result.text and "NOT confirmed" not in result.text
+    assert result.data["state"] == "updated"
+    # a Quest that answers the write but returns the goal without the links is reported as such, with no claim of linking
+    client = CachedListingClient([{"id": "k", "name": KEYED, "spec_solution_id": None, "spec_metric_id": None, "period": "2026_W45"}])
+    client.update_goal = lambda goal_id, fields: type("W", (), {"status": None, "data": {"id": goal_id, "title": KEYED, "specSolutionId": None, "specMetricId": None}})()
+    result = run_tool(client)
+    assert "not linked to a solution" in result.text and "NOT confirmed" in result.text

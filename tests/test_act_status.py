@@ -61,7 +61,7 @@ def test_an_act_request_sends_the_status_first_then_the_result_with_the_metric_b
     assert "Current value: 12." in interim[0]["text"] and "Done when: 100 installs." in interim[0]["text"]
     assert interim[0]["text"].startswith("Where this stands:") and "\n\nNow: " in interim[0]["text"]
     assert events.index(interim[0]) < events.index(result) and writes == [WRITE["args"]]
-    assert "before 12, now 15 (changed)" in result["text"]            # the second reading is a read by code, after the write
+    assert "was 12, now 15." in result["text"]            # the second reading is a read by code, after the write
 
 
 def test_an_information_request_sends_one_message():
@@ -82,7 +82,7 @@ def test_a_repeated_act_request_reports_what_is_already_there_without_a_second_w
                  registry(state, writes, existing=True))
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
     assert writes == [] and "Already in place, so nothing was written again: The weekly check-in is already on the quest" in result["text"]
-    assert "before 15, now 15 (unchanged)" in result["text"]
+    assert "unchanged, still 15." in result["text"]
 
 
 def test_no_recorded_value_is_said_not_filled_in():
@@ -119,5 +119,24 @@ def test_every_request_measured_carries_the_metric_records_own_readings_into_bot
     orch.run("make progress on the app release", sink=StreamSink(events.append), quest_id="q1")
     first = [e for e in events if e["type"] == EVENT_INTERIM][0]
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
-    assert "Current value: 12." in first["text"] and "before 12, now 15 (changed)" in result["text"]
+    assert "Current value: 12." in first["text"] and "was 12, now 15." in result["text"]
     assert [m["after"] for m in result["data"].get("metrics") or [] if "after" in m] in ([15.0], [])      # the rows ride on the result
+
+
+def test_the_closing_metric_line_names_the_metric_and_never_pastes_the_records_raw_text():
+    raw = "Re-read 2026-10-31 22:01 UTC (Payal pass): still No. The listing was checked again and nothing has changed since the earlier pass."
+    before = act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", raw)
+    gone = act_status.closing_lines(before, None, reread=True, already=[])
+    assert gone == "Metric (App Store listing live): was No; it could not be read again just now."
+    same = act_status.closing_lines(before, act_status.MetricReading("g1", "P3 Mobile app live", "App Store listing live", raw), reread=True, already=[])
+    assert same == "Metric (App Store listing live): unchanged, still No."
+    moved = act_status.closing_lines(before, act_status.MetricReading("g1", "", "", "Yes"), reread=True, already=[])
+    assert moved == "Metric (App Store listing live): was No, now Yes." and "Payal" not in moved and "UTC" not in moved
+
+
+def test_the_code_steps_own_receipt_is_not_listed_again_as_already_in_place():
+    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import receipt_observation
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
+    code = receipt_observation("create_or_update_quest_goal", "RECEIPT written by code for X. This week's next step for X was already set.", "noop")
+    other = {"kind": "query", "locator": "tool:update_goal", "tool_status": "noop", "text": "The weekly check-in is already on the quest"}
+    assert already_in_place([code, other]) == ["The weekly check-in is already on the quest"]

@@ -399,6 +399,7 @@ def receipt_observation(tool: str, text: str, status: str) -> Dict[str, Any]:
     """The receipt of a write that code carried out, shaped like a tool's own receipt (locator ``tool:<name>``) so the reply and the write guards read it the same way."""
     receipt = Observation(kind="query", locator=f"tool:{tool}", text=text).to_dict()
     receipt["tool_status"] = status
+    receipt["by_code"] = True
     return receipt
 
 

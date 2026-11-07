@@ -335,7 +335,7 @@ def already_in_place(gathered: Sequence[Any]) -> List[str]:
     for g in gathered:
         if not isinstance(g, dict) or not str(g.get("locator") or "").startswith("tool:"):
             continue
-        if g.get("tool_status") == "noop":
+        if g.get("tool_status") == "noop" and not g.get("by_code"):      # the code step's own receipt is led by its sentence in the reply; it is not listed again
             first = str(g.get("tool_text") or g.get("text") or "").strip().splitlines()
             out.append((first[0] if first else str(g["locator"])[5:])[:140].rstrip("."))
     return out

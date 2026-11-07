@@ -103,21 +103,36 @@ def differs(before: Optional[Mapping[str, Any]], after: Mapping[str, Any]) -> bo
     return before is None or any(before.get(f) != after.get(f) for f in SEEN_FIELDS)
 
 
+def from_write(write: Any) -> Optional[Dict[str, Any]]:
+    """The goal as the backend's own write response returns it (the saved goal, camelCase), in the listing's field names; ``None`` when the response carries no goal.
+    This is the authoritative read-back: the backend keeps a per-process cache of a quest's goal list, so a listing read right after a write can still show the old goal."""
+    data = getattr(write, "data", None)
+    if not isinstance(data, Mapping) or not (data.get("id") or data.get("title")):
+        return None
+    pick = lambda *names: next((data.get(n) for n in names if data.get(n) not in (None, "")), None)
+    return {"id": data.get("id"), "name": pick("title", "name"), "assigned_to_user_id": pick("assignedToUserId", "assigned_to_user_id"),
+            "spec_solution_id": pick("specSolutionId", "spec_solution_id"), "spec_metric_id": pick("specMetricId", "spec_metric_id"),
+            "period": pick("period"), "description": pick("description")}
+
+
 def verified(client: Any, quest_id: str, outcome: Mapping[str, Any], title: str, wanted: Mapping[str, Any], assignee_id: Optional[str]) -> Dict[str, Any]:
-    """The write checked against the quest. Reads the goal again; when a link that was asked for is not on it, writes the links alone once, so a refusal comes back
-    with its reason, and reads again. Returns ``{state, goal, problems, read}`` where ``state`` is created, updated (only when the read-back differs from before) or unchanged,
-    ``goal`` is the goal as read, ``problems`` lists each asked-for thing the quest does not show, and ``read`` is False when the goals could not be read at all."""
-    goal = fetch_goal(client, quest_id, outcome.get("goal_id"), title)
+    """The write checked against what the backend returned and the quest lists. The goal as the last write returned it (else as listed) must show every link that was asked
+    for; when it does not, the links are written alone, once, so a refusal comes back with its own words, and that response is read. Returns ``{state, goal, problems, read}``:
+    ``state`` is created, updated (only when the goal now differs from before) or unchanged, ``goal`` what is shown, ``problems`` each asked-for thing not shown, and ``read`` False
+    when nothing could be read at all."""
+    listed = fetch_goal(client, quest_id, outcome.get("goal_id"), title)
+    written = next((g for g in (from_write(w) for w in reversed(outcome.get("writes") or [])) if g), None)
+    goal = written or listed
     if goal is None:
         return {"state": outcome["state"], "goal": None, "problems": [], "read": False}
     links = {k: wanted[k] for k in ("spec_solution_id", "spec_metric_id") if wanted.get(k)}
     problems: List[str] = []
-    if any(goal.get(k) != v for k, v in links.items()):
+    if any(goal.get(k) != v for k, v in links.items()) or (listed is not None and written is None and any(listed.get(k) != v for k, v in links.items())):
         try:
-            client.update_goal(str(goal.get("id")), links)
+            again = from_write(client.update_goal(str(goal.get("id") or outcome.get("goal_id")), links))
+            goal = again or goal
         except Exception as error:  # noqa: BLE001  the refusal's own words are the reason
             problems.append(f"the link was refused by Quest ({str(error)[:200]})")
-        goal = fetch_goal(client, quest_id, goal.get("id"), title) or goal
     for k, label in (("spec_solution_id", "solution"), ("spec_metric_id", "metric")):
         if links.get(k) and goal.get(k) != links[k]:
             problems.append(f"the {label} link is not on the goal as read back")

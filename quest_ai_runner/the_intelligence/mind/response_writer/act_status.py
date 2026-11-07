@@ -129,7 +129,7 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
             parts.append(f"Milestone: {reading.milestone}.")
         if reading.done_when and not voice:
             parts.append(f"Done when: {reading.done_when}.")
-        parts.append(f"Current value: {reading.value}.")
+        parts.append(f"Current value: {short_value(reading.value)}.")
     if not voice:
         kept = [grounded_line(f, evidence) for f in list(facts)[:MAX_FACTS]]
         parts.extend(f.rstrip(".") + "." for f in kept if f)
@@ -139,18 +139,34 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
     return {"status": status, "next": nxt, "text": f"Where this stands: {status}\n\nNow: {nxt}"}
 
 
+VALUE_CHARS = 60
+
+
+def short_value(value: str) -> str:
+    """A recorded value as a reader wants it in one line. A record's text often starts with a log stamp ("<date and who>: <value>"); the stamp is dropped when what
+    follows its first colon is the value, and the rest is cut at a sentence end or ``VALUE_CHARS``. Never the record's raw text."""
+    text = " ".join(str(value or "").split())
+    head, sep, rest = text.partition(": ")
+    if sep and rest and len(head) <= 60 and any(c.isdigit() for c in head):
+        text = rest
+    if text.lower().startswith("still "):
+        text = text[6:]          # "still No" says the value did not move; the closing line says that itself
+    cut = re.search(r"[.;](\s|$)", text[:VALUE_CHARS])
+    return (text[:cut.start()] if cut else text[:VALUE_CHARS]).strip() or NOT_RECORDED
+
+
 def closing_lines(before: Optional[MetricReading], after: Optional[MetricReading], *, reread: bool,
                   already: Sequence[str], voice: bool = False) -> str:
-    """The code-written tail of message 2: the metric before and after (the same record read again), then what was already in place."""
+    """The code-written tail of message 2: the metric (its name), the value before and after (the same record read again), then what was already in place."""
     lines: List[str] = []
     if before is not None:
         label = before.done_when or before.milestone or "the milestone's measure"
+        was = short_value(before.value)
         if after is not None:
-            moved = "unchanged" if after.value == before.value else "changed"
-            lines.append(f"Metric ({label}): before {before.value}, now {after.value} ({moved}).")
+            now = short_value(after.value)
+            lines.append(f"Metric ({label}): unchanged, still {was}." if now == was else f"Metric ({label}): was {was}, now {now}.")
         else:
-            why = READ_AGAIN_FAILED if reread else "was not read again this turn"
-            lines.append(f"Metric ({label}): before {before.value}, now it {why}.")
+            lines.append(f"Metric ({label}): was {was}; " + ("it could not be read again just now." if reread else "it was not read again this turn."))
     if already and not voice:
         lines.append("Already in place, so nothing was written again: " + "; ".join(already[:3]) + ".")
     return "\n".join(lines)
