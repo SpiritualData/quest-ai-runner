@@ -138,6 +138,23 @@ def render(spec: Dict[str, Any], picked: Optional[Tuple[Dict[str, Any], Optional
     return "\n".join(lines)
 
 
+def refreshed_metric_values(client: Any, quest_id: str, spec: Optional[Dict[str, Any]], getter: Any) -> Optional[Dict[str, Any]]:
+    """The specification after the quest's metric records that name a source were refreshed from it (``metric_refresh``): the specification read again
+    when any record was written, else the one given. Best-effort: a failed refresh never costs the pass its brief."""
+    if not spec or not callable(getattr(client, "edit_spec_record", None)):
+        return spec
+    try:
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import metric_refresh
+        results = metric_refresh.refresh_metric_values(client, quest_id, spec)
+        for result in results:
+            if result["status"] not in ("written", "unchanged"):
+                log.info("autopilot: metric %s of quest %s not refreshed (%s): %s", result["record_id"], quest_id, result["status"], result.get("reason", ""))
+        return (getter("quest", quest_id) or spec) if metric_refresh.written(results) else spec
+    except Exception as e:  # noqa: BLE001 -- the refresh is a help for the brief, never a gate
+        log.info("autopilot: metric refresh failed for quest %s: %s", quest_id, e)
+        return spec
+
+
 def esoi_readiness(client: Any, quest_id: str) -> Optional[str]:
     """The readiness block for ``quest_id``, or None when it cannot be built. Never raises."""
     getter = getattr(client, "get_spec", None)
@@ -145,6 +162,7 @@ def esoi_readiness(client: Any, quest_id: str) -> Optional[str]:
         return None
     try:
         spec = getter("quest", quest_id)
+        spec = refreshed_metric_values(client, quest_id, spec, getter)
         refreshed = False
         if not spec or _gaps((spec or {}).get("records") or []):
             refresher = getattr(client, "refresh_spec", None)

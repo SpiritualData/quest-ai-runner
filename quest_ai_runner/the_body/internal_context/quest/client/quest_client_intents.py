@@ -83,6 +83,13 @@ class IntentsMixin:
         return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/refresh",
                                   {"reason": reason, "force": bool(force)})
 
+    def refresh_metric_values(self, quest_id: str) -> Dict[str, Any]:
+        """Refresh the measured values of a quest's metric records that name a source: each source is read through the lane's ``metric_sources`` and the
+        reading is written as the record's leading ``Current value:`` line with ``measured_through`` set (nothing else in the record changes; the same
+        reading writes nothing). Returns ``{"quest_id", "records"}``, one result per record: written, unchanged, gap, stale, held or refused."""
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.metric_refresh import refresh_metric_values
+        return {"quest_id": quest_id, "records": refresh_metric_values(self, quest_id)}
+
     def create_spec_record(self, subject_type: str, subject_id: str, record_type: str, fields: Dict[str, Any]) -> Dict[str, Any]:
         """POST /api/intents/specs/{subjectType}/{subjectId}/records: one new record (problem, ideal, solution, implementation or metric) of
         the specification. The server answers 403 when the quest's autopilot is off, and a record the AI writes stays the AI's."""
