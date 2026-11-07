@@ -631,6 +631,13 @@ ALT_GOALS = [{"id": "g1", "title": "Launch push post A", "text": "Kept by Quest 
              {"id": "g2", "title": "Unrelated thing", "spec_solution_id": None, "completed": False, "abandoned": False}]
 
 
+def same_post_of(prompt, ids):
+    """The model-judged answer of Resolve a Reference for one version: the goal id whose scripted text the prompt's version holds, else NONE."""
+    import json
+    version = prompt.split("The phrase:\n", 1)[1].split("\n\nCandidates", 1)[0] if "The phrase:\n" in prompt else prompt
+    return json.dumps({"id": next((goal for text, goal in ids.items() if text in version), "NONE")})
+
+
 def alt_answer(*alts):
     import json
     return json.dumps({"alternatives": [dict(a) for a in alts]})
@@ -1175,7 +1182,7 @@ def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_titl
         return ToolResult(ok=True, status=ToolStatus.NOOP, data={"state": "left_alone"}, text="left")
     tools = ToolRegistry([read_spec(), list_goals(rows), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=write)])
     same_titles = [dict(A_EXISTING, title="FB push post A", goal_id=""), dict(B_NEW, title="FB push post B", goal_id="")]
-    tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or (alt_answer(*same_titles) if "Other goals on the quest" in prompt else '{"same":[{"version":1,"goal_id":"p1"},{"version":2,"goal_id":"p2"}]}'))
+    tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or (alt_answer(*same_titles) if "Other goals on the quest" in prompt else same_post_of(prompt, {"Post one in full": "p1", "Post two in full": "p2"})))
     assert "FB push post A" in asked[0].split("Other goals on the quest that look like these")[1] and "Budget review" not in asked[0]
     assert "(already on the quest, left exactly as it is)" in tail and "A story hook gets more clicks" in tail and "Compared by:" in tail
     assert calls == [] and "- FB push post A (already on the quest" in tail and "- FB push post B (already on the quest" in tail          # nothing is created beside a person's series
@@ -1216,7 +1223,7 @@ def test_look_alike_goals_that_are_a_persons_mean_nothing_is_created_even_under_
     calls = []
     new_titles = [dict(A_EXISTING, title="Facebook post A for the 1000 subscribers push", goal_id=""), dict(B_NEW, title="Facebook post B for the 1000 subscribers push", goal_id="")]
     tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the push", "reply",
-                                 lambda prompt: alt_answer(*new_titles) if "Other goals on the quest" in prompt else '{"same":[]}')
+                                 lambda prompt: alt_answer(*new_titles) if "Other goals on the quest" in prompt else '{"id": "NONE"}')
     assert calls == []
     assert "Already on the quest: FB push post A, FB push post B (left as they are)." in tail and "Post A: A story hook gets more clicks" in tail       # each hypothesis stays with its own post
     assert "Facebook post A for the 1000" not in tail and "Compared by: P3 App Store listing live." in tail
@@ -1264,7 +1271,7 @@ def test_a_draft_turn_on_a_quest_with_many_goals_finds_the_look_alikes_past_the_
     tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=paged), write_goal(calls)])
     versions = [dict(A_EXISTING, title="Facebook post A", goal_id=""), dict(B_NEW, title="Facebook post B", goal_id="")]
     tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply",
-                                 lambda prompt: alt_answer(*versions) if "Other goals on the quest" in prompt else '{"same":[]}')
+                                 lambda prompt: alt_answer(*versions) if "Other goals on the quest" in prompt else '{"id": "NONE"}')
     assert calls == []
     assert tail.count("Already on the quest:") == 1 and "FB push post A, FB push post B (left as they are)." in tail and "Grow subscribers task" not in tail
     assert "Post A: A story hook gets more clicks" in tail and "Post B: A question hook gets more signups" in tail and "Compared by:" in tail

@@ -106,7 +106,7 @@ def test_an_unknown_assignee_or_outcome_creates_nothing():
     client = FakeClient()
     bad_person = run(work.create_task_spec, client, {"text": "x", "new_goal": {"title": "Plan the launch", "assigned_to_user_id": "zed"}})
     bad_outcome = run(work.create_task_spec, client, {"text": "x", "new_goal": {"title": "Plan the launch", "outcome_id": "zzz"}})
-    assert not bad_person.ok and "Nobody" in bad_person.text
+    assert not bad_person.ok and "does not name exactly one person" in bad_person.text
     assert not bad_outcome.ok and client.calls == []
 
 

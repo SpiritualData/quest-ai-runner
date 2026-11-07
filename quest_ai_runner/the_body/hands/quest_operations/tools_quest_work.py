@@ -51,20 +51,14 @@ def similar_open_goals(title: str, rows: List[Dict[str, Any]]) -> List[Dict[str,
 
 
 def resolve_member(client: Any, quest_id: str, who: str):
-    """``(user_id, problem)`` for a quest member named by id, name or email fragment."""
+    """``(user_id, problem)`` for the one quest member named by id, email, name or the words of a name (the hub's Resolve a Reference, which abstains on two that fit or none)."""
+    from quest_ai_runner.the_intelligence.mind.reference_resolver.quest_references import member_reference
     members = client.list_assignable_members(quest_id) or []
-    wanted = str(who).strip().lower()
-    for m in members:
-        if str(m.get("user_id")) == str(who).strip():
-            return str(m["user_id"]), None
-    hits = [m for m in members if wanted and (wanted in str(m.get("name") or "").lower()
-                                              or wanted == str(m.get("email") or "").lower())]
+    user_id, why = member_reference(who, members)
+    if user_id:
+        return user_id, None
     roster = ", ".join(f"{m.get('name') or m.get('email')} ({m.get('user_id')})" for m in members) or "none found"
-    if len(hits) == 1:
-        return str(hits[0]["user_id"]), None
-    if not hits:
-        return None, f"Nobody on this quest matches {who!r}. The people it can be assigned to: {roster}."
-    return None, f"{who!r} matches more than one person: {roster}. Pass the user_id."
+    return None, f"{who!r} does not name exactly one person on this quest. The people it can be assigned to: {roster}. Pass the user_id."
 
 
 def current_task_goal(client: Any, ctx: ToolContext) -> Dict[str, Any]:

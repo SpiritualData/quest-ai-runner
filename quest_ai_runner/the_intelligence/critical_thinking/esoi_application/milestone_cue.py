@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_readiness as readiness
+from quest_ai_runner.the_intelligence.mind.reference_resolver import quest_references
 
 STOP = frozenset("""a about all also an and any are as at be been but by can could do does for from get go going had has have how i in into is it its let lets
 make me more my need new next not now of on one or our out please so some than that the their them then there these they this to up us want was we were what
@@ -585,7 +586,7 @@ class Resolved:
         step = kept_step or " ".join(str(data.get("human_step") or "").split())
         people = data.get("people") if isinstance(data.get("people"), list) else []
         self.people = tuple(dict.fromkeys(str(n).strip(" .'\"") for n in people if str(n).strip(" .'\"")))
-        return {"owners": [str(n).strip(" .'\"") for n in named if n and str(n).strip(" .'\"")], "goal_id": goal if goal in {str(g.get("id")) for g in keyed} else "",
+        return {"owners": [str(n).strip(" .'\"") for n in named if n and str(n).strip(" .'\"")], "goal_id": quest_references.goal_offered(goal, keyed),      # an id the model was not offered is never adopted
                 "draft": draft, "human_step": step}
 
     def name_owner(self, shown: Mapping[str, Any], decide: Optional[Callable[[str], str]]) -> str:

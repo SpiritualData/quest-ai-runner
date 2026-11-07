@@ -121,7 +121,9 @@
    "receive-input-mid-run": "quest_ai_runner",
    "replay-known-operations": "quest_ai_runner",
    "reply-in-steps": "quest_ai_runner",
+   "resolve-a-reference": "quest_ai_runner",
    "response-quality": "quest_ai_runner",
+   "route-a-request": "quest_ai_runner",
    "run-applies-esoi": "quest_ai_runner",
    "search-cards-and-specs": "quest_ai_runner",
    "show-progress": "quest_ai_runner",
@@ -714,6 +716,17 @@
   }
  },
  "run-applies-esoi": {
+ "route-a-request": {
+  "default": "planner_derived",
+  "evidence": {
+   "detail": "the selected implementation has no recorded row; best guess on the point estimate (majority_floor 0.25); no test was possible",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "planner_derived": "quest_ai_runner.the_intelligence.mind.request_router.planner_derived"
+  }
+ },
   "default": "slice-and-writeback",
   "evidence": {
    "detail": "beaten by single_attempt: best guess, not yet significant: single_attempt 0.907 against slice_and_writeback 0.826 on the point estimate; no case counts or per-case rows allow a test",

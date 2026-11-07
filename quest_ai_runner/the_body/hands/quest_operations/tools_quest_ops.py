@@ -871,19 +871,11 @@ def list_quest_workflows_spec(env: Mapping[str, str], client_factory=None) -> To
 
 
 def resolve_member(who: Any, members: List[Mapping[str, Any]]) -> "tuple[Optional[str], Optional[str]]":
-    """A quest member from a user id, a name or part of one, or an email: ``(user_id, None)``, or
-    ``(None, why)`` naming the people it could have been so the call can be fixed."""
-    want = str(who or "").strip().lower()
-    if not want:
-        return None, "a human step needs an assignee"
-    known = [m for m in members if m.get("user_id")]
-    exact = [m for m in known if want in (str(m["user_id"]).lower(), str(m.get("email") or "").lower())]
-    hits = exact or [m for m in known if want in str(m.get("name") or "").lower()
-                     or want == str(m.get("email") or "").split("@")[0].lower()]
-    if len(hits) == 1:
-        return str(hits[0]["user_id"]), None
-    roster = ", ".join(str(m.get("name") or m["user_id"]) for m in known) or "nobody"
-    return None, (f"{who!r} matches {len(hits)} people on this quest. Members: {roster}.")
+    """A quest member from a user id, an email, a name or the words of a name: ``(user_id, None)`` when exactly one member is meant, else
+    ``(None, why)`` naming the people it could have been so the call can be fixed. Settled by the hub's Resolve a Reference (``quest_references``), which abstains
+    when two members fit or none does: a word that two people share, or the middle of another word, names nobody."""
+    from quest_ai_runner.the_intelligence.mind.reference_resolver.quest_references import member_reference
+    return member_reference(who, members)
 
 
 CREATE_LOCK = threading.Lock()

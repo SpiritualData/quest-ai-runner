@@ -1,0 +1,437 @@
+[
+ {
+  "id": "qroute-information-01",
+  "kind": "information",
+  "args": {
+   "request": "Where do we stand on the newsletter subscribers milestone?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-02",
+  "kind": "information",
+  "args": {
+   "request": "How many goals are open on this quest?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-03",
+  "kind": "information",
+  "args": {
+   "request": "What is the status of the workshop signups?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-04",
+  "kind": "information",
+  "args": {
+   "request": "Which of my goals is due first?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-05",
+  "kind": "information",
+  "args": {
+   "request": "Who owns the podcast milestone?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-06",
+  "kind": "information",
+  "args": {
+   "request": "What did we decide about the launch date in last week's notes?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-07",
+  "kind": "information",
+  "args": {
+   "request": "Summarise where this quest stands in a few sentences.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-08",
+  "kind": "information",
+  "args": {
+   "request": "What is the done-when for the listeners milestone?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-09",
+  "kind": "information",
+  "args": {
+   "request": "How many goals did we finish last month?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-10",
+  "kind": "information",
+  "args": {
+   "request": "Did anyone reply to the survey decision?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-11",
+  "kind": "information",
+  "args": {
+   "request": "What moved on the signups metric this week?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-information-12",
+  "kind": "information",
+  "args": {
+   "request": "Is there already a weekly check-in workflow on this quest?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "information"
+ },
+ {
+  "id": "qroute-act-01",
+  "kind": "act",
+  "args": {
+   "request": "Add a goal for this week: send the spring survey to the list.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-02",
+  "kind": "act",
+  "args": {
+   "request": "Mark the workshop outline goal as done.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-03",
+  "kind": "act",
+  "args": {
+   "request": "Move the launch call to Thursday afternoon.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-04",
+  "kind": "act",
+  "args": {
+   "request": "Create a note on the podcast milestone saying the guest confirmed.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-05",
+  "kind": "act",
+  "args": {
+   "request": "Assign the invoice follow-up goal to Dana.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-06",
+  "kind": "act",
+  "args": {
+   "request": "Set up a weekly Monday check-in workflow for this quest.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-07",
+  "kind": "act",
+  "args": {
+   "request": "Start a research run on competitor pricing and report back when it is done.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-08",
+  "kind": "act",
+  "args": {
+   "request": "Schedule a reminder for Friday to renew the domain.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-09",
+  "kind": "act",
+  "args": {
+   "request": "Push the workshop signups milestone forward this week.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-act-10",
+  "kind": "act",
+  "args": {
+   "request": "Send the agenda to the team before the call.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-cue-01",
+  "kind": "act",
+  "args": {
+   "request": "newsletter subscribers",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-cue-02",
+  "kind": "act",
+  "args": {
+   "request": "podcast listeners",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-cue-03",
+  "kind": "act",
+  "args": {
+   "request": "workshop signups",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "act"
+ },
+ {
+  "id": "qroute-draft-01",
+  "kind": "draft",
+  "args": {
+   "request": "Write a short caption for the launch photo.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-02",
+  "kind": "draft",
+  "args": {
+   "request": "Draft two versions of the subject line for Friday's email.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-03",
+  "kind": "draft",
+  "args": {
+   "request": "Give me a three sentence description of the workshop for the website.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-04",
+  "kind": "draft",
+  "args": {
+   "request": "Compose a thank you note to the guest, I will send it myself.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-05",
+  "kind": "draft",
+  "args": {
+   "request": "Write the opening paragraph of the newsletter.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-06",
+  "kind": "draft",
+  "args": {
+   "request": "Can you word a post announcing the new episode?",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-07",
+  "kind": "draft",
+  "args": {
+   "request": "Draft the message I could send to the volunteers about Saturday.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-draft-08",
+  "kind": "draft",
+  "args": {
+   "request": "Write two Facebook posts for the signups push, with a hypothesis for each.",
+   "context": {
+    "view": "Milestones on this quest: newsletter subscribers; podcast listeners; workshop signups. Open goals: 14."
+   }
+  },
+  "expect": "draft"
+ },
+ {
+  "id": "qroute-clarify-01",
+  "kind": "clarify",
+  "args": {
+   "request": "Do the thing from before.",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-02",
+  "kind": "clarify",
+  "args": {
+   "request": "Update it.",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-03",
+  "kind": "clarify",
+  "args": {
+   "request": "Send that to them.",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-04",
+  "kind": "clarify",
+  "args": {
+   "request": "Make it better.",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-05",
+  "kind": "clarify",
+  "args": {
+   "request": "and also the other one",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-06",
+  "kind": "clarify",
+  "args": {
+   "request": "Move it to next week.",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-07",
+  "kind": "clarify",
+  "args": {
+   "request": "Fix the numbers.",
+   "context": {}
+  },
+  "expect": "clarify"
+ },
+ {
+  "id": "qroute-clarify-08",
+  "kind": "clarify",
+  "args": {
+   "request": "Can you look at the one Dana mentioned?",
+   "context": {}
+  },
+  "expect": "clarify"
+ }
+]

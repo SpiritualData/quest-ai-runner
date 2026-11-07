@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+from quest_ai_runner.the_intelligence.mind.reference_resolver import quest_references
 
 log = logging.getLogger("quest-ai-runner.alternatives")
 STATE_WORDS = {"not_recorded": "not recorded on the quest", "left_alone": "already on the quest, left exactly as it is", "created": "created", "updated": "already tracked, copy updated", "unchanged": "already tracked"}
@@ -209,12 +210,12 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     if not alts:
         log.warning("alternatives flow: no alternatives to keep in the reply (model answer: %r)", str(answer)[:400])
         return ""
-    by_title = {str(g.get("title") or "").strip().casefold(): str(g.get("id")) for g in goals}
     taken = {a.goal_id for a in alts if a.goal_id}
     titles = {str(g.get("id")): str(g.get("title") or "").strip() for g in goals}
     for alt in alts:
-        same = by_title.get(alt.title.strip().casefold(), "")
-        if not alt.goal_id and same and same not in taken:      # a title that is an existing goal's title is that goal, whatever id the model gave
+        titled = quest_references.goal_titled(alt.title, goals) if not alt.goal_id else None      # a title that is an existing goal's whole title is that goal, whatever id the model gave
+        same = str(titled.get("id")) if titled is not None else ""
+        if not alt.goal_id and same and same not in taken:
             alt.goal_id = same
             taken.add(same)
         if alt.goal_id:
@@ -251,25 +252,14 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
 
 
 def same_posts(alts: Sequence[Alternative], candidates: Sequence[Mapping[str, Any]], decide: Callable[[str], str]) -> Dict[int, Mapping[str, Any]]:
-    """``{id(version): the person's goal}`` for each version the model, shown the version and every candidate goal, says is that goal's own post (the same piece of content). A goal id the
-    model was not shown, or one named for two versions, is dropped; a version it does not pair stays unpaired."""
-    shown = {str(g.get("id")): g for g in candidates}
-    listing = "\n".join(f"{g.get('id')} | {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in candidates)
-    versions = "\n\n".join(f"Version {i + 1}:\n{a.text[:500]}" for i, a in enumerate(alts))
-    try:
-        answer = decide(f"Versions of a piece of content just written for a quest:\n\n{versions}\n\nGoals already on the quest (id | title | text):\n{listing}\n\n"
-                        'Return JSON {"same":[{"version":1,"goal_id":"..."}]} listing a version only when one goal above is that very post (the same piece of content under its own title). '
-                        'A goal that merely shares a topic or words is not the same post. Return {"same":[]} when none is. Reply with the JSON only.')
-        data = milestone_cue.parse_json(answer)
-    except Exception:      # noqa: BLE001  an unreadable answer pairs nothing
-        return {}
+    """``{id(version): the person's goal}`` for each version that the hub's Resolve a Reference (the model-judged arm, one call per version, shown the version and the goals still free)
+    says is that goal's own post (the same piece of content, not one that shares a topic or words). A goal already paired with another version is not offered again; a version the
+    resolver abstains on, or whose answer cannot be used, stays unpaired. Which goals may be changed is not decided here: a paired goal is named and left as it is."""
+    from quest_ai_runner.the_intelligence.mind.reference_resolver.quest_references import post_goal
     out: Dict[int, Mapping[str, Any]] = {}
-    for item in (data.get("same") or []) if isinstance(data, dict) else []:
-        try:
-            alt, goal = alts[int(item.get("version")) - 1], shown.get(str(item.get("goal_id")))
-        except (TypeError, ValueError, IndexError, AttributeError):
-            continue
-        if goal is not None and all(g is not goal for g in out.values()) and id(alt) not in out:
+    for alt in alts:
+        goal = post_goal(alt.text[:500], [g for g in candidates if all(g is not taken for taken in out.values())], decide)
+        if goal is not None:
             out[id(alt)] = goal
     return out
 

@@ -20,6 +20,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Replay Known Operations (solution with no page of its own, its implementations are in this intent's records): Speeds up a quest's repeated operations by recognising a request that worked before and replaying the known steps.
 - Reply In Steps (solution with no page of its own, its implementations are in this intent's records): Lets a person see progress and the reason for more work during a long turn without being spammed.
 - Show Progress (solution with no page of its own, its implementations are in this intent's records): Lets a person follow a run at the level they want, every step while they watch and only milestones once they step away.
+- Route a Request (solution with no page of its own, its implementations are in this intent's records)
+- Resolve a Reference (solution with no page of its own, its implementations are in this intent's records)
 
 ## Solutions at a glance
 
@@ -31,6 +33,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Replay Known Operations | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
 | Reply In Steps | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
 | Show Progress | `show-progress` | `quest_ai_runner.run("show-progress", {'event': 'milestone', 'mode': 'background'})` | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
+| Route a Request | `route-a-request` | no entry declared | Route read off the planner decision (`planner_derived`) | Requests routed to what they ask for |
+| Resolve a Reference | `resolve-a-reference` | no entry declared | none selected | none yet |
 
 ## Solutions from a library
 
@@ -40,6 +44,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`replay-known-operations`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Specializes the library `hub`.
 - [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`reply-in-steps`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
 - [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`show-progress`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
+- [Route a Request](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`route-a-request`): Decides once what a request asks of the system: to be told something (information), to have something done or changed (act), to have text written and handed back in the reply (draft), or that it cannot be acted on yet (clarify). Adopted from the library `hub`.
+- [Resolve a Reference](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/mind/README.md) (`resolve-a-reference`): Says which one of a list of candidates a phrase refers to (a person for an owner's name, a goal for a draft's title, a post for a version of it), or abstains. Adopted from the library `hub`.
 
 ## Problems and ideals
 
@@ -63,7 +69,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Quest answers that name the person's goal and circumstance and fit features to them (`metric-quest-answer-tied-to-goal-and-circumstance`): leader `reference_script`, 13 of 13 cases
 - Day-with-Jarvis turns right end to end (`metric-jarvis-ness`): leader `reference_script`, 13 of 13 cases
 - Asks filed and deletes held before anything outward or irreversible happens (`metric-jarvis-floor-consent`): leader `reference_script`, 13 of 13 cases
-- and 6 more: all 16 are in [metrics](#metrics) of the full record below
+- and 7 more: all 17 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -94,6 +100,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Replay Known Operations | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
 | Reply In Steps | `reply-in-steps` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
 | Show Progress | `show-progress` | Stream, milestone and fan-out sinks (`stream`) | Surfaced-event policy by mode, Progress shown while the work runs |
+| Route a Request | `route-a-request` | Route read off the planner decision (`planner_derived`) | Requests routed to what they ask for |
+| Resolve a Reference | `resolve-a-reference` | none selected | none yet |
 
 ### Implementations
 
@@ -124,6 +132,9 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | The terminal draws the Trail from the hub's renderers | `quest-work-shown:terminal_trail` | [quest_ai_runner/the_consciousness/terminal/textual_ui_trail.py](../../the_consciousness/terminal/textual_ui_trail.py) |  |
 | The planner prompt written by the real loop | `context-intake:planner_prompt` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
 | The recipe store of the loop | `replay-known-operations:stored_recipes` | [quest_ai_runner/the_intelligence/mind/area_mind.py](area_mind.py) |  |
+| Route read off the planner decision | `route-a-request:planner_derived` | [quest_ai_runner/the_intelligence/mind/request_router/planner_derived.py](request_router/planner_derived.py) |  |
+| One cheap classifier call | `route-a-request:single_classifier` | [evaluation/components/route_a_request/impls/single_classifier.py](../../../evaluation/components/route_a_request/impls/single_classifier.py) |  |
+| Always information | `route-a-request:majority_floor` | [evaluation/components/route_a_request/impls/majority_floor.py](../../../evaluation/components/route_a_request/impls/majority_floor.py) |  |
 | The loop planner decides the route | `planner:planner_route` | [quest_ai_runner/the_intelligence/mind/planner/message_routing.py](planner/message_routing.py) |  |
 | One cheap model call per turn writes the beat (today) | `quest-work-shown:model_beat` | [quest_ai_runner/the_intelligence/mind/response_writer/orchestrator_turn.py](response_writer/orchestrator_turn.py) |  |
 | The Trail (live line, one summary line, expandable groups) | `quest-work-shown:trail` | [quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py](response_writer/work_trace.py) |  |
@@ -147,6 +158,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Interim messages and asks that are true, not repeated and only where a person is needed (`metric-interim-reply-truthful-and-useful`): `esoi run interim_reply --impl gated`
 - The terminal shows the AI's work with the hub's rules and words, and keeps no copy (`metric-terminal-uses-hub-renderers`): `python3 -m pytest tests/test_terminal_trail.py tests/test_terminal_uses_hub_renderers.py`
 - Supported first beats within the time and cost the turn allows (`metric-narrate-a-turn`): `esoi run narrate_a_turn --impl model_beat`
+- Requests routed to what they ask for (`metric-route-a-request`): `esoi run route_a_request --impl planner_derived --sample 3 --max-calls 3; esoi run route_a_request --impl single_classifier --sample 3 --max-calls 3; esoi run route_a_request --impl majority_floor`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
