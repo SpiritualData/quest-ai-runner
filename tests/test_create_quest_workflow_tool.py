@@ -88,3 +88,23 @@ def test_a_different_schedule_or_an_unreadable_listing_is_not_a_match():
     assert call(client, title="Thursday check", steps=[step]).ok and len(client.calls) == 1
     unreadable = ListingClient(None)
     assert not call(unreadable, title="W", steps=[STEP]).ok and unreadable.calls == []
+
+
+def test_a_weekly_monday_step_with_the_shapes_the_planner_sends_is_created():
+    members = MEMBERS
+    for weekday in (0, [0], "0"):
+        client = ListingClient([])
+        step = {"title": "Check how it is going", "assignee": "Ann", "starts_at": "2026-11-09T08:00:00+00:00",
+                "ends_at": "2026-11-09T12:00:00+00:00", "repeat": "weekly", "by_weekday": weekday, "tz": "UTC"}
+        result = call(client, title="Monday check", steps=[step])
+        assert result.ok and client.calls, (weekday, result.text)
+        assert client.calls[0][2][0]["timing"]["repeat"]["byWeekday"] == [0]
+
+
+def test_a_tool_that_raises_on_argument_shape_reports_a_plain_message():
+    from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolSpec
+    def boom(args, ctx):
+        raise TypeError("'int' object is not iterable")
+    registry = ToolRegistry([ToolSpec(name="t", description="d", mutates=False, handler=boom)])
+    result = registry.invoke("t", {}, ToolContext())
+    assert not result.ok and "could not use the arguments as given" in result.text and "iterable" not in result.text

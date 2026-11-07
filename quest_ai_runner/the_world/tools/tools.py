@@ -608,8 +608,11 @@ class ToolRegistry:
                 log.warning("tool %s raised: %s", name, e)
                 # A client write error carries its own status (refused, failed, unknown) and a message that says so.
                 typed = getattr(e, "write_status", None) is not None
-                box["result"] = ToolResult(ok=False, text=str(e) if typed else f"{name} failed: {e}",
-                                           status=status_of_error(e))
+                shaped = isinstance(e, (TypeError, ValueError, KeyError, AttributeError, IndexError))
+                text = (str(e) if typed else
+                        f"{name} could not use the arguments as given ({type(e).__name__}); nothing was changed. Check each argument against the tool's "
+                        "parameters (a list where a list is asked, a number where a number is asked) and call it again." if shaped else f"{name} failed: {e}")
+                box["result"] = ToolResult(ok=False, text=text, status=status_of_error(e))
 
         t = threading.Thread(target=run_handler, name=f"tool-{name}", daemon=True)
         t.start()

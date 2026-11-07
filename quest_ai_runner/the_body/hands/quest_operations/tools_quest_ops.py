@@ -854,7 +854,9 @@ def squash(text: Any) -> str:
 
 def schedule_of(timing: Mapping[str, Any]) -> tuple:
     repeat = (timing or {}).get("repeat") or {}
-    return (repeat.get("freq"), tuple(repeat.get("byWeekday") or ()), repeat.get("interval") or 1) if repeat else (None, (), 1)
+    days = repeat.get("byWeekday") or ()
+    days = days if isinstance(days, (list, tuple)) else (days,)
+    return (repeat.get("freq"), tuple(days), repeat.get("interval") or 1) if repeat else (None, (), 1)
 
 
 def workflow_already_there(workflows: List[Mapping[str, Any]], title: str, steps: List[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
@@ -880,7 +882,8 @@ def workflow_step_body(index: int, raw: Mapping[str, Any], members: List[Mapping
     if raw.get("repeat"):
         repeat = {"freq": str(raw["repeat"]), "interval": 1}
         if raw.get("by_weekday") is not None:
-            repeat["byWeekday"] = list(raw["by_weekday"])
+            days = raw["by_weekday"]
+            repeat["byWeekday"] = [int(d) for d in (days if isinstance(days, (list, tuple)) else [days])]     # one day may arrive as a bare number
         if raw.get("tz"):
             repeat["tz"] = str(raw["tz"])
     if raw.get("rep_id"):
