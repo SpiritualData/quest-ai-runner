@@ -701,11 +701,8 @@ class RunCloseMixin:
                     self._kickoff_card_update(pursued["result"], PlanDecision(action="deep", goal=overall_goal), rs.user_message, _ctx_meta, emit,
                                               gathered=gathered)
                     return finish(pursued["result"])
-                if pursuit["status"] == "continuing":
-                    # the current reply goes out with the one plain line; the follow-up posts its result to this conversation
-                    rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]
-                elif pursuit["message"] and pursuit["replans"]:
-                    rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]
+                if pursuit["message"] and (pursuit["status"] == "continuing" or pursuit["replans"]):
+                    rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]       # the hub adds none now; a line stays a structured outcome of the pursuit, not a default
                 _last = rs._last_verdict
                 _question = str(_last.get("question") or "").strip()
                 if (pursuit["status"] == "unmet_reported" and getattr(self.cfg, "interim_replies", False)

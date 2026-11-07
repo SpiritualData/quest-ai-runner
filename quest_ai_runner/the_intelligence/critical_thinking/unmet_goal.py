@@ -12,7 +12,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Dict, Mapping
 
-from hubofhubs.api import EVENT_MILESTONE, BoundedReplan, ProgressEvent, runner_starts_background_work
+from hubofhubs.api import BoundedReplan, runner_starts_background_work
 
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import log
@@ -62,11 +62,6 @@ def pursue_before_giving_up(orchestrator: Any, rs: SimpleNamespace, goal: str, e
             return {"met": bool(outcome.get("met")), "reason": str(outcome.get("reason") or gap)}
         return {"met": False, "reason": str(gap)}
 
-    def announce(line: str) -> None:
-        if emit is not None and not held.get("announced"):
-            held["announced"] = True
-            emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=((rs.text or "").rstrip() + "\n\n" + line).strip(), data={"still_working": True}))
-
     def attempt(step: Mapping[str, Any]) -> Mapping[str, Any]:
         plan = PlanDecision(
             action="deep", goal=_truncate_goal(goal),
@@ -99,9 +94,9 @@ def pursue_before_giving_up(orchestrator: Any, rs: SimpleNamespace, goal: str, e
 
     means = [{"name": SEARCH, "kind": "read", "cost_seconds": cfg.pursue_deep_seconds}]
     budget = {"max_replans": cfg.pursue_max_replans, "wall_seconds": cfg.pursue_wall_seconds, "inline_seconds": cfg.pursue_inline_seconds, "background": background}
-    pursuit = BoundedReplan().pursue(goal, "", rs.text, attempt, means, budget, announce, check)
+    pursuit = BoundedReplan().pursue(goal, "", rs.text, attempt, means, budget, None, check)
     if pursuit["status"] == "continuing":
-        # the current reply has gone out with its one "still working" line: the search continues as a queued follow-up that posts to this conversation
+        # the current reply goes out as it is (no added line): the search continues as a queued follow-up that posts to this conversation
         attempt({"missing": pursuit["missing"], "background": True})
         started, held["result"] = held["result"], None
         return {"pursuit": pursuit, "result": None, "followup_started": started is not None}

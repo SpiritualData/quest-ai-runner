@@ -31,3 +31,7 @@ def test_the_planner_rubric_asks_what_only_the_person_knows_instead_of_handing_o
     for text in (PLANNER_DECISION_RUBRIC, PLANNER_PROMPT_COMPACT):
         assert "ASK WHAT ONLY THEY KNOW" in text
     assert "never hand it to" in PLANNER_DECISION_RUBRIC
+
+
+def test_the_closing_sentence_is_left_out_when_nothing_moved():
+    assert "nothing moved" in LONG_TERM_GUIDANCE and "never ends with the sentence" in LONG_TERM_GUIDANCE
