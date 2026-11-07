@@ -161,7 +161,7 @@ def build_arm(meter, bounded):
         routes = [f"/api/teams/{team}/quests/{quest}/goals", f"/api/teams/{team}/quests/{quest}/goals", f"/api/planning/quests/{quest}/goals/current"]
         for attempt, path in enumerate(routes):
             try:
-                found = goal_in(safety_client._request("GET", path) or {}, goal_id)
+                found = goal_in(safety_client.send_request("GET", path) or {}, goal_id)
             except Exception:  # noqa: BLE001 -- the next route is tried
                 found = None
             if found:
