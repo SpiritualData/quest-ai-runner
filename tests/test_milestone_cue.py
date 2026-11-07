@@ -1234,7 +1234,7 @@ def test_look_alike_goals_that_are_a_persons_mean_nothing_is_created_even_under_
     tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the push", "reply",
                                  lambda prompt: alt_answer(*new_titles) if "Other goals on the quest" in prompt else '{"same":[]}')
     assert calls == []
-    assert tail.startswith("Already on the quest: FB push post A, FB push post B (left as they are).") and "A story hook" not in tail       # no hypothesis is attached to a goal that is not its own post
+    assert "Already on the quest: FB push post A, FB push post B (left as they are)." in tail and "Post A: A story hook gets more clicks" in tail       # each hypothesis stays with its own post
     assert "Facebook post A for the 1000" not in tail and "Compared by: P3 App Store listing live." in tail
 
 
@@ -1264,3 +1264,23 @@ def test_the_reply_voice_asks_for_short_attributed_answers_with_the_core_fact_fi
     from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
     for rule in ("in as few sentences as it needs", "never tell the person what you would need or could do for them", 'Never an unattributed "I", "we" or "our"', "open with the core fact asked about"):
         assert rule in REPLY_VOICE_SYSTEM
+
+
+def test_a_draft_turn_on_a_quest_with_many_goals_finds_the_look_alikes_past_the_first_page_and_names_only_them():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    everything = ([{"id": f"j{i}", "title": f"Grow subscribers task {i}", "text": "", "spec_solution_id": None, "completed": False} for i in range(150)]
+                  + [{"id": "p1", "title": "FB push post A", "text": "a person's goal", "spec_solution_id": None, "completed": False},
+                     {"id": "p2", "title": "FB push post B", "text": "a person's goal", "spec_solution_id": None, "completed": False}])
+
+    def paged(args, ctx):
+        needle = str(args.get("text_contains") or "").lower()
+        rows = [g for g in everything if needle in f"{g['title']} {g['text']}".lower()] if needle else everything
+        return ToolResult(ok=True, data=rows[:100], text="one page")      # a listing shows one page; the person's goals sit past it
+    calls = []
+    tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=paged), write_goal(calls)])
+    versions = [dict(A_EXISTING, title="Facebook post A", goal_id=""), dict(B_NEW, title="Facebook post B", goal_id="")]
+    tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply",
+                                 lambda prompt: alt_answer(*versions) if "Other goals on the quest" in prompt else '{"same":[]}')
+    assert calls == []
+    assert tail.count("Already on the quest:") == 1 and "FB push post A, FB push post B (left as they are)." in tail and "Grow subscribers task" not in tail
+    assert "Post A: A story hook gets more clicks" in tail and "Post B: A question hook gets more signups" in tail and "Compared by:" in tail

@@ -834,7 +834,7 @@ INFORMATION_ANSWER_DIRECTIVE = """\
 The person asked a question to be answered from their records. Answer it first, in at most three short sentences: for a status, the current value
 of the key measure the records hold, with its date, then at most one fact about what moved or is stuck; for a count, the count; for a priority, the one item.
 Only what was asked: no unrelated blockers, no list of other items, no extra readings, no suggestion of what to do next, no offer or question at the end.
-A definition or how-to question is answered in general terms, with nothing drawn from their goals, dates or counts. Never use an em dash. Records may be written in the first person by whoever authored them: never copy
+A definition or how-to question is answered in one or two sentences in general terms, with nothing drawn from their goals, dates or counts and no list of its fields, parts or options. Never use an em dash. Records may be written in the first person by whoever authored them: never copy
 I, my, me or our from a record, say whose it is by name ("waiting for Sam's preview"); use "I" only for what you yourself did or could not do this turn.
 """
 

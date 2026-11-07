@@ -61,6 +61,34 @@ def goals_like(goals: Sequence[Mapping[str, Any]], cue: str, min_shared: int = M
     return [g for score, g in scored if score >= REFERENCE_SHARE * best][:REFERENCE_MAX]
 
 
+MATCH_WORDS = 6
+
+
+def goals_with_words(registry: Any, quest_id: str, cue: str) -> List[Mapping[str, Any]]:
+    """The quest's goals that hold a word of the request, read one word at a time through the goal tool's own text filter. A quest can hold hundreds of goals and a listing shows one page
+    of them, so a goal the listing did not reach (a look-alike due later than the page ends) is found here. A failed read adds nothing; the plain listing still stands."""
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    out: Dict[str, Mapping[str, Any]] = {}
+    if registry is None or registry.get("list_quest_goals") is None:
+        return []
+    for word in list(dict.fromkeys(milestone_cue.words(cue)))[:MATCH_WORDS]:
+        try:
+            result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "open_only": False, "text_contains": word, "limit": 100}, ToolContext(quest_id=quest_id))
+        except Exception:      # noqa: BLE001
+            continue
+        for g in (result.data or []) if result.ok else []:
+            if isinstance(g, Mapping) and g.get("id"):
+                out[str(g["id"])] = g
+    return list(out.values())
+
+
+def merged_goals(registry: Any, quest_id: str, cue: str) -> List[Mapping[str, Any]]:
+    """The quest's goals as listed, plus those that hold a word of the request (``goals_with_words``), each once."""
+    listed = list(milestone_cue.goals_through(registry, quest_id))
+    seen = {str(g.get("id")) for g in listed}
+    return listed + [g for g in goals_with_words(registry, quest_id, cue) if str(g.get("id")) not in seen]
+
+
 def solutions_listing(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> List[Dict[str, str]]:
     """The quest's solutions that have a metric, as ``{solution_id, name, metric_id, metric_name}`` (what an alternative may be linked to)."""
     out = []
@@ -173,7 +201,7 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     if registry is None or not quest_id or registry.get("create_or_update_quest_goal") is None:
         return ""
     tables, _ = milestone_cue.read_through(registry, quest_id)
-    everything = milestone_cue.goals_through(registry, quest_id)
+    everything = merged_goals(registry, quest_id, cue)
     goals = goals_kept(everything)
     solutions = solutions_listing(tables)
     answer = decide(build_prompt(cue, reply, goals, solutions, goals_like(everything, cue, min_shared=1)))      # the model sees every goal that shares a rare word, to pick out the series by title
@@ -200,7 +228,9 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     if looks_like and not existing:
         # Goals that look like this series exist and are a person's (Quest AI did not write them) and none is the same post as a version: nothing is created beside them and nothing is
         # changed. The reply says in one sentence that they are there and were left as they are; no version's hypothesis is attached to a goal that is not its own.
-        return "Already on the quest: " + ", ".join(str(g.get("title") or "") for g in looks_like) + " (left as they are)." + (f" Compared by: {metric}." if metric else "")
+        own = [f"- Post {chr(65 + i)}: {a.hypothesis}" for i, a in enumerate(alts) if a.hypothesis]       # each hypothesis stays with its own post
+        return (("Hypotheses:\n" + "\n".join(own) + "\n") if own else "") + (f"Compared by: {metric}.\n" if metric else "") \
+            + "Already on the quest: " + ", ".join(str(g.get("title") or "") for g in looks_like) + " (left as they are)."
     results = [{"title": str(existing[id(a)].get("title") or a.title), "hypothesis": a.hypothesis, "state": "left_alone"} for a in alts if id(a) in existing]      # a person's goal the version is for: named, never changed
     alts = [a for a in alts if id(a) not in existing]
     if not alts:
@@ -252,7 +282,7 @@ def act_status_scrub(text: str) -> str:
 def status_line(registry: Any, quest_id: str, cue: str) -> str:
     """What the quest already holds for this request, in plain words, for message 1: the goals that overlap it (titles), and, when they are linked to a plan solution, the solution and the
     metric it moves. "" when the quest holds none or cannot be read."""
-    held = goals_like(milestone_cue.goals_through(registry, quest_id), cue)
+    held = goals_like(merged_goals(registry, quest_id, cue), cue)
     if not held:
         return ""
     titles = ", ".join(str(g.get("title")) for g in held[:3])
