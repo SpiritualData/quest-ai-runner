@@ -58,7 +58,7 @@ def test_an_act_request_sends_the_status_first_then_the_result_with_the_metric_b
     interim = [e for e in events if e["type"] == EVENT_INTERIM]
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
     assert len(interim) == 1 and interim[0]["data"]["status_first"] is True and interim[0]["data"]["seq"] == 1
-    assert "Current value: 12." in interim[0]["text"] and "Done when: 100 installs." in interim[0]["text"]
+    assert "I am looking at quest goals first." in interim[0]["text"]       # sent as soon as the plan is known to be an act, before the read finishes
     assert interim[0]["text"].startswith("Where this stands:") and "\n\nNow: " in interim[0]["text"]
     assert events.index(interim[0]) < events.index(result) and writes == [WRITE["args"]]
     assert "was 12, now 15." in result["text"]            # the second reading is a read by code, after the write
@@ -71,9 +71,11 @@ def test_an_information_request_sends_one_message():
     assert "Metric (" not in [e for e in events if e["type"] == EVENT_RESULT][-1]["text"]
 
 
-def test_an_act_request_that_only_reads_sends_one_message():
+def test_an_act_request_that_only_reads_still_sends_its_status_first_before_the_read_finishes():
     events = run([act_plan("act", READ), {"action": "answer", "rationale": "say it", "user_intent": "act"}], registry({"value": "12"}, []))
-    assert not [e for e in events if e["type"] == EVENT_INTERIM]
+    interim = [e for e in events if e["type"] == EVENT_INTERIM]
+    assert len(interim) == 1 and "I am looking at quest goals first." in interim[0]["text"] and "?" not in interim[0]["text"]
+    assert events.index(interim[0]) < events.index([e for e in events if e["type"] == EVENT_RESULT][-1])
 
 
 def test_a_repeated_act_request_reports_what_is_already_there_without_a_second_write():
@@ -201,3 +203,35 @@ def test_the_final_reply_of_an_ensure_turn_that_found_everything_there_is_exactl
                                 (SimpleNamespace(gathered=[read, there], status_first=None), SimpleNamespace(kind="confirm", text=reply)),
                                 (SimpleNamespace(gathered=[read, there], status_first={"before": object()}), SimpleNamespace(kind="answer", text=reply))):
         assert settle_already_set(orch, rs_other, res_other) is False and res_other.text == reply
+
+
+def test_a_planner_that_only_reads_an_existing_workflow_gets_the_idempotent_write_added_by_code_and_the_reply_is_the_code_sentence():
+    created = []
+    row = {"workflow_id": "qwf_1", "workflow_title": "Weekly check-in: Thursday office hour", "step_id": "s1", "title": "Thursday office hour: weekly check-in",
+           "assignee_name": "Ann Example", "assignee_user_id": "u1", "starts_at": "2026-11-12T08:00:00+00:00", "ends_at": "2026-11-13T07:59:00+00:00",
+           "repeats": "weekly on Thursday", "repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}, "status": "pending", "due": "2026-11-13T07:59:00+00:00"}
+
+    def read(args, ctx):  # noqa: ARG001
+        return ToolResult(ok=True, data=[row], text="1 matching workflow steps")
+
+    def ensure(args, ctx):  # noqa: ARG001
+        created.append(args)
+        return ToolResult(ok=True, status=ToolStatus.NOOP, data=dict(WORKFLOW_THERE), text="Already there: the workflow (qwf_1) already has every one of these steps")
+    props = {"type": "object", "properties": {"quest_id": {"type": "string"}, "title": {"type": "string"}, "steps": {"type": "array"}}}
+    tools = ToolRegistry([make_spec("list_quest_workflows", handler=read, mutates=False, parameters=props),
+                          make_spec("create_quest_workflow", handler=ensure, mutates=True, parameters=props)])
+    plan_read = {"action": "tool", "rationale": "look first", "user_intent": "act", "tool_calls": [{"name": "list_quest_workflows", "args": {"quest_id": "q1"}}]}
+    events = run([plan_read, {"action": "answer", "rationale": "it exists", "user_intent": "act"}], tools, message="make sure the Thursday check-in exists")
+    result = [e for e in events if e["type"] == EVENT_RESULT][-1]
+    assert created and created[0]["title"] == "Weekly check-in: Thursday office hour" and created[0]["steps"][0]["repeat"] == "weekly" and created[0]["steps"][0]["by_weekday"] == [3]
+    assert result["text"] == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November)."
+    assert len([e for e in events if e["type"] == EVENT_INTERIM]) == 1
+
+
+def test_no_ensure_call_is_built_from_a_read_of_several_workflows_or_none():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read
+    from .test_tools import make_spec
+    tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True)])
+    two = {"locator": "tool:list_quest_workflows", "tool_data": [{"workflow_id": "a", "workflow_title": "A", "title": "s"}, {"workflow_id": "b", "workflow_title": "B", "title": "s"}]}
+    assert ensure_from_read.call_from_reads([two], tools, "q1") is None and ensure_from_read.call_from_reads([], tools, "q1") is None
+    assert ensure_from_read.call_from_reads([two], ToolRegistry([]), "q1") is None

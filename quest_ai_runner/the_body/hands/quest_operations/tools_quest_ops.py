@@ -766,7 +766,7 @@ def step_rows(workflow: Mapping[str, Any], names: Mapping[str, str]) -> List[Dic
             "due": window.get("endsAt") or window.get("startsAt"),
             "timing_kind": (step.get("timing") or {}).get("kind"),
             "starts_at": (step.get("timing") or {}).get("startsAt") or (step.get("timing") or {}).get("runAt"), "ends_at": (step.get("timing") or {}).get("endsAt"),
-            "repeats": repeat_words((step.get("timing") or {}).get("repeat")),
+            "repeats": repeat_words((step.get("timing") or {}).get("repeat")), "repeat": (step.get("timing") or {}).get("repeat"),
             "completed_at": step.get("completedAt")})
     return rows
 

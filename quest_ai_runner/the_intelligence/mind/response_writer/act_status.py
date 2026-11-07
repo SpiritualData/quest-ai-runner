@@ -147,6 +147,16 @@ def read_summary(gathered: Iterable[Any]) -> str:
     return ("I looked at " + ", ".join(names[:3]) + ".") if names else ""
 
 
+def planned_reads(plan: Any) -> str:
+    """A plain line for the read tools a plan is about to run ("I am looking at quest workflows first."); "" when it plans none by name."""
+    names: List[str] = []
+    for call in getattr(plan, "tool_calls", None) or []:
+        name = humanize_tool(str((call or {}).get("name") or "")) if isinstance(call, Mapping) else ""
+        if name and name not in names:
+            names.append(name)
+    return ("I am looking at " + ", ".join(names[:3]) + " first.") if names else ""
+
+
 def schedule_phrase(data: Mapping[str, Any]) -> str:
     """How often a recorded routine repeats, from its steps' own timing, in the words the workflow listing uses ("weekly on Thursday"); "" when it does not repeat."""
     from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import repeat_words

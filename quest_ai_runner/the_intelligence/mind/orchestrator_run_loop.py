@@ -35,7 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.em_dash_pass import remove_em_dashes
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.path_pass import relativize
 from quest_ai_runner.the_world.tools.tools import ToolContext
@@ -675,6 +675,19 @@ class RunLoopMixin:
                     DEEP_FOR_CODE_CHECK_NOTE if rs.plan.deep_target == "code_or_files" else DEEP_FOR_TOOL_WORK_NOTE, "deep_for_tool_work"))
                 emit.status("Planning this as a direct change…")
                 continue
+
+            # ENSURE FLOW STEP, in code: an order whose read already shows the thing is confirmed by the idempotent write tool, which reports "already there" with
+            # structured data (``ensure_from_read``). A planner that saw the thing in the read and answered is not asked again; the call is built from the read's receipt.
+            if (rs.plan and message_is_user_turn and rs.turn_user_intent == "act" and rs.plan.action == "answer" and not getattr(rs, "ensure_step_done", False)
+                    and not tool_guards.mutating_tool_ran(gathered, self.tools)):
+                ensure_call = ensure_from_read.call_from_reads(gathered, self.tools, quest_id)
+                if ensure_call is not None:
+                    rs.ensure_step_done = True
+                    self.run_tool_calls([ensure_call], gathered=gathered, exec_record=exec_record, tool_ok_signatures=tool_ok_signatures, emit=emit, steps=rs.steps,
+                                        ctx=ToolContext(quest_id=quest_id, user_id=_ctx_meta.get("user_id"), task_id=_ctx_meta.get("task_id"),
+                                                        meta={**_ctx_meta, "turn_asks": rs.turn_asks}),
+                                        evidence=lambda: self.turn_evidence(rs), order_gate=lambda: self.change_was_ordered(rs), trace=rs.trace)
+                    rs.tool_calls_ran = True
 
             # The same hand-back for an order answered with a description: the planner's own user_intent says "act", it chose "answer", nothing
             # was changed and a tool could change something (``tool_guards.act_answered_without_a_write``). At most twice, and only while no tool

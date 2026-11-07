@@ -262,9 +262,19 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
     cfg = orch.cfg
     if emit is None or plan is None:
         return False
+    early = getattr(rs, "status_first", None)
+    if isinstance(early, dict) and early.get("early") and early.get("before") is None:
+        # The first message went out before the reads finished; once they have found a milestone's measure it becomes the "before" of the closing metric lines.
+        found = act_status.pick_reading(act_status.readings_in(entries_of(rs, gathered)), rs.user_message)
+        if found is not None:
+            early["before"] = found
+        return False
+    # An order the planner reads as ``act`` whose plan so far only reads is still an act: the first message goes out now, before the reads finish, saying what is being looked at.
+    reads_first = (getattr(rs, "turn_user_intent", None) == "act" and plan.action in ("tool", "read")
+                   and mutating_call_count(orch, plan.tool_calls or []) == 0)
     if not act_status.should_send_status(
             enabled=bool(getattr(cfg, "interim_replies", False)), user_turn=user_turn, user_intent=getattr(rs, "turn_user_intent", None),
-            action="tool" if forced else plan.action, mutating_calls=1 if forced else mutating_call_count(orch, plan.tool_calls or []),
+            action="tool" if (forced or reads_first) else plan.action, mutating_calls=1 if (forced or reads_first) else mutating_call_count(orch, plan.tool_calls or []),
             already_sent=getattr(rs, "status_first", None) is not None):
         return False
     meta = getattr(rs, "_ctx_meta", None) or {}
@@ -283,14 +293,14 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
         # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
         # ids and owner text) is left out.
         texts = act_status.status_texts(reading, [] if (forced or reading is None) else list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice,
-                                        found=act_status.read_summary(gathered))
+                                        found=act_status.read_summary(gathered) or act_status.planned_reads(plan))
         ledger = interim_ledger_for(meta if meta else None)
         clock = time.monotonic()
         seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))
         data = interim_event_data(done=texts["status"], why_more="", next_step=texts["next"], coverage=None, attempt=0, seq=seq)
         data["status_first"] = True
         emit.emit(ProgressEvent(type=EVENT_INTERIM, text=texts["text"], data=data))
-        rs.status_first = {"before": reading, "voice": voice}
+        rs.status_first = {"before": reading, "voice": voice, "early": bool(reads_first and not forced)}
         return True
     except Exception:  # noqa: BLE001 -- a status note must never break a turn
         return False
