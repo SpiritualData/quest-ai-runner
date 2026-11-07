@@ -26,12 +26,23 @@ def structured(value):
     return value if isinstance(value, dict) else None
 
 
-def is_action_case(case):
-    """True for a case that asks the assistant to make progress (a milestone case, or one whose declared effect is not 'none')."""
+def message_standard(case):
+    """``"single"`` or ``"two-role"``, from the case's own data and never from the reply. A case that writes nothing (``zero_writes``) or to which ESOI
+    does not apply (``esoi.esoi_applies`` false) is a reply-only case: one message is complete. A case whose effect allows a write, that names an
+    ``increment_kind`` or that is a milestone case acts, so it owes a status message first and a report after."""
+    if case.get("zero_writes") or (isinstance(case.get("esoi"), dict) and case["esoi"].get("esoi_applies") is False):
+        return "single"
     effect = case.get("effect")
-    if case.get("group") == "milestone":
-        return True
-    return effect not in (None, "", {}) and not str(effect).strip().lower().startswith("none")
+    allows = bool(effect.get("allow")) if isinstance(effect, dict) else effect not in (None, "") and not str(effect).strip().lower().startswith("none")
+    kind = str(case.get("increment_kind") or "").strip()
+    if allows or case.get("group") == "milestone" or (kind and not kind.lower().startswith("none")):
+        return "two-role"
+    return "single"
+
+
+def is_action_case(case):
+    """True when the case owes the two-role standard (see ``message_standard``)."""
+    return message_standard(case) == "two-role"
 
 
 def items_of(payload, list_key=""):
@@ -169,7 +180,8 @@ TWO_MESSAGE_ITEM = ("The turn sends two useful messages in these roles (judge th
                     "(with the milestone's current metric value when known) and says what it is now doing to make progress; message 2, after "
                     "the work, reports what it did, the new state and the metric before and after. Both are grounded in what was read, with no "
                     "invented value.")
-SINGLE_MESSAGE_ITEM = "A single message is correct for this request: it answers or replies directly and promises or does nothing more."
+SINGLE_MESSAGE_ITEM = ("A single message is correct and complete for this request: it answers or replies directly and promises or does nothing more. Do not apply a "
+                       "status-then-report two-message standard, and do not apply any length limit the case's own criteria do not set.")
 
 
 def sequence_note(case, messages, metric=None):

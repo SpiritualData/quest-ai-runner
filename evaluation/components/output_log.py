@@ -52,6 +52,12 @@ def record(dataset, case_id, arm, input_text, reply, route, score, passed, reaso
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(line, ensure_ascii=False) + "\n")
+        messages = (extra or {}).get("messages")
+        if messages:        # the readable form of the same line: every message of the turn in order, so a failure can be read without parsing JSON
+            with path.with_suffix(".txt").open("a", encoding="utf-8") as handle:
+                handle.write(f"--- {line['timestamp']} {arm} passed={bool(passed)} score={score} standard={(extra or {}).get('message_standard', '')}\n")
+                handle.writelines(f"[{m.get('n')}] ({m.get('kind')}, t={m.get('t')}) {m.get('text')}\n" for m in messages)
+                handle.write(f"reason: {reason}\n")
     except OSError:
         return None
     return path

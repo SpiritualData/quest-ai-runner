@@ -244,6 +244,7 @@ def build_arm(meter, bounded):
             messages = P.messages_of(frames)
             record["messages"] = messages
             sequence, item = P.sequence_note(case, messages, metric)
+            record["message_standard"] = P.message_standard(case)
             judged_case["evidence_notes"] += " " + sequence
             judged_case["rubric"] = list(judged_case.get("rubric") or []) + [item]
             evidence = J.build_evidence([{"message": message, "events": frames}])
@@ -278,7 +279,7 @@ def build_arm(meter, bounded):
             plan_actions=(record.get("evidence") or {}).get("actions"), acted_as=acted_as,
             replanned="replan" in types, still_working="interim" in types,
             route=("deep" if snap["briefs"] else "") or (final.kind if final is not None else "none"))
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies")}
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "reads", "changes", "bookkeeping", "tokens_in", "tokens_out", "lane_gaps", "replanned", "still_working", "performed", "state", "judge_calls", "plan_actions", "acted_as", "metric", "messages", "message_standard", "metric_error", "reads_seen", "unsupported_figures", "calls_by_purpose", "call_sequence", "frame_trace", "housekeeping_skipped", "startup_calls", "context_assemblies")}
         try:
             meter.record(record["model_calls"])
         except Exception as e:  # noqa: BLE001 -- the run's budget ran out on this turn: keep its record, the next case stops at the top check

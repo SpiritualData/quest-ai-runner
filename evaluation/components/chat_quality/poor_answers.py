@@ -84,7 +84,7 @@ def case_of(raw):
                 rubric=[str(item) for item in raw["pass_criteria"]] if isinstance(raw.get("pass_criteria"), list) and raw["pass_criteria"]
                 else [item.format(kind=kind) for item in GENERIC_RUBRIC],     # the case's own criteria when it states them forbid_writes=False, pivots_change_answer=False,
                 precheck={"reply_regex": [r"\S"]}, evidence_notes=" ".join(notes),
-                **{key: raw[key] for key in ("effect", "state_check", "metric_probe", "increment", "increment_kind", "group", "cue_resolves_to") if raw.get(key)})   # optional: the writes the case allows on the bounded production arm and how to count its effect
+                **{key: raw[key] for key in ("effect", "state_check", "metric_probe", "increment", "increment_kind", "group", "cue_resolves_to", "esoi") if raw.get(key)})   # optional: the writes the case allows on the bounded production arm and how to count its effect
 
 
 def parse_cases(text):

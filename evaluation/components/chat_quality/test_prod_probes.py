@@ -81,3 +81,24 @@ def test_the_default_number_skips_dates_and_a_yes_no_is_found_after_a_lead_in():
                                          {"recordId": "c", "fields": {"record": "Provisional 83.3 percent (35 of 42), read 2026-10-31"}}, {"recordId": "d", "fields": {"record": "0 of 6 stages (2026-10-31)"}}]}})
     read = lambda rid, **kw: P.read_number(dict({"read": "/s", "list_key": "records", "match": {"=recordId": rid}, "pick": "fields.record"}, **kw), client)
     assert read("a") is None and read("b", yes_no=True) == 0.0 and read("c") == 83.3 and read("d") == 0.0
+
+
+def test_the_message_standard_comes_from_the_cases_own_data():
+    zero = {"id": "B", "group": "production failure", "effect": {"allow": []}, "zero_writes": True, "esoi": {"esoi_applies": False}}
+    assert P.message_standard(zero) == "single" and not P.is_action_case(zero)
+    assert P.message_standard({"id": "B", "effect": "none", "esoi": {"esoi_applies": False}}) == "single"
+    assert P.message_standard({"id": "B", "zero_writes": True, "esoi": {"esoi_applies": True}}) == "single"          # an information case about the milestones is still one message
+    assert P.message_standard({"id": "W", "effect": {"allow": [{"tool": "t"}]}}) == "two-role"
+    assert P.message_standard({"id": "W", "effect": "workflow on the quest"}) == "two-role"
+    assert P.message_standard({"id": "M", "group": "milestone", "effect": "none"}) == "two-role"
+    assert P.message_standard({"id": "M", "increment_kind": "owned next step for human-only work"}) == "two-role"
+    assert P.message_standard({"id": "X", "increment_kind": "none (information)"}) == "single"
+    assert P.sequence_note(zero, [{"n": 1, "kind": "final", "t": 1.0, "text": "Which topic?"}])[1] == P.SINGLE_MESSAGE_ITEM
+
+
+def test_the_output_log_adds_a_readable_text_of_every_message(tmp_path):
+    import output_log
+    output_log.record("poor_answers", "X-1", "prod_qar", "in", "reply", "", 1.0, True, "ok", environ={output_log.ENV: str(tmp_path)},
+                      extra={"messages": [{"n": 1, "kind": "interim", "t": 2.0, "text": "Status"}, {"n": 2, "kind": "final", "t": 9.0, "text": "Done"}], "message_standard": "two-role"})
+    text = (tmp_path / "poor_answers" / "X-1.txt").read_text()
+    assert "[1] (interim, t=2.0) Status" in text and "[2] (final, t=9.0) Done" in text and "standard=two-role" in text
