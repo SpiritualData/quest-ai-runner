@@ -454,6 +454,8 @@ wrongly executed as a task before:
   * Anything about the assistant's own behavior rather than the work: "don't create a task", "just
     answer here", "kill those runs", "I haven't given you an instruction yet".
   * A follow-up that only comments on work already done ("thanks, that looks right").
+TRUE also: "can we", "could we" or "lets" followed by a NAMED piece of work to get going or done ("can we get the first product video
+moving?", "lets get the store release going"). That asks for the work to be started, even though it ends in a question mark.
 When you are torn, answer false. A missed directive costs the user one more sentence ("go ahead");
 a wrong one opens a task nobody asked for and reports work that was never wanted.
 
