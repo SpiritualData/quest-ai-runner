@@ -258,7 +258,7 @@ class Resolved:
         args: Dict[str, Any] = {
             "quest_id": self.quest_id, "title": next_step_title(self.name, self.week), "period": self.week.period, "due_date": self.week.due,
             "description": f"Next step for {self.name}. Done when: {self.done_when}. Current value: {self.value or 'not recorded yet'}.",
-            "spec_solution_id": self.rid, "user_asked_for_this_field": True}
+            "spec_solution_id": self.rid, "match_by_link": True, "user_asked_for_this_field": True}
         if self.metric_ids:
             args["spec_metric_id"] = self.metric_ids[0]
         return args

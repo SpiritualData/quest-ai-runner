@@ -327,3 +327,83 @@ def test_the_first_message_is_composed_from_the_records_before_the_write_and_no_
     assert "Where this stands" in first["text"] and "P3 Mobile app live on the Apple Store" in first["text"] and "blocked" not in first["text"].lower()
     assert "Recording this week's next step" in first["text"]
     assert result.kind != "deep" and len(calls) == 1
+
+
+class GoalClient:
+    """A Quest client over a goal list: records every write so a test can say a create (POST) never happened."""
+
+    def __init__(self, goals):
+        self.goals = goals
+        self.posts, self.puts, self.assigns = [], [], []
+
+    def list_quest_goals(self, quest_id):
+        return {"period_groups": [{"goals": self.goals}]}
+
+    def list_assignable_members(self, quest_id):
+        return [{"user_id": "u1", "name": "Cy Owner"}]
+
+    def create_goal(self, title, **kw):
+        self.posts.append((title, kw))
+        goal = {"id": "new", "name": title, "assigned_to_user_id": kw.get("assigned_to_user_id"), "spec_solution_id": kw.get("spec_solution_id"),
+                "spec_metric_id": kw.get("spec_metric_id"), "period": kw.get("period")}
+        self.goals.append(goal)
+        return type("W", (), {"id": "new", "data": {"id": "new"}, "status": None})()
+
+    def update_goal(self, goal_id, fields):
+        self.puts.append((goal_id, fields))
+        goal = next(g for g in self.goals if g["id"] == goal_id)
+        goal.update({("name" if k == "title" else k): v for k, v in fields.items()})
+        return type("W", (), {"status": None})()
+
+    def assign_goal(self, goal_id, user_id):
+        self.assigns.append((goal_id, user_id))
+        next(g for g in self.goals if g["id"] == goal_id)["assigned_to_user_id"] = user_id
+        return type("W", (), {"status": None})()
+
+
+KEYED = "P3 Mobile app live on the Apple Store next step: week of 2026-11-02"
+
+
+def test_a_goal_already_linked_or_already_titled_is_updated_in_place_and_never_created_again():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    fields = {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "d"}
+    # the keyed goal exists next to a legacy unlinked one: nothing is created
+    client = GoalClient([{"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "d", "period": "2026_W45"},
+                         {"id": "old", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "period": "2026_W45"}])
+    done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", fields, None, None, True)
+    assert done["state"] == "unchanged" and client.posts == [] and client.puts == []
+    # only a linked goal under another title exists (the model picked nothing): it is renamed in place, by code
+    client = GoalClient([{"id": "l", "name": "P3 Mobile app live on the Apple Store next step: week of 2026-10-26", "spec_solution_id": "esr_c", "period": "2026_W44"}])
+    done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", fields, None, None, True)
+    assert done["state"] == "updated" and client.posts == [] and client.puts[0][0] == "l" and client.puts[0][1]["title"] == KEYED
+    # a finished linked goal is history, not the goal
+    client = GoalClient([{"id": "d", "name": "older", "spec_solution_id": "esr_c", "completed": True}])
+    assert goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", fields, None, None, True)["state"] == "created" and len(client.posts) == 1
+
+
+def test_the_receipt_states_the_assignee_name_solution_and_metric_as_read_back_after_the_write():
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    client = GoalClient([{"id": "old", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "period": "2026_W45"}])
+    spec = create_or_update_quest_goal_spec({}, client_factory=lambda: client)
+    client.members = [{"user_id": "u1", "name": "Cy Owner", "email": "x"}]
+    import quest_ai_runner.the_body.hands.quest_operations.goal_links as gl
+    gl.resolve_assignee = lambda c, q, who: ("u1", None)
+    result = spec.handler({"quest_id": "q1", "title": KEYED, "assignee": "Cy", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True,
+                           "adopt_goal_id": "old", "user_asked_for_this_field": True}, ToolContext(quest_id="q1"))
+    assert result.ok and "assigned to Cy Owner" in result.text and "solution esr_c" in result.text and "metric esr_mc" in result.text and client.posts == []
+    again = spec.handler({"quest_id": "q1", "title": KEYED, "assignee": "Cy", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True,
+                          "user_asked_for_this_field": True}, ToolContext(quest_id="q1"))
+    assert "already" in again.text and client.posts == []
+
+
+def test_the_code_step_is_in_the_execution_record_so_no_net_re_runs_the_work_as_a_deep_run():
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
+    config = OrchestratorConfig()
+    config.overseer = False
+    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([])).run(CUE, quest_id="q1")
+    record = result.execution_record
+    assert record is not None and record.any_success and any("create_or_update_quest_goal" in f.goal for f in record.facts)

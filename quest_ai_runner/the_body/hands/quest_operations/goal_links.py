@@ -60,14 +60,46 @@ def resolve_assignee(client: Any, quest_id: str, who: Any) -> Tuple[Optional[str
     return user_id, ("assignee: " + why) if why else None
 
 
-def existing_goals(client: Any, quest_id: str, title: str) -> Optional[List[Dict[str, Any]]]:
-    """The goals on the quest titled exactly ``title`` and not abandoned; ``None`` when the quest's goals could not be read (so nothing may be assumed)."""
+def all_goals(client: Any, quest_id: str) -> Optional[List[Dict[str, Any]]]:
+    """Every goal on the quest as the listing carries it (with its ``spec_solution_id``, ``spec_metric_id`` and assignee); ``None`` when the goals could not be read."""
     listing = client.list_quest_goals(quest_id)
     groups = listing.get("period_groups") if isinstance(listing, dict) else None
     if groups is None:
         return None
-    return [g for group in groups for g in group.get("goals") or []
-            if str(g.get("name") or "").strip() == title and not g.get("abandoned")]
+    return [g for group in groups for g in group.get("goals") or []]
+
+
+def existing_goals(client: Any, quest_id: str, title: str) -> Optional[List[Dict[str, Any]]]:
+    """The goals on the quest titled exactly ``title`` and not abandoned; ``None`` when the quest's goals could not be read (so nothing may be assumed)."""
+    goals = all_goals(client, quest_id)
+    if goals is None:
+        return None
+    return [g for g in goals if str(g.get("name") or "").strip() == title and not g.get("abandoned")]
+
+
+def linked_open_goal(goals: List[Dict[str, Any]], solution_id: str, title: str) -> Optional[str]:
+    """The id of the open goal already linked to ``solution_id``, the one whose name shares the longest start with ``title`` when several are: code decides this, no model."""
+    import os.path
+    linked = [g for g in goals if str(g.get("spec_solution_id") or "") == solution_id and not g.get("completed") and not g.get("abandoned")]
+    if not linked:
+        return None
+    best = max(linked, key=lambda g: len(os.path.commonprefix([str(g.get("name") or ""), title])))
+    return str(best.get("id"))
+
+
+def read_back(client: Any, quest_id: str, goal_id: Optional[str], title: str) -> str:
+    """What the quest holds for the goal after the write, read again: its assignee (by name), the strategy and the metric it is linked to. Words that say so when it could not be read."""
+    goals = all_goals(client, quest_id)
+    if goals is None:
+        return "Read back: the goal could not be read again, so its owner and links are not confirmed."
+    goal = next((g for g in goals if goal_id and str(g.get("id")) == str(goal_id)), None) or next((g for g in goals if str(g.get("name") or "").strip() == title), None)
+    if goal is None:
+        return "Read back: the goal was not found when read again."
+    assignee = goal.get("assigned_to_user_id")
+    names = {str(m.get("user_id")): str(m.get("name") or "") for m in (client.list_assignable_members(quest_id) or []) if m.get("user_id")}
+    who = (names.get(str(assignee)) or f"user {assignee}") if assignee else "nobody (unassigned)"
+    return (f"Read back from the quest: goal {goal.get('name')!r} is assigned to {who}, linked to solution {goal.get('spec_solution_id') or 'none'} "
+            f"and metric {goal.get('spec_metric_id') or 'none'}, period {goal.get('period') or 'none'}.")
 
 
 def goal_changes(goal: Mapping[str, Any], wanted: Mapping[str, Any]) -> Dict[str, Any]:
@@ -76,13 +108,17 @@ def goal_changes(goal: Mapping[str, Any], wanted: Mapping[str, Any]) -> Dict[str
 
 
 def ensure_goal(client: Any, quest_id: str, title: str, period: str, fields: Mapping[str, Any],
-                assignee_id: Optional[str], adopt_goal_id: Optional[str] = None) -> Dict[str, Any]:
+                assignee_id: Optional[str], adopt_goal_id: Optional[str] = None, link_match: bool = False) -> Dict[str, Any]:
     """Make exactly one goal titled ``title`` exist on the quest with these fields. Returns ``{state, goal_id, changed, writes, copies}`` where ``state`` is
     ``created``, ``updated``, ``unchanged`` or ``unknown`` (the quest's goals could not be read, nothing was written). ``writes`` are the client results,
     for the caller to read a held or refused one from. A client that raises on a refused write propagates; the caller reports it."""
-    found = existing_goals(client, quest_id, title)
-    if found is None:
+    goals = all_goals(client, quest_id)
+    if goals is None:
         return {"state": "unknown", "goal_id": None, "changed": [], "writes": [], "copies": 0}
+    found = [g for g in goals if str(g.get("name") or "").strip() == title and not g.get("abandoned")]
+    if not found and link_match and fields.get("spec_solution_id"):
+        # Idempotent in code: a goal already linked to this strategy is the goal, updated in place, before any create. The model's pick below is only for older goals with no link.
+        adopt_goal_id = linked_open_goal(goals, str(fields["spec_solution_id"]), title) or adopt_goal_id
     if not found and adopt_goal_id:
         # The same work already exists under an older title: it is updated in place (renamed to the key, linked, moved to the period), never duplicated.
         write = client.update_goal(str(adopt_goal_id), {"title": title, "period": period, **{k: v for k, v in fields.items() if k in UPDATABLE}})

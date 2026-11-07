@@ -36,7 +36,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 if why:
                     return ToolResult(ok=False, text=f"Nothing was written: {why}")
             outcome = goal_links.ensure_goal(client, quest_id, title, period, goal_links.link_fields(args), assignee_id,
-                                             str(args.get("adopt_goal_id") or "").strip() or None)
+                                             str(args.get("adopt_goal_id") or "").strip() or None, bool(args.get("match_by_link")))
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was written")
         state, writes = outcome["state"], outcome["writes"]
@@ -51,6 +51,10 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
                 "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed."}[state]
+        try:
+            said += " " + goal_links.read_back(client, quest_id, outcome["goal_id"], title)
+        except Exception:  # noqa: BLE001  the write is done; the read-back failing is said, not hidden
+            said += " Read back: the goal could not be read again, so its owner and links are not confirmed."
         recorded = str(args.get("description") or "").strip()
         if recorded and state != "unchanged":
             said += f" Recorded text: {recorded[:500]}"          # the reply restates what was recorded, including each alternative's hypothesis and metric
@@ -89,6 +93,9 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 "target_value": {"type": "number", "description": "Target number, when it has one."},
                 "target_unit": {"type": "string", "description": "Unit of the target."},
                 **goal_links.LINK_PARAMS,
+                "match_by_link": {"type": "boolean",
+                                  "description": ("True for a goal that stands for its strategy's next step: when no goal has this exact title, the open goal already linked to "
+                                                  "spec_solution_id is updated in place (renamed, moved) before any goal is created.")},
                 "adopt_goal_id": {"type": "string",
                                   "description": ("The id of an existing open goal that is the same work under an older title. When no goal has this exact title, that goal is "
                                                   "renamed to this title and updated in place instead of a second goal being created.")},

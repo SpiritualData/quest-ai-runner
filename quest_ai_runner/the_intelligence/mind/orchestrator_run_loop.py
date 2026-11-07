@@ -21,7 +21,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_mes
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import is_eligible, trace_from_result
-from hubofhubs.api import CardThreadDecision, parse_card_thread
+from hubofhubs.api import CardThreadDecision, ExecutionFact, parse_card_thread
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import deep_metric_data
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     context_not_reassembled_observation, lane_gap_observation, planner_full_view_start, receipt_observation, planner_note_observation, read_spec_key, repeated_read_observation, split_context_reassembly, split_mixed_reads,
@@ -531,9 +531,13 @@ class RunLoopMixin:
                 try:
                     receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision)
                     gathered.append(receipt_observation("create_or_update_quest_goal", receipt, tool_status))
+                    if exec_record is not None:       # the turn's execution record holds the write, so no net re-runs it as a deep run
+                        exec_record.facts.append(ExecutionFact(goal=f"tool create_or_update_quest_goal: {receipt[:200]}", succeeded=True, phases=["tool_call", "done"]))
                 except milestone_cue.LaneGap as gap:
                     log.warning("milestone cue: lane gap: %s", gap)
                     gathered.append(lane_gap_observation(str(gap)))
+                    if exec_record is not None:
+                        exec_record.facts.append(ExecutionFact(goal="tool create_or_update_quest_goal", failed=True, error=str(gap)[:280], phases=["tool_call", "failed"]))
                 rs.cue_resolved.settle_plan(rs.plan, receipt)
             if getattr(rs.plan, "delivery", None):
                 rs.turn_delivery = rs.plan.delivery      # how the reply is delivered (spoken or written): the latest report of any step
