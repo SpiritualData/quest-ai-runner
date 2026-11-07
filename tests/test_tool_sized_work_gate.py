@@ -67,7 +67,7 @@ def test_guard_facts():
     assert not tool_guards.deep_is_tool_sized(plan, ToolRegistry([spec("list_quest_workflows", False)]))
     plan.deep_subtasks = [{"goal": "a", "brief": "b"}, {"goal": "c", "brief": "d"}]
     assert not tool_guards.deep_is_tool_sized(plan, registry())
-    assert not tool_guards.deep_is_tool_sized(normalize_decision(deep(None), OrchestratorConfig()), registry())
+    assert tool_guards.deep_is_tool_sized(normalize_decision(deep(None), OrchestratorConfig()), registry())
     code = normalize_decision(deep("code_or_files"), OrchestratorConfig())
     assert not tool_guards.deep_is_tool_sized(code, registry())
 

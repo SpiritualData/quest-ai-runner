@@ -484,6 +484,10 @@ DEEP_ACTION = """\
     is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
     current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
     treat the work outside the quest (a channel, a video, a post) as the thing you were asked to do.
+    ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply
+    carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
+    keyed by a short stable title ("FB push post A", "FB push post B") with the text, hypothesis and metric in the goal's description and
+    spec_solution_id of the solution they serve (from read_spec_records). Repeating the request updates the same goals. Say they are recorded.
     DELIVERABLE IN THE REPLY. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
     set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
@@ -771,7 +775,8 @@ ACT_WITHOUT_TOOL_NOTE = (
     "ORDER NOT CARRIED OUT: your user_intent is act, you chose to answer, and nothing has been changed this turn, while a tool in the TOOLS block can "
     "make a change in the person's Quest records. An answer that only restates a plan or asks which step to take is not the work. Plan a tool step now: "
     "if you have not yet read what exists, call the read-only tool first (the spec records, the goals, the workflows); then make the write keyed by exact "
-    "title or record id, and report whether it was created, updated or already there. If no tool can do it, or the order is not the person's to give "
+    "title or record id, and report whether it was created, updated or already there. Alternatives you wrote (posts, headlines) are recorded the same way, "
+    "one keyed goal each with its hypothesis and comparison metric. If no tool can do it, or the order is not the person's to give "
     "here, answer and say why.")
 
 RECORDS_NOT_READ_NOTE = (
@@ -800,7 +805,8 @@ INFORMATION_ANSWER_DIRECTIVE = """\
 --- THIS REPLY GIVES INFORMATION (set by the planner) ---
 The person asked a question to be answered from their records. Answer it first, in two to four short sentences: name the item the records
 point to and the figure that shows where it stands, with its date. Only what was asked: no unrelated blockers, no list of other items,
-no offer or question at the end. Never use an em dash.
+no offer or question at the end. Never use an em dash. Records may be written in the first person by whoever authored them: never copy
+I, my, me or our from a record, say whose it is by name ("waiting for Zee's preview"); use "I" only for what you yourself did or could not do this turn.
 """
 
 HANDOFF_ANSWER_NOW_DIRECTIVE = """\

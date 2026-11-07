@@ -439,10 +439,8 @@ def test_tools_catalog_read_searches_hidden_tools():
 
 def test_deep_brief_lists_relevant_tools_with_commands():
     calls = []
-    provider = StubProvider(decisions=[
-        {"action": "deep", "goal": "Write the report and email it", "deep_brief": "write + email",
-         "rationale": "real work"},
-    ])
+    deep_plan = {"action": "deep", "goal": "Write the report and email it", "deep_brief": "write + email", "rationale": "real work"}
+    provider = StubProvider(decisions=[dict(deep_plan), dict(deep_plan)])     # the second is the planner insisting after the one hand-back
     deep = StubDeepRunner(met=True)
     make_orch(provider, email_registry(calls), deep_runner=deep).run(
         "write the weekly report and email it to me", context_meta={"quest_id": "quest_9"})
@@ -455,7 +453,7 @@ def test_deep_brief_lists_relevant_tools_with_commands():
 
 def test_no_tools_means_no_tool_vocabulary():
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "hi"}])
-    make_orch(provider, None).run("hello")
+    make_orch(provider, None).run("what is on the roadmap this week")
     assert "tool" not in provider.plan_tool_schemas[0]["input_schema"]["properties"]["action"]["enum"]
     assert "DIRECT TOOLS" not in provider.plan_prompts[0]
 

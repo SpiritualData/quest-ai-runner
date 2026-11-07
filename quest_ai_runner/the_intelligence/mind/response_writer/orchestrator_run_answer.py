@@ -25,7 +25,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text imp
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
-    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
@@ -66,12 +66,12 @@ class RunAnswerMixin:
                                   (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered, pool)
             facts = list(getattr(rs.plan, "facts_read", None) or [])
             resolved = self._resolved_facts_of(rs, gathered)
-            measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved)
+            measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
             rounds = 0
             while measured.failed and rounds < cfg.reply_standard_max_repairs:
                 text = write(steering(measured.hint(), text)) or text
                 rounds += 1
-                measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved)
+                measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
             if measured.failed:
                 text = repair(text, standard, measured, evidence, pool, basis)
             return text
@@ -267,6 +267,12 @@ class RunAnswerMixin:
                     last_plan.goal = last_plan.goal or last_plan.deferred_deep.get("goal")
                     last_plan.deep_brief = (last_plan.deep_brief
                                             or last_plan.deferred_deep.get("brief"))
+            # The same acceptance test as every other path to a deep run (``tool_guards.escalation_route``): text the reply carries, or Quest-record
+            # work a tool performs, is not a deep run. The wrap-up then answers from what was read.
+            if must_execute and tool_guards.escalation_route(last_plan, nets_intent, self.tools, bool(getattr(rs, "deep_to_tool_runs", 0)),
+                                                            tool_guards.mutating_tool_ran(gathered, self.tools)) != tool_guards.ROUTE_DEEP:
+                log.info("Read budget spent: a deep run is not accepted for this request; the wrap-up answers.")
+                must_execute = False
             # PURSUE BEFORE THE WRAP-UP: the read budget is spent and the last read step returned nothing (a structured count the loop
             # keeps), so the answer would rest on records nobody opened. Before wrapping up with "I could not find it", the read-only
             # search runs through Critical Thinking's bounded replan; what it returns answers the turn, else the wrap-up goes ahead
@@ -414,9 +420,11 @@ class RunAnswerMixin:
             # latched turn cannot ship a reply that was never told the turn was held.
             # A CLARIFYING QUESTION is composed from the person's message alone (the planner's structured ``clarify`` shape): the writer is handed no
             # context, transcript, reads or persona, so it cannot name a topic it never saw; a regeneration gets the same restricted input, one tier up.
-            if is_clarify(rs.plan):
+            if is_clarify(rs.plan) or rs.records_free:
+                # A general question (the request analyser reported ``needs_records`` false) is written the same way: from the question alone.
                 return self._grounded_answer(rs.user_message, "", "", [], rs.model if steering is None else self._regeneration_model(rs), False,
-                                             native_blocks=None, rep_preamble=None, reply_directive=CLARIFY_DIRECTIVE)
+                                             native_blocks=None, rep_preamble=None,
+                                             reply_directive=CLARIFY_DIRECTIVE if is_clarify(rs.plan) else GENERAL_ANSWER_DIRECTIVE)
             cv = _answer_grounding(steering)
             # A reply that came back for a correction is written one tier up: the cheaper model already missed it once (Joshua's rule: when a
             # cheaper model fails, retry one tier up rather than the same way).
@@ -519,13 +527,13 @@ class RunAnswerMixin:
                                                 (getattr(rs, "context_view", "") or "").replace(getattr(rs, "recent_context_text", "") or "\0", ""),
                                                 gathered, figure_pool)
                 measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
-                                   resolved=turn_resolved)
+                                   resolved=turn_resolved, question=rs.user_message)
                 standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
                 log.info("Reply standard %s in force=%s before the verdict: %s", standard.shape, standard_in_force, measured.as_text())
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 standard, measured, standard_in_force = None, None, False
         repair_rounds = 0
-        if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals:
+        if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals and not rs.records_free:      # nothing of the person's to check a general answer against
             try:
                 if rs._oversee_executor is None:
                     rs._oversee_executor = ThreadPoolExecutor(max_workers=1)
@@ -662,7 +670,7 @@ class RunAnswerMixin:
         if standard is not None and standard_in_force:
             try:
                 measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
-                                   resolved=turn_resolved)
+                                   resolved=turn_resolved, question=rs.user_message)
                 measurement_rounds = 0     # the overseer's and the constraint's regenerations do not use up the rounds the measurements are owed
                 while measured.failed and measurement_rounds < cfg.reply_standard_max_repairs:
                     if emit is not None:
@@ -680,7 +688,7 @@ class RunAnswerMixin:
                         break
                     rs.text = candidate
                     measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
-                                   resolved=turn_resolved)
+                                   resolved=turn_resolved, question=rs.user_message)
                 if measured.failed:
                     rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence)
                 log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
@@ -720,9 +728,12 @@ class RunAnswerMixin:
         # An answer that DECLINES the act on the records it read (``act_declined``: a stored
         # constraint or conflict, with the nearest option that works) is the complete response, not
         # a proposal to execute, so none of the nets below may turn it into a deep run.
+        deep_accepted = tool_guards.escalation_route(
+            rs.plan, nets_intent, self.tools, bool(getattr(rs, "deep_to_tool_runs", 0)),
+            tool_guards.mutating_tool_ran(gathered, self.tools)) == tool_guards.ROUTE_DEEP
         if (not rs.should_defer_deep and not rs.brainstorm_active
                 and nets_intent != USER_INTENT_HOLD_OFF
-                and not rs.act_declined
+                and not rs.act_declined and deep_accepted
                 and (self._has_deep_execution_capability()
                      or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag

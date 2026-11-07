@@ -63,6 +63,9 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         when_to_use=("A recurring or keyed goal, such as a milestone's next step titled 'Pn next step: week of <Monday date>', or a named deliverable "
                      "goal, where a repeat of the request must find the goal already there. Name the owner (assignee) and link it to the "
                      "milestone with spec_solution_id (and spec_metric_id with metric_target_value) from read_spec_records or get_spec. "
+                     "Also how to record alternatives you wrote (two posts, three headlines): one goal each, titled by a short stable key "
+                     "such as 'FB push post A', with the full text, the hypothesis and the metric they are compared by in the description, "
+                     "and spec_solution_id of the solution they serve. "
                      + _NEVER_CODE),
         when_not_to_use=("A one-off goal whose title will not repeat (use create_quest_goal). A goal the user did not ask for: suggest it "
                          "instead. Renaming a goal (the title is the key, so a new title is a new goal)."),
