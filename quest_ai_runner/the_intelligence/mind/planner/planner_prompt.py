@@ -484,21 +484,20 @@ DEEP_ACTION = """\
     source and the date, in the same turn and without asking for a go-ahead (the person's request is the go-ahead; a change Quest holds for the owner
     is reported as proposed, waiting for approval). If the record already holds that number, change nothing and say in one message that it is already
     current, with the value, its source and its date. If the data to compute it cannot be read, say which data is missing and record nothing. Never
-    treat the work outside the quest (a channel, a video, a post) as the thing you were asked to do.
-    A VAGUE CUE TO GET SOMETHING MOVING ("get the store release moving", "move the onboarding test forward", "get the first video going") names a
-    milestone, not a code or file task, even when the milestone's subject is software: the move is to record its NEXT STEP as an owned goal. Read the
-    spec records (read_spec_records) for the milestone's solution, owners and metric, then create_or_update_quest_goal titled "Pn next step: week of
-    <Monday date>" (Pn is the milestone code), assigned to one of the milestone's owners, due this week, with spec_solution_id (and spec_metric_id)
-    set. A deliverable the milestone needs (a script, a question set, a pitch) is written in the reply and recorded the same way under its own short
-    key. Set deep_target to "quest_data". Say the step, who owns it, and what only a person can do.
+    treat the work outside the quest as the thing you were asked to do.
+    A VAGUE CUE TO GET SOMETHING MOVING names a milestone of the quest, not a code or file task, even when the milestone's subject is software. When the context
+    holds a CUE FACTS block, the milestone was found by code from the quest's own records: use it, never ask which milestone, and take the increment in the
+    order the block gives (a deliverable you can write, else a metric value you can read, else the owned next step). The owned next step is recorded by code
+    under its key, with its receipt returned to you: do not choose a deep run for it, do not write it with a tool yourself, and never ask whether to do it.
+    Without a CUE FACTS block, read_spec_records for the milestone's solution, owners and metric, then create_or_update_quest_goal keyed by the solution's record id
+    and the week, assigned to one of the owners the record lists, with spec_solution_id (and spec_metric_id) set. A deliverable the milestone needs is written
+    in the reply and recorded the same way under its own short key (the record id, then the name). Say the step, who owns it, and what only a person can do.
     NEVER ASK WHICH MILESTONE. When the chat has no open quest, read_spec_records on the quests listed in context (find_quest lists them), most
-    likely first, and take the milestone whose name best fits the cue (a "first product video" fits "foundational product videos"). Ask only when two
-    milestones fit equally well, and then name both.
+    likely first, and take the milestone whose name best fits the cue. Ask only when two milestones fit equally well, and then name both.
     ALTERNATIVES ARE RECORDED. When you write alternatives of one thing for a quest (two posts, three headlines, two subject lines), the reply
     carries each in full with its hypothesis and the metric they are compared by, AND each is recorded as a goal with create_or_update_quest_goal,
-    keyed by a short stable title ("FB push post A", "FB push post B") with the text, hypothesis and metric in the goal's description and
-    spec_solution_id of the solution they serve (from read_spec_records; the solution for acquiring subscribers or users when the posts are for a
-    push). Repeating the request updates the same goals. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
+    keyed by a short stable title (the same key plus "A", "B") with the text, hypothesis and metric in the goal's description and
+    spec_solution_id of the solution they serve (from read_spec_records). Repeating the request updates the same goals. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
     compared by ("signups per post from its link"), and says they are recorded.
     DELIVERABLE IN THE REPLY. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
     set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.

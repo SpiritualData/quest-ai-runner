@@ -297,19 +297,20 @@ def read_spec_records_spec(env: Mapping[str, str], client_factory=None) -> ToolS
     factory = client_factory or (lambda: quest_client_from_env(env))
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        from hubofhubs.api import EsoiApplying
-        from quest_ai_runner.api import run
+        from quest_ai_runner.the_body.internal_context.quest.spec_records import QuestSpecRecords
         quest_id = str(args.get("quest_id") or ctx.quest_id or "").strip()
         if not quest_id:
             return ToolResult(ok=False, text=NO_QUEST.text)
+        client = factory()
         try:
-            tables = run(EsoiApplying, **spec_run_options(factory())).read(quest_id)
+            tables = QuestSpecRecords(client).read(quest_id)      # the quest's own records, read where Quest keeps them: no assembly, no quest placement
         except RuntimeError as error:
             return ToolResult(ok=False, status=ToolStatus.FAILED, text=str(error))
         records = {table: {record_id: {column: (value if not isinstance(value, str) or len(value) <= MAX_VALUE_CHARS else value[:MAX_VALUE_CHARS] + "...")
                                        for column, value in row.items() if value not in ("", None, [])}
                            for record_id, row in list(rows.items())[:MAX_ROWS_PER_TABLE]} for table, rows in tables.items()}
-        return ToolResult(ok=True, data={"quest_id": quest_id, "records": records},
+        zone = str(((client.get_quest_autopilot(quest_id) or {}).get("autopilot") or {}).get("run_timezone") or "") if hasattr(client, "get_quest_autopilot") else ""
+        return ToolResult(ok=True, data={"quest_id": quest_id, "records": records, "time_zone": zone},
                           text=f"Read the specification records of quest {quest_id}: " + ", ".join(f"{len(rows)} {table}" for table, rows in records.items()) + ".")
 
     return ToolSpec(

@@ -389,6 +389,19 @@ def planner_note_observation(text: str, locator: str) -> Dict[str, Any]:
     return note
 
 
+def lane_gap_observation(text: str) -> Dict[str, Any]:
+    """A gathered entry the reply can see: what this lane could not do, in the lane's own words. Unlike a planner note it grounds the answer, so the reply says
+    plainly what is missing instead of claiming the work."""
+    return Observation(kind="query", locator="lane_gap", text="LANE GAP (do not claim this was done or known): " + text).to_dict()
+
+
+def receipt_observation(tool: str, text: str, status: str) -> Dict[str, Any]:
+    """The receipt of a write that code carried out, shaped like a tool's own receipt (locator ``tool:<name>``) so the reply and the write guards read it the same way."""
+    receipt = Observation(kind="query", locator=f"tool:{tool}", text=text).to_dict()
+    receipt["tool_status"] = status
+    return receipt
+
+
 def repeated_read_observation(spec: Dict[str, Any], step: int) -> Dict[str, Any]:
     """The gathered note that stands in for a read that was not run again."""
     return planner_note_observation(
@@ -396,6 +409,22 @@ def repeated_read_observation(spec: Dict[str, Any], step: int) -> Dict[str, Any]
         f"step {step} of this turn, and its result is shown in full in what you gathered above. "
         "The same read returns the same result. Use that result, read something DIFFERENT, or "
         "choose another action.", "repeated_read")
+
+
+def split_context_reassembly(reads: List[Dict[str, Any]], context_in_hand: bool) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """``(kept, dropped)``: on a re-plan, the card-context reads (``{"cards": query}``) are dropped when the turn already holds its assembled context.
+
+    The turn-start assembly is the turn's context; a re-plan reads what the plan still lacks with the other reads and never assembles the context again."""
+    if not context_in_hand:
+        return list(reads), []
+    return [r for r in reads if r.get("cards") is None], [r for r in reads if r.get("cards") is not None]
+
+
+def context_not_reassembled_observation() -> Dict[str, Any]:
+    """The planner note that stands in for a card-context read dropped on a re-plan."""
+    return planner_note_observation(
+        "CONTEXT NOT ASSEMBLED AGAIN: this turn already holds its assembled context, shown above, and a re-plan does not assemble it a second time. "
+        "Use it, read the record or file you still lack, or choose another action.", "context_not_reassembled")
 
 
 def planner_full_view_start(content_count: int, recent_full: int, compress_over: int) -> int:

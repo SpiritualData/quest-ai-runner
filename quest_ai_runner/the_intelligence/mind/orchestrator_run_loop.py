@@ -24,7 +24,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation im
 from hubofhubs.api import CardThreadDecision, parse_card_thread
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import deep_metric_data
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
-    planner_full_view_start, planner_note_observation, read_spec_key, repeated_read_observation, split_mixed_reads,
+    context_not_reassembled_observation, lane_gap_observation, planner_full_view_start, receipt_observation, planner_note_observation, read_spec_key, repeated_read_observation, split_context_reassembly, split_mixed_reads,
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
@@ -360,12 +360,12 @@ class RunLoopMixin:
         _scope_note = scope_fence_block(self._meta_quest_ids(_ctx_meta)) if message_is_user_turn else ""
         if _scope_note:
             rs.context_view = _scope_note + ("\n\n" + rs.context_view if rs.context_view else "")
-        # A turn pinned to a quest is handed the milestone its cue concerns, found by code from the quest's own records
-        # (``milestone_cue``), so the planner neither asks which milestone nor reads another quest's records.
-        if message_is_user_turn and quest_id and self.tools is not None:
-            _cue_facts = milestone_cue.facts_for_turn(self.tools, quest_id, rs.user_message)
-            if _cue_facts:
-                gathered.append(planner_note_observation(_cue_facts, "cue_facts"))
+        # The milestone the pinned turn's cue concerns was found by code before context assembly (``milestone_cue.resolve``, in run begin): the planner is shown its facts
+        # so it neither asks which milestone nor reads another quest's records, and a lane gap is shown to the reply as well as the planner.
+        if rs.cue_gap:
+            gathered.append(lane_gap_observation(rs.cue_gap))
+        if rs.cue_resolved is not None:
+            gathered.append(planner_note_observation(rs.cue_resolved.facts, "cue_facts"))
         for step in range(cfg.max_steps):
             # An information turn re-plans once: after the first plan and one re-plan, the wrap-up answers from what was read (the same exit
             # as a spent read budget). ``cheap_information_turns`` False is the other arm and keeps the full step budget.
@@ -518,6 +518,22 @@ class RunLoopMixin:
                 rs.plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             if getattr(rs.plan, "user_intent", None):
                 rs.turn_user_intent = rs.plan.user_intent
+            # ESOI Application's flow step, in code and not a planner choice: once the milestone is resolved and the person asked for something to be done, the keyed next
+            # step is written and its receipt returned, unless a higher rung of the increment order is taken (a deliverable written in the reply, a metric value
+            # recorded). No deep run and no permission asking: the plan becomes the answer, which tells the person what was recorded.
+            if (rs.cue_resolved is not None and not rs.cue_step_attempted and rs._forced_plan is None
+                    and rs.cue_resolved.routes_to_code(rs.plan, rs.turn_user_intent, gathered, self.tools)):
+                rs.cue_step_attempted = True
+                try:
+                    receipt, tool_status = rs.cue_resolved.carry_out(self.tools)
+                    gathered.append(receipt_observation("create_or_update_quest_goal", receipt, tool_status))
+                except milestone_cue.LaneGap as gap:
+                    log.warning("milestone cue: lane gap: %s", gap)
+                    gathered.append(lane_gap_observation(str(gap)))
+                rs.plan.action = "answer"
+                rs.plan.deferred_deep = None
+                rs.plan.confirm_question = None
+                rs.plan.asks_first = False
             if getattr(rs.plan, "delivery", None):
                 rs.turn_delivery = rs.plan.delivery      # how the reply is delivered (spoken or written): the latest report of any step
             if rs.trace is not None and getattr(rs.plan, "facts_read", None):
@@ -941,9 +957,15 @@ class RunLoopMixin:
                 # The per-step cap _do_reads applies, applied here so a spec it would drop is
                 # never recorded as having run.
                 fresh_reads = fresh_reads[: cfg.max_reads_per_step]
+                reassembly_reads: list = []
+                if step >= 1 or rs.cue_resolved is not None:       # a re-plan never assembles the turn's context again, and a resolved milestone's records are the context
+                    fresh_reads, reassembly_reads = split_context_reassembly(
+                        fresh_reads, rs.cue_resolved is not None or (card_context is not None and card_context.has_completed_context()))
+                    if reassembly_reads:
+                        gathered.append(context_not_reassembled_observation())
                 for spec, ran_at in repeated_reads:
                     gathered.append(repeated_read_observation(spec, ran_at))
-                if repeated_reads and not fresh_reads:
+                if (repeated_reads or reassembly_reads) and not fresh_reads:
                     rs.repeat_only_steps += 1
                 elif fresh_reads:
                     rs.repeat_only_steps = 0

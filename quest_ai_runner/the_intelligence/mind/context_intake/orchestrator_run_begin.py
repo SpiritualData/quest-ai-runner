@@ -23,6 +23,7 @@ from hubofhubs.api import ExecutionRecord
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_needs_records
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
@@ -702,10 +703,22 @@ class RunBeginMixin:
         card_context.trace = rs.trace
         _ctx_prefetch_query: Optional[str] = None
 
+        # A turn pinned to a quest is handed the milestone its cue concerns, found by code from the quest's own records (``milestone_cue``). When one is found the
+        # quest's records are the context: the broad card and file retrieval is skipped. A failure to read them is a lane gap the reply is told, not an empty hint.
+        rs.cue_resolved = None
+        rs.cue_gap = ""
+        rs.cue_step_attempted = False
+        if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None:
+            try:
+                rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message)
+            except milestone_cue.LaneGap as gap:
+                rs.cue_gap = str(gap)
+                log.warning("milestone cue: lane gap: %s", gap)
+
         _assembled = None
         _ctx_future = None
         _ctx_executor = None
-        if self.context_assembler is not None and rs._forced_plan is None:
+        if self.context_assembler is not None and rs._forced_plan is None and rs.cue_resolved is None:
             try:
                 _ctx_assembler = self.context_assembler
                 # STEP 2 (context selection) targets the RESOLVED request: when Step 1 rewrote the

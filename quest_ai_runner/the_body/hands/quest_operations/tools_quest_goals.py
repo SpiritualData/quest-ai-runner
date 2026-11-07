@@ -63,11 +63,11 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         description=_with_standard(
             "Make sure exactly ONE goal with this exact title exists on the quest, with this owner and these links, and say whether it was "
             "created, updated in place or already as asked. Safe to call again: a repeat never makes a second goal.", "goal"),
-        when_to_use=("A recurring or keyed goal, such as a milestone's next step titled 'Pn next step: week of <Monday date>', or a named deliverable "
+        when_to_use=("A recurring or keyed goal, such as a milestone's next step titled '<solution record id> next step: week of <Monday date>', or a named deliverable "
                      "goal, where a repeat of the request must find the goal already there. Name the owner (assignee) and link it to the "
                      "milestone with spec_solution_id (and spec_metric_id with metric_target_value) from read_spec_records or get_spec. "
-                     "Keys: a milestone's next step is titled 'Pn next step: week of YYYY-MM-DD' (Pn is the code at the start of the milestone's name, the date is "
-                     "the Monday of this week); a deliverable you write is titled 'Pn <short name>'. Use the same title every time so a repeat finds it. "
+                     "Keys: a milestone's next step is titled '<solution record id> next step: week of YYYY-MM-DD' (the date is the Monday of this week in the "
+                     "quest's own time zone); a deliverable you write is titled '<solution record id> <short name>'. Use the same title every time so a repeat finds it. "
                      "Also how to record alternatives you wrote (two posts, three headlines): one goal each, titled by a short stable key "
                      "such as 'FB push post A', with the full text, the hypothesis and the metric they are compared by in the description, "
                      "and spec_solution_id of the solution they serve. "

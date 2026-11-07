@@ -611,7 +611,8 @@ def goal_row(goal: Mapping[str, Any], names: Mapping[str, str]) -> Dict[str, Any
             "assignee_user_id": assignee, "assignee_name": names.get(str(assignee or "")) or None,
             "completed": bool(goal.get("completed")), "abandoned": bool(goal.get("abandoned")),
             "time_scope": goal.get("time_scope"), "period": goal.get("period"),
-            "due": due.isoformat() if due else None, "parent_goal_id": goal.get("parent_goal_id")}
+            "due": due.isoformat() if due else None, "parent_goal_id": goal.get("parent_goal_id"),
+            "spec_solution_id": goal.get("spec_solution_id") or None, "spec_metric_id": goal.get("spec_metric_id") or None}
 
 
 def goal_line(row: Mapping[str, Any]) -> str:

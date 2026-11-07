@@ -24,7 +24,7 @@ COLUMNS = {
     "problems": ("problem", "who_has_it", "why_it_matters", "why_hard", "existing_attempts", "ideal_ids"),
     "ideals": ("name", "principle", "state_description", "hints_of_measurement", "problem_ids"),
     "solutions": ("name", "description", "purpose", "approach", "out_of_scope", "milestones", "knowledge", "measures_of_success", "parameters", "inputs",
-                  "outputs", "effects", "usage_notes", "problem_ids", "ideal_ids", "interface_name", "selected", "authoritative_metric_id"),
+                  "outputs", "effects", "usage_notes", "problem_ids", "ideal_ids", "interface_name", "selected", "authoritative_metric_id", "tracking_owner"),
     "implementations": ("solution_id", "filepath", "name", "description", "advantages", "disadvantages", "uses_solution_ids", "ideal_ids"),
     "metrics": ("name", "purpose", "record", "disadvantages", "cascading_conditionals", "solution_ids", "command"),
 }
