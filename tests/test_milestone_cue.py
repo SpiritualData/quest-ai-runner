@@ -817,16 +817,16 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
     tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
     resolved = cue.resolve(tools, "q1", CUE, now)
-    receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action [link]"}))
-    assert len(asked) == 1 and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few, neutral, each a full sentence ready to send as written" in asked[0] and "no em dashes" in asked[0]
-    assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action [link]")
+    receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action on the signup page"}))
+    assert len(asked) == 1 and "human_step" in asked[0] and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few neutral questions, each a full sentence ready to send" in asked[0] and "no em dashes" in asked[0]
+    assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action on the signup page")
     assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
-    kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action [link]",
+    kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action on the signup page",
             "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
     again = cue.resolve(ToolRegistry([read, list_goals([kept]), write_goal(calls)]), "q1", CUE, now)
     asked.clear()
     again.carry_out(ToolRegistry([read, list_goals([kept]), write_goal(calls)]), lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy"}))
-    assert "draft" not in asked[0].split("Return JSON")[1] and calls[-1]["description"].endswith("Draft: Opening, three product points, call to action [link]")
+    assert "draft" not in asked[0].split("Return JSON")[1] and calls[-1]["description"].endswith("Draft: Opening, three product points, call to action on the signup page")
 
 
 def test_a_cue_that_names_a_word_family_of_the_milestone_resolves_it():
@@ -1034,8 +1034,8 @@ def test_the_draft_prompt_names_sendable_questions_and_a_short_pitch_and_limits_
     asked = []
     cue.resolve(registry([]), "q1", CUE).carry_out(registry([]), lambda prompt: asked.append(prompt) or "{}")
     text = asked[0]
-    assert "few, neutral, each a full sentence ready to send as written" in text and "a short message stating what they get and the ask" in text
-    assert "a checklist of at most 5 steps only when none of those fits" in text and "under 120 words" in text
+    assert "few neutral questions, each a full sentence ready to send" in text and "a short message to that party stating what they get, the ask" in text
+    assert "a checklist of at most 5 steps only when none of these fits" in text and "under 120 words" in text and "Leave no bracket slot" in text
 
 
 def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_deliverable_stays_in_the_one_keyed_goal():

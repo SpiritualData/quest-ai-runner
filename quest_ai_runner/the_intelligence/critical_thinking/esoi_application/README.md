@@ -7,6 +7,7 @@ Part of [Critical Thinking](../README.md)
 ## Metrics
 
 - Specification selection pass rate (`metric-spec-selection`): leader `lexical_vector_gated`, 70 of 76 cases
+- Milestone next-step readiness (`metric-milestone-readiness`)
 
 ## Where to go next
 

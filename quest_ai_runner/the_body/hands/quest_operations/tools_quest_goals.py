@@ -71,7 +71,7 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
             except Exception:  # noqa: BLE001  the name is a convenience for the reader; the id stays
                 shown["assignee_name"] = None
         data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"], "problems": check["problems"], "links_refused": links_refused,
-                "goal": {k: shown.get(k) for k in ("id", "name", "assigned_to_user_id", "assignee_name", "spec_solution_id", "spec_metric_id", "period")} if shown else None}
+                "goal": {k: shown.get(k) for k in ("id", "name", "assigned_to_user_id", "assignee_name", "spec_solution_id", "spec_metric_id", "period", "scheduled_date")} if shown else None}
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
                 "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed.",

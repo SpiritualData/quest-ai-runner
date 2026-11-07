@@ -553,6 +553,8 @@ class RunLoopMixin:
                 receipt = ""
                 try:
                     receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision)
+                    if isinstance(rs._ctx_meta, dict):
+                        rs._ctx_meta["milestone_step_recorded"] = True       # the person-only steps are in the goal: no later ask turns the reply into a question to the chat user
                     receipt_entry = receipt_observation("create_or_update_quest_goal", receipt, tool_status)
                     receipt_entry["after_state"] = dict(rs.cue_resolved.after_state or {})      # what the tool read back: the evidence a later reader of the goal list cannot yet contradict
                     gathered.append(receipt_entry)

@@ -153,7 +153,7 @@ def from_write(write: Any) -> Optional[Dict[str, Any]]:
     pick = lambda *names: next((data.get(n) for n in names if data.get(n) not in (None, "")), None)
     return {"id": data.get("id"), "name": pick("title", "name"), "assigned_to_user_id": pick("assignedToUserId", "assigned_to_user_id"),
             "spec_solution_id": pick("specSolutionId", "spec_solution_id"), "spec_metric_id": pick("specMetricId", "spec_metric_id"),
-            "period": pick("period"), "description": pick("description")}
+            "period": pick("period"), "description": pick("description"), "scheduled_date": pick("scheduledDate", "scheduled_date")}
 
 
 def verified(client: Any, quest_id: str, outcome: Mapping[str, Any], title: str, wanted: Mapping[str, Any], assignee_id: Optional[str]) -> Dict[str, Any]:

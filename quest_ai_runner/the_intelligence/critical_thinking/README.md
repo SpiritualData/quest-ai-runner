@@ -48,6 +48,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Runs that leave a durable, attributed record of what they changed (`metric-track-runs-on-records`)
 - Drafted metrics accepted per unit of cost (`metric-draft-a-metric`): leader `capped_model_draft`, 10 of 10 cases
 - Specification selection pass rate (`metric-spec-selection`): leader `lexical_vector_gated`, 70 of 76 cases
+- Milestone next-step readiness (`metric-milestone-readiness`)
 
 ## Where to go next
 
@@ -104,6 +105,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Runs that leave a durable, attributed record of what they changed (`metric-track-runs-on-records`): `esoi run record_tracking`
 - Drafted metrics accepted per unit of cost (`metric-draft-a-metric`): `esoi run draft_a_metric --impl capped_model_draft`
 - Specification selection pass rate (`metric-spec-selection`): `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
+- Milestone next-step readiness (`metric-milestone-readiness`): `none`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

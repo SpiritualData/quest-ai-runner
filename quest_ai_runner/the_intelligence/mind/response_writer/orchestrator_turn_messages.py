@@ -145,6 +145,8 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
     if not blocks_on_person(str(verdict.get("blocker") or ""), question, failures):
         return False
     meta = ctx_meta or {}
+    if meta.get("milestone_step_recorded"):
+        return False       # the steps only a person can do are in the milestone's goal, assigned to its owner: the reply states them and never turns into a question to the chat user
     # FOUND_CONSTRAINT standard (core/reply_standards.py): when this turn's verdict found that the person's records conflict with
     # the request, the fact and its consequence open the question, so the shown ask AND the filed decision-request carry them.
     head = str(meta.get("found_constraint_head") or "").strip()
@@ -478,8 +480,21 @@ def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
             after = reread_cue_metric(orch, rs, before) or reread_metric(orch, rs, before)
         if after is None and before is not None and not metric_written(orch, rs):
             after = before       # nothing this turn wrote the metric record, so its value is what was read: unchanged
-        tail = act_status.closing_lines(before, after, reread=before is not None, already=already_in_place(rs.gathered),
-                                        voice=bool(sent.get("voice")))
+        cue = getattr(rs, "cue_resolved", None)
+        if cue is not None and cue.stage_after is not None and before is not None:
+            # A milestone step was recorded by code: the reply ends with ONE line giving the readiness stage and the milestone metric, each before and after; the reply states the human-only
+            # steps and never ends by asking the chat user (the steps are in the goal, assigned to its owner).
+            if cue.reading:
+                after = act_status.MetricReading(before.record_id, before.milestone, before.done_when, act_status.format_figure(cue.reading["value"]))
+            shown = lambda reading: act_status.clean_value(reading.value) or act_status.status_value(reading.value)
+            tail = cue.closing(shown(before), shown(after if after is not None else before))
+            res.text = cue.without_questions(res.text)
+            for part in getattr(res, "deep_results", None) or []:
+                if isinstance(getattr(part, "output", None), str):
+                    part.output = cue.without_questions(part.output)
+        else:
+            tail = act_status.closing_lines(before, after, reread=before is not None, already=already_in_place(rs.gathered),
+                                            voice=bool(sent.get("voice")))
     except Exception:  # noqa: BLE001 -- the closing lines must never lose the reply
         return
     if not tail:
