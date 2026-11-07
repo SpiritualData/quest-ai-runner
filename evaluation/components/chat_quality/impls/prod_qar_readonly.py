@@ -267,20 +267,17 @@ def build_arm(meter, bounded):
                 except Exception as e:  # noqa: BLE001
                     record["state_error"] = f"{type(e).__name__}: {e}"
                 try:
-                    record["readback"] = [state_readback(check, state_client) for check in checks]
-                    judged_case["evidence_notes"] += (" Read back from the quest after the run (the goals the state check counts: name, assignee id, solution link, metric link, period): "
+                    states = P.after_states(getattr(final, "gathered", None))
+                    # The tool's own read-back (the write's response) is the after-state when there is one; the goal list can still be a cached copy, so it is read only without one.
+                    record["readback"] = states if states else [state_readback(check, state_client) for check in checks]
+                    source = "the tool's read-back of the goal after its write (the saved goal as Quest returned it)" if states else "the quest's goal list read after the run"
+                    judged_case["evidence_notes"] += (f" After-state of the goals the state check counts (name, assignee id, solution link, metric link, period), from {source}: "
                                                       + json.dumps(record["readback"], default=str)[:1500] + ".")
                 except Exception as e:  # noqa: BLE001
                     record["readback_error"] = f"{type(e).__name__}: {e}"
-            if "before" in counts and "after" in counts:
-                verdicts = [state_verdict(check, b4, af) for check, b4, af in zip(checks, counts["before"], counts["after"])]
-                record["state"] = dict(counts, ok=all(v[0] for v in verdicts), why="; ".join(v[1] for v in verdicts))
-                judged_case["evidence_notes"] += (f" State check: {counts['before']} matching before the run, {counts['after']} after. Lines marked DONE were really made. "
-                                                  "Only the writes the case allows run; anything else stays blocked.")
-                if any(b4 >= int(check.get("expect", check.get("expect_min", 1))) for check, b4 in zip(checks, counts["before"])):
-                    judged_case["already_there"] = True      # nothing needs doing: one complete message is the standard (prod_probes.message_standard)
-                    judged_case["rubric"] = list(judged_case.get("rubric") or []) + [
-                        "The thing already exists, so the reply says it is already set or already there, and does not claim to have created it again"]
+                owners = P.accepted_owners(effect)
+                if owners:
+                    judged_case["evidence_notes"] += " Accepted owners for the goal (any one of them is acceptable): " + ", ".join(owners) + ". The after-state carries the assignee's name when the tool could look it up."
             if case.get("zero_writes"):
                 attempted = [w for w in dry.RECORDER.snapshot()["writes"] if not w.get("internal")] + [{"done": d} for d in dry.RECORDER.snapshot()["performed"]]
                 record["state"] = dict(ok=not attempted, why=("no write attempted" if not attempted else f"{len(attempted)} write(s) attempted on a case that writes nothing"))

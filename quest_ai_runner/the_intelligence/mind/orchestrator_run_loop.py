@@ -530,7 +530,9 @@ class RunLoopMixin:
                 receipt = ""
                 try:
                     receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision)
-                    gathered.append(receipt_observation("create_or_update_quest_goal", receipt, tool_status))
+                    receipt_entry = receipt_observation("create_or_update_quest_goal", receipt, tool_status)
+                    receipt_entry["after_state"] = dict(rs.cue_resolved.after_state or {})      # what the tool read back: the evidence a later reader of the goal list cannot yet contradict
+                    gathered.append(receipt_entry)
                     if exec_record is not None:       # the turn's execution record holds the write, so no net re-runs it as a deep run
                         exec_record.facts.append(ExecutionFact(goal=f"tool create_or_update_quest_goal: {receipt[:200]}", succeeded=True, phases=["tool_call", "done"]))
                 except milestone_cue.LaneGap as gap:

@@ -531,3 +531,21 @@ def test_a_found_goal_without_the_links_gets_them_written_and_the_write_response
     client.update_goal = lambda goal_id, fields: type("W", (), {"status": None, "data": {"id": goal_id, "title": KEYED, "specSolutionId": None, "specMetricId": None}})()
     result = run_tool(client)
     assert "not linked to a solution" in result.text and "NOT confirmed" in result.text
+
+
+def test_the_receipt_entry_of_the_code_step_carries_the_goal_as_the_tool_read_it_back():
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    client = CachedListingClient([{"id": "k", "name": KEYED, "spec_solution_id": None, "spec_metric_id": None, "period": "2026_W45", "assigned_to_user_id": "u1"}])
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
+    tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False,
+                                                handler=lambda a, c: ToolResult(ok=True, data=[{"id": "k", "title": KEYED, "spec_solution_id": None, "completed": False, "abandoned": False}], text="l")),
+                          create_or_update_quest_goal_spec({}, client_factory=lambda: client)])
+    provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
+    config = OrchestratorConfig()
+    config.overseer = False
+    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=tools).run(CUE, quest_id="q1")
+    entries = [g for g in (result.gathered or []) if isinstance(g, dict) and g.get("after_state")]
+    assert entries and entries[0]["after_state"]["spec_solution_id"] == "esr_c" and entries[0]["after_state"]["spec_metric_id"] == "esr_mc"
+    assert entries[0]["after_state"]["assignee_name"] == "Cy Owner"

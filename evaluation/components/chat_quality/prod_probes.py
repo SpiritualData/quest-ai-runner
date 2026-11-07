@@ -152,6 +152,21 @@ def readback(spec, client, limit=5):
     return rows
 
 
+def after_states(gathered):
+    """The goals as the turn's own tool read them back after its write (``after_state`` on a receipt): the authoritative after-state, fresher than a cached goal list."""
+    return [dict(g["after_state"]) for g in gathered or [] if isinstance(g, dict) and g.get("after_state")]
+
+
+def accepted_owners(effect):
+    """The owners a case accepts for the goal it allows (any one is acceptable), from its allowed call's ``assignee~`` list; empty when the case names none."""
+    owners = []
+    for rule in (effect or {}).get("allow") or []:
+        for key, want in (rule.get("args") or {}).items():
+            if key.rstrip("~") == "assignee":
+                owners += [str(w) for w in (want if isinstance(want, list) else [want])]
+    return owners
+
+
 def read_value(spec, client):
     """A reference value for the judge: a number (``read_number``), or with ``text`` the picked text (clipped), or with ``file`` and ``grep`` the
     first line of a file containing the grep text."""

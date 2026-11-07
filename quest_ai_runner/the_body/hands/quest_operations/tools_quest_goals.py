@@ -50,7 +50,15 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         # Only what the quest shows after the write is reported: "updated" when the read-back differs from before, links and owner as read.
         check = goal_links.verified(client, quest_id, outcome, title, goal_links.link_fields(args), assignee_id)
         state = check["state"]
-        data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"], "problems": check["problems"]}
+        shown = dict(check.get("goal") or {})
+        if shown.get("assigned_to_user_id"):
+            try:
+                shown["assignee_name"] = next((str(m.get("name") or "") for m in (client.list_assignable_members(quest_id) or [])
+                                               if str(m.get("user_id")) == str(shown["assigned_to_user_id"])), None)
+            except Exception:  # noqa: BLE001  the name is a convenience for the reader; the id stays
+                shown["assignee_name"] = None
+        data = {"state": state, "goal_id": outcome["goal_id"], "changed": outcome["changed"], "problems": check["problems"],
+                "goal": {k: shown.get(k) for k in ("id", "name", "assigned_to_user_id", "assignee_name", "spec_solution_id", "spec_metric_id", "period")} if shown else None}
         said = {"created": f"Created the {period} goal {title!r} on quest {quest_id}.",
                 "updated": f"The goal {title!r} already existed; updated in place ({', '.join(outcome['changed'])}). No second goal was made.",
                 "unchanged": f"The goal {title!r} already exists exactly as asked; nothing was changed."}[state]

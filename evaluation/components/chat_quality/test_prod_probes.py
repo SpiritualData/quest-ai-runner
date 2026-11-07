@@ -158,3 +158,12 @@ def test_interim_replies_are_on_in_the_production_arms_unless_the_environment_tu
     import prod_qar_readonly as arm
     assert arm.interim_replies_on({}) and arm.interim_replies_on({"QUEST_AI_INCREMENTAL_REPLIES_ENABLED": "1"})
     assert not arm.interim_replies_on({"QUEST_AI_INCREMENTAL_REPLIES_ENABLED": "0"})
+
+
+def test_the_after_state_is_the_tools_own_read_back_and_the_accepted_owners_are_the_cases():
+    import prod_probes as P
+    gathered = [{"locator": "tool:create_or_update_quest_goal", "after_state": {"name": "P3 next step", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc",
+                                                                                  "assignee_name": "Kaja", "period": "2026_W45"}}, {"locator": "x"}, "text"]
+    assert P.after_states(gathered) == [gathered[0]["after_state"]] and P.after_states(None) == []
+    effect = {"allow": [{"tool": "create_or_update_quest_goal", "args": {"title~": "P3 ", "assignee~": ["Kaja", "Honelign"]}}]}
+    assert P.accepted_owners(effect) == ["Kaja", "Honelign"] and P.accepted_owners({}) == []

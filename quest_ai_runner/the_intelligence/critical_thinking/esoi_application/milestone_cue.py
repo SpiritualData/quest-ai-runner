@@ -229,6 +229,7 @@ class Resolved:
     purpose: str = ""
     candidates: List[Mapping[str, Any]] = field(default_factory=list)
     receipt: str = field(default="")
+    after_state: Optional[Mapping[str, Any]] = None      # the goal as the tool read it back after the write (id, name, assignee id, links, period)
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the increment is the third rung: the person asked for something to be done (the planner's ``user_intent``), no deliverable is being written in the
@@ -317,6 +318,7 @@ class Resolved:
                 raise LaneGap(f"recording the next step failed ({type(error).__name__}: {error})") from error
             if result.ok:
                 self.receipt = result.text
+                self.after_state = (result.data or {}).get("goal")
                 note = f" The owner could not be set ({'; '.join(refused)})." if refused and not owner else ""
                 lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
                 if (result.data or {}).get("problems"):
