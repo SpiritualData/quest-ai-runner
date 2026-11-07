@@ -211,6 +211,9 @@ class GoalsMixin:
                     ai_help: Optional[bool] = None,
                     assignee_rep_id: Optional[str] = None,
                     assigned_to_user_id: Optional[str] = None,
+                    spec_solution_id: Optional[str] = None,
+                    spec_metric_id: Optional[str] = None,
+                    metric_target_value: Optional[float] = None,
                     idempotency_key: Optional[str] = None) -> WriteResult:
         """POST a new Goal to /api/planning/goals.
 
@@ -239,6 +242,11 @@ class GoalsMixin:
         the caller must be able to edit the quest, and the assignee must already be a member of
         it, or the request is refused with no goal created. Requires ``quest_id`` -- a standalone
         goal has no quest membership to check the assignee against.
+
+        ``spec_solution_id`` points the goal at the quest strategy (specification solution record) it serves,
+        ``spec_metric_id`` at the metric of that strategy a milestone moves, and ``metric_target_value`` is that
+        metric's target by the goal's date. Quest validates them against the quest's own specification and refuses
+        an id that is not on it, so a wrong link is reported, never saved.
 
         Returns a ``WriteResult`` whose data is the created Goal dict (camelCase fields: id, questId, title,
         period, deadline, ...); its status is ``noop`` when Quest says the goal already existed and ``held`` when
@@ -278,6 +286,12 @@ class GoalsMixin:
             body["assignee_rep_id"] = assignee_rep_id
         if assigned_to_user_id is not None:
             body["assigned_to_user_id"] = assigned_to_user_id
+        if spec_solution_id is not None:
+            body["spec_solution_id"] = spec_solution_id
+        if spec_metric_id is not None:
+            body["spec_metric_id"] = spec_metric_id
+        if metric_target_value is not None:
+            body["metric_target_value"] = metric_target_value
         return self._write("POST", "/api/planning/goals", body=body, label="Creating the goal",
                            idempotency_key=idempotency_key or new_idempotency_key())
 

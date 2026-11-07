@@ -282,6 +282,99 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         timeout_seconds=45.0)
 
 
+MAX_VALUE_CHARS = 240
+MAX_ROWS_PER_TABLE = 60
+SPEC_CHANGE_KINDS = ("spec_edit", "metric_edit", "problem_edit", "ideal_edit", "implementation_edit", "record_add", "milestone_add")
+
+
+def spec_run_options(client: Any) -> Dict[str, Any]:
+    """Run ESOI Application on the quest's records through this lane's Quest client."""
+    from quest_ai_runner.api import QUEST_SPEC_RECORDS
+    return {"arms": {"esoi-application": QUEST_SPEC_RECORDS}, "options": {"esoi-application": {"client": client}}}
+
+
+def read_spec_records_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        from hubofhubs.api import EsoiApplying
+        from quest_ai_runner.api import run
+        quest_id = str(args.get("quest_id") or ctx.quest_id or "").strip()
+        if not quest_id:
+            return ToolResult(ok=False, text=NO_QUEST.text)
+        try:
+            tables = run(EsoiApplying, **spec_run_options(factory())).read(quest_id)
+        except RuntimeError as error:
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text=str(error))
+        records = {table: {record_id: {column: (value if not isinstance(value, str) or len(value) <= MAX_VALUE_CHARS else value[:MAX_VALUE_CHARS] + "...")
+                                       for column, value in row.items() if value not in ("", None, [])}
+                           for record_id, row in list(rows.items())[:MAX_ROWS_PER_TABLE]} for table, rows in tables.items()}
+        return ToolResult(ok=True, data={"quest_id": quest_id, "records": records},
+                          text=f"Read the specification records of quest {quest_id}: " + ", ".join(f"{len(rows)} {table}" for table, rows in records.items()) + ".")
+
+    return ToolSpec(
+        name="read_spec_records",
+        handler=handler,
+        description=("Read a quest's specification records (problems, ideals, solutions, implementations, metrics) by table and record id, with "
+                     "their filled columns. The ids it returns are what spec_solution_id, spec_metric_id and apply_spec_edit take."),
+        when_to_use=("Before apply_spec_edit or before linking a goal to a milestone, so the edit names a record that exists and the link uses a real id. "
+                     "To find which solution is a milestone and which metric it moves."),
+        when_not_to_use="Searching across quests or repositories (find_specs). Reading a quest's goals.",
+        parameters={"type": "object", "properties": {"quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."}}},
+        mutates=False, origin="standard",
+        keywords=("spec", "specification", "records", "solution", "milestone", "metric", "esoi", "read"),
+        context_args={"quest_id": "quest_id"}, timeout_seconds=45.0)
+
+
+def apply_spec_edit_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        from quest_ai_runner.api import run
+        quest_id = str(args.get("quest_id") or ctx.quest_id or "").strip()
+        change = args.get("change")
+        if not quest_id:
+            return ToolResult(ok=False, text=NO_QUEST.text)
+        if not isinstance(change, dict) or change.get("kind") not in SPEC_CHANGE_KINDS:
+            return ToolResult(ok=False, text="Not changed: change must be an object whose kind is one of " + ", ".join(SPEC_CHANGE_KINDS) + ".")
+        try:
+            result = dict(run("esoi-application", {"subject": quest_id, "edit": dict(change)}, **spec_run_options(factory())))
+        except RuntimeError as error:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"Not changed: {error}")
+        if result.get("proposed"):
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=result, text=(
+                f"Proposed, waiting for approval: this is now an ask for the owner (decision {result.get('decision')}) and is NOT done. "
+                "Do not repeat it or tell the person it is done."))
+        if result.get("applied") and result.get("created") is False:
+            return ToolResult(ok=True, status=ToolStatus.NOOP, data=result, text="Already there: nothing was added or changed.")
+        if result.get("applied"):
+            what = (f"added to {result.get('table')} ({result.get('target')})" if result.get("created")
+                    else f"{result.get('table')} {result.get('target')}, {result.get('field')} now reads: {str(result.get('after'))[:MAX_VALUE_CHARS]}")
+            return ToolResult(ok=True, data=result, text="Done: " + what)
+        return ToolResult(ok=False, status=ToolStatus.REFUSED, data=result, text="Not changed: " + str(result.get("reason") or "the change could not be applied"))
+
+    return ToolSpec(
+        name="apply_spec_edit",
+        handler=handler,
+        description=("Apply ONE edit or ensure-one addition to a quest's specification through ESOI Application. change is one of: "
+                     "{kind: spec_edit|metric_edit|problem_edit|ideal_edit|implementation_edit, target: record_id, field: column, value: new text} "
+                     "sets one column of one record; {kind: record_add, table: problems|ideals|solutions|implementations|metrics, key: the record's "
+                     "name, fields: {column: value}} adds a record once (a repeat adds nothing; an implementation also needs fields.solution_id); "
+                     "{kind: milestone_add, target: solution_record_id, key: the milestone sentence, fields: {metric: metric_record_id, "
+                     "strategy: how}} adds a milestone to a solution's ladder once. Result status: applied, already there, proposed (waiting for the "
+                     "owner: NOT done) or refused (the message says why, for example a field the person edited). No em dashes in any value."),
+        when_to_use=("A record, metric or milestone of the quest's specification needs to exist or change, and repeating the call must not duplicate it. "
+                     "Read the records first with read_spec_records."),
+        when_not_to_use=("A field the person wrote or edited. A change the person did not ask for and the autopilot brief does not call for. "
+                         "Linking a goal to a milestone (that is create_or_update_quest_goal's spec_solution_id)."),
+        parameters={"type": "object", "required": ["change"], "properties": {
+            "quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."},
+            "change": {"type": "object", "description": "The one change, in one of the three shapes above."}}},
+        mutates=True, workflow_step=False, origin="standard", on_request_only=True,
+        keywords=("spec", "specification", "record", "edit", "milestone", "metric", "solution", "esoi", "add"),
+        context_args={"quest_id": "quest_id"}, timeout_seconds=60.0)
+
+
 def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -395,6 +488,8 @@ QUEST_INTENT_BUILDERS = {
     "get_spec": with_credentials(get_spec_spec),
     "refresh_spec": with_credentials(refresh_spec_spec),
     "edit_spec_record": with_credentials(edit_spec_record_spec),
+    "read_spec_records": with_credentials(read_spec_records_spec),
+    "apply_spec_edit": with_credentials(apply_spec_edit_spec),
     "place_quest": with_credentials(place_quest_spec),
     "create_sub_intent": with_credentials(create_sub_intent_spec),
 }

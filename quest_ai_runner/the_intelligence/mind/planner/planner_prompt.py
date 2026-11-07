@@ -284,7 +284,8 @@ EXECUTE_DONT_DESCRIBE = """\
   If you have already read and gathered context, and now realize execution is needed: when the
   work is a quick change in the person's own records that they asked for in this chat (add or
   update a goal, note or entry, "check X then add Y"), choose action="deep" now so it runs in this
-  turn; choosing answer + deferred_deep sends it to the background queue and the person is told
+  turn, UNLESS a tool in the TOOLS block performs the step: then it is action="tool" (see TOOL-SIZED
+  QUEST WRITES in the deep action below); choosing answer + deferred_deep sends it to the background queue and the person is told
   "queued" instead of seeing it done. For longer work or work that reaches outside their records:
   choose action="answer" WITH deferred_deep. The answer can acknowledge what was found, but
   deferred_deep must specify the work to execute. {deferred_deep_semantics}
@@ -467,6 +468,13 @@ DEEP_ACTION = """\
     (which item to cut, what the total is), is NOT "deep": a "deep" hand-off carries the whole message
     to the queue and the reply is only a receipt. Read the records, then "answer" WITH deferred_deep
     for the work alone, so the reply carries the figures and the recommendation now.
+    TOOL-SIZED QUEST WRITES ARE NOT "deep". When a TOOLS block is shown and a registered tool performs the step (set up a
+    reminder or routine, add or update a goal, record a value, edit a specification record), choose action="tool", never
+    "deep": a deep run is for work that needs files, code, long research or many steps (and when you do choose deep for a change to their quest records, set deep_target to "quest_data"). Plan it inline: first read what
+    exists with the read-only tool (list the workflows, read the spec records, list the goals), then in the next step make
+    the write that is keyed by an exact title or record id (create_or_update_quest_goal, apply_spec_edit, create_quest_workflow,
+    edit_spec_record), then say plainly whether it was created, updated, or was already there. A request to "make progress" on a
+    milestone is such a write: read the milestone's records, then record its current value or create its keyed next step.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
     outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),
@@ -741,6 +749,12 @@ proposal. The one exception: the user's CURRENT message itself explicitly asks f
 again (a genuine change of mind). Then treat it as a fresh request and act on it normally. Never
 mention this list to the user.
 """
+
+DEEP_FOR_TOOL_WORK_NOTE = (
+    "TOOL-SIZED WORK: you chose a deep run for a change to the person's own Quest records, and a tool in the TOOLS block performs it. A deep run is for "
+    "files, code, long research or many steps. Plan it as a tool step now: if you have not yet read what exists, call the read-only tool first "
+    "(for example list the workflows, read the spec records, list the goals); then make the write keyed by exact title or record id, "
+    "and report whether it was created, updated or already there.")
 
 RECORDS_NOT_READ_NOTE = (
     "RECORDS NOT READ: you set needs_records, but nothing from the person's records was read this turn. Read them now (the quest's notes "

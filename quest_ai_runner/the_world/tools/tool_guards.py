@@ -354,3 +354,14 @@ def past_activity_reads_owed(message: str, action: str, operation: Optional[str]
         first, last = references[0][1]
         window = {"date": f"{first.isoformat()}..{last.isoformat()}"}
     return [{"operation": operation, "args": {"person": name, "limit": 10, **window}} for name in people]
+
+
+def deep_is_tool_sized(plan: Any, registry: Any) -> bool:
+    """True when a planned deep run is work a registered tool performs: the plan's own structured facts say it is a change to the person's Quest
+    records (``deep_target`` is ``quest_data``; ``code_or_files``, ``other`` and unset all keep the deep run), it is one run (no staged ``deep_subtasks``), and the
+    registry offers at least one tool that acts. Facts about the plan and the tool set only, never a word of the request or of the plan's prose."""
+    if registry is None or getattr(plan, "action", None) != "deep" or getattr(plan, "deep_subtasks", None):
+        return False
+    if getattr(plan, "deep_target", None) != "quest_data":
+        return False
+    return any(getattr(spec, "mutates", False) for spec in registry.all())

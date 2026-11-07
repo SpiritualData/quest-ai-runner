@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 from quest_ai_runner.the_world.tools.tools import (
     STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env, quest_credentials_present, result_of_write, write_failed)
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus, decision_id_of
+from quest_ai_runner.the_body.hands.quest_operations import goal_links
 
 
 def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
@@ -361,8 +362,14 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
                                               f"{title!r}. Suggest it in your reply instead."))
         kwargs = {k: args[k] for k in ("description", "criteria", "target_value", "target_unit",
                                        "parent_goal_id") if args.get(k) not in (None, "")}
+        kwargs.update({k: args[k] for k in goal_links.LINK_KEYS if args.get(k) not in (None, "")})
         try:
-            goal = factory().create_goal(title, period=period, quest_id=quest_id, **kwargs)
+            client = factory()
+            if args.get("assignee"):
+                kwargs["assigned_to_user_id"], why = goal_links.resolve_assignee(client, quest_id, args["assignee"])
+                if why:
+                    return ToolResult(ok=False, text=f"Nothing was created: {why}")
+            goal = client.create_goal(title, period=period, quest_id=quest_id, **kwargs)
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was created")
         return result_of_write(
@@ -376,7 +383,10 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         handler=handler,
         description=_with_standard(
             "Create one goal on a quest's plan for one period (day, week, month, quarter or "
-            "year). Follow the nuance for the goal's period.", "goal"),
+            "year). Follow the nuance for the goal's period. Optionally name its owner (assignee) and the "
+            "strategy and metric it serves (spec_solution_id, spec_metric_id, metric_target_value). This "
+            "tool always makes a new goal; to make sure ONE goal with a given title exists, use "
+            "create_or_update_quest_goal.", "goal"),
         when_to_use=("The user asked to add a goal (or a day's, week's, month's, quarter's or "
                      "year's goal) to their quest. " + _NEVER_CODE),
         when_not_to_use=("Background AI work for later (that is a task, not a goal). A goal the "
@@ -398,6 +408,7 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
                 "target_unit": {"type": "string", "description": "Unit of the target."},
                 "parent_goal_id": {"type": "string",
                                    "description": "The longer-period goal this one serves."},
+                **goal_links.LINK_PARAMS,
                 "user_asked_for_this_field": _ASKED_PARAM,
             },
         },
@@ -572,6 +583,6 @@ STANDARD_TOOL_BUILDERS.update({
 
 #: Every standard tool that writes quest data, for guards and briefs that must name them.
 QUEST_DATA_TOOLS: Tuple[str, ...] = (*QUEST_FIELD_TOOLS.values(), "add_quest_measurable_outcome",
-                                     "create_quest_goal", "add_quest_strategy",
+                                     "create_quest_goal", "create_or_update_quest_goal", "add_quest_strategy",
                                      "create_quest_habit", "create_quest_experiment",
                                      "update_quest_experiment", "delete_quest_experiment")

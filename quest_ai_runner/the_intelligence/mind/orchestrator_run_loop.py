@@ -28,7 +28,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text, is_information_turn
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import RECORDS_NOT_READ_NOTE
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_FOR_TOOL_WORK_NOTE, RECORDS_NOT_READ_NOTE
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
@@ -603,6 +603,20 @@ class RunLoopMixin:
                          [c["name"] for c in rs.plan.tool_calls])
                 rs.brainstorm_suppressed_action = rs.brainstorm_suppressed_action or "tool"
                 rs.plan.action = "answer"
+
+            # --- TOOL-SIZED WORK GATE: a deep run is for files, code, long research or many steps ------------------------------------
+            # A change to the person's own Quest records that a registered tool performs is a tool plan: read what exists, then the
+            # keyed write. When the planner chose "deep" for such work (its own structured deep_target and the tool set say so,
+            # see ``tool_guards.deep_is_tool_sized``), the code hands the decision back ONCE with the instruction to plan tool steps.
+            # A planner that still chooses deep afterwards is not asked again: the second choice stands.
+            if (rs.plan and rs.plan.action == "deep" and message_is_user_turn and not getattr(rs, "deep_to_tool_runs", 0)
+                    and tool_guards.deep_is_tool_sized(rs.plan, self.tools)
+                    and step + 1 < cfg.max_steps and not budget_exhausted()):
+                rs.deep_to_tool_runs = 1
+                log.info("Tool-sized work gate: the planner chose a deep run for Quest-record work a tool performs; planning again as tool steps.")
+                gathered.append(planner_note_observation(DEEP_FOR_TOOL_WORK_NOTE, "deep_for_tool_work"))
+                emit.status("Planning this as a direct change…")
+                continue
 
             # --- NO-ATTACHMENT GATE: the message refers to a file or photo that did not arrive ------------------------------
             # The planner reports in a structured field (``refers_to_attachment``) that the message speaks of a photo or file as sent
