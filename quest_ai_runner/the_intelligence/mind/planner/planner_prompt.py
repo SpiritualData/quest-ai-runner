@@ -450,7 +450,8 @@ ANSWER_ACTION = """\
     A folder listing, a find result or a list of search hits that only NAMES files is not content
     either: read the file that holds the fact, then answer. An answer that says you will open or
     check something is a failure; the read is the action.
-    Use "answer" ONLY to INFORM (explain, summarize, advise). If the user asked you to CHANGE
+    Use "answer" to INFORM (explain, summarize, advise) AND to WRITE text the reply itself can carry (a caption, a post, an email, an outline, a
+    plan: deep_target "draft_in_chat"). If the user asked you to CHANGE
     something (create/add/update/edit/delete/mark/set/rename their data or artifacts, OR fix/
     implement/build/refactor CODE OR FILES), that is an ACTION -- do NOT just describe the change in
     an answer; choose "deep" so the change is actually proposed/made. Describing a mutation in prose,
@@ -459,7 +460,7 @@ ANSWER_ACTION = """\
 
 DEEP_ACTION = """\
   - "deep": this needs REAL WORK. The test is simple: if fulfilling the request means PRODUCING or
-    CHANGING an artifact (not just explaining one), it is "deep". So is any request, even a pure
+    CHANGING an artifact (a file, code, a record; not just explaining one, and not text the reply can carry), it is "deep". So is any request, even a pure
     question, whose answer lives somewhere your reads cannot reach (see REACH OF A READ). That covers BOTH the user's data
     or artifacts -- CREATE / ADD / UPDATE / EDIT / DELETE / MARK / SET (e.g. "add a goal", "add a
     measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") -- AND
