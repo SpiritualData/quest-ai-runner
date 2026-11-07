@@ -55,10 +55,14 @@ def test_a_figure_the_reads_do_not_hold_is_caught_on_an_information_turn():
     assert m.unsupported and any(v.kind == "unsupported" for v in m.violations)
 
 
-def test_an_information_turn_is_held_to_four_sentences_and_a_default_non_question_is_not():
-    five = "One. Two. Three. Four. Five."
-    assert measure(five, standard_for(PlanDecision(action="answer", user_intent="ask")), "").failed
-    assert not measure(five, standard_for(PlanDecision(action="answer", user_intent="act")), "").failed
+def test_an_information_turn_is_held_to_three_sentences_an_order_report_to_two_and_a_written_deliverable_is_not_held():
+    four, three = "One. Two. Three. Four.", "One. Two. Three."
+    ask = standard_for(PlanDecision(action="answer", user_intent="ask"))
+    act = standard_for(PlanDecision(action="answer", user_intent="act"))
+    assert measure(four, ask, "").failed and not measure(three, ask, "").failed
+    assert measure(three, act, "").failed and not measure("One. Two.", act, "").failed
+    draft = standard_for(PlanDecision(action="answer", user_intent="act", deep_target="draft_in_chat"))
+    assert not measure("One. Two. Three. Four. Five.", draft, "").failed
 
 
 def test_spoken_delivery_selects_the_speakable_shape_and_enforces_it():
