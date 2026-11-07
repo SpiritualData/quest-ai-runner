@@ -118,3 +118,11 @@ def test_allowlist_names_nested_and_prefix_arguments():
         assert not dry.tool_allowed("apply_spec_edit", {"quest_id": "q1", "change": {"kind": "record_add", "target": "esr_x"}})
     finally:
         dry.set_allowances([])
+
+
+def test_dry_run_tells_a_quest_less_call_to_name_the_quest_not_that_it_was_blocked(monkeypatch):
+    monkeypatch.setenv("QAR_DRY_RUN_WRITES", "1")
+    spec = goals.create_or_update_quest_goal_spec(CREDS, client_factory=lambda: FakeClient())
+    before = len(dry.RECORDER.writes)
+    result = dry.tool_call(spec, spec.name, {"title": "t"})
+    assert not result.ok and "no quest is known" in result.text and len(dry.RECORDER.writes) == before

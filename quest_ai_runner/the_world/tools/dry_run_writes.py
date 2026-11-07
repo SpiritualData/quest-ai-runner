@@ -238,6 +238,10 @@ def tool_call(spec: Any, name: str, args: Mapping[str, Any]):
     if tool_allowed(name, args):
         RECORDER.performed(f"tool {name} {summarize(dict(args))}")
         return None
+    unbound = [arg for arg, key in (getattr(spec, "context_args", None) or {}).items() if key == "quest_id" and not args.get(arg)]
+    if unbound:     # the call names no quest: the real tool would say so and the planner would find the quest, so test mode says the same instead of "blocked"
+        return ToolResult(ok=False, status=ToolStatus.REFUSED, text=(f"{name}: no quest is known for this call. Call again with {unbound[0]} set to the id of the quest the "
+                                                                    "request is about, taken from the quests listed in context (find_quest lists them)."))
     RECORDER.write("tool", f"{name} {summarize(dict(args))}", tool=name)
     return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"Blocked in test mode: {name} was not run and nothing was changed.")
 
