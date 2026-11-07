@@ -532,7 +532,7 @@ TERMINAL_TASK = {"done", "failed", "cancelled", "completed", "error", "dismissed
 
 def autopilot_window(now, autopilot, tasks, minutes=10):
     """Why a write-capable case must not start now, else None. ``now`` is epoch seconds. A reason when: a task on the quest is active (neither queued nor finished),
-    a queued task has no schedule (it is runnable now) or is scheduled up to ``minutes`` ahead (in the autopilot's time zone or in UTC; either counts), or the quest's
+    a queued task has no schedule (it is runnable now) or is scheduled up to ``minutes`` ahead (in the autopilot's time zone, or UTC when it has none), or the quest's
     daily autopilot run time falls in the next ``minutes`` or began within the last ``minutes``."""
     import datetime
     horizon = now + minutes * 60
@@ -545,7 +545,7 @@ def autopilot_window(now, autopilot, tasks, minutes=10):
         date, clock = task.get("scheduled_date"), task.get("scheduled_time")
         if not date:
             return f"autopilot window: queued task {task.get('task_id')} has no schedule and is runnable now"
-        for zone in (autopilot or {}).get("run_timezone") and [autopilot["run_timezone"], "UTC"] or ["UTC"]:
+        for zone in [(autopilot or {}).get("run_timezone") or "UTC"]:      # a schedule is in the quest's own zone; UTC only when it has none
             when = local_epoch(date, clock or "00:00", zone)
             if when is not None and when <= horizon:
                 return f"autopilot window: queued task {task.get('task_id')} is scheduled for {date} {clock} ({zone})"

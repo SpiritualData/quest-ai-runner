@@ -165,6 +165,8 @@ def test_autopilot_window_blocks_when_a_run_is_active_queued_unscheduled_or_due_
     assert "runnable now" in PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "queued"}])
     assert PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "queued", "scheduled_date": "2026-11-06", "scheduled_time": "12:05"}])
     assert PC.autopilot_window(NOON_PT, AUTOPILOT, [{"task_id": "a", "status": "queued", "scheduled_date": "2026-11-07", "scheduled_time": "12:05"}]) is None
+    at_0528_utc = PC.local_epoch("2026-11-06", "21:28", "America/Los_Angeles")      # 05:28 UTC next day; a task for 05:00 in the quest's zone is hours away, not overdue
+    assert PC.autopilot_window(at_0528_utc, AUTOPILOT, [{"task_id": "a", "status": "queued", "scheduled_date": "2026-11-07", "scheduled_time": "05:00"}]) is None
     assert PC.autopilot_window(PC.local_epoch("2026-11-06", "14:25", "America/Los_Angeles"), AUTOPILOT, [])      # the daily run time is five minutes away
     assert PC.autopilot_window(PC.local_epoch("2026-11-06", "14:35", "America/Los_Angeles"), AUTOPILOT, [])      # and just began
 
