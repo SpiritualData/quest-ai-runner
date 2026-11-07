@@ -217,6 +217,6 @@ def test_a_version_that_names_a_persons_existing_goal_is_reported_under_that_goa
             {"id": "x1", "title": "Budget decision recorded", "text": "other", "spec_solution_id": None, "completed": False}]
     calls = []
     named = [dict(A_EXISTING, title="Push post A", goal_id=""), dict(B_NEW, title="Push post B", goal_id="")]
-    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of posts for the push", "reply", lambda prompt: alt_answer(*named))
+    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of posts for the push", "reply", lambda prompt: alt_answer(*named) if "Other goals on the quest" in prompt else '{"same":[{"version":1,"goal_id":"p1"}]}')
     assert "- Push post A (already on the quest, left exactly as it is)" in tail and "Budget decision" not in tail
     assert all(c.get("title") != "Push post A" for c in calls)

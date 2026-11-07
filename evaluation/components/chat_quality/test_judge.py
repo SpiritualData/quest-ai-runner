@@ -372,3 +372,14 @@ def test_a_figure_present_in_the_reads_is_verified_and_one_absent_is_unsupported
     assert P.unsupported_figures("We have 0 paid subscribers, a $12,000 budget and a target of 10; P1 is 50%.", reads, "") == []
     assert P.unsupported_figures("We have 0 subscribers and a $15,000 budget.", reads, "") == ["15000"]
     assert P.unsupported_figures("You said 7 posts.", reads, "write 7 posts") == []
+
+
+def test_a_long_read_keeps_the_passage_around_each_number_and_date_the_reply_states():
+    import prod_probes as P
+    filler = "background line. " * 400
+    deep = filler + "Subscribers history: 2026-11-05 count 0 trialing 0 MRR 12345" + filler
+    plain = P.reads_of([{"locator": "tool:history", "text": deep}], [])
+    assert "2026-11-05" not in plain[0]["text"]
+    kept = P.reads_of([{"locator": "tool:history", "text": deep}], [], reply="There are 0 subscribers as of 5 November and MRR 12,345.")
+    assert "2026-11-05 count 0" in kept[0]["text"] and "12345" in kept[0]["text"] and kept[0]["text"].startswith("background line.")
+    assert len(kept[0]["text"]) <= 2 * 2500 + 200

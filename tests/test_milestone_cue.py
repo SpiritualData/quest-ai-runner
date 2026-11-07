@@ -1191,7 +1191,7 @@ def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_titl
         return ToolResult(ok=True, status=ToolStatus.NOOP, data={"state": "left_alone"}, text="left")
     tools = ToolRegistry([read_spec(), list_goals(rows), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=write)])
     same_titles = [dict(A_EXISTING, title="FB push post A", goal_id=""), dict(B_NEW, title="FB push post B", goal_id="")]
-    tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or alt_answer(*same_titles))
+    tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or (alt_answer(*same_titles) if "Other goals on the quest" in prompt else '{"same":[{"version":1,"goal_id":"p1"},{"version":2,"goal_id":"p2"}]}'))
     assert "FB push post A" in asked[0].split("Other goals on the quest that look like these")[1] and "Budget review" not in asked[0]
     assert "(already on the quest, left exactly as it is)" in tail and "A story hook gets more clicks" in tail and "Compared by:" in tail
     assert calls == [] and "- FB push post A (already on the quest" in tail and "- FB push post B (already on the quest" in tail          # nothing is created beside a person's series
@@ -1231,9 +1231,10 @@ def test_look_alike_goals_that_are_a_persons_mean_nothing_is_created_even_under_
             {"id": "p2", "title": "FB push post B", "text": "a person's own goal", "spec_solution_id": None, "completed": False}]
     calls = []
     new_titles = [dict(A_EXISTING, title="Facebook post A for the 1000 subscribers push", goal_id=""), dict(B_NEW, title="Facebook post B for the 1000 subscribers push", goal_id="")]
-    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: alt_answer(*new_titles))
+    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the push", "reply",
+                                 lambda prompt: alt_answer(*new_titles) if "Other goals on the quest" in prompt else '{"same":[]}')
     assert calls == []
-    assert tail.startswith("On the quest:\n- FB push post A (already on the quest, left exactly as it is): A story hook gets more clicks") and "A question hook gets more signups" in tail
+    assert tail.startswith("Already on the quest: FB push post A, FB push post B (left as they are).") and "A story hook" not in tail       # no hypothesis is attached to a goal that is not its own post
     assert "Facebook post A for the 1000" not in tail and "Compared by: P3 App Store listing live." in tail
 
 

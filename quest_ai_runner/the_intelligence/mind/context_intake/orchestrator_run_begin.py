@@ -971,6 +971,16 @@ class RunBeginMixin:
                 _recent_entries = []
         _merged_card_meta = _card_meta + _recent_entries
 
+        # --- KEY MEASURE, LIVE: a question that only asks to be told something, in a quest's chat, is handed the quest's top metric read through its declared source ---------
+        if rs.turn_information_only and rs.quest_id and self.tools is not None and rs._forced_plan is None and rs.message_is_user_turn:
+            try:
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_reading
+                _key_measure = status_reading.observation(self.tools, rs.quest_id)
+                if _key_measure is not None:
+                    rs.gathered.append(_key_measure)
+            except Exception:  # noqa: BLE001 -- an addition to the turn never breaks it
+                log.debug("key measure read skipped", exc_info=True)
+
         # --- STRUCTURAL SUFFICIENCY GATE: which of this turn's context is only a SUMMARY ---------
         # A content item whose locator declares ``full_ref`` is saying, structurally, "the text
         # stored on the card is an abridged stand-in, the real source is fetched with THIS read

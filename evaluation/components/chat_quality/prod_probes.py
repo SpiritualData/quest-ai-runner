@@ -270,18 +270,79 @@ def unsupported_figures(reply, reads_text, message=""):
     return sorted(figures_in(reply) - figures_in(reads_text) - figures_in(message), key=lambda f: (len(f), f))
 
 
-def reads_of(gathered, context_views, per_item=2500, total=24000):
+MONTH_NAMES = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+DATE_IN_REPLY = re.compile(r"\b(?:(?P<d1>\d{1,2})(?:st|nd|rd|th)?\s+(?P<m1>[A-Za-z]{3,9})|(?P<m2>[A-Za-z]{3,9})\s+(?P<d2>\d{1,2})(?:st|nd|rd|th)?)\b")
+PASSAGE_RADIUS = 160
+HEAD_CHARS = 1000
+
+
+def month_number(word):
+    word = word.lower()
+    return next((i + 1 for i, name in enumerate(MONTH_NAMES) if len(word) >= 3 and name.startswith(word[:3]) and name.startswith(word)), None)
+
+
+def needles_of(reply):
+    """The strings to look for in a read so the passage that holds what the reply states is kept: each date the reply states, in the forms a record writes it
+    (day and month name, month name and day, ISO), and each number of two or more digits."""
+    needles = []
+    for m in DATE_IN_REPLY.finditer(str(reply or "")):
+        month = month_number(m.group("m1") or m.group("m2") or "")
+        day = m.group("d1") or m.group("d2")
+        if month and day and 1 <= int(day) <= 31:
+            name = MONTH_NAMES[month - 1]
+            needles += [f"{int(day)} {name}", f"{name} {int(day)}", f"{int(day)} {name[:3]}", f"{name[:3]} {int(day)}", f"-{month:02d}-{int(day):02d}"]
+    for token in FIGURE.findall(str(reply or "")):
+        digits = token.strip("$%").replace(",", "")
+        if len(digits.replace(".", "")) >= 2:
+            needles.append(token.strip("$%"))
+            needles.append(digits)
+    return list(dict.fromkeys(n for n in needles if n))
+
+
+def trimmed(text, limit, needles):
+    """``text`` cut to ``limit`` characters (twice that when passages are kept): its head, then the passage around every place a needle occurs, merged where they overlap.
+    A text within ``limit`` is whole."""
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    lowered = text.lower()
+    spans = []
+    for needle in needles:
+        at = lowered.find(needle.lower(), HEAD_CHARS)
+        while at >= 0 and len(spans) < 40:
+            spans.append((max(HEAD_CHARS, at - PASSAGE_RADIUS), min(len(text), at + len(needle) + PASSAGE_RADIUS)))
+            at = lowered.find(needle.lower(), at + len(needle) + PASSAGE_RADIUS)
+    if not spans:
+        return text[:limit]
+    merged = []
+    for a, b in sorted(spans):
+        if merged and a <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
+        else:
+            merged.append((a, b))
+    out, used = text[:HEAD_CHARS], HEAD_CHARS
+    for a, b in merged:
+        if used + (b - a) > limit * 2:
+            break
+        out += " ... " + text[a:b]
+        used += b - a
+    return out
+
+
+def reads_of(gathered, context_views, per_item=2500, total=24000, reply=""):
     """What the turn actually read, as ``[{"source", "text"}]`` trimmed for the judge and the private log: each tool result or read observation
-    the loop gathered, then the context the run was handed. Nothing here comes from any test data."""
+    the loop gathered, then the context the run was handed. A long read keeps its head and the passages around every number and date the final reply
+    states (``reply``), so a figure the reply took from deep inside a read stays visible. Nothing here comes from any test data."""
+    needles = needles_of(reply)
     items = []
     for observation in gathered or []:
         if isinstance(observation, dict):
             text = observation.get("tool_text") or observation.get("text") or observation.get("content") or ""
             if str(text).strip():
-                items.append({"source": str(observation.get("locator") or observation.get("rel_path") or observation.get("kind") or "read"), "text": str(text)[:per_item]})
+                items.append({"source": str(observation.get("locator") or observation.get("rel_path") or observation.get("kind") or "read"), "text": trimmed(text, per_item, needles)})
     for view in context_views or []:
         if str(view).strip():
-            items.append({"source": "context handed to the run", "text": str(view)[:per_item * 2]})
+            items.append({"source": "context handed to the run", "text": trimmed(view, per_item * 2, needles)})
     out, used = [], 0
     for item in items:
         if used + len(item["text"]) > total:

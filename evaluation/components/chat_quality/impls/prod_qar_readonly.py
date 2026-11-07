@@ -367,7 +367,7 @@ def build_arm(meter, bounded):
             judged_case["evidence_notes"] += " " + sequence
             judged_case["rubric"] = list(judged_case.get("rubric") or []) + [item]
             evidence = J.build_evidence([{"message": message, "events": frames}])
-            reads_seen = P.reads_of(getattr(final, "gathered", None), list(context_views))
+            reads_seen = P.reads_of(getattr(final, "gathered", None), list(context_views), reply=evidence.get("reply", ""))
             truth = P.reads_text(reads_seen)
             unsupported = P.unsupported_figures(evidence.get("reply", ""), truth, message)
             judged_case["evidence_notes"] += (" Figures in the reply that appear neither in the turn's reads nor in the user's message: " + (", ".join(unsupported) or "none") + ".")

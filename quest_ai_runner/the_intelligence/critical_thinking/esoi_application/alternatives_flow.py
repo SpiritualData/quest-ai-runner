@@ -196,13 +196,11 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     kept_ids = {str(k.get("id")) for k in goals}
     looks_like = [g for g in goals_like(everything, cue, min_shared=1) if str(g.get("id")) not in kept_ids]
     metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
-    others = {str(g.get("title") or "").strip().casefold(): g for g in everything if str(g.get("id")) not in kept_ids and not g.get("completed") and not g.get("abandoned")}
-    existing = {id(a): others[a.title.strip().casefold()] for a in alts if not a.goal_id and a.title.strip().casefold() in others}
+    existing = same_posts(alts, [g for g in looks_like], decide) if looks_like else {}
     if looks_like and not existing:
-        # Goals that look like this series exist and are a person's (Quest AI did not write them) and the versions name none of them: nothing is created beside them and nothing is
-        # changed. The reply says they are there and were left as they are.
-        rows = [{"title": str(looks_like[i].get("title") if i < len(looks_like) else alt.title), "hypothesis": alt.hypothesis, "state": "left_alone"} for i, alt in enumerate(alts)]
-        return compose_tail(rows, metric)
+        # Goals that look like this series exist and are a person's (Quest AI did not write them) and none is the same post as a version: nothing is created beside them and nothing is
+        # changed. The reply says in one sentence that they are there and were left as they are; no version's hypothesis is attached to a goal that is not its own.
+        return "Already on the quest: " + ", ".join(str(g.get("title") or "") for g in looks_like) + " (left as they are)." + (f" Compared by: {metric}." if metric else "")
     results = [{"title": str(existing[id(a)].get("title") or a.title), "hypothesis": a.hypothesis, "state": "left_alone"} for a in alts if id(a) in existing]      # a person's goal the version is for: named, never changed
     alts = [a for a in alts if id(a) not in existing]
     if not alts:
@@ -220,6 +218,30 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
             continue
         results.append({"title": alt.title, "hypothesis": alt.hypothesis, "state": str((result.data or {}).get("state") or "created")})
     return compose_tail(results, metric)
+
+
+def same_posts(alts: Sequence[Alternative], candidates: Sequence[Mapping[str, Any]], decide: Callable[[str], str]) -> Dict[int, Mapping[str, Any]]:
+    """``{id(version): the person's goal}`` for each version the model, shown the version and every candidate goal, says is that goal's own post (the same piece of content). A goal id the
+    model was not shown, or one named for two versions, is dropped; a version it does not pair stays unpaired."""
+    shown = {str(g.get("id")): g for g in candidates}
+    listing = "\n".join(f"{g.get('id')} | {g.get('title')} | {str(g.get('text') or '')[:200]}" for g in candidates)
+    versions = "\n\n".join(f"Version {i + 1}:\n{a.text[:500]}" for i, a in enumerate(alts))
+    try:
+        answer = decide(f"Versions of a piece of content just written for a quest:\n\n{versions}\n\nGoals already on the quest (id | title | text):\n{listing}\n\n"
+                        'Return JSON {"same":[{"version":1,"goal_id":"..."}]} listing a version only when one goal above is that very post (the same piece of content under its own title). '
+                        'A goal that merely shares a topic or words is not the same post. Return {"same":[]} when none is. Reply with the JSON only.')
+        data = milestone_cue.parse_json(answer)
+    except Exception:      # noqa: BLE001  an unreadable answer pairs nothing
+        return {}
+    out: Dict[int, Mapping[str, Any]] = {}
+    for item in (data.get("same") or []) if isinstance(data, dict) else []:
+        try:
+            alt, goal = alts[int(item.get("version")) - 1], shown.get(str(item.get("goal_id")))
+        except (TypeError, ValueError, IndexError, AttributeError):
+            continue
+        if goal is not None and all(g is not goal for g in out.values()) and id(alt) not in out:
+            out[id(alt)] = goal
+    return out
 
 
 def act_status_scrub(text: str) -> str:
