@@ -716,6 +716,11 @@ class RunAnswerMixin:
             rs.text = f"{NO_ATTACHMENT_LINE} {rs.text}".strip()     # code-written: the fact is the turn's own (no attachment object), not the model's wording
         rs.act_declined = bool(rs.plan.act_declined or rs.found_constraint)
         rs.should_defer_deep = (None if (rs.brainstorm_active or rs.act_declined) else rs.plan.deferred_deep)
+        if rs.should_defer_deep and tool_guards.escalation_route(
+                rs.plan, rs.turn_user_intent, self.tools, bool(getattr(rs, "deep_to_tool_runs", 0)),
+                tool_guards.mutating_tool_ran(gathered, self.tools)) != tool_guards.ROUTE_DEEP:
+            log.info("The planner's deferred deep run is not accepted (tool-sized or reply-sized work); the answer stands.")
+            rs.should_defer_deep = None
         # Capability for these nets = inline execution OR a wired deferred queue: everything they
         # can set flows through the deferred block below, which reaches the queue runner by explicit
         # override, so a queue-only consumer (no default runner, no classifier) is capable here.

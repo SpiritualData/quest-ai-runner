@@ -83,7 +83,11 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
                 "target_value": {"type": "number", "description": "Target number, when it has one."},
                 "target_unit": {"type": "string", "description": "Unit of the target."},
                 **goal_links.LINK_PARAMS,
-                "user_asked_for_this_field": _ASKED_PARAM,
+                "user_asked_for_this_field": {
+                    "type": "boolean",
+                    "description": ("True when the user's own message asks for the work this goal records: a request to do or write something, "
+                                    "or a cue to get a milestone moving (its next step is this goal), or to write alternatives (each is recorded "
+                                    "here). False means it is only offered for the owner to approve.")},
             },
         },
         mutates=True,
