@@ -374,6 +374,25 @@ def test_a_figure_present_in_the_reads_is_verified_and_one_absent_is_unsupported
     assert P.unsupported_figures("You said 7 posts.", reads, "write 7 posts") == []
 
 
+
+def test_list_markers_and_references_to_list_items_are_not_figures_but_real_figures_stay():
+    import prod_probes as P
+    reads = "12 tasks open"
+    reply = "Plan:\n1. Draft\n2. Review\n3. Send\nRepeat steps 2 and 3 weekly. 31 posts."
+    assert P.unsupported_figures(reply, reads, "") == ["31"]
+    assert P.unsupported_figures("Repeat steps 2 and 3.", reads, "") == ["2", "3"]      # no such list items in this reply
+    assert P.unsupported_figures("1. One thing\n2. 12 tasks", reads, "") == []
+
+
+def test_an_iso_date_is_checked_as_a_date_in_any_written_form():
+    import prod_probes as P
+    assert P.unsupported_figures("Due 2026-10-31.", "closes October 31", "") == []
+    assert P.unsupported_figures("Due 2026-10-31.", "due 31 Oct", "") == []
+    assert P.unsupported_figures("Due 2026-10-31.", "created 2026-10-31T09:00:00Z", "") == []
+    assert P.unsupported_figures("Due 2026-10-31.", "10 posts on 31 items", "") == ["2026-10-31"]      # the loose numbers 10 and 31 are no date
+    assert P.unsupported_figures("Due 2026-10-31.", "", "") == ["2026-10-31"]
+
+
 def test_a_long_read_keeps_the_passage_around_each_number_and_date_the_reply_states():
     import prod_probes as P
     filler = "background line. " * 400

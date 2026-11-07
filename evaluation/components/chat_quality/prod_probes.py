@@ -265,9 +265,49 @@ def figures_in(text):
     return found
 
 
+LIST_MARKER = re.compile(r"(?m)^([ \t>*_-]*)(\d{1,3})([.)])(?=\s)")
+ITEM_REFERENCE = re.compile(r"\b(?:steps?|items?|points?|options?|bullets?|numbers?)\s+((?:#?\d{1,3})(?:\s*(?:,|and|or|&|to|through)\s*(?:and\s+|or\s+)?#?\d{1,3})*)", re.I)
+ISO_DATE = re.compile(r"(?<![\d-])(\d{4})-(\d{2})-(\d{2})(?![\d-])")
+
+
+def without_list_numbers(reply):
+    """``reply`` with the numbers that are not figures blanked: the markers of its own numbered list ("1.", "2)" at a line start) and the numbers that refer to those
+    items ("repeat steps 2 and 3"; a reference counts only when the list has that marker). A number anywhere else stays."""
+    text = str(reply or "")
+    markers = {m.group(2) for m in LIST_MARKER.finditer(text)}
+    if not markers:
+        return text
+    text = LIST_MARKER.sub(lambda m: m.group(1) + " " * len(m.group(2)) + m.group(3), text)
+
+    def blank_references(m):
+        body = re.sub(r"\d{1,3}", lambda n: " " * len(n.group(0)) if n.group(0) in markers else n.group(0), m.group(1))
+        return m.group(0)[:m.start(1) - m.start(0)] + body
+    return ITEM_REFERENCE.sub(blank_references, text)
+
+
+def date_written_in(year, month, day, text):
+    """True when the date appears in ``text`` in any written form: ISO (``2026-10-31``), day and month name (``31 October``, ``31st Oct``), month name and day (``October 31``), or numeric month/day (``10/31``)."""
+    month_name, low = MONTH_NAMES[month - 1], str(text or "").lower()
+    forms = [rf"\b{day}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{month_name}|{month_name[:3]})\b", rf"\b(?:{month_name}|{month_name[:3]})\.?\s+{day}(?:st|nd|rd|th)?\b",
+             rf"(?<!\d){year}-{month:02d}-{day:02d}(?!\d)", rf"(?<![\d/]){month}/{day}(?![\d/])", rf"(?<![\d/]){month:02d}/{day:02d}(?![\d/])"]
+    return any(re.search(f, low) for f in forms)
+
+
 def unsupported_figures(reply, reads_text, message=""):
-    """The figures a reply states that appear neither in the turn's own reads nor in the user's message: unsupported until shown otherwise."""
-    return sorted(figures_in(reply) - figures_in(reads_text) - figures_in(message), key=lambda f: (len(f), f))
+    """The figures a reply states that appear neither in the turn's own reads nor in the user's message: unsupported until shown otherwise. Not figures: the markers of the
+    reply's own numbered list and numbers that refer to its items. A written ISO date is checked as a date (in any written form in the reads or the message), not as
+    separate numbers; an unsupported one is returned whole."""
+    body, dates = without_list_numbers(reply), []
+    for m in ISO_DATE.finditer(body):
+        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            continue
+        dates.append((m.group(0), year, month, day))
+    body = ISO_DATE.sub(lambda m: " " * len(m.group(0)) if any(d[0] == m.group(0) for d in dates) else m.group(0), body)
+    known = figures_in(reads_text) | figures_in(message)
+    found = sorted(figures_in(body) - known, key=lambda f: (len(f), f))
+    lost = [iso for iso, y, mo, d in dates if not any(date_written_in(y, mo, d, t) for t in (reads_text, message))]
+    return found + sorted(set(lost))
 
 
 MONTH_NAMES = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
