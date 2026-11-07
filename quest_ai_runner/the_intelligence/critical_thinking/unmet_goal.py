@@ -36,7 +36,7 @@ def turn_awaits_person(rs: SimpleNamespace) -> bool:
     parked decision, or the verifier's ``asks_person`` boolean on a turn that is not an order to act. Never the words of the reply."""
     plan = getattr(rs, "plan", None)
     verdict = getattr(rs, "_last_verdict", None) or {}
-    return bool(getattr(plan, "asks_first", False) or getattr(plan, "reply_shape", None) == "ask_first" or getattr(rs, "final", None) == "clarify"
+    return bool(getattr(plan, "asks_first", False) or getattr(plan, "reply_shape", None) in ("ask_first", "clarify") or getattr(rs, "final", None) == "clarify"
                 or getattr(rs, "_decision_parked", False)
                 or (verdict.get("asks_person") is True and not user_ordered_work(getattr(rs, "turn_user_intent", None))))
 

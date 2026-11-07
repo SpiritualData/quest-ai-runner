@@ -24,7 +24,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text imp
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
-    SHAPE_DEFAULT, constraint_violated, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, standard_for, steering,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
@@ -359,6 +359,11 @@ class RunAnswerMixin:
             # this turn produces (including each regeneration) goes through here or the read-budget
             # wrap-up above, and both pass ``brainstorm_ack_note`` as the reply directive, so a
             # latched turn cannot ship a reply that was never told the turn was held.
+            # A CLARIFYING QUESTION is composed from the person's message alone (the planner's structured ``clarify`` shape): the writer is handed no
+            # context, transcript, reads or persona, so it cannot name a topic it never saw; a regeneration gets the same restricted input, one tier up.
+            if is_clarify(rs.plan):
+                return self._grounded_answer(rs.user_message, "", "", [], rs.model if steering is None else self._regeneration_model(rs), False,
+                                             native_blocks=None, rep_preamble=None, reply_directive=CLARIFY_DIRECTIVE)
             cv = _answer_grounding(steering)
             # A reply that came back for a correction is written one tier up: the cheaper model already missed it once (Joshua's rule: when a
             # cheaper model fails, retry one tier up rather than the same way).

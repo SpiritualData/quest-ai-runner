@@ -29,12 +29,13 @@ from typing import Any, Dict, List, Optional, Tuple
 SHAPE_YES_NO = "yes_no"
 SHAPE_ONE_STEP = "one_step"
 SHAPE_ASK_FIRST = "ask_first"
+SHAPE_CLARIFY = "clarify"
 SHAPE_BRIEF = "brief"
 SHAPE_READBACK = "readback"
 SHAPE_DECLINE = "decline"
 SHAPE_SUPPORT = "support"
 SHAPE_DEFAULT = "default"
-REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
+REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,10 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "The reply asks for facts only the person holds: one sentence reacting, then the one or two questions, nothing else. "
              "No plan, list or assumed values.",
              max_questions=2, max_chars=500, max_list_lines=0),
+    Standard(SHAPE_CLARIFY,
+             "The message is cut off or says nothing to act on, and no known candidates exist to choose between: ONE question asking the person to "
+             "supply the missing piece, in at most two sentences. No example topics, no list, no guess at what they meant, no greeting by a name.",
+             max_questions=1, max_chars=240, max_list_lines=0, max_sentences=2),
     Standard(SHAPE_BRIEF,
              "The person asked for a quick or one-breath reply: the answer first, two or three short sentences, no list, no "
              "preamble, no closing offer.",
@@ -432,10 +437,22 @@ def event_offset_errors(draft: str) -> List[str]:
     return errors
 
 
+CLARIFY_DIRECTIVE = (
+    "The person's message is cut off or ambiguous, and you are given nothing else about them or their work. Reply with ONE short question "
+    "that asks them to finish or say what they want, in at most two sentences. Refer only to what the message itself says. Give no example "
+    "topics, no list, no guess, and do not greet them by a name.")
+
+
+def is_clarify(plan: Any) -> bool:
+    """True when the planner's structured reply shape says the reply is the one question a cut-off or ambiguous message needs (no known candidates to choose
+    between: a CHOICE among known candidates is ``ask_first``, which keeps its context)."""
+    return getattr(plan, "action", None) == "answer" and getattr(plan, "reply_shape", None) == SHAPE_CLARIFY
+
+
 def standard_for(plan: Any) -> Standard:
     """The standard that applies to this reply, from the planner's structured fields only."""
     shape = getattr(plan, "reply_shape", None)
-    if getattr(plan, "asks_first", False):
+    if getattr(plan, "asks_first", False) and shape != SHAPE_CLARIFY:
         shape = SHAPE_ASK_FIRST
     return STANDARDS.get(shape or "", STANDARDS[SHAPE_DEFAULT])
 
