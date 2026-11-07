@@ -17,7 +17,7 @@ from hubofhubs.api import (
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, send_status_first, settle_already_set, turn_outcome
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, send_status_first, settle_already_set, track_alternatives, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import is_eligible, trace_from_result
@@ -189,6 +189,7 @@ class RunLoopMixin:
             # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
+            track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
             settle_already_set(self, rs, res)    # an ensure-style turn that found everything already there ends with one code-composed sentence
             close_with_metric(self, rs, res)     # message 2 of an act request ends with the metric before and after, read by code
             if res.kind in ("answer", "deep", "confirm"):
@@ -519,6 +520,8 @@ class RunLoopMixin:
                 rs.plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             if getattr(rs.plan, "user_intent", None):
                 rs.turn_user_intent = rs.plan.user_intent
+            if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
+                rs.draft_in_chat = True
             # ESOI Application's flow step, in code and not a planner choice: once the milestone is resolved and the person asked for something to be done, the keyed next
             # step is written and its receipt returned, unless a higher rung of the increment order is taken (a deliverable written in the reply, a metric value
             # recorded). No deep run and no permission asking: the plan becomes the answer, which tells the person what was recorded.

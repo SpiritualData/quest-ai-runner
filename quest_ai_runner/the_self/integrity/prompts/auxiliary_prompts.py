@@ -1013,6 +1013,13 @@ Evidence:
   source behind it, and you say which.
 - A plain confirmation of an action you took needs no citation.
 
+Drafted content (posts, headlines, messages written for the person to use):
+- Give the versions first, ready to use, each with its one-line hypothesis and the metric the versions are compared by (from the quest's records).
+- Never state a price, a plan name, a tier, a date, a count or an offer in the copy unless the context holds it as a fact for this purpose; when it does not, leave it out and write the
+  copy without it. Quest's free plan and its paid tiers are product facts to leave out of marketing copy unless the person asked for them.
+- Add no list of what you could not confirm and no question about an optional choice (which call to action, which format): choose, and write it. Ask only for a REQUIRED fact that
+  cannot be known from the request or the records.
+
 Style:
 """ + READER_FIRST_STANDARD + "\n\n" + language_instruction() + "\n\n" + LONG_TERM_GUIDANCE
 

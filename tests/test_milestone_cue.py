@@ -622,3 +622,94 @@ def test_a_none_judgment_leaves_the_turn_without_cue_facts_or_a_write():
 def test_neutral_messages_of_other_kinds_do_not_even_reach_the_judge_on_these_records():
     for message in NEUTRAL_CUES:
         assert cue.candidates(TABLES, message) == [], message
+
+
+# ---- alternatives written for a quest are kept by it, keyed; the reply says which already were there
+
+ALT_GOALS = [{"id": "g1", "title": "Launch push post A", "spec_solution_id": "esr_c", "completed": False, "abandoned": False},
+             {"id": "g2", "title": "Unrelated thing", "spec_solution_id": None, "completed": False, "abandoned": False}]
+
+
+def alt_answer(*alts):
+    import json
+    return json.dumps({"alternatives": [dict(a) for a in alts]})
+
+
+A_EXISTING = {"title": "Launch push post A", "goal_id": "g1", "text": "Post one in full", "hypothesis": "A story hook gets more clicks", "solution_id": "esr_c", "metric_id": "esr_mc"}
+B_NEW = {"title": "Launch push post B", "goal_id": "", "text": "Post two in full", "hypothesis": "A question hook gets more signups", "solution_id": "esr_c", "metric_id": "esr_mc"}
+
+
+def alt_registry(calls, goals=ALT_GOALS):
+    def write(args, ctx):
+        calls.append(dict(args))
+        state = "unchanged" if args.get("adopt_goal_id") == "g1" else "created"
+        return ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data={"state": state}, text=state)
+    return ToolRegistry([read_spec(), list_goals(goals), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=write)])
+
+
+def test_alternatives_in_a_reply_are_kept_by_the_quest_one_goal_each_and_the_tail_says_which_were_already_tracked():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    calls, asked = [], []
+    tail = alternatives_flow.run(alt_registry(calls), "q1", "write a couple of posts for the push", "the two posts...",
+                                 lambda prompt: asked.append(prompt) or alt_answer(A_EXISTING, B_NEW))
+    assert len(asked) == 1 and "Launch push post A" in asked[0] and "esr_c | P3 Mobile app live on the Apple Store" in asked[0]
+    assert calls[0]["adopt_goal_id"] == "g1" and calls[0]["title"] == "Launch push post A" and calls[0]["spec_solution_id"] == "esr_c" and calls[0]["spec_metric_id"] == "esr_mc"
+    assert "adopt_goal_id" not in calls[1] and calls[1]["title"] == "Launch push post B" and "Hypothesis: A question hook gets more signups" in calls[1]["description"]
+    assert "Compared by: P3 App Store listing live" in calls[1]["description"]
+    assert tail == ("On the quest:\n- Launch push post A (already tracked): A story hook gets more clicks\n- Launch push post B (created): A question hook gets more signups\n"
+                    "Compared by: P3 App Store listing live.")
+    assert "g1" not in tail and "esr_" not in tail
+
+
+def test_ids_the_model_was_not_offered_are_dropped_and_fewer_than_two_alternatives_record_nothing():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    calls = []
+    forged = dict(B_NEW, goal_id="g_not_offered", solution_id="esr_not_offered", metric_id="esr_made_up")
+    tail = alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer(A_EXISTING, forged))
+    assert "adopt_goal_id" not in calls[1] and "spec_solution_id" not in calls[1] and "spec_metric_id" not in calls[1] and tail
+    calls.clear()
+    assert alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer(A_EXISTING)) == "" and calls == []
+    assert alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: "not json at all") == "" and calls == []
+    assert alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer()) == ""
+
+
+def test_a_refused_write_is_a_lane_gap_and_the_turn_says_so_in_one_plain_sentence():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
+                                                                         handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: not allowed"))])
+    orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
+    rs = SimpleNamespace(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="write posts")
+    res = SimpleNamespace(kind="answer", text="the posts", deep_results=[])
+    assert track_alternatives(orch, rs, res) is True
+    assert res.text.startswith("the posts") and "I could not keep these on the quest:" in res.text and "not allowed" in res.text
+
+
+def test_the_tracking_step_runs_only_for_a_drafted_deliverable_ordered_by_the_person():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    calls = []
+    orch = SimpleNamespace(tools=alt_registry(calls), cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
+    base = dict(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="m")
+    for change in ({"draft_in_chat": False}, {"turn_user_intent": "ask"}, {"quest_id": None}, {"cue_resolved": object()},
+                   {"gathered": [{"locator": "tool:create_or_update_quest_goal"}]}):
+        res = SimpleNamespace(kind="answer", text="posts", deep_results=[])
+        assert track_alternatives(orch, SimpleNamespace(**{**base, **change}), res) is False and res.text == "posts"
+    assert calls == []
+    res = SimpleNamespace(kind="answer", text="posts", deep_results=[])
+    assert track_alternatives(orch, SimpleNamespace(**base), res) is True and "On the quest:" in res.text and len(calls) == 2
+
+
+def test_message_one_for_a_tracked_deliverable_says_what_the_quest_already_holds_and_never_the_empty_status():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    line = alternatives_flow.status_line(alt_registry([], [dict(ALT_GOALS[0]), dict(ALT_GOALS[0], id="g3", title="Launch push post C")]), "q1")
+    assert line == "The quest already tracks 2 open goals under P3 Mobile app live on the Apple Store, which moves P3 App Store listing live."
+    assert alternatives_flow.status_line(alt_registry([], [ALT_GOALS[1]]), "q1") == ""
+    texts = act_status.status_texts(None, [], "", evidence="", found=line)
+    assert texts["status"] == line and "have not found" not in act_status.status_texts(None, [], "", evidence="")["text"]
+
+
+def test_the_reply_voice_keeps_prices_and_optional_questions_out_of_drafted_content():
+    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
+    assert "Never state a price, a plan name, a tier" in REPLY_VOICE_SYSTEM and "no question about an optional choice" in REPLY_VOICE_SYSTEM and "no list of what you could not confirm" in REPLY_VOICE_SYSTEM

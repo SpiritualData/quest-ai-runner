@@ -253,6 +253,17 @@ def entries_of(rs: Any, gathered: Sequence[Any]) -> List[Any]:
     return [*gathered, str(getattr(rs, "context_view", "") or "")]
 
 
+def tracked_status(orch: Any, rs: Any) -> str:
+    """For a deliverable the quest tracks: what it already holds (``alternatives_flow.status_line``), read by code now; "" when it is not such a turn or cannot be read."""
+    if not getattr(rs, "draft_in_chat", False) or not getattr(rs, "quest_id", None) or getattr(orch, "tools", None) is None:
+        return ""
+    try:
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+        return alternatives_flow.status_line(orch.tools, rs.quest_id)
+    except Exception:  # noqa: BLE001 -- a status line is a convenience; the plain default follows
+        return ""
+
+
 def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *, user_turn: bool, doing: str = "", forced: bool = False) -> bool:
     """MESSAGE 1 of an act request: where it stands (the milestone's measure read from the records, or what the planner listed from
     its reads), then what happens now. Sent once, as an interim message, before the planned work runs. True when sent.
@@ -293,7 +304,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
         # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
         # ids and owner text) is left out.
         texts = act_status.status_texts(reading, [] if (forced or reading is None) else list(getattr(plan, "facts_read", None) or []), doing, evidence=evidence, voice=voice,
-                                        found=act_status.read_summary(gathered) or act_status.planned_reads(plan))
+                                        found=act_status.read_summary(gathered) or tracked_status(orch, rs) or act_status.planned_reads(plan))
         ledger = interim_ledger_for(meta if meta else None)
         clock = time.monotonic()
         seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))
@@ -352,6 +363,36 @@ def already_in_place(gathered: Sequence[Any]) -> List[str]:
             if phrase not in out:
                 out.append(phrase)
     return out
+
+
+def track_alternatives(orch: Any, rs: Any, res: Any) -> bool:
+    """The quest keeps the alternatives a reply carries (``alternatives_flow``): after the reply is written, when the planner's own report was "a deliverable written in the reply"
+    for an order (``deep_target`` draft_in_chat, ``user_intent`` act), no tool has already written, and no milestone cue is in play. The reply gains the plain tail the
+    receipts compose. True when a tail was added. A failure is said in one plain sentence, never hidden and never with ids."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow, milestone_cue
+    from quest_ai_runner.the_world.tools import tool_guards
+    quest_id = getattr(rs, "quest_id", None)
+    if (not getattr(rs, "draft_in_chat", False) or getattr(rs, "turn_user_intent", None) != "act" or getattr(res, "kind", "") not in ("answer", "deep") or not quest_id
+            or getattr(rs, "cue_resolved", None) is not None or getattr(orch, "tools", None) is None or tool_guards.mutating_tool_ran(rs.gathered, orch.tools)):
+        return False
+    deep = getattr(res, "deep_results", None)
+    in_deep = not (res.text or "").strip() and deep and isinstance(getattr(deep[-1], "output", None), str)
+    body = deep[-1].output if in_deep else (res.text or "")
+    if not body.strip():
+        return False
+    try:
+        tail = alternatives_flow.run(orch.tools, quest_id, rs.user_message, body, orch.cheap_decision)
+    except milestone_cue.LaneGap as gap:
+        tail = "I could not keep these on the quest: " + (act_status.plain(str(gap)) or "the quest could not be updated just now") + "."
+    except Exception as error:      # noqa: BLE001  said in a sentence, with the kind of failure, not hidden
+        tail = f"I could not check what the quest already tracks for these ({type(error).__name__})."
+    if not tail:
+        return False
+    if in_deep:
+        deep[-1].output = body.rstrip() + "\n\n" + tail
+    else:
+        res.text = body.rstrip() + "\n\n" + tail
+    return True
 
 
 def settle_already_set(orch: Any, rs: Any, res: Any) -> bool:

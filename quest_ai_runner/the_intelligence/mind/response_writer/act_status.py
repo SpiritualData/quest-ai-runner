@@ -21,7 +21,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import
 NOT_RECORDED = "not recorded yet"
 READ_AGAIN_FAILED = "could not be read again just now"
 GENERIC_NEXT = "I will carry this out now and then check the result."
-NO_STATUS = "I have not found a recorded status for this yet."
+NO_STATUS = "I am starting on this now."
 MAX_FACTS = 3
 
 #: Fields of a record's text that end a ``Current value`` or ``Done when`` segment on the same line (goal lines hold them inline).

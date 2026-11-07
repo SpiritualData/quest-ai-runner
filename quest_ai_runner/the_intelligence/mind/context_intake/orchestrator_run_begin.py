@@ -708,6 +708,7 @@ class RunBeginMixin:
         rs.cue_resolved = None
         rs.cue_gap = ""
         rs.cue_step_attempted = False
+        rs.draft_in_chat = False      # set when a plan reports a deliverable written in the reply
         if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None:
             try:
                 rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message, decide=self.cheap_decision)

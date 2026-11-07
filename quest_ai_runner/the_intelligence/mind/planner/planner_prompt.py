@@ -507,7 +507,7 @@ DEEP_ACTION = """\
     keyed by a short stable title (the same key plus "A", "B") with the text, hypothesis and metric in the goal's description and
     spec_solution_id of the solution they serve (from read_spec_records). Repeating the request updates the same goals. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
     compared by ("signups per post from its link"), and says they are recorded.
-    DELIVERABLE IN THE REPLY. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
+    DELIVERABLE IN THE REPLY. When it is several versions of one thing for a quest (two posts, three headlines), each has a one-line hypothesis and the metric they are compared by, and the quest keeps them (code records each as a goal and adds what was already tracked). Never put a price, plan name or date in the copy unless the context holds it as a fact for this purpose. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
     set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
