@@ -1194,7 +1194,7 @@ def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_titl
     tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or alt_answer(*same_titles))
     assert "FB push post A" in asked[0].split("Other goals on the quest that look like these")[1] and "Budget review" not in asked[0]
     assert "(already on the quest, left exactly as it is)" in tail and "A story hook gets more clicks" in tail and "Compared by:" in tail
-    assert [c["title"] for c in calls] == ["FB push post A", "FB push post B"]
+    assert calls == [] and "- FB push post A (already on the quest" in tail and "- FB push post B (already on the quest" in tail          # nothing is created beside a person's series
 
 
 def test_a_tool_that_leaves_an_unmarked_goal_alone_is_reported_as_already_on_the_quest():
@@ -1223,3 +1223,43 @@ def test_a_drafting_turn_stops_reading_after_two_rounds_and_has_no_overseer():
     config.overseer = True
     Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=alt_registry([])).run("write a caption", sink=StreamSink(lambda e: None), quest_id="q1")
     assert len([n for n in provider.plan_tool_schemas if n.get("name") == "decide"]) <= 3          # no fourth round of reading
+
+
+def test_look_alike_goals_that_are_a_persons_mean_nothing_is_created_even_under_other_titles():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    rows = [{"id": "p1", "title": "FB push post A", "text": "a person's own goal", "spec_solution_id": None, "completed": False},
+            {"id": "p2", "title": "FB push post B", "text": "a person's own goal", "spec_solution_id": None, "completed": False}]
+    calls = []
+    new_titles = [dict(A_EXISTING, title="Facebook post A for the 1000 subscribers push", goal_id=""), dict(B_NEW, title="Facebook post B for the 1000 subscribers push", goal_id="")]
+    tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: alt_answer(*new_titles))
+    assert calls == []
+    assert tail.startswith("On the quest:\n- FB push post A (already on the quest, left exactly as it is): A story hook gets more clicks") and "A question hook gets more signups" in tail
+    assert "Facebook post A for the 1000" not in tail and "Compared by: P3 App Store listing live." in tail
+
+
+def test_a_question_that_already_read_what_it_concerns_never_goes_to_a_deep_background_run():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
+    rs = SimpleNamespace(turn_user_intent="ask", gathered=[{"kind": "query", "locator": "tool:list_quest_goals", "text": "595 matching goals"}], text="The quest has 595 goals.", _last_verdict={"met": False})
+    done = pursue_before_giving_up(SimpleNamespace(cfg=SimpleNamespace()), rs, "g", None, {}, None, None, None, None)
+    assert done["result"] is None and done["followup_started"] is False and done["pursuit"]["status"] == "unmet_reported" and done["pursuit"]["message"] == ""
+
+
+def test_a_question_asked_inside_a_quests_chat_is_not_answered_from_the_question_alone():
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    reads = {"action": "tool", "user_intent": "ask", "rationale": "count them", "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}
+    provider = StubProvider([reads, {"action": "answer", "user_intent": "ask", "rationale": "r"}])
+    config = OrchestratorConfig()
+    config.overseer = False
+    events = []
+    Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=alt_registry([])).run("how many goals does the quest have", sink=StreamSink(events.append), quest_id="q1")
+    assert any("list_quest_goals" in str(e.get("text") or "") for e in events)           # the count was read before it was answered
+
+
+def test_the_reply_voice_asks_for_short_attributed_answers_with_the_core_fact_first():
+    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
+    for rule in ("in as few sentences as it needs", "never tell the person what you would need or could do for them", 'Never an unattributed "I", "we" or "our"', "open with the core fact asked about"):
+        assert rule in REPLY_VOICE_SYSTEM

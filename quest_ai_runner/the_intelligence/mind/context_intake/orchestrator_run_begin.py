@@ -565,7 +565,7 @@ class RunBeginMixin:
             rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
             if is_small_talk(rs.user_message):
                 rs.turn_needs_records = False      # a greeting needs none of the person's records
-            if (rs.turn_needs_records is False and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None
+            if (rs.turn_needs_records is False and not rs.quest_id and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None
                     and not attachments and rs.message_is_user_turn):
                 # A definition, a how-to or a greeting needs nothing of the person's: no context is assembled, no planner step runs,
                 # and the reply is written from the question alone (``records_free``).

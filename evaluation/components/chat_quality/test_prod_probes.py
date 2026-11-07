@@ -225,3 +225,42 @@ def test_an_unexpected_write_stops_the_whole_run_and_every_later_case_is_refused
     arm.RUN_STOPPED["why"] = ""
     assert "blocked: PUT" in arm.stop_after_unexpected_write({"case_id": "X-3"}, blocked)
     arm.RUN_STOPPED["why"] = ""
+
+
+def test_the_guards_goal_lookup_reads_through_the_real_client_class_and_a_missing_method_cannot_pass_silently(monkeypatch, caplog):
+    """The lookup must work through the REAL wrapper class the production arm uses (only the network is faked), so a renamed method fails here and not as a permanent block in a run."""
+    import io
+    import json
+    import logging
+    import sys
+    import urllib.request
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent / "impls"))
+    import prod_qar_readonly as arm
+    import prodchat as PC
+    seen = []
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        seen.append(request.full_url)
+        listing = {"period_groups": [{"goals": [{"id": "g1", "name": "P1 next step: week of 2026-11-02", "description": "Kept by Quest AI: step"}]}]}
+        return Response(json.dumps(listing if "/goals" in request.full_url and "current" not in request.full_url else {}).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("QAR_PROD_BASE_URL", "https://api.prod.spiritualdata.org")
+    client = PC.ProdClient("https://api.prod.spiritualdata.org", "key", quest_id="quest_x", team_id="team_y")
+    lookup = arm.goal_lookup(client, "quest_x", "team_y", pause=lambda s: None)
+    assert lookup("g1") == {"title": "P1 next step: week of 2026-11-02", "description": "Kept by Quest AI: step"}
+    assert seen[0].endswith("/api/teams/team_y/quests/quest_x/goals")
+    assert lookup("missing") is None
+    # a client whose method the lookup calls no longer exists: the failure is logged at warning level with its cause, not swallowed
+    class Renamed:
+        pass
+    with caplog.at_level(logging.WARNING, logger="chat_quality.prod_qar"):
+        assert arm.goal_lookup(Renamed(), "quest_x", "team_y", pause=lambda s: None)("g1") is None
+    assert "goal lookup: reading" in caplog.text and "AttributeError" in caplog.text and "send_request" in caplog.text

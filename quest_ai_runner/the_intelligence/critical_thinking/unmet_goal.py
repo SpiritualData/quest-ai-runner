@@ -46,6 +46,11 @@ def pursue_before_giving_up(orchestrator: Any, rs: SimpleNamespace, goal: str, e
     """Runs the hub's bounded replan over the deep search. Returns ``pursuit`` (the hub's result), ``result`` (the deep OrchestratorResult that answers the
     turn, or None) and ``followup_started`` (the search continues as a queued follow-up)."""
     cfg = orchestrator.cfg
+    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
+    if rs.turn_user_intent in ("ask", "inform") and gathered_content(rs.gathered):
+        # A question that already read what it concerns is answered from that: a status or count question never goes to a deep background run.
+        return {"pursuit": {"outcome": rs.text, "status": "unmet_reported", "met": False, "replans": 0, "tried": [], "missing": "", "interim": "", "message": "", "ignored_writes": []},
+                "result": None, "followup_started": False}
     verdict = rs._last_verdict or {}
     gap = verdict.get("next_action") or verdict.get("reason") or "the answer did not meet the goal"
     held: Dict[str, Any] = {"result": None, "plan": None}

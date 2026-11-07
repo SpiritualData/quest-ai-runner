@@ -193,6 +193,14 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
             alt.title = titles.get(alt.goal_id) or alt.title        # the keyed goal is found by its exact title: renaming is never the way in
     from quest_ai_runner.the_world.tools.tools import ToolContext
     names = {(s["solution_id"], s["metric_id"]): s["metric_name"] for s in solutions}
+    looks_like = [g for g in goals_like(everything, cue) if str(g.get("id")) not in {str(k.get("id")) for k in goals}]
+    if looks_like:
+        # Goals that look like this series exist and are a person's (Quest AI did not write them): nothing is created beside them and nothing is changed. The reply still carries each
+        # version's hypothesis and what they are compared by, and says the existing goals are there and were left as they are.
+        metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
+        rows = [{"title": str(looks_like[i].get("title") if i < len(looks_like) else alt.title), "hypothesis": alt.hypothesis, "state": "left_alone"} for i, alt in enumerate(alts)]
+        return compose_tail(rows, metric)
+
     default = next(((str(g["spec_solution_id"]), m) for g in goals if g.get("spec_solution_id") for m in [next((s["metric_id"] for s in solutions if s["solution_id"] == g["spec_solution_id"]), "")] if m), ("", ""))
     for alt in alts:
         if not alt.solution_id and default[0]:

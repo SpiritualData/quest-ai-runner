@@ -16,6 +16,7 @@ PAID in subscription calls (``claude -p``), no API dollars. ``--max-calls`` boun
 A tool the lane lacks is listed in ``lane_gaps`` and judged apart from the model; a blocked write is never a failure by itself."""
 PAID = True
 import json
+import logging
 import os
 import sys
 from collections import Counter
@@ -82,6 +83,41 @@ def state_verdict(check, before, after):
 
 
 RUN_STOPPED = {"why": ""}
+log = logging.getLogger("chat_quality.prod_qar")
+
+
+def goal_in(node, goal_id):
+    """The goal with this id anywhere in a listing's nested structure, as ``{title, description}``."""
+    if isinstance(node, dict):
+        if str(node.get("id") or node.get("goal_id") or "") == str(goal_id) and (node.get("name") or node.get("title")):
+            return {"title": node.get("name") or node.get("title"), "description": node.get("description")}
+        node = list(node.values())
+    if isinstance(node, list):
+        for value in node:
+            found = goal_in(value, goal_id)
+            if found:
+                return found
+    return None
+
+
+def goal_lookup(client, quest, team, pause=time.sleep):
+    """``lookup(goal_id) -> {title, description} or None`` for the guard in ``dry_run_writes``, which asks before any change to a goal. Fresh reads through ``client.send_request`` of the
+    quest's goals, retried, then the quest's current-goals listing (a different route, so a stale or capped team listing does not hide a goal). A read that fails is logged at warning
+    level with its cause, never swallowed: a lookup that silently fails blocks every goal write."""
+    routes = [f"/api/teams/{team}/quests/{quest}/goals", f"/api/teams/{team}/quests/{quest}/goals", f"/api/planning/quests/{quest}/goals/current"]
+
+    def lookup(goal_id):
+        for attempt, path in enumerate(routes):
+            try:
+                found = goal_in(client.send_request("GET", path) or {}, goal_id)
+            except Exception as error:  # noqa: BLE001 -- the next route is tried, and the failure is on record
+                log.warning("goal lookup: reading %s failed (%s: %s)", path, type(error).__name__, error)
+                found = None
+            if found:
+                return found
+            pause(0.5 * attempt)
+        return None
+    return lookup
 
 
 def stop_after_unexpected_write(record, dry):
@@ -138,36 +174,7 @@ def build_arm(meter, bounded):
     harness_paths = [os.environ.get("QAR_EVAL_OUTPUT_DIR"), str(components), str(components.parents[1] / "esoi")]
     dry.set_allowances([], harness_paths)
 
-    def goal_in(node, goal_id):
-        """The goal with this id anywhere in a listing's nested structure, as ``{title, description}``."""
-        if isinstance(node, dict):
-            if str(node.get("id") or node.get("goal_id") or "") == str(goal_id) and (node.get("name") or node.get("title")):
-                return {"title": node.get("name") or node.get("title"), "description": node.get("description")}
-            for value in node.values():
-                found = goal_in(value, goal_id)
-                if found:
-                    return found
-        elif isinstance(node, list):
-            for value in node:
-                found = goal_in(value, goal_id)
-                if found:
-                    return found
-        return None
-
-    def current_goal_title(goal_id):
-        """The goal as the quest holds it now (title and description) for the guard in ``dry_run_writes``, which asks before any change to a goal. Fresh reads of the quest's goals,
-        retried, then the quest's current-goals listing (a different route, so a stale or capped team listing does not hide a goal)."""
-        quest, team = PC.target("QAR_PROD_QUEST_ID"), PC.target("QAR_PROD_TEAM_ID")
-        routes = [f"/api/teams/{team}/quests/{quest}/goals", f"/api/teams/{team}/quests/{quest}/goals", f"/api/planning/quests/{quest}/goals/current"]
-        for attempt, path in enumerate(routes):
-            try:
-                found = goal_in(safety_client.send_request("GET", path) or {}, goal_id)
-            except Exception:  # noqa: BLE001 -- the next route is tried
-                found = None
-            if found:
-                return found
-            time.sleep(0.5 * attempt)
-        return None
+    current_goal_title = goal_lookup(safety_client, PC.target("QAR_PROD_QUEST_ID"), PC.target("QAR_PROD_TEAM_ID"))
     dry.set_goal_title_lookup(current_goal_title)
     import judge as J
     import prod_probes as P
