@@ -308,7 +308,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
                               str(getattr(rs, "context_view", "") or "")])
         if cue is not None:
             evidence += "\n" + cue.doing()      # what is being done is composed from the record by code, so it is its own evidence
-        doing = doing or ("Writing the versions now and keeping them on the quest." if getattr(rs, "draft_in_chat", False) else "") or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
+        doing = doing or ("Writing the draft now." if getattr(rs, "draft_in_chat", False) else "") or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
         voice = meta.get("channel") == "voice"
         # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
         # ids and owner text) is left out.
@@ -441,8 +441,8 @@ def settle_already_set(orch: Any, rs: Any, res: Any) -> bool:
         return False
     label = next((str(r.get("quest_name")) for g in receipts if isinstance(g.get("tool_data"), list) for r in g["tool_data"] if isinstance(r, dict) and r.get("quest_name")), "")
     place = {"create_quest_workflow": "Workflows page"}.get(str(writes[0]["locator"])[5:], "")
-    if label and place and len(phrases) == 1 and phrases[0].endswith("."):
-        phrases = [phrases[0][:-1] + f", on the {label} quest's {place}."]      # where it is, in plain words, from the listing (never an id)
+    if place and len(phrases) == 1 and phrases[0].endswith("."):
+        phrases = [phrases[0][:-1] + (f", on the {label} quest's {place}." if label else f", on this quest's {place}.")]      # where it is, in plain words (the quest's name from the listing when it was read; never an id)
     res.text = " ".join(phrases[:2])
     rs.status_first = None       # the closing metric lines would repeat the sentence
     return True

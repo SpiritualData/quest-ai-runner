@@ -219,7 +219,7 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
         kept = [grounded_line(f, evidence) for f in list(facts)[:MAX_FACTS]]
         parts.extend(f.rstrip(".") + "." for f in kept if f)
     status = " ".join(parts) or found or NO_STATUS
-    nxt = plain(grounded_line(doing, evidence)).rstrip(".") if doing != "Writing the versions now and keeping them on the quest." else doing.rstrip(".")
+    nxt = plain(grounded_line(doing, evidence)).rstrip(".") if doing != "Writing the draft now." else doing.rstrip(".")
     if "?" in nxt:
         nxt = ""         # message 1 is a status: a question is never what is being done
     nxt = (nxt + ".") if nxt else GENERIC_NEXT

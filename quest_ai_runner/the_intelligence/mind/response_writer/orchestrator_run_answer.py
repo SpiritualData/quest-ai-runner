@@ -533,7 +533,7 @@ class RunAnswerMixin:
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
                 standard, measured, standard_in_force = None, None, False
         repair_rounds = 0
-        if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals and not rs.records_free and not getattr(rs, "cue_step_attempted", False):      # nothing of the person's to check a general answer against
+        if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals and not rs.records_free and not getattr(rs, "cue_step_attempted", False) and not getattr(rs, "draft_in_chat", False):      # nothing of the person's to check a general answer against
             try:
                 if rs._oversee_executor is None:
                     rs._oversee_executor = ThreadPoolExecutor(max_workers=1)

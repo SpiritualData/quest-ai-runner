@@ -138,12 +138,36 @@ def build_arm(meter, bounded):
     harness_paths = [os.environ.get("QAR_EVAL_OUTPUT_DIR"), str(components), str(components.parents[1] / "esoi")]
     dry.set_allowances([], harness_paths)
 
+    def goal_in(node, goal_id):
+        """The goal with this id anywhere in a listing's nested structure, as ``{title, description}``."""
+        if isinstance(node, dict):
+            if str(node.get("id") or node.get("goal_id") or "") == str(goal_id) and (node.get("name") or node.get("title")):
+                return {"title": node.get("name") or node.get("title"), "description": node.get("description")}
+            for value in node.values():
+                found = goal_in(value, goal_id)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for value in node:
+                found = goal_in(value, goal_id)
+                if found:
+                    return found
+        return None
+
     def current_goal_title(goal_id):
-        """The goal as the quest holds it now (title and description, a fresh read of the pinned quest's goals; the guard in ``dry_run_writes`` calls this before any change to a goal)."""
+        """The goal as the quest holds it now (title and description) for the guard in ``dry_run_writes``, which asks before any change to a goal. Fresh reads of the quest's goals,
+        retried, then the quest's current-goals listing (a different route, so a stale or capped team listing does not hide a goal)."""
         quest, team = PC.target("QAR_PROD_QUEST_ID"), PC.target("QAR_PROD_TEAM_ID")
-        body = safety_client._request("GET", f"/api/teams/{team}/quests/{quest}/goals") or {}
-        return next(({"title": g.get("name"), "description": g.get("description")} for group in body.get("period_groups") or [] for g in group.get("goals") or []
-                     if str(g.get("id")) == str(goal_id)), None)
+        routes = [f"/api/teams/{team}/quests/{quest}/goals", f"/api/teams/{team}/quests/{quest}/goals", f"/api/planning/quests/{quest}/goals/current"]
+        for attempt, path in enumerate(routes):
+            try:
+                found = goal_in(safety_client._request("GET", path) or {}, goal_id)
+            except Exception:  # noqa: BLE001 -- the next route is tried
+                found = None
+            if found:
+                return found
+            time.sleep(0.5 * attempt)
+        return None
     dry.set_goal_title_lookup(current_goal_title)
     import judge as J
     import prod_probes as P

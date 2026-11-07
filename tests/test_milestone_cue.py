@@ -761,7 +761,7 @@ def test_message_one_for_a_drafted_deliverable_is_the_code_status_and_not_the_pl
     events = []
     orch.run("write a couple of posts for the launch push", sink=StreamSink(events.append), quest_id="q1")
     first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
-    assert "The quest already tracks 1 goal like this (Launch push post A)" in first and "Now: Writing the versions now and keeping them on the quest." in first
+    assert "The quest already tracks 1 goal like this (Launch push post A)" in first and "Now: Writing the draft now." in first
     assert "priority ladder" not in first and "starting on this now" not in first
 
 
@@ -1099,7 +1099,8 @@ def test_the_alternatives_flow_never_offers_or_changes_a_goal_that_merely_shares
     forged = [dict(A_EXISTING, goal_id="r1", title=REAL_GOALS[0]["name"]), dict(B_NEW, goal_id="r2", title=REAL_GOALS[1]["name"])]
     tail = alternatives_flow.run(alt_registry(calls, rows), "q1", "write a couple of facebook posts for the 1000 subscribers push", "reply",
                                  lambda prompt: asked.append(prompt) or alt_answer(*forged))
-    assert REAL_GOALS[0]["name"] not in asked[0] and "r1 |" not in asked[0] and "k1 | Launch push post A" in asked[0]
+    assert "r1 |" not in asked[0] and "r2 |" not in asked[0] and "k1 | Launch push post A" in asked[0]          # a person's goal is never offered with an id to change
+    assert "belong to people and are never changed" in asked[0]
     # the model named the persons goals by title: the tool is asked, and it leaves them alone (this fake tool stands in for it)
     assert all(c.get("adopt_goal_id") is None for c in calls)
     assert tail
@@ -1112,3 +1113,113 @@ def test_a_milestone_cue_never_offers_a_persons_goal_for_adoption():
     asked = []
     picked = resolved.choices(lambda prompt: asked.append(prompt) or json.dumps({"goal_id": "h1"}))
     assert picked["goal_id"] == "" and "h1:" not in asked[0]
+
+
+# ---- full run on 3a5550bf
+
+def test_a_goal_that_cannot_be_read_blocks_the_write_but_is_a_lane_gap_not_an_unexpected_write_and_does_not_stop_the_run():
+    import sys
+    from pathlib import Path
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+    from quest_ai_runner.the_world.tools import dry_run_writes as dry
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation/components/chat_quality/impls"))
+    import prod_qar_readonly as arm
+    import os
+    os.environ[dry.ENV] = "1"
+    try:
+        dry.RECORDER.clear()
+        dry.set_allowances([{"tool": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title~": "P1 "}}])
+        dry.set_goal_title_lookup(lambda goal_id: None)
+        with dry.allow_scope(True):
+            try:
+                dry.quest_exchange("PUT", "/api/planning/goals/f9166b94", {"title": "x"})
+                raised = None
+            except QuestApiError as error:
+                raised = str(error)
+        assert raised and "could not be read" in raised
+        assert dry.RECORDER.snapshot()["unexpected"] == []              # not an unexpected write
+        arm.RUN_STOPPED["why"] = ""
+        assert arm.stop_after_unexpected_write({"case_id": "M-01", "unexpected_writes": []}, dry) == ""        # and the run goes on
+    finally:
+        os.environ.pop(dry.ENV, None)
+        dry.set_allowances([])
+        dry.set_goal_title_lookup(None)
+        dry.RECORDER.clear()
+
+
+def test_a_sentence_stating_a_figure_no_read_of_the_turn_holds_is_taken_out_and_the_rest_of_the_reply_stays():
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.figure_pass import evidence_of, strip_unsupported
+    reads = [{"locator": "tool:list_quest_goals", "text": "595 matching goals on quest q1 (595 in all)"}]
+    evidence = evidence_of(reads, "", "how many goals does the quest have?")
+    reply = "The quest has **595 goals**, open and done combined. That is newer than the earlier counts of 573 and 542, so go by 595. I did not get the open versus completed split."
+    text, dropped = strip_unsupported(reply, evidence)
+    assert text == "The quest has **595 goals**, open and done combined. I did not get the open versus completed split." and dropped == ["573", "542"]
+    status = "As of 5 November, the quest still has 0 paid subscribers.\n- P1 onboarding (at risk, due 15 November): 50.0% completion, target 66.7%.\nI have no reading for today, 7 November."
+    held = evidence_of([{"locator": "x", "text": "5 November report: 0 paid subscribers; P1 onboarding 50.0% completion"}], "", "status?")
+    kept, dropped = strip_unsupported(status, held)
+    assert kept == "As of 5 November, the quest still has 0 paid subscribers." and sorted(dropped) == ["15", "66.7", "7"]
+    only_bad = "It is 573."
+    assert strip_unsupported(only_bad, evidence) == (only_bad, [])        # never an empty reply
+    assert strip_unsupported("1. First step\n2. Second step", evidence)[0] == "1. First step\n2. Second step"        # list numbering is not a figure
+
+
+def test_the_figure_pass_does_not_touch_a_drafted_deliverable_or_a_reply_whose_figures_were_read():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    provider = StubProvider([{"action": "answer", "user_intent": "ask", "rationale": "r", "pending_read": []}])
+    config = OrchestratorConfig()
+    config.overseer = False
+    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config).run("what is 12 plus 3?")
+    assert result.text
+
+
+def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_title_leaves_it_as_it_is():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    rows = [{"id": "p1", "title": "FB push post A", "text": "a person's own goal", "spec_solution_id": None, "completed": False},
+            {"id": "p2", "title": "FB push post B", "text": "a person's own goal", "spec_solution_id": None, "completed": False},
+            {"id": "x", "title": "Budget review", "text": "", "spec_solution_id": None, "completed": False}]
+    calls, asked = [], []
+
+    class Guarded(ToolRegistry):
+        pass
+
+    def write(args, ctx):
+        calls.append(dict(args))
+        owned = False          # these goals are unmarked: the real tool leaves them exactly as they are
+        return ToolResult(ok=True, status=ToolStatus.NOOP, data={"state": "left_alone"}, text="left")
+    tools = ToolRegistry([read_spec(), list_goals(rows), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=write)])
+    same_titles = [dict(A_EXISTING, title="FB push post A", goal_id=""), dict(B_NEW, title="FB push post B", goal_id="")]
+    tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or alt_answer(*same_titles))
+    assert "FB push post A" in asked[0].split("Other goals on the quest that look like these")[1] and "Budget review" not in asked[0]
+    assert "(already on the quest, left exactly as it is)" in tail and "A story hook gets more clicks" in tail and "Compared by:" in tail
+    assert [c["title"] for c in calls] == ["FB push post A", "FB push post B"]
+
+
+def test_a_tool_that_leaves_an_unmarked_goal_alone_is_reported_as_already_on_the_quest():
+    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    person = {"id": "p1", "name": "FB push post A", "description": "a person's own goal", "period": "2026_W45", "completed": False, "abandoned": False}
+    result = run_tool(GoalClient([dict(person)]), title="FB push post A", description="New copy", match_by_link=False)
+    assert result.ok and result.data["state"] == "left_alone" and "left exactly as it is" in result.text
+
+
+def test_the_reply_voice_forbids_tool_chatter_offers_and_unread_figures_in_every_reply_and_the_draft_status_does_not_claim_a_save():
+    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
+    for rule in ("Never mention a file, tool, report, search or read you could or could not use", "no offer of further work", "Never recall a number from memory"):
+        assert rule in REPLY_VOICE_SYSTEM
+    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    assert "keeping them" not in act_status.status_texts(None, [], "Writing the draft now.", evidence="", found="")["text"]
+
+
+def test_a_drafting_turn_stops_reading_after_two_rounds_and_has_no_overseer():
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    read = {"action": "tool", "user_intent": "act", "deep_target": "draft_in_chat", "rationale": "r", "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}
+    provider = StubProvider([read, read, read, read, {"action": "answer", "user_intent": "act", "deep_target": "draft_in_chat", "rationale": "r"}])
+    config = OrchestratorConfig()
+    config.overseer = True
+    Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=alt_registry([])).run("write a caption", sink=StreamSink(lambda e: None), quest_id="q1")
+    assert len([n for n in provider.plan_tool_schemas if n.get("name") == "decide"]) <= 3          # no fourth round of reading

@@ -180,6 +180,7 @@ def tool_allowed(name: str, args: Mapping[str, Any]) -> bool:
     return False
 
 
+UNREADABLE = "UNREADABLE:"          # a refusal that is a failed read of the goal, not a write to a goal the case may not change
 GOAL_WRITE = re.compile(r"^/api/planning/goals/([^/?]+)(/assign)?$")
 
 
@@ -217,7 +218,7 @@ def goal_write_refusal(method: str, path: str) -> Optional[str]:
         except Exception:  # noqa: BLE001 -- a goal that cannot be read is not changed
             goal = None
     if goal is None:
-        return f"goal {goal_id}: its current title could not be read, so it is not changed"
+        return f"{UNREADABLE} goal {goal_id}: its current title could not be read, so it is not changed"
     title = str(goal.get("title") if isinstance(goal, Mapping) else goal)
     description = str(goal.get("description") or "") if isinstance(goal, Mapping) else ""
     from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
@@ -288,10 +289,11 @@ def quest_exchange(method: str, path: str, body: Any = None):
     if in_allowed_scope() or request_allowed(method, path):
         refusal = goal_write_refusal(method, path)
         if refusal:
-            line = f"UNEXPECTED WRITE blocked: {method.upper()} {path.split('?')[0]}: {refusal}"
-            with RECORDER.lock:
-                RECORDER.unexpected.append(line)
-            RECORDER.write("quest api", f"{method.upper()} {path.split('?')[0]} (unexpected: {refusal})")
+            if not refusal.startswith(UNREADABLE):          # only a write to a goal the case may not change is an unexpected write; a goal that could not be read is a lane gap, not a reason to stop
+                line = f"UNEXPECTED WRITE blocked: {method.upper()} {path.split('?')[0]}: {refusal}"
+                with RECORDER.lock:
+                    RECORDER.unexpected.append(line)
+            RECORDER.write("quest api", f"{method.upper()} {path.split('?')[0]} ({'blocked' if refusal.startswith(UNREADABLE) else 'unexpected'}: {refusal})")
             from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
             raise QuestApiError(f"Quest API {method.upper()} {path.split('?')[0]} -> 403: blocked in test mode, nothing was changed ({refusal})", status=403, code="blocked_in_test_mode")
         RECORDER.performed(f"quest api {method.upper()} {path.split('?')[0]}")

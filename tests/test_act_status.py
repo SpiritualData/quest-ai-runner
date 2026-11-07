@@ -196,7 +196,7 @@ def test_the_final_reply_of_an_ensure_turn_that_found_everything_there_is_exactl
     reply = "It's already on the quest as a weekly check-in, assigned to you, pending, and repeats every Thursday. The next one is Thursday, so I did not add a duplicate."
     rs, res = SimpleNamespace(gathered=[read, there], status_first=None), SimpleNamespace(kind="answer", text=reply)
     assert settle_already_set(orch, rs, res) is True
-    assert res.text == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November)."
+    assert res.text == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November), on this quest's Workflows page."
     # a write that was applied, or refused, or made by the code step keeps the model's text
     for other in ({**there, "tool_status": "applied"}, {**there, "tool_status": "refused"}, {**there, "by_code": True}):
         kept = SimpleNamespace(kind="answer", text=reply)
@@ -227,7 +227,7 @@ def test_a_planner_that_only_reads_an_existing_workflow_gets_the_idempotent_writ
     events = run([plan_read, {"action": "answer", "rationale": "it exists", "user_intent": "act"}], tools, message="make sure the Thursday check-in exists")
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
     assert created and created[0]["title"] == "Weekly check-in: Thursday office hour" and created[0]["steps"][0]["repeat"] == "weekly" and created[0]["steps"][0]["by_weekday"] == [3]
-    assert result["text"] == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November)."
+    assert result["text"] == "It's already set: Weekly check-in: Thursday office hour, weekly on Thursday (next: Thursday 12 November), on this quest's Workflows page."
     assert len([e for e in events if e["type"] == EVENT_INTERIM]) == 1
 
 
@@ -255,7 +255,7 @@ def test_the_already_set_sentence_says_where_it_is_with_the_quests_name_and_no_i
     assert "quest_" not in res.text and "qwf_" not in res.text
     nameless = SimpleNamespace(kind="answer", text="x")
     settle_already_set(SimpleNamespace(tools=tools), SimpleNamespace(gathered=[{**read, "tool_data": [{"workflow_id": "qwf_1"}]}, there], status_first=None), nameless)
-    assert nameless.text.endswith("(next: Thursday 12 November).")
+    assert nameless.text.endswith("(next: Thursday 12 November), on this quest's Workflows page.")
 
 
 def test_the_workflow_listing_rows_carry_the_quests_plain_name():

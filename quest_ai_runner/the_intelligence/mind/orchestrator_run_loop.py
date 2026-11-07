@@ -37,6 +37,7 @@ from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import s
 from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.em_dash_pass import remove_em_dashes
+from quest_ai_runner.the_intelligence.critical_thinking.response_quality.figure_pass import evidence_of, strip_unsupported
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.path_pass import relativize
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
@@ -189,6 +190,11 @@ class RunLoopMixin:
             # --- EM DASH PASS (core/em_dash_pass.py): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
+            if res.kind == "answer" and not getattr(rs, "draft_in_chat", False) and (res.text or "").strip():
+                # Every figure in a status or answer reply must be one this turn read (``figure_pass``): a sentence that states one it did not is taken out.
+                res.text, dropped = strip_unsupported(res.text, evidence_of(rs.gathered, rs.context_view, rs.user_message))
+                if dropped:
+                    log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
             track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
             settle_already_set(self, rs, res)    # an ensure-style turn that found everything already there ends with one code-composed sentence
             close_with_metric(self, rs, res)     # message 2 of an act request ends with the metric before and after, read by code
@@ -522,6 +528,10 @@ class RunLoopMixin:
                 rs.turn_user_intent = rs.plan.user_intent
             if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
                 rs.draft_in_chat = True
+            if (getattr(rs, "draft_in_chat", False) and step >= 2 and rs.plan.action in ("read", "tool")
+                    and not any(getattr(self.tools.get(str((c or {}).get("name") or "")), "mutates", False) for c in (rs.plan.tool_calls or []) if self.tools is not None)):
+                # Copy for the person is written from what two rounds of reading found; a third round of searching is the waste, not the work.
+                rs.plan.action, rs.plan.reads, rs.plan.tool_calls = "answer", [], []
             # The milestone flow owns the goal writes of a milestone cue: the planner's own goal writes (a second goal for a deliverable, an outreach message) are taken out of its plan; the
             # deliverable lives inside the one keyed next-step goal the code step records. A plan left with no call becomes the answer.
             if rs.cue_resolved is not None and getattr(rs.plan, "action", None) == "tool":
@@ -704,7 +714,7 @@ class RunLoopMixin:
             # The same hand-back for an order answered with a description: the planner's own user_intent says "act", it chose "answer", nothing
             # was changed and a tool could change something (``tool_guards.act_answered_without_a_write``). At most twice, and only while no tool
             # that changes something has run (a read between the two is progress, not the work). Without it the answer's overseer escalated this to a deep run.
-            if (rs.plan and message_is_user_turn and getattr(rs, "deep_to_tool_runs", 0) < 2
+            if (rs.plan and message_is_user_turn and getattr(rs, "deep_to_tool_runs", 0) < 2 and not getattr(rs, "draft_in_chat", False)       # copy written for the person is the work, not a description of it
                     and tool_guards.act_answered_without_a_write(rs.plan, rs.turn_user_intent, self.tools, tool_guards.mutating_tool_ran(gathered, self.tools))
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
                 rs.deep_to_tool_runs = getattr(rs, "deep_to_tool_runs", 0) + 1
@@ -921,7 +931,7 @@ class RunLoopMixin:
             # and its read budget bounds it: the in-loop consult is skipped, while the checkpoint on the draft answer below stays.
             read_only_information = bool(getattr(cfg, "cheap_information_turns", True) and rs.turn_user_intent == "ask"
                                          and not (exec_record is not None and exec_record.any_mutation_attempted))
-            if (cfg.overseer and rs.plan.action == "read" and rs.pending_oversee is None and not read_only_information and rs.cue_resolved is None
+            if (cfg.overseer and rs.plan.action == "read" and rs.pending_oversee is None and not read_only_information and rs.cue_resolved is None and not getattr(rs, "draft_in_chat", False)
                     and rs.steps >= cfg.overseer_min_step
                     and rs.steps % max(1, cfg.overseer_every_steps) == 0
                     and rs.overseer_submitted < cfg.overseer_max_signals):
