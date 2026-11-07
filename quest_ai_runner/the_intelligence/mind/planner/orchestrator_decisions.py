@@ -618,6 +618,9 @@ def parse_goal_condition_reply(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]
                 cleaned["content_kind"] = content_kind.strip().lower()
             if obj.get("needs_records") is False:
                 cleaned["needs_records"] = False      # not a retrieval filter: the caller takes it out (``take_needs_records``)
+            for flag in ("asks_status", "read_aloud"):
+                if obj.get(flag) is True:
+                    cleaned[flag] = True      # structured reports about the turn, not retrieval filters: the caller takes them out (``take_status_flags``)
             if obj.get("information_only") is True:
                 cleaned["information_only"] = True      # not a retrieval filter either: the caller takes it out (``take_information_only``)
             if cleaned:
@@ -632,6 +635,15 @@ def take_information_only(constraints: Optional[Dict[str, Any]]) -> Tuple[bool, 
         return False, constraints
     rest = {k: v for k, v in constraints.items() if k != "information_only"}
     return constraints.get("information_only") is True, (rest or None)
+
+
+def take_status_flags(constraints: Optional[Dict[str, Any]]) -> Tuple[Dict[str, bool], Optional[Dict[str, Any]]]:
+    """Take the analyser's ``asks_status`` and ``read_aloud`` reports out of the parsed constraints: ``({"asks_status": bool, "read_aloud": bool}, the filters left or None)``."""
+    flags = {name: bool(constraints and constraints.get(name) is True) for name in ("asks_status", "read_aloud")}
+    if not constraints:
+        return flags, constraints
+    rest = {k: v for k, v in constraints.items() if k not in flags}
+    return flags, (rest or None)
 
 
 def take_needs_records(constraints: Optional[Dict[str, Any]]) -> Tuple[Optional[bool], Optional[Dict[str, Any]]]:

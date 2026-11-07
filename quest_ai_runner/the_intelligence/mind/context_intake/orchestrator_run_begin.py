@@ -24,7 +24,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records, take_status_flags
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import Narrator, TurnCardCache, _Emitter
@@ -171,6 +171,7 @@ class RunBeginMixin:
         rs.turn_user_intent: Optional[str] = None
         rs.turn_delivery: Optional[str] = None
         rs.turn_needs_records: Optional[bool] = None
+        rs.status_snapshot = False             # a code-composed snapshot is in the gathered reads and the plan is forced to answer from it
         rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
         rs.records_free = False
         if hold_off_active:
@@ -565,6 +566,19 @@ class RunBeginMixin:
             rs.goal_condition, rs.retrieval_constraints = self._derive_goal_condition(rs.user_message, now=now)
             rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
             rs.turn_information_only, rs.retrieval_constraints = take_information_only(rs.retrieval_constraints)
+            status_flags, rs.retrieval_constraints = take_status_flags(rs.retrieval_constraints)
+            if (status_flags["asks_status"] and rs.quest_id and self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn
+                    and getattr(cfg, "cheap_information_turns", True)):
+                # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop.
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+                emit.status("Reading where the quest stands…")
+                own = (rs.retrieval_constraints or {}).get("actor") == "me"
+                snapshot = status_snapshot.build(self.tools, rs.quest_id, str(_ctx_meta.get("asker_user_id") or _ctx_meta.get("user_id") or ""), own=own)
+                if snapshot is not None:
+                    rs.gathered.append(snapshot)
+                    rs.status_snapshot = True
+                    rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
+                                                   rationale="A status question: answered from the status snapshot read for this turn.")
             if is_small_talk(rs.user_message):
                 rs.turn_needs_records = False      # a greeting needs none of the person's records
             if (rs.turn_needs_records is False and not rs.quest_id and not self._meta_quest_ids(_ctx_meta) and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None

@@ -34,7 +34,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import
 from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve as resolve_facts
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
-    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, NO_ATTACHMENT_LINE,
+    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
     READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
 
@@ -193,6 +193,8 @@ class RunAnswerMixin:
         if (rs.plan is not None and rs.plan.action == "answer" and not getattr(rs.plan, "asks_first", False)
                 and standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_SPOKEN):
             reply_directive = SPOKEN_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # read aloud: speakable, three sentences
+        if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "status_snapshot", False):
+            reply_directive = STATUS_SNAPSHOT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # a status is written from the snapshot code read
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
             reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active

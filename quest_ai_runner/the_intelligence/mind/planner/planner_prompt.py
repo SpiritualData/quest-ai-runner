@@ -838,6 +838,14 @@ A definition or how-to question is answered in one or two sentences in general t
 I, my, me or our from a record, say whose it is by name ("waiting for Sam's preview"); use "I" only for what you yourself did or could not do this turn.
 """
 
+STATUS_SNAPSHOT_DIRECTIVE = """\
+--- THIS REPLY IS A STATUS FROM A SNAPSHOT (set by the system) ---
+A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only: open with the key measure's value and the date it was read, then the one or two
+priorities that matter most (or the asker's own, when the question is about their own work) with their due days. Name the date of every figure. Leave out anything
+older than the snapshot (earlier campaigns, old notes, earlier replies) unless the question asked for it, add nothing the snapshot does not hold, and keep to the
+length for this kind of reply. Never use an em dash.
+"""
+
 SETTLED_ANSWER_DIRECTIVE = """\
 --- THIS REPLY REPORTS AN ORDER (set by the planner) ---
 The person asked for something to be done and the turn's tools carried it out or found it already in place. Say in the first sentence what is now so

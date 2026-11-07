@@ -897,6 +897,11 @@ Reply with ONE OR TWO LINES, nothing else:
       "information_only": true -- ONLY when the message just asks to be told something (a question,
         a status, a count, a priority) and asks for nothing to be created, changed, written, drafted,
         scheduled or sent. Omit it for any request to do or produce something, and whenever unsure.
+      "asks_status": true -- ONLY when the message asks where something stands, what matters or comes
+        first (a priority), or for a summary or script of that to be read out or shared. Omit it for
+        anything else, and whenever unsure.
+      "read_aloud": true -- ONLY when the message says the reply will be read out, said aloud or heard
+        (a call, a voice message, a speech). Omit it otherwise.
     Never invent a filter the message does not support. When unsure, omit line 2 entirely.
 
 {now_block}
