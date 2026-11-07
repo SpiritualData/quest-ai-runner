@@ -368,11 +368,10 @@ def deep_is_tool_sized(plan: Any, registry: Any) -> bool:
 
 
 def act_answered_without_a_write(plan: Any, user_intent: Optional[str], registry: Any, tool_calls_ran: bool) -> bool:
-    """True when the planner's own structured verdict is "the person ordered a change" (``user_intent`` act), it chose to answer (not decline, ask first,
-    support or queue the work), nothing was changed this turn, and a registered tool could change something. Facts about the plan and the tool set only."""
+    """True when the planner's own structured verdict is "the person ordered a change" (``user_intent`` act), it chose to answer (not decline, support or queue the work; a question back before acting is handed back too, because what it asks is often readable), nothing was changed this turn, and a registered tool could change something. Facts about the plan and the tool set only."""
     if registry is None or tool_calls_ran or user_intent != "act" or getattr(plan, "action", None) != "answer":
         return False
-    if (getattr(plan, "act_declined", False) or getattr(plan, "asks_first", False) or getattr(plan, "deferred_deep", None)
+    if (getattr(plan, "act_declined", False) or getattr(plan, "deferred_deep", None)
             or getattr(plan, "reply_shape", None) in ("decline", "support")):
         return False
     return any(getattr(spec, "mutates", False) for spec in registry.all())

@@ -84,12 +84,18 @@ def test_an_order_answered_with_a_description_is_handed_back_once_to_plan_tool_s
     assert "ORDER NOT CARRIED OUT" in provider.plan_prompts[1]
 
 
+def test_a_question_back_before_acting_on_an_order_is_handed_back_too():
+    provider = StubProvider([answered(asks_first=True), LIST, DONE])
+    orch(provider, registry()).run("make progress on the funnel")
+    assert "ORDER NOT CARRIED OUT" in provider.plan_prompts[1]
+
+
 def test_an_order_answered_twice_stands_and_a_question_or_decline_is_not_handed_back():
     provider = StubProvider([answered(), answered()])
     orch(provider, registry()).run("make progress on the funnel")
     assert not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts[:1])
     assert provider.plan_prompts[-1].count("ORDER NOT CARRIED OUT: your user_intent") <= 1
-    for plan in (answered(user_intent="ask"), answered(act_declined=True), answered(reply_shape="decline"), answered(asks_first=True)):
+    for plan in (answered(user_intent="ask"), answered(act_declined=True), answered(reply_shape="decline")):
         provider = StubProvider([plan])
         orch(provider, registry()).run("what is the funnel?")
         assert not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts)
