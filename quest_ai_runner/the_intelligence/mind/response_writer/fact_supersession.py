@@ -17,12 +17,13 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import FrozenSet, List, Optional, Tuple
 
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import MONTHS, NUMBER, SENTENCE_END, Violation, dates_in
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
+    DAY_THEN_MONTH, MONTHS, MONTH_NUMBER, MONTH_THEN_DAY, NUMBER, SENTENCE_END, Violation, dates_in)
 
 WORD = re.compile(r"[a-z]{3,}")
 STOP = frozenset("the and for with from that this was were are has have had not but its our your their per out new all one two as of on at by".split())
-SAME_FACT = 0.6          # shared subject words (Jaccard) at which two lines are readings of one fact
-SAME_CLAUSE = 0.5        # the same, for two clauses of one draft
+SAME_FACT = 0.5          # shared subject words (of the smaller set) at which two readings are of one fact
+SAME_CLAUSE = 0.6        # the same, for two clauses of one draft
 MAX_LINE = 300
 MAX_READINGS = 400
 
@@ -52,36 +53,61 @@ def strip_dates(text: str) -> str:
 
 
 def similar(a: FrozenSet[str], b: FrozenSet[str], bar: float) -> bool:
-    return bool(a and b) and len(a & b) / len(a | b) >= bar
+    """Two word sets are about one subject: they share at least two words and the shared part is ``bar`` of the smaller set."""
+    return len(a & b) >= 2 and len(a & b) / min(len(a), len(b)) >= bar
 
 
 @dataclass
 class Reading:
-    line: str
+    line: str          # the stretch of the record around the figure
     day: date
-    stated: str
+    stated: str        # the date as the record wrote it
     words: FrozenSet[str]
     figures: FrozenSet[str]
 
 
+WINDOW = 90            # characters either side of a figure that belong to its reading
+MEASURE = re.compile(r"(?<![\w.])(?P<n>\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s?%|(?P<sym>[$€£])\s?(?P<m>\d{1,3}(?:,\d{3})*(?:\.\d+)?)")
+
+
+def date_spans(line: str, today: date) -> List[Tuple[int, int, date, str]]:
+    found = []
+    taken: List[Tuple[int, int]] = []
+    for rx in (DAY_THEN_MONTH, MONTH_THEN_DAY):
+        for m in rx.finditer(line):
+            month = MONTH_NUMBER.get(m.group("mon").lower()[:3])
+            if month is None or any(a < m.end() and m.start() < b for a, b in taken):
+                continue
+            placed = day_of((int(m.group("d1")), month), today)
+            if placed:
+                taken.append((m.start(), m.end()))
+                found.append((m.start(), m.end(), placed, m.group(0).strip(" .")))
+    return found
+
+
 def readings_in(evidence: str, today: date) -> List[Reading]:
+    """Every measured figure (a percentage or an amount) in the records, with the date nearest to it in the same line and the words around it.
+    A record line may hold several readings (before and after, two dates): each figure is read with its own nearest date."""
     out: List[Reading] = []
     for raw in (evidence or "").splitlines():
         line = raw.strip(" \t-*•|#>")
-        if not 12 <= len(line) <= MAX_LINE:
+        if not 12 <= len(line) <= 600:
             continue
-        dated = dates_in(line)
-        if len(dated) != 1:
+        spans = date_spans(line, today)
+        if not spans:
             continue
-        stated, parts = dated[0]
-        placed = [d for d in (day_of(p, today) for p in parts) if d]
-        rest = strip_dates(line)
-        figures = figures_of(rest)
-        if not placed or not figures:
-            continue
-        out.append(Reading(line, max(placed), stated, subject_words(rest), figures))
-        if len(out) >= MAX_READINGS:
-            break
+        for m in MEASURE.finditer(line):
+            centre = (m.start() + m.end()) // 2
+            start, end, placed, stated = min(spans, key=lambda sp: min(abs(sp[0] - centre), abs(sp[1] - centre)))
+            if min(abs(start - centre), abs(end - centre)) > 2 * WINDOW:
+                continue
+            lo, hi = max(0, m.start() - WINDOW), min(len(line), m.end() + WINDOW)
+            window = line[lo:hi]
+            rest = strip_dates(MEASURE.sub(" ", window))
+            figure = (m.group("n") or m.group("m")).replace(",", "")
+            out.append(Reading(window.strip(), placed, stated, subject_words(rest), frozenset({figure})))
+            if len(out) >= MAX_READINGS:
+                return out
     return out
 
 
@@ -131,7 +157,7 @@ class Resolved:
         for i in range(len(dated)):
             for j in range(i + 1, len(dated)):
                 (a, da, wa), (b, db, wb) = dated[i], dated[j]
-                if da != db and len(wa & wb) >= 2 and similar(wa, wb, SAME_CLAUSE):
+                if da != db and similar(wa, wb, SAME_CLAUSE):
                     out.append(Violation(
                         "contradiction", f"it states two different dates for one thing ({a.strip()[:60]!r} and {b.strip()[:60]!r}); "
                         "state that one thing once, with the date your records hold latest"))

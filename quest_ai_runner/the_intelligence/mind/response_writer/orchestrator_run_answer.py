@@ -42,6 +42,12 @@ class RunAnswerMixin:
     """Settling the loop's final action and drafting the answer, with the overseer's answer checkpoint."""
 
 
+    def _resolved_facts_of(self, rs: SimpleNamespace, gathered: Any) -> Any:
+        """The facts the turn's records gave at more than one date, resolved by date (``fact_supersession``)."""
+        recent = getattr(rs, "recent_context_text", "") or "\0"
+        return resolve_facts(evidence_text(rs.user_message, getattr(rs, "transcript", ""),
+                                           (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered))
+
     def _hold_to_standard(self, rs: SimpleNamespace, text: str, gathered: Any, write: Any) -> str:
         """Hold a reply written outside the answer stage (the read-budget wrap-up) to its situation standard: measure it against the
         turn's reads, regenerate with the measurement's own hint up to ``reply_standard_max_repairs`` times, then the deterministic repair.
@@ -59,7 +65,7 @@ class RunAnswerMixin:
             basis = evidence_text(rs.user_message, getattr(rs, "transcript", ""),
                                   (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered, pool)
             facts = list(getattr(rs.plan, "facts_read", None) or [])
-            resolved = rs._resolved_facts()
+            resolved = self._resolved_facts_of(rs, gathered)
             measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved)
             rounds = 0
             while measured.failed and rounds < cfg.reply_standard_max_repairs:
@@ -299,7 +305,7 @@ class RunAnswerMixin:
                 wrapup_directive = (reply_directive + "\n\n" + READ_BUDGET_WRAPUP_HONESTY_NOTE
                                     if reply_directive else READ_BUDGET_WRAPUP_HONESTY_NOTE)
                 try:
-                    wrapup_facts = rs._resolved_facts().block()
+                    wrapup_facts = self._resolved_facts_of(rs, gathered).block()
                 except Exception:  # noqa: BLE001
                     wrapup_facts = ""
                 if wrapup_facts:
@@ -398,12 +404,7 @@ class RunAnswerMixin:
             data={"response_model": {"tier": reply_tier, "model": rs.model}}))
 
         def resolved_facts():
-            """The facts the turn's records gave at more than one date, resolved by date (``fact_supersession``)."""
-            recent = getattr(rs, "recent_context_text", "") or "\0"
-            return resolve_facts(evidence_text(rs.user_message, getattr(rs, "transcript", ""),
-                                               (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered))
-
-        rs._resolved_facts = resolved_facts
+            return self._resolved_facts_of(rs, gathered)
 
         def _gen_answer(steering: Optional[str]) -> str:
             # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
@@ -508,7 +509,7 @@ class RunAnswerMixin:
                 standard_evidence = (self.link_evidence_for(rs, SimpleNamespace(deep_results=[]))
                                      + "\n" + (exec_record.summary() if exec_record is not None else ""))
                 standard = standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery)
-                turn_resolved = rs._resolved_facts()
+                turn_resolved = self._resolved_facts_of(rs, gathered)
                 # what the turn READ (the operands a derived figure may use): the person's message, the reads and the execution record
                 figure_pool = evidence_text(rs.user_message, gathered) + "\n" + (exec_record.summary() if exec_record is not None else "")
                 # What may vouch for a FIGURE is narrower than what may vouch for a link: the person's message, this conversation, the context minus

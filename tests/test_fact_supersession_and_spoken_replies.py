@@ -115,8 +115,9 @@ def test_the_read_budget_wrap_up_is_held_to_the_standard_and_regenerated_with_th
     steers = []
     rs = SimpleNamespace(plan=PlanDecision(action="read"), turn_user_intent="ask", turn_delivery="spoken", exec_record=None,
                          user_message="read it out", context_view=EVIDENCE, transcript="", recent_context_text="",
-                         _resolved_facts=lambda: resolve(EVIDENCE, TODAY))
-    host = SimpleNamespace(cfg=OrchestratorConfig(), link_evidence_for=lambda *a, **k: EVIDENCE)
+                         )
+    host = SimpleNamespace(cfg=OrchestratorConfig(), link_evidence_for=lambda *a, **k: EVIDENCE,
+                           _resolved_facts_of=lambda rs, gathered: resolve(EVIDENCE, TODAY))
 
     def write(steer=None):
         steers.append(steer)
@@ -125,3 +126,31 @@ def test_the_read_budget_wrap_up_is_held_to_the_standard_and_regenerated_with_th
     long = "**Onboarding** is 40% as of 5 Oct. Paid subscribers: 0. Grants are on hold. Ask more? Done."
     out = RunAnswerMixin._hold_to_standard(host, rs, long, "", write)
     assert out == "Onboarding completion is 50.0% as of 5 Nov." and len(steers) == 1 and "YOUR PREVIOUS ANSWER" in steers[0]
+
+
+def test_a_turn_that_ends_in_the_read_budget_wrap_up_is_regenerated_to_the_spoken_standard():
+    """The whole path: the planner keeps reading until the budget is spent, the wrap-up writes a long marked-up draft, and the standard
+    (selected from the planner's reported delivery) regenerates it once with the measurement's hint."""
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from .conftest import StubProvider, StubRetrieval
+
+    drafts = ["**Status:** We are at 50.0% as of 5 Nov. Paid subscribers are 0. Grants are on hold. Ask me more? Done.",
+              "We are at 50.0% as of 5 Nov. Paid subscribers are still zero."]
+
+    class Writer(StubProvider):
+        steered = 0
+
+        def answer(self, messages, *, model=None, system=None):
+            text = "\n".join(str(m.get("content")) for m in messages)
+            if "YOUR PREVIOUS ANSWER" in text:
+                Writer.steered += 1
+            return drafts[1] if Writer.steered else drafts[0]
+
+    reads = [{"action": "read", "reads": [{"rel_path": f"n{i}.md"}], "rationale": "look", "user_intent": "ask", "delivery": "spoken"} for i in range(12)]
+    files = {f"n{i}.md": "Onboarding completion 50.0% on 5 Nov. Paid subscribers 0 on 5 Nov. Grants on hold." for i in range(12)}
+    provider = Writer(decisions=reads)
+    orch = Orchestrator(retrieval=StubRetrieval(files), provider=provider, registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(max_steps=3, verify_claims=False, answer_goal_max_iterations=1, overseer=False))
+    res = orch.run("im on a call, where are we? keep it short, i will read it out")
+    assert Writer.steered >= 1 and "*" not in res.text and "?" not in res.text
