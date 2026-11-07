@@ -367,7 +367,7 @@ def apply_spec_edit_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
         when_to_use=("A record, metric or milestone of the quest's specification needs to exist or change, and repeating the call must not duplicate it. "
                      "Read the records first with read_spec_records. A request to move or make progress on a milestone is this: work out the "
                      "metric's current value from data you can read, then set the metric record's value with it (change kind metric_edit, "
-                     "field record), with its source and date. Do it without asking; a row Quest holds for its owner comes back as proposed."),
+                     "field record) holding the number, its source and the date, keyed by the metric's record id from read_spec_records. Do it without asking; a row Quest holds for its owner comes back as proposed."),
         when_not_to_use=("A field the person wrote or edited. A change the person did not ask for and the autopilot brief does not call for. "
                          "Linking a goal to a milestone (that is create_or_update_quest_goal's spec_solution_id)."),
         parameters={"type": "object", "required": ["change"], "properties": {

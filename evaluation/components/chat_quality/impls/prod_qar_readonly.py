@@ -206,8 +206,13 @@ def build_arm(meter, bounded):
             preamble, grounding = session.turn_grounding(message)
             if case.get("tool_pins"):                    # operations that are offered only when a run names them (for example a spec edit)
                 grounding = {**(grounding or {}), "tool_pins": list(case["tool_pins"])}
+            # The team cues these inside the quest's own chat, so the turn is pinned to that quest the way the Quest app pins a quest chat
+            # (``quest_id`` plus ``quest_ids`` in the turn's scope); the planner never has to ask which quest, nor reads another quest's records.
+            pinned = PC.target("QAR_PROD_QUEST_ID")
+            if pinned:
+                grounding = {**(grounding or {}), "quest_id": pinned, "quest_ids": [pinned]}
             stream = session._orch.run_stream(
-                message, transcript="", quest_id=session.bound_quest_id(), rep_preamble=preamble, conv_id=session._conv_id,
+                message, transcript="", quest_id=pinned or session.bound_quest_id(), rep_preamble=preamble, conv_id=session._conv_id,
                 context_meta=grounding,
                 cancel_check=lambda: dry.RECORDER.model_calls >= CASE_MODEL_CALL_CAP or time.time() - started > CASE_SECONDS_CAP)
             try:

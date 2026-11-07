@@ -35,6 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.em_dash_pass import remove_em_dashes
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.path_pass import relativize
 from quest_ai_runner.the_world.tools.tools import ToolContext
@@ -359,6 +360,12 @@ class RunLoopMixin:
         _scope_note = scope_fence_block(self._meta_quest_ids(_ctx_meta)) if message_is_user_turn else ""
         if _scope_note:
             rs.context_view = _scope_note + ("\n\n" + rs.context_view if rs.context_view else "")
+        # A turn pinned to a quest is handed the milestone its cue concerns, found by code from the quest's own records
+        # (``milestone_cue``), so the planner neither asks which milestone nor reads another quest's records.
+        if message_is_user_turn and quest_id and self.tools is not None:
+            _cue_facts = milestone_cue.facts_for_turn(self.tools, quest_id, rs.user_message)
+            if _cue_facts:
+                gathered.append(planner_note_observation(_cue_facts, "cue_facts"))
         for step in range(cfg.max_steps):
             # An information turn re-plans once: after the first plan and one re-plan, the wrap-up answers from what was read (the same exit
             # as a spent read budget). ``cheap_information_turns`` False is the other arm and keeps the full step budget.
