@@ -4,7 +4,7 @@ answer is none (``quest_selection``'s ``picked_sink``), so a message no quest fi
 import json
 import re
 
-from place_on_a_quest import account
+from place_on_a_quest import account, backend_loader
 
 
 def shown(quest):
@@ -17,7 +17,7 @@ def pick_among(provider, model, pick, ordered, case, window):
     """The ids the model picks for ``case`` among ``ordered`` quests (best candidate first), as the backend's prompt asks it."""
     ordered = ordered[:max(window, 1)]   # the model is shown a window of the first quests, as quest_selection.rank_quest_batch shows it
     items = [{"text": case["message"], "previous": case["previous"]}]
-    prompt = pick.QUEST_RANKING_SYSTEM_PROMPT + "\n\n" + pick.pick_prompt([shown(q) for q in ordered], items, None, 3)
+    prompt = backend_loader.ranking_system_prompt() + "\n\n" + pick.pick_prompt([shown(q) for q in ordered], items, None, 3)
     raw = provider.answer([{"role": "user", "content": prompt}], model=model)
     found = re.search(r"\{.*\}", str(raw), re.S)
     try:
