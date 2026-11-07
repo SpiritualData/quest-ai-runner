@@ -26,4 +26,3 @@ class IntentGrounding(typing.Protocol):
     """Ties work to its purpose: the frame of the person's intent a quest sits under, from the ids Quest holds."""
 
     def frame(self, quest_id: str) -> Optional[Mapping[str, Any]]: ...
-
