@@ -669,6 +669,8 @@ class JudgesMixin:
         message = str(getattr(rs, "user_message", "") or "")
         if "?" not in message:
             return None
+        if getattr(rs, "turn_user_intent", None) == "act":
+            return None       # the planner read the whole message and the context and said it orders a change; a second, smaller judge does not overrule that
         if not hasattr(rs, "order_verdict"):
             verdict, why = self.directive_verdict(message, "")
             rs.order_verdict = verdict
