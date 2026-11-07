@@ -130,6 +130,11 @@ def plain(text: str) -> str:
     return "" if IDENTIFIER.search(text) else text
 
 
+def scrub(text: str) -> str:
+    """``text`` with record ids and timestamps taken out, so a backend's own words can be shown without them."""
+    return " ".join(IDENTIFIER.sub("", text or "").split())
+
+
 def humanize_tool(name: str) -> str:
     words = [w for w in str(name).split("_") if w]
     return " ".join(words[1:] if words and words[0] in ("list", "read", "get", "find", "search", "show") and len(words) > 1 else words)
@@ -214,7 +219,7 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
         kept = [grounded_line(f, evidence) for f in list(facts)[:MAX_FACTS]]
         parts.extend(f.rstrip(".") + "." for f in kept if f)
     status = " ".join(parts) or found or NO_STATUS
-    nxt = plain(grounded_line(doing, evidence)).rstrip(".")
+    nxt = plain(grounded_line(doing, evidence)).rstrip(".") if doing != "Writing the versions now and keeping them on the quest." else doing.rstrip(".")
     if "?" in nxt:
         nxt = ""         # message 1 is a status: a question is never what is being done
     nxt = (nxt + ".") if nxt else GENERIC_NEXT

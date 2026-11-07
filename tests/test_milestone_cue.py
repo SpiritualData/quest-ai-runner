@@ -703,9 +703,12 @@ def test_the_tracking_step_runs_only_for_a_drafted_deliverable_ordered_by_the_pe
 def test_message_one_for_a_tracked_deliverable_says_what_the_quest_already_holds_and_never_the_empty_status():
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
     from quest_ai_runner.the_intelligence.mind.response_writer import act_status
-    line = alternatives_flow.status_line(alt_registry([], [dict(ALT_GOALS[0]), dict(ALT_GOALS[0], id="g3", title="Launch push post C")]), "q1")
-    assert line == "The quest already tracks 2 open goals under P3 Mobile app live on the Apple Store, which moves P3 App Store listing live."
-    assert alternatives_flow.status_line(alt_registry([], [ALT_GOALS[1]]), "q1") == ""
+    line = alternatives_flow.status_line(alt_registry([], [dict(ALT_GOALS[0]), dict(ALT_GOALS[0], id="g3", title="Launch push post C")]), "q1", "write two posts for the launch push")
+    assert line == ("The quest already tracks 2 goals like this (Launch push post A, Launch push post C), under P3 Mobile app live on the Apple Store, "
+                    "which moves P3 App Store listing live.")
+    unlinked = [dict(ALT_GOALS[0], spec_solution_id=None)]
+    assert alternatives_flow.status_line(alt_registry([], unlinked), "q1", "write two posts for the launch push") == "The quest already tracks 1 goal like this (Launch push post A)."
+    assert alternatives_flow.status_line(alt_registry([], [ALT_GOALS[1]]), "q1", "write two posts for the launch push") == ""
     texts = act_status.status_texts(None, [], "", evidence="", found=line)
     assert texts["status"] == line and "have not found" not in act_status.status_texts(None, [], "", evidence="")["text"]
 
@@ -713,3 +716,64 @@ def test_message_one_for_a_tracked_deliverable_says_what_the_quest_already_holds
 def test_the_reply_voice_keeps_prices_and_optional_questions_out_of_drafted_content():
     from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
     assert "Never state a price, a plan name, a tier" in REPLY_VOICE_SYSTEM and "no question about an optional choice" in REPLY_VOICE_SYSTEM and "no list of what you could not confirm" in REPLY_VOICE_SYSTEM
+
+
+def test_only_goals_that_overlap_the_request_are_offered_for_adoption_and_a_title_that_is_an_existing_goals_title_adopts_it():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    goals = [{"id": "g1", "title": "Launch push post A", "text": "", "spec_solution_id": None, "completed": False},
+             {"id": "g2", "title": "Launch push post B", "text": "", "spec_solution_id": None, "completed": False},
+             {"id": "g9", "title": "Quarterly budget review", "text": "", "spec_solution_id": None, "completed": False},
+             {"id": "g8", "title": "Launch push post Z", "text": "", "spec_solution_id": None, "completed": True}]
+    cue = "write a couple of posts for the launch push"
+    assert [g["id"] for g in alternatives_flow.goals_for_cue(goals, cue)] == ["g1", "g2"]
+    calls, asked = [], []
+    new_titles = [dict(A_EXISTING, title="Launch push post A", goal_id=""), dict(B_NEW, title="launch push post b", goal_id="")]
+    tail = alternatives_flow.run(alt_registry(calls, goals), "q1", cue, "reply", lambda prompt: asked.append(prompt) or alt_answer(*new_titles))
+    assert "Quarterly budget review" not in asked[0] and "ALWAYS wins" in asked[0] and "g9" not in asked[0]
+    assert [c["adopt_goal_id"] for c in calls] == ["g1", "g2"] and tail.count("\n- ") == 2
+
+
+def test_the_refusals_own_words_reach_the_reply_without_ids_and_are_kept_in_the_turns_record():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
+                                                                         handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: Quest refused it (esr_fbcc56e182f7 is not a strategy of this quest)"))])
+    orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
+    rs = SimpleNamespace(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="write posts for the push")
+    res = SimpleNamespace(kind="answer", text="the posts", deep_results=[])
+    track_alternatives(orch, rs, res)
+    assert "is not a strategy of this quest" in res.text and "esr_" not in res.text and "could not be updated just now" not in res.text
+    assert any(g.get("locator") == "lane_gap" and "esr_fbcc56e182f7" in g["text"] for g in rs.gathered)
+
+
+def test_a_drafted_deliverable_is_shown_once_in_the_final_message_with_no_milestone_copy_and_no_deep_run():
+    from hubofhubs.api import EVENT_RESULT
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from .test_done_evidence import Provider, Runner
+    from .test_incremental_replies import build, NOT_MET
+    plan = {"action": "answer", "rationale": "write them", "user_intent": "act", "deep_target": "draft_in_chat", "work_shape": "lookup", "done_evidence": ["x"]}
+    runner = Runner([])
+    provider = Provider([plan], verdicts=[dict(NOT_MET), dict(NOT_MET), {"met": True}])
+    events = []
+    build(provider, runner).run("write two posts", sink=StreamSink(events.append))
+    assert runner.briefs == [] and not [e for e in events if e["type"] == "milestone" and (e.get("data") or {}).get("goal_not_met")]
+    assert [e for e in events if e["type"] == EVENT_RESULT]
+
+
+def test_message_one_for_a_drafted_deliverable_is_the_code_status_and_not_the_planners_plan():
+    from hubofhubs.api import EVENT_INTERIM
+    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    goals = [dict(ALT_GOALS[0], text="")]
+    plan_read = {"action": "tool", "rationale": "I will read the priority ladder and the quest sync file", "user_intent": "act", "deep_target": "draft_in_chat",
+                 "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}
+    provider = StubProvider([plan_read, {"action": "answer", "rationale": "r", "user_intent": "act", "deep_target": "draft_in_chat"}])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=alt_registry([], goals),
+                        config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0))
+    events = []
+    orch.run("write a couple of posts for the launch push", sink=StreamSink(events.append), quest_id="q1")
+    first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
+    assert "The quest already tracks 1 goal like this (Launch push post A)" in first and "Now: Writing the versions now and keeping them on the quest." in first
+    assert "priority ladder" not in first and "starting on this now" not in first

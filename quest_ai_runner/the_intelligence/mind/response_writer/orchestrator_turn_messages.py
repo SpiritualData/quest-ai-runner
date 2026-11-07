@@ -7,6 +7,7 @@ out of the loop so the loop only calls ``maybe_send_interim`` and ``file_blocked
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -26,6 +27,8 @@ from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import
 
 from quest_ai_runner.the_intelligence.mind.response_writer import act_status
 from quest_ai_runner.the_world.tools.tools import ToolContext
+
+log = logging.getLogger("quest-ai-runner.turn-messages")
 
 LEDGER_KEY = "interim_ledger"
 GOAL_READ_TOOL = "list_quest_goals"      # the read-only tool that returns a quest's goal lines, used when the first reading came from context
@@ -259,7 +262,7 @@ def tracked_status(orch: Any, rs: Any) -> str:
         return ""
     try:
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
-        return alternatives_flow.status_line(orch.tools, rs.quest_id)
+        return alternatives_flow.status_line(orch.tools, rs.quest_id, rs.user_message)
     except Exception:  # noqa: BLE001 -- a status line is a convenience; the plain default follows
         return ""
 
@@ -299,7 +302,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
                                                value=act_status.format_figure(measured.get("before")), call=reading.call if reading else None)
         evidence = "\n".join([rs.user_message or "", *[str(g.get("text") or "") for g in gathered if isinstance(g, dict)],
                               str(getattr(rs, "context_view", "") or "")])
-        doing = doing or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
+        doing = doing or ("Writing the versions now and keeping them on the quest." if getattr(rs, "draft_in_chat", False) else "") or ((plan.goal or "") if plan.action == "deep" else (plan.rationale or ""))
         voice = meta.get("channel") == "voice"
         # The forced (code-composed) message 1 is the milestone, what done means, the current value and what is being done: the planner's own list of facts (which can quote record
         # ids and owner text) is left out.
@@ -383,7 +386,11 @@ def track_alternatives(orch: Any, rs: Any, res: Any) -> bool:
     try:
         tail = alternatives_flow.run(orch.tools, quest_id, rs.user_message, body, orch.cheap_decision)
     except milestone_cue.LaneGap as gap:
-        tail = "I could not keep these on the quest: " + (act_status.plain(str(gap)) or "the quest could not be updated just now") + "."
+        log.warning("alternatives flow: lane gap: %s", gap)
+        gathered = getattr(rs, "gathered", None)
+        if isinstance(gathered, list):
+            gathered.append({"kind": "query", "locator": "lane_gap", "text": "LANE GAP: " + str(gap)})       # in the turn's record with the backend's own words
+        tail = "I could not keep these on the quest: " + (act_status.scrub(str(gap)) or "the quest could not be updated just now") + "."
     except Exception as error:      # noqa: BLE001  said in a sentence, with the kind of failure, not hidden
         tail = f"I could not check what the quest already tracks for these ({type(error).__name__})."
     if not tail:

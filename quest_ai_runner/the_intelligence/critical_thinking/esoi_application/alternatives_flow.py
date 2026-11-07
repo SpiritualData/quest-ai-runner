@@ -27,6 +27,22 @@ class Alternative:
     metric_id: str = ""
 
 
+MIN_SHARED_WORDS = 2
+
+
+def goals_for_cue(goals: Sequence[Mapping[str, Any]], cue: str) -> List[Mapping[str, Any]]:
+    """The open goals the quest already holds that overlap the request (at least ``MIN_SHARED_WORDS`` of its meaningful words occur in the goal's title and text): the only goals an
+    alternative may be adopted into. Model-free, by the same word weighting the milestone cue uses."""
+    wanted = set(milestone_cue.words(cue))
+    out = []
+    for g in goals:
+        if g.get("completed") or g.get("abandoned"):
+            continue
+        if len(wanted & set(milestone_cue.words(f"{g.get('title') or ''} {g.get('text') or ''}"))) >= MIN_SHARED_WORDS:
+            out.append(g)
+    return out
+
+
 def solutions_listing(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> List[Dict[str, str]]:
     """The quest's solutions that have a metric, as ``{solution_id, name, metric_id, metric_name}`` (what an alternative may be linked to)."""
     out = []
@@ -37,14 +53,14 @@ def solutions_listing(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> 
 
 
 def build_prompt(cue: str, reply: str, goals: Sequence[Mapping[str, Any]], solutions: Sequence[Mapping[str, str]]) -> str:
-    goal_lines = "\n".join(f"{g.get('id')} | {g.get('title')} | solution {g.get('spec_solution_id') or 'none'}" for g in goals if not g.get("completed") and not g.get("abandoned")) or "(none)"
+    goal_lines = "\n".join(f"{g.get('id')} | {g.get('title')} | solution {g.get('spec_solution_id') or 'none'}" for g in goals) or "(none)"
     solution_lines = "\n".join(f"{s['solution_id']} | {s['name']} | metric {s['metric_id']} | {s['metric_name']}" for s in solutions) or "(none)"
     return ("A person asked for content in their quest's chat:\n" + str(cue).strip()[:800] + "\n\nThe reply written for them:\n" + str(reply).strip()[:5000]
-            + "\n\nThe quest's open goals (id | title | linked solution):\n" + goal_lines + "\n\nThe quest's solutions (solution id | name | metric id | metric name):\n" + solution_lines
+            + "\n\nGoals the quest ALREADY holds for this (id | title | linked solution):\n" + goal_lines + "\n\nThe quest's solutions (solution id | name | metric id | metric name):\n" + solution_lines
             + "\n\nIf the reply holds two or more alternatives of one thing meant to be compared (versions of a post, a headline, a message), return JSON "
               '{"alternatives":[{"title":"...","goal_id":"...","text":"the alternative in full","hypothesis":"one line","solution_id":"...","metric_id":"..."}]} with one entry per alternative. '
-              "When an open goal above already tracks that alternative, give its goal_id and keep its title exactly. Otherwise leave goal_id empty and give a short stable title in the style of the "
-              "quest's existing tracking goals, ending in A, B, C. Choose solution_id and metric_id from the list above (the solution these alternatives serve), or leave them empty. "
+              "Adopting an existing goal ALWAYS wins over a new title: when a goal above tracks that alternative, or is the next free one of the same series (A, B, C), give its goal_id and keep its title "
+              "exactly. Use a new title only when no goal above can hold the alternative, and then continue the series and style of the titles above. Choose solution_id and metric_id from the list above (the solution these alternatives serve), or leave them empty. "
               'Write no em dashes. If the reply does not hold alternatives to compare, return {"alternatives":[]}. Reply with the JSON only.')
 
 
@@ -99,37 +115,45 @@ def run(registry: Any, quest_id: str, cue: str, reply: str, decide: Callable[[st
     if registry is None or not quest_id or registry.get("create_or_update_quest_goal") is None:
         return ""
     tables, _ = milestone_cue.read_through(registry, quest_id)
-    goals = milestone_cue.goals_through(registry, quest_id)
+    goals = goals_for_cue(milestone_cue.goals_through(registry, quest_id), cue)
     solutions = solutions_listing(tables)
     alts = parse(decide(build_prompt(cue, reply, goals, solutions)), {str(g.get("id")) for g in goals}, solutions)
     if not alts:
         return ""
+    by_title = {str(g.get("title") or "").strip().casefold(): str(g.get("id")) for g in goals}
+    taken = {a.goal_id for a in alts if a.goal_id}
+    for alt in alts:
+        same = by_title.get(alt.title.strip().casefold(), "")
+        if not alt.goal_id and same and same not in taken:      # a title that is an existing goal's title is that goal, whatever id the model gave
+            alt.goal_id = same
+            taken.add(same)
     from quest_ai_runner.the_world.tools.tools import ToolContext
     names = {(s["solution_id"], s["metric_id"]): s["metric_name"] for s in solutions}
     results = []
     for alt in alts:
         result = registry.invoke("create_or_update_quest_goal", goal_arguments(quest_id, alt, names.get((alt.solution_id, alt.metric_id), "")), ToolContext(quest_id=quest_id))
         if not result.ok:
-            raise milestone_cue.LaneGap(f"{alt.title!r} could not be recorded: {str(result.text).strip()[:200]}")
+            raise milestone_cue.LaneGap(f"{alt.title!r} could not be recorded: {str(result.text).strip()[:300]}")
         results.append({"title": alt.title, "hypothesis": alt.hypothesis, "state": str((result.data or {}).get("state") or "created")})
     metric = next((names[(a.solution_id, a.metric_id)] for a in alts if (a.solution_id, a.metric_id) in names), "")
     return compose_tail(results, metric)
 
 
-def status_line(registry: Any, quest_id: str) -> str:
-    """What the quest already holds for this kind of request, in plain words, for message 1: how many open goals sit under the plan solution most goals are linked to, and the metric
-    it moves ("The quest already tracks 3 open goals under Acquire paying subscribers, which moves Paid subscribers."). "" when the quest has no linked goals or cannot be read."""
-    tables, _ = milestone_cue.read_through(registry, quest_id)
-    goals = [g for g in milestone_cue.goals_through(registry, quest_id) if not g.get("completed") and not g.get("abandoned") and g.get("spec_solution_id")]
-    if not goals:
+def status_line(registry: Any, quest_id: str, cue: str) -> str:
+    """What the quest already holds for this request, in plain words, for message 1: the goals that overlap it (titles), and, when they are linked to a plan solution, the solution and the
+    metric it moves. "" when the quest holds none or cannot be read."""
+    held = goals_for_cue(milestone_cue.goals_through(registry, quest_id), cue)
+    if not held:
         return ""
-    counts: Dict[str, int] = {}
-    for g in goals:
-        counts[str(g["spec_solution_id"])] = counts.get(str(g["spec_solution_id"]), 0) + 1
-    solution_id = max(counts, key=lambda k: counts[k])
-    name = str(((tables.get("solutions") or {}).get(solution_id) or {}).get("name") or "")
-    metric = next((str(m.get("name") or "") for _, m in milestone_cue.metrics_of(tables, solution_id)), "")
-    if not name:
-        return ""
-    n = counts[solution_id]
-    return f"The quest already tracks {n} open goal{'s' if n != 1 else ''} under {name}" + (f", which moves {metric}" if metric else "") + "."
+    titles = ", ".join(str(g.get("title")) for g in held[:3])
+    n = len(held)
+    line = f"The quest already tracks {n} goal{'s' if n != 1 else ''} like this ({titles}{', and more' if n > 3 else ''})"
+    linked = [str(g["spec_solution_id"]) for g in held if g.get("spec_solution_id")]
+    if linked:
+        tables, _ = milestone_cue.read_through(registry, quest_id)
+        solution = max(set(linked), key=linked.count)
+        name = str(((tables.get("solutions") or {}).get(solution) or {}).get("name") or "")
+        metric = next((str(m.get("name") or "") for _, m in milestone_cue.metrics_of(tables, solution)), "")
+        if name:
+            line += f", under {name}" + (f", which moves {metric}" if metric else "")
+    return line + "."

@@ -595,7 +595,7 @@ class RunCloseMixin:
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
-                    if (verdict.get("need_more_context") and not rs.brainstorm_active
+                    if (verdict.get("need_more_context") and not rs.brainstorm_active and not getattr(rs, "draft_in_chat", False)
                             and not rs.own_escalation_settled
                             and self._has_deep_execution_capability()):
                         if emit is not None:
@@ -661,7 +661,7 @@ class RunCloseMixin:
                         continue
                     # Goal not met: surface the current answer as a milestone so the user sees
                     # progress while we continue iterating toward the goal.
-                    if emit is not None and rs.text:
+                    if emit is not None and rs.text and not getattr(rs, "draft_in_chat", False):       # a drafted deliverable is shown once, complete, in the final message
                         emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=rs.text,
                                                 data={"goal_not_met": True,
                                                       "reason": verdict.get("reason") or ""}))
@@ -684,7 +684,7 @@ class RunCloseMixin:
         # verifier naming a gap without setting need_more_context, a non-answer like "which file
         # should I look in?"). One pass only; skipped when something already mutated this turn (a
         # re-run could double the change) or the human asked us to hold off.
-        if (self.cfg.deep_before_giving_up and not rs._deferred_handoff_confirmed and not rs._decision_parked
+        if (self.cfg.deep_before_giving_up and not getattr(rs, "draft_in_chat", False) and not rs._deferred_handoff_confirmed and not rs._decision_parked
                 and not rs.deferred_unconfirmed
                 and not rs._claim_corrected and not rs.page_unopenable
                 and rs._last_verdict is not None and not rs._last_verdict.get("met")
