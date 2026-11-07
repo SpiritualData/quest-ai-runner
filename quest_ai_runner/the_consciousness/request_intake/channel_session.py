@@ -155,7 +155,7 @@ class ChannelSink:
         self._last_milestone_sent = 0.0
         self._last_result_text: Optional[str] = None
         self._ack_timer: Optional[threading.Timer] = None
-        self._sent_texts: set = set()      # the text of every message this turn sent: the same text is never sent twice
+        self.sent_texts: set = set()      # the text of every message this turn sent: the same text is never sent twice
 
     # --- lifecycle ---------------------------------------------------------------------------
 
@@ -278,9 +278,9 @@ class ChannelSink:
     def _safe_send(self, reply: OutboundReply) -> None:
         with self._lock:
             key = (reply.text or "").strip()
-            if key in self._sent_texts:
+            if key in self.sent_texts:
                 return
-            self._sent_texts.add(key)
+            self.sent_texts.add(key)
         try:
             result = self._transport.send(reply)
             if not result.ok:

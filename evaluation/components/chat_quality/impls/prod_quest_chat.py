@@ -99,7 +99,7 @@ def build(meter):
             if capped:
                 raise RuntimeError(f"not judged: {capped}")
             time.sleep(2.0)                             # let the server finish persisting the turn
-            conversation = client._request("GET", f"/api/quest-ai/conversations/{conv}", params={"include_interim": "true"})
+            conversation = client.send_request("GET", f"/api/quest-ai/conversations/{conv}", params={"include_interim": "true"})
             outcome = safety.finish(own_conv=conv, frames=events)
             changes, unexpected = outcome["changes"], outcome["unexpected"]
             usage = PC.usage_of(events)

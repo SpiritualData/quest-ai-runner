@@ -13,7 +13,7 @@ import types
 from pathlib import Path
 
 ROOT = Path(os.environ.get("QAR_QUEST_BACKEND") or Path(__file__).resolve().parents[3].parent / "quest-backend")
-_loaded = {}
+loaded_modules = {}
 
 
 def read_module(name, relative):
@@ -43,14 +43,14 @@ async def no_model(**options):  # noqa: ARG001
 
 def backend():
     """``(quest_pick_prompt, quest_candidates)`` as the backend ships them."""
-    if not _loaded:
+    if not loaded_modules:
         stand_in("app"), stand_in("app.core"), stand_in("app.prompts")
         stand_in("app.core.cache", async_cache=no_cache)
         stand_in("app.core.llm_config", call_llm_async=no_model)
         stand_in("app.prompts.quest_candidate_prompts", **vars(read_module("qb_quest_candidate_prompts", "app/prompts/quest_candidate_prompts.py")))
-        _loaded["pick"] = read_module("qb_quest_pick_prompt", "app/business/quests/quest_pick_prompt.py")
-        _loaded["candidates"] = read_module("qb_quest_candidates", "app/business/quests/quest_candidates.py")
-    return _loaded["pick"], _loaded["candidates"]
+        loaded_modules["pick"] = read_module("qb_quest_pick_prompt", "app/business/quests/quest_pick_prompt.py")
+        loaded_modules["candidates"] = read_module("qb_quest_candidates", "app/business/quests/quest_candidates.py")
+    return loaded_modules["pick"], loaded_modules["candidates"]
 
 
 def quest_index(candidates, quests):

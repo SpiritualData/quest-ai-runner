@@ -123,17 +123,17 @@ class ProdClient:
         self.sleep, self.jitter = time.sleep, random.random
         self.removable = set()           # ("decisions"|"tasks"|"workflows"|"notes", id) this run created and may undo; nothing else is ever touched
 
-    def _headers(self, accept="application/json"):
+    def request_headers(self, accept="application/json"):
         return {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json", "Accept": accept}
 
-    def _request(self, method, path, body=None, params=None, timeout=60):
+    def send_request(self, method, path, body=None, params=None, timeout=60):
         """JSON call. Anything but a GET must be one of the three allowed writes (``allow_write``)."""
         if method != "GET":
             self.allow_write(method, path)
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
         waited = 0.0
         for attempt in range(1000):
-            req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method=method, headers=self._headers())
+            req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, method=method, headers=self.request_headers())
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     raw = resp.read().decode()
@@ -166,13 +166,13 @@ class ProdClient:
 
     def whoami(self):
         try:
-            return self._request("GET", "/api/teams/whoami") or {}
+            return self.send_request("GET", "/api/teams/whoami") or {}
         except Exception as e:  # noqa: BLE001
             return {"error": f"{type(e).__name__}: {e}"}
 
     def create_conversation(self):
         """A fresh chat pinned to the quest the way the Quest app opens a quest chat: ``quest_ids`` plus the quest's team."""
-        body = self._request("POST", "/api/quest-ai/conversations", {"quest_ids": [self.quest_id], "team_id": self.team_id})
+        body = self.send_request("POST", "/api/quest-ai/conversations", {"quest_ids": [self.quest_id], "team_id": self.team_id})
         conv = (body or {}).get("conversation_id") or (body or {}).get("id") or ((body or {}).get("data") or {}).get("id")
         if not conv:
             raise RuntimeError(f"create conversation returned no id: {str(body)[:200]}")
@@ -181,7 +181,7 @@ class ProdClient:
 
     def stop(self, conv):
         try:
-            self._request("POST", f"/api/quest-ai/conversations/{conv}/stop", {})
+            self.send_request("POST", f"/api/quest-ai/conversations/{conv}/stop", {})
         except Exception:  # noqa: BLE001 -- best effort, the turn may already be over
             pass
 
@@ -193,7 +193,7 @@ class ProdClient:
         payload = {"content": content, "auto_run": auto_run}
         if self.timezone:
             payload["timezone"] = self.timezone
-        req = urllib.request.Request(self.base + path, data=json.dumps(payload).encode(), method="POST", headers=self._headers("text/event-stream"))
+        req = urllib.request.Request(self.base + path, data=json.dumps(payload).encode(), method="POST", headers=self.request_headers("text/event-stream"))
         calls = 0
         try:
             with urllib.request.urlopen(req, timeout=max_seconds) as resp:
@@ -365,7 +365,7 @@ def read_fingerprint(client, own_conv=None):
 def read_fingerprint_unlocked(client, own_conv=None):
     def read(path, key=None, params=None):
         try:
-            body = client._request("GET", path, params=params)
+            body = client.send_request("GET", path, params=params)
         except RateLimited:
             raise
         except Exception as e:  # noqa: BLE001 -- an unreadable category must fail loudly, never look like "unchanged"
@@ -374,7 +374,7 @@ def read_fingerprint_unlocked(client, own_conv=None):
             return body.get(key) or []
         return body if isinstance(body, list) else []
     quest_id, team_id = client.quest_id, client.team_id
-    goals_body = client._request("GET", f"/api/teams/{team_id}/quests/{quest_id}/goals") or {}
+    goals_body = client.send_request("GET", f"/api/teams/{team_id}/quests/{quest_id}/goals") or {}
     reads = {
         "notes": read(f"/api/quests/{quest_id}/notes"),
         "goals": [g for group in goals_body.get("period_groups") or [] for g in group.get("goals") or []],
@@ -533,7 +533,7 @@ def run_cleanup(client, plan):
         path, method = {"decisions": (f"/api/teams/decisions/{item_id}/withdraw", "POST"), "workflows": (f"/api/workflows/{item_id}", "DELETE"),
                         "tasks": (f"/api/assistant-tasks/{item_id}", "DELETE"), "notes": (f"/api/quests/{client.quest_id}/notes/{item_id}", "DELETE")}[cat]
         try:
-            client._request(method, path, {} if method == "POST" else None)
+            client.send_request(method, path, {} if method == "POST" else None)
             (out["withdrawn"] if cat == "decisions" else out["deleted"]).append(item_id)
         except Exception as e:  # noqa: BLE001
             out["left"].append(f"{cat} {item_id} (removal failed: {str(e)[:120]})")
@@ -593,8 +593,8 @@ def wait_for_clear(client, now=time.time, sleep=time.sleep, max_wait=900, step=3
     waited = 0
     while True:
         with fingerprint_lock():
-            state = client._request("GET", f"/api/quests/{client.quest_id}/state") or {}
-            tasks = (client._request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": TASK_PAGE}) or {}).get("tasks") or []
+            state = client.send_request("GET", f"/api/quests/{client.quest_id}/state") or {}
+            tasks = (client.send_request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": TASK_PAGE}) or {}).get("tasks") or []
         autopilot = (state.get("state") or state).get("autopilot") or {}
         reason = autopilot_window(now(), autopilot, tasks, minutes)
         if reason is None or waited >= max_wait:

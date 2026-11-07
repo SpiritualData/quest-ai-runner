@@ -117,14 +117,14 @@ def test_the_read_budget_wrap_up_is_held_to_the_standard_and_regenerated_with_th
                          user_message="read it out", context_view=EVIDENCE, transcript="", recent_context_text="",
                          )
     host = SimpleNamespace(cfg=OrchestratorConfig(), link_evidence_for=lambda *a, **k: EVIDENCE,
-                           _resolved_facts_of=lambda rs, gathered: resolve(EVIDENCE, TODAY))
+                           resolved_facts_of=lambda rs, gathered: resolve(EVIDENCE, TODAY))
 
     def write(steer=None):
         steers.append(steer)
         return "Onboarding completion is 50.0% as of 5 Nov."
 
     long = "**Onboarding** is 40% as of 5 Oct. Paid subscribers: 0. Grants are on hold. Ask more? Done."
-    out = RunAnswerMixin._hold_to_standard(host, rs, long, "", write)
+    out = RunAnswerMixin.hold_to_standard(host, rs, long, "", write)
     assert out == "Onboarding completion is 50.0% as of 5 Nov." and len(steers) == 1 and "YOUR PREVIOUS ANSWER" in steers[0]
 
 

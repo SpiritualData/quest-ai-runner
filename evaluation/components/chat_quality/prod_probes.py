@@ -119,7 +119,7 @@ def read_number(spec, client):
         text = subprocess.run(list(spec["command"]), capture_output=True, text=True, timeout=int(spec.get("timeout", 120)), check=False).stdout
         found = re.search(spec.get("regex") or NUMBER, text)
         return float(found.group(1).replace(",", "")) if found else None
-    payload = client._request("GET", str(spec["read"]))
+    payload = client.send_request("GET", str(spec["read"]))
     items = [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"), spec.get("min_len"))] if (spec.get("match") or spec.get("list_key")) else [payload]
     if spec.get("count"):
         if spec.get("distinct"):     # one per distinct normalised first line of this field: two goals holding the same text count once
@@ -152,7 +152,7 @@ READBACK_FIELDS = (("name", "title"), ("assignee", "assigned_to_user_id"), ("spe
 def readback(spec, client, limit=5):
     """The goals a state check counts, read again after the run: name, assignee id, spec_solution_id, spec_metric_id and period of each (no description text), by the same
     GET and match ``read_number`` uses, so the judge sees what the quest really holds and not a count."""
-    payload = client._request("GET", str(spec["read"]))
+    payload = client.send_request("GET", str(spec["read"]))
     items = [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"), spec.get("min_len"))] if (spec.get("match") or spec.get("list_key")) else [payload]
     rows = []
     for item in items[:limit]:
@@ -182,7 +182,7 @@ def read_value(spec, client):
         with open(spec["file"], encoding="utf-8") as handle:
             return next((line.strip()[:400] for line in handle if str(spec.get("grep", "")).lower() in line.lower()), None)
     if spec.get("text"):
-        payload = client._request("GET", str(spec["read"]))
+        payload = client.send_request("GET", str(spec["read"]))
         for item in [i for i in items_of(payload, spec.get("list_key", "")) if matches(i, spec.get("match"))]:
             value = pick_of(item, spec.get("pick"))
             return str(value)[:400] if value is not None else None

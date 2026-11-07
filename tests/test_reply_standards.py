@@ -395,7 +395,7 @@ def test_a_corrected_reply_is_written_one_tier_up_from_the_fast_tier_and_a_pinne
     from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
     registry = ModelRegistry(StubProvider([]))
     host = SimpleNamespace(registry=registry)
-    up = lambda rs: RunAnswerMixin._regeneration_model(host, rs)
+    up = lambda rs: RunAnswerMixin.regeneration_model(host, rs)
     fast = SimpleNamespace(model="fast-model", model_hint=None, plan=SimpleNamespace(model_tier="fast"))
     assert up(fast) == registry.resolve_tier("balanced")
     hinted = SimpleNamespace(model="fast-model", model_hint="fast", plan=SimpleNamespace(model_tier=None))

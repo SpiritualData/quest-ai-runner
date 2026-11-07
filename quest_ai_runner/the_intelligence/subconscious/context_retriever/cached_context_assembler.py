@@ -29,35 +29,35 @@ class CachedContextAssembler:
     """Wraps any context assembler; every other attribute is the wrapped assembler's own."""
 
     def __init__(self, inner: Any, *, ttl: float = TTL_SECONDS, clock: Any = time.monotonic) -> None:
-        self._inner = inner
-        self._ttl = ttl
-        self._clock = clock
-        self._lock = threading.Lock()
-        self._entries: "OrderedDict[Tuple[Any, ...], Tuple[float, Any]]" = OrderedDict()
+        self.wrapped_assembler = inner
+        self.cache_ttl = ttl
+        self.cache_clock = clock
+        self.cache_lock = threading.Lock()
+        self.cache_entries: "OrderedDict[Tuple[Any, ...], Tuple[float, Any]]" = OrderedDict()
 
     def assemble(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, **kwargs: Any) -> AssembledContext:
         key = cache_key(task_text, meta)
-        now = self._clock()
-        with self._lock:
-            hit = self._entries.get(key)
-            if hit is not None and now - hit[0] <= self._ttl:
-                self._entries.move_to_end(key)
+        now = self.cache_clock()
+        with self.cache_lock:
+            hit = self.cache_entries.get(key)
+            if hit is not None and now - hit[0] <= self.cache_ttl:
+                self.cache_entries.move_to_end(key)
                 return hit[1]
-        result = self._inner.assemble(task_text, meta=meta, **kwargs)
+        result = self.wrapped_assembler.assemble(task_text, meta=meta, **kwargs)
         if not getattr(result, "partial", False) and (getattr(result, "context_view", "") or "").strip():
-            with self._lock:
-                self._entries[key] = (now, result)
-                while len(self._entries) > MAX_ENTRIES:
-                    self._entries.popitem(last=False)
+            with self.cache_lock:
+                self.cache_entries[key] = (now, result)
+                while len(self.cache_entries) > MAX_ENTRIES:
+                    self.cache_entries.popitem(last=False)
         return result
 
     def clear(self) -> None:
-        with self._lock:
-            self._entries.clear()
+        with self.cache_lock:
+            self.cache_entries.clear()
 
     def record(self, *args: Any, **kwargs: Any) -> Any:
         self.clear()
-        return self._inner.record(*args, **kwargs)
+        return self.wrapped_assembler.record(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._inner, name)
+        return getattr(self.wrapped_assembler, name)

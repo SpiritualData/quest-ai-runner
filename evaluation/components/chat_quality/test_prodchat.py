@@ -98,7 +98,7 @@ class FakeApi(PC.ProdClient):
         super().__init__(BASE, "k")
         self.calls, self.fail = [], set(fail)
 
-    def _request(self, method, path, body=None, params=None, timeout=60):
+    def send_request(self, method, path, body=None, params=None, timeout=60):
         if method != "GET":
             self.allow_write(method, path)
             if any(f in path for f in self.fail):
@@ -176,13 +176,13 @@ class ClockApi(FakeApi):
         super().__init__()
         self.busy_reads = busy_reads
 
-    def _request(self, method, path, body=None, params=None, timeout=60):
+    def send_request(self, method, path, body=None, params=None, timeout=60):
         if path.endswith("/state"):
             return {"state": {"autopilot": AUTOPILOT}}
         if path == "/api/assistant-tasks":
             self.busy_reads -= 1
             return {"tasks": [{"task_id": "a", "status": "running"}] if self.busy_reads >= 0 else []}
-        return super()._request(method, path, body, params, timeout)
+        return super().send_request(method, path, body, params, timeout)
 
 
 def test_a_write_capable_case_waits_for_the_window_then_runs_or_is_skipped_as_an_autopilot_window():
@@ -217,7 +217,7 @@ def test_the_client_refuses_to_undo_anything_it_was_not_told_this_run_created():
     api = FakeApi()
     for method, path in (("POST", "/api/teams/decisions/d_old/withdraw"), ("DELETE", "/api/workflows/wf_old"), ("DELETE", "/api/quests/quest_x/notes/n1")):
         with pytest.raises(PC.GuardRefusal):
-            api._request(method, path)
+            api.send_request(method, path)
     assert "undo" in PC.describe_undo({"allow": [{"tool": "add_quest_note"}]}, False) or "taken back" in PC.describe_undo(None, True)
 
 
@@ -227,11 +227,11 @@ class Changing(FakeApi):
         super().__init__()
         self.ask, self.reads = ask, 0
 
-    def _request(self, method, path, body=None, params=None, timeout=60):
+    def send_request(self, method, path, body=None, params=None, timeout=60):
         if method == "GET" and path == "/api/teams/decisions/for-quest":
             self.reads += 1
             return [self.ask] if self.reads > 1 else []
-        return super()._request(method, path, body, params, timeout)
+        return super().send_request(method, path, body, params, timeout)
 
 
 def test_the_lane_arms_share_the_safety_net_an_ask_the_lane_run_raised_is_withdrawn_and_the_case_fails():
@@ -277,12 +277,12 @@ def test_429_honours_retry_after_then_backs_off_with_jitter_and_gives_up_as_rate
     api = PC.ProdClient(BASE, "k")
     slept = []
     api.sleep, api.jitter = slept.append, lambda: 1.0
-    assert api._request("GET", "/x") == {"ok": 1}
+    assert api.send_request("GET", "/x") == {"ok": 1}
     assert slept[0] == 7 * 1.25 and slept[1] == 4 * 1.25              # the server's Retry-After first, then 2^(attempt+1), each with 25 percent jitter
     monkeypatch.setattr(PC.urllib.request, "urlopen", lambda req, timeout=0: (_ for _ in ()).throw(http_429(40)))
     slept.clear()
     with pytest.raises(PC.RateLimited):
-        api._request("GET", "/x")
+        api.send_request("GET", "/x")
     assert sum(slept) <= PC.MAX_BACKOFF + 1                             # never waits past the 90 second budget
 
 

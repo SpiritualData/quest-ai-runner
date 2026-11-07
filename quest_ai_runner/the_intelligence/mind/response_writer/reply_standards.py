@@ -547,7 +547,7 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
         if standard.forbid_markup and re.search(r"[*#`_>]|[\"“”]", text):
             m.violations.append(Violation("format", "write plain words only, with no asterisks, hashes, backticks, underscores or quotation marks"))
         if standard.max_figures is not None:
-            said_figures = len(NUMBER.findall(_without_dates(text)))
+            said_figures = len(NUMBER.findall(without_dates(text)))
             if said_figures > standard.max_figures:
                 m.violations.append(Violation("figures", f"state at most {standard.max_figures} figures (you stated {said_figures}); keep the one that matters most"))
         if standard.max_exclamations is not None and text.count("!") > standard.max_exclamations:
@@ -561,7 +561,7 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
         return Measurements(shape=standard.shape)
 
 
-def _without_dates(text: str) -> str:
+def without_dates(text: str) -> str:
     for stated, _ in dates_in(text or ""):
         text = text.replace(stated, " ")
     return text
@@ -599,7 +599,7 @@ def unrelated_sentences(draft: str, question: str, facts: Optional[List[str]]) -
         return []
     out: List[str] = []
     for sentence in sentences(draft):
-        if (dates_in(sentence) or NUMBER.search(_without_dates(sentence))) and not (topic_words(sentence) & basis):
+        if (dates_in(sentence) or NUMBER.search(without_dates(sentence))) and not (topic_words(sentence) & basis):
             out.append(sentence.strip())
     return out
 

@@ -36,7 +36,7 @@ from quest_ai_runner.the_consciousness.feedback_learning.candidate_cases import 
 class RunCloseMixin:
     """Closing a turn: deferred deep work, goal verification of the answer, and the final result."""
 
-    def _search_untried(self, rs: SimpleNamespace, exec_record: Any, ctx_meta: Dict[str, Any]) -> bool:
+    def search_untried(self, rs: SimpleNamespace, exec_record: Any, ctx_meta: Dict[str, Any]) -> bool:
         """Whether the read-only deep search is still untried this turn and safe to run: wired, not tried or settled, no change attempted."""
         return bool(not getattr(rs, "own_escalation_settled", False) and not rs.brainstorm_active and not ctx_meta.get("deep_attempted")
                     and self._has_deep_execution_capability() and (exec_record is None or not exec_record.any_mutation_attempted))
@@ -461,7 +461,7 @@ class RunCloseMixin:
                     # code resolved) and the turn ends with it. Switched on with ``interim_replies``.
                     # A block only a person can lift is asked about only when nothing else is left to try: while the read-only deep search is
                     # untried, the last net below pursues it first, and files this ask itself if the search cannot meet the goal.
-                    if getattr(self.cfg, "interim_replies", False) and not self._search_untried(rs, exec_record, _ctx_meta) and blocks_on_person(
+                    if getattr(self.cfg, "interim_replies", False) and not self.search_untried(rs, exec_record, _ctx_meta) and blocks_on_person(
                             str(verdict.get("blocker") or ""), str(verdict.get("question") or "").strip()):
                         blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False,
                                                   coverage=None)
@@ -689,7 +689,7 @@ class RunCloseMixin:
                 and not rs._claim_corrected and not rs.page_unopenable
                 and rs._last_verdict is not None and not rs._last_verdict.get("met")
                 and not rs._last_verdict.get("claims_unsupported")
-                and self._search_untried(rs, exec_record, _ctx_meta)):
+                and self.search_untried(rs, exec_record, _ctx_meta)):
             try:
                 pursued = pursue_before_giving_up(self, rs, overall_goal, exec_record, _ctx_meta, emit, cancel_check, take_resume_session,
                                                   working_dir_override)
@@ -703,15 +703,15 @@ class RunCloseMixin:
                     return finish(pursued["result"])
                 if pursuit["message"] and (pursuit["status"] == "continuing" or pursuit["replans"]):
                     rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]       # the hub adds none now; a line stays a structured outcome of the pursuit, not a default
-                _last = rs._last_verdict
-                _question = str(_last.get("question") or "").strip()
+                last_verdict = rs._last_verdict
+                open_question = str(last_verdict.get("question") or "").strip()
                 if (pursuit["status"] == "unmet_reported" and getattr(self.cfg, "interim_replies", False)
-                        and blocks_on_person(str(_last.get("blocker") or ""), _question)):
+                        and blocks_on_person(str(last_verdict.get("blocker") or ""), open_question)):
                     # What the search could not find is now the one thing only the person can give: ask for exactly that.
-                    _blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
-                    if file_blocked_ask(self, emit, _ctx_meta, _blocked, _last, question=_question):
-                        rs.text = _blocked.output
-                        rs._parked_decision_id = _blocked.decision_id
+                    blocked_ask = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+                    if file_blocked_ask(self, emit, _ctx_meta, blocked_ask, last_verdict, question=open_question):
+                        rs.text = blocked_ask.output
+                        rs._parked_decision_id = blocked_ask.decision_id
                         rs._decision_parked = True
             except Exception:  # noqa: BLE001 — the net must never break the turn
                 log.warning("last-resort deep run failed", exc_info=True)
@@ -734,9 +734,9 @@ class RunCloseMixin:
                 and not rs._deferred_handoff_confirmed and not rs._decision_parked):
             _exit_reason = "overseer_answer_now"
         try:      # noticing: an input that ended unmet, empty or pushed back becomes a candidate case (off unless the private folder is named)
-            _signals = turn_signals(rs._last_verdict, rs.text, getattr(rs, "pursuit", None))
-            if any(_signals.values()):
-                record_candidate(rs.user_message, rs.text, _signals, reason=str((rs._last_verdict or {}).get("reason") or ""))
+            case_signals = turn_signals(rs._last_verdict, rs.text, getattr(rs, "pursuit", None))
+            if any(case_signals.values()):
+                record_candidate(rs.user_message, rs.text, case_signals, reason=str((rs._last_verdict or {}).get("reason") or ""))
         except Exception:  # noqa: BLE001 — noticing must never break the turn
             log.warning("candidate case not recorded", exc_info=True)
         _res = OrchestratorResult(kind="answer", text=rs.text, rationale=rs.plan.rationale,

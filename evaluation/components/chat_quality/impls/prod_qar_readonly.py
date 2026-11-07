@@ -130,7 +130,7 @@ def build_arm(meter, bounded):
     def current_goal_title(goal_id):
         """The goal's title as the quest holds it now (a fresh read of the pinned quest's goals; the guard in ``dry_run_writes`` calls this before any change to a goal)."""
         quest, team = PC.target("QAR_PROD_QUEST_ID"), PC.target("QAR_PROD_TEAM_ID")
-        body = safety_client._request("GET", f"/api/teams/{team}/quests/{quest}/goals") or {}
+        body = safety_client.send_request("GET", f"/api/teams/{team}/quests/{quest}/goals") or {}
         return next((g.get("name") for group in body.get("period_groups") or [] for g in group.get("goals") or [] if str(g.get("id")) == str(goal_id)), None)
     dry.set_goal_title_lookup(current_goal_title)
     import judge as J

@@ -824,11 +824,11 @@ class RunLoopMixin:
             if (rs.plan and rs.plan.action in ("answer", "clarify") and message_is_user_turn and self.retrieval is not None
                     and not getattr(rs, "dated_files_gate_done", False) and step + 1 < cfg.max_steps and not budget_exhausted()):
                 rs.dated_files_gate_done = True
-                _dated = tool_guards.dated_file_reads_owed(rs.user_message, self.retrieval)
-                if _dated:
+                dated_reads = tool_guards.dated_file_reads_owed(rs.user_message, self.retrieval)
+                if dated_reads:
                     log.info("Dated-file gate: the message names a time; finding date-named files before answering.")
                     rs.plan.action = "read"
-                    rs.plan.reads = _dated
+                    rs.plan.reads = dated_reads
                     emit.status("Looking for files from that day…")
 
             # --- PAST-ACTIVITY GATE: a message naming someone is searched for what they asked the AI before the question back ------
@@ -840,11 +840,11 @@ class RunLoopMixin:
                     and cfg.past_activity_operation and not getattr(rs, "past_activity_gate_done", False)
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
                 rs.past_activity_gate_done = True
-                _past = tool_guards.past_activity_reads_owed(rs.user_message, rs.plan.action, cfg.past_activity_operation)
-                if _past:
+                past_reads = tool_guards.past_activity_reads_owed(rs.user_message, rs.plan.action, cfg.past_activity_operation)
+                if past_reads:
                     log.info("Past-activity gate: the message names someone; searching what they asked the AI before replying.")
                     rs.plan.action = "read"
-                    rs.plan.reads = _past
+                    rs.plan.reads = past_reads
                     emit.status("Looking for that conversation…")
 
             # --- WEB-READ GATE: a question about the world right now is answered after a web read ------------------------

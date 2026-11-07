@@ -10,7 +10,7 @@ class Client:
     def __init__(self, answers):
         self.answers = answers
 
-    def _request(self, method, path):
+    def send_request(self, method, path):
         assert method == "GET"
         return self.answers[path]
 
@@ -114,7 +114,7 @@ def test_state_checks_count_by_meaning_not_exact_title():
 
 def test_distinct_count_and_already_there_standard():
     class Client:
-        def _request(self, method, path):
+        def send_request(self, method, path):
             return {"g": [{"d": "Post A\nmore"}, {"d": "post   a"}, {"d": "Post B"}]}
     assert P.read_number({"read": "/x", "list_key": "g", "count": True, "distinct": "d"}, Client()) == 2.0
     case = {"effect": {"allow": [{"tool": "t"}]}}
@@ -141,7 +141,7 @@ def test_the_readback_lists_the_goals_a_state_check_counts_with_their_links_and_
     import prod_probes as P
 
     class Client:
-        def _request(self, method, path):
+        def send_request(self, method, path):
             return {"period_groups": [{"goals": [
                 {"name": "P3 Mobile app next step: week of 2026-11-02", "description": "private text", "assigned_to_user_id": "u1", "spec_solution_id": "esr_c",
                  "spec_metric_id": "esr_mc", "period": "2026_W45"},
@@ -182,14 +182,14 @@ def test_the_workflow_state_check_reads_a_path_with_a_query_and_matches_the_real
     seen = []
 
     class Client:
-        def _request(self, method, path):
+        def send_request(self, method, path):
             seen.append(path)
             return WORKFLOWS_LISTING
     assert P.read_number(dict(WORKFLOW_STATE_CHECK, count=True), Client()) == 1.0 and seen == ["/api/workflows?quest_id=quest_x"]
     none = {"items": [{"steps": [{"title": "Monday check", "timing": {"repeat": {"freq": "weekly", "byWeekday": [0]}}}]}]}
 
     class Empty:
-        def _request(self, method, path):
+        def send_request(self, method, path):
             return none
     assert P.read_number(dict(WORKFLOW_STATE_CHECK, count=True), Empty()) == 0.0
 

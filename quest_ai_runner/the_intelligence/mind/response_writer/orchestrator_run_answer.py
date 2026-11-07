@@ -42,13 +42,13 @@ class RunAnswerMixin:
     """Settling the loop's final action and drafting the answer, with the overseer's answer checkpoint."""
 
 
-    def _resolved_facts_of(self, rs: SimpleNamespace, gathered: Any) -> Any:
+    def resolved_facts_of(self, rs: SimpleNamespace, gathered: Any) -> Any:
         """The facts the turn's records gave at more than one date, resolved by date (``fact_supersession``)."""
         recent = getattr(rs, "recent_context_text", "") or "\0"
         return resolve_facts(evidence_text(rs.user_message, getattr(rs, "transcript", ""),
                                            (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered))
 
-    def _hold_to_standard(self, rs: SimpleNamespace, text: str, gathered: Any, write: Any) -> str:
+    def hold_to_standard(self, rs: SimpleNamespace, text: str, gathered: Any, write: Any) -> str:
         """Hold a reply written outside the answer stage (the read-budget wrap-up) to its situation standard: measure it against the
         turn's reads, regenerate with the measurement's own hint up to ``reply_standard_max_repairs`` times, then the deterministic repair.
         The same measurements the answer stage uses (figures, dates, superseded readings, length, spoken shape). Never raises."""
@@ -65,7 +65,7 @@ class RunAnswerMixin:
             basis = evidence_text(rs.user_message, getattr(rs, "transcript", ""),
                                   (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered, pool)
             facts = list(getattr(rs.plan, "facts_read", None) or [])
-            resolved = self._resolved_facts_of(rs, gathered)
+            resolved = self.resolved_facts_of(rs, gathered)
             measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
             rounds = 0
             while measured.failed and rounds < repair_limit(cfg, standard):
@@ -78,7 +78,7 @@ class RunAnswerMixin:
         except Exception:  # noqa: BLE001 -- a standard must never break the turn
             return text
 
-    def _regeneration_model(self, rs: SimpleNamespace) -> str:
+    def regeneration_model(self, rs: SimpleNamespace) -> str:
         """The model a corrected reply is written with: one tier up when the reply was written on the fast tier, else unchanged (a pinned model id stays pinned)."""
         try:
             tier = (rs.model_hint or rs.plan.model_tier or "").strip().lower()
@@ -279,7 +279,7 @@ class RunAnswerMixin:
             # with the one honest line the replan wrote.
             pursuit_line = ""
             if (not must_execute and not turn_awaits_person(rs) and not rs.brainstorm_active and getattr(rs, "empty_read_steps", 0) >= 1 and cfg.deep_before_giving_up
-                    and nets_intent != USER_INTENT_HOLD_OFF and message_is_user_turn and self._search_untried(rs, exec_record, _ctx_meta)):
+                    and nets_intent != USER_INTENT_HOLD_OFF and message_is_user_turn and self.search_untried(rs, exec_record, _ctx_meta)):
                 rs.text = getattr(rs, "text", "") or ""
                 rs._last_verdict = {"met": False, "reason": "the reads returned nothing the answer can rest on",
                                     "next_action": "open the records the question concerns (the quest's collections, by their ids) and read their entries"}
@@ -311,7 +311,7 @@ class RunAnswerMixin:
                 wrapup_directive = (reply_directive + "\n\n" + READ_BUDGET_WRAPUP_HONESTY_NOTE
                                     if reply_directive else READ_BUDGET_WRAPUP_HONESTY_NOTE)
                 try:
-                    wrapup_facts = self._resolved_facts_of(rs, gathered).block()
+                    wrapup_facts = self.resolved_facts_of(rs, gathered).block()
                 except Exception:  # noqa: BLE001
                     wrapup_facts = ""
                 if wrapup_facts:
@@ -322,7 +322,7 @@ class RunAnswerMixin:
                                                  rs.model, True, native_blocks=rs.native_blocks,
                                                  rep_preamble=rep_preamble,
                                                  reply_directive=wrapup_directive)
-                rs.text = self._hold_to_standard(rs, write_wrapup(), gathered, write_wrapup)
+                rs.text = self.hold_to_standard(rs, write_wrapup(), gathered, write_wrapup)
                 if pursuit_line:
                     rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit_line
                 return finish(OrchestratorResult(kind="answer", text=rs.text, rationale=rs.plan.rationale,
@@ -410,7 +410,7 @@ class RunAnswerMixin:
             data={"response_model": {"tier": reply_tier, "model": rs.model}}))
 
         def resolved_facts():
-            return self._resolved_facts_of(rs, gathered)
+            return self.resolved_facts_of(rs, gathered)
 
         def _gen_answer(steering: Optional[str]) -> str:
             # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
@@ -422,13 +422,13 @@ class RunAnswerMixin:
             # context, transcript, reads or persona, so it cannot name a topic it never saw; a regeneration gets the same restricted input, one tier up.
             if is_clarify(rs.plan) or rs.records_free:
                 # A general question (the request analyser reported ``needs_records`` false) is written the same way: from the question alone.
-                return self._grounded_answer(rs.user_message, "", "", [], rs.model if steering is None else self._regeneration_model(rs), False,
+                return self._grounded_answer(rs.user_message, "", "", [], rs.model if steering is None else self.regeneration_model(rs), False,
                                              native_blocks=None, rep_preamble=None,
                                              reply_directive=CLARIFY_DIRECTIVE if is_clarify(rs.plan) else GENERAL_ANSWER_DIRECTIVE)
             cv = _answer_grounding(steering)
             # A reply that came back for a correction is written one tier up: the cheaper model already missed it once (Joshua's rule: when a
             # cheaper model fails, retry one tier up rather than the same way).
-            model = rs.model if steering is None else self._regeneration_model(rs)
+            model = rs.model if steering is None else self.regeneration_model(rs)
             directive = reply_directive
             if rs.plan.action == "answer":
                 # Facts the records give at two dates are resolved by date in code; the writer is told only the latest and its date.
@@ -517,7 +517,7 @@ class RunAnswerMixin:
                 standard_evidence = (self.link_evidence_for(rs, SimpleNamespace(deep_results=[]))
                                      + "\n" + (exec_record.summary() if exec_record is not None else ""))
                 standard = standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery)
-                turn_resolved = self._resolved_facts_of(rs, gathered)
+                turn_resolved = self.resolved_facts_of(rs, gathered)
                 # what the turn READ (the operands a derived figure may use): the person's message, the reads and the execution record
                 figure_pool = evidence_text(rs.user_message, gathered) + "\n" + (exec_record.summary() if exec_record is not None else "")
                 # What may vouch for a FIGURE is narrower than what may vouch for a link: the person's message, this conversation, the context minus
