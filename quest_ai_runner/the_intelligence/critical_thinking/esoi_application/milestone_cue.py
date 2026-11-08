@@ -157,20 +157,27 @@ def judged_option(answer: Any, ids: Sequence[str], names: Optional[Mapping[str, 
 def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: Sequence[str], decide: Callable[[str], str]) -> Optional[str]:
     """The one cheap model judgment: which of the candidate milestones, if any, is the message asking to move forward. NONE is a first-class answer (the message is about
     something else: a reminder, a workflow, a recurring meeting, writing, a question). The reply is matched to the options offered (``judged_option``); an answer that names
-    no option and is not NONE is no verdict and is asked once more (``JUDGE_ASKS``), then read as NONE. (Measured offline on the chat cases, 2026-11-08: this one listing
-    question chose right on 22 of 23 milestone and non-milestone cues; one YES/NO question per candidate chose right on 20, saying YES to a wrong milestone.)"""
+    no option and is not NONE is no verdict and is asked once more (``JUDGE_ASKS``), then read as NONE. (Measured offline on the chat cases, 2026-11-08, on the production path: the
+    answer-at-once listing said NONE to plain requests for progress on 15 of 20 tries; with the purpose shown and one line before the verdict it chose right; one YES/NO question
+    per candidate and a two-view Decision Check both chose worse.)"""
     solutions = dict(solutions_of(tables))
     offered = [rid for rid in ids if rid in solutions]
-    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {clip(solutions[rid].get('milestones'), VALUE_CHARS)}" for rid in offered)
+    # Each option carries its purpose too: milestones of one area (several sources of users, say) differ there, not in their names or done-when lines.
+    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {clip(solutions[rid].get('milestones'), VALUE_CHARS)}"
+                        + (f" | why: {clip(solutions[rid].get('purpose'), VALUE_CHARS)}" if solutions[rid].get("purpose") else "") for rid in offered)
+    # One short line first: answering at once, a cheap model often said NONE to a plain request for progress; the verdict is read from the last line only.
     prompt = ("A person wrote this message in their quest's chat:\n\n" + str(cue).strip()[:1500]
               + "\n\nThese are milestones of the quest:\n" + listing
-              + "\n\nIs the message asking to move one of these milestones forward (make progress on it, get it going)? Reply with that milestone's id exactly as listed. "
-              f"Reply {NONE} if the message is about something else (a reminder, a workflow, a recurring meeting, writing content, preparing for a call, a question, "
-              "a status check). Reply with nothing else.")
+              + "\n\nIs the message asking for work that moves one of these milestones forward: making progress on it, getting it going, or bringing its numbers or records "
+              "up to date? A request worded as a question is still a request, and the message need not use the milestone's words. "
+              f"It is {NONE} only if what it asks for is something other than progress on a milestone: a reminder, a workflow, a recurring meeting, writing content, "
+              "preparing for a call, or information alone (how something stands, with nothing asked to be done). "
+              f"First write one short line saying what the message asks for, without any id. Then, on the last line, write only that milestone's id exactly as listed, or {NONE}.")
     names = {rid: str(solutions[rid].get("name") or "") for rid in offered}
     for attempt in range(JUDGE_ASKS):
         answer = decide(prompt)
-        settled, chosen = judged_option(answer, offered, names)
+        lines = [line for line in str(answer or "").splitlines() if line.strip()]
+        settled, chosen = judged_option(lines[-1] if lines else "", offered, names)
         if settled:
             return chosen
         log.info("milestone cue: the judgment answered %r, which names no option (ask %d of %d)", str(answer)[:300], attempt + 1, JUDGE_ASKS)

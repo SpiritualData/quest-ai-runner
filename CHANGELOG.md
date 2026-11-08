@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format is based on
 - chat_quality judge: the ground truth view is 80,000 characters, and when the reads run longer each long read is cut to a fair share (head and tail kept), so one large record dump no longer pushes the read a reply's figure came from out of the judge's view.
 
 ### Fixed
+- Milestone cue judgment: answered at once, the cheap model said NONE to plain requests for progress ("make progress on ...", "can you get ... up to date?"). Each option now carries its purpose (milestones of one area differ there), NONE is only for a reminder, a workflow, a meeting, writing or information alone, and the model writes one line before the verdict, which is read from the last line only.
 - An ensure-style reply whose repeated write had no data of its own no longer ends with a second "It's already set."
 - A status question reaches the status snapshot (and so the information budget of three sentences) whenever the reach judge's structured `asks_status` report or the request analyser's says so. Before, only the analyser's report counted, and a turn it did not flag ran the planner loop and could name the wrong priority or run past the budget. The judge's report is false for an order and for a count.
 - The snapshot's goal reads page through all goals of a quest (up to 1000), so a quest with hundreds of goals keeps its priority steps past the first page.

@@ -585,6 +585,21 @@ def test_the_judgment_names_the_milestone_only_from_the_candidates_offered():
     assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: "") is None
 
 
+def test_the_judgment_reasons_in_one_line_first_and_only_the_last_line_is_the_verdict():
+    """Answering at once, a cheap model often said NONE to a plain request for progress; a line first fixes that, and an id or NONE in that line never counts."""
+    asked = []
+    assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: asked.append(prompt) or "Not NONE: it asks to move esr_c along.\nesr_c").rid == "esr_c"
+    assert "last line" in asked[0] and "information alone" in asked[0]
+    assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: "It could be esr_c, but it asks for a reminder.\nNONE") is None
+
+
+def test_the_judgment_shows_each_milestones_purpose_where_milestones_of_one_area_differ():
+    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "purpose": "A source tested and tracked on its own."}}}
+    asked = []
+    cue.judge(tables, CUE, ["esr_c"], lambda prompt: asked.append(prompt) or "NONE")
+    assert "why: A source tested and tracked on its own." in asked[0]
+
+
 def test_an_answer_naming_no_option_is_asked_once_more_and_an_id_without_its_prefix_or_the_name_label_counts():
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import JUDGE_ASKS, judged_option
     ids = ["esr_aaaa1111bbbb", "esr_cccc2222dddd"]
