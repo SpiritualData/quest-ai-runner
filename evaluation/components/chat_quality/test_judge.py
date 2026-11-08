@@ -72,6 +72,7 @@ class FlakyThenCorrectProvider:
 def judge_cache_off(monkeypatch):
     """Every test judges afresh unless it turns the verdict cache on itself (in a tmp dir)."""
     monkeypatch.setenv("QUAL_JUDGE_CACHE", "0")
+    monkeypatch.setenv("QUAL_ITEM_VIEWS", "0")          # these tests count the whole-case judge's own calls; the item views are tested on their own
     monkeypatch.setitem(J.JUDGE_CLI_VERSION, "value", "test-cli 1.0")
 
 
@@ -402,3 +403,22 @@ def test_a_long_read_keeps_the_passage_around_each_number_and_date_the_reply_sta
     kept = P.reads_of([{"locator": "tool:history", "text": deep}], [], reply="There are 0 subscribers as of 5 November and MRR 12,345.")
     assert "2026-11-05 count 0" in kept[0]["text"] and "12345" in kept[0]["text"] and kept[0]["text"].startswith("background line.")
     assert len(kept[0]["text"]) <= 2 * 2500 + 200
+
+
+def test_each_rubric_item_is_decided_by_the_majority_of_its_draft_and_three_views_and_the_score_by_the_formula():
+    import item_judge
+    case = {"input": "how many goals?", "rubric": ["States the count", "Adds nothing else"], "evidence_notes": ""}
+    verdict = {"rubric": [{"id": 1, "item": "States the count", "pass": False, "evidence": ""},
+                          {"id": 2, "item": "Adds nothing else", "pass": True, "evidence": "There are 12 goals."}],
+               "routing_ok": True, "side_effects_ok": True, "context_used": [], "judge_score": None}
+    evidence = {"reply": "There are 12 goals."}
+
+    def ask(prompt):
+        # The count item: every view finds it met, outvoting the draft. The extras item: two of three views find it met.
+        if "States the count" in prompt:
+            return json.dumps({"pick": "pass", "quote": "There are 12 goals."})
+        ask.extras = getattr(ask, "extras", 0) + 1
+        return json.dumps({"pick": "fail" if ask.extras == 1 else "pass", "quote": "There are 12 goals."})
+    got = item_judge.refine(case, verdict, evidence, [], "goals listed: 12", ask)
+    assert [r["pass"] for r in got["rubric"]] == [True, True] and got["score"] == 1.0
+    assert got["rubric"][0]["majority"]["draft"] == "fail" and got["rubric"][0]["majority"]["outcome"] == "majority"

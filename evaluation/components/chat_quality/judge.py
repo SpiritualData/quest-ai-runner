@@ -850,6 +850,20 @@ def write_cached_verdict(cache_path, raw):
         pass
 
 
+def item_majority(case, verdict, evidence, changes, truth, provider):
+    """The verdict with each rubric item decided by a majority of independent fast-tier views (``item_judge``), or as it was when that is off or fails."""
+    import item_judge
+    if not item_judge.on() or not verdict.get("rubric"):
+        return verdict
+    try:
+        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+        model = ModelRegistry(provider).resolve_tier("fast")
+        return item_judge.refine(case, verdict, evidence, changes, truth,
+                                 lambda prompt: provider.answer([{"role": "user", "content": prompt}], model=model))
+    except Exception as error:  # noqa: BLE001 -- the whole-case verdict stands, and says why
+        return dict(verdict, item_views_error=f"{type(error).__name__}: {error}")
+
+
 def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None,
           model=JUDGE_MODEL, production=False):
     """Run the LLM judge. Never raises: a failure returns {"error": ...} so a case is reported as
@@ -865,10 +879,10 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
     prompt = build_prompt(case, evidence, changes, pre, truth, pivots, production=production)
     cache_path = judge_cache_path(model, prompt)
     cached = read_cached_verdict(cache_path, case)
-    if cached:
-        return {"verdict": cached[1], "raw": cached[0], "prompt_chars": len(prompt),
-                "cached": True}
     provider = provider or claude_provider()
+    if cached:
+        return {"verdict": item_majority(case, cached[1], evidence, changes, truth, provider), "raw": cached[0], "prompt_chars": len(prompt),
+                "cached": True}
     messages = [{"role": "user", "content": prompt}]
     last = None
     for attempt in range(2):
@@ -877,7 +891,7 @@ def judge(case, evidence, changes, pre, truth, pivots, world=None, provider=None
             raw = provider.answer(messages, model=model, system=JUDGE_SYSTEM)
             verdict = normalise_verdict(extract_json(raw), case)
             write_cached_verdict(cache_path, raw)
-            return {"verdict": verdict, "raw": raw, "prompt_chars": len(prompt)}
+            return {"verdict": item_majority(case, verdict, evidence, changes, truth, provider), "raw": raw, "prompt_chars": len(prompt)}
         except RubricCountMismatch as e:
             last = f"{type(e).__name__}: {e}"
             if attempt == 0:
