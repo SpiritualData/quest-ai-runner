@@ -107,6 +107,11 @@ from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_pro
 
 # Tools and Web Search: the tool registry and the web readers
 from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+# The milestone flow's tools over a host's own Quest client, and the shapes a host's client and metric reader return
+from quest_ai_runner.the_body.hands.quest_operations.tools_milestone_flow import milestone_flow_tools
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import MetricSourceError, checked_reading
 from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateLinkWebResearch
 from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
 
@@ -191,7 +196,9 @@ __all__ = [
     "QdrantCardVectorStore",
     "QdrantVectorStore",
     "QuestApiCardRepository",
+    "MetricSourceError",
     "QuestApiError",
+    "QuestWriteError",
     "QuestClient",
     "RUNNABLE_MODELS",
     "RecipeStore",
@@ -207,6 +214,10 @@ __all__ = [
     "ToolRegistry",
     "ToolResult",
     "ToolSpec",
+    "ToolStatus",
+    "WriteResult",
+    "checked_reading",
+    "milestone_flow_tools",
     "VectorContextAssembler",
     "apply_quest_data_ladder_guard",
     "assemble_with_scope_tags",

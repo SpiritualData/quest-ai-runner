@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `milestone_flow_tools(client_factory, metric_reader=None)` (and `WriteResult`, `QuestWriteError`, `ToolStatus`, `MetricSourceError`, `checked_reading` in `quest_ai_runner.api`): the four tools the milestone flow runs on (`read_spec_records`, `list_quest_goals`, `create_or_update_quest_goal`, `read_metric_source`) over a host's own Quest client and metric reader, so a host that runs the brain inside its own service (no `QAR_BASE_URL`, no key) gets the milestone flow instead of a registry without it. `tools_metric_source.metric_reader_spec` is the source tool over any `read(name)`.
+
+### Changed
+- A metric source the record names that cannot be read leaves no figure on the keyed next step: its `Current value:` line says the source could not be read just now, and the metric record's older figure is not passed off as the current value.
+
 ## [0.5.1] - 2026-11-08
 
 ### Changed

@@ -22,7 +22,7 @@ import json
 import logging
 import re
 import subprocess
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from quest_ai_runner.the_world.tools.tools import (
     STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, expand_placeholders, process_environment)
@@ -122,35 +122,51 @@ def read_source(name: str, env: Optional[Mapping[str, str]] = None, run=subproce
     return reading_of(printed_object(proc.stdout), entry["label"])
 
 
-def read_metric_source_spec(env: Mapping[str, str]) -> Optional[ToolSpec]:
-    names = sorted(configured_sources(env))
-    if not names:
-        return None
+def checked_reading(text: str, label: str = "") -> Dict[str, Any]:
+    """The checked reading of a source that printed ``text`` (a JSON object, whole or on its last line): ``value``, ``as_of``, ``source`` and ``detail``. Raises ``MetricSourceError``
+    in plain words when the text is no object or lacks a value, a day or a source label. A host that reads a source some other way than a command (a file on the team's file
+    server) gives the text it read to this, so every source is held to the same shape."""
+    return reading_of(printed_object(text), label)
+
+
+def metric_reader_spec(read: Callable[[str], Mapping[str, Any]], names: Optional[Sequence[str]] = None, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> ToolSpec:
+    """The ``read_metric_source`` tool over ``read(name) -> reading`` (which raises ``MetricSourceError`` for a source it cannot read). ``names`` are the sources the host offers,
+    when it knows them up front; with none the name is free text the reader resolves."""
+    offered = sorted(names or [])
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         name = str(args.get("name") or "").strip()
         try:
-            reading = read_source(name, env)
+            reading = read(name)
         except MetricSourceError as error:
             return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"Not read: {error}. Record no value for it.")
         return ToolResult(ok=True, data={"name": name, **reading},
                           text=f"Metric source {name}: {shown(reading['value'])} (as of {reading['as_of']}, from {reading['source']}).")
 
+    name_schema: Dict[str, Any] = {"type": "string", "description": "The source's name, as the metric or solution record's source column gives it."}
+    if offered:
+        name_schema["enum"] = offered
     return ToolSpec(
         name="read_metric_source",
         handler=handler,
-        description=("Read a metric's current value from the source its record names: runs the lane's read-only command for that source and returns exactly what it "
-                     "computed, the value, the day it covers (as_of) and the source label, with the figures behind it in detail. Read only. "
-                     "Configured sources: " + ", ".join(names) + "."),
+        description=("Read a metric's current value from the source its record names: reads that source (read only) and returns exactly what it "
+                     "computed, the value, the day it covers (as_of) and the source label, with the figures behind it in detail. "
+                     + (("Configured sources: " + ", ".join(offered) + ".") if offered else "")).strip(),
         when_to_use=("A metric record (or its solution) names a source and you need the metric's real current value: to state it, or to record it. "
                      "Use the value, date and source label exactly as returned."),
         when_not_to_use=("A metric whose record names no source (read the data it points to instead). Estimating, rounding or adjusting the value. "
                          "Recording it: this only reads."),
-        parameters={"type": "object", "required": ["name"], "properties": {
-            "name": {"type": "string", "enum": names, "description": "The source's name, as the metric or solution record's source column gives it."}}},
+        parameters={"type": "object", "required": ["name"], "properties": {"name": name_schema}},
         mutates=False, workflow_step=False, origin="standard",
         keywords=("metric", "value", "current", "source", "measure", "number", "compute", "funnel", "pass", "rate", "count", "milestone"),
-        timeout_seconds=max(c["timeout_seconds"] for c in configured_sources(env).values()) + 15.0)
+        timeout_seconds=float(timeout_seconds) + 15.0)
+
+
+def read_metric_source_spec(env: Mapping[str, str]) -> Optional[ToolSpec]:
+    names = sorted(configured_sources(env))
+    if not names:
+        return None
+    return metric_reader_spec(lambda name: read_source(name, env), names, max(c["timeout_seconds"] for c in configured_sources(env).values()))
 
 
 STANDARD_TOOL_BUILDERS["read_metric_source"] = read_metric_source_spec

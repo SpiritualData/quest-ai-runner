@@ -502,8 +502,11 @@ class Resolved:
         return ("\nRelated goals on the quest: " + "; ".join(titles) + ".") if titles else ""
 
     def goal_arguments(self) -> Dict[str, Any]:
+        # A source the record names that could not be read puts no figure on the goal: the line says so, and the older reading (the goal's own, else the record's) is not
+        # passed off as the current value.
+        unread = f"{CURRENT_VALUE} not read, the {self.source} source could not be read just now"
         line = (current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"]) if self.reading
-                else self.kept_line or f"{CURRENT_VALUE} {self.value or 'not recorded yet'}")
+                else self.kept_line or (unread if self.source else f"{CURRENT_VALUE} {self.value or 'not recorded yet'}"))
         args: Dict[str, Any] = {
             "quest_id": self.quest_id, "title": next_step_title(self.name, self.week), "period": self.week.period, "due_date": self.week.due,
             "description": with_value_line(f"Next step for {self.name}. Done when: {self.done_when}.", line) + self.related_text(),
