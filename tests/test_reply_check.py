@@ -31,7 +31,7 @@ def test_the_binding_gives_each_view_only_its_own_evidence():
     evidence = {v["id"]: v["evidence"] for v in b["views"]}
     assert "plan text" in evidence["reads"] and "create_note" not in evidence["reads"]
     assert "create_note" in evidence["actions"] and "plan text" not in evidence["actions"]
-    assert "Sam" in evidence["asks"] and "create_note" not in evidence["asks"] and b["max_calls"] == 12
+    assert "Sam" in evidence["asks"] and "create_note" not in evidence["asks"] and b["max_calls"] == 40
     # Every factual sentence is held to the reads alone (a missed review nobody read is not a fact the reply may state).
     assert "plan text" in evidence["facts"] and "create_note" not in evidence["facts"] and "Sam" not in evidence["facts"]
 
@@ -78,3 +78,13 @@ def test_the_reads_and_facts_views_see_the_context_the_reply_was_written_from(mo
     V.checked_reply(orch, rs, "The store release is on the test track only.")
     facts_prompts = [p for p in ask.seen if "A statement of fact about" in p]
     assert facts_prompts and "the store release is on the test track only" in facts_prompts[0]
+
+
+def test_a_confirmed_span_removed_instead_of_rewritten_is_kept_as_a_mistake_record(tmp_path):
+    from hubofhubs.api import MistakeLog
+    rows = [{"id": "m1", "check_id": "facts", "input_slice": "reads", "wrong": "A claim nobody read.", "right": "the repair removed it", "source": "confirmed_failure",
+             "case_id": "", "at": ""}]
+    V.keep_mistakes(rows, str(tmp_path / "mistakes.jsonl"))
+    V.keep_mistakes(rows, str(tmp_path / "mistakes.jsonl"))
+    kept = MistakeLog(tmp_path / "mistakes.jsonl").read("facts")
+    assert [m.wrong for m in kept] == ["A claim nobody read."]

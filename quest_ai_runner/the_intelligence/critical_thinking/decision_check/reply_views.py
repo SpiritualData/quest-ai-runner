@@ -50,9 +50,9 @@ def present_text(participants: Sequence[Any]) -> str:
     return "the person writing to us" + "".join(f", {n}" for n in names if n)
 
 
-def reply_binding(reads: str, executed: str, present: str, max_calls: int = 12) -> Dict[str, Any]:
+def reply_binding(reads: str, executed: str, present: str, max_calls: int = 40) -> Dict[str, Any]:
     """The hub's Binding for a reply: four views, each shown only its own evidence."""
-    return {"kind": "reply", "max_calls": max_calls, "parallel": 4, "views": [
+    return {"kind": "reply", "max_calls": max_calls, "parallel": 8, "views": [
         {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "facts", "instruction": FACTS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "actions", "instruction": ACTIONS_VIEW, "evidence": "Executed actions this turn:\n" + (clip(executed) or NONE_TEXT)},
@@ -66,6 +66,21 @@ def model_ask(orch: Any, tier: str) -> Optional[Callable[[str], str]]:
         return None
     provider = orch.get_provider_for_model(model)
     return lambda prompt: answer_with_reasoning(provider, [{"role": "user", "content": prompt}], model=model, step=STEP_JUDGE) or ""
+
+
+def keep_mistakes(rows: Sequence[Any], path: str) -> None:
+    """Each confirmed span the check removed instead of rewriting, as a mistake record the learning loop reads (``MistakeLog`` at ``path``), and in the log. Never raises."""
+    for row in rows:
+        log.info("Reply check mistake: %s removed (%s)", str(row.get("wrong"))[:300], row.get("right"))
+    if not path or not rows:
+        return
+    try:
+        from hubofhubs.api import Mistake, MistakeLog
+        book = MistakeLog(path)
+        for row in rows:
+            book.add(Mistake(**row))
+    except Exception:  # noqa: BLE001 -- keeping a record must never break the turn
+        log.warning("reply check mistakes not kept", exc_info=True)
 
 
 def checked_reply(orch: Any, rs: Any, text: str) -> str:
@@ -85,9 +100,10 @@ def checked_reply(orch: Any, rs: Any, text: str) -> str:
         context = str(getattr(rs, "context_view", "") or "").strip()
         grounding = reads_text(answer_evidence(getattr(rs, "gathered", None) or [])) + (f"\n- the context the reply was written from: {context}" if context else "")
         binding = reply_binding(grounding, tool_landed_account(getattr(rs, "exec_record", None)),
-                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 12)))
+                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 40)))
         result = AgreementCheck(plumbing=None).check(text, binding, ask)
         rs.reply_check = {k: result.get(k) for k in ("outcome", "calls", "agreement", "why")}
+        keep_mistakes(result.get("mistakes") or [], str(getattr(cfg, "reply_check_mistakes_path", "") or ""))
         log.info("Reply check: %s in %s calls (agreement %s): %s", result.get("outcome"), result.get("calls"), result.get("agreement"), result.get("why"))
         fixed = str(result.get("text") or "")
         return fixed if result.get("outcome") == "repaired" and fixed.strip() else text
