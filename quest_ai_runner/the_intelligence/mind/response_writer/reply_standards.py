@@ -541,6 +541,51 @@ def sentences(text: str) -> List[str]:
     return [s for s in SENTENCE_END.split(text or "") if s and s.strip()]
 
 
+REFERENCE_LEAD = re.compile(r"\b(?:that|this|these|those|the)\s+(?P<head>[A-Za-z][A-Za-z-]{3,})", re.IGNORECASE)
+REFERENCE_STEM = 5
+
+
+def stem_of(word: str) -> str:
+    return word.lower()[:REFERENCE_STEM]
+
+
+def orphaned_sentences(before: str, after: str, question: str = "") -> List[str]:
+    """Sentences of ``after`` that point back (by "that", "this", "these", "those" or "the" and a noun) to a noun whose only mention was in a sentence ``before`` held and ``after`` no
+    longer does: the reference lost its antecedent. A noun also found earlier in ``after``, elsewhere in the same sentence, or in the question is still anchored. Compares the words
+    of the two texts; it reads no meaning and never judges what a sentence says."""
+    kept = sentences(after)
+    kept_keys = {k.strip() for k in kept}
+    removed = " ".join(x for x in sentences(before) if x.strip() not in kept_keys)
+    if not removed.strip():
+        return []
+    removed_stems = {stem_of(w) for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", removed)}
+    asked_stems = {stem_of(w) for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", question or "")}
+    out: List[str] = []
+    earlier: set = set()
+    for sentence in kept:
+        words = [stem_of(w) for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", sentence)]
+        for match in REFERENCE_LEAD.finditer(sentence):
+            head = stem_of(match.group("head"))
+            others = sum(1 for w in words if w == head)
+            if head in removed_stems and head not in earlier and head not in asked_stems and others <= 1:
+                out.append(sentence.strip())
+                break
+        earlier.update(words)
+    return out
+
+
+def drop_orphans(before: str, after: str, question: str = "") -> str:
+    """``after`` without the sentences whose reference lost its antecedent to the repair that turned ``before`` into it (repeated until none is left). Never empties the reply."""
+    text = after
+    for _ in range(4):
+        lost = set(orphaned_sentences(before, text, question))
+        kept = [x for x in sentences(text) if x.strip() not in lost]
+        if not lost or not kept:
+            break
+        text = " ".join(x.strip() for x in kept)
+    return text
+
+
 def repair(draft: str, standard: Standard, measurements: Measurements, evidence: str, reads: Optional[str] = None,
            figure_basis: Optional[str] = None) -> str:
     """The cheapest deterministic repair that is safe, for a draft that still breaks a measurement after the repair rounds.
@@ -583,6 +628,8 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
             # alternative, the acknowledgement and the next step). Position only; no wording is read.
             kept = kept[:standard.max_sentences - 1] + kept[-1:]
         fixed = " ".join(kept) if kept else draft
+        if kept:
+            fixed = drop_orphans(draft, fixed)       # a reference whose sentence the repair removed is not left pointing at nothing
         if standard.forbid_markup:      # the last resort for a reply read aloud: the marks go, the words stay
             fixed = re.sub(r"[*#`_>]|[\"“”]", "", fixed)
         return fixed

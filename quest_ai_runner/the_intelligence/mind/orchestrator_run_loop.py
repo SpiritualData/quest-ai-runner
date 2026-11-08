@@ -36,7 +36,8 @@ from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
-from hubofhubs.api import evidence_of, relativize, remove_em_dashes, strip_unsupported
+from hubofhubs.api import evidence_of, relativize, remove_em_dashes
+from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import without_unsupported
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
 
@@ -190,7 +191,7 @@ class RunLoopMixin:
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
             if res.kind == "answer" and not getattr(rs, "draft_in_chat", False) and (res.text or "").strip():
                 # Every figure in a status or answer reply must be one this turn read (the hub's grounded_figures arm): a sentence that states one it did not is taken out.
-                res.text, dropped = strip_unsupported(res.text, evidence_of(rs.gathered, rs.context_view, rs.user_message))
+                res.text, dropped = without_unsupported(rs, res.text, evidence_of(rs.gathered, rs.context_view, rs.user_message))
                 if dropped:
                     log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
             track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there

@@ -333,8 +333,9 @@ def test_ask_path_leaves_the_question_alone_without_a_conflict():
 def test_a_repair_that_drops_an_address_the_draft_held_is_rejected_for_the_longer_draft():
     longer = "Start here:\n1. Call Dana, see https://dana.example/book\n2. Order parts\nWhen can you call?"
     provider, res = run_turn([longer, GOOD])
-    assert len(steered(provider)) == 1                      # one repair round was tried, then it stopped
-    assert "Keep every web address" in steered(provider)[0]  # the hint told the writer the address must survive
+    repairs = [t for t in steered(provider) if "remove only these figures" not in t]       # the figure pass's own one rewrite is a different round
+    assert len(repairs) == 1                      # one repair round was tried, then it stopped
+    assert "Keep every web address" in repairs[0]  # the hint told the writer the address must survive
     assert "Order parts" in res.text and not res.text.startswith("Call Dana today")
 
 
@@ -449,3 +450,30 @@ def test_a_date_stated_beside_a_figure_must_be_the_date_the_records_give_that_fi
     assert unsupported_values("There are 0 paid subscribers as of 5 October.", index) == []
     assert unsupported_values("There are 0 paid subscribers as of 5 November.", index) == ["5 November"]
     assert unsupported_values("The review is on 5 November.", index) == []
+
+
+def test_a_repair_never_leaves_a_reference_whose_antecedent_it_removed():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import drop_orphans, orphaned_sentences
+    before = "The release needs write access to the store, which 1,000 testers confirmed. I have no record of that access being added since. The next review is Monday."
+    after = "I have no record of that access being added since. The next review is Monday."
+    assert orphaned_sentences(before, after) == ["I have no record of that access being added since."]
+    assert drop_orphans(before, after) == "The next review is Monday."
+    assert orphaned_sentences(before, after, "is the access added?") == []          # the question itself anchors the noun
+    assert orphaned_sentences(before, before) == []
+    assert drop_orphans("Only that access. Nothing else.", "Only that access.") == "Only that access."      # nothing removed is nothing orphaned
+
+
+def test_an_unsupported_figure_is_rewritten_once_by_the_writer_and_only_cut_when_the_rewrite_still_states_it():
+    from types import SimpleNamespace
+    from hubofhubs.api import evidence_of
+    from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import without_unsupported
+    evidence = evidence_of([{"text": "The release is blocked on store access."}], "", "status?")
+    text = "Store access was confirmed by 1,000 testers in a survey of the team. I have no record of that access being added since. The next review is Monday."
+    seen = []
+    clean = SimpleNamespace(user_message="status?", _gen_answer=lambda steer: seen.append(steer) or "I have no figure for the survey. I have no record of that access being added since. The next review is Monday.")
+    fixed, dropped = without_unsupported(clean, text, evidence)
+    assert dropped and "that access" in fixed and len(seen) == 1 and "1,000" in seen[0]
+    stubborn = SimpleNamespace(user_message="status?", _gen_answer=lambda steer: text)
+    cut, _ = without_unsupported(stubborn, text, evidence)
+    assert "1,000" not in cut and "that access" not in cut and "next review" in cut        # the cut took the antecedent, so the sentence pointing at it went too
+    assert without_unsupported(clean, "No figures here.", evidence) == ("No figures here.", [])
