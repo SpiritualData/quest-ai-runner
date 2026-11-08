@@ -111,7 +111,9 @@ def ship_overlay(meter_say=print):
     model_layer = os.environ.get("QAR_OVERLAY_CONCEPTAI_CHECKOUT")       # optional: the model-calling library checkout the release will pin, measured with the rest
     if model_layer and (Path(model_layer) / "conceptai").is_dir():
         (stage / "conceptai").mkdir()
-        pack = subprocess.run(["tar", "-C", model_layer, "--exclude=__pycache__", "--exclude=tests", "-cf", "-", "conceptai"], capture_output=True, check=True).stdout
+        # The package and the selection records it reads beside it (its implementations are chosen from them at import).
+        parts = [name for name in ("conceptai", "esoi", "esoi.toml") if (Path(model_layer) / name).exists()]
+        pack = subprocess.run(["tar", "-C", model_layer, "--exclude=__pycache__", "--exclude=tests", "-cf", "-", *parts], capture_output=True, check=True).stdout
         subprocess.run(["tar", "-C", str(stage / "conceptai"), "-xf", "-"], input=pack, check=True)
     archive = subprocess.run(["tar", "-C", str(stage), "-cf", "-", "."], capture_output=True, check=True).stdout
     subprocess.run(["rm", "-rf", str(stage)], check=True)
