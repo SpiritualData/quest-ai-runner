@@ -95,3 +95,10 @@ def test_the_deliverable_lands_on_the_goal_quest_ai_already_keeps_for_the_milest
 def test_a_writer_claim_without_a_quote_in_the_text_does_not_count():
     scorer = milestone_progress.Scorer(lambda prompt: json.dumps({"verdicts": [{"n": 1, "meets": True, "quote": "words not in the text"}]}), ["Has an opening"])
     assert scorer("Has an opening", "Some other text here.") is False
+
+
+def test_a_dated_reading_line_is_read_again_as_its_value_and_day():
+    registry = Registry()
+    registry.tables["metrics"]["met-1"]["record"] = "Current value: 0 (as of 2030-03-09, from the funnel dashboard, sign-ups by source)"
+    made = milestone_progress.make_progress(cue(), registry, decide)
+    assert made.metric_after == "0 (as of 2030-03-09, from the funnel dashboard, sign-ups by source)"

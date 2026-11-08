@@ -401,7 +401,11 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     try:
         again, _ = milestone_cue.read_through(registry, cue.quest_id)       # the milestone's metric read again, after the work
         metric = (again.get("metrics") or {}).get(cue.metric_ids[0]) if cue.metric_ids else None
-        out.metric_after = milestone_cue.first_sentence(str((metric or {}).get("record") or "")) if metric else ""
+        line = str((metric or {}).get("record") or "").strip().split("\n")[0].strip()
+        kept_reading = milestone_cue.Resolved.KEPT_READING.match(line)
+        # A dated reading line is said as its value and day (the clip of a whole line would stop at its colon); any other record by its first sentence.
+        out.metric_after = (f"{kept_reading.group('value').strip()} (as of {kept_reading.group('day').strip()}, from {kept_reading.group('source').strip()})" if kept_reading
+                            else milestone_cue.first_sentence(line)) if metric else ""
     except milestone_cue.LaneGap as gap:
         log.warning("milestone progress: the metric could not be read again: %s", gap)
     return out
