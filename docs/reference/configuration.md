@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-237 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+239 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -85,7 +85,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_MAX_BUDGET_USD` | A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MAX_TURNS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MODELS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MODEL_HARD` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MODEL_HARD` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_resolvers.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_NORMAL` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_SIMPLE` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `the_body/configuration/config_core_settings.py` | `.env.example` |
@@ -140,6 +140,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `the_intelligence/critical_thinking/metric_translation/tools_metric_results.py` | `docs/explanation/metric-results.md` |
 | `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `the_body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
 | `QAR_METRIC_SOURCES` | JSON map {source name: {command, label, timeout_seconds}} of the read-only commands that give a metric its current value; set from the metric_sources tables of the config file, which is where to write it. Unset offers no read_metric_source tool. | `the_body/configuration/config_environment.py`, `the_intelligence/critical_thinking/esoi_application/tools_metric_source.py` | - |
+| `QAR_MILESTONE_WRITER_TIER` | Model tier a milestone progress turn writes its deliverable on (default fast, overriding OrchestratorConfig.milestone_writer_tier); a measured arm, while the structured judgments stay on the cheap tier. | `the_intelligence/critical_thinking/esoi_application/milestone_progress.py` | - |
 | `QAR_MIN_FREE_MEMORY_MB` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MODEL_BACKEND` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` +1 | `.env.example`, `docs/how-to/adapters.md` |
 | `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
@@ -200,6 +201,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `the_consciousness/terminal/interactive_session_commands.py` | - |
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `the_body/configuration/walk_settings.py`, `the_world/tools/file_reading/files_search_worker.py`, `the_world/tools/file_reading/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `the_body/configuration/card_store_settings.py` | - |
+| `QAR_SOLUTION_CONSIDERATION_SECONDS` | How long a chat turn waits, after its acknowledgement, for each touched ESOI solution's own consideration (default 8); a slower one finishes in the background and grounds the next turn. CoreSettings.solution_consideration_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
 | `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `the_consciousness/terminal/__main__.py`, `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | `docs/explanation/metric-results.md`, `docs/explanation/spec-selection.md` |
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `the_consciousness/terminal/cli_quest.py` | - |
