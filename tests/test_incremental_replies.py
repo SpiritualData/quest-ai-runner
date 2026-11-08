@@ -144,7 +144,8 @@ def build(provider, runner, sink=None, **cfg):
 
 def run(orch, meta=None) -> List[Dict[str, Any]]:
     events: List[Dict[str, Any]] = []
-    orch.run("do the thing", sink=StreamSink(events.append), context_meta=meta) if meta else orch.run("do the thing", sink=StreamSink(events.append))
+    # nobody reads this thread live: the question is filed as an ask (a live chat asks it in the reply, see test_inline_ask_and_landed_receipt)
+    orch.run("do the thing", sink=StreamSink(events.append), context_meta={**(meta or {}), "live_user_turn": False})
     return events
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from hubofhubs.api import Mode
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
@@ -65,13 +66,27 @@ def test_clarify_honors_planner_kind_and_deadline():
     ])
     sink = StubEscalation(decision_id="dec_choice")
     before = datetime.now(timezone.utc)
+    # Nobody is attending a background run, so the question is filed for the person to answer later.
     res = make_orchestrator(provider, StubRetrieval(), escalation=sink).run(
-        "which campaign should run", quest_id="quest_1")
+        "which campaign should run", quest_id="quest_1", mode=Mode.BACKGROUND)
 
     assert res.kind == "confirm"
     raised = sink.raised[0]
     assert raised.kind == "notice:prod-ops"
     assert before + timedelta(hours=47) < raised.deadline < before + timedelta(hours=49)
+
+
+def test_clarify_to_the_person_in_a_live_chat_is_asked_inline_and_files_nothing():
+    provider = StubProvider(decisions=[
+        {"action": "clarify", "clarification": {"question": "Which campaign?", "options": ["A", "B"]}, "rationale": "need a choice"},
+    ])
+    sink = StubEscalation(decision_id="dec_choice")
+    res = make_orchestrator(provider, StubRetrieval(), escalation=sink).run("which campaign should run", quest_id="quest_1")
+
+    assert res.kind == "confirm"
+    assert "Which campaign?" in res.question
+    assert res.decision_id is None
+    assert sink.raised == []
 
 
 def test_confirm_deadline_garbage_degrades_to_no_deadline():

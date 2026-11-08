@@ -323,6 +323,9 @@ class RunBeginMixin:
         # The default FileContextStore ignores it. Threaded to both assemble() and record().
         _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
         rs._ctx_meta = _ctx_meta
+        # A person is typing to us and waiting for this reply: a question for them is asked in the reply, never filed as a decision-request.
+        # A consumer that knows better (a person is not reading this thread) says so in ``context_meta``.
+        _ctx_meta.setdefault("live_user_turn", bool(mode is Mode.LIVE and message_is_user_turn))
         rs.turn_asks = []          # decision-requests a worker raised with its own create_decision call this turn (core/ask_policy.py)
         _ctx_meta["turn_asks"] = rs.turn_asks   # the deep path's adoption of a worker's own row records into the same ledger
         rs.private_cards = []      # a shared thread: the selected cards the reply must not draw on (core/shared_thread.py)
@@ -524,7 +527,7 @@ class RunBeginMixin:
                 # clarify/confirm mechanism so the executor maps it to needs_you and chat posts it.
                 rs.plan = PlanDecision(action="confirm", confirm_question=clarify_q,
                                     rationale="clarification needed to understand the request")
-                rs.res = self._run_confirm(rs.plan, quest_id=quest_id)
+                rs.res = self._run_confirm(rs.plan, quest_id=quest_id, ask_inline=bool(_ctx_meta.get("live_user_turn")))
                 return self._finish_understanding_clarify(
                     rs.res, emit=emit, exec_record=exec_record, user_message=rs.user_message,
                     ctx_meta=_ctx_meta)

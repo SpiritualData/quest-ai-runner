@@ -13,7 +13,7 @@ Covers the four contract points:
 import time
 from typing import Any, Dict, List
 
-from hubofhubs.api import EVENT_MODE_SIGNAL
+from hubofhubs.api import EVENT_MODE_SIGNAL, Mode
 from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 from quest_ai_runner.the_intelligence.mind.orchestrator import (
@@ -756,6 +756,19 @@ def test_brainstorm_understanding_clarify_does_not_escalate():
 
 
 def test_brainstorm_understanding_clarify_still_escalates_in_normal_mode():
+    """A normal run nobody is attending still files the question; a live chat asks it in the reply (next test)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "r"}])
+    escalation = StubEscalation()
+    orch = _orch(provider, StubRetrieval(), escalation=escalation)
+    orch._understand_input = lambda *a, **kw: ("do it", "", "Which thing did you mean?")
+    orch._needs_context_to_understand = lambda _m: True
+    orch.conversation_store = object()
+    res = orch.run("Do the thing we discussed", conv_id="c1", mode=Mode.BACKGROUND)
+    assert res.kind == "confirm"
+    assert escalation.raised          # unchanged: a normal turn still asks the human
+
+
+def test_understanding_clarify_in_a_live_chat_is_asked_in_the_reply_and_files_nothing():
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "r"}])
     escalation = StubEscalation()
     orch = _orch(provider, StubRetrieval(), escalation=escalation)
@@ -764,7 +777,9 @@ def test_brainstorm_understanding_clarify_still_escalates_in_normal_mode():
     orch.conversation_store = object()
     res = orch.run("Do the thing we discussed", conv_id="c1")
     assert res.kind == "confirm"
-    assert escalation.raised          # unchanged: a normal turn still asks the human
+    assert res.question == "Which thing did you mean?"
+    assert res.decision_id is None
+    assert escalation.raised == []
 
 
 # ---------------------------------------------------------------------------

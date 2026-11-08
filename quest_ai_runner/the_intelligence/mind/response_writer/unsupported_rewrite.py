@@ -32,5 +32,11 @@ def without_unsupported(rs: Any, text: str, evidence: Any) -> Tuple[str, List[st
             rewritten = ""
         if rewritten.strip():
             again, still = strip_unsupported(rewritten, evidence)
-            return (rewritten if not still else drop_orphans(rewritten, again, getattr(rs, "user_message", ""))), dropped
+            final = rewritten if not still else drop_orphans(rewritten, again, getattr(rs, "user_message", ""))
+            # The writer rewrites from the turn's context, which may only hold the pre-work proposal; the rewrite is the LAST text
+            # before the reader, so it is held to the turn's executed-action account like every earlier rewrite.
+            keep = getattr(rs, "keep_landed", None)
+            if callable(keep):
+                final = keep(final)
+            return final, dropped
     return drop_orphans(text, cut, getattr(rs, "user_message", "")), dropped

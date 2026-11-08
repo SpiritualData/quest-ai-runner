@@ -102,7 +102,8 @@ def build(provider, runner, sink, **cfg):
 
 def run(orch, meta=META):
     events: List[Dict[str, Any]] = []
-    result = orch.run("book the photographer", sink=StreamSink(events.append), quest_id=QUEST, context_meta=dict(meta))
+    # nobody reads this thread live: the question is filed as an ask (a live chat asks it in the reply, see test_inline_ask_and_landed_receipt)
+    result = orch.run("book the photographer", sink=StreamSink(events.append), quest_id=QUEST, context_meta=dict(meta, live_user_turn=False))
     return result, events
 
 

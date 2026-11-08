@@ -271,11 +271,13 @@ class UnderstandingMixin:
             return gist, None
 
     def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
-                     emit: Optional[_Emitter] = None) -> OrchestratorResult:
+                     emit: Optional[_Emitter] = None, ask_inline: bool = False) -> OrchestratorResult:
         """Surface user clarification/selection need as a decision request.
 
         Creates a decision-request with the question and options (if any) so the user can
         respond on the frontend or terminal. Returns with kind="confirm" to trigger UI.
+        ``ask_inline`` (a person is in the conversation waiting for the reply) asks the question in the reply
+        and files no decision-request: the person answers by replying.
         """
         clarif = plan.clarification or {}
         question = (clarif.get("question") or "").strip() or "Need your input to proceed"
@@ -286,7 +288,7 @@ class UnderstandingMixin:
         question_with_opts = _clarify_question_text(plan)
 
         decision_id = None
-        if self.escalation is not None:
+        if self.escalation is not None and not ask_inline:
             try:
                 decision_id = self.escalation.escalate(Escalation(
                     # Condense to a concise done-standard: a decision summary is stored as a goal
@@ -309,11 +311,11 @@ class UnderstandingMixin:
 
     # --- confirm -------------------------------------------------------------
 
-    def _run_confirm(self, plan: PlanDecision, *, quest_id: Optional[str]) -> OrchestratorResult:
+    def _run_confirm(self, plan: PlanDecision, *, quest_id: Optional[str], ask_inline: bool = False) -> OrchestratorResult:
         question = (plan.confirm_question
                     or "Before I act on this — can you confirm you'd like me to go ahead?").strip()
         decision_id = None
-        if self.escalation is not None:
+        if self.escalation is not None and not ask_inline:
             try:
                 decision_id = self.escalation.escalate(Escalation(
                     # Condense long questions: the summary is stored as a goal CONDITION.

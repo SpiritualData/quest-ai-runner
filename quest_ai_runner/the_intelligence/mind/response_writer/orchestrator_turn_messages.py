@@ -157,6 +157,14 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
                                 meta.get("participants") or [], asker)
     receipts = list(getattr(res, "observations", None) or []) if getattr(res, "observations_reported", False) else []
     done = done_text(receipts=receipts, coverage=getattr(res, "coverage", None))
+    # THE PERSON IS IN THE CONVERSATION: a question to the one who is typing to us is asked in the reply, where they answer it by
+    # replying. A decision-request ("Asks for you") is for someone who is NOT here (a teammate named by the verifier, or a run with
+    # nobody attending); filing one for the asker makes a chat question a task they must find elsewhere. The turn ends as a final.
+    if assignee.asked_of == "asker" and meta.get("live_user_turn"):
+        existing = str(getattr(res, "output", "") or "")
+        if question.casefold() not in existing.casefold():
+            res.output = ((existing + "\n\n") if existing.strip() else "") + question
+        return False
     why_only_you = why_only_you_of(str(verdict.get("blocker") or ""), assignee, meta.get("participants") or [])
     options = None
     outcome = file_ask(

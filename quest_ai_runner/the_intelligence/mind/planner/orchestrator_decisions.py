@@ -447,6 +447,16 @@ def ladder_for_quest_data(ladder: List[Any]) -> List[Any]:
     return operations_only if operations_only else kept
 
 
+def rung_offers_quest_data_tools(rung: Any) -> bool:
+    """Whether a rung can follow the write-surface instruction, which tells a worker to use named quest-data tools.
+
+    A rung that cannot be offered any tool (an in-process model that only writes text) declares ``offers_quest_data_tools = False``.
+    Told to use a tool it does not have, such a rung reports "no such tool" and refuses work it could do (prod 2026-11-08: a request
+    for a social post came back "not saved, no goal-creating tool exists"), so the instruction is left out of its brief. A rung that
+    declares nothing keeps the instruction, exactly as before."""
+    return getattr(rung, "offers_quest_data_tools", True) is not False
+
+
 def apply_quest_data_ladder_guard(
     ladder: List[Any], brief: str, *, deliberate_choice: bool
 ) -> Tuple[List[Any], str]:
@@ -456,14 +466,15 @@ def apply_quest_data_ladder_guard(
     classifier-selected named runner) is never re-routed, but if its rung is not the governed-
     operations rung the brief gains ``QUEST_DATA_WRITE_SURFACE_INSTRUCTION``. Otherwise the default
     ladder is narrowed by ``ladder_for_quest_data`` (file-editing rungs dropped, operations rungs
-    preferred), and the instruction is appended when no operations rung survived.
+    preferred), and the instruction is appended when no operations rung survived. The instruction names tools, so it is only
+    appended to a rung that can follow it (``rung_offers_quest_data_tools``).
     """
     def surface(r: Any) -> Any:
         return getattr(r, "write_surface", WRITE_SURFACE_AGENT)
 
     if deliberate_choice:
         rung = ladder[0] if ladder else None
-        if surface(rung) != WRITE_SURFACE_OPERATIONS:
+        if surface(rung) != WRITE_SURFACE_OPERATIONS and rung_offers_quest_data_tools(rung):
             brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
         return ladder, brief
 
@@ -484,7 +495,7 @@ def apply_quest_data_ladder_guard(
         log.info("Quest-data ladder guard: no rung can change quest data, so this goal has "
                  "nothing to execute it")
         ladder = [None]
-    if not any(surface(r) == WRITE_SURFACE_OPERATIONS for r in ladder):
+    if not any(surface(r) == WRITE_SURFACE_OPERATIONS for r in ladder) and all(rung_offers_quest_data_tools(r) for r in ladder):
         # No governed-operations rung survived: the agent worker still runs the goal, but must be
         # told which tool to use instead of writing code.
         brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION

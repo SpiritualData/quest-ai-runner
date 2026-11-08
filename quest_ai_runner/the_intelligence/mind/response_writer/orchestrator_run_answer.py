@@ -348,7 +348,7 @@ class RunAnswerMixin:
 
         if rs.final == "clarify":
             # User clarification/selection needed: surface as decision-request
-            rs.res = self._run_clarify(rs.plan, quest_id=quest_id, emit=emit)
+            rs.res = self._run_clarify(rs.plan, quest_id=quest_id, emit=emit, ask_inline=bool(_ctx_meta.get("live_user_turn")))
             rs.res.exit_reason = "clarify"
             return finish(rs.res)
 
@@ -709,6 +709,8 @@ class RunAnswerMixin:
         # the judge (one structured contradiction verdict, no keywords) swaps in the account when the reply denies it. Set before
         # the nets below, which would otherwise read a denial ("I can't add it") as work still to execute.
         rs.landed_account = tool_landed_account(exec_record)
+        rs.landed_receipt = False
+        rs.keep_landed = lambda text: self.keep_landed_work_reported(rs, text)    # the final rewrites (the figure pass) hold their output to the same account
         rs.text = self.keep_landed_work_reported(rs, rs.text)
 
         # If deferred_deep is set, also run the deep task now, synchronously, right after the

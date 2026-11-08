@@ -55,8 +55,13 @@ class RunCloseMixin:
         try:
             account = (getattr(rs, "landed_account", "") or "").strip()
             exec_record = rs.exec_record
-            if (not account or not (text or "").strip() or exec_record is None
-                    or not exec_record.any_success or exec_record.any_failure):
+            # What proves the work landed: a tool or run the record shows succeeded with none failed, OR a deferred run's own write
+            # receipt (``DeepResult.has_write_receipt``, kept on ``rs.landed_receipt``). The record marks a run that the goal verifier
+            # judged "not met" as failed even when its write landed (a goal added where a workflow was asked for), and that is exactly
+            # the run whose proposal-shaped rewrite most needs holding to the account.
+            receipt = bool(getattr(rs, "landed_receipt", False))
+            if (not account or not (text or "").strip()
+                    or not (receipt or (exec_record is not None and exec_record.any_success and not exec_record.any_failure))):
                 return text
             if self.reply_denies_landed_work(rs.user_message, text, account) is True:
                 log.warning("reply denied work the execution record proves landed; "
@@ -219,6 +224,7 @@ class RunCloseMixin:
                     rs.context_view = (rs.context_view + "\n\n" + _deep_block) if rs.context_view else _deep_block
                     rs._deferred_deep_grounded = True
                     rs.landed_account = deep_output
+                    rs.landed_receipt = any(getattr(d, "has_write_receipt", False) for d in landed_results)
                     rs.text = self.keep_landed_work_reported(rs, rs.text)
                     if unconfirmed_text and unconfirmed_text not in rs.text:
                         # A sibling that did NOT land: its own honest text, verbatim, after the
@@ -266,6 +272,10 @@ class RunCloseMixin:
                     # toward "done".
                     rs.text = unconfirmed_text
                     rs.deferred_unconfirmed = True
+                    # The run's own words are a record the later rewrites (the figure pass, a regeneration) must be able to read:
+                    # without them in the context a rewrite is written from the pre-work proposal alone and can deny the run.
+                    _unconfirmed_block = "--- WHAT THE DEEP RUN REPORTED (not confirmed as done) ---\n" + unconfirmed_text
+                    rs.context_view = (rs.context_view + "\n\n" + _unconfirmed_block) if rs.context_view else _unconfirmed_block
                 elif _queued_mode:
                     # HONEST-ENQUEUE: this deployment queues deferred work, NO hand-off was
                     # confirmed this turn (the enqueue failed, or the run errored before it), and
@@ -475,7 +485,7 @@ class RunCloseMixin:
                             rs.text = blocked.output
                             rs._parked_decision_id = blocked.decision_id
                             rs._decision_parked = True
-                        else:
+                        elif blocked.output.casefold() not in (rs.text or "").casefold():
                             rs.text = (rs.text or "").rstrip() + "\n\n" + blocked.output
                         break
                     # HONESTY: the answer claims a completed change the execution record does not
