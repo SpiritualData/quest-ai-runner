@@ -35,6 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence, gathered_content
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
+from quest_ai_runner.the_intelligence.mind.planner import handoff_gate
 from quest_ai_runner.the_intelligence.mind.planner.handoff_gate import HANDOFF_NOTE, must_hand_off
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
 from hubofhubs.api import evidence_of, relativize, remove_em_dashes
@@ -536,6 +537,23 @@ class RunLoopMixin:
                     gathered.append(planner_note_observation(HANDOFF_NOTE, "handoff_required"))
                     emit.status("Planning the hand-off…")
                     continue
+            # HAND-OFF STEPS: a plan that hands the work over is accepted only after the turn read the quest's records and made one owned next-step write (tool receipts, never words).
+            # The planner is told what is missing; when the records are still unread on the second try, the code reads them (the planner's own tool step) and the planner plans again.
+            if (rs.plan and message_is_user_turn and handoff_gate.hands_off(rs.plan) and must_hand_off(self.reach_verdict(rs.user_message))
+                    and getattr(rs, "handoff_steps_asked", 0) < 2 and step + 1 < cfg.max_steps and not budget_exhausted()):
+                missing = handoff_gate.steps_missing(gathered, self.tools)
+                if missing:
+                    rs.handoff_steps_asked = getattr(rs, "handoff_steps_asked", 0) + 1
+                    target = str(rs.quest_id or next(iter(self._meta_quest_ids(_ctx_meta) or []), "") or "")
+                    owed = handoff_gate.owed_read_calls(target, gathered) if "read" in missing and rs.handoff_steps_asked == 2 else []
+                    if owed:
+                        log.info("Hand-off steps: the records are still unread; the code reads them (%s).", ", ".join(c["name"] for c in owed))
+                        rs.plan.action, rs.plan.tool_calls, rs.plan.deferred_deep, rs.plan.reads = "tool", owed, None, []
+                        emit.status("Reading the quest's records before handing the work over…")
+                    else:
+                        gathered.append(planner_note_observation(handoff_gate.steps_note(missing), "handoff_steps_missing"))
+                        emit.status("Completing the hand-off…")
+                        continue
             if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
                 rs.draft_in_chat = True
             if (getattr(rs, "draft_in_chat", False) and step >= 2 and rs.plan.action in ("read", "tool")
