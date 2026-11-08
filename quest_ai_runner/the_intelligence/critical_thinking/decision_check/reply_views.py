@@ -21,6 +21,8 @@ ACTIONS_VIEW = ("A statement that a change was made or an action done (added, cr
                 "in the evidence. A plan, an offer, a read and a question are not this task.")
 ASKS_VIEW = ("A question or request addressed to a named person who is not listed as present in the evidence fails this task. A question to a person who is present, "
              "and every statement that is not a question or request, does not fail it.")
+FACTS_VIEW = ("A statement of fact about the person's quest, work, people, dates, figures or events (something happened, was missed, is due, stands at a value) must be "
+              "supported by the reads listed in the evidence. A plan, an offer, a question, advice and general knowledge are not this task.")
 EVIDENCE_CHARS = 6000
 NONE_TEXT = "(none)"
 
@@ -47,10 +49,11 @@ def present_text(participants: Sequence[Any]) -> str:
     return "the person writing to us" + "".join(f", {n}" for n in names if n)
 
 
-def reply_binding(reads: str, executed: str, present: str, max_calls: int = 6) -> Dict[str, Any]:
-    """The hub's Binding for a reply: three views, each shown only its own evidence."""
-    return {"kind": "reply", "max_calls": max_calls, "parallel": 3, "views": [
+def reply_binding(reads: str, executed: str, present: str, max_calls: int = 8) -> Dict[str, Any]:
+    """The hub's Binding for a reply: four views, each shown only its own evidence."""
+    return {"kind": "reply", "max_calls": max_calls, "parallel": 4, "views": [
         {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads) or NONE_TEXT)},
+        {"id": "facts", "instruction": FACTS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads) or NONE_TEXT)},
         {"id": "actions", "instruction": ACTIONS_VIEW, "evidence": "Executed actions this turn:\n" + (clip(executed) or NONE_TEXT)},
         {"id": "asks", "instruction": ASKS_VIEW, "evidence": "Present in this conversation: " + (clip(present, 600) or NONE_TEXT)}]}
 
@@ -77,7 +80,7 @@ def checked_reply(orch: Any, rs: Any, text: str) -> str:
             return text
         meta = getattr(rs, "_ctx_meta", None) or {}
         binding = reply_binding(reads_text(answer_evidence(getattr(rs, "gathered", None) or [])), tool_landed_account(getattr(rs, "exec_record", None)),
-                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 6)))
+                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 8)))
         result = AgreementCheck(plumbing=None).check(text, binding, ask)
         rs.reply_check = {k: result.get(k) for k in ("outcome", "calls", "agreement", "why")}
         log.info("Reply check: %s in %s calls (agreement %s): %s", result.get("outcome"), result.get("calls"), result.get("agreement"), result.get("why"))

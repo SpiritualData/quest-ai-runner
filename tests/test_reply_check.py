@@ -31,7 +31,9 @@ def test_the_binding_gives_each_view_only_its_own_evidence():
     evidence = {v["id"]: v["evidence"] for v in b["views"]}
     assert "plan text" in evidence["reads"] and "create_note" not in evidence["reads"]
     assert "create_note" in evidence["actions"] and "plan text" not in evidence["actions"]
-    assert "Sam" in evidence["asks"] and "create_note" not in evidence["asks"] and b["max_calls"] == 6
+    assert "Sam" in evidence["asks"] and "create_note" not in evidence["asks"] and b["max_calls"] == 8
+    # Every factual sentence is held to the reads alone (a missed review nobody read is not a fact the reply may state).
+    assert "plan text" in evidence["facts"] and "create_note" not in evidence["facts"] and "Sam" not in evidence["facts"]
 
 
 def test_an_action_claimed_but_not_executed_is_removed_and_the_rest_of_the_reply_stays(monkeypatch):
