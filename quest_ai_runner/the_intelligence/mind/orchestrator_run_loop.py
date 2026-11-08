@@ -35,6 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence, gathered_content
 from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import scope_fence_block
 from quest_ai_runner.the_world.tools import tool_guards
+from quest_ai_runner.the_intelligence.mind.planner.handoff_gate import HANDOFF_NOTE, must_hand_off
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
 from hubofhubs.api import evidence_of, relativize, remove_em_dashes
 from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import without_unsupported
@@ -525,6 +526,16 @@ class RunLoopMixin:
                 rs.plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             if getattr(rs.plan, "user_intent", None):
                 rs.turn_user_intent = rs.plan.user_intent
+            if rs.plan and message_is_user_turn and must_hand_off(self.reach_verdict(rs.user_message)):
+                # The reach check settled: an order, outside what is readable, covered by an attached environment. It is an order whatever the planner called it, and a plan that only
+                # answers is sent back once to hand the work over.
+                rs.turn_user_intent = "act"
+                if (rs.plan.action == "answer" and not rs.plan.deferred_deep and not getattr(rs, "handoff_asked", False) and step + 1 < cfg.max_steps
+                        and not tool_guards.mutating_tool_ran(gathered, self.tools) and not budget_exhausted()):
+                    rs.handoff_asked = True
+                    gathered.append(planner_note_observation(HANDOFF_NOTE, "handoff_required"))
+                    emit.status("Planning the hand-off…")
+                    continue
             if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
                 rs.draft_in_chat = True
             if (getattr(rs, "draft_in_chat", False) and step >= 2 and rs.plan.action in ("read", "tool")
