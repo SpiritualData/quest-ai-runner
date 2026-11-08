@@ -108,13 +108,19 @@ def ship_overlay(meter_say=print):
         (stage / "hub").mkdir()
         pack = subprocess.run(["tar", "-C", str(hub), "--exclude=__pycache__", "--exclude=tests", "-cf", "-", "hubofhubs"], capture_output=True, check=True).stdout
         subprocess.run(["tar", "-C", str(stage / "hub"), "-xf", "-"], input=pack, check=True)
+    model_layer = os.environ.get("QAR_OVERLAY_CONCEPTAI_CHECKOUT")       # optional: the model-calling library checkout the release will pin, measured with the rest
+    if model_layer and (Path(model_layer) / "conceptai").is_dir():
+        (stage / "conceptai").mkdir()
+        pack = subprocess.run(["tar", "-C", model_layer, "--exclude=__pycache__", "--exclude=tests", "-cf", "-", "conceptai"], capture_output=True, check=True).stdout
+        subprocess.run(["tar", "-C", str(stage / "conceptai"), "-xf", "-"], input=pack, check=True)
     archive = subprocess.run(["tar", "-C", str(stage), "-cf", "-", "."], capture_output=True, check=True).stdout
     subprocess.run(["rm", "-rf", str(stage)], check=True)
     target = overlay_dir()
     done = remote_exec(f'sh -c "rm -rf {target} && mkdir -p {target} && tar -C {target} -xf -"', data=archive)
     if done.returncode:
         raise RuntimeError(f"overlay could not be shipped: {done.stderr.decode()[-300:]}")
-    meter_say(f"chat_quality: overlay shipped: {len(files)} backend file(s) {files}, the quest_ai_runner package" + (" and the hubofhubs package" if (hub / "hubofhubs").is_dir() else ""))
+    meter_say(f"chat_quality: overlay shipped: {len(files)} backend file(s) {files}, the quest_ai_runner package" + (" and the hubofhubs package" if (hub / "hubofhubs").is_dir() else "")
+              + (" and the conceptai package" if model_layer and (Path(model_layer) / "conceptai").is_dir() else ""))
     return files
 
 
