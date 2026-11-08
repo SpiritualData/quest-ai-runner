@@ -473,6 +473,7 @@ class Resolved:
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
     record_line: str = ""                                # the metric record's first line as written: a dated "Current value: ... (as of ..., from ...)" is a recorded reading
     request: str = ""                                    # what the person asked this turn, in their words: the step and its draft serve it, within the milestone
+    lead: str = ""                                       # the code-composed sentence saying what the write did (created, updated in place, already set), whole
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
@@ -838,7 +839,7 @@ class Resolved:
                 named = ", ".join(owners)
                 note = (f" The owner could not be set ({'; '.join(refused)}), so the goal is left unassigned. Say plainly that the record names {named} but the quest cannot assign the goal to them, say who should own it, and ask nothing."
                         if refused and not owner else "")
-                lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
+                lead = self.lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
                 if (result.data or {}).get("problems"):
                     note += " The quest does not show everything that was asked for (" + "; ".join(result.data["problems"]) + "): say exactly that, and do not say it is linked or owned."
                 note += self.reading_note()
