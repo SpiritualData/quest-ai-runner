@@ -120,7 +120,7 @@ def test_the_owner_is_named_as_the_record_names_them_with_the_account_beside_it_
     calls = []
     step = resolved(tools(calls))
     step.carry_out(tools(calls), lambda prompt: "Travis" if "Which name in this text" in prompt else json.dumps({"draft": "Pitch.", "human_step": "Send it."}))
-    assert step.owner_label == "Travis (account SpiritOps)" and step.lead_sentence("created").endswith("Travis (account SpiritOps) owns it.")
+    assert step.owner_label == "Travis (account SpiritOps)" and "Travis (account SpiritOps) owns it. The step is due " in step.lead_sentence("created")
     same = resolved(tools(calls, member="Travis Example"))
     same.carry_out(tools(calls, member="Travis Example"), lambda prompt: json.dumps({"draft": "Pitch.", "human_step": "Send it."}))
     assert same.owner_label == "Travis Example"

@@ -569,12 +569,19 @@ class Resolved:
         """The plain statement of what the write did, composed by code from the tool's typed state: created, updated in place, or already set; then who owns it, by the name the
         milestone's record uses (with the account's name beside it when that differs)."""
         lead = self.LEADS.get(state, "I recorded this week's next step for {name}.").format(name=self.name)
-        return f"{lead} {self.owner_label} owns it." if self.owner_label else lead
+        lead = f"{lead} {self.owner_label} owns it." if self.owner_label else lead
+        # The step's own due date, said by code: left to the reply, the milestone's target date was given as the step's due date.
+        due = str((self.after_state or {}).get("due_date") or self.week.due or "")[:10]
+        try:
+            day = datetime.date.fromisoformat(due)
+        except ValueError:
+            return lead
+        return f"{lead} The step is due {day.strftime('%A')} {day.day} {day.strftime('%B')}."
 
     DRAFT_FORM = ('"draft": the deliverable itself, never a plan to write it, written to be used as it is and short enough to send or use (under 120 words). Its type comes from what the milestone '
                   'needs, read from its done-when, what it produces and its text: for a milestone that depends on an outside party, a short message to that party stating what they get, the ask and '
                   'the next step (a partner pitch); for a milestone about a video, the words to be spoken, not notes about it; for copy to be compared, distinct alternatives with the metric they are '
-                  'compared by; for people to be asked, few neutral questions, each a full sentence ready to send; for a new source or channel, one source the facts above name (when they name none, the kind of source to '
+                  'compared by; for people to be asked, only a few neutral questions, each a full sentence ready to send, with no greeting, introduction or message around them; for a new source or channel, exactly one source (never a choice of two or more) that the facts above name (when they name none, the kind of source to '
                   'try first, labelled as a candidate with why) with a one-line hypothesis, a first test and the milestone metric; for a release or an announcement, the message to be published; a checklist of at most 5 steps only when none of these fits. '
                   'Use only the facts above: never a person, place, group, platform or organisation they do not name; never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
                   '("I", "we", "our") unless the facts above name who is speaking; never a due date or deadline that is not in the facts above; no em dashes. '
