@@ -19,6 +19,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Metric Translation (solution with no page of its own, its implementations are in this intent's records)
 - Goal Completion (solution with no page of its own, its implementations are in this intent's records)
 - Response Quality (solution with no page of its own, its implementations are in this intent's records)
+- Decision Check (solution with no page of its own, its implementations are in this intent's records)
 
 ## Solutions at a glance
 
@@ -29,6 +30,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Metric Translation | `metric-translation` | `quest_ai_runner.run("metric-translation", ...)` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
 | Goal Completion | `goal-completion` | `quest_ai_runner.run("goal-completion", ...)` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
 | Response Quality | `response-quality` | `quest_ai_runner.run("response-quality", 'See https://example.org/a for details.')` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
+| Decision Check | `decision-check` | no entry declared | none selected | none yet |
 
 ## Solutions from a library
 
@@ -36,6 +38,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Metric Translation](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`metric-translation`): Turns a request into a metric with a target value or an improvement, adjustable in real time, and applies the same step recursively to each sub-goal, rolling each up to its parent objective. Adopted from the library `hub`.
 - [Goal Completion](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`goal-completion`): Says whether the goal condition of a request or sub-goal was met, against the done-standard its metric names. Adopted from the library `hub`.
 - [Response Quality](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`response-quality`): Judges a response against a quality profile: a named set of criteria with weights and target values. Adopted from the library `hub`.
+- [Decision Check](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/critical_thinking/README.md) (`decision-check`): Checks a draft decision (a pick among options, or a reply) by small independent checks, each a short structured call that sees only the slice of evidence it needs, so that a cheap model gives a reliable decision through structure. Adopted from the library `hub`.
 
 ## Metrics and their leaders
 
@@ -70,6 +73,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Metric Translation | `metric-translation` | Capped model draft per task (today) (`capped_model_draft`) | Drafted metrics accepted per unit of cost |
 | Goal Completion | `goal-completion` | Production judges under a scripted provider (`qar_judges`) | Judge deterministic-half correctness with a scripted provider |
 | Response Quality | `response-quality` | Production guard engines under test (`qar_guards`) | Reply guard correctness over link, recipe and anticipation cases, Judge agreement with labelled reference replies |
+| Decision Check | `decision-check` | none selected | none yet |
 
 ### Implementations
 
@@ -93,6 +97,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Regex-check floor | `response-quality:regex_only` | [evaluation/components/esoi_judge/impls/regex_only.py](../../../evaluation/components/esoi_judge/impls/regex_only.py) |  |
 | Edit a quest's specification in Quest | `esoi-application:quest_spec_records` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/quest_spec_edit.py](esoi_application/quest_spec_edit.py) |  |
 | Read a metric's current value from its named source | `esoi-application:metric_source` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/tools_metric_source.py](esoi_application/tools_metric_source.py) |  |
+| Chat reply held to the turn's reads and executed actions | `decision-check:chat_reply_views` | [quest_ai_runner/the_intelligence/critical_thinking/decision_check/reply_views.py](decision_check/reply_views.py) |  |
 
 ### Metrics
 

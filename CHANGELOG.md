@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- Reply check (`OrchestratorConfig.reply_check`, off by default; the hub's Decision Check on a chat reply, `the_intelligence/critical_thinking/decision_check/`). Before a reply is sent, three cheap-tier views run in parallel, each shown only its own evidence: a statement that something was read against the turn's reads, a statement that a change was made against the executed-action record, and a question put to a person against who is in the conversation. Only a span that an independent call confirms fails is rewritten or removed. `mistake_sources.eval_failure_mistakes` turns the chat evaluation's failed cases into the hub's mistake records for the learning loop. Needs the hub release that carries Decision Check.
 - `milestone_flow_tools(client_factory, metric_reader=None)` (and `WriteResult`, `QuestWriteError`, `ToolStatus`, `MetricSourceError`, `checked_reading` in `quest_ai_runner.api`): the four tools the milestone flow runs on (`read_spec_records`, `list_quest_goals`, `create_or_update_quest_goal`, `read_metric_source`) over a host's own Quest client and metric reader, so a host that runs the brain inside its own service (no `QAR_BASE_URL`, no key) gets the milestone flow instead of a registry without it. `tools_metric_source.metric_reader_spec` is the source tool over any `read(name)`.
 
 ### Changed

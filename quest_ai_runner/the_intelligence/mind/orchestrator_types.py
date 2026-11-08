@@ -249,6 +249,11 @@ class OrchestratorConfig:
     # supports (``claims_unsupported``). A flagged reply is rewritten ONCE to state its basis,
     # hedge, or drop the claim. Only consulted when ``verify_claims`` is on.
     verify_support: bool = True
+    # REPLY CHECK (the hub's Decision Check, ``decision_check/reply_views.py``): before the reply is sent, independent cheap-tier views hold it to what the turn read and
+    # to the actions it executed, and only a span an independent call confirms is rewritten or removed. Off until its measured result says it pays.
+    reply_check: bool = False
+    reply_check_tier: str = "fast"
+    reply_check_max_calls: int = 6
     # LAST-RESORT DEEP RUN: when the turn's goal verdict is definitively NOT met and no deep run
     # was attempted this turn, run ONE deep pass before handing the user a non-answer (for example
     # "I don't have material on that, which file should I look in?"). Only applies when a deep

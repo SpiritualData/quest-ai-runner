@@ -13,6 +13,7 @@ from hubofhubs.api import EVENT_INTENT, EVENT_MILESTONE, Mode
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import blocks_on_person
+from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import checked_reply
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import log, result_landed_work
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import (
     DEFERRED_RUNNER_KEY, OWN_ESCALATION_KEPT_STATUS, own_escalation_adds_nothing)
@@ -726,6 +727,7 @@ class RunCloseMixin:
             except Exception:  # noqa: BLE001 — the net must never break the turn
                 log.warning("last-resort deep run failed", exc_info=True)
 
+        rs.text = checked_reply(self, rs, rs.text)       # Decision Check: independent views hold the reply to the reads and executed actions (off unless cfg.reply_check)
         _exit_reason = "unverified"
         if rs._deferred_handoff_confirmed:
             # The work was confirmed queued out-of-band (deferred contract): neither verified nor

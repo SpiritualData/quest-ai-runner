@@ -1,0 +1,88 @@
+"""The reply's three views for the hub's Decision Check: what the turn read, what it did, and whom it may ask.
+
+Role: before a chat reply is sent, small independent checks (the hub's agreement check, each on the cheap tier) hold it to the record of the turn, one kind of evidence each, so a small model is
+reliable on it: (1) a statement that something was read or looked up against the reads the turn actually made; (2) a statement that a change was made against the executed-action record the
+runner wrote from the tools' own receipts; (3) a question or request put to a person against who is in the conversation. The checks run in parallel; a span is repaired only when an independent
+call confirms it fails, and only that span is rewritten or removed, with the evidence that contradicts it. Whether a reply denies work that landed, and whether a question to the person present
+is asked in the reply, are decided elsewhere (``keep_landed_work_reported``, ``file_blocked_ask``); this adds the two checks that held nothing to the record before: claims against reads and
+claimed actions against executed ones. Off unless ``OrchestratorConfig.reply_check`` is set. Never raises: any failure sends the reply as it was.
+"""
+import json
+import logging
+from typing import Any, Callable, Dict, List, Optional, Sequence
+
+from hubofhubs.api import STEP_JUDGE, AgreementCheck, answer_with_reasoning
+
+log = logging.getLogger("quest-ai-runner.reply-check")
+
+READS_VIEW = ("A statement that something was read, looked up, opened or found in a source must be supported by the reads listed in the evidence. "
+              "A statement of any other kind (an action done, a plan, a question, advice) is not this task.")
+ACTIONS_VIEW = ("A statement that a change was made or an action done (added, created, moved, sent, scheduled, set up), as a fact in the past or present, must be supported by an executed action "
+                "in the evidence. A plan, an offer, a read and a question are not this task.")
+ASKS_VIEW = ("A question or request addressed to a named person who is not listed as present in the evidence fails this task. A question to a person who is present, "
+             "and every statement that is not a question or request, does not fail it.")
+EVIDENCE_CHARS = 6000
+NONE_TEXT = "(none)"
+
+
+def clip(text: Any, limit: int = EVIDENCE_CHARS) -> str:
+    raw = str(text or "").strip()
+    return raw if len(raw) <= limit else raw[:limit - 1].rstrip() + "…"
+
+
+def reads_text(gathered: Sequence[Any]) -> str:
+    """The turn's reads as plain text: each observation's source and text."""
+    lines: List[str] = []
+    for item in gathered or ():
+        if isinstance(item, dict):
+            lines.append(f"- {item.get('locator') or item.get('source') or 'read'}: {clip(item.get('text') or item.get('content') or json.dumps(item, default=str)[:600], 800)}")
+        else:
+            lines.append(f"- {clip(item, 800)}")
+    return "\n".join(lines)
+
+
+def present_text(participants: Sequence[Any]) -> str:
+    """Who is in the conversation: the person typing to us, and the participants the turn lists by name."""
+    names = [str(p.get("name") or p.get("user_id") or "").strip() for p in participants or () if isinstance(p, dict)]
+    return "the person writing to us" + "".join(f", {n}" for n in names if n)
+
+
+def reply_binding(reads: str, executed: str, present: str, max_calls: int = 6) -> Dict[str, Any]:
+    """The hub's Binding for a reply: three views, each shown only its own evidence."""
+    return {"kind": "reply", "max_calls": max_calls, "parallel": 3, "views": [
+        {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads) or NONE_TEXT)},
+        {"id": "actions", "instruction": ACTIONS_VIEW, "evidence": "Executed actions this turn:\n" + (clip(executed) or NONE_TEXT)},
+        {"id": "asks", "instruction": ASKS_VIEW, "evidence": "Present in this conversation: " + (clip(present, 600) or NONE_TEXT)}]}
+
+
+def model_ask(orch: Any, tier: str) -> Optional[Callable[[str], str]]:
+    """The one-argument model call of the cheap tier through the orchestrator's own provider, or None when the tier cannot be resolved."""
+    model = orch.registry.resolve_tier(tier)
+    if not model:
+        return None
+    provider = orch.get_provider_for_model(model)
+    return lambda prompt: answer_with_reasoning(provider, [{"role": "user", "content": prompt}], model=model, step=STEP_JUDGE) or ""
+
+
+def checked_reply(orch: Any, rs: Any, text: str) -> str:
+    """``text`` held to the turn's reads, executed actions and participants; unchanged when the check is off, has nothing to hold it to, or fails."""
+    cfg = orch.cfg
+    if not getattr(cfg, "reply_check", False) or not (text or "").strip():
+        return text
+    try:
+        from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence
+        from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import tool_landed_account
+        ask = model_ask(orch, getattr(cfg, "reply_check_tier", "fast"))
+        if ask is None:
+            return text
+        meta = getattr(rs, "_ctx_meta", None) or {}
+        binding = reply_binding(reads_text(answer_evidence(getattr(rs, "gathered", None) or [])), tool_landed_account(getattr(rs, "exec_record", None)),
+                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 6)))
+        result = AgreementCheck(plumbing=None).check(text, binding, ask)
+        rs.reply_check = {k: result.get(k) for k in ("outcome", "calls", "agreement", "why")}
+        log.info("Reply check: %s in %s calls (agreement %s): %s", result.get("outcome"), result.get("calls"), result.get("agreement"), result.get("why"))
+        fixed = str(result.get("text") or "")
+        return fixed if result.get("outcome") == "repaired" and fixed.strip() else text
+    except Exception:  # noqa: BLE001 -- the check must never break the turn
+        log.warning("reply check failed; the reply is sent as it was", exc_info=True)
+        return text

@@ -4,3 +4,4 @@ esoi-application,ESOI Application,,,,,,,,,,,,,,,,quest_spec_records;metric_sourc
 metric-translation,Metric Translation,,,,,,,,,,,,,,,metric-draft-a-metric,capped_model_draft;ask_owner,,MetricDrafting,capped_model_draft,,,,@hub/metric-translation,
 goal-completion,Goal Completion,,,,,,,,,,,,,,,metric-judge-a-decision,qar_judges;no_call_floor;live_judges,,DecisionJudging,qar_judges,,,,@hub/goal-completion,
 response-quality,Response Quality,,,,,,,,,,,,,,,metric-guard-a-reply;metric-judge-esoi-behavior,qar_guards;model_judge;regex_only,,ReplyGuarding,qar_guards,metric-guard-a-reply,,,@hub/response-quality,
+decision-check,Decision Check,,,,,,,,,,,,,,,,chat_reply_views,,,,,,,@hub/decision-check,
