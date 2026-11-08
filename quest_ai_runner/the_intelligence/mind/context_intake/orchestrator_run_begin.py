@@ -575,7 +575,10 @@ class RunBeginMixin:
                 snapshot_quest = rs.quest_id
                 if not snapshot_quest:
                     quests = status_snapshot.reachable_quests(self.tools)
-                    snapshot_quest = self.judge_quest_for_turn(rs.user_message, "", quests, None) if quests else None
+                    from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
+                    # The conversation's last exchange goes to the placement: a follow-up that names nothing continues the quest of the message before it.
+                    previous = quoted_phrase.previous_reply(self.conversation_store, conv_id, rs.user_message) if self.conversation_store is not None and conv_id else ""
+                    snapshot_quest = self.judge_quest_for_turn(rs.user_message, previous, quests, None) if quests else None
                     if quests and not snapshot_quest:
                         rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
                                                        rationale="A status question that fits none of the asker's quests: one short question.")

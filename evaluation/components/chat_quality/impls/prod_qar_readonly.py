@@ -240,7 +240,7 @@ def build_arm(meter, bounded):
             try:
                 counts["before"] = [count_state(check, state_client) for check in checks]
             except Exception as e:  # noqa: BLE001
-                record.update(error=f"not run: the state check cannot be read as {acted_as}: {type(e).__name__}: {e}", score=None, passed=False,
+                record.update(error=f"not run: the state check cannot be read (HTTP {getattr(e, 'status', None)}, {type(e).__name__}) as {acted_as.get('email')}: {e}", score=None, passed=False,
                               acted_as=acted_as)
                 record["log_extra"] = {"environment": environment, "acted_as": acted_as}
                 return record
@@ -275,7 +275,7 @@ def build_arm(meter, bounded):
                 grounding = {**(grounding or {}), "tool_pins": list(case["tool_pins"])}
             # The team cues these inside the quest's own chat, so the turn is pinned to that quest the way the Quest app pins a quest chat
             # (``quest_id`` plus ``quest_ids`` in the turn's scope); the planner never has to ask which quest, nor reads another quest's records.
-            pinned = PC.target("QAR_PROD_QUEST_ID")
+            pinned = None if case.get("pinned") is False else PC.target("QAR_PROD_QUEST_ID")      # a case whose live input was asked with no quest open ("pinned": false) runs unpinned, as it was asked
             if pinned:
                 grounding = {**(grounding or {}), "quest_id": pinned, "quest_ids": [pinned]}
             stream = session._orch.run_stream(

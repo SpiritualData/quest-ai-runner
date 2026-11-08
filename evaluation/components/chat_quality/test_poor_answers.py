@@ -128,3 +128,9 @@ def test_a_records_prior_turns_travel_onto_its_case():
     raw = dict(case_id="X-9", input_text="Invented follow-up", history=[{"role": "user", "text": "Invented first"}, {"role": "assistant", "text": "Invented reply"}], pass_criteria=["ok"])
     assert poor_answers.case_of(raw)["history"] == raw["history"]
     assert "history" not in poor_answers.case_of(dict(raw, history=None))
+
+
+def test_a_case_asked_with_no_quest_open_runs_unpinned_and_the_default_stays_pinned():
+    raw = dict(case_id="X-8", input_text="Invented question", pass_criteria=["ok"])
+    assert poor_answers.case_of(dict(raw, pinned=False))["pinned"] is False
+    assert "pinned" not in poor_answers.case_of(raw)
