@@ -306,7 +306,8 @@ def read_spec_records_spec(env: Mapping[str, str], client_factory=None) -> ToolS
             tables = QuestSpecRecords(client).read(quest_id)      # the quest's own records, read where Quest keeps them: no assembly, no quest placement
         except RuntimeError as error:
             return ToolResult(ok=False, status=ToolStatus.FAILED, text=str(error))
-        records = {table: {record_id: {column: (value if not isinstance(value, str) or len(value) <= MAX_VALUE_CHARS else value[:MAX_VALUE_CHARS] + "...")
+        whole = {str(r) for r in args.get("whole_record_ids") or []}       # records whose columns are returned whole (a flow that reads its own kept field back)
+        records = {table: {record_id: {column: (value if record_id in whole or not isinstance(value, str) or len(value) <= MAX_VALUE_CHARS else value[:MAX_VALUE_CHARS] + "...")
                                        for column, value in row.items() if value not in ("", None, [])}
                            for record_id, row in list(rows.items())[:MAX_ROWS_PER_TABLE]} for table, rows in tables.items()}
         zone = str(((client.get_quest_autopilot(quest_id) or {}).get("autopilot") or {}).get("run_timezone") or "") if hasattr(client, "get_quest_autopilot") else ""
@@ -321,7 +322,9 @@ def read_spec_records_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         when_to_use=("Before apply_spec_edit or before linking a goal to a milestone, so the edit names a record that exists and the link uses a real id. "
                      "To find which solution is a milestone and which metric it moves."),
         when_not_to_use="Searching across quests or repositories (find_specs). Reading a quest's goals.",
-        parameters={"type": "object", "properties": {"quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."}}},
+        parameters={"type": "object", "properties": {"quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."},
+                                                     "whole_record_ids": {"type": "array", "items": {"type": "string"},
+                                                                          "description": "Record ids whose columns come back whole instead of cut at a length."}}},
         mutates=False, origin="standard",
         keywords=("spec", "specification", "records", "solution", "milestone", "metric", "esoi", "read", "progress", "priority",
                   "value", "current", "number", "advance", "move"),

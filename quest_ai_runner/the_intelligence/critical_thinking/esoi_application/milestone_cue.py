@@ -32,7 +32,9 @@ PURPOSE_CHARS = 1200
 ACT = "act"
 PROGRESS_INTENTS = (ACT, "ask")       # the planner's reading of a message the milestone judgment found asks for progress
 OWNED_WRITES = ("create_or_update_quest_goal", "create_quest_goal")       # goal writes of a milestone cue belong to the code step, which keeps the deliverable inside one keyed goal
-CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify", "read")    # a plan that, for an act cue, the flow step runs before
+# A plan that, for a progress cue, the flow step runs before. A tool plan is one too: the planner reading the quest again (live, a dozen rounds of it) only
+# postpones the work, and the progress step reads what it needs itself.
+CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify", "read", "tool")
 BEYOND_THE_WRITE_TARGET = "code_or_files"                                 # work a tool write cannot do: the one case a deep run may follow the receipt
 DELIVERABLE_TARGET = "draft_in_chat"                              # the planner reports a deliverable written in the reply: the first rung of the increment order
 
@@ -430,14 +432,17 @@ class Resolved:
         return (f"Making the next piece of work for {self.name} that does not wait on anyone, measuring it before and after, and reading the milestone's metric again.")
 
     def settle_plan(self, plan: Any, receipt: str) -> None:
-        """Make the plan agree with what code already did. A read plan is left alone. A deep run stays only when the work needs files or code beyond the tool write, and then its brief
-        starts with what the write already did; every other plan (a deep run, a question, a request for permission) becomes the answer, which reports the receipt."""
-        if getattr(plan, "action", None) == "read":
+        """Make the plan agree with what code already did. A read plan is left alone only when the step made nothing (no receipt), so the turn can still read. A deep run
+        stays only when the work needs files or code beyond the tool write, and then its brief starts with what the write already did; every other plan (a deep run, a tool
+        call, a question, a request for permission) becomes the answer, which reports the receipt."""
+        if getattr(plan, "action", None) == "read" and not receipt:
             return
         if getattr(plan, "action", None) == "deep" and (getattr(plan, "deep_target", None) == BEYOND_THE_WRITE_TARGET or getattr(plan, "deep_subtasks", None)):
             plan.deep_brief = f"Already done by the runner before this run (do not redo it): {receipt}\n\n{plan.deep_brief or plan.goal or ''}"
             return
         plan.action = "answer"
+        plan.tool_calls = []
+        plan.reads = []
         plan.deferred_deep = None
         plan.confirm_question = None
         plan.asks_first = False

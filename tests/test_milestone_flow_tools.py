@@ -243,3 +243,16 @@ def test_a_workflow_worded_nearly_the_same_on_the_same_schedule_is_already_there
     assert workflow_already_there(existing, "Standup", other) is None
     thursday = [{"title": "Check how the 1000 subscribers are doing", "timing": {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}}}]
     assert workflow_already_there(existing, "Thursday check", thursday) is None
+
+
+def test_a_record_named_whole_comes_back_uncut_and_the_others_stay_cut():
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    long_text = "x " * 300
+    SPEC["records"][0]["fields"]["knowledge"] = long_text
+    try:
+        registry = ToolRegistry(milestone_flow_tools(lambda: Client()))
+        cut = registry.invoke("read_spec_records", {"quest_id": "q1"}, ToolContext(quest_id="q1")).data["records"]["solutions"]["sol_1"]["knowledge"]
+        whole = registry.invoke("read_spec_records", {"quest_id": "q1", "whole_record_ids": ["sol_1"]}, ToolContext(quest_id="q1")).data["records"]["solutions"]["sol_1"]["knowledge"]
+    finally:
+        SPEC["records"][0]["fields"].pop("knowledge")
+    assert cut.endswith("...") and len(cut) < len(long_text) and whole == long_text

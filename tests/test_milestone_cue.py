@@ -148,7 +148,7 @@ def test_the_third_rung_runs_only_for_an_act_turn_that_took_no_higher_rung():
     assert not resolved.routes_to_code(PlanDecision(action="answer"), "hold_off", [], tools)  # "not yet" holds
     assert not resolved.routes_to_code(PlanDecision(action="answer"), "inform", [], tools)
     assert resolved.routes_to_code(PlanDecision(action="answer", deep_target="draft_in_chat"), "act", [], tools)      # a deliverable meant for the reply does not exempt the kept step
-    assert not resolved.routes_to_code(PlanDecision(action="tool"), "act", [], tools)
+    assert resolved.routes_to_code(PlanDecision(action="tool"), "act", [], tools)            # the planner's further reads only postpone the work
     assert not resolved.routes_to_code(PlanDecision(action="answer"), "act", [{"locator": "tool:create_or_update_quest_goal"}], tools)   # rung 2 ran: a write is done
 
 

@@ -151,7 +151,8 @@ A deliverable is a piece of the very thing the done test needs made, written now
 used (the words of a script, listing copy, a message, a question set, an analysis). A plan, a status report, a schedule, or a list of owners or dates is
 bookkeeping, never a deliverable. Evidence is answering the questions a decision needs from data or sources; actor is person for anything only a person can do. Give 3 or 4 requirements for each item an AI can make, each
 checkable by reading one unit's own text against the records (never by what happens later, outside the text, or after a person acts), and asking only for
-what can be written from the records: never a title, screen, shot, length, figure or date the records do not describe. For anything that speaks
+what can be written from the records: never a title, screen, shot, length, figure or date the records do not describe, and never one that waits on a
+decision people have not made yet (an agreed list, an approval). For anything that speaks
 about a product, a team or past work, one requirement is that every claim in it is one the records or the reads state.
 Use only what the records say; invent no figure, name or date. {no_em_dash}"""
 
@@ -172,8 +173,7 @@ What this turn read and was shown (the only source for any claim about the produ
 The work item: {item}
 Each unit must meet: {requirements}
 {kept}
-Reply with JSON only: {{"overview": "<what this set is, and for a set of several units the list of all {total} units with a one-line purpose each>",
-"part": "<the next unit, complete, meeting every requirement above>"}}. The part is the unit itself, used as it is: for a video, the words to be
+Reply with JSON only: {{"part": "<the next unit, complete, meeting every requirement above>"}}. The part is the unit itself, used as it is: for a video, the words to be
 spoken; for copy, the copy; for a message, the message; never notes, an outline or a plan about the unit unless the unit is itself an outline.
 Rules: use only facts the records or the reads state; never invent a feature, user, figure, price, date or name. Say of the product only what the records or
 the reads say it does, in their words; where they say little, write about the problem and the outcome the records name instead of describing features. In the
@@ -338,11 +338,6 @@ def kept_parts(text: str) -> List[str]:
     return [p.strip() for p in pieces[1:] if p.strip()]
 
 
-def kept_overview(text: str) -> str:
-    head = PART_SPLIT.split(str(text or ""))[0]
-    return head.split(OVERVIEW_HEAD, 1)[1].strip() if OVERVIEW_HEAD in head else ""
-
-
 def work_items(records: str, rids: Sequence[str], decide: Callable[[str], str]) -> List[Dict[str, Any]]:
     """The milestone's work items with both independent checks recorded (``checks``) and the outward ones marked with the outward means (``tools``)."""
     data = parse_json(decide(DECOMPOSE_PROMPT.format(records=records[:RECORD_CHARS * 2], no_em_dash=NO_EM_DASH)))
@@ -385,7 +380,8 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     means = [{"name": OUTWARD, "outward": True}]
     doable = lambda item: doable_by_ai(item, means, rids)      # noqa: E731
     spec_edit = ToolSpecEdit(registry, cue.quest_id)
-    rubric = kept_rubric(cue.row)
+    row = whole_row(registry, cue)
+    rubric = kept_rubric(row)
     rubric_state = ""
     if rubric is not None:
         # The record keeps the deliverable and its rubric from an earlier turn: that is the work item now, for the writer and the scorer alike. It was agreed when it
@@ -403,7 +399,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                                  f"{cue.rid}, Quest AI, {day}")
             stored = kept_rubric({"knowledge": entry})
             first["requirements"] = stored.requirements if stored else first["requirements"]     # the words as stored, so a later turn's reuse scores the same rubric
-            answer = spec_edit.apply({"edit": {"kind": "spec_edit", "target": cue.rid, "field": "knowledge", "value": with_entry(cue.row.get("knowledge"), entry)}})
+            answer = spec_edit.apply({"edit": {"kind": "spec_edit", "target": cue.rid, "field": "knowledge", "value": with_entry(row.get("knowledge"), entry)}})
             rubric_state = "kept" if answer.get("applied") else ("proposed" if answer.get("proposed") else "not kept: " + str(answer.get("reason") or "refused")[:200])
     moved_by = "person" if [i for i in items if i.get("moves_parent")] and not any(doable(i) for i in items if i.get("moves_parent")) else "ai"
     from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
@@ -458,8 +454,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                                                                  no_em_dash=NO_EM_DASH))).get("part") or "").strip()
             part = revised or part
         part = grounded_text(part, allowed, decide) if part else ""
-        overview = grounded_text(str(data.get("overview") or "").strip(), allowed, decide) if data.get("overview") else kept_overview(kept_text)
-        out.overview = overview or kept_overview(kept_text)
+        # The overview is composed by code from the item and its count: a model-written list of units named topics the records never gave.
+        out.overview = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".") + (
+            f" What each unit covers is {TO_BE_DECIDED} where the records do not name it." if total and total > 1 else "")
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}
 
@@ -520,6 +517,20 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
 
 
 EVIDENCE_QUESTIONS = 8
+
+
+def whole_row(registry: Any, cue: Any) -> Mapping[str, Any]:
+    """The milestone's Solution record with its columns whole (the turn's read cuts long values, and the kept rubric line is read back whole); the row the
+    cue holds when the lane cannot read it whole."""
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    if registry is None or registry.get("read_spec_records") is None:
+        return cue.row
+    try:
+        result = registry.invoke("read_spec_records", {"quest_id": cue.quest_id, "whole_record_ids": [cue.rid]}, ToolContext(quest_id=cue.quest_id))
+    except Exception:  # noqa: BLE001  the cue's own row stands
+        return cue.row
+    data = getattr(result, "data", None) or {}
+    return ((data.get("records") or {}).get("solutions") or {}).get(cue.rid) or cue.row if getattr(result, "ok", False) else cue.row
 
 
 def render_questions(questions: Sequence[Mapping[str, Any]]) -> str:
