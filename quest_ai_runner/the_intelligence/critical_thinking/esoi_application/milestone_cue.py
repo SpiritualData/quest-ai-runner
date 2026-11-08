@@ -1,14 +1,13 @@
-"""Which milestone of a quest a short cue concerns, found by code before the planner plans, and the keyed step recorded by code once it is found.
+"""Which milestone of a quest a short cue concerns, found by code before the planner plans.
 
 Role: an arm of the Spec Selection idea (choose, from an ESOI specification, the few records a request concerns) for the records a quest keeps
-in Quest, and the code-driven flow step of ESOI Application that follows: read the records, write the owned next step under a key that repeats safely,
-return the receipt. A cue such as "get the release moving" names no record; the quest's solutions (the strategies, each with its milestones and
-metric) are scored against it by the words they share, weighted by how rare each word is among them, and the best is handed to the planner as a block
-of facts: the solution id, what done means, the metric and its current value, the owners the record lists, the goals already linked to it, and the
-increment order. Nothing here reads the model's output. Resolving a milestone reads; ``Resolved.carry_out`` is the one write, and it runs when the
-planner's own structured report says the person asked for something to be done and the plan has not chosen the higher rungs of the increment order
-(a deliverable written in the reply, a metric value recorded by a tool). A failure to read or write is a ``LaneGap``, never an empty result. When two
-solutions are close the one the quest lists first wins: a quest lists its solutions in the order its owners ranked them.
+in Quest. A cue such as "get the release moving" names no record; the quest's solutions (the strategies, each with its milestones and metric) are
+scored against it by the words they share, weighted by how rare each word is among them, one cheap judgment says whether the message asks for
+progress on one of them (NONE for a reminder, bookkeeping alone or a question), and the chosen one is handed to the planner as a block of facts: the
+solution id, what done means, the metric and its current value, the owners the record lists, the goals already linked to it, and the increment order.
+Nothing here reads the model's output, and resolving a milestone only reads; the work a progress turn does is ``milestone_progress``. A failure to read
+is a ``LaneGap``, never an empty result. When two solutions are close the one the quest lists first wins: a quest lists its solutions in the order its
+owners ranked them.
 """
 from __future__ import annotations
 
@@ -19,8 +18,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_readiness as readiness
-from quest_ai_runner.the_intelligence.mind.reference_resolver import quest_references
 
 STOP = frozenset("""a about all also an and any are as at be been but by can could do does for from get go going had has have how i in into is it its let lets
 make me more my need new next not now of on one or our out please so some than that the their them then there these they this to up us want was we were what
@@ -216,41 +213,6 @@ def parse_json(answer: str) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-IDENTIFIER_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9]")
-
-
-def truncated_tokens(text: str, allowed: str) -> List[str]:
-    """The identifier-like tokens of ``text`` (they hold a hyphen, an underscore or a dot between characters) that are not a token of ``allowed`` but are the start of one: a cut identifier
-    (a source name that lost its end). Plain words are not looked at, since a word is often the start of a longer one."""
-    known = {t.lower() for t in IDENTIFIER_TOKEN.findall(allowed or "")}
-    return [t for t in IDENTIFIER_TOKEN.findall(text or "")
-            if re.search(r"[A-Za-z0-9][_.-][A-Za-z0-9]", t) and t.lower() not in known and any(k.startswith(t.lower()) for k in known)]
-
-
-GROUNDING_CHARS = 6000      # how much of the turn's reads and context the draft call is shown
-
-
-def supported_draft(draft: str, allowed: str) -> str:
-    """The draft without any line that states a figure the records do not hold (a count of its own characters, an invented rate): a figure outside the milestone's record text is
-    unsupported and its line is dropped, so a draft never carries a number that came from nowhere. List numbering and a [bracket] are not figures."""
-    from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import FIGURE
-    held = set(FIGURE.findall(allowed or ""))          # whole figures only: 12 is not held because 2026-12-31 contains it
-    kept = []
-    for line in str(draft or "").splitlines():
-        body = re.sub(r"^\s*(?:[-*\u2022]\s*)?\d+[.)]\s+", "", line)
-        body = re.sub(r"\[[^\]]*\]", "", body)
-        if any(f not in held for f in FIGURE.findall(body)) or truncated_tokens(body, allowed):
-            continue
-        kept.append(line)
-    return "\n".join(kept).strip()
-
-
-def draft_of(goal_text: str) -> str:
-    """The draft a keyed goal already holds in its description (after its ``Draft:`` line), else "": a repeat reuses it, so it never rewrites the goal."""
-    head, sep, rest = str(goal_text or "").partition("Draft:")
-    return rest.strip() if sep else ""
-
-
 def clip(text: Any, limit: int) -> str:
     """``text`` shortened to at most ``limit`` characters without ever cutting inside a word or an identifier: it ends at a sentence end, else at a clause break (a comma, semicolon or
     opening bracket) in the second half, else at the last whole word. A text that fits is returned whole (whitespace collapsed)."""
@@ -298,22 +260,6 @@ def value_line_of(text: str) -> str:
     """The ``Current value:`` line a goal's text already holds, else ""."""
     found = VALUE_LINE.search(str(text or ""))
     return found.group(0).strip() if found else ""
-
-
-def with_value_line(description: str, line: str) -> str:
-    """``description`` holding exactly one ``Current value:`` line, ``line``: an existing one is replaced in place, a missing one is added after the first line, never a second."""
-    lines = str(description or "").split("\n")
-    kept, placed = [], False
-    for text in lines:
-        if text.startswith(CURRENT_VALUE):
-            if not placed:
-                kept.append(line)
-                placed = True
-            continue
-        kept.append(text)
-    if not placed:
-        kept.insert(1 if kept else 0, line)
-    return "\n".join(kept)
 
 
 def source_of(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], rid: str, row: Mapping[str, Any]) -> str:
@@ -456,18 +402,11 @@ class Resolved:
     purpose: str = ""
     candidates: List[Mapping[str, Any]] = field(default_factory=list)
     receipt: str = field(default="")
-    draft: str = ""
-    after_state: Optional[Mapping[str, Any]] = None      # the goal as the tool read it back after the write (id, name, assignee id, links, period)
     source: str = ""                                     # the name of the metric source the record gives ("" when it names none)
     reading: Optional[Mapping[str, Any]] = None          # what read_metric_source returned: value, as_of, source (label), detail
     reading_gap: str = ""                                # why the source could not be read, in the tool's words
     kept_line: str = ""                                  # the Current value line the keyed goal already holds
-    stage_before: Optional[readiness.Stage] = None       # the readiness stage of the next step as the quest held it before the write
-    stage_after: Optional[readiness.Stage] = None        # the same, from the goal as the write read it back
-    owner_label: str = ""                                # who owns the step, as the milestone's record names them (with the account name when it differs)
-    people: Tuple[str, ...] = ()                         # the people the milestone text names, as it writes them
     grounding: str = ""                                  # what the turn read and was shown: the only source for a draft's claim about a product or past work
-    human_step: str = ""                                 # the step only a person can do, as kept in the goal
     value_full: str = ""                                 # the metric record's whole text (whitespace collapsed): what a draft is written from, never a cut of it
     records_text: str = ""                               # the milestone's record and its metric records as the code read them
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
@@ -478,25 +417,13 @@ class Resolved:
     lead: str = ""                                       # the code-composed sentence saying what the write did (created, updated in place, already set), whole
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
-        """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
-        and the plan is one the flow step takes over. A deliverable the planner means to write in the reply does not exempt it: the step records the owned next step with its own draft, so a
-        reply that fails to record anything still ends with the step kept. Structured fields only."""
+        """True when the person asked for progress (the milestone judgment and the planner's ``user_intent``), no tool has already changed something this turn (a refused or
+        blocked write has not), and the plan is one the flow step takes over. A deliverable the planner means to write in the reply does not exempt it: the progress step makes and
+        keeps the deliverable itself. Structured fields only."""
         # The milestone judgment already answered "is this asking for work that moves the milestone" (a question about how it stands is NONE there and resolves no
         # milestone), so a request worded as a question ("can we get it moving?") that the planner reads as ``ask`` is still progress; only a hold-off or a statement is not.
         return (not self.receipt and user_intent in PROGRESS_INTENTS and getattr(plan, "action", None) in CODE_ROUTED_ACTIONS
                 and not applied_write_ran(gathered, registry))
-
-    def week_goal(self, goal_id: str = "") -> Optional[Mapping[str, Any]]:
-        """The goal that is (or will be updated as) this milestone's next step: the keyed goal of this week, else the one the model chose to adopt, else a goal this flow wrote that is
-        linked to the milestone. None when there is none yet."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
-        title = next_step_title(self.name, self.week)
-        return (next((g for g in self.candidates if str(g.get("title") or "").strip() == title), None)
-                or next((g for g in self.candidates if goal_id and str(g.get("id")) == str(goal_id)), None)
-                or next((g for g in self.candidates if str(g.get("spec_solution_id") or "") == self.rid and is_owned(g)), None))
-
-    def measure_stage(self, goal: Optional[Mapping[str, Any]]) -> readiness.Stage:
-        return readiness.measure(goal, owners=self.owners, solution_id=self.rid, metric_ids=self.metric_ids, monday=self.week.monday, due=self.week.due)
 
     def doing(self) -> str:
         """What happens now, for the first message: stated from the records, before the work: the increment is made and measured, never a step recorded for someone."""
@@ -530,7 +457,7 @@ class Resolved:
 
     def read_entries(self) -> List[Dict[str, Any]]:
         """What the code step read, shaped like the tool results the loop gathers (``by_code``), so the writer, the figure pass and the judge see the milestone's record, the metric
-        record's text, the source's reading and the goal as it stood before and after the write."""
+        record's text and the source's reading."""
         def entry(tool: str, text: str) -> Dict[str, Any]:
             return {"kind": "query", "locator": f"tool:{tool}", "text": text, "tool_status": "applied", "by_code": True}
         out = []
@@ -539,147 +466,7 @@ class Resolved:
         if self.reading:
             out.append(entry(READ_TOOL, current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"])
                              + (f"\nDetail: {self.reading['detail']}" if self.reading.get("detail") else "")))
-        goal = self.week_goal()
-        if goal:
-            out.append(entry("list_quest_goals", goal_summary(goal) + "\n" + str(goal.get("text") or "")))
-        if self.after_state:
-            out.append(entry("list_quest_goals", "After the write: " + ", ".join(f"{k} {v}" for k, v in self.after_state.items() if v not in (None, ""))))
         return out
-
-    def related_text(self) -> str:
-        """The person's own goals for this milestone are linked to only by being named here, in this goal's description; they are never changed."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
-        titles = [str(g.get("title")) for g in self.candidates if g.get("title") and not is_owned(g)][:4]
-        return ("\nRelated goals on the quest: " + "; ".join(titles) + ".") if titles else ""
-
-    def goal_arguments(self) -> Dict[str, Any]:
-        # A source the record names that could not be read puts no figure on the goal: the line says so, and the older reading (the goal's own, else the record's) is not
-        # passed off as the current value.
-        unread = f"{CURRENT_VALUE} not read, the {self.source} source could not be read just now"
-        line = (current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"]) if self.reading
-                else self.kept_line or (unread if self.source else f"{CURRENT_VALUE} {self.value or 'not recorded yet'}"))
-        args: Dict[str, Any] = {
-            "quest_id": self.quest_id, "title": next_step_title(self.name, self.week), "period": self.week.period, "due_date": self.week.due,
-            "description": with_value_line(f"Next step for {self.name}. Done when: {self.done_when}.", line) + self.related_text(),
-            "spec_solution_id": self.rid, "match_by_link": True, "user_asked_for_this_field": True}
-        if self.metric_ids:
-            args["spec_metric_id"] = self.metric_ids[0]
-        return args
-
-    LEADS = {"created": "I created this week's next step for {name}.",
-             "updated": "I updated the existing next step for {name} in place (no second goal was made).",
-             "unchanged": "This week's next step for {name} was already set, so nothing was changed."}
-
-    def lead_sentence(self, state: str) -> str:
-        """The plain statement of what the write did, composed by code from the tool's typed state: created, updated in place, or already set; then who owns it, by the name the
-        milestone's record uses (with the account's name beside it when that differs)."""
-        lead = self.LEADS.get(state, "I recorded this week's next step for {name}.").format(name=self.name)
-        lead = f"{lead} {self.owner_label} owns it." if self.owner_label else lead
-        # The step's own due date, said by code: left to the reply, the milestone's target date was given as the step's due date.
-        due = str((self.after_state or {}).get("due_date") or self.week.due or "")[:10]
-        try:
-            day = datetime.date.fromisoformat(due)
-        except ValueError:
-            return lead
-        return f"{lead} The step is due {day.strftime('%A')} {day.day} {day.strftime('%B')}."
-
-    DRAFT_FORM = ('"draft": the deliverable itself, never a plan to write it, written to be used as it is and short enough to send or use (under 120 words). Its type comes from what the milestone '
-                  'needs, read from its done-when, what it produces and its text: for a milestone that depends on an outside party, a short message to that party stating what they get, the ask and '
-                  'the next step (a partner pitch); for a milestone about a video, the words to be spoken, not notes about it; for copy to be compared, distinct alternatives with the metric they are '
-                  'compared by; for people to be asked, only a few neutral questions, each a full sentence ready to send, with no greeting, introduction or message around them; for a new source or channel, exactly one source (never a choice of two or more) that the facts above name (when they name none, the kind of source to '
-                  'try first, labelled as a candidate with why) with a one-line hypothesis, a first test and the milestone metric; for a release or an announcement, the message to be published; a checklist of at most 5 steps only when none of these fits. '
-                  'Use only the facts above: never a person, place, group, platform or organisation they do not name; never a claim that some work was done or a result came out, or about what a product, service or organisation is, does, has or offers, unless the facts above state it (a script or message about a product says only what the facts above say of it); never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
-                  '("I", "we", "our") unless the facts above name who is speaking; never a due date or deadline that is not in the facts above; no em dashes. '
-                  'Leave no bracket slot, no angle slot and no blank to fill ("[source name]", "[link]"): fill each from the facts above and the reads; where a fact is unknown, name one concrete '
-                  'candidate the records support, labelled as a candidate with why, or write the deliverable so it is sendable as it is (for example neutral questions to the person who knows)')
-
-    def asks_for_fix(self, draft: str, decide: Callable[[str], str]) -> str:
-        """A draft that still holds a slot to fill is sent back once to be fixed; a second draft that still holds one is dropped (the goal then keeps none and its readiness says so)."""
-        slots = readiness.placeholder_slots(draft)
-        if not slots:
-            return draft
-        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}.\n\nThe milestone text:\n{clip(self.purpose, PURPOSE_CHARS) or '(none)'}\n\nThis draft has slots left to fill: "
-                        + ", ".join(slots) + f"\n\nDraft:\n{draft}\n\nReturn JSON with this key only: " + self.DRAFT_FORM + ". Reply with the JSON only.")
-        fixed = supported_draft(str(parse_json(answer).get("draft") or "").strip(), self.allowed_text())
-        return "" if readiness.placeholder_slots(fixed) else fixed
-
-    def choices(self, decide: Optional[Callable[[str], str]]) -> Dict[str, Any]:
-        """The things that need reading the record text, in ONE cheap call: ``owner`` (when the record's ``tracking_owner`` names nobody, the person the purpose text names as
-        doing the work), ``goal_id`` (the keyed next-step goal on the quest that is already this milestone's next step, any week, any older title; only keyed goals are offered,
-        a person's goal never is), ``draft`` (the deliverable for the step, kept in the goal; not asked again when the existing keyed goal already holds one without a slot left to
-        fill) and ``human_step`` (the one step only a person can do, named in the goal)."""
-        from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
-        keyed = [g for g in self.candidates if is_owned(g)]       # goals this flow wrote earlier only; a person's goal is never offered
-        if decide is None:
-            return {"owners": [], "goal_id": "", "draft": "", "human_step": ""}
-        this_week = next((g for g in keyed if str(g.get("title") or "").strip() == next_step_title(self.name, self.week)), None)
-        kept_text = str((this_week or {}).get("text") or "")
-        kept_draft = draft_of(kept_text)
-        if readiness.placeholder_slots(kept_draft):
-            kept_draft = ""          # a kept draft with a slot left in it is written again
-        kept_step = readiness.human_step_in(kept_text)
-        listing = "\n".join(f"{g.get('id')}: {g.get('title')} | {clip(g.get('text'), 200)}" for g in keyed) or "(none)"
-        asks = []
-        if not self.owners and self.purpose.strip():
-            asks.append('"owners": every person named as an owner in the milestone text above, as written (names only, no team names), the one who does the hands-on work first, or [] when it names none')
-        if keyed:
-            asks.append('"goal_id": the id, exactly as listed, of the open goal below that is already the next step of this milestone (the same work, whatever its title or week), or ""')
-        if not kept_draft:
-            asks.append(self.DRAFT_FORM)
-        if not kept_step:
-            asks.append('"human_step": the one next step only a person can do toward this milestone, one full sentence from the done-when and the text above, naming what is done and by whom when the text says')
-        if asks and len(self.owners) == 1 and self.purpose.strip():       # asked in the same call, only when the call is made anyway
-            asks.append('"people": every person the milestone text above names, as the text writes the name (no team names, no roles), or []')
-        if not asks:
-            return {"owners": [], "goal_id": "", "draft": kept_draft, "human_step": kept_step}
-        outputs = clip(self.row.get("outputs"), PURPOSE_CHARS)
-        answer = decide(f"Milestone: {self.name}. Done when: {self.done_when}. Current value: {self.current_text()}."
-                        + (f" The metric record's older text, history only and not the current value: {self.value}." if self.reading and self.value else "")
-                        + f"\n\nThe milestone text:\n{clip(self.purpose, PURPOSE_CHARS) or '(none)'}\n\n"
-                        + (f"What the milestone produces:\n{outputs}\n\n" if outputs else "")
-                        + f"Open goals on the same quest:\n{listing}\n\n"
-                        + (f"What the person asked for this turn, in their words (the step and the draft serve this request, within this milestone):\n{clip(self.request, PURPOSE_CHARS)}\n\n" if self.request else "")
-                        + (f"What this turn read and was shown (a fact here counts as a fact above):\n{clip(self.grounding, GROUNDING_CHARS)}\n\n" if self.grounding.strip() else "")
-                        + "Return JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
-        data = parse_json(answer)
-        goal = str(data.get("goal_id") or "")
-        named = data.get("owners") if isinstance(data.get("owners"), list) else [data.get("owner")]
-        draft = kept_draft or supported_draft(str(data.get("draft") or "").strip(), self.allowed_text())
-        if draft and not kept_draft:
-            draft = self.asks_for_fix(draft, decide)
-        if draft and not kept_draft:
-            # Before the draft is kept in the goal, independent checks hold each claim in it to the facts it was written from: a claim nothing supports is rewritten from
-            # them or removed (the reply check sees the reply only after the goal is written).
-            from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import grounded_text
-            draft = grounded_text(draft, self.allowed_text() + "\n" + self.grounding, decide)
-        step = kept_step or " ".join(str(data.get("human_step") or "").split())
-        people = data.get("people") if isinstance(data.get("people"), list) else []
-        self.people = tuple(dict.fromkeys(str(n).strip(" .'\"") for n in people if str(n).strip(" .'\"")))
-        return {"owners": [str(n).strip(" .'\"") for n in named if n and str(n).strip(" .'\"")], "goal_id": quest_references.goal_offered(goal, keyed),      # an id the model was not offered is never adopted
-                "draft": draft, "human_step": step}
-
-    def name_owner(self, shown: Mapping[str, Any], decide: Optional[Callable[[str], str]]) -> str:
-        """Who owns the step, as a reader recognises them: the name the milestone's record uses for the person, with the account's own name in parentheses when it differs ("Ann (account
-        Ann Ops)"). An account name sharing a whole word with the record's text is the person. When the record lists one owner and its text names one person, that is the name, with no
-        model call. Otherwise one cheap call asks which name in the text is theirs, and an answer that is not a name in the text is discarded (the account name alone is then shown)."""
-        account = str(shown.get("assignee_name") or "").strip()
-        if not account:
-            return ""
-        whole = lambda text: {w for w in re.findall(r"[a-z0-9]+", str(text).lower()) if len(w) > 2}
-        if whole(account) & whole(self.purpose):
-            return account
-        # Only the people the milestone text itself names count: a name the draft call made up (a contact it invented) is not a candidate for the owner.
-        named = [p for p in self.people if p.lower() in self.purpose.lower()]
-        if len(self.owners) == 1 and len(named) == 1 and not whole(named[0]) & whole(account):
-            return f"{named[0]} (account {account})"
-        if decide is None:
-            return account
-        try:
-            answer = " ".join(str(decide(f"Milestone text:\n{clip(self.purpose, PURPOSE_CHARS)}\n\nWhich name in this text refers to the person whose Quest account is named {account!r}? "
-                                         "Reply with that name exactly as the text writes it, or NONE if no name in the text is theirs.") or "").split()).strip(" .'\"")
-        except Exception:  # noqa: BLE001  a name is a convenience for the reader; the account name stands
-            return account
-        return f"{answer} (account {account})" if answer and answer != NONE and answer.lower() in self.purpose.lower() and answer.lower() != account.lower() else account
 
     def read_source(self, registry: Any) -> None:
         """Read the milestone's metric source, when its record names one, through the lane's ``read_metric_source`` tool. A reading is kept for the goal's one
@@ -729,132 +516,8 @@ class Resolved:
             return None
         return {"value": found.group("value").strip(), "as_of": found.group("day").strip(), "source": found.group("source").strip(), "detail": {"from": "the metric record"}}
 
-    def reading_note(self) -> str:
-        """What the receipt tells the reply about the measured value."""
-        if self.reading:
-            line = current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"])
-            stood = (f" Its source could not be read again just now ({self.reading_gap}), so the recorded reading stands; say so in a few words."
-                     if self.reading_gap else "")
-            return (f" The metric's current value was read and the goal's one line now reads: \"{line}\". "
-                    "State the value, the date it covers and the source label in the reply, exactly as that line gives them, and no other figure for it." + stood)
-        if self.source:
-            return f" The metric's value could not be read ({self.reading_gap}). Say that, say which data is missing, and state no value for it."
-        return ""
 
     KEPT_READING = re.compile(r"^Current value:\s*(?P<value>.*?)\s*\(as of (?P<day>[^,)]+), from (?P<source>.*)\)\s*$")
-
-    def metric_sentence(self, before_value: str, after_value: str) -> str:
-        """The milestone value before and after, each from where it came and only ever the same measure against itself. With a source: the goal's previous ``Current value:`` line
-        (same source) against the reading now; with no previous line the step had none, and the metric record's own last reading is given labelled as such, not as a before. With no
-        source the metric record's value is read twice, and an unchanged one is said as unchanged, with why."""
-        if self.reading:
-            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import shown
-            now, day, source = shown(self.reading["value"]), self.reading["as_of"], self.reading["source"]
-            earlier = self.KEPT_READING.match(self.kept_line or "")
-            record = f"the metric record's last reading: {before_value}" + (f" ({self.record_date})" if self.record_date else "")
-            if earlier and earlier.group("source").strip() == str(source).strip():
-                if earlier.group("value") == now:
-                    return f"unchanged at {now} (as of {day}, from {source}), because the source still reads the same as the goal's previous line ({earlier.group('day')})"
-                return f"was {earlier.group('value')} (as of {earlier.group('day')}), now {now} (as of {day}), both from {source}"
-            if earlier:
-                return f"now {now} (as of {day}, from {source}); the goal's previous line came from another source ({earlier.group('source')}), so it is not compared; {record}"
-            return f"now {now} (as of {day}, from {source}); the step had no earlier reading of this measure; {record}"
-        if not (before_value and after_value):
-            return "not recorded, so no before and after can be shown"
-        if before_value == after_value:
-            why = "it changes only when a person completes the step above" if self.human_step else "nothing recorded has moved it"
-            return f"unchanged at {before_value} (the metric record), because {why}"
-        return f"was {before_value}, now {after_value} (the metric record)"
-
-    def closing(self, before_value: str, after_value: str) -> str:
-        """The one line message 2 ends with once the step is recorded: the readiness stage before and after, and the milestone metric before and after (said as unchanged, with why,
-        when it did not move). "" when the step was not recorded."""
-        if self.stage_before is None or self.stage_after is None:
-            return ""
-        return readiness.closing_line(self.stage_before, self.stage_after, label=self.name, metric=self.metric_sentence(before_value, after_value))
-
-    def apply_owner_label(self, text: str) -> str:
-        """The reply naming the owner as the record names them: where the reply writes the account's own name alone, the name with the account beside it ("Ann (account Ann Ops)").
-        Text that already carries the label, or an owner whose account name is the name, is returned as it was."""
-        account = str((self.after_state or {}).get("assignee_name") or "").strip()
-        if not self.owner_label or not account or self.owner_label == account or self.owner_label in str(text or ""):
-            return text
-        return re.sub(re.escape(account) + r"(?! \(account)", self.owner_label.replace("\\", "\\\\"), str(text or ""))
-
-    def without_questions(self, text: str) -> str:
-        """The reply without a closing paragraph that asks the person something: a paragraph outside the kept draft whose last character is a question mark. The draft's own questions (neutral
-        questions for someone else) stay; they are the deliverable. The reply keeps whatever else it said; text with nothing else in it is returned as it was."""
-        draft_lines = {re.sub(r"^\s*(?:>|[-*\u2022]|\d+[.)])\s*", "", line).strip() for line in self.draft.splitlines() if line.strip()}
-        kept = []
-        for paragraph in re.split(r"\n\s*\n", str(text or "")):
-            lines = [re.sub(r"^\s*(?:>|[-*\u2022]|\d+[.)])\s*", "", line).strip() for line in paragraph.splitlines() if line.strip()]
-            in_draft = bool(lines) and all(line in draft_lines for line in lines)
-            if paragraph.rstrip().endswith("?") and not in_draft:
-                continue
-            kept.append(paragraph)
-        out = "\n\n".join(kept).strip()
-        return out or str(text or "")
-
-    def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None, grounding: str = "") -> Tuple[str, str]:
-        """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is
-        updated in place (renamed to the key, linked, moved to the week), never duplicated; a repeat finds the keyed goal and says it is already there. Each owner is tried as
-        assignee in turn; with none that Quest accepts the step is written unassigned and the receipt says so. A tool the lane lacks, or a write that failed or is held, is a
-        ``LaneGap`` carrying the tool's own words. ``decide(prompt) -> text`` is one cheap model call used for the two choices that need reading the record text."""
-        from quest_ai_runner.the_world.tools.tools import ToolContext
-        if registry is None or registry.get("create_or_update_quest_goal") is None:
-            raise LaneGap("this lane has no create_or_update_quest_goal tool, so the next step could not be recorded")
-        ctx = ToolContext(quest_id=self.quest_id)
-        self.grounding = str(grounding or "")       # what the turn read and was shown: the only source a draft may take a claim about a product or past work from
-        self.read_source(registry)
-        base = self.goal_arguments()
-        try:
-            picked = self.choices(decide)
-        except Exception as error:      # noqa: BLE001  the choice failed: surfaced, not guessed
-            raise LaneGap(f"choosing the owner or the existing goal failed ({type(error).__name__}: {error})") from error
-        owners = list(self.owners) or list(picked["owners"])
-        if picked["goal_id"]:
-            base["adopt_goal_id"] = picked["goal_id"]
-        self.stage_before = self.measure_stage(self.week_goal(picked["goal_id"]))
-        if picked["human_step"]:
-            base["description"] = base["description"] + f"\n{readiness.HUMAN_STEP} {picked['human_step']}"
-            self.human_step = picked["human_step"]
-        if picked["draft"]:
-            base["description"] = base["description"] + f"\n{readiness.DRAFT} {picked['draft']}"
-            self.draft = picked["draft"]
-        refused: List[str] = []
-        for owner in [*owners, ""]:
-            args = dict(base, assignee=owner) if owner else dict(base, clear_assignee=True) if refused else dict(base)
-            try:
-                result = registry.invoke("create_or_update_quest_goal", args, ctx)
-            except Exception as error:      # noqa: BLE001  surfaced as a gap, with the cause
-                raise LaneGap(f"recording the next step failed ({type(error).__name__}: {error})") from error
-            if result.ok:
-                self.receipt = result.text
-                self.after_state = (result.data or {}).get("goal")
-                written = dict(self.after_state or {}, description=base["description"])
-                written["scheduled_date"] = written.get("scheduled_date") or base.get("due_date")
-                self.stage_after = self.measure_stage(written)
-                self.owner_label = self.name_owner(self.after_state or {}, decide)
-                named = ", ".join(owners)
-                note = (f" The owner could not be set ({'; '.join(refused)}), so the goal is left unassigned. Say plainly that the record names {named} but the quest cannot assign the goal to them, say who should own it, and ask nothing."
-                        if refused and not owner else "")
-                lead = self.lead = self.lead_sentence(str((result.data or {}).get("state") or ""))
-                if (result.data or {}).get("problems"):
-                    note += " The quest does not show everything that was asked for (" + "; ".join(result.data["problems"]) + "): say exactly that, and do not say it is linked or owned."
-                note += self.reading_note()
-                if self.human_step:
-                    note += f" The step only a person can do, recorded in the goal for its owner: {self.human_step} State it in the reply."
-                if self.draft:
-                    note += f" The draft kept in the goal, to show in the reply: {self.draft}"
-                return (f"RECEIPT written by code for {self.name!r}. Outcome: {lead} {result.text}{note} "
-                        f"Open the reply with exactly this sentence: \"{lead}\" Then say who owns it and what only a person can do, "
-                        "and do not offer to do it or ask whether to. This request is carried out: ask the person nothing, propose no new date, and do not move the milestone's own date. "
-                        "Show the kept draft exactly as given and state no count of its items. State no figure that is not in the records."), result.status.value
-            if owner and "assignee" in str(result.text):
-                refused.append(f"{owner}: {str(result.text).strip()[:160]}")
-                continue
-            raise LaneGap(f"the next step for {self.name!r} was not recorded: {str(result.text).strip()[:300]}")
-        raise LaneGap(f"the next step for {self.name!r} was not recorded")
 
 
 def read_through(registry: Any, quest_id: str) -> Tuple[Mapping[str, Any], str]:

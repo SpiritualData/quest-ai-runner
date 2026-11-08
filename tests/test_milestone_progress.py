@@ -25,6 +25,9 @@ class Registry:
             return SimpleNamespace(ok=True, data={"records": self.tables}, text="records")
         if name == "apply_spec_edit":
             change = args["change"]
+            if change["kind"] == "spec_edit":
+                self.tables["solutions"][change["target"]][change["field"]] = change["value"]
+                return SimpleNamespace(ok=True, data={"applied": True, "target": change["target"], "field": change["field"], "after": change["value"]}, text="Done")
             self.tables["metrics"].setdefault(change["key"], dict(change["fields"]))
             return SimpleNamespace(ok=True, data={"applied": True, "created": True, "target": change["key"]}, text="Done")
         state = "updated" if args["title"] in self.goals else "created"
@@ -102,3 +105,54 @@ def test_a_dated_reading_line_is_read_again_as_its_value_and_day():
     registry.tables["metrics"]["met-1"]["record"] = "Current value: 0 (as of 2030-03-09, from the funnel dashboard, sign-ups by source)"
     made = milestone_progress.make_progress(cue(), registry, decide)
     assert made.metric_after == "0 (as of 2030-03-09, from the funnel dashboard, sign-ups by source)"
+
+
+def test_the_rubric_is_kept_on_the_milestones_record_once_and_the_next_turn_reuses_it():
+    registry = Registry()
+    first = milestone_progress.make_progress(cue(), registry, decide)
+    knowledge = registry.tables["solutions"]["sol-1"]["knowledge"]
+    assert first.rubric_state == "kept" and knowledge.startswith("[best guess] Deliverable rubric for the tutorial list and the script for the next tutorial (6 units): ")
+    assert "Has an opening; Ends with a call to action (source: sol-1, Quest AI, " in knowledge
+    asked = []
+
+    def drifting(prompt):
+        asked.append(prompt)
+        if "Break the work this milestone needs" in prompt:       # a later decomposition proposes other requirements: the kept rubric wins
+            return decide(prompt).replace("Has an opening", "Names a title").replace("Ends with a call to action", "Lists shots")
+        return decide(prompt)
+    later = cue()
+    later.row = dict(later.row, knowledge=knowledge)
+    second = milestone_progress.make_progress(later, registry, drifting)
+    assert second.rubric_state == "reused" and second.item == "the tutorial list and the script for the next tutorial"
+    writer = next(p for p in asked if "You write one deliverable" in p)
+    assert "Has an opening; Ends with a call to action" in writer and "Names a title" not in writer
+    assert all("Names a title" not in p for p in asked if "Check one deliverable" in p)
+    assert registry.tables["solutions"]["sol-1"]["knowledge"].count("Deliverable rubric") == 1
+
+
+def test_a_research_increment_counts_only_answers_with_a_quote_found_in_the_records():
+    def research(prompt):
+        if "Break the work this milestone needs" in prompt:
+            return json.dumps({"items": [{"name": "the questions the tutorial choice needs", "kind": "evidence", "actor": "ai", "outward": False, "moves_parent": False,
+                                          "requirements": ["Each answer cites a record"]},
+                                         {"name": "publishing", "kind": "outward", "actor": "person", "outward": True, "moves_parent": True, "step": "Publish them."}]})
+        if "You gather the evidence" in prompt:
+            return json.dumps({"questions": [
+                {"question": "What is the milestone for?", "answer": "Teaching new users the product.", "source": "the milestone record", "quote": "Teach new users the product"},
+                {"question": "How many users watched?", "answer": "About 400.", "source": "analytics", "quote": "400 viewers last week"},
+                {"question": "Which tutorial goes first?", "answer": "", "source": "", "quote": ""}]})
+        return decide(prompt)
+    made = milestone_progress.make_progress(cue(), Registry(), research)
+    assert made.status == "measured" and (made.before, made.after, made.total) == (0, 1, 3)
+    text = made.reply_text()
+    assert "A1. Teaching new users the product. (source: the milestone record)" in text and "A2. to be decided" in text and "400" not in text
+    again = milestone_progress.questions_of(made.parts[0])
+    assert [bool(q["answer"]) for q in again["questions"]] == [True, False, False]       # a kept evidence part is measured again the same way
+
+
+def test_the_milestone_pass_shapes_a_made_progress_without_running_the_work_again():
+    made = milestone_progress.Progress(item="the script", measure_name="Scripts meeting the rubric", before=0, after=1, total=6, as_of="2030-03-10",
+                                       status="measured", ask="publish it")
+    found = milestone_progress.milestone_pass(made, cue(), "get it moving")
+    assert found["solution_id"] == "sol-1" and found["target"] == {"metric_id": "met-1", "value": 6, "done_when": TABLES["solutions"]["sol-1"]["milestones"]}
+    assert found["needs"].startswith("the script: Scripts meeting the rubric: 0 of 6 before, 1 of 6 after") and found["risks"] == ["Only a person can do: publish it"]

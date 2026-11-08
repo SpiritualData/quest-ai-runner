@@ -43,6 +43,47 @@ RECORD_CHARS = 1500
 NO_EM_DASH = "Do not use em dashes."
 
 
+#: The deliverable's rubric is durable knowledge on the milestone's Solution record (its ``knowledge`` field, one entry per line, the ``[kind] claim (source: ...)``
+#: shape the ESOI knowledge records migrate from), written once through ESOI Application and reused by the writer and the scorer on every later turn.
+RUBRIC_KIND = "best guess"
+RUBRIC_CLAIM = "Deliverable rubric for "
+RUBRIC_LINE = re.compile(r"^\[" + RUBRIC_KIND + r"\] " + RUBRIC_CLAIM + r"(?P<item>[^:]+?)(?: \((?P<total>\d+) units\))?: (?P<rubric>.+) \(source: (?P<source>[^)]*)\)\s*$")
+TO_BE_DECIDED = "to be decided"
+
+
+@dataclass(frozen=True)
+class KeptRubric:
+    """A deliverable rubric as the milestone's record keeps it."""
+    item: str
+    requirements: List[str]
+    total: Optional[int]
+    source: str
+
+
+def kept_rubric(row: Mapping[str, Any]) -> Optional[KeptRubric]:
+    """The deliverable rubric the milestone's record keeps (the last one written), else None. Reads only the line shape this module writes."""
+    found = None
+    for line in str(row.get("knowledge") or "").splitlines():
+        match = RUBRIC_LINE.match(line.strip())
+        if match:
+            found = KeptRubric(match.group("item").strip(), [r.strip() for r in match.group("rubric").split(";") if r.strip()],
+                               int(match.group("total")) if match.group("total") else None, match.group("source").strip())
+    return found
+
+
+def rubric_entry(item: str, requirements: Sequence[str], total: Optional[int], source: str) -> str:
+    """One knowledge line for a rubric: the kind in brackets, the claim (item, unit count and the requirements joined by "; "), and its source."""
+    clean = lambda text: " ".join(str(text).replace(";", ",").replace(":", ",").replace("(", "").replace(")", "").split())      # noqa: E731
+    count = f" ({total} units)" if total and total > 1 else ""
+    return f"[{RUBRIC_KIND}] {RUBRIC_CLAIM}{clean(item)}{count}: " + "; ".join(clean(r) for r in requirements if str(r).strip()) + f" (source: {source})"
+
+
+def with_entry(knowledge: Any, entry: str) -> str:
+    """The knowledge text with ``entry`` as its rubric line: an older rubric line is replaced, never kept beside it."""
+    kept = [line for line in str(knowledge or "").splitlines() if line.strip() and not RUBRIC_LINE.match(line.strip())]
+    return "\n".join(kept + [entry])
+
+
 class ToolSpecEdit:
     """ESOI Application at the turn's ``apply_spec_edit`` tool: the hub's upkeep writes the intermediate metric through it, under Quest's own approval rules."""
 
@@ -138,7 +179,24 @@ Rules: use only facts the records or the reads state; never invent a feature, us
 the reads say it does, in their words; where they say little, write about the problem and the outcome the records name instead of describing features. In the
 overview, name only units the records name; where they name none, list the units by number alone, with no topic the records do not give. State no length,
 duration, count or date the records do not give. No first person
-plural unless the records say who speaks; no bracket or blank slot to fill. {no_em_dash}"""
+plural unless the records say who speaks; no bracket or blank slot to fill: where the unit needs a fact the records and reads do not give, write
+"to be decided" in its place, never a plausible guess. {no_em_dash}"""
+
+EVIDENCE_PROMPT = """You gather the evidence a team's decision needs. Answer only from the records and the reads below; quote the exact words each answer rests on.
+
+The milestone, from its records:
+{records}
+
+What this turn read and was shown:
+{grounding}
+
+The work item: {item}
+Each answer must meet: {requirements}
+
+List the questions this decision needs answered (at most {limit}), and answer each one the records or the reads can answer. Reply with JSON only:
+{{"questions": [{{"question": "<one full sentence>", "answer": "<the answer, or empty when the records and reads do not give it>",
+"source": "<the record or read it comes from, by name>", "quote": "<the exact words of that record or read the answer rests on, a few words, empty when unanswered>"}}]}}.
+Invent no figure, name or date. {no_em_dash}"""
 
 REVISE_PROMPT = """This unit of a milestone's deliverable was checked by someone else and misses some requirements.
 
@@ -191,6 +249,7 @@ class Progress:
     child_metric: Optional[Mapping[str, Any]] = None
     status: str = ""
     why: str = ""
+    rubric_state: str = ""          # "reused" (kept on the record and read back), "kept" (defined this turn and written), or why it was not kept
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
@@ -322,20 +381,41 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     items = work_items(cue.records_text, rids, decide)
     means = [{"name": OUTWARD, "outward": True}]
     doable = lambda item: doable_by_ai(item, means, rids)      # noqa: E731
+    spec_edit = ToolSpecEdit(registry, cue.quest_id)
+    rubric = kept_rubric(cue.row)
+    rubric_state = ""
+    if rubric is not None:
+        # The record keeps the deliverable and its rubric from an earlier turn: that is the work item now, for the writer and the scorer alike. It was agreed when it
+        # was defined (both checks), so it is not judged again; the work items of this turn only give the person-only step and what moves the metric.
+        others = [i for i in items if not (str(i.get("kind") or "") == "deliverable" and doable(i))]
+        items = [{"name": rubric.item, "kind": "deliverable", "actor": "ai", "outward": False, "moves_parent": False, "inputs": [cue.rid], "tools": [],
+                  "checks": [True, True], "total": rubric.total or 1, "requirements": list(rubric.requirements), "kept_rubric": True}] + others
+        rubric_state = "reused"
+    else:
+        first = next((i for i in items if str(i.get("kind") or "") == "deliverable" and doable(i) and i.get("requirements")), None)
+        if first is not None:
+            # Defined once and kept on the milestone's own record, through ESOI Application (the same gate and autopilot rules as any spec edit), so every later
+            # turn reuses it instead of drifting.
+            entry = rubric_entry(first["name"], first["requirements"], first.get("total") if isinstance(first.get("total"), int) else None,
+                                 f"{cue.rid}, Quest AI, {day}")
+            stored = kept_rubric({"knowledge": entry})
+            first["requirements"] = stored.requirements if stored else first["requirements"]     # the words as stored, so a later turn's reuse scores the same rubric
+            answer = spec_edit.apply({"edit": {"kind": "spec_edit", "target": cue.rid, "field": "knowledge", "value": with_entry(cue.row.get("knowledge"), entry)}})
+            rubric_state = "kept" if answer.get("applied") else ("proposed" if answer.get("proposed") else "not kept: " + str(answer.get("reason") or "refused")[:200])
     moved_by = "person" if [i for i in items if i.get("moves_parent")] and not any(doable(i) for i in items if i.get("moves_parent")) else "ai"
     from quest_ai_runner.the_body.hands.quest_operations.goal_links import is_owned
     # The milestone's keyed goal is the one Quest AI already keeps for it (linked to the milestone's record), updated in place; only a milestone with none gets a new one.
     kept_goal = next((g for g in cue.candidates if str(g.get("spec_solution_id") or "") == cue.rid and is_owned(g)), None)
     title = str((kept_goal or {}).get("title") or (kept_goal or {}).get("name") or f"{cue.name} {DELIVERABLES}").strip()
     kept_text = str((kept_goal or {}).get("text") or (kept_goal or {}).get("description") or "")
-    kept = {"parts": kept_parts(kept_text)} if kept_text else None
+    # What the goal already holds, measured again for the before: its parts for a rubric, its answered questions for evidence (nothing kept scores 0).
+    kept = dict({"parts": kept_parts(kept_text)}, **(questions_of(kept_text) or {})) if kept_text else None
     milestone = {"solution_id": cue.rid, "name": cue.name, "done_when": cue.done_when, "moved_by": moved_by, "records": rids,
                  "lands_on": {"collection": "goals", "title_prefix": cue.name}}
-    spec_edit = ToolSpecEdit(registry, cue.quest_id)
     decision = MajorityVote(plumbing=None)
     composition = CriticalThinkingComposition(None, spec_edit, None, None, decision, RecordFieldUpkeep(esoi=spec_edit, decision=decision))
     out = Progress(title=title, metric_name=str((metrics.get(cue.metric_ids[0]) or {}).get("name") or "") if cue.metric_ids else "",
-                   metric_before=cue.current_text() if cue.reading else cue.value, as_of=day)
+                   metric_before=cue.current_text() if cue.reading else cue.value, as_of=day, rubric_state=rubric_state)
     source = cue.source
     readers = {source: (lambda mid: dict(cue.reading))} if source and cue.reading else None
     chosen: Dict[str, Any] = {}
@@ -349,16 +429,20 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         scorer = scorers.setdefault(owner, Scorer(decide, owner, cue.records_text + "\n" + str(grounding or "")))
         return scorer(requirement, part)
 
+    reference = cue.records_text + "\n" + cue.allowed_text() + "\n" + str(grounding or "")
+
     def work(increment: Mapping[str, Any]) -> Mapping[str, Any]:
         item = dict(increment.get("item") or {})
         chosen.update(item=item, increment=dict(increment))
+        if increment.get("method") == "evidence":
+            return gather_evidence(item, increment, kept)
         total = item.get("total") if isinstance(item.get("total"), int) else None
         have = list((kept or {}).get("parts") or [])
         kept_note = (f"Already kept (do not repeat; write the next unit, number {len(have) + 1}):\n" + "\n".join(f"- {clip_line(p)}" for p in have)) if have else ""
         data = parse_json(decide(WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
                                                      item=item.get("name"), requirements="; ".join(increment.get("requirements") or []) or "(none given)",
                                                      kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)))
-        allowed = cue.allowed_text() + "\n" + str(grounding or "")
+        allowed = reference
         part = str(data.get("part") or "").strip()
         requirements = [str(r) for r in increment.get("requirements") or []]
         for _ in range(REVISIONS if part and requirements else 0):
@@ -376,7 +460,28 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}
 
-    made = composition.progress(milestone, metrics, items, work, judge=judge, means=means, readers=readers, today=day, ask=decide, kept=kept)
+    def gather_evidence(item: Mapping[str, Any], increment: Mapping[str, Any], kept: Any) -> Mapping[str, Any]:
+        """Research increment: the questions the decision needs, each answered only with a quote code finds in the records or reads; the rest stay open
+        ("to be decided"). Coverage is questions answered with a source out of questions asked."""
+        data = parse_json(decide(EVIDENCE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
+                                                        item=item.get("name"), requirements="; ".join(increment.get("requirements") or []) or "(none given)",
+                                                        limit=EVIDENCE_QUESTIONS, no_em_dash=NO_EM_DASH)))
+        text = squash(reference)
+        questions = []
+        for row in data.get("questions") or []:
+            if not isinstance(row, Mapping) or not str(row.get("question") or "").strip():
+                continue
+            quote = squash(row.get("quote"))
+            grounded = bool(str(row.get("answer") or "").strip()) and bool(str(row.get("source") or "").strip()) and len(quote) >= 3 and quote in text
+            questions.append({"question": " ".join(str(row["question"]).split()), "answer": " ".join(str(row.get("answer") or "").split()) if grounded else "",
+                              "source": " ".join(str(row.get("source") or "").split()) if grounded else ""})
+        questions = questions[:EVIDENCE_QUESTIONS]
+        out.parts = [render_questions(questions)] if questions else []
+        out.overview = f"The questions the decision needs, each answered from a cited record or read; the rest are {TO_BE_DECIDED}."
+        return {"artifact": {"questions": questions} if questions else None, "evidence_ref": title}
+
+    made = composition.progress(milestone, metrics, items, work, judge=judge, means=means, readers=readers, today=day, ask=decide,
+                                kept=kept)
     out.status = str(made.get("status") or "")
     increment = dict(made.get("increment") or {})
     item = dict(increment.get("item") or {})
@@ -411,6 +516,51 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     return out
 
 
+EVIDENCE_QUESTIONS = 8
+
+
+def render_questions(questions: Sequence[Mapping[str, Any]]) -> str:
+    """The evidence as kept text: each question, then its answer and source, or that it is still to be decided."""
+    lines = []
+    for n, q in enumerate(questions, 1):
+        lines.append(f"Q{n}. {q['question']}")
+        lines.append(f"A{n}. {q['answer']} (source: {q['source']})" if q.get("answer") else f"A{n}. {TO_BE_DECIDED}")
+    return "\n".join(lines)
+
+
+QUESTION_LINE = re.compile(r"^Q(?P<n>\d+)\. (?P<q>.+)$")
+ANSWER_LINE = re.compile(r"^A(?P<n>\d+)\. (?P<a>.+?)(?: \(source: (?P<s>[^)]*)\))?$")
+
+
+def questions_of(text: str) -> Optional[Dict[str, Any]]:
+    """The questions a kept evidence part holds (the shape ``render_questions`` writes), so the before is measured on what is kept; None when it holds none."""
+    found: Dict[str, Dict[str, str]] = {}
+    for line in str(text or "").splitlines():
+        q, a = QUESTION_LINE.match(line.strip()), ANSWER_LINE.match(line.strip())
+        if q:
+            found.setdefault(q.group("n"), {})["question"] = q.group("q")
+        elif a:
+            answered = a.group("a").strip() != TO_BE_DECIDED and a.group("s")
+            found.setdefault(a.group("n"), {}).update(answer=a.group("a").strip() if answered else "", source=(a.group("s") or "").strip() if answered else "")
+    questions = [v for _, v in sorted(found.items(), key=lambda kv: int(kv[0])) if v.get("question")]
+    return {"questions": questions} if questions else None
+
+
 def clip_line(text: str, limit: int = 160) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + " ..."
+
+
+def milestone_pass(made: Progress, cue: Any, request: str = "") -> Dict[str, Any]:
+    """The per-solution finding for the milestone's own solution, shaped from a progress step already made (it never runs the work again): what the turn
+    needs (its increment), the target it moves (the intermediate metric when one was defined, else the milestone's own metric, with its total), the risk a
+    person-only step leaves, and the kept rubric as knowledge. ``request`` is the person's message, kept for the reader of the finding."""
+    child = made.child_metric if isinstance(made.child_metric, Mapping) else {}
+    metric_id = str(child.get("id") or (cue.metric_ids[0] if getattr(cue, "metric_ids", None) else ""))
+    rubric = kept_rubric(getattr(cue, "row", {}) or {})
+    return {"solution_id": getattr(cue, "rid", ""), "applies": True, "request": request,
+            "needs": f"{made.item}: {made.increment_line()}".strip(": ") if made.status == "measured" else (made.why or "no AI increment could be made"),
+            "target": {"metric_id": metric_id, "value": made.total, "done_when": getattr(cue, "done_when", "")},
+            "risks": [f"Only a person can do: {made.ask}"] if made.ask else [], "conflicts": [],
+            "knowledge": [rubric_entry(rubric.item, rubric.requirements, rubric.total, rubric.source)] if rubric else [],
+            "candidates": [], "before": made.before, "after": made.after}

@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- Milestone progress keeps the deliverable's rubric on the milestone's Solution record (its `knowledge` field, `[best guess] Deliverable rubric for <item> (N units): ... (source: ...)`), written once through `apply_spec_edit` and reused by the writer and the scorer on every later turn. A research increment gathers the questions a decision needs, counts an answer only with a quote found in the records or reads, and leaves the rest "to be decided". `milestone_pass` shapes a made progress as the per-solution finding.
+- The overlay arm's `QAR_OVERLAY_SEED_FROM_LAST=1`: a case reads the specification edits its last saved replay made, so reuse of something kept is proved with every write blocked.
 - Milestone progress (`esoi_application/milestone_progress.py`): a turn whose resolved intent is progress on a milestone (the milestone cue plus the analyser's `act`) makes one AI increment through the hub's `CriticalThinkingComposition.progress` instead of recording an owned next step: work items from the Solution record (an item is the AI's only when two independent checks agree and it has no outward act), Metric Upkeep (one intermediate metric through `apply_spec_edit` when the milestone's own metric moves only through a person), the deliverable written from the reads and kept on the goal Quest AI keeps for the milestone, measured before and after by a scoring call that is not the writer (a requirement counts only with a quote found in the text), the milestone metric read again, and at most one person-only step. The reply is composed by code, deliverable first.
 - `keep_milestone_deliverable` (flow-owned) in `milestone_flow_tools`, with `apply_spec_edit` (flow-owned): the deliverable kept on one goal per exact title, updated in place, with its measured increment in the result.
 - `evaluation/components/chat_quality/value_gate.py`: the value gate (D x G x L x M) for progress cases (`ai_doable` in the case data); bookkeeping requests are not held to it. `rejudge.py` judges a saved reply by the dataset's current case.
@@ -17,6 +19,9 @@ All notable changes to this project are documented here. The format is based on
 - `ToolSpec.flow_owned`: an operation a flow runs in code (the milestone cue's goal write and metric reads) is never offered to the planner and a call to it by name is refused.
 - The request analyser reports `writes_text` (the person asked for a piece of text to use and nothing else). The turn is then a deliverable written in the reply: a planned write, task or deep run is turned into the answer, and the writer gets the draft directive (the whole piece, every part it normally has, no question about an optional choice, no "cannot publish").
 - `create_quest_workflow_spec` and `list_quest_workflows_spec` are in `quest_ai_runner.api`, so a host can offer the workflow tools over its own Quest client.
+
+### Removed
+- `milestone_cue.Resolved.carry_out`, `choices` and the owned-next-step write, `milestone_readiness` and its metric record: a progress turn makes and measures work (`milestone_progress`) and bookkeeping is never its output.
 
 ### Changed
 - The milestone judgment names bookkeeping alone (an owner, a due date or a reminder) as NONE, so such a request gets its bookkeeping and no forced deliverable; the planner's increment order now says code makes the increment and that an owner, a due date or a reminder is never the progress.

@@ -12,7 +12,7 @@ package of this checkout into the container's ``/tmp/qoverlay`` (nothing is inst
 no SSE transport, no parked-decision shortcut, and the reply and the user message are not stored. The model calls are real production calls.
 
 Environment: ``QAR_PRIVATE_POOR_ANSWERS_DATASET`` (approved ids and texts), ``QAR_PROD_CASE_RULES_FILE``, ``QAR_OVERLAY_SSH`` (user@host), ``QAR_OVERLAY_REMOTE_DIR`` (the compose directory), ``QAR_OVERLAY_BASE_REF`` (the deployed backend commit), ``QAR_OVERLAY_USER`` (the caller's user id),
-``QAR_PROD_QUEST_ID``, ``QAR_PROD_TEAM_ID``, ``QAR_OVERLAY_BACKEND`` (optional: the quest-backend checkout).
+``QAR_PROD_QUEST_ID``, ``QAR_PROD_TEAM_ID``, ``QAR_OVERLAY_BACKEND`` (optional: the quest-backend checkout), ``QAR_OVERLAY_SEED_FROM_LAST`` (optional: 1 makes each case read the specification edits its last saved replay made, as if they had landed).
 PAID in production model calls; the judge is ``claude -p``."""
 PAID = True
 ALTERNATIVE = True
@@ -144,6 +144,34 @@ def replay(payload, user, team):
     return records, summary, done.stderr.decode("utf-8", "replace")[-600:]
 
 
+def seed_from_last(case_id, environ=None):
+    """``{record id: {field: value}}``: the specification edits the last saved replay of this case made (``apply_spec_edit`` results it recorded, blocked like
+    every write), so the next replay reads them as kept. Used with ``QAR_OVERLAY_SEED_FROM_LAST=1`` to prove a run reuses what an earlier one kept; {} when
+    there is no earlier replay or it kept nothing."""
+    import output_log
+    environ = os.environ if environ is None else environ
+    folder = (environ.get(output_log.ENV) or "").strip()
+    path = Path(folder).expanduser() / "poor_answers" / f"{output_log.safe_name(case_id)}.jsonl" if folder else None
+    if path is None or not path.is_file():
+        return {}
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip().startswith("{")]
+    last = next((r for r in reversed(rows) if r.get("arm") == "prod_chat_overlay" and r.get("reads_seen") is not None), None)
+    seed = {}
+    for read in (last or {}).get("reads_seen") or []:
+        if not str(read.get("source") or "").startswith("tool apply_spec_edit"):
+            continue
+        for line in reversed(str(read.get("text") or "").splitlines()):
+            try:
+                data = json.loads(line) if line.strip().startswith("{") else None
+            except ValueError:
+                data = None
+            if isinstance(data, dict):
+                if data.get("applied") and data.get("field") and data.get("target") and "after" in data:
+                    seed.setdefault(str(data["target"]), {})[str(data["field"])] = data["after"]
+                break
+    return seed
+
+
 def category_of(collection):
     name = str(collection).lower()
     if any(w in name for w in IGNORED_WORDS):
@@ -216,6 +244,9 @@ def build(meter):
         started = time.time()
         payload = [{"id": case["id"], "input": message, "pinned": pinned_quest(case, quest), "history": prior,
                     "input_origin": "app_voice_chat" if case.get("channel") == "voice" else "app_chat"}]
+        if os.environ.get("QAR_OVERLAY_SEED_FROM_LAST") == "1":
+            payload[0]["seed_spec"] = seed_from_last(case["id"])
+            record["seed_spec"] = payload[0]["seed_spec"]
         try:
             records, summary, tail = replay(payload, user, team)
             if not records:
@@ -267,7 +298,7 @@ def build(meter):
         record.setdefault("model_calls", 0)
         record.update(seconds=round(time.time() - started, 1), tokens_in=0, tokens_out=0, tokens_estimated=True)
         record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "changes", "unexpected_writes", "other_writes", "messages", "reads_seen", "unsupported_figures",
-                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "value_gate", "replay_error", "model_calls_log",
+                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "value_gate", "seed_spec", "replay_error", "model_calls_log",
                                                           "qar_notes", "provider_retries", "judge_input")}
         try:
             meter.record(max(1, record["model_calls"]))

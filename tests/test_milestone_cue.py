@@ -138,35 +138,6 @@ def test_a_failed_read_is_a_lane_gap_not_an_empty_hint():
         cue.resolve(ToolRegistry([read_spec()]), "q1", CUE)
 
 
-def test_the_flow_step_writes_the_keyed_next_step_to_an_owner_and_returns_the_receipt():
-    calls = []
-    resolved = cue.resolve(registry(calls), "q1", CUE, datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc))
-    receipt, status = resolved.carry_out(registry(calls))
-    assert status == "applied" and "RECEIPT written by code" in receipt and "do not offer to do it" in receipt
-    assert calls[0]["title"] == "P3 Mobile app live on the Apple Store next step: week of 2026-11-02" and calls[0]["assignee"] == "Cy" and calls[0]["spec_solution_id"] == "esr_c"
-    assert calls[0]["spec_metric_id"] == "esr_mc" and calls[0]["period"] == "2026_W45" and calls[0]["due_date"] == "2026-11-08"
-
-
-def test_an_owner_quest_does_not_know_is_skipped_and_none_accepted_writes_it_unassigned_and_says_so():
-    calls = []
-    resolved = cue.resolve(registry(calls), "q1", CUE, datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc))
-    receipt, _ = resolved.carry_out(ToolRegistry([write_goal(calls, refuse=("Cy",))]))
-    assert [c.get("assignee") for c in calls] == ["Cy", "Di"] and "Created" in receipt
-    calls.clear()
-    receipt, _ = resolved.carry_out(ToolRegistry([write_goal(calls, refuse=("Cy", "Di"))]))
-    assert "assignee" not in calls[-1] and "owner could not be set" in receipt
-
-
-def test_a_write_the_tool_refuses_or_a_lane_without_the_tool_is_a_lane_gap():
-    resolved = cue.resolve(registry(), "q1", CUE)
-    refusing = ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
-                        handler=lambda args, ctx: ToolResult(ok=False, status=ToolStatus.HELD, text="Not applied yet: waiting for a person to approve it."))
-    with pytest.raises(cue.LaneGap, match="waiting for a person"):
-        resolved.carry_out(ToolRegistry([refusing]))
-    with pytest.raises(cue.LaneGap, match="no create_or_update_quest_goal tool"):
-        resolved.carry_out(ToolRegistry([]))
-
-
 def test_the_third_rung_runs_only_for_an_act_turn_that_took_no_higher_rung():
     from hubofhubs.api import PlanDecision
     resolved = cue.resolve(registry(), "q1", CUE)
@@ -260,29 +231,6 @@ def test_an_old_format_goal_sharing_the_milestones_code_and_words_is_listed_as_a
     assert "P3 next step: week of 2026-11-02" in cue.fact_block(TABLES, CUE, monday="2026-11-09", goals=[OLD_GOAL])
 
 
-def test_the_model_decides_the_existing_goal_and_the_owner_from_the_record_text_and_the_goal_is_updated_in_place():
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Cy and Di."}}}
-
-    class Tools(ToolRegistry):
-        pass
-    calls = []
-    read = ToolSpec(name="read_spec_records", description="d", mutates=False,
-                    handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
-    tools = ToolRegistry([read, list_goals([OLD_GOAL]), write_goal(calls)])
-    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
-    asked = []
-
-    def decide(prompt):
-        asked.append(prompt)
-        return json.dumps({"owner": "Cy", "goal_id": "g9", "draft": ""})
-    receipt, _ = resolved.carry_out(tools, decide)
-    assert len(asked) == 1 and calls[0]["adopt_goal_id"] == "g9" and calls[0]["assignee"] == "Cy" and calls[0]["title"] == "P3 Mobile app live on the Apple Store next step: week of 2026-11-02"
-    calls.clear()
-    resolved.receipt = ""
-    resolved.carry_out(tools, lambda prompt: "NONE")
-    assert "adopt_goal_id" not in calls[0] and "assignee" not in calls[0]       # no owner named, no same goal: created unassigned
-
-
 def test_adopting_an_existing_goal_renames_links_and_moves_it_and_a_repeat_is_already_there():
     from quest_ai_runner.the_body.hands.quest_operations import goal_links
 
@@ -306,15 +254,6 @@ def test_adopting_an_existing_goal_renames_links_and_moves_it_and_a_repeat_is_al
     assert client.updates[0][1]["spec_solution_id"] == "esr_c" and len(client.goals) == 1
     again = goal_links.ensure_goal(client, "q1", "esr_c next step: week of 2026-11-09", "2026_W46", fields, None, "g9")
     assert again["state"] == "unchanged" and len(client.updates) == 1
-
-
-def test_the_title_starts_with_the_milestones_code_and_never_carries_the_record_id_and_the_old_unlinked_goal_is_found_and_adopted():
-    calls = []
-    tools = ToolRegistry([read_spec(), list_goals([OLD_GOAL]), write_goal(calls)])
-    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc))
-    assert [g["id"] for g in resolved.candidates] == ["g9"] and "esr_c next step" not in resolved.facts.split("Keys:")[1].split("\n")[0]
-    resolved.carry_out(tools, lambda prompt: json.dumps({"goal_id": "g9"}))
-    assert calls[0]["title"].startswith("P3 ") and "esr_" not in calls[0]["title"] and calls[0]["adopt_goal_id"] == "g9" and calls[0]["spec_solution_id"] == "esr_c"
 
 
 def test_settle_plan_turns_a_deep_run_or_a_permission_question_into_the_answer_and_keeps_only_work_beyond_the_write():
@@ -439,18 +378,6 @@ def test_the_code_step_is_in_the_execution_record_so_no_net_re_runs_the_work_as_
     result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([])).run(CUE, quest_id="q1")
     record = result.execution_record
     assert record is not None and record.any_success and any("keep_milestone_deliverable" in f.goal for f in record.facts)
-
-
-def test_the_receipt_leads_with_created_updated_or_already_set_from_the_tools_typed_state():
-    resolved = cue.resolve(registry(), "q1", CUE)
-    leads = {state: resolved.lead_sentence(state) for state in ("created", "updated", "unchanged")}
-    assert "already set" in leads["unchanged"] and "nothing was changed" in leads["unchanged"] and "updated" in leads["updated"] and "created" in leads["created"]
-    for state, lead in leads.items():
-        noop = ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
-                        handler=lambda args, ctx, state=state: ToolResult(ok=True, status=ToolStatus.NOOP if state == "unchanged" else ToolStatus.APPLIED, data={"state": state}, text="done"))
-        receipt, _ = resolved.carry_out(ToolRegistry([noop]))
-        assert f'Open the reply with exactly this sentence: "{lead}"' in receipt
-        resolved.receipt = ""
 
 
 def test_a_milestone_act_cue_sends_two_messages_the_status_first_and_the_result():
@@ -839,44 +766,7 @@ def test_only_a_keyed_next_step_goal_can_be_taken_over_and_the_pattern_is_the_on
     assert done["state"] == "updated" and [p[0] for p in client.puts] == ["k"] and client.posts == []
 
 
-def test_the_milestone_step_offers_only_keyed_goals_for_adoption_and_names_the_persons_goal_in_its_description():
-    keyed = {"id": "k", "title": "P3 next step: week of 2026-11-02", "text": "", "spec_solution_id": None, "completed": False, "abandoned": False}
-    human = {"id": "h1", "title": "Submit the app to the store and advance the written feature test pass", "text": "", "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
-    tools = ToolRegistry([read_spec(), list_goals([keyed, human]), write_goal([])])
-    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
-    asked = []
-
-    def decide(prompt):
-        asked.append(prompt)
-        return json.dumps({"goal_id": "k"})
-    assert resolved.choices(decide)["goal_id"] == "k" and "h1:" not in asked[0] and "k:" in asked[0]
-    assert resolved.choices(lambda prompt: json.dumps({"goal_id": "h1"}))["goal_id"] == ""
-    description = resolved.goal_arguments()["description"]
-    assert "Related goals on the quest: Submit the app to the store" in description and "k" not in description.split("Related goals")[1]
-
-
 # ---- the group fixes of the milestone baseline
-
-def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_repeat_reuses_the_kept_draft():
-    calls, asked = [], []
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Cy and Di."}}}
-    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
-    tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
-    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
-    resolved = cue.resolve(tools, "q1", CUE, now)
-    receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action on the signup page"}))
-    checks = [p for p in asked if "independent checkers" in p]
-    assert len(checks) == 2 and all("Facts the draft was written from" in c for c in checks), "the new draft's claims are checked by its two claims views, against the facts it was written from"
-    asked[:] = [p for p in asked if p not in checks]
-    assert len(asked) == 1 and "human_step" in asked[0] and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few neutral questions, each a full sentence ready to send" in asked[0] and "no em dashes" in asked[0]
-    assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action on the signup page")
-    assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
-    kept = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "Next step ...\nDraft: Opening, three product points, call to action on the signup page",
-            "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
-    again = cue.resolve(ToolRegistry([read, list_goals([kept]), write_goal(calls)]), "q1", CUE, now)
-    asked.clear()
-    again.carry_out(ToolRegistry([read, list_goals([kept]), write_goal(calls)]), lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy"}))
-    assert "draft" not in asked[0].split("Return JSON")[1] and calls[-1]["description"].endswith("Draft: Opening, three product points, call to action on the signup page")
 
 
 def test_a_cue_that_names_a_word_family_of_the_milestone_resolves_it():
@@ -944,29 +834,7 @@ def test_the_first_message_for_a_resolved_milestone_is_read_from_its_record_fiel
     assert "Now: Making the next piece of work" in text
 
 
-def test_the_reply_is_told_to_ask_nothing_and_never_to_move_the_milestones_own_date():
-    calls = []
-    resolved = cue.resolve(registry(calls), "q1", CUE)
-    receipt, _ = resolved.carry_out(registry(calls))
-    assert "ask the person nothing, propose no new date" in receipt and "state no count of its items" in receipt
-    assert "never means rescheduling the milestone's own date" in resolved.facts
-
-
 # ---- run 3 of the milestone baseline
-
-def test_a_draft_loses_every_line_that_states_a_figure_the_records_do_not_hold_and_keeps_numbering_and_brackets():
-    allowed = "P12 Announce integrations. Done when: 0 integrations announced. Target 2026-12-31."
-    draft = "Short description (66 characters)\n1. Tested and ready: new integrations\n2. Click-through of 4.2 percent expected\n3. Built for your workflow [link]\nTarget 2026-12-31 stays."
-    kept = cue.supported_draft(draft, allowed)
-    assert kept == "1. Tested and ready: new integrations\n3. Built for your workflow [link]\nTarget 2026-12-31 stays." and "66" not in kept and "4.2" not in kept
-    assert cue.supported_draft("Only 77 percent", allowed) == ""
-
-
-def test_the_kept_draft_never_carries_an_unsupported_figure_even_when_the_model_writes_one():
-    calls = []
-    resolved = cue.resolve(registry(calls), "q1", CUE)
-    resolved.carry_out(registry(calls), lambda prompt: json.dumps({"draft": "Headline A\nHeadline B (about 9 words)\nHeadline C"}))
-    assert calls[0]["description"].endswith("Draft: Headline A\nHeadline C") and "9 words" not in calls[0]["description"]
 
 
 def test_a_deliverable_goal_the_planner_wrote_under_its_own_title_does_not_stand_in_for_the_milestones_next_step():
@@ -977,16 +845,6 @@ def test_a_deliverable_goal_the_planner_wrote_under_its_own_title_does_not_stand
     keyed = {"locator": "tool:create_or_update_quest_goal", "tool_status": "applied", "call": {"name": "create_or_update_quest_goal", "args": {"title": "P3 next step: week of 2026-11-02"}}}
     plan = PlanDecision(action="answer")
     assert resolved.routes_to_code(plan, "act", [deliverable], tools) is True and resolved.routes_to_code(plan, "act", [keyed], tools) is False
-
-
-def test_each_owner_the_record_names_is_tried_in_turn_and_a_team_name_is_not_asked_for():
-    calls, asked = [], []
-    tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Cy, Di."}}}
-    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="read"))
-    tools = ToolRegistry([read, list_goals([]), write_goal(calls, refuse=("Cy",))])
-    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
-    resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owners": ["Cy", "Di"]}))
-    assert [c.get("assignee") for c in calls] == ["Cy", "Di"] and "names only, no team names" in asked[0]
 
 
 def test_the_closing_line_reports_unchanged_from_the_read_when_nothing_wrote_the_metric():
@@ -1046,25 +904,6 @@ def test_message_one_says_the_step_already_exists_when_this_weeks_goal_is_on_the
     assert cue.resolve(registry(), "q1", CUE, now).doing().startswith("Making the next piece of work")
 
 
-def test_when_no_named_owner_can_be_set_the_goal_is_left_unassigned_and_the_reply_says_who_should_own_it():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
-    existing = {"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "period": "2026_W45", "assigned_to_user_id": "team-account"}
-    client = GoalClient([dict(existing)])
-    client.assign_goal = lambda goal_id, user_id: client.assigns.append((goal_id, user_id)) or type("W", (), {"status": None})()
-    done = goal_links.ensure_goal(client, "q1", KEYED, "2026_W45", {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}, None, None, False, True)
-    assert client.assigns == [("k", None)] and "assignee cleared" in done["changed"]
-    untouched = GoalClient([dict(existing)])
-    untouched.assign_goal = lambda goal_id, user_id: untouched.assigns.append((goal_id, user_id)) or type("W", (), {"status": None})()
-    goal_links.ensure_goal(untouched, "q1", KEYED, "2026_W45", {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc"}, None, None, False, False)
-    assert untouched.assigns == []           # without the flag a goal keeps whoever it has
-    calls = []
-    tools = ToolRegistry([read_spec(), list_goals([]), write_goal(calls, refuse=("Cy", "Di"))])
-    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
-    receipt, _ = resolved.carry_out(tools)
-    assert calls[-1].get("clear_assignee") is True and "assignee" not in calls[-1]
-    assert "left unassigned. Say plainly that the record names Cy, Di but the quest cannot assign the goal to them, say who should own it, and ask nothing" in receipt
-
-
 def test_the_closing_line_reads_the_milestones_metric_record_again_after_the_write():
     from types import SimpleNamespace
     from quest_ai_runner.the_intelligence.mind.response_writer import act_status
@@ -1080,14 +919,6 @@ def test_the_closing_line_reads_the_milestones_metric_record_again_after_the_wri
     assert res.text.endswith("Metric (P3 Mobile app live on the Apple Store): was No, now Yes.")
 
 
-def test_the_draft_prompt_names_sendable_questions_and_a_short_pitch_and_limits_a_checklist_to_when_nothing_else_fits():
-    asked = []
-    cue.resolve(registry([]), "q1", CUE).carry_out(registry([]), lambda prompt: asked.append(prompt) or "{}")
-    text = asked[0]
-    assert "few neutral questions, each a full sentence ready to send" in text and "a short message to that party stating what they get, the ask" in text
-    assert "a checklist of at most 5 steps only when none of these fits" in text and "under 120 words" in text and "Leave no bracket slot" in text
-
-
 def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_deliverable_stays_in_the_one_keyed_goal():
     from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
@@ -1100,12 +931,6 @@ def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_
     Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry(calls)).run(CUE, quest_id="q1")
     assert [c["title"] for c in calls] == ["esr_c next step: week of 2026-10-26"]       # the planner's own goal write is taken out; the code keeps the work on the milestone's kept goal
     assert "outreach" not in calls[0]["title"]
-
-
-def test_the_draft_prompt_forbids_first_person_unsourced_dates_and_notes_in_place_of_a_script():
-    asked = []
-    cue.resolve(registry([]), "q1", CUE).carry_out(registry([]), lambda prompt: asked.append(prompt) or "{}")
-    assert 'no first person ("I", "we", "our")' in asked[0] and "never a due date or deadline that is not in the facts above" in asked[0] and "the words to be spoken, not notes about it" in asked[0]
 
 
 # ---- SAFETY run 6: a person's goal that merely shares words with a request is never updated
@@ -1154,15 +979,6 @@ def test_the_alternatives_flow_never_offers_or_changes_a_goal_that_merely_shares
     # the model named the persons goals by title: the tool is asked, and it leaves them alone (this fake tool stands in for it)
     assert all(c.get("adopt_goal_id") is None for c in calls)
     assert tail
-
-
-def test_a_milestone_cue_never_offers_a_persons_goal_for_adoption():
-    person = {"id": "h1", "title": "P3 Mobile app live on the Apple Store mentor ad draft", "text": "a person's plan", "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
-    tools = ToolRegistry([read_spec(), list_goals([person]), write_goal([])])
-    resolved = cue.resolve(tools, "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
-    asked = []
-    picked = resolved.choices(lambda prompt: asked.append(prompt) or json.dumps({"goal_id": "h1"}))
-    assert picked["goal_id"] == "" and "h1:" not in asked[0]
 
 
 # ---- full run on 3a5550bf
@@ -1320,44 +1136,6 @@ def test_a_draft_turn_on_a_quest_with_many_goals_finds_the_look_alikes_past_the_
     assert "Post A: A story hook gets more clicks" in tail and "Post B: A question hook gets more signups" in tail and "Compared by:" in tail
 
 
-
-
-def test_a_draft_claim_no_fact_supports_is_rewritten_or_removed_before_the_draft_is_kept():
-    calls = []
-    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": TABLES, "time_zone": "UTC"}, text="read"))
-    tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
-    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
-    invented = "The app replaces five other tools."
-
-    def model(prompt):
-        if "independent checkers" in prompt:
-            return json.dumps({"findings": [{"span": invented, "quote": ""}]})
-        if "For each numbered statement" in prompt:
-            return json.dumps({"verdicts": [{"n": 1, "fails": True, "quote": ""}]})
-        if "Rewrite only the failing part" in prompt:
-            return json.dumps({"action": "remove", "text": ""})
-        return json.dumps({"owner": "Cy", "draft": f"Watch the app go live. {invented} Sign up on the store page."})
-    cue.resolve(tools, "q1", CUE, now).carry_out(tools, model)
-    assert invented not in calls[0]["description"] and "Draft: Watch the app go live. Sign up on the store page." in calls[0]["description"]
-
-
-def test_the_turns_reads_reach_the_draft_call_and_the_draft_claim_check():
-    """A draft may state what a product does only from what the turn read or was shown: that text is in the draft call and in the claims check's evidence."""
-    calls, asked = [], []
-    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": TABLES, "time_zone": "UTC"}, text="read"))
-    tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
-    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
-    seen = "The app keeps every goal and its owner on one screen."
-
-    def model(prompt):
-        asked.append(prompt)
-        if "independent checkers" in prompt:
-            return json.dumps({"findings": []})
-        return json.dumps({"owner": "Cy", "draft": "Every goal and its owner on one screen."})
-    cue.resolve(tools, "q1", CUE, now).carry_out(tools, model, grounding=seen)
-    assert seen in asked[0] and all(seen in p for p in asked if "independent checkers" in p)
-
-
 def test_the_flow_asks_only_for_the_milestones_own_open_goals_and_finds_this_weeks_step():
     """A quest with hundreds of goals: the tool showed one page of 100, soonest due first, so this week's step was never seen. The flow now asks the
     lane for the goals linked to the milestone's record, open only, and gets only those."""
@@ -1376,7 +1154,7 @@ def test_the_flow_asks_only_for_the_milestones_own_open_goals_and_finds_this_wee
     tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=server), write_goal([])])
     resolved = cue.resolve(tools, "q1", CUE, now)
     assert asked == [{"quest_id": "q1", "spec_solution_id": "esr_c", "open_only": True, "limit": 100}]
-    assert resolved.week_goal() is not None
+    assert [g["id"] for g in resolved.candidates] == ["k1"]
 
 
 def test_the_goals_tool_asks_the_server_for_the_linked_goals_and_filters_an_older_servers_full_answer():
@@ -1398,19 +1176,6 @@ def test_the_goals_tool_asks_the_server_for_the_linked_goals_and_filters_an_olde
     assert calls == [{"spec_solution_id": "esr_c", "open_only": True}] and [r["id"] for r in result.data] == ["a"]
     spec.handler({"quest_id": "q1"}, ToolContext(quest_id="q1"))
     assert calls[-1] == {}        # without a record the whole list is read, so the total stays the quest's count
-
-
-def test_the_step_and_draft_are_written_for_what_the_person_asked():
-    calls, prompts = [], []
-    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
-    request = "what is missing for the automated build and test loop on the store release? make sure it happens"
-
-    def model(prompt):
-        prompts.append(prompt)
-        return json.dumps({"owners": ["Cy"], "draft": "", "human_step": "Cy sets up the automated build and test loop."})
-    resolved = cue.resolve(registry(calls), "q1", request + " apple store", now)
-    resolved.carry_out(registry(calls), model)
-    assert any("What the person asked for this turn" in p and "automated build and test loop" in p for p in prompts)
 
 
 def test_a_bookkeeping_request_gets_its_bookkeeping_and_no_forced_deliverable(monkeypatch):

@@ -57,7 +57,7 @@ def test_the_tools_are_built_over_the_hosts_client_and_the_source_tool_only_with
     assert "read_metric_source" not in [spec.name for spec in milestone_flow_tools(lambda: Client())]
 
 
-def test_the_flow_runs_on_a_hosts_tools_and_the_value_comes_from_the_hosts_reader():
+def test_the_flow_reads_on_a_hosts_tools_and_the_value_comes_from_the_hosts_reader():
     reading = {"value": 61, "as_of": "2026-11-03", "source": "Funnel report", "detail": {}}
 
     def read(name):
@@ -65,22 +65,16 @@ def test_the_flow_runs_on_a_hosts_tools_and_the_value_comes_from_the_hosts_reade
             raise MetricSourceError("unknown")
         return reading
     client, registry, resolved = flow(read)
-    receipt, status = resolved.carry_out(registry, decide)
-    goal = client.created[0]
-    assert status == "applied" and goal["name"] == "P1 Onboarding that captivates next step: week of 2026-11-02"
-    assert goal["assigned_to_user_id"] == "u_ann" and goal["spec_solution_id"] == "sol_1" and goal["spec_metric_id"] == "met_1"
-    assert "Current value: 61 (as of 2026-11-03, from Funnel report)" in goal["description"]
+    resolved.read_source(registry)
+    assert resolved.current_text() == "61 (as of 2026-11-03, from Funnel report)" and client.created == []      # reading writes nothing
 
 
-def test_a_source_the_reader_cannot_read_leaves_no_figure_on_the_goal_and_the_receipt_says_so():
+def test_a_source_the_reader_cannot_read_gives_no_reading_and_says_why():
     def unreadable(name):
         raise MetricSourceError("no file source holds it")
     client, registry, resolved = flow(unreadable)
-    receipt, status = resolved.carry_out(registry, decide)
-    description = client.created[0]["description"]
-    assert "Current value: not read, the funnel source could not be read just now" in description
-    assert "50" not in description and "as of" not in description
-    assert "could not be read" in receipt and "state no value" in receipt.lower().replace("and state", "state")
+    resolved.read_source(registry)
+    assert resolved.reading is None and "no file source holds it" in resolved.reading_gap      # no figure is passed off as a reading
 
 
 def flow_with_record(reader, record):
@@ -99,16 +93,15 @@ def test_the_dated_reading_the_metric_record_holds_is_read_first_and_a_zero_stan
     def unreadable(name):
         raise MetricSourceError("no file source holds it")
     client, registry, resolved = flow_with_record(unreadable, "Current value: 0 (as of 2026-11-02, from Admin user list)\nNo tagged accounts yet.")
-    receipt, status = resolved.carry_out(registry, decide)
-    assert "Current value: 0 (as of 2026-11-02, from Admin user list)" in client.created[0]["description"]
-    assert "not read" not in client.created[0]["description"] and "recorded reading stands" in receipt
+    resolved.read_source(registry)
+    assert resolved.current_text() == "0 (as of 2026-11-02, from Admin user list)" and resolved.reading_gap
 
 
 def test_a_source_reading_as_recent_or_newer_replaces_the_records_reading():
     newer = {"value": 3, "as_of": "2026-11-03", "source": "Funnel report", "detail": {}}
     client, registry, resolved = flow_with_record(lambda name: newer, "Current value: 0 (as of 2026-11-02, from Admin user list)")
-    resolved.carry_out(registry, decide)
-    assert "Current value: 3 (as of 2026-11-03, from Funnel report)" in client.created[0]["description"]
+    resolved.read_source(registry)
+    assert resolved.current_text() == "3 (as of 2026-11-03, from Funnel report)"
 
 
 def test_a_stored_value_older_than_the_records_last_measure_is_not_the_current_value():
@@ -121,8 +114,8 @@ def test_a_stored_value_older_than_the_records_last_measure_is_not_the_current_v
         resolved = cue.resolve(registry, "q1", "get the onboarding test moving", NOW, decide)
     finally:
         SPEC["records"][1]["fields"].pop("measured_through")
-    resolved.carry_out(registry, decide)
-    assert "Current value: 61 (as of 2026-11-03, from Funnel report)" in client.created[0]["description"] and "100" not in client.created[0]["description"]
+    resolved.read_source(registry)
+    assert resolved.current_text() == "61 (as of 2026-11-03, from Funnel report)"
 
 
 def test_a_reading_is_checked_the_same_way_whatever_reads_it():
@@ -149,14 +142,14 @@ def test_the_value_recorded_in_the_hosts_store_is_read_before_the_named_source_a
     client = Client()
     registry = ToolRegistry(milestone_flow_tools(lambda: client, lambda name: source_reading, recorded_reader=recorded_reader))
     resolved = cue.resolve(registry, "q1", "get the onboarding test moving", NOW, decide)
-    resolved.carry_out(registry, decide)
-    assert asked == [("q1", "met_1")] and "Current value: 70 (as of 2026-11-02, from Admin dashboard)" in client.created[0]["description"]
+    resolved.read_source(registry)
+    assert asked == [("q1", "met_1")] and resolved.current_text() == "70 (as of 2026-11-02, from Admin dashboard)"
     recorded.clear()
     client2 = Client()
     registry2 = ToolRegistry(milestone_flow_tools(lambda: client2, lambda name: source_reading, recorded_reader=recorded_reader))
     resolved2 = cue.resolve(registry2, "q1", "get the onboarding test moving", NOW, decide)
-    resolved2.carry_out(registry2, decide)
-    assert "Current value: 61 (as of 2026-11-03, from Funnel report)" in client2.created[0]["description"]
+    resolved2.read_source(registry2)
+    assert resolved2.current_text() == "61 (as of 2026-11-03, from Funnel report)"
 
 
 def test_goal_write_and_metric_reads_are_not_offered_to_the_planner():
