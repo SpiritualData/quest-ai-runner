@@ -37,8 +37,10 @@ GROUNDING_CHARS = 16000   # the reads and facts views see what the writer saw: t
 NONE_TEXT = "(none)"
 # At most this many check calls in flight. Measured on the production replay (2026-11-08): the provider answers "concurrent connections exceeded" (429) for
 # this account as soon as a few calls overlap with live traffic, and each retry adds 0.4 to 1 s (a repeated one, many seconds). 8 at once put 6 to 19 s on single
-# calls; 6 at once with a 2.5 s hedge gave 14 to 29 retries on the slowest checks (p90 14.6 s); 4 with no hedge gave the fewest retries.
-REPLY_CHECK_PARALLEL = 4
+# calls; 6 at once with a 2.5 s hedge gave 14 to 29 retries on the slowest checks (p90 14.6 s); 4 with no hedge gave the fewest retries of those. Then the key's
+# own limit was measured directly: exactly 2 calls in flight, every one beyond answered 429. In an A/B on that replay the check at 4 caused 6 provider retries a
+# turn against 0.2 with it off, so the default is the key's limit (a consumer whose key allows more can pass a wider binding).
+REPLY_CHECK_PARALLEL = 2
 # A hedge (a slow call sent once more) adds load exactly when the provider is refusing load, so it is off; the hub's CallPool keeps it for a provider with headroom.
 REPLY_CHECK_HEDGE_SECONDS = 0.0
 
