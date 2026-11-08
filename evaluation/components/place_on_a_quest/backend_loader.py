@@ -89,3 +89,14 @@ def quest_aim(quest):
 def quest_index(candidates, quests):
     """The backend's ``QuestIndex`` for each fixture quest, from its own ``quest_index_from_doc`` (the one projection production uses)."""
     return [candidates.quest_index_from_doc(quest_doc(q)) for q in quests]
+
+
+def verify():
+    """The backend's ``quest_verify`` module (the verify step after the judge's pick), as it ships; its prompt texts and the pick prompt module are
+    stood in for the application imports it makes."""
+    backend()
+    if "verify" not in loaded_modules:
+        stand_in("app.business.quests.quest_pick_prompt", **vars(loaded_modules["pick"]))
+        stand_in("app.prompts.quest_verify_prompts", **vars(read_module("qb_quest_verify_prompts", "app/prompts/quest_verify_prompts.py")))
+        loaded_modules["verify"] = read_module("qb_quest_verify", "app/business/quests/quest_verify.py")
+    return loaded_modules["verify"]

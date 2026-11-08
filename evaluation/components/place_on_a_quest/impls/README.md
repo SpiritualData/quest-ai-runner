@@ -6,6 +6,7 @@ Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../../../quest
 |---|---|---|---|
 | Learn from what is already placed, the model picks | `place-on-a-quest:example-vote-ranker` | [`evaluation/components/place_on_a_quest/impls/example_vote_ranker.py`](example_vote_ranker.py) |  |
 | A small learned prior over generic signals | `place-on-a-quest:learned-quest-prior` | [`evaluation/components/place_on_a_quest/impls/example_vote_ranker.py`](example_vote_ranker.py) |  |
+| Check the pick against the picked quest's own scope | `place-on-a-quest:scope-verify` | [`evaluation/components/place_on_a_quest/impls/scope_verify_ranker_model.py`](scope_verify_ranker_model.py) |  |
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [`evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py`](shared_quest_ranker.py) |  |
 
 ## Where to go next

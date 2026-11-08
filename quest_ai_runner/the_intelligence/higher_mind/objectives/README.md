@@ -107,6 +107,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | The library judge over the quests it is given | `place-on-a-quest:library-quest-judge` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
 | Learn from what is already placed, the model picks | `place-on-a-quest:example-vote-ranker` | [evaluation/components/place_on_a_quest/impls/example_vote_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/example_vote_ranker.py) |  |
 | A small learned prior over generic signals | `place-on-a-quest:learned-quest-prior` | [evaluation/components/place_on_a_quest/impls/example_vote_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/example_vote_ranker.py) |  |
+| Check the pick against the picked quest's own scope | `place-on-a-quest:scope-verify` | [evaluation/components/place_on_a_quest/impls/scope_verify_ranker_model.py](../../../../evaluation/components/place_on_a_quest/impls/scope_verify_ranker_model.py) |  |
 
 ### Metrics
 

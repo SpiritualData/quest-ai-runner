@@ -39,3 +39,14 @@ def test_the_example_vote_arm_votes_the_closest_examples_and_leaves_exampleless_
     assert arm.similar_examples({"message": "x", "previous": ""}, fake_embed) == []
     backend = backend_loader.examples()
     assert backend.vote_order(backend.example_vote(found))[0] == "q_a"
+
+
+def test_the_verify_module_loads_and_accepts_a_switch_only_to_a_listed_quest():
+    V = backend_loader.verify()
+    picked = {"quest_id": "q_a", "scope": "Only mobile app work. Out of scope: general features that work the same on web."}
+    others = [{"quest_id": "q_b"}, {"quest_id": "q_c"}]
+    quote = "Out of scope: general features"
+    assert V.parse_verdict({"excluded_by": quote, "belongs_to": 3}, picked, others) == {"excluded": True, "switch": "q_c"}
+    assert V.parse_verdict({"excluded_by": quote, "belongs_to": 9}, picked, others)["switch"] is None
+    assert V.parse_verdict({"excluded_by": "words not in the scope", "belongs_to": 2}, picked, others)["excluded"] is False
+    assert V.should_verify("disagree", "q_a", "q_a") is False and V.should_verify("disagree", "q_a", None) is True
