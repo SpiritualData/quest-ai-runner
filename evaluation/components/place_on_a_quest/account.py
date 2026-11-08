@@ -2,7 +2,10 @@
 look-alike pairs (the app launch and the website redesign share "launch"; the grant and the newsletter share "funding"/"growth"
 vocabulary; the bookkeeper hire and the team offsite are both Operations). Invented for this metric: no Spiritual Data name, no
 private text. A quest has the fields Quest's ranker reads: its outcome (title), category, current state, the owner's scope and the
-open measurable outcomes (the milestones)."""
+open measurable outcomes (the milestones), and optionally its ``vision`` (the vision statement, in the person's words; the outcome when
+absent) and ``purpose`` (why the quest matters), which every stage passes through to the backend's ``quest_aim``. The public quests below
+carry neither, so their cases measure what they did before the two fields reached the pickers; a real labelled case carries them when the
+quest has them."""
 
 CORE = [
     {"quest_id": "q_app", "outcome": "Ship the mobile app to the app stores", "category": "Product",
@@ -48,13 +51,13 @@ def quest_label(quest):
 
 
 def embedding_text(quest):
-    """What the shared ranker's embedding covers: the outcome, the category and the scope (quest_selection.semantic_hits)."""
-    return " ".join(p for p in (quest["outcome"], quest["category"], quest["scope"]) if p)
+    """What the shared ranker's embedding covers: the vision statement, the purpose, the category and the scope (quest_selection.semantic_hits)."""
+    return " ".join(p for p in (quest.get("vision") or quest["outcome"], quest.get("purpose"), quest["category"], quest["scope"]) if p)
 
 
 def card_text(quest):
-    """What the hybrid ranker's quest card covers: the outcome, state and open outcomes (a longer digest than the outcome alone)."""
-    return " ".join([quest["outcome"], quest["category"], quest["state"], *quest["open"]])
+    """What the hybrid ranker's quest card covers: the outcome, purpose, state and open outcomes (a longer digest than the outcome alone)."""
+    return " ".join(p for p in [quest["outcome"], quest.get("purpose"), quest["category"], quest["state"], *quest["open"]] if p)
 
 
 # Thirty more quests of a busy account, fixed before any arm was scored on them, so the candidate window of a model (the first 25 it is shown)

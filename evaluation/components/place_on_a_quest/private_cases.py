@@ -3,7 +3,8 @@
 The cases are real messages a person sent, each labelled by that person (or a reviewer) with the quest ids it belongs to (the empty list when none
 did) and carrying the quests it was labelled against. They are kept OUTSIDE this repository, in ``placement_cases.jsonl`` in the file or folder
 named by ``QAR_PRIVATE_PLACEMENT_DATASET`` (several separated by ``os.pathsep``); one JSON object per line:
-``{"id", "message", "previous", "quests": [{"quest_id", "outcome", "category", "state", "scope", "open": []}], "expect": [quest ids]}``.
+``{"id", "message", "previous", "quests": [{"quest_id", "outcome", "category", "state", "scope", "open": [], "vision"?, "purpose"?}],
+"expect": [quest ids]}`` (``vision`` and ``purpose`` are optional; see ``account``).
 With nothing present the source contributes no case and the metric runs on the public cases alone; nothing fails. Nothing from the data is copied
 into the repository. The private poorly answered inputs (``QAR_PRIVATE_POOR_ANSWERS_DATASET``) name what a cue resolves to in words, not by quest id,
 so they become cases here once a person has labelled them against the quests they came from.

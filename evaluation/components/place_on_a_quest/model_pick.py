@@ -10,7 +10,8 @@ from place_on_a_quest import account, backend_loader
 def shown(quest):
     open_outcomes = "; ".join(quest["open"])
     return {"quest_id": quest["quest_id"], "title": account.quest_label(quest),
-            "state": f"{quest['state']} | open measurable outcomes: {open_outcomes}", "scope": quest["scope"]}
+            "state": f"{quest['state']} | open measurable outcomes: {open_outcomes}", "scope": quest["scope"],
+            **backend_loader.quest_aim(quest)}
 
 
 def pick_among(provider, model, pick, ordered, case, window):
