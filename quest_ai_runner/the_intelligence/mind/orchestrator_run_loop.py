@@ -592,20 +592,27 @@ class RunLoopMixin:
                 send_status_first(self, emit, rs, gathered, user_turn=message_is_user_turn, doing=rs.cue_resolved.doing(), forced=True)
                 receipt = ""
                 try:
-                    receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered))
+                    # A progress turn makes one AI increment and measures it (milestone_progress): the deliverable, kept on the milestone's keyed goal, measured before and
+                    # after by a check that is not the writer, and the milestone metric read again. Bookkeeping (an owner, a due date) is never the output.
+                    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_progress
+                    made = milestone_progress.make_progress(rs.cue_resolved, self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered))
+                    rs.cue_resolved.progress = made
+                    if made.status != "measured":
+                        raise milestone_cue.LaneGap(f"no AI increment could be made for {rs.cue_resolved.name!r}: {made.why}")
+                    receipt = made.reply_text()
+                    rs.cue_resolved.lead = receipt.split("\n\n", 1)[0]
                     if isinstance(rs._ctx_meta, dict):
-                        rs._ctx_meta["milestone_step_recorded"] = True       # the person-only steps are in the goal: no later ask turns the reply into a question to the chat user
-                    receipt_entry = receipt_observation("create_or_update_quest_goal", receipt, tool_status)
-                    receipt_entry["after_state"] = dict(rs.cue_resolved.after_state or {})      # what the tool read back: the evidence a later reader of the goal list cannot yet contradict
+                        rs._ctx_meta["milestone_step_recorded"] = True       # the person-only step is in the reply: no later ask turns the reply into a question to the chat user
+                    receipt_entry = receipt_observation(milestone_progress.KEEP_TOOL, "RECEIPT written by code. " + receipt, "applied" if made.kept_state != "unchanged" else "noop")
                     gathered.append(receipt_entry)
                     if exec_record is not None:       # the turn's execution record holds the write, so no net re-runs it as a deep run
-                        # The fact is a reader's account of the write (it can become the reply), so it is the code-composed whole sentence, never the receipt cut at a length.
-                        exec_record.facts.append(ExecutionFact(goal=f"tool create_or_update_quest_goal: {rs.cue_resolved.lead or milestone_cue.first_sentence(receipt, 200)}", succeeded=True, phases=["tool_call", "done"]))
-                except milestone_cue.LaneGap as gap:
-                    log.warning("milestone cue: lane gap: %s", gap)
-                    gathered.append(lane_gap_observation(str(gap)))
+                        # The fact is a reader's account of the write (it can become the reply), so it is the code-composed whole sentence, never a text cut at a length.
+                        exec_record.facts.append(ExecutionFact(goal=f"tool {milestone_progress.KEEP_TOOL}: {rs.cue_resolved.lead}", succeeded=True, phases=["tool_call", "done"]))
+                except Exception as gap:      # noqa: BLE001  a lane gap, or a step that failed: said plainly in the turn's reads, never hidden and never a guess
+                    log.warning("milestone progress: %s: %s", type(gap).__name__, gap, exc_info=not isinstance(gap, milestone_cue.LaneGap))
+                    gathered.append(lane_gap_observation(str(gap) if isinstance(gap, milestone_cue.LaneGap) else f"the progress step failed ({type(gap).__name__}: {gap})"))
                     if exec_record is not None:
-                        exec_record.facts.append(ExecutionFact(goal="tool create_or_update_quest_goal", failed=True, error=str(gap)[:280], phases=["tool_call", "failed"]))
+                        exec_record.facts.append(ExecutionFact(goal="tool keep_milestone_deliverable", failed=True, error=str(gap)[:280], phases=["tool_call", "failed"]))
                 gathered.extend(rs.cue_resolved.read_entries())      # what the code step read is part of the turn's reads: the writer, the figure pass and the judge see it
                 rs.cue_resolved.settle_plan(rs.plan, receipt)
             if getattr(rs.plan, "delivery", None):

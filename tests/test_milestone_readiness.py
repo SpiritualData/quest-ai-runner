@@ -138,9 +138,9 @@ def test_the_closing_line_gives_both_stages_and_says_why_an_unchanged_value_did_
     assert "was 0 of 100, now 7 of 100 (the metric record)" in step.closing("0 of 100", "7 of 100") and "\n" not in line
 
 
-def test_the_first_message_says_the_readiness_the_quest_holds():
+def test_the_first_message_says_the_work_is_made_not_a_step_recorded():
     doing = resolved(tools([])).doing()
-    assert "Readiness of the step now: none held." in doing and "of 5" not in doing
+    assert doing.startswith("Making the next piece of work") and "Readiness" not in doing and "of 5" not in doing
 
 
 def test_the_reply_loses_a_closing_question_but_keeps_the_questions_of_the_draft():
@@ -226,7 +226,7 @@ def test_the_planners_source_read_is_taken_out_so_the_source_is_read_once():
     config = OrchestratorConfig()
     config.overseer = False
     Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=sourced_tools(calls, reads)).run("get the partner users moving", quest_id="q1")
-    assert reads == [{"name": "cov_source"}] and len(calls) == 1
+    assert reads == [{"name": "cov_source"}]      # read once, by the progress step's code
 
 
 def test_the_first_message_never_carries_the_planners_fact_text_even_when_the_plan_still_reads():

@@ -35,9 +35,14 @@ def cheap_model(monkeypatch):
     import re
     from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
 
+    from .test_milestone_progress import decide as progress_decide
+
     def fake(self, prompt):
-        found = re.search(r"^(esr_\w+):", prompt, re.M) if "These are milestones of the quest" in prompt else None
-        return found.group(1) if found else "NONE"
+        if "These are milestones of the quest" in prompt:
+            found = re.search(r"^(esr_\w+):", prompt, re.M)
+            return found.group(1) if found else "NONE"
+        answer = progress_decide(prompt)      # the progress step's calls (work items, the check, the writer, the scorer), answered offline
+        return "NONE" if answer == "{}" else answer
     monkeypatch.setattr(Orchestrator, "cheap_decision", fake)
 GOALS = [{"id": "g1", "title": "esr_c next step: week of 2026-10-26", "spec_solution_id": "esr_c", "completed": False, "abandoned": False, "due": "2026-11-01",
           "assignee_name": "Cy"},
@@ -65,8 +70,19 @@ def write_goal(calls, refuse=()):
     return ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=handler)
 
 
+def keep_goal(calls):
+    """The progress step's keep tool: records the call; the first keep creates the goal, a repeat updates it."""
+    def handler(args, ctx):
+        state = "updated" if any(c.get("kept") and c["title"] == args["title"] for c in calls) else "created"
+        calls.append(dict(args, kept=True))
+        return ToolResult(ok=True, status=ToolStatus.APPLIED, data={"state": state, "goal": {"name": args["title"]}, "increment": args.get("increment")},
+                          text=f"Kept the deliverable as {args['title']!r}.")
+    return ToolSpec(name="keep_milestone_deliverable", description="d", mutates=True, handler=handler)
+
+
 def registry(calls=None, **kw):
-    return ToolRegistry([read_spec(**kw), list_goals(), write_goal(calls if calls is not None else [])])
+    calls = calls if calls is not None else []
+    return ToolRegistry([read_spec(**kw), list_goals(), write_goal(calls), keep_goal(calls)])
 
 
 def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys_owners_and_goals_already_there():
@@ -80,7 +96,7 @@ def test_a_cue_finds_its_milestone_and_the_facts_carry_the_keys_owners_and_goals
 
 def test_the_facts_give_the_increment_order_and_the_full_purpose_text_for_the_model_to_assign_from():
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02")
-    assert block.index("1. a deliverable") < block.index("2. else a metric value") < block.index("3. else an owned next step")
+    assert block.index("1. the deliverable") < block.index("2. a fresh reading") < block.index("3. evidence") and "never the progress" in block
     tables = {**TABLES, "solutions": {**TABLES["solutions"], "esr_c": {**TABLES["solutions"]["esr_c"], "owner_user_ids": [], "purpose": "Owners: Zed."}}}
     block = cue.fact_block(tables, CUE)
     assert "Owners: Zed." in block and "owner_user_ids: empty" in block and "never ask who should own it" in block
@@ -157,7 +173,9 @@ def test_the_third_rung_runs_only_for_an_act_turn_that_took_no_higher_rung():
     tools = registry()
     assert resolved.routes_to_code(PlanDecision(action="deep"), "act", [], tools)
     assert resolved.routes_to_code(PlanDecision(action="confirm"), "act", [], tools)          # no permission asking for an action cue
-    assert not resolved.routes_to_code(PlanDecision(action="answer"), "ask", [], tools)       # a question changes nothing
+    assert resolved.routes_to_code(PlanDecision(action="answer"), "ask", [], tools)           # the judgment found a request for progress, however it is worded
+    assert not resolved.routes_to_code(PlanDecision(action="answer"), "hold_off", [], tools)  # "not yet" holds
+    assert not resolved.routes_to_code(PlanDecision(action="answer"), "inform", [], tools)
     assert resolved.routes_to_code(PlanDecision(action="answer", deep_target="draft_in_chat"), "act", [], tools)      # a deliverable meant for the reply does not exempt the kept step
     assert not resolved.routes_to_code(PlanDecision(action="tool"), "act", [], tools)
     assert not resolved.routes_to_code(PlanDecision(action="answer"), "act", [{"locator": "tool:create_or_update_quest_goal"}], tools)   # rung 2 ran: a write is done
@@ -173,7 +191,7 @@ def test_a_pinned_turn_skips_the_broad_retrieval_and_the_code_records_the_step_a
     config.overseer = False
     result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config,
                           tools=registry(calls)).run(CUE, quest_id="q1")
-    assert calls and calls[0]["title"].startswith("P3 Mobile app live on the Apple Store next step: week of ") and result.kind != "deep"
+    assert [c["title"] for c in calls] == ["esr_c next step: week of 2026-10-26"] and calls[0]["kept"] and result.kind != "deep"     # the work, kept on the goal Quest AI keeps for the milestone
     assert "CUE FACTS (found by code" in provider.plan_prompts[0]
 
 
@@ -329,7 +347,8 @@ def test_the_first_message_is_composed_from_the_records_before_the_write_and_no_
     def recording(args, ctx):
         order.append("write")
         return inner.handler(args, ctx)
-    tools = ToolRegistry([read_spec(), list_goals(), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True, handler=recording)])
+    inner = keep_goal(calls)
+    tools = ToolRegistry([read_spec(), list_goals(), ToolSpec(name="keep_milestone_deliverable", description="d", mutates=True, handler=recording)])
     provider = StubProvider([{"action": "deep", "user_intent": "act", "rationale": "r", "pending_read": [], "deep_brief": "carry out the request for real", "goal": "carry it out"}])
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=tools,
                         config=OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0))
@@ -338,7 +357,7 @@ def test_the_first_message_is_composed_from_the_records_before_the_write_and_no_
     assert order[:2] == [EVENT_INTERIM, "write"]            # the first message, then the write
     first = next(e for e in events if e["type"] == EVENT_INTERIM)
     assert "Where this stands" in first["text"] and "P3 Mobile app live on the Apple Store" in first["text"] and "blocked" not in first["text"].lower()
-    assert "Recording this week's next step" in first["text"]
+    assert "Making the next piece of work" in first["text"]
     assert result.kind != "deep" and len(calls) == 1
 
 
@@ -419,7 +438,7 @@ def test_the_code_step_is_in_the_execution_record_so_no_net_re_runs_the_work_as_
     config.overseer = False
     result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([])).run(CUE, quest_id="q1")
     record = result.execution_record
-    assert record is not None and record.any_success and any("create_or_update_quest_goal" in f.goal for f in record.facts)
+    assert record is not None and record.any_success and any("keep_milestone_deliverable" in f.goal for f in record.facts)
 
 
 def test_the_receipt_leads_with_created_updated_or_already_set_from_the_tools_typed_state():
@@ -546,22 +565,16 @@ def test_a_found_goal_without_the_links_gets_them_written_and_the_write_response
     assert "not linked to a solution" in result.text and "NOT confirmed" in result.text
 
 
-def test_the_receipt_entry_of_the_code_step_carries_the_goal_as_the_tool_read_it_back():
+def test_the_receipt_entry_of_the_progress_step_is_by_code_and_the_reply_leads_with_the_deliverable():
     from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
-    client = CachedListingClient([{"id": "k", "name": KEYED, "spec_solution_id": None, "spec_metric_id": None, "period": "2026_W45", "assigned_to_user_id": "u1"}])
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
-    tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False,
-                                                handler=lambda a, c: ToolResult(ok=True, data=[{"id": "k", "title": KEYED, "spec_solution_id": None, "completed": False, "abandoned": False}], text="l")),
-                          create_or_update_quest_goal_spec({}, client_factory=lambda: client)])
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
-    config = OrchestratorConfig()
-    config.overseer = False
-    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=tools).run(CUE, quest_id="q1")
-    entries = [g for g in (result.gathered or []) if isinstance(g, dict) and g.get("after_state")]
-    assert entries and entries[0]["after_state"]["spec_solution_id"] == "esr_c" and entries[0]["after_state"]["spec_metric_id"] == "esr_mc"
-    assert entries[0]["after_state"]["assignee_name"] == "Cy Owner"
+    config = OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0)
+    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([])).run(CUE, quest_id="q1")
+    entries = [g for g in (result.gathered or []) if isinstance(g, dict) and g.get("locator") == "tool:keep_milestone_deliverable"]
+    assert entries and entries[0]["by_code"] and entries[0]["tool_status"] == "applied"
+    assert result.text.startswith("I wrote") and result.text.index("Opening line") < result.text.index("before,") < result.text.index("only a person can do")
 
 
 NEUTRAL_CUES = ("what is the weather like this week", "remind me to call the dentist on friday", "help me prepare for tomorrow's call with the new advisor",
@@ -928,7 +941,7 @@ def test_the_first_message_for_a_resolved_milestone_is_read_from_its_record_fiel
     assert send_status_first(orch, emit, rs, [garbled], user_turn=True, forced=True)
     text = sent[0].text
     assert "Milestone: P3 Mobile app live on the Apple Store" in text and "Current value: No." in text and "esr_" not in text and "rep_" not in text and "OUTSIDE" not in text
-    assert "Now: Recording this week's next step" in text
+    assert "Now: Making the next piece of work" in text
 
 
 def test_the_reply_is_told_to_ask_nothing_and_never_to_move_the_milestones_own_date():
@@ -1029,8 +1042,8 @@ def test_message_one_says_the_step_already_exists_when_this_weeks_goal_is_on_the
     keyed = {"id": "k", "title": "P3 Mobile app live on the Apple Store next step: week of 2026-11-02", "text": "", "spec_solution_id": "esr_c", "completed": False, "abandoned": False}
     tools = ToolRegistry([read_spec(), list_goals([keyed]), write_goal([])])
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
-    assert "which is already on the quest" in cue.resolve(tools, "q1", CUE, now).doing()
-    assert cue.resolve(registry(), "q1", CUE, now).doing().startswith("Recording this week's next step")
+    assert cue.resolve(tools, "q1", CUE, now).doing() == cue.resolve(registry(), "q1", CUE, now).doing()     # the work is made either way: a kept step changes nothing
+    assert cue.resolve(registry(), "q1", CUE, now).doing().startswith("Making the next piece of work")
 
 
 def test_when_no_named_owner_can_be_set_the_goal_is_left_unassigned_and_the_reply_says_who_should_own_it():
@@ -1085,7 +1098,7 @@ def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_
     config = OrchestratorConfig()
     config.overseer = False
     Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry(calls)).run(CUE, quest_id="q1")
-    assert [c["title"] for c in calls] == ["P3 Mobile app live on the Apple Store next step: week of " + calls[0]["title"].rsplit(" ", 1)[1]] and len(calls) == 1
+    assert [c["title"] for c in calls] == ["esr_c next step: week of 2026-10-26"]       # the planner's own goal write is taken out; the code keeps the work on the milestone's kept goal
     assert "outreach" not in calls[0]["title"]
 
 
@@ -1363,7 +1376,7 @@ def test_the_flow_asks_only_for_the_milestones_own_open_goals_and_finds_this_wee
     tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=server), write_goal([])])
     resolved = cue.resolve(tools, "q1", CUE, now)
     assert asked == [{"quest_id": "q1", "spec_solution_id": "esr_c", "open_only": True, "limit": 100}]
-    assert resolved.week_goal() is not None and "which is already on the quest" in resolved.doing()
+    assert resolved.week_goal() is not None
 
 
 def test_the_goals_tool_asks_the_server_for_the_linked_goals_and_filters_an_older_servers_full_answer():
@@ -1398,3 +1411,26 @@ def test_the_step_and_draft_are_written_for_what_the_person_asked():
     resolved = cue.resolve(registry(calls), "q1", request + " apple store", now)
     resolved.carry_out(registry(calls), model)
     assert any("What the person asked for this turn" in p and "automated build and test loop" in p for p in prompts)
+
+
+def test_a_bookkeeping_request_gets_its_bookkeeping_and_no_forced_deliverable(monkeypatch):
+    """Joshua's scope (2026-11-08): only progress on a milestone must make an AI increment. A request that IS bookkeeping (move a due date, set an owner) is judged
+    NONE by the milestone judgment, so no progress step runs and the planner's own write is the turn's work."""
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubProvider, StubRetrieval
+    monkeypatch.setattr(Orchestrator, "cheap_decision", lambda self, prompt: "Asks to change a goal's due date.\nNONE")
+    calls = []
+    move = {"name": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title": "Apple Store submission", "due_date": "2026-11-06"}}
+    provider = StubProvider([{"action": "tool", "user_intent": "act", "rationale": "r", "tool_calls": [move]}])
+    config = OrchestratorConfig()
+    config.overseer = False
+    Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config,
+                 tools=registry(calls)).run("move the apple store submission due date to friday", quest_id="q1")
+    assert [c["title"] for c in calls] == ["Apple Store submission"] and not any(c.get("kept") for c in calls)
+
+
+def test_the_milestone_judgment_names_bookkeeping_as_none():
+    asked = []
+    cue.judge(TABLES, CUE, ["esr_c"], lambda prompt: asked.append(prompt) or "NONE")
+    assert "an owner, a due date or a reminder" in asked[0]

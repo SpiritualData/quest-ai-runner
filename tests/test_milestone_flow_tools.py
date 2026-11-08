@@ -51,9 +51,9 @@ def flow(reader):
     return client, registry, resolved
 
 
-def test_the_four_tools_are_built_over_the_hosts_client_and_the_source_tool_only_with_a_reader():
+def test_the_tools_are_built_over_the_hosts_client_and_the_source_tool_only_with_a_reader():
     assert sorted(spec.name for spec in milestone_flow_tools(lambda: Client(), lambda name: {})) == [
-        "create_or_update_quest_goal", "list_quest_goals", "read_metric_source", "read_spec_records"]
+        "apply_spec_edit", "create_or_update_quest_goal", "keep_milestone_deliverable", "list_quest_goals", "read_metric_source", "read_spec_records"]
     assert "read_metric_source" not in [spec.name for spec in milestone_flow_tools(lambda: Client())]
 
 
@@ -164,7 +164,7 @@ def test_goal_write_and_metric_reads_are_not_offered_to_the_planner():
     registry = ToolRegistry(milestone_flow_tools(lambda: None, lambda name: {}, recorded_reader=lambda quest, metric: {}))
     offered = {spec.name for spec in registry.offered()}
     hidden = {name for name in registry.names() if registry.get(name).on_request_only}
-    assert hidden == {"create_or_update_quest_goal", "read_metric_source", "read_recorded_metric_value"}
+    assert hidden == {"create_or_update_quest_goal", "read_metric_source", "read_recorded_metric_value", "keep_milestone_deliverable", "apply_spec_edit"}
     assert {name for name in registry.names() if registry.get(name).flow_owned} == hidden
     assert registry.get("list_quest_goals").on_request_only is False and registry.get("read_spec_records").on_request_only is False
     assert offered == {"list_quest_goals", "read_spec_records"}

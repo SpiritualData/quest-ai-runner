@@ -33,6 +33,7 @@ VALUE_CHARS = 220
 FULL_VALUE_CHARS = 1500       # a metric record's whole text goes to a draft's prompt up to this size, clipped at a boundary
 PURPOSE_CHARS = 1200
 ACT = "act"
+PROGRESS_INTENTS = (ACT, "ask")       # the planner's reading of a message the milestone judgment found asks for progress
 OWNED_WRITES = ("create_or_update_quest_goal", "create_quest_goal")       # goal writes of a milestone cue belong to the code step, which keeps the deliverable inside one keyed goal
 CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify", "read")    # a plan that, for an act cue, the flow step runs before
 BEYOND_THE_WRITE_TARGET = "code_or_files"                                 # work a tool write cannot do: the one case a deep run may follow the receipt
@@ -171,7 +172,7 @@ def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: 
               + "\n\nIs the message asking for work that moves one of these milestones forward: making progress on it, getting it going, or bringing its numbers or records "
               "up to date? A request worded as a question is still a request, and the message need not use the milestone's words. "
               f"It is {NONE} only if what it asks for is something other than progress on a milestone: a reminder, a workflow, a recurring meeting, writing content, "
-              "preparing for a call, or information alone (how something stands, with nothing asked to be done). "
+              "preparing for a call, bookkeeping alone (changing an owner, a due date or a reminder), or information alone (how something stands, with nothing asked to be done). "
               f"First write one short line saying what the message asks for, without any id. Then, on the last line, write only that milestone's id exactly as listed, or {NONE}.")
     names = {rid: str(solutions[rid].get("name") or "") for rid in offered}
     for attempt in range(JUDGE_ASKS):
@@ -392,12 +393,11 @@ def goal_summary(goal: Mapping[str, Any]) -> str:
     return f"{goal.get('title')!r} [{state}, due {goal.get('due') or 'no date'}, {goal.get('assignee_name') or goal.get('assignee_user_id') or 'unassigned'}]"
 
 
-INCREMENT_ORDER = ("Increment order, the first that applies (one increment per turn): "
-                   "1. a deliverable the milestone needs that you can write from what you have: write it in the reply (deep_target draft_in_chat) and record it as a goal keyed "
-                   "{title} followed by a short name; "
-                   "2. else a metric value you can read from the data your tools reach: record it with the metric's record id and its source and date (when the facts name a metric source, code reads it and records the value in the keyed next step); "
-                   "3. else an owned next step that names what only a person can do. Code records that step for you under its key and returns the receipt, "
-                   "so do not choose a deep run, do not call create_or_update_quest_goal for it, and never ask permission to do it.")
+INCREMENT_ORDER = ("This turn's increment is made by code, the first of these that applies: 1. the deliverable the milestone's done test needs that an AI can write now; "
+                   "2. a fresh reading of its metric; 3. evidence for the next decision; 4. a better recommendation. Code measures it before and after with a check that is "
+                   "not the writer, keeps it on the goal titled '{title} deliverables' (updated in place on a repeat), reads the milestone's metric again and names at most one "
+                   "step only a person can do. So do not choose a deep run, do not write a goal for it, and never ask permission. An owner, a due date or a reminder is "
+                   "never the progress.")
 
 
 def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, monday: str = "", goals: Sequence[Mapping[str, Any]] = (),
@@ -435,7 +435,7 @@ def fact_block(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
                  + (f" (week read in {zone})" if zone else " (the quest records no time zone, so UTC)") + f", linked to spec_solution_id {rid}"
                  + (f" and spec_metric_id {metric_ids[0]}" if metric_ids else "") + f"; a deliverable is a goal titled '{name} <short name>'. The record id is only the link (spec_solution_id). The tool reports created, updated or already there.")
     lines.append(INCREMENT_ORDER.replace("{title}", name))
-    lines.append("This cue asks to move the milestone forward by recording its next step. It never means rescheduling the milestone's own date, and it is not a question to the person.")
+    lines.append("This cue asks to move the milestone forward with work the AI does itself. It never means rescheduling the milestone's own date, and it is not a question to the person.")
     lines.append("Use them: do not ask which milestone, and do not ask for facts listed here.")
     return "\n".join(lines)
 
@@ -473,13 +473,17 @@ class Resolved:
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
     record_line: str = ""                                # the metric record's first line as written: a dated "Current value: ... (as of ..., from ...)" is a recorded reading
     request: str = ""                                    # what the person asked this turn, in their words: the step and its draft serve it, within the milestone
+    tables: Mapping[str, Any] = field(default_factory=dict)        # the quest's specification records as read when the cue was resolved
+    progress: Any = None                                 # what the progress step made and measured (``milestone_progress.Progress``), None until it ran
     lead: str = ""                                       # the code-composed sentence saying what the write did (created, updated in place, already set), whole
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
         and the plan is one the flow step takes over. A deliverable the planner means to write in the reply does not exempt it: the step records the owned next step with its own draft, so a
         reply that fails to record anything still ends with the step kept. Structured fields only."""
-        return (not self.receipt and user_intent == ACT and getattr(plan, "action", None) in CODE_ROUTED_ACTIONS
+        # The milestone judgment already answered "is this asking for work that moves the milestone" (a question about how it stands is NONE there and resolves no
+        # milestone), so a request worded as a question ("can we get it moving?") that the planner reads as ``ask`` is still progress; only a hold-off or a statement is not.
+        return (not self.receipt and user_intent in PROGRESS_INTENTS and getattr(plan, "action", None) in CODE_ROUTED_ACTIONS
                 and not applied_write_ran(gathered, registry))
 
     def week_goal(self, goal_id: str = "") -> Optional[Mapping[str, Any]]:
@@ -495,13 +499,8 @@ class Resolved:
         return readiness.measure(goal, owners=self.owners, solution_id=self.rid, metric_ids=self.metric_ids, monday=self.week.monday, due=self.week.due)
 
     def doing(self) -> str:
-        """What happens now, for the first message: stated from the records, before the write, with the readiness of the step as the quest holds it."""
-        week = next_step_title(self.name, self.week)
-        exists = any(str(g.get("title") or "").strip() == week for g in self.candidates)
-        stage = self.measure_stage(self.week_goal())
-        return ((f"Updating this week's next step for {self.name}, which is already on the quest, and keeping its owner and draft." if exists
-                 else f"Recording this week's next step for {self.name}, linked to the milestone, with its owner.")
-                + f" Readiness of the step now: {stage.describe()}.")
+        """What happens now, for the first message: stated from the records, before the work: the increment is made and measured, never a step recorded for someone."""
+        return (f"Making the next piece of work for {self.name} that does not wait on anyone, measuring it before and after, and reading the milestone's metric again.")
 
     def settle_plan(self, plan: Any, receipt: str) -> None:
         """Make the plan agree with what code already did. A read plan is left alone. A deep run stays only when the work needs files or code beyond the tool write, and then its brief
@@ -931,7 +930,7 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
     linked = metrics_of(tables, rid)
     metric = linked[0][1] if linked else None
     return Resolved(
-        rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week,
+        rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week, tables=tables,
         facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id, request=str(cue or "").strip(),
         done_when=clip(row.get("milestones"), VALUE_CHARS).rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
