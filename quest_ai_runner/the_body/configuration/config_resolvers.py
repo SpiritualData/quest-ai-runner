@@ -135,6 +135,33 @@ def qar_binding_of(hub_cls: Any) -> Any:
     return None
 
 
+def apply_hub_hard_tier(cfg: RunnerConfig, declared: List[str], choose: Any, *, warn: bool = True) -> None:
+    """Start hard deep work on the tier the hub measured best for hard work, unless the operator named one (``QAR_DEEP_MODEL_HARD``).
+
+    Applied only when the hub's hard-work choice was measured on hard work itself, drives Anthropic (the deep-model ladder's family), and
+    its tier resolves to a model on the ladder this deployment climbs, so the start can never fall to a weaker rung than intended."""
+    if os.getenv("QAR_DEEP_MODEL_HARD") or cfg.model_provider is None:
+        return
+    try:
+        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import (
+            DEFAULT_AUTO_DEEP_LADDER, default_rung_key)
+        hard = choose(declared, difficulty="hard")
+        if hard is None or getattr(hard, "kind", "") != "hard" or hard.provider != "anthropic" or not hard.tier:
+            return
+        model = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None).resolve_tier(hard.tier)
+        ladder = [m for m in (cfg.orchestrator.deep_model_ladder or []) if m] or list(DEFAULT_AUTO_DEEP_LADDER)
+        if default_rung_key(model) not in [default_rung_key(m) for m in ladder]:
+            if warn:
+                _log.warning("deep runner: the hub measured the %s tier (%s) best for hard work, but it is not on the deep ladder %s; "
+                             "hard work keeps its configured start", hard.tier, model, ladder)
+            return
+        cfg.orchestrator.deep_difficulty_models["hard"] = model
+        _log.info("deep runner: hard work starts on %s, the %s tier the hub measured best for hard work (%s)", model, hard.tier, hard.reason)
+    except Exception:  # noqa: BLE001 -- the configured start stays when anything here fails
+        if warn:
+            _log.warning("deep runner: could not apply the hub's tier for hard work", exc_info=True)
+
+
 def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
     """Build the arm the hub picks for the providers this deployment declared (``cfg.deep_providers``), or None.
 
@@ -177,6 +204,7 @@ def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
         if cls is not hub_cls:
             extra.pop("settings", None)   # QAR's binding reads its own settings
         runner = cls(config, **extra)
+        apply_hub_hard_tier(cfg, declared, choose_agent_arm, warn=warn)
         log_level = _log.info if choice.basis == "measured" else _log.warning
         log_level("deep runner: the hub's pick for providers %s is %s (%s; %s)%s", declared, choice.arm, choice.basis, choice.reason,
                   "" if choice.basis == "measured" else ": NOT MEASURED, chosen by the fallback rule")

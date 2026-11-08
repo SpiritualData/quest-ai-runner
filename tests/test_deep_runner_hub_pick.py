@@ -38,7 +38,9 @@ def picks(monkeypatch):
     """The hub's choice, fixed per test: ``{frozenset(providers): ArmChoice}``; records what each call declared."""
     table, asked = {}, []
 
-    def choose(declared):
+    def choose(declared, difficulty=""):
+        if difficulty:
+            return table.get((difficulty, frozenset(declared)))
         asked.append(tuple(declared))
         return table.get(frozenset(declared))
     monkeypatch.setattr(hub_api, "choose_agent_arm", choose)
@@ -90,3 +92,25 @@ def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, 
     table[frozenset({"gemini"})] = arm("opencode_runner", "gemini")
     os.remove(programs / "opencode")
     assert type(resolve_deep_runner(cfg(deep_providers=["gemini"]))) is SubprocessGoalRunner
+
+
+def test_hard_work_starts_on_the_tier_measured_best_for_hard_work(programs, picks, monkeypatch):
+    table, _ = picks
+    table[frozenset({"anthropic"})] = arm("stream_json_goal_runner", "anthropic")
+    hard = arm("subprocess_goal_runner", "anthropic", tier="best")
+    hard.kind = "hard"
+    table[("hard", frozenset({"anthropic"}))] = hard
+    monkeypatch.delenv("QAR_DEEP_MODEL_HARD", raising=False)
+    config = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "best": "opus"})
+    config.orchestrator.deep_model_ladder = ["haiku", "sonnet", "opus"]
+    resolve_deep_runner(config)
+    assert config.orchestrator.deep_difficulty_models["hard"] == "opus"
+    off_ladder = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "best": "opus"})
+    off_ladder.orchestrator.deep_model_ladder = ["haiku", "sonnet"]
+    resolve_deep_runner(off_ladder)
+    assert off_ladder.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # not on the ladder: the configured start stays
+    monkeypatch.setenv("QAR_DEEP_MODEL_HARD", "sonnet")
+    pinned = cfg(model_fallback={"best": "opus"})
+    pinned.orchestrator.deep_model_ladder = ["haiku", "sonnet", "opus"]
+    resolve_deep_runner(pinned)
+    assert pinned.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # the operator's choice wins
