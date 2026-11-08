@@ -33,6 +33,8 @@ class Registry:
         self.calls.append((name, dict(args)))
         if name == "read_spec_records":
             return SimpleNamespace(ok=True, data={"records": TABLES, "time_zone": ""}, text="")
+        if name == "find_quest":
+            return SimpleNamespace(ok=True, data=[{"quest_id": "q1", "outcome": "Reach the target"}, {"quest_id": "q2", "outcome": "Another aim"}], text="")
         if name == "read_metric_source":
             return SimpleNamespace(ok=True, data=READING, text="")
         rows = [g for g in GOALS if not args.get("assignee_user_id") or g["assignee_user_id"] == args["assignee_user_id"]]
@@ -78,10 +80,11 @@ class StatusProvider(StubProvider):
         return "There are 0 paid subscribers as of 7 November."
 
 
-def run_status(analyser, message):
+def run_status(analyser, message, quest_id="q1", placement=None):
     provider = StatusProvider(analyser)
-    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), tools=_tools(), config=OrchestratorConfig(overseer=True))
-    res = orch.run(message, mode=Mode.LIVE, sink=RecordingSink(), quest_id="q1", context_meta={"user_id": "u1"})
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), tools=_tools(), quest_placement=placement,
+                        config=OrchestratorConfig(overseer=True))
+    res = orch.run(message, mode=Mode.LIVE, sink=RecordingSink(), quest_id=quest_id, context_meta={"user_id": "u1"})
     return provider, res
 
 
@@ -91,7 +94,7 @@ def _tools():
 
     def make(name):
         return ToolSpec(name=name, description="d", mutates=False, handler=lambda args, ctx: (lambda r: ToolResult(ok=r.ok, data=r.data, text=r.text))(registry.invoke(name, args, ctx)))
-    return ToolRegistry([make(n) for n in ("read_spec_records", "read_metric_source", "list_quest_goals")])
+    return ToolRegistry([make(n) for n in ("read_spec_records", "read_metric_source", "list_quest_goals", "find_quest")])
 
 
 def test_a_status_question_a_status_script_and_a_my_priority_question_each_get_the_snapshot_and_no_planner_loop():
@@ -105,3 +108,23 @@ def test_a_status_question_a_status_script_and_a_my_priority_question_each_get_t
         assert provider.writer_prompts and "STATUS FROM A SNAPSHOT" in provider.writer_prompts[0]
         assert ("READ ALOUD" in provider.writer_prompts[0]) == ("read_aloud" in flags)
         assert ("Unrelated task" in provider.writer_prompts[0]) == ('"actor": "me"' in flags)
+
+
+class Placement:
+    def __init__(self, picked):
+        self.picked, self.asked = picked, []
+
+    def place(self, message, previous="", home_quest_id=None, max_quests=1):
+        self.asked.append(message)
+        return {"picked": self.picked, "ranked": self.picked}
+
+
+def test_a_status_question_in_a_chat_with_no_quest_is_placed_on_a_quest_and_gets_its_snapshot_or_asks_one_short_question():
+    placement = Placement(["q1"])
+    provider, res = run_status('Where it stands.\n{"asks_status": true}', "where are we with the release?", quest_id=None, placement=placement)
+    assert placement.asked and res.kind == "answer" and provider.planner_calls == 0
+    assert any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
+    abstain = Placement([])
+    provider, res = run_status('Where it stands.\n{"asks_status": true}', "where are we with the release?", quest_id=None, placement=abstain)
+    assert abstain.asked and provider.planner_calls == 0 and not any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
+    assert res.kind == "answer" and "STATUS FROM A SNAPSHOT" not in "".join(provider.writer_prompts)

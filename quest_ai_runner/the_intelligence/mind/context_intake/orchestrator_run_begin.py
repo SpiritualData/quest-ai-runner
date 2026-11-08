@@ -567,13 +567,24 @@ class RunBeginMixin:
             rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
             rs.turn_information_only, rs.retrieval_constraints = take_information_only(rs.retrieval_constraints)
             status_flags, rs.retrieval_constraints = take_status_flags(rs.retrieval_constraints)
-            if (status_flags["asks_status"] and rs.quest_id and self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn
+            if (status_flags["asks_status"] and self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn
                     and getattr(cfg, "cheap_information_turns", True)):
-                # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop.
+                # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop. A chat with no quest
+                # open first places the question on one of the asker's quests (the quest placement); when none fits, the turn asks one short question.
                 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
-                emit.status("Reading where the quest stands…")
-                own = (rs.retrieval_constraints or {}).get("actor") == "me"
-                snapshot = status_snapshot.build(self.tools, rs.quest_id, str(_ctx_meta.get("asker_user_id") or _ctx_meta.get("user_id") or ""), own=own)
+                snapshot_quest = rs.quest_id
+                if not snapshot_quest:
+                    quests = status_snapshot.reachable_quests(self.tools)
+                    snapshot_quest = self.judge_quest_for_turn(rs.user_message, "", quests, None) if quests else None
+                    if quests and not snapshot_quest:
+                        rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
+                                                       rationale="A status question that fits none of the asker's quests: one short question.")
+                if snapshot_quest and rs._forced_plan is None:
+                    emit.status("Reading where the quest stands…")
+                    own = (rs.retrieval_constraints or {}).get("actor") == "me"
+                    snapshot = status_snapshot.build(self.tools, snapshot_quest, str(_ctx_meta.get("asker_user_id") or _ctx_meta.get("user_id") or ""), own=own)
+                else:
+                    snapshot = None
                 if snapshot is not None:
                     rs.gathered.append(snapshot)
                     rs.status_snapshot = True

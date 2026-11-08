@@ -22,6 +22,20 @@ PAGE = 100
 HEAD = "STATUS SNAPSHOT READ JUST NOW (every figure carries its own date; nothing older is part of it)"
 
 
+def reachable_quests(registry: Any) -> List[Dict[str, str]]:
+    """The quests the asker can reach, as the placement judge takes them (``{"quest_id", "title", "state"}``), from the lane's ``find_quest`` tool. [] when the lane has none."""
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    if registry is None or registry.get("find_quest") is None:
+        return []
+    try:
+        result = registry.invoke("find_quest", {"name": ""}, ToolContext())
+    except Exception as error:      # noqa: BLE001
+        log.info("quests not listed: %s: %s", type(error).__name__, error)
+        return []
+    rows = (result.data or []) if result.ok else []
+    return [{"quest_id": str(r.get("quest_id") or r.get("id")), "title": str(r.get("outcome") or ""), "state": ""} for r in rows if isinstance(r, Mapping) and (r.get("quest_id") or r.get("id"))]
+
+
 def goal_rows(registry: Any, quest_id: str, **args: Any) -> List[Mapping[str, Any]]:
     from quest_ai_runner.the_world.tools.tools import ToolContext
     if registry is None or registry.get("list_quest_goals") is None:
