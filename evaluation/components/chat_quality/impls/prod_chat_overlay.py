@@ -2,7 +2,7 @@
 production data, with THIS checkout's code laid over the deployed image, so a fix is proved before it is released.
 
 The turn runs on the production server inside the backend container (``quest-backend/scripts/checks/quest_chat_replay.py``): the same builder, tools, planner, reach judge and
-streaming function the route calls, as the case's caller, in a fresh in-memory conversation pinned to the lane's quest (or to none), with the case's prior turns (the recorded
+streaming function the route calls, as the case's caller, in a fresh in-memory conversation pinned to the lane's quest (or to the quest the case names, or to none), with the case's prior turns (the recorded
 replies too) as the conversation's earlier messages. Every database and vector write is BLOCKED and recorded; the recorded attempts are the turn's "changes", checked against the
 case's ``effect`` exactly as ``prod_quest_chat`` checks the quest's before and after (an attempted write the case does not allow is an UNEXPECTED WRITE and fails the case). The reads come
 from the tools' own results (the data, not summaries). The judge is the same ``chat_quality`` judge (``claude -p``).
@@ -160,6 +160,13 @@ def build(meter):
     environment = "production data and tiers, this checkout's code overlaid, writes blocked"
     print(f"chat_quality: replaying the production Quest AI chat turn as {user} on quest {quest} (overlay, writes blocked), {len(allowed)} approved case ids")
 
+    def pinned_quest(case, lane_quest):
+        """The quest the case's turn is pinned to: none for ``pinned: false``, the case's own quest id when it names one, else the lane's quest."""
+        pinned = case.get("pinned")
+        if pinned is False:
+            return None
+        return pinned.strip() if isinstance(pinned, str) and pinned.strip() else lane_quest
+
     def converse(case):
         if meter.max_calls is not None and meter.calls >= meter.max_calls:
             from common import BudgetExceeded
@@ -174,7 +181,7 @@ def build(meter):
             record.update(error="not run: the case has no zero_writes flag or structured effect, so its allowed writes are unknown", score=None, passed=False)
             return record
         started = time.time()
-        payload = [{"id": case["id"], "input": message, "pinned": None if case.get("pinned") is False else quest, "history": prior,
+        payload = [{"id": case["id"], "input": message, "pinned": pinned_quest(case, quest), "history": prior,
                     "input_origin": "app_voice_chat" if case.get("channel") == "voice" else "app_chat"}]
         try:
             records, summary, tail = replay(payload, user, team)
