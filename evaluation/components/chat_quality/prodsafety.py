@@ -68,7 +68,7 @@ class TurnSafety:
         record["concurrent_writes"] = list(outcome.get("concurrent") or [])
         if record["concurrent_writes"]:
             self.say(f"  {self.case_id}: concurrent writes by the same account, not this turn's, left alone: {record['concurrent_writes']}")
-        gaps = [outcome["line"]] if (outcome["cleanup"]["withdrawn"] or outcome["cleanup"]["deleted"] or outcome["cleanup"]["left"]) else []
+        gaps = [outcome["line"]] if (outcome["cleanup"]["withdrawn"] or outcome["cleanup"]["deleted"] or outcome["cleanup"].get("cancelled") or outcome["cleanup"]["left"]) else []
         record["lane_gaps"] = sorted(set(list(record.get("lane_gaps") or []) + gaps))
         if outcome["failed"]:
             record["passed"] = False

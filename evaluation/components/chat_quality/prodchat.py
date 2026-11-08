@@ -126,7 +126,7 @@ def check_case(case, allowed):
 
 #: How each kind of item a run created is undone, as the AI account, by routes that only take the item back (no resolution, no learning, no rejection).
 UNDO_ROUTES = (("decisions", r"/api/teams/decisions/([\w-]+)/withdraw", "POST"), ("workflows", r"/api/workflows/([\w-]+)", "DELETE"),
-               ("tasks", r"/api/assistant-tasks/([\w-]+)", "DELETE"), ("notes", r"/api/quests/{quest}/notes/([\w-]+)", "DELETE"))
+               ("tasks", r"/api/assistant-tasks/([\w-]+)", "DELETE"), ("tasks", r"/api/assistant-tasks/([\w-]+)/undo", "POST"), ("notes", r"/api/quests/{quest}/notes/([\w-]+)", "DELETE"))
 
 
 class ProdClient:
@@ -349,6 +349,21 @@ def digest(*parts):
     return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
+def task_in_quest(task, quest_id):
+    """False only when the task names a quest and it is not ``quest_id`` (the fields a task may carry it in: ``quest_id``, ``goal_id``, ``quest_ids``). A task that names none is kept: it cannot be
+    told apart, and a task the run's own conversation created must never be dropped for a field the listing lacks."""
+    named = {str(v) for k in ("quest_id", "goal_id") for v in [task.get(k)] if v} | {str(q) for q in task.get("quest_ids") or []}
+    return not named or quest_id in named
+
+
+def read_quest_tasks(client):
+    """The quest's tasks whoever owns them (``include_quest_tasks``: whoever can see a quest sees its tasks), newest ``TASK_PAGE``. A task the chat creates can be owned by another
+    account than the one this run acts as (created for the quest's AI, from the owner's conversation); an owner-scoped list would never show it, and the lane would run it during a later case."""
+    body = client.send_request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": TASK_PAGE, "include_quest_tasks": "true"})
+    tasks = body.get("tasks") if isinstance(body, dict) else body
+    return [t for t in tasks or [] if isinstance(t, dict) and task_in_quest(t, client.quest_id)]
+
+
 def fingerprint_from(reads):
     """The fingerprint from raw reads ``{name: payload}`` (a pure function): ``{category: {id: {"digest", "label", ...}}}``."""
     fp = {c: {} for c in CATEGORIES}
@@ -365,6 +380,7 @@ def fingerprint_from(reads):
         fp["spec_records"][rec.get("recordId")] = {"digest": digest(rec.get("revision"), rec.get("updatedAt"), rec.get("fields")), "label": f"{rec.get('type')}"}
     for task in reads.get("tasks") or []:
         fp["tasks"][task.get("task_id") or task.get("id")] = {"digest": "", "label": str(task.get("title") or task.get("text") or "")[:80], "conv_id": task.get("conv_id"), "created_by": task.get("created_by"),
+                                                               "owner": task.get("user_id") or task.get("owner_id"), "status": task.get("status"),
                                                                "source": task.get("source"), "created_at": task.get("created_at")}
     for dec in reads.get("decisions") or []:
         fp["decisions"][dec.get("decision_id")] = {"digest": "", "label": str(dec.get("summary") or "")[:80], "conv_id": dec.get("conv_id"), "kind": dec.get("kind"), "status": dec.get("status"),
@@ -417,7 +433,7 @@ def read_fingerprint_unlocked(client, own_conv=None):
         "goals": [g for group in goals_body.get("period_groups") or [] for g in group.get("goals") or []],
         "workflows": read("/api/workflows", "items") + read(f"/api/quests/{quest_id}/workflows", "items"),
         "spec_records": read(f"/api/intents/specs/quest/{quest_id}", "records"),
-        "tasks": read("/api/assistant-tasks", "tasks", {"quest_id": quest_id, "limit": TASK_PAGE}),
+        "tasks": read_quest_tasks(client),
         "decisions": read("/api/teams/decisions/for-user", "decisions") + read("/api/teams/decisions/for-quest", "decisions", {"quest_id": quest_id}),
         "conversations": read("/api/quest-ai/conversations", None, {"limit": 500}),
     }
@@ -588,7 +604,7 @@ def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes
     nothing is guessed, a human is told, and the case fails). ``window`` is ``(turn start, turn end + 30s)`` in epoch seconds."""
     allowed = set() if zero_writes else allowed_categories(effect)
     evidence, words = str(evidence or "").lower(), keywords_of(message)
-    plan = {"remove": [], "keep": [], "left": []}
+    plan = {"remove": [], "keep": [], "left": [], "stop": []}
     for c in changes:
         cat = c["category"]
         if c["change"] == "changed" and cat == "goals" and cat in allowed and goal_change_explained(c, effect, titles):
@@ -597,6 +613,8 @@ def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes
             plan["left"].append(dict(c, why=f"{c['change']}: cannot be undone from here"))
         elif cat in allowed:
             plan["keep"].append(c)
+            if cat == "tasks" and own_conv and c.get("conv_id") == own_conv:
+                plan["stop"].append(c)          # the intended task is kept as a record, but cancelled: a queued one must never run in the next case's window
         elif cat in ("decisions", "tasks") and own_conv and c.get("conv_id") == own_conv:
             plan["remove"].append(c)
         elif cat in ("decisions", "tasks", "notes", "workflows") and strongly_this_turns(c, window, ai_user_id, evidence, words):
@@ -608,25 +626,53 @@ def plan_cleanup(changes, own_conv, window, ai_user_id, effect=None, zero_writes
     return plan
 
 
+def cancel_task(client, item_id):
+    """Cancel a queued or running task through the stop route (open to everyone who can see the task, whoever owns it). True when it was cancelled, False when it had already ended."""
+    client.removable.add(("tasks", item_id))
+    try:
+        client.send_request("POST", f"/api/assistant-tasks/{item_id}/undo", {})
+        return True
+    except GuardRefusal:
+        raise
+    except Exception as e:  # noqa: BLE001
+        if "409" in str(e):
+            return False
+        raise
+
+
 def run_cleanup(client, plan):
-    """Take back what the plan says to remove, as the AI account. Returns ``{"withdrawn": [ids], "deleted": [ids], "left": [text], "kept": [ids]}``; an item whose
-    removal fails is ``left``."""
-    out = {"withdrawn": [], "deleted": [], "left": [f"{c['category']} {c['id']} ({c['why']})" for c in plan["left"]], "kept": [c["id"] for c in plan["keep"]]}
+    """Take back what the plan says to remove, as the AI account. Returns ``{"withdrawn": [ids], "deleted": [ids], "cancelled": [ids], "left": [text], "kept": [ids]}``; an item whose
+    removal fails is ``left``. A task is cancelled first (the stop route works across accounts, so it cannot run into a later case), then deleted when the account owns it. A task the case
+    keeps as its intended result is only cancelled (``plan["stop"]``): ``cancelled`` lists those."""
+    out = {"withdrawn": [], "deleted": [], "cancelled": [], "left": [f"{c['category']} {c['id']} ({c['why']})" for c in plan["left"]], "kept": [c["id"] for c in plan["keep"]]}
+    for c in plan.get("stop") or []:
+        try:
+            if cancel_task(client, c["id"]):
+                out["cancelled"].append(c["id"])
+        except Exception as e:  # noqa: BLE001
+            out["left"].append(f"tasks {c['id']} (cancel failed: {str(e)[:120]})")
     for c in plan["remove"]:
         cat, item_id = c["category"], c["id"]
         client.removable.add((cat, item_id))
         path, method = {"decisions": (f"/api/teams/decisions/{item_id}/withdraw", "POST"), "workflows": (f"/api/workflows/{item_id}", "DELETE"),
                         "tasks": (f"/api/assistant-tasks/{item_id}", "DELETE"), "notes": (f"/api/quests/{client.quest_id}/notes/{item_id}", "DELETE")}[cat]
         try:
-            client.send_request(method, path, {} if method == "POST" else None)
-            (out["withdrawn"] if cat == "decisions" else out["deleted"]).append(item_id)
+            stopped = cat == "tasks" and cancel_task(client, item_id)
+            try:
+                client.send_request(method, path, {} if method == "POST" else None)
+                (out["withdrawn"] if cat == "decisions" else out["deleted"]).append(item_id)
+            except Exception:  # noqa: BLE001 -- a task owned by another account cannot be deleted from here; cancelled is enough
+                if not stopped:
+                    raise
+                out["cancelled"].append(item_id)
         except Exception as e:  # noqa: BLE001
             out["left"].append(f"{cat} {item_id} (removal failed: {str(e)[:120]})")
     return out
 
 
 def cleanup_line(result):
-    return f"cleanup: withdrawn {result['withdrawn'] or 'none'}, deleted {result['deleted'] or 'none'}, left {result['left'] or 'none'}, kept (the case's intended result) {result['kept'] or 'none'}"
+    cancelled = f"cancelled {result['cancelled']}, " if result.get("cancelled") else ""
+    return f"cleanup: withdrawn {result['withdrawn'] or 'none'}, deleted {result['deleted'] or 'none'}, {cancelled}left {result['left'] or 'none'}, kept (the case's intended result) {result['kept'] or 'none'}"
 
 
 # ---------------------------------------------------------------------------------------------------------------- autopilot window
@@ -679,7 +725,7 @@ def wait_for_clear(client, now=time.time, sleep=time.sleep, max_wait=900, step=3
     while True:
         with fingerprint_lock():
             state = client.send_request("GET", f"/api/quests/{client.quest_id}/state") or {}
-            tasks = (client.send_request("GET", "/api/assistant-tasks", params={"quest_id": client.quest_id, "limit": TASK_PAGE}) or {}).get("tasks") or []
+            tasks = read_quest_tasks(client)
         autopilot = (state.get("state") or state).get("autopilot") or {}
         reason = autopilot_window(now(), autopilot, tasks, minutes)
         if reason is None or waited >= max_wait:

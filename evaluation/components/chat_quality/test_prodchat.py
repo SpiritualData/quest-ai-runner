@@ -137,7 +137,7 @@ def test_a_duplicate_workflow_a_queued_task_and_the_runs_note_are_deleted_only_o
                {"note_id": "n_human", "text": "Instagram caption about subscribers growth", "author_id": "human", "created_at": "2026-11-06T10:00:07"}]),
         evidence='{"event": "exec", "output": "created workflow wf_dup"}', message="Write an Instagram caption about subscribers growth")
     assert sorted(result["deleted"]) == ["n_mine", "t_mine", "wf_dup"]
-    assert sorted(c[1] for c in calls) == ["/api/assistant-tasks/t_mine", "/api/quests/quest_x/notes/n_mine", "/api/workflows/wf_dup"]
+    assert sorted(c[1] for c in calls) == ["/api/assistant-tasks/t_mine", "/api/assistant-tasks/t_mine/undo", "/api/quests/quest_x/notes/n_mine", "/api/workflows/wf_dup"]      # a task is cancelled first, then deleted
     assert not any("t_mine" in x or "n_mine" in x or "wf_dup" in x for x in result["left"])      # the other actors' items are left alone, and reported
 
 
@@ -322,7 +322,7 @@ def test_an_allowed_call_that_created_nothing_shows_no_change_and_no_cleanup():
     safe = PS.TurnSafety(NoChange(), UID, "BAD-03", {"allow": [{"tool": "create_quest_workflow"}]}, False, "m", clock=lambda: next(clock), say=lambda *_: None)
     safe.begin()
     outcome = safe.finish(own_conv=None, frames=[])
-    assert outcome["changes"] == [] and outcome["failed"] is False and outcome["cleanup"] == {"withdrawn": [], "deleted": [], "left": [], "kept": []}
+    assert outcome["changes"] == [] and outcome["failed"] is False and outcome["cleanup"] == {"withdrawn": [], "deleted": [], "cancelled": [], "left": [], "kept": []}
 
 
 def test_an_extra_workflow_the_run_created_is_deleted_and_named_in_the_cleanup_line_before_the_state_is_counted():
@@ -424,3 +424,79 @@ def test_a_cases_prior_turns_become_session_pairs_and_the_chat_arm_sends_only_th
     client.stream_turn = lambda conv, text, started, **kw: sent.append((conv, text)) or iter(())
     client.seed_history("c1", ["first question"], 0.0)
     assert sent == [("c1", "first question")]
+
+
+# ---------------------------------------------------------------------------------------------------------------- tasks owned by another account
+
+class TaskApi:
+    """A fake client whose task list is the quest-wide one (``include_quest_tasks``) and whose stop route answers 409 for a task that already ended."""
+    quest_id, team_id = "quest_x", "team_x"
+
+    def __init__(self, tasks, ended=(), delete_fails=True):
+        self.tasks, self.ended, self.delete_fails, self.calls, self.removable, self.params = tasks, set(ended), delete_fails, [], set(), None
+
+    def send_request(self, method, path, body=None, params=None, timeout=60):
+        self.calls.append((method, path))
+        if method == "GET":
+            self.params = params
+            return {"tasks": self.tasks}
+        if method == "POST" and path.endswith("/undo"):
+            assert ("tasks", path.split("/")[3]) in self.removable
+            if path.split("/")[3] in self.ended:
+                raise RuntimeError("POST: 409 Task can no longer be undone")
+            return {}
+        if method == "DELETE" and self.delete_fails:
+            raise RuntimeError("DELETE: 404 Assistant task not found")
+        return {}
+
+
+def test_the_quest_task_read_lists_every_owners_tasks_and_drops_other_quests():
+    api = TaskApi([{"task_id": "a", "user_id": "other-account", "conv_id": "c1"}, {"task_id": "b", "quest_id": "quest_x"}, {"task_id": "c", "quest_id": "quest_other"}, {"task_id": "d", "quest_ids": ["quest_other"]}])
+    assert [t["task_id"] for t in PC.read_quest_tasks(api)] == ["a", "b"]
+    assert api.params["include_quest_tasks"] == "true"
+    fp = PC.fingerprint_from({"tasks": PC.read_quest_tasks(api)})
+    assert fp["tasks"]["a"]["owner"] == "other-account" and fp["tasks"]["a"]["conv_id"] == "c1"
+
+
+def cleanup_of(api, allowed_effect=None, zero=True):
+    before = PC.fingerprint_from(reads())
+    after = PC.fingerprint_from(reads(tasks=[{"task_id": "t_foreign", "conv_id": "own", "user_id": "other-account", "status": "queued"}, {"task_id": "t_old", "conv_id": "elsewhere", "user_id": "other-account"}]))
+    changes = PC.diff_fingerprints(before, after, own_conv="own")
+    plan = PC.plan_cleanup(changes, "own", WINDOW, UID, allowed_effect, zero)
+    return changes, PC.run_cleanup(api, plan)
+
+
+def test_a_task_another_account_owns_is_this_runs_write_and_is_cancelled_before_the_next_case():
+    api = TaskApi([])
+    changes, result = cleanup_of(api)
+    assert {c["id"] for c in changes if c["category"] == "tasks"} == {"t_foreign", "t_old"}
+    assert PC.unexpected_writes(changes, None, True)[0].startswith("UNEXPECTED WRITE: tasks added t_foreign")
+    assert ("POST", "/api/assistant-tasks/t_foreign/undo") in api.calls
+    assert result["cancelled"] == ["t_foreign"] and result["deleted"] == [] and "cancelled ['t_foreign']" in PC.cleanup_line(result)
+    assert not any("t_old" in c[1] for c in api.calls)          # a task of another conversation is never touched, only reported
+    assert any("t_old" in x for x in result["left"])
+
+
+def test_a_task_the_case_allows_is_kept_but_cancelled_so_it_cannot_run_in_a_later_window():
+    api = TaskApi([])
+    effect = {"allow": [{"tool": "create_task"}]}
+    changes, result = cleanup_of(api, effect, zero=False)
+    assert PC.unexpected_writes(changes, effect, False) == []
+    assert "t_foreign" in result["kept"] and result["cancelled"] == ["t_foreign"]      # t_old (another conversation's task) is neither stopped nor deleted
+    assert [c for c in api.calls if c[0] == "DELETE"] == []
+
+
+def test_a_task_that_already_ended_is_deleted_when_possible_else_left():
+    changes, result = cleanup_of(TaskApi([], ended={"t_foreign"}, delete_fails=False))
+    assert result["deleted"] == ["t_foreign"] and result["cancelled"] == []
+    changes, result = cleanup_of(TaskApi([], ended={"t_foreign"}, delete_fails=True))
+    assert any(x.startswith("tasks t_foreign (removal failed") for x in result["left"])
+
+
+def test_only_the_stop_route_of_a_task_this_run_may_remove_is_allowed():
+    client = PC.ProdClient(BASE, "k")
+    for path in ("/api/assistant-tasks/t1/undo",):
+        with pytest.raises(PC.GuardRefusal):
+            client.allow_write("POST", path)
+    client.removable.add(("tasks", "t1"))
+    client.allow_write("POST", "/api/assistant-tasks/t1/undo")
