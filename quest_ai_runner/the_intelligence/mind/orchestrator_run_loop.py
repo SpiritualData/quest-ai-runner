@@ -600,6 +600,16 @@ class RunLoopMixin:
                     if made.status != "measured":
                         raise milestone_cue.LaneGap(f"no AI increment could be made for {rs.cue_resolved.name!r}: {made.why}")
                     receipt = made.reply_text()
+                    try:
+                        # The per-solution pass for the milestone's solution is this progress (milestone_progress.milestone_pass); its parent and dependent passes add
+                        # lines when that module is installed. It never raises and is bounded by its own timeout; absent, nothing changes.
+                        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
+                    except ImportError:
+                        solution_consideration = None
+                    if solution_consideration is not None and hasattr(solution_consideration, "after_milestone"):
+                        extra = solution_consideration.after_milestone(made, rs.cue_resolved, rs.user_message, self.provider)
+                        made.notes = str(extra or "").strip()
+                        receipt = made.reply_text()
                     rs.cue_resolved.lead = receipt.split("\n\n", 1)[0]
                     if isinstance(rs._ctx_meta, dict):
                         rs._ctx_meta["milestone_step_recorded"] = True       # the person-only step is in the reply: no later ask turns the reply into a question to the chat user

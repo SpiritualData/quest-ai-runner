@@ -250,6 +250,7 @@ class Progress:
     status: str = ""
     why: str = ""
     rubric_state: str = ""          # "reused" (kept on the record and read back), "kept" (defined this turn and written), or why it was not kept
+    notes: str = ""                 # lines the milestone's parent and dependent solution passes add, after the person-only step
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
@@ -288,6 +289,8 @@ class Progress:
             parts.append(tail)
         if self.ask:
             parts.append(f"The one step only a person can do: {self.ask.rstrip('.')}.")
+        if self.notes:
+            parts.append(self.notes)
         return "\n\n".join(p for p in parts if p.strip())
 
 
