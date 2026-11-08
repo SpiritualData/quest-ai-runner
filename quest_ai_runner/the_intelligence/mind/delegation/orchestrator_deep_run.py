@@ -16,6 +16,7 @@ from hubofhubs.api import (
 from hubofhubs.api import EVENT_EXEC, EVENT_INTERIM, EVENT_MILESTONE, EVENT_STATUS
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import start_status_text
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics, run_hint, working_dir_of
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
@@ -503,6 +504,13 @@ class DeepRunMixin:
                 request=f"{user_message}\n{goal}", working_dir=working_dir_of(terminal_runner, working_dir_override),
                 status=emit.status if emit is not None else None)
             brief = brief + metrics.begin()
+            # EACH ESOI SOLUTION THIS GOAL TOUCHES gets its own consideration through the hub (relevant solutions, then one cheap pass
+            # per solution on the prompt its own records form, then the scopes above and the dependents): the worker's brief carries each
+            # touched solution's generated prompt and what its pass found. A folder with no ESOI records, no provider or a slow pass adds
+            # nothing (bounded, never raises).
+            brief = brief + solution_consideration.brief_block(
+                f"{user_message}\n{goal}", working_dir_of(terminal_runner, working_dir_override), getattr(self, "provider", None),
+                status=emit.status if emit is not None else None)
             announce_model_selection(terminal_runner)
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
