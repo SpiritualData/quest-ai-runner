@@ -59,7 +59,8 @@ def observation(registry: Any, quest_id: str) -> Optional[Dict[str, Any]]:
         if not (result.ok and isinstance(result.data, Mapping) and result.data.get("as_of") and "value" in result.data):
             log.info("key measure not read: %s", str(getattr(result, "text", ""))[:200])
             return None
-        return {"kind": "query", "locator": LOCATOR, "text": reading_text(metric, result.data)}
+        # ``intake``: handed to the turn by code before the planner's first step. It is one measure, not a read the planner chose, so the records gate does not count it as the records read.
+        return {"kind": "query", "locator": LOCATOR, "text": reading_text(metric, result.data), "by_code": True, "intake": True}
     except Exception as error:      # noqa: BLE001  a status reading is an addition; its failure never stops the turn
         log.info("key measure not read: %s: %s", type(error).__name__, error)
         return None

@@ -407,3 +407,8 @@ def escalation_route(plan: Any, user_intent: Optional[str], registry: Any, hande
             return ROUTE_INLINE
         return ROUTE_INLINE if handed_back else ROUTE_TOOL
     return ROUTE_DEEP
+
+
+def tool_result_by_planner(gathered: Any) -> bool:
+    """True when ``gathered`` holds a tool result the planner's own step produced. A read the code handed the turn at intake (``intake``, such as the quest's key measure) is not one."""
+    return any(str(g.get("locator") or "").startswith("tool:") and not g.get("intake") for g in gathered or [] if isinstance(g, dict))

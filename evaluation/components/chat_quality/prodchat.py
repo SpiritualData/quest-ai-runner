@@ -469,16 +469,31 @@ def executed_categories(executed):
     return {cat for cat, words in ALLOW_WORDS.items() if any(t.startswith(w) for t in tokens for w in words)}
 
 
+DERIVED_PREFIX = "derived:"      # a spec record the backend computes from the quest's own fields on every read; it is not a stored row, so it moves when the quest does
+
+
+def derived_change_possible(executed):
+    """True when an executed write could have moved a quest-derived record: a write to the spec records themselves or to the quest's own fields (an update of the quest or its intent)."""
+    tokens = [t for line in executed or [] for t in re.split(r"[^a-z0-9]+", str(line).lower()) if t]
+    if "spec_records" in executed_categories(executed):
+        return True
+    return any(t.startswith("intent") for t in tokens) or any(a == "update" and b.startswith("quest") for a, b in zip(tokens, tokens[1:])) or any(a.startswith("quest") and b == "update" for a, b in zip(tokens, tokens[1:]))
+
+
 def split_concurrent(changes, executed=None):
-    """``(this turn's possible changes, concurrent additions)``. Only an in-process arm can tell: every real write it makes goes through the dry-run guard, so an ADDED item
-    whose category no executed write could have created is provably not this turn's (another lane writing as the same account). ``executed=None`` (the HTTP arm,
-    which cannot see the turn's calls) keeps every change strict. A changed or removed item is never called concurrent."""
+    """``(this turn's possible changes, concurrent changes)``. Only an in-process arm can tell: every real write it makes goes through the dry-run guard, so an ADDED item
+    whose category no executed write could have created is provably not this turn's (another lane writing as the same account). The same holds for a CHANGED quest-derived spec
+    record (``derived:...``): the backend computes it from the quest's fields, so it moves when someone else edits the quest, and it is this turn's only when the turn executed a write
+    that could reach those fields. ``executed=None`` (the HTTP arm, which cannot see the turn's calls) keeps every change strict. Any other changed or removed item is never called concurrent."""
     if executed is None:
         return list(changes), []
     could = executed_categories(executed)
+    derived_possible = derived_change_possible(executed)
     mine, other = [], []
     for c in changes:
-        (other if c["change"] == "added" and c["category"] not in could else mine).append(c)
+        added_elsewhere = c["change"] == "added" and c["category"] not in could
+        derived_elsewhere = c["change"] == "changed" and c["category"] == "spec_records" and str(c.get("id") or "").startswith(DERIVED_PREFIX) and not derived_possible
+        (other if added_elsewhere or derived_elsewhere else mine).append(c)
     return mine, other
 
 
@@ -487,7 +502,7 @@ def concurrent_lines(changes):
     out = []
     for c in changes:
         extra = ", ".join(f"{k}={c[k]}" for k in ("author", "conv_id", "source", "created_at", "kind") if c.get(k))
-        out.append(f"CONCURRENT WRITE (not this turn's, no executed write could have made it): {c['category']} added {c['id']} {c.get('label', '')!r}" + (f" ({extra})" if extra else ""))
+        out.append(f"CONCURRENT WRITE (not this turn's, no executed write could have made it): {c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" + (f" ({extra})" if extra else ""))
     return out
 
 

@@ -44,3 +44,12 @@ def test_nothing_is_added_when_there_is_no_source_no_tool_or_no_reading():
     assert status_reading.observation(Registry(reading=None), "q1") is None
     assert status_reading.observation(Registry(tables={"solutions": {"a": {}}, "metrics": {}}), "q1") is None
     assert status_reading.observation(None, "q1") is None
+
+
+def test_the_intake_reading_is_not_a_tool_result_the_planner_produced():
+    from quest_ai_runner.the_world.tools import tool_guards
+    got = status_reading.observation(Registry(), "q1")
+    assert got["intake"] is True and got["by_code"] is True
+    assert tool_guards.tool_result_by_planner([got]) is False                  # the records gate still owes a read
+    assert tool_guards.tool_result_by_planner([got, {"locator": "tool:list_quest_goals", "text": "3 goals"}]) is True
+    assert tool_guards.tool_result_by_planner([{"locator": "notes/a.md"}]) is False

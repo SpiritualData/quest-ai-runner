@@ -772,7 +772,7 @@ class RunLoopMixin:
             if (rs.plan and rs.plan.action == "answer" and (getattr(rs.plan, "needs_records", False) or rs.plan.reply_shape == "support")
                     and getattr(rs, "records_gate_runs", 0) < 2
                     and message_is_user_turn and not getattr(rs, "no_attachment", False) and not executed_reads
-                    and not any(str(g.get("locator") or "").startswith("tool:") for g in gathered if isinstance(g, dict))
+                    and not tool_guards.tool_result_by_planner(gathered)      # a read the code made at intake is no record read by the planner
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
                 rs.records_gate_runs = getattr(rs, "records_gate_runs", 0) + 1
                 if rs.records_gate_runs == 1:

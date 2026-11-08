@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- The records gate no longer counts a read the code handed the turn at intake (the quest's key measure) as a record the planner read, so an answer that rests on the person's records is sent back to read them. The evaluation harness reports a changed quest-derived spec record as a concurrent change, not an unexpected write, unless the turn executed a write that could reach the quest's fields.
 - `place_on_a_quest` metric: a fixture quest may carry optional `vision` (the vision statement) and `purpose` (why the quest matters), and every stage passes them through the Quest backend's own `quest_aim` (loaded by path, like the pick prompt), so the offline arms render the same prompt and word index production builds; `backend_loader.quest_index` now calls the backend's `quest_index_from_doc` instead of mirroring its labels. The public quests carry neither field, so their numbers are unchanged (free arms re-run: 0.57 and 0.44, as recorded). The metric record gains a final `account-replay` stage: the production placement replayed read-only on one person's own tasks (quest-backend `scripts/checks/quest_placement_replay.py`, with an in-process candidate arm), its rows kept in a private folder outside every repository.
 
 ## [0.5.0] - 2026-11-07

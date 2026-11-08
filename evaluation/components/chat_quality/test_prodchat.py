@@ -377,6 +377,18 @@ def test_an_addition_no_executed_write_could_have_made_is_concurrent_and_the_htt
     assert all(l.startswith("CONCURRENT WRITE") for l in PC.concurrent_lines(other))
 
 
+def test_a_changed_derived_spec_record_is_concurrent_unless_the_turn_wrote_to_the_quest():
+    derived = {"category": "spec_records", "change": "changed", "id": "derived:quest_x:problem:current_state", "label": "problem"}
+    stored = {"category": "spec_records", "change": "changed", "id": "esr_1", "label": "problem"}
+    mine, other = PC.split_concurrent([derived, stored], [])
+    assert [c["id"] for c in other] == [derived["id"]] and [c["id"] for c in mine] == ["esr_1"]      # a stored record that changed is always this turn's
+    assert PC.split_concurrent([derived], ["tool add_quest_note {}"])[1] == [derived]                   # a note write cannot move it
+    assert PC.split_concurrent([derived], ["tool apply_spec_edit {}"])[0] == [derived]                  # a spec write could
+    assert PC.split_concurrent([derived], ["quest api PUT /api/intents/specs/quest/q"])[0] == [derived]
+    assert PC.split_concurrent([derived], None) == ([derived], [])                                      # the HTTP arm stays strict
+    assert PC.concurrent_lines([derived])[0].startswith("CONCURRENT WRITE") and "changed" in PC.concurrent_lines([derived])[0]
+
+
 def test_the_safety_net_reports_concurrent_writes_apart_leaves_them_and_does_not_fail_the_case():
     import prodsafety as PS
     clock = iter([T0, T0 + 20, T0 + 21])
