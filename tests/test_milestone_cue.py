@@ -852,6 +852,9 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
     resolved = cue.resolve(tools, "q1", CUE, now)
     receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action on the signup page"}))
+    checks = [p for p in asked if "independent checkers" in p]
+    assert len(checks) == 1 and "Facts the draft was written from" in checks[0], "the new draft's claims are checked once, against the facts it was written from"
+    asked[:] = [p for p in asked if p not in checks]
     assert len(asked) == 1 and "human_step" in asked[0] and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few neutral questions, each a full sentence ready to send" in asked[0] and "no em dashes" in asked[0]
     assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action on the signup page")
     assert "The draft kept in the goal" in receipt and "Opening, three product points" in receipt
@@ -1304,3 +1307,22 @@ def test_a_draft_turn_on_a_quest_with_many_goals_finds_the_look_alikes_past_the_
     assert "Post A: A story hook gets more clicks" in tail and "Post B: A question hook gets more signups" in tail and "Compared by:" in tail
 
 
+
+
+def test_a_draft_claim_no_fact_supports_is_rewritten_or_removed_before_the_draft_is_kept():
+    calls = []
+    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": TABLES, "time_zone": "UTC"}, text="read"))
+    tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
+    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
+    invented = "The app replaces five other tools."
+
+    def model(prompt):
+        if "independent checkers" in prompt:
+            return json.dumps({"findings": [{"span": invented, "quote": ""}]})
+        if "For each numbered statement" in prompt:
+            return json.dumps({"verdicts": [{"n": 1, "fails": True, "quote": ""}]})
+        if "Rewrite only the failing part" in prompt:
+            return json.dumps({"action": "remove", "text": ""})
+        return json.dumps({"owner": "Cy", "draft": f"Watch the app go live. {invented} Sign up on the store page."})
+    cue.resolve(tools, "q1", CUE, now).carry_out(tools, model)
+    assert invented not in calls[0]["description"] and "Draft: Watch the app go live. Sign up on the store page." in calls[0]["description"]

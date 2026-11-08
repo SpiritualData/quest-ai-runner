@@ -12,6 +12,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from hubofhubs.api import STEP_JUDGE, AgreementCheck, answer_with_reasoning
+from hubofhubs.api import UNCONFIRMED_REPLY as UNCONFIRMED_DRAFT_TEXT
 
 log = logging.getLogger("quest-ai-runner.reply-check")
 
@@ -20,12 +21,20 @@ READS_VIEW = ("A statement that something was read, looked up, opened or found i
 ACTIONS_VIEW = ("A statement that a change was made or an action done (added, created, moved, sent, scheduled, set up), as a fact in the past or present, must be supported by an executed action "
                 "in the evidence. A plan, an offer, a read and a question are not this task.")
 ASKS_VIEW = ("A question or request addressed to a named person who is not listed as present in the evidence fails this task. A question to a person who is present, "
-             "and every statement that is not a question or request, does not fail it.")
+             "and every statement that is not a question or request, does not fail it. A sentence that says who does or owns a step is a statement about them, not a request "
+             "addressed to them, and does not fail.")
 FACTS_VIEW = ("A statement of fact about the person's quest, work, people, dates, figures or events (something happened, was missed, is due, stands at a value) must be "
-              "supported by the reads listed in the evidence. A plan, an offer, a question, advice and general knowledge are not this task.")
+              "supported by the reads listed in the evidence. Statements inside a drafted text the reply hands over (a script, message, post or notes) count too: that some "
+              "work was done or a result came out, and what a product, service or organisation is, does, has or offers. A plan, an offer, a question, advice, a call to "
+              "action and general knowledge are not this task.")
+CLAIMS_VIEW = ("A statement in this drafted text that some work was done or a result came out, or about what a product, service, person or organisation is, does, has or offers, "
+               "must be supported by the evidence. What the text asks its reader to do, a question, a next step, a plan, and its form and tone are not this task.")
 EVIDENCE_CHARS = 6000
 GROUNDING_CHARS = 16000   # the reads and facts views see what the writer saw: the turn's reads and its context (a status snapshot, the quest's own state), not a cut of it
 NONE_TEXT = "(none)"
+# At most this many check calls in flight. Measured on the production replay (2026-11-08): with 8 at once plus the turn's own calls the provider answered
+# "concurrent connections exceeded" (429) and its retries put 6 to 19 s on single calls, the bulk of the check's added time.
+REPLY_CHECK_PARALLEL = 4
 
 
 def clip(text: Any, limit: int = EVIDENCE_CHARS) -> str:
@@ -52,11 +61,28 @@ def present_text(participants: Sequence[Any]) -> str:
 
 def reply_binding(reads: str, executed: str, present: str, max_calls: int = 40) -> Dict[str, Any]:
     """The hub's Binding for a reply: four views, each shown only its own evidence."""
-    return {"kind": "reply", "max_calls": max_calls, "parallel": 8, "views": [
+    return {"kind": "reply", "max_calls": max_calls, "parallel": REPLY_CHECK_PARALLEL, "views": [
         {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "facts", "instruction": FACTS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "actions", "instruction": ACTIONS_VIEW, "evidence": "Executed actions this turn:\n" + (clip(executed) or NONE_TEXT)},
         {"id": "asks", "instruction": ASKS_VIEW, "evidence": "Present in this conversation: " + (clip(present, 600) or NONE_TEXT)}]}
+
+
+def grounded_text(text: str, evidence: str, ask: Callable[[str], str], max_calls: int = 12) -> str:
+    """A drafted deliverable (a script, a message, notes) held to the facts it was written from before it is kept anywhere: the hub's Decision Check with one claims view, so
+    a claim no fact supports is confirmed by independent calls and rewritten from the evidence or removed with its sentence. The text as it was when the check cannot run."""
+    if not (text or "").strip() or ask is None:
+        return text
+    binding = {"kind": "reply", "max_calls": max_calls, "parallel": REPLY_CHECK_PARALLEL,
+               "views": [{"id": "draft_claims", "instruction": CLAIMS_VIEW, "evidence": "Facts the draft was written from:\n" + (clip(evidence, GROUNDING_CHARS) or NONE_TEXT)}]}
+    try:
+        result = AgreementCheck(plumbing=None).check(text, binding, ask)
+    except Exception:  # noqa: BLE001 -- a check must never break the work it checks
+        log.warning("draft claim check failed; the draft is kept as written", exc_info=True)
+        return text
+    log.info("Draft claim check: %s in %s calls: %s", result.get("outcome"), result.get("calls"), result.get("why"))
+    fixed = str(result.get("text") or "")
+    return fixed if result.get("outcome") == "repaired" and fixed.strip() and fixed != UNCONFIRMED_DRAFT_TEXT else ("" if result.get("outcome") == "repaired" else text)
 
 
 def model_ask(orch: Any, tier: str) -> Optional[Callable[[str], str]]:

@@ -583,7 +583,7 @@ class Resolved:
                   'the next step (a partner pitch); for a milestone about a video, the words to be spoken, not notes about it; for copy to be compared, distinct alternatives with the metric they are '
                   'compared by; for people to be asked, only a few neutral questions, each a full sentence ready to send, with no greeting, introduction or message around them; for a new source or channel, exactly one source (never a choice of two or more) that the facts above name (when they name none, the kind of source to '
                   'try first, labelled as a candidate with why) with a one-line hypothesis, a first test and the milestone metric; for a release or an announcement, the message to be published; a checklist of at most 5 steps only when none of these fits. '
-                  'Use only the facts above: never a person, place, group, platform or organisation they do not name; never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
+                  'Use only the facts above: never a person, place, group, platform or organisation they do not name; never a claim that some work was done or a result came out, or about what a product, service or organisation is, does, has or offers, unless the facts above state it (a script or message about a product says only what the facts above say of it); never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
                   '("I", "we", "our") unless the facts above name who is speaking; never a due date or deadline that is not in the facts above; no em dashes. '
                   'Leave no bracket slot, no angle slot and no blank to fill ("[source name]", "[link]"): fill each from the facts above and the reads; where a fact is unknown, name one concrete '
                   'candidate the records support, labelled as a candidate with why, or write the deliverable so it is sendable as it is (for example neutral questions to the person who knows)')
@@ -639,6 +639,11 @@ class Resolved:
         draft = kept_draft or supported_draft(str(data.get("draft") or "").strip(), self.allowed_text())
         if draft and not kept_draft:
             draft = self.asks_for_fix(draft, decide)
+        if draft and not kept_draft:
+            # Before the draft is kept in the goal, independent checks hold each claim in it to the facts it was written from: a claim nothing supports is rewritten from
+            # them or removed (the reply check sees the reply only after the goal is written).
+            from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import grounded_text
+            draft = grounded_text(draft, self.allowed_text(), decide)
         step = kept_step or " ".join(str(data.get("human_step") or "").split())
         people = data.get("people") if isinstance(data.get("people"), list) else []
         self.people = tuple(dict.fromkeys(str(n).strip(" .'\"") for n in people if str(n).strip(" .'\"")))

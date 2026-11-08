@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format is based on
 - `create_quest_workflow_spec` and `list_quest_workflows_spec` are in `quest_ai_runner.api`, so a host can offer the workflow tools over its own Quest client.
 
 ### Changed
+- Reply check: at most 4 check calls in flight (`REPLY_CHECK_PARALLEL`; 8 at once drew "concurrent connections exceeded" retries from the provider), with the hub's overlapping stages. The asks view no longer reads a sentence naming who does a step as a request to them; the facts view covers claims inside a drafted text the reply hands over.
+- Milestone drafts: the draft is told to make no claim of work done or of what a product does unless its facts state it, and before it is kept in the goal `grounded_text` (one claims view of the hub's Decision Check over the facts it was written from) rewrites or removes any claim nothing supports.
 - The milestone cue's judgment runs as two parallel views with the candidates in opposite orders; agreement is the verdict, a disagreement is settled by a third view. An answer naming no offered milestone (or naming its id without the `esr_` prefix, which now counts) is asked once more instead of read as NONE.
 - The verifier counts "already there as asked" as meeting a request to put something in place; the reply voice names what a stuck item waits on, who clears it and by when; the status snapshot names each priority's owner.
 - The tool-sized work notes no longer tell the planner to record a written deliverable as a goal: text the person asked for is the answer.

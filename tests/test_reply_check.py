@@ -38,7 +38,7 @@ def test_the_binding_gives_each_view_only_its_own_evidence():
 
 def test_an_action_claimed_but_not_executed_is_removed_and_the_rest_of_the_reply_stays(monkeypatch):
     ask = scripted({"Rewrite only the failing part": {"action": "remove", "text": ""},
-                    "Does the statement fail": {"fails": True, "quote": ""},
+                    "For each numbered statement": {"verdicts": [{"n": 1, "fails": True, "quote": ""}]},
                     "List each part of the reply": {"findings": [{"span": "I added the weekly task to the quest.", "quote": ""}]}})
     monkeypatch.setattr(V, "model_ask", lambda orch, tier: ask)
     monkeypatch.setattr(V, "tool_landed_account", lambda record: EXECUTED, raising=False)
