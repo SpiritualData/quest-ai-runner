@@ -134,3 +134,9 @@ def test_a_case_asked_with_no_quest_open_runs_unpinned_and_the_default_stays_pin
     raw = dict(case_id="X-8", input_text="Invented question", pass_criteria=["ok"])
     assert poor_answers.case_of(dict(raw, pinned=False))["pinned"] is False
     assert "pinned" not in poor_answers.case_of(raw)
+
+
+def test_a_case_that_came_from_voice_mode_is_run_as_a_spoken_turn():
+    raw = dict(case_id="X-7", input_text="Invented question", pass_criteria=["ok"])
+    assert poor_answers.case_of(dict(raw, input_origin="app_voice_chat"))["channel"] == "voice"
+    assert "channel" not in poor_answers.case_of(dict(raw, input_origin="web_chat"))

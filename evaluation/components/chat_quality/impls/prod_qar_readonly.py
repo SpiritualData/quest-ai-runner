@@ -267,10 +267,12 @@ def build_arm(meter, bounded):
         started = time.time()
         frames, final = [], None
         try:
-            session._session_history = P.history_pairs(case)           # the prior turns of the case, seeded before its input
+            session._session_history[:] = P.history_pairs(case)         # the prior turns of the case, seeded before its input, in the list the conversation store and the placement hold (never a new list)
             session._conv_id = f"qar_chat_{uuid.uuid4().hex}"
             session.pinned_quest, session._goal_id = None, None
             preamble, grounding = session.turn_grounding(message)
+            if case.get("channel"):                      # a spoken input reaches the brain as one (a phrase heard as another word is tied to the previous reply)
+                grounding = {**(grounding or {}), "channel": case["channel"]}
             if case.get("tool_pins"):                    # operations that are offered only when a run names them (for example a spec edit)
                 grounding = {**(grounding or {}), "tool_pins": list(case["tool_pins"])}
             # The team cues these inside the quest's own chat, so the turn is pinned to that quest the way the Quest app pins a quest chat
