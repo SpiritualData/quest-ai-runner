@@ -84,8 +84,35 @@ def goal_line(g: Mapping[str, Any]) -> str:
     return f"- {g.get('title')} (due {g.get('due') or 'no date'}" + (f"; owner {owner}" if owner else "") + (f"; {value}" if value else "") + ")"
 
 
-def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False) -> Optional[Dict[str, Any]]:
-    """The snapshot as one gathered read (locator ``status_snapshot``), or None when no part could be read. Never raises."""
+ABOUT_PROMPT = ("A person asked this in their quest's chat:\n\n{question}\n\nThese are milestones of the quest:\n{listing}\n\nIs the question about where one of these "
+                "milestones stands? First write one short line saying what the question is about, without any id. Then, on the last line, write only that milestone's id "
+                "exactly as listed, or NONE when it asks about none of them in particular.")
+
+
+def milestone_asked_about(tables: Mapping[str, Any], question: str, decide: Any) -> Optional[str]:
+    """The milestone a status question is about, from the model-free candidates and one cheap judgment read from its last line; None when none is."""
+    ids = [rid for rid in milestone_cue.candidates(tables, question) if rid in dict(milestone_cue.solutions_of(tables))]
+    if not ids or decide is None:
+        return None
+    solutions = dict(milestone_cue.solutions_of(tables))
+    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {milestone_cue.clip(solutions[rid].get('milestones'), milestone_cue.VALUE_CHARS)}" for rid in ids)
+    lines = [line for line in str(decide(ABOUT_PROMPT.format(question=str(question).strip()[:1500], listing=listing)) or "").splitlines() if line.strip()]
+    settled, chosen = milestone_cue.judged_option(lines[-1] if lines else "", ids, {rid: str(solutions[rid].get("name") or "") for rid in ids})
+    return chosen if settled else None
+
+
+def milestone_part(registry: Any, quest_id: str, tables: Mapping[str, Any], rid: str) -> str:
+    """The milestone a status question is about, as its records hold it (the metric record's dated text, which carries what blocks it, and the owners its text names),
+    with its open next-step goals (due day, owner, value line)."""
+    row = dict(milestone_cue.solutions_of(tables)).get(rid) or {}
+    steps = [g for g in milestone_cue.linked_goals(goal_rows(registry, quest_id, open_only=True), rid) if not g.get("completed") and not g.get("abandoned")]
+    text = "The milestone the question is about, as its records hold it:\n" + milestone_cue.records_read(tables, rid, row)
+    return text + ("\nIts open next steps:\n" + "\n".join(goal_line(g) for g in steps) if steps else "\nIt has no open next-step goal.")
+
+
+def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False, question: str = "", decide: Any = None) -> Optional[Dict[str, Any]]:
+    """The snapshot as one gathered read (locator ``status_snapshot``), or None when no part could be read. With ``question`` and ``decide``, a question about one
+    milestone also gets that milestone's records (what blocks it, who owns it, its next step and date). Never raises."""
     if registry is None or not quest_id:
         return None
     try:
@@ -95,6 +122,13 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
             tables, _ = milestone_cue.read_through(registry, quest_id)
         except milestone_cue.LaneGap:
             tables = {}
+        if tables and question:
+            try:
+                about = milestone_asked_about(tables, question, decide)
+                if about:
+                    parts.append(milestone_part(registry, quest_id, tables, about))
+            except Exception as error:      # noqa: BLE001  the milestone part is an addition; the rest of the snapshot stands
+                log.info("status snapshot: the milestone part was not read: %s: %s", type(error).__name__, error)
         measure = status_reading.observation(registry, quest_id)
         if measure is not None:
             parts.append(measure["text"])

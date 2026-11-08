@@ -181,3 +181,25 @@ def test_a_quest_with_hundreds_of_goals_keeps_its_priority_steps_past_the_first_
             return SimpleNamespace(ok=True, data=rows[args.get("offset", 0):args.get("offset", 0) + args["limit"]], text="")
     snap = status_snapshot.build(Paged(), "q1", "u1")
     assert "First milestone next step" in snap["text"]
+
+
+def test_a_status_question_about_one_milestone_gets_its_records_blocker_owner_and_next_step():
+    milestone_tables = {"solutions": {"s_top": TABLES["solutions"]["s_top"], "s_a": {"name": "P1 Store release", "milestones": "App live in the store.",
+                                                                                   "purpose": "Ship to the store. Owners: Ann."},
+                                      "s_b": {"name": "P2 Partner users", "milestones": "100 users from partners."}},
+                        "metrics": {"m": TABLES["metrics"]["m"], "m_a": {"name": "Store listing live", "solution_ids": ["s_a"],
+                                                                        "record": "Current value: 0 (as of 2026-11-06, from store search)\nBlocked: the store account is not verified."}}}
+    registry = Registry()
+    original = dict(TABLES)
+    TABLES.clear(); TABLES.update(milestone_tables)
+    try:
+        asked = []
+        snap = status_snapshot.build(registry, "q1", question="what is the status of the store release?",
+                                     decide=lambda prompt: asked.append(prompt) or "It asks how the store release stands.\ns_a")
+        none = status_snapshot.build(registry, "q1", question="what is the status of the store release?", decide=lambda prompt: "NONE")
+    finally:
+        TABLES.clear(); TABLES.update(original)
+    text = snap["text"]
+    assert "last line" in asked[0] and "Blocked: the store account is not verified." in text and "Owners: Ann." in text
+    assert "First milestone next step" in text.split("The milestone the question is about")[1].split("Active priorities")[0]
+    assert "The milestone the question is about" not in none["text"]

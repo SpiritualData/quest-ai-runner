@@ -600,7 +600,8 @@ class RunBeginMixin:
                 if snapshot_quest and rs._forced_plan is None:
                     emit.status("Reading where the quest stands…")
                     own = (rs.retrieval_constraints or {}).get("actor") == "me"
-                    snapshot = status_snapshot.build(self.tools, snapshot_quest, str(_ctx_meta.get("asker_user_id") or _ctx_meta.get("user_id") or ""), own=own)
+                    snapshot = status_snapshot.build(self.tools, snapshot_quest, str(_ctx_meta.get("asker_user_id") or _ctx_meta.get("user_id") or ""), own=own,
+                                                     question=rs.user_message, decide=self.cheap_decision)
                 else:
                     snapshot = None
                 if snapshot is not None:
