@@ -329,6 +329,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
         seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))
         data = interim_event_data(done=texts["status"], why_more="", next_step=texts["next"], coverage=None, attempt=0, seq=seq)
         data["status_first"] = True
+        data["message_role"] = "status"        # replaced by the next message and not kept once the answer lands (a partial result, an ask or a deliverable is "saved")
         emit.emit(ProgressEvent(type=EVENT_INTERIM, text=texts["text"], data=data))
         rs.status_first = {"before": reading, "voice": voice, "early": bool(reads_first and not forced)}
         return True
