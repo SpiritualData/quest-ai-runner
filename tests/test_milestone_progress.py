@@ -156,3 +156,22 @@ def test_the_milestone_pass_shapes_a_made_progress_without_running_the_work_agai
     found = milestone_progress.milestone_pass(made, cue(), "get it moving")
     assert found["solution_id"] == "sol-1" and found["target"] == {"metric_id": "met-1", "value": 6, "done_when": TABLES["solutions"]["sol-1"]["milestones"]}
     assert found["needs"].startswith("the script: Scripts meeting the rubric: 0 of 6 before, 1 of 6 after") and found["risks"] == ["Only a person can do: publish it"]
+
+
+def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_rechecked():
+    def thin_first(prompt):
+        if "You write one deliverable" in prompt and "## This part" not in prompt:
+            return json.dumps({"part": "Opening line for tutorial 1. Teach the product."})          # misses the call to action
+        if "## This part" in prompt:
+            return json.dumps({"part": "Call to action: try it today."})
+        if "Join these parts" in prompt:
+            return json.dumps({"part": "Opening line for tutorial 1. Teach the product. Call to action: try it today."})
+        if "Check one deliverable" in prompt:
+            text = prompt.split("The text:", 1)[1]
+            return json.dumps({"verdicts": [{"n": n, "meets": True, "quote": q} for n, q in enumerate(("Opening line", "Call to action"), 1) if q in text]
+                              if "Has an opening" in prompt.split("Requirements:")[1].split("\n")[1] or True else []})
+        return decide(prompt)
+    made = milestone_progress.make_progress(cue(), Registry(), thin_first)
+    assert made.depth["levels"] == 1 and made.depth["before"] < 1 and made.depth["after"] == 1 and made.depth["met"]
+    assert made.after == 1 and "Call to action" in made.parts[-1]
+    assert "after building it out in 1 level(s) of parts" in made.reply_text()

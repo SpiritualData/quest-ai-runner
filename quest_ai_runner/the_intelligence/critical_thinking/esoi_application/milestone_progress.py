@@ -38,7 +38,7 @@ PART_SEPARATOR = "\n\n--- Part {n} ---\n"
 PART_SPLIT = re.compile(r"\n*--- Part \d+ ---\n")
 OVERVIEW_HEAD = "Overview:\n"
 GROUNDING_CHARS = 12000
-REVISIONS = 1          # a unit the separate check finds short is rewritten once, told only which requirements it missed
+DEPTH_CALLS = 16       # the depth loop's call budget for one unit (work and check calls; the hub default)
 RECORD_CHARS = 1500
 NO_EM_DASH = "Do not use em dashes."
 
@@ -198,20 +198,19 @@ List the questions this decision needs answered (at most {limit}), and answer ea
 "source": "<the record or read it comes from, by name>", "quote": "<the exact words of that record or read the answer rests on, a few words, empty when unanswered>"}}]}}.
 Invent no figure, name or date. {no_em_dash}"""
 
-REVISE_PROMPT = """This unit of a milestone's deliverable was checked by someone else and misses some requirements.
+COMBINE_PROMPT = """Join these parts of one unit of a team's deliverable into the one unit, complete and in order, used as it is.
 
-The unit:
-{part}
+The unit: {goal}
+It must meet: {requirements}
 
-It misses: {missed}
-It must still meet: {requirements}
+The unit as first written:
+{base}
 
-The milestone's records and this turn's reads, the only source for any claim:
-{records}
-{grounding}
+Parts written to meet what it missed:
+{parts}
 
-Rewrite the unit so it meets every requirement, using only facts above; where the records give no fact for a requirement, meet it with what the records do
-say, never with an invented feature, figure, date or name. Reply with JSON only: {{"part": "<the whole rewritten unit>"}}. {no_em_dash}"""
+Keep every fact exactly as the parts and the first version give it; add none. Where a fact is missing, write "to be decided". Reply with JSON only:
+{{"part": "<the whole unit>"}}. {no_em_dash}"""
 
 SCORE_PROMPT = """Check one deliverable against its requirements. You did not write it; judge only what the text shows, against the records below.
 
@@ -251,6 +250,7 @@ class Progress:
     why: str = ""
     rubric_state: str = ""          # "reused" (kept on the record and read back), "kept" (defined this turn and written), or why it was not kept
     notes: str = ""                 # lines the milestone's parent and dependent solution passes add, after the person-only step
+    depth: Optional[Mapping[str, Any]] = None       # the depth loop's account: rubric score of the one-call unit (before) and after depth, calls, levels, why it stopped
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
@@ -264,7 +264,12 @@ class Progress:
             return ""
         shown = lambda v: str(int(v)) if float(v).is_integer() else f"{v:g}"     # noqa: E731
         of = f" of {self.total}" if self.total else ""
-        return f"{self.measure_name}: {shown(self.before)}{of} before, {shown(self.after)}{of} after (scored {self.as_of} by a check separate from the writer)."
+        line = f"{self.measure_name}: {shown(self.before)}{of} before, {shown(self.after)}{of} after (scored {self.as_of} by a check separate from the writer)."
+        if self.depth and self.depth.get("levels"):
+            pct = lambda v: f"{round(100 * float(v or 0))}%"      # noqa: E731
+            line += (f" This unit met {pct(self.depth.get('before'))} of its rubric in one call and {pct(self.depth.get('after'))} after building it out in "
+                     f"{self.depth.get('levels')} level(s) of parts.")
+        return line
 
     def metric_line(self) -> str:
         if not self.metric_name:
@@ -444,15 +449,33 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         allowed = reference
         part = str(data.get("part") or "").strip()
         requirements = [str(r) for r in increment.get("requirements") or []]
-        for _ in range(REVISIONS if part and requirements else 0):
-            # The separate check is asked now, as it will be for the after; a unit it finds short is rewritten once with only what it missed.
-            missed = [r for r in requirements if not judge(r, part)]
-            if not missed:
-                break
-            revised = str(parse_json(decide(REVISE_PROMPT.format(part=part, missed="; ".join(missed), requirements="; ".join(requirements),
-                                                                 records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
-                                                                 no_em_dash=NO_EM_DASH))).get("part") or "").strip()
-            part = revised or part
+        if part and requirements:
+            # The unit is its own solution with the kept rubric as its metric: the hub's depth loop checks it (the separate scorer, never the writer), splits what
+            # it misses into sub-pieces with their own sub-prompts, recombines and checks again within the request's budget.
+            from hubofhubs.api import build_out
+            prompt = WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
+                                         item=item.get("name"), requirements="; ".join(requirements), kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)
+            unit = {"goal": f"{item.get('name')}, unit {len(have) + 1}", "requirements": requirements, "prompt": prompt, "solution_id": cue.rid}
+
+            def piece_work(piece: Mapping[str, Any]) -> str:
+                answer = decide(str(piece.get("prompt") or ""))
+                return str(parse_json(answer).get("part") or answer or "").strip()
+
+            def piece_check(text: str, piece: Mapping[str, Any]) -> Dict[str, Any]:
+                wanted = [str(r) for r in piece.get("requirements") or []]
+                met = [r for r in wanted if judge(r, text)] if text.strip() else []
+                missing = [r for r in wanted if r not in met]
+                return {"met": not missing, "score": len(met) / len(wanted) if wanted else 0.0, "missing": missing,
+                        "reason": "meets every requirement" if not missing else "misses: " + "; ".join(missing)}
+
+            def piece_combine(piece: Mapping[str, Any], base: str, parts: Sequence[Mapping[str, Any]]) -> str:
+                written = "\n\n".join(f"For: {p['requirements'][0]}\n{p['text']}" for p in parts if str(p.get("text") or "").strip())
+                answer = decide(COMBINE_PROMPT.format(goal=piece.get("goal"), requirements="; ".join(piece.get("requirements") or []), base=base,
+                                                      parts=written or "(none)", no_em_dash=NO_EM_DASH))
+                return str(parse_json(answer).get("part") or base).strip()
+            deep = build_out(unit, piece_work, piece_check, combine=piece_combine, budget={"calls": DEPTH_CALLS, "depth": 2, "width": 4}, base=part)
+            out.depth = {k: deep.get(k) for k in ("before", "after", "calls", "levels", "stopped", "met")}
+            part = str(deep.get("text") or part).strip()
         part = grounded_text(part, allowed, decide) if part else ""
         # The overview is composed by code from the item and its count: a model-written list of units named topics the records never gave.
         out.overview = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".") + (
