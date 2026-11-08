@@ -20,7 +20,12 @@ def kept_inputs(folder: Path, runs: int):
     """``{case_id: [record, ...]}``: the last ``runs`` records of each case that hold a judge input, oldest first."""
     out = {}
     for path in sorted(folder.glob("*.jsonl")):
-        rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        rows = []
+        for line in path.read_text().splitlines():
+            try:
+                rows.append(json.loads(line)) if line.strip() else None
+            except ValueError:          # a line cut short by an interrupted run is not a record
+                continue
         kept = [r for r in rows if r.get("judge_input")]
         if kept:
             out[path.stem] = kept[-runs:]
