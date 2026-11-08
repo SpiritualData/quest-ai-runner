@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quest-ai-runner"
-version = "0.5.0"
+version = "0.5.1"
 description = "The orchestrator brain (importable core) plus the queued-task executor (runner) for Quest AI tasks. Generic, no consumer-specific logic."
 readme = "README.md"
 requires-python = ">=3.11"  # tomllib (RunnerConfig.from_file) is 3.11+
