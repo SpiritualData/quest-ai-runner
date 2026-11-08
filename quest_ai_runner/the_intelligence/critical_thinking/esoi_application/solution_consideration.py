@@ -52,6 +52,38 @@ def bounded(work: Callable[[], Any], seconds: float) -> Any:
     return box.get("value")
 
 
+ROW_TABLES = {"intents": "intent_id", "problems": "problem_id", "ideals": "ideal_id", "solutions": "solution_id",
+              "implementations": "implementation_id", "metrics": "metric_id", "knowledge": "knowledge_id"}
+QUEST_NETWORKS: Dict[str, Any] = {}
+
+
+def cell(value: Any) -> str:
+    return ";".join(str(v) for v in value) if isinstance(value, (list, tuple)) else ("" if value is None else str(value))
+
+
+def quest_rows(tables: Mapping[str, Any]) -> Dict[str, List[Dict[str, str]]]:
+    """The quest's specification records (``{table: {record id: row}}`` as Quest returns them) as the rows the hub's network reads."""
+    rows: Dict[str, List[Dict[str, str]]] = {}
+    for table, id_column in ROW_TABLES.items():
+        held = tables.get(table) or {}
+        items = held.items() if isinstance(held, Mapping) else [(str(r.get(id_column, "")), r) for r in held]
+        rows[table] = [{**{k: cell(v) for k, v in dict(row).items()}, id_column: str(rid)} for rid, row in items]
+    return {k: v for k, v in rows.items() if v}
+
+
+def quest_network(quest_id: str, tables: Mapping[str, Any]) -> Any:
+    """The hub's network of a quest's records, built from rows (no folder) and kept until the records change."""
+    import hashlib
+    import json as json_module
+    from hubofhubs.api import SolutionNetwork
+    rows = quest_rows(tables)
+    key = quest_id + ":" + hashlib.sha256(json_module.dumps(rows, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:12]
+    if key not in QUEST_NETWORKS:
+        QUEST_NETWORKS.clear()
+        QUEST_NETWORKS[key] = SolutionNetwork.from_rows(rows, name=f"quest {quest_id}")
+    return QUEST_NETWORKS[key]
+
+
 def cut(text: str, chars: int = PROMPT_CHARS) -> str:
     if len(text) <= chars:
         return text
@@ -98,10 +130,11 @@ def consider(request: str, root: Any, ask: Callable[[str], str], found: Optional
              own_passes: Optional[Mapping[str, Callable[..., Mapping[str, Any]]]] = None) -> Dict[str, Any]:
     """The hub's flow for one request over the records at ``root``: relevant solutions (or ``found``), their briefs, their passes."""
     from hubofhubs.api import NetworkPasses, RecordsIndex, briefs, network_of
-    solutions = list(found) if found is not None else list(RecordsIndex().relevant(request, str(root))["solutions"])
+    records = root if hasattr(root, "classify") else str(root)
+    solutions = list(found) if found is not None else list(RecordsIndex().relevant(request, records)["solutions"])
     if not solutions:
         return {}
-    prepared = briefs(network_of(str(root)), solutions, request)
+    prepared = briefs(network_of(records), solutions, request)
     return {"briefs": prepared, "considered": dict(NetworkPasses(None).consider(request, prepared, own_passes=own_passes, ask=ask))}
 
 
@@ -130,12 +163,14 @@ def after_milestone(made: Any, cue: Any, request: str, provider: Any, seconds: f
         from hubofhubs.api import network_of
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_progress import milestone_pass
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
-        root = slice_root(getattr(cue, "working_dir", None))
+        root: Any = slice_root(getattr(cue, "working_dir", None))
         sid = str(getattr(cue, "rid", "") or "")
         ask = ask_for(provider)
+        if root is None and getattr(cue, "tables", None):
+            root = quest_network(str(getattr(cue, "quest_id", "") or ""), cue.tables)      # the quest's own records, as Quest holds them
         if root is None or not sid or ask is None:
             return ""
-        network = network_of(str(root))
+        network = network_of(root if hasattr(root, "classify") else str(root))
         if not network.has(sid):
             return ""
         finding = milestone_pass(made, cue, request)
@@ -206,12 +241,18 @@ def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> None:
         from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
-        root = slice_root(str(ctx_meta.get("quest_folder") or "") or None)
+        root: Any = slice_root(str(ctx_meta.get("quest_folder") or "") or None)
         store = card_writer(getattr(orch, "context_assembler", None))
         ask = ask_for(getattr(orch, "provider", None))
-        if root is None or store is None or ask is None:
+        if store is None or ask is None:
             return
-        key = str(root)
+        if root is None and getattr(rs, "quest_id", None) and getattr(orch, "tools", None) is not None:
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import read_through
+            tables, _ = read_through(orch.tools, rs.quest_id)       # the quest's own records, through the backend API
+            root = quest_network(str(rs.quest_id), tables) if tables else None
+        if root is None:
+            return
+        key = str(getattr(root, "root", root))
         with LANDED_LOCK:
             earlier = LANDED.pop(key, [])
         request = str(getattr(rs, "goal_condition", "") or getattr(rs, "user_message", ""))

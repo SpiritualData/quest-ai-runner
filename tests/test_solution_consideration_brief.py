@@ -75,3 +75,14 @@ def test_a_milestone_turn_is_left_to_its_own_step(monkeypatch):
     store, meta = Store(), {}
     solution_consideration.for_turn(Orch(store, Scripted()), SimpleNamespace(cue_resolved=object(), message_is_user_turn=True), meta)
     assert store.cards == {} and "priority_card_ids" not in meta
+
+
+def test_quest_held_records_form_the_network_without_a_folder():
+    tables = {"solutions": {"weekly-video": {"name": "Weekly Video", "purpose": "Publish one video each week.", "metric_ids": ["m1"],
+                                             "knowledge": "[lesson] Short titles did better (source: last month's results)"}},
+              "metrics": {"m1": {"name": "Videos per week", "solution_ids": ["weekly-video"], "purpose": "Count videos."}}}
+    network = solution_consideration.quest_network("q1", tables)
+    scripted = Scripted()
+    found = solution_consideration.consider("publish the weekly video", network, lambda prompt: scripted.answer([{"role": "user", "content": prompt}]))
+    assert found["briefs"]["solutions"][0]["solution_id"] == "weekly-video"
+    assert "Short titles did better" in found["briefs"]["solutions"][0]["prompt"]
