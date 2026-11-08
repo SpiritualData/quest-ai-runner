@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- `find_quest_spec` is exported from `quest_ai_runner.api`, so a host can offer `find_quest` over its own client (a chat with no quest open places a status question on one of the person's quests).
 - `ToolSpec.reads_first`: a write that must see what exists first names its read (`create_quest_workflow` -> `list_quest_workflows`). Called before that read has run in the turn, the write is not run; the read runs in its place and the planner decides again from it, so an ensure-style order never makes a second copy of what is already there.
 - `ToolSpec.flow_owned`: an operation a flow runs in code (the milestone cue's goal write and metric reads) is never offered to the planner and a call to it by name is refused.
 - The request analyser reports `writes_text` (the person asked for a piece of text to use and nothing else). The turn is then a deliverable written in the reply: a planned write, task or deep run is turned into the answer, and the writer gets the draft directive (the whole piece, every part it normally has, no question about an optional choice, no "cannot publish").
