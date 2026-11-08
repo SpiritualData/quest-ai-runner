@@ -285,12 +285,18 @@ ASKS_OWN_UPDATES_PARAGRAPH = (
     'a thing in the world, and false for everything else.\n'
 )
 
+ASKS_STATUS_PARAGRAPH = (
+    'ALSO set "asks_status": true when the meaning of the request is "where does this stand": the status or progress\n'
+    'of a piece of work, or which item matters most or comes first (a priority). Wording and spelling never matter, only the meaning.\n'
+    'False for a request to do or change something, for a question about how something works, and for a count.\n'
+)
+
 
 def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
     # Unchanged apart from the no-em-dash rule every registered prompt now carries.
     assert prompt_default == (_PRE_CHANGE_JUDGE_PROMPT_NO_WEB + ASKS_CHANGE_PARAGRAPH + NEEDS_RECORDS_PARAGRAPH
-                              + ASKS_OWN_UPDATES_PARAGRAPH + "\n" + NO_EM_DASH_RULE)
+                              + ASKS_OWN_UPDATES_PARAGRAPH + ASKS_STATUS_PARAGRAPH + "\n" + NO_EM_DASH_RULE)
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
     assert prompt_explicit_false == prompt_default

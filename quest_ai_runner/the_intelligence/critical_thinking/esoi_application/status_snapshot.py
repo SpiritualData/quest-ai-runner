@@ -19,6 +19,7 @@ LOCATOR = "status_snapshot"
 PRIORITY_MAX = 5
 OWN_MAX = 8
 PAGE = 100
+PAGES = 10
 HEAD = "STATUS SNAPSHOT READ JUST NOW (every figure carries its own date; nothing older is part of it)"
 
 
@@ -37,15 +38,22 @@ def reachable_quests(registry: Any) -> List[Dict[str, str]]:
 
 
 def goal_rows(registry: Any, quest_id: str, **args: Any) -> List[Mapping[str, Any]]:
+    """The goals the tool lists for ``args``, every page of them (up to ``PAGES`` pages of ``PAGE``): a quest with hundreds of goals keeps its priority steps past the first page."""
     from quest_ai_runner.the_world.tools.tools import ToolContext
     if registry is None or registry.get("list_quest_goals") is None:
         return []
-    try:
-        result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "limit": PAGE, **args}, ToolContext(quest_id=quest_id))
-    except Exception as error:      # noqa: BLE001
-        log.info("goals not read: %s: %s", type(error).__name__, error)
-        return []
-    return [g for g in (result.data or []) if isinstance(g, Mapping)] if result.ok else []
+    rows: List[Mapping[str, Any]] = []
+    for page in range(PAGES):
+        try:
+            result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "limit": PAGE, "offset": page * PAGE, **args}, ToolContext(quest_id=quest_id))
+        except Exception as error:      # noqa: BLE001
+            log.info("goals not read: %s: %s", type(error).__name__, error)
+            return rows
+        got = [g for g in (result.data or []) if isinstance(g, Mapping)] if result.ok else []
+        rows.extend(got)
+        if len(got) < PAGE:
+            break
+    return rows
 
 
 def ladder(tables: Mapping[str, Any]) -> Dict[str, int]:

@@ -373,6 +373,12 @@ class PlanningMixin:
                         type(e).__name__, str(e)[:200])
         return None
 
+    def reach_asks_status(self, user_message: str) -> bool:
+        """Whether the stronger tier's structured verdict says the request asks where something stands (a status, a priority, a count) and asks for no change.
+        A second, independent report beside the request analyser's ``asks_status``: either one starts the status snapshot. False when there is no verdict."""
+        verdict = self.reach_verdict(user_message)
+        return bool(verdict and verdict.get("asks_status") is True and verdict.get("asks_change") is not True)
+
     def read_own_updates(self, user_message: str) -> Any:
         """Run the optional ``own_updates`` read once when the judge's structured ``asks_own_updates`` is a real
         ``True`` (never decided by words). Returns what the adapter returned (an ``OwnUpdates`` or an

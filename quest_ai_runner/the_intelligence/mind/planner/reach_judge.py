@@ -64,6 +64,8 @@ REACH_JUDGE_TOOL: Dict[str, Any] = {
                                                                  "something the person stored that the request does not state."},
             "asks_own_updates": {"type": "boolean", "description": "Whether it asks what is new or what changed in the "
                                                                     "person's own work since they last looked, naming no subject."},
+            "asks_status": {"type": "boolean", "description": "Whether it asks where something stands, what matters most or "
+                                                               "comes first."},
         },
         "required": ["reach"],
     },
@@ -103,6 +105,9 @@ ALSO set "asks_own_updates": true when the meaning of the request is "tell me wh
 since I last looked", however short, lowercase or unpunctuated it is, and it names no subject. Wording and
 spelling never matter, only the meaning. False for any request that names a subject, a product, a topic or
 a thing in the world, and false for everything else.
+ALSO set "asks_status": true when the meaning of the request is "where does this stand": the status or progress
+of a piece of work, or which item matters most or comes first (a priority). Wording and spelling never matter, only the meaning.
+False for a request to do or change something, for a question about how something works, and for a count.
 """
 
 #: What the planner is told when the work is out of reach AND something can do it.
@@ -190,7 +195,7 @@ def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
     if covered and covered.lower() in ("null", "none", "n/a"):
         covered = None
     verdict = {"reach": reach.strip().lower(), "covered_by": covered}
-    for flag in ("asks_change", "needs_records", "asks_own_updates"):
+    for flag in ("asks_change", "needs_records", "asks_own_updates", "asks_status"):
         if isinstance(raw.get(flag), bool):
             verdict[flag] = raw[flag]
     if verdict.get("asks_own_updates") is True:

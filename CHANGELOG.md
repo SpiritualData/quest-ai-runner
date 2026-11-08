@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- A status question reaches the status snapshot (and so the information budget of three sentences) whenever the reach judge's structured `asks_status` report or the request analyser's says so. Before, only the analyser's report counted, and a turn it did not flag ran the planner loop and could name the wrong priority or run past the budget. The judge's report is false for an order and for a count.
+- The snapshot's goal reads page through all goals of a quest (up to 1000), so a quest with hundreds of goals keeps its priority steps past the first page.
+
 ## [0.5.2] - 2026-11-08
 
 ### Added

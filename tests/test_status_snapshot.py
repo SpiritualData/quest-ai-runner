@@ -128,3 +128,53 @@ def test_a_status_question_in_a_chat_with_no_quest_is_placed_on_a_quest_and_gets
     provider, res = run_status('Where it stands.\n{"asks_status": true}', "where are we with the release?", quest_id=None, placement=abstain)
     assert abstain.asked and provider.planner_calls == 0 and not any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
     assert res.kind == "answer" and "STATUS FROM A SNAPSHOT" not in "".join(provider.writer_prompts)
+
+
+class JudgeProvider(StatusProvider):
+    """The request analyser leaves the status report out; the reach judge (a second, stronger structured report) makes it."""
+
+    def __init__(self, verdict):
+        super().__init__("What is the top priority.")
+        self.verdict = verdict
+
+    def plan(self, prompt, *, model, tool_schema, tier=None):
+        if "Decide ONE thing" in prompt:
+            return dict(self.verdict)
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+
+def run_judged(verdict, message="whats our top priority right now?"):
+    provider = JudgeProvider(verdict)
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), tools=_tools(),
+                        config=OrchestratorConfig(overseer=True, planner_reach_judge=True, read_reach_summary="the quest's own records"))
+    res = orch.run(message, mode=Mode.LIVE, sink=RecordingSink(), quest_id="q1", context_meta={"user_id": "u1"})
+    return provider, res
+
+
+def test_a_status_question_the_analyser_did_not_flag_gets_the_snapshot_when_the_reach_judge_reports_the_status_shape():
+    provider, res = run_judged({"reach": "inside", "asks_status": True, "asks_change": False})
+    assert res.kind == "answer" and provider.planner_calls == 0
+    assert any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
+    assert provider.writer_prompts and "STATUS FROM A SNAPSHOT" in provider.writer_prompts[0]
+
+
+def test_the_reach_judge_report_starts_no_snapshot_for_an_order_or_a_turn_it_did_not_flag():
+    for verdict in ({"reach": "inside", "asks_status": True, "asks_change": True}, {"reach": "inside", "asks_status": False}, {"reach": "inside"}):
+        provider, res = run_judged(verdict)
+        assert not any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
+        assert provider.planner_calls >= 1
+
+
+def test_a_quest_with_hundreds_of_goals_keeps_its_priority_steps_past_the_first_page():
+    class Paged(Registry):
+        def invoke(self, name, args, ctx):
+            if name != "list_quest_goals":
+                return super().invoke(name, args, ctx)
+            filler = [{"id": f"f{i}", "title": f"Filler {i}", "text": "", "due": "2026-10-01", "spec_solution_id": None, "completed": False, "abandoned": False} for i in range(250)]
+            keyed = [{"id": "k1", "title": "First milestone next step: week of 2026-11-02", "text": "", "due": "2026-12-30", "spec_solution_id": "s_a", "completed": False, "abandoned": False}]
+            rows = filler + keyed
+            if args.get("text_contains"):
+                rows = [g for g in rows if args["text_contains"] in g["title"]]
+            return SimpleNamespace(ok=True, data=rows[args.get("offset", 0):args.get("offset", 0) + args["limit"]], text="")
+    snap = status_snapshot.build(Paged(), "q1", "u1")
+    assert "First milestone next step" in snap["text"]
