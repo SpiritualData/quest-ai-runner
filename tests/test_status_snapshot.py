@@ -203,3 +203,17 @@ def test_a_status_question_about_one_milestone_gets_its_records_blocker_owner_an
     assert "last line" in asked[0] and "Blocked: the store account is not verified." in text and "Owners: Ann." in text
     assert "First milestone next step" in text.split("The milestone the question is about")[1].split("Active priorities")[0]
     assert "The milestone the question is about" not in none["text"]
+
+
+def test_when_the_key_measure_cannot_be_read_the_dated_reading_its_record_holds_leads_and_no_older_figure_does():
+    class Unreadable(Registry):
+        def invoke(self, name, args, ctx):
+            if name == "read_metric_source":
+                return SimpleNamespace(ok=False, data=None, text="no file source holds it")
+            return super().invoke(name, args, ctx)
+    TABLES["metrics"]["m"]["record"] = "Current value: 0 (as of 2026-11-07, from Revenue analytics)\nOlder: 0 on 2026-10-05."
+    try:
+        text = status_snapshot.build(Unreadable(), "q1")["text"]
+    finally:
+        TABLES["metrics"]["m"].pop("record")
+    assert "KEY MEASURE AS LAST RECORDED" in text and "Paid subscribers: 0 (as of 2026-11-07, from Revenue analytics)" in text

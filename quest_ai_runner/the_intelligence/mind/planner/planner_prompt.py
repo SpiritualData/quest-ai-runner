@@ -846,7 +846,8 @@ STATUS_SNAPSHOT_DIRECTIVE = """\
 A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only: open with the key measure's value and the date it was read, then the one or two
 priorities that matter most (or the asker's own, when the question is about their own work) with their due days. Name the date of every figure. Leave out anything
 older than the snapshot (earlier campaigns, old notes, earlier replies) unless the question asked for it, add nothing the snapshot does not hold, and keep to the
-length for this kind of reply. Never use an em dash.
+length for this kind of reply. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
+next step and by when. End on the last fact: no offer, no question and no list beyond what was asked. Never use an em dash.
 """
 
 DRAFT_ANSWER_DIRECTIVE = """\

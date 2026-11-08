@@ -38,6 +38,18 @@ def top_metric_source(tables: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> 
     return "", ""
 
 
+def recorded_reading(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], metric_name: str) -> Optional[Dict[str, Any]]:
+    """The dated reading the key metric's record leads with (``Current value: <value> (as of <YYYY-MM-DD>, from <source>)``), else None. A 0 is a reading."""
+    import re
+    for metric in (tables.get("metrics") or {}).values():
+        if str(metric.get("name") or "") != metric_name:
+            continue
+        found = milestone_cue.Resolved.KEPT_READING.match(str(metric.get("record") or "").strip().split("\n")[0].strip())
+        if found and re.fullmatch(r"\d{4}-\d{2}-\d{2}", found.group("day").strip()) and found.group("value").strip():
+            return {"value": found.group("value").strip(), "as_of": found.group("day").strip(), "source": found.group("source").strip()}
+    return None
+
+
 def reading_text(metric: str, reading: Mapping[str, Any]) -> str:
     detail = reading.get("detail")
     return (f"KEY MEASURE READ LIVE JUST NOW: {metric}: {shown(reading['value'])} (as of {reading['as_of']}, from {reading.get('source') or 'its source'})."
@@ -58,7 +70,13 @@ def observation(registry: Any, quest_id: str) -> Optional[Dict[str, Any]]:
         result = registry.invoke(milestone_cue.READ_TOOL, {"name": source}, ToolContext(quest_id=quest_id))
         if not (result.ok and isinstance(result.data, Mapping) and result.data.get("as_of") and "value" in result.data):
             log.info("key measure not read: %s", str(getattr(result, "text", ""))[:200])
-            return None
+            # The newest dated reading still wins over older text: the one the metric record holds, said as recorded, not as read now.
+            kept = recorded_reading(tables, metric)
+            if kept is None:
+                return None
+            return {"kind": "query", "locator": LOCATOR, "by_code": True, "intake": True,
+                    "text": (f"KEY MEASURE AS LAST RECORDED (its source could not be read just now): {metric}: {kept['value']} (as of {kept['as_of']}, from {kept['source']}). "
+                             "A reply about where the quest stands opens with this value and this date, and gives no older figure for it.")}
         # ``intake``: handed to the turn by code before the planner's first step. It is one measure, not a read the planner chose, so the records gate does not count it as the records read.
         return {"kind": "query", "locator": LOCATOR, "text": reading_text(metric, result.data), "by_code": True, "intake": True}
     except Exception as error:      # noqa: BLE001  a status reading is an addition; its failure never stops the turn
