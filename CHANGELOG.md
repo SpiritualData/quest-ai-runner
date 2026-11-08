@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- Incremental replies: message 1 of an act request (where it stands, what happens now) carries `message_role: "status"` in its interim event data: a status is replaced by the next message and not kept once the answer lands; any other interim is a saved message.
+- Incremental replies: message 1 of an act request (where it stands, what happens now) is marked `announce` in its interim event data (`hubofhubs.api.ANNOUNCE_KEY`), so the hub's communication policy makes it a status: shown, replaced by the next message, never kept. Whether any interim is kept is that policy's one decision; the runner sets no role of its own.
 - `find_quest_spec` is exported from `quest_ai_runner.api`, so a host can offer `find_quest` over its own client (a chat with no quest open places a status question on one of the person's quests).
 - `ToolSpec.reads_first`: a write that must see what exists first names its read (`create_quest_workflow` -> `list_quest_workflows`). Called before that read has run in the turn, the write is not run; the read runs in its place and the planner decides again from it, so an ensure-style order never makes a second copy of what is already there.
 - `ToolSpec.flow_owned`: an operation a flow runs in code (the milestone cue's goal write and metric reads) is never offered to the planner and a call to it by name is refused.

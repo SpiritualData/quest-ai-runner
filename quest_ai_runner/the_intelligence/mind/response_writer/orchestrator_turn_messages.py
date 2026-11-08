@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from hubofhubs.api import render_coverage_line
 from hubofhubs.api import ProgressEvent
-from hubofhubs.api import EVENT_DECISION, EVENT_INTERIM
+from hubofhubs.api import ANNOUNCE_KEY, EVENT_DECISION, EVENT_INTERIM
 from hubofhubs.api import STEP_SUMMARIZE, plan_with_step
 
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import INTERIM_PROGRESS_TOOL
@@ -329,7 +329,7 @@ def send_status_first(orch: Any, emit: Any, rs: Any, gathered: Sequence[Any], *,
         seq = ledger.record(clock, progress_signature(output=texts["text"], receipts=[], coverage=None))
         data = interim_event_data(done=texts["status"], why_more="", next_step=texts["next"], coverage=None, attempt=0, seq=seq)
         data["status_first"] = True
-        data["message_role"] = "status"        # replaced by the next message and not kept once the answer lands (a partial result, an ask or a deliverable is "saved")
+        data[ANNOUNCE_KEY] = True               # it announces the work: the hub's communication policy makes it a status (shown, replaced, never kept)
         emit.emit(ProgressEvent(type=EVENT_INTERIM, text=texts["text"], data=data))
         rs.status_first = {"before": reading, "voice": voice, "early": bool(reads_first and not forced)}
         return True

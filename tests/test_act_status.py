@@ -57,7 +57,7 @@ def test_an_act_request_sends_the_status_first_then_the_result_with_the_metric_b
                  registry(state, writes))
     interim = [e for e in events if e["type"] == EVENT_INTERIM]
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
-    assert len(interim) == 1 and interim[0]["data"]["status_first"] is True and interim[0]["data"]["seq"] == 1
+    assert len(interim) == 1 and interim[0]["data"]["status_first"] is True and interim[0]["data"]["announce"] is True and interim[0]["data"]["seq"] == 1
     assert "I am looking at quest goals first." in interim[0]["text"]       # sent as soon as the plan is known to be an act, before the read finishes
     assert interim[0]["text"].startswith("Where this stands:") and "\n\nNow: " in interim[0]["text"]
     assert events.index(interim[0]) < events.index(result) and writes == [WRITE["args"]]
