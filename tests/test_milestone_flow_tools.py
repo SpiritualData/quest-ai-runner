@@ -83,6 +83,34 @@ def test_a_source_the_reader_cannot_read_leaves_no_figure_on_the_goal_and_the_re
     assert "could not be read" in receipt and "state no value" in receipt.lower().replace("and state", "state")
 
 
+def flow_with_record(reader, record):
+    client = Client()
+    registry = ToolRegistry(milestone_flow_tools(lambda: client, reader))
+    original = SPEC["records"][1]["fields"]["record"]
+    SPEC["records"][1]["fields"]["record"] = record
+    try:
+        resolved = cue.resolve(registry, "q1", "get the onboarding test moving", NOW, decide)
+    finally:
+        SPEC["records"][1]["fields"]["record"] = original
+    return client, registry, resolved
+
+
+def test_the_dated_reading_the_metric_record_holds_is_read_first_and_a_zero_stands_when_the_source_cannot_be_read():
+    def unreadable(name):
+        raise MetricSourceError("no file source holds it")
+    client, registry, resolved = flow_with_record(unreadable, "Current value: 0 (as of 2026-11-02, from Admin user list)\nNo tagged accounts yet.")
+    receipt, status = resolved.carry_out(registry, decide)
+    assert "Current value: 0 (as of 2026-11-02, from Admin user list)" in client.created[0]["description"]
+    assert "not read" not in client.created[0]["description"] and "recorded reading stands" in receipt
+
+
+def test_a_source_reading_as_recent_or_newer_replaces_the_records_reading():
+    newer = {"value": 3, "as_of": "2026-11-03", "source": "Funnel report", "detail": {}}
+    client, registry, resolved = flow_with_record(lambda name: newer, "Current value: 0 (as of 2026-11-02, from Admin user list)")
+    resolved.carry_out(registry, decide)
+    assert "Current value: 3 (as of 2026-11-03, from Funnel report)" in client.created[0]["description"]
+
+
 def test_a_reading_is_checked_the_same_way_whatever_reads_it():
     assert checked_reading('{"value": 7, "as_of": "2026-11-03", "source": "A"}')["value"] == 7
     for text in ("not json", '{"as_of": "2026-11-03", "source": "A"}', '{"value": 1, "as_of": "yesterday", "source": "A"}', '{"value": 1, "as_of": "2026-11-03"}'):

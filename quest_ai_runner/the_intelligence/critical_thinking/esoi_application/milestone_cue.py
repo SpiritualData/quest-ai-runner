@@ -467,6 +467,7 @@ class Resolved:
     value_full: str = ""                                 # the metric record's whole text (whitespace collapsed): what a draft is written from, never a cut of it
     records_text: str = ""                               # the milestone's record and its metric records as the code read them
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
+    record_line: str = ""                                # the metric record's first line as written: a dated "Current value: ... (as of ..., from ...)" is a recorded reading
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
@@ -677,6 +678,9 @@ class Resolved:
             if recorded is not None and recorded.ok and isinstance(recorded.data, Mapping) and recorded.data.get("as_of"):
                 self.reading = {k: recorded.data[k] for k in ("value", "as_of", "source", "detail") if k in recorded.data}
                 return
+        # Next, the reading the metric record itself holds, dated and sourced on its first line. Any value is a reading, 0 included. The named source is still read after
+        # it and replaces it when it reads as recently or later; a source that cannot be read leaves the recorded reading standing, and the receipt says so.
+        self.reading = self.recorded_reading()
         if not self.source:
             return
         if registry is None or registry.get(READ_TOOL) is None:
@@ -688,16 +692,26 @@ class Resolved:
             self.reading_gap = f"reading the source {self.source!r} failed ({type(error).__name__}: {error})"
             return
         if result.ok and isinstance(result.data, Mapping) and result.data.get("as_of"):
-            self.reading = {k: result.data[k] for k in ("value", "as_of", "source", "detail") if k in result.data}
+            if not self.reading or str(result.data["as_of"]) >= str(self.reading.get("as_of") or ""):
+                self.reading = {k: result.data[k] for k in ("value", "as_of", "source", "detail") if k in result.data}
         else:
             self.reading_gap = str(result.text).strip()[:300]
+
+    def recorded_reading(self) -> Optional[Dict[str, Any]]:
+        """The reading the metric record's first line holds (``Current value: <value> (as of <YYYY-MM-DD>, from <source>)``), else None. A value of 0 is a reading."""
+        found = self.KEPT_READING.match(self.record_line or "")
+        if not found or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", found.group("day").strip()) or not found.group("value").strip():
+            return None
+        return {"value": found.group("value").strip(), "as_of": found.group("day").strip(), "source": found.group("source").strip(), "detail": {"from": "the metric record"}}
 
     def reading_note(self) -> str:
         """What the receipt tells the reply about the measured value."""
         if self.reading:
             line = current_value_line(self.reading["value"], self.reading["as_of"], self.reading["source"])
-            return (f" The metric's current value was read from its source and the goal's one line now reads: \"{line}\". "
-                    "State the value, the date it covers and the source label in the reply, exactly as that line gives them, and no other figure for it.")
+            stood = (f" Its source could not be read again just now ({self.reading_gap}), so the recorded reading stands; say so in a few words."
+                     if self.reading_gap else "")
+            return (f" The metric's current value was read and the goal's one line now reads: \"{line}\". "
+                    "State the value, the date it covers and the source label in the reply, exactly as that line gives them, and no other figure for it." + stood)
         if self.source:
             return f" The metric's value could not be read ({self.reading_gap}). Say that, say which data is missing, and state no value for it."
         return ""
@@ -892,4 +906,5 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
         value_full=" ".join(str(metric.get("record") or "").split()) if metric else "",
         purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row), records_text=records_read(tables, rid, row),
-        record_date=measured_through_of(tables, rid, row) or next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", str(metric.get("record") or ""))), "") if metric else "")
+        record_date=measured_through_of(tables, rid, row) or next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", str(metric.get("record") or ""))), "") if metric else "",
+        record_line=str(metric.get("record") or "").strip().split("\n")[0].strip() if metric else "")
