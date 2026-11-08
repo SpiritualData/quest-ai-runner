@@ -472,6 +472,7 @@ class Resolved:
     records_text: str = ""                               # the milestone's record and its metric records as the code read them
     record_date: str = ""                                # the day the metric record's own reading is from (its measured_through, else a day in its text)
     record_line: str = ""                                # the metric record's first line as written: a dated "Current value: ... (as of ..., from ...)" is a recorded reading
+    request: str = ""                                    # what the person asked this turn, in their words: the step and its draft serve it, within the milestone
 
     def routes_to_code(self, plan: Any, user_intent: Optional[str], gathered: Sequence[Mapping[str, Any]], registry: Any) -> bool:
         """True when the person asked for something to be done (the planner's ``user_intent``), no tool has already changed something this turn (a refused or blocked write has not),
@@ -637,6 +638,7 @@ class Resolved:
                         + f"\n\nThe milestone text:\n{clip(self.purpose, PURPOSE_CHARS) or '(none)'}\n\n"
                         + (f"What the milestone produces:\n{outputs}\n\n" if outputs else "")
                         + f"Open goals on the same quest:\n{listing}\n\n"
+                        + (f"What the person asked for this turn, in their words (the step and the draft serve this request, within this milestone):\n{clip(self.request, PURPOSE_CHARS)}\n\n" if self.request else "")
                         + (f"What this turn read and was shown (a fact here counts as a fact above):\n{clip(self.grounding, GROUNDING_CHARS)}\n\n" if self.grounding.strip() else "")
                         + "Return JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
         data = parse_json(answer)
@@ -881,19 +883,30 @@ def records_read(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], rid: str
     return "\n".join(parts)
 
 
+GOAL_PAGE = 100      # the tool's own page cap
+GOAL_PAGES = 20      # up to 2,000 open goals
+
+
 def goals_through(registry: Any, quest_id: str) -> List[Mapping[str, Any]]:
-    """The quest's goals, open and finished, from the lane's ``list_quest_goals`` tool. A lane without it, or a read that fails, is a ``LaneGap``: the reply must not claim a
-    step is new when the goals could not be read."""
+    """The quest's open goals (every one this flow reads), all pages of the lane's ``list_quest_goals`` tool. One page used to be read: the tool caps a page at 100, soonest due
+    first, so on a quest with hundreds of goals this week's next step was never seen, the first message said it was being recorded with nothing ready, and the tool then updated
+    it in place. A lane without the tool, or a read that fails, is a ``LaneGap``: the reply must not claim a step is new when the goals could not be read."""
     if registry is None or registry.get("list_quest_goals") is None:
         raise LaneGap("this lane has no list_quest_goals tool, so the goals already on the milestone could not be listed")
     from quest_ai_runner.the_world.tools.tools import ToolContext
-    try:
-        result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "open_only": False, "limit": 200}, ToolContext(quest_id=quest_id))
-    except Exception as error:      # noqa: BLE001
-        raise LaneGap(f"the quest's goals could not be listed ({type(error).__name__}: {error})") from error
-    if not result.ok:
-        raise LaneGap("the quest's goals could not be listed: " + str(result.text).strip()[:300])
-    return [g for g in (result.data or []) if isinstance(g, Mapping)]
+    out: List[Mapping[str, Any]] = []
+    for _ in range(GOAL_PAGES):
+        try:
+            result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "open_only": True, "limit": GOAL_PAGE, "offset": len(out)}, ToolContext(quest_id=quest_id))
+        except Exception as error:      # noqa: BLE001
+            raise LaneGap(f"the quest's goals could not be listed ({type(error).__name__}: {error})") from error
+        if not result.ok:
+            raise LaneGap("the quest's goals could not be listed: " + str(result.text).strip()[:300])
+        page = [g for g in (result.data or []) if isinstance(g, Mapping)]
+        out += page
+        if len(page) < GOAL_PAGE:
+            break
+    return out
 
 
 def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datetime] = None, decide: Optional[Callable[[str], str]] = None) -> Optional[Resolved]:
@@ -925,7 +938,7 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
     metric = linked[0][1] if linked else None
     return Resolved(
         rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week,
-        facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id,
+        facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id, request=str(cue or "").strip(),
         done_when=clip(row.get("milestones"), VALUE_CHARS).rstrip("."),
         value=first_sentence(str(metric.get("record") or "")) if metric else "",
         value_full=" ".join(str(metric.get("record") or "").split()) if metric else "",

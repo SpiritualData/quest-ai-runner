@@ -1343,3 +1343,35 @@ def test_the_turns_reads_reach_the_draft_call_and_the_draft_claim_check():
         return json.dumps({"owner": "Cy", "draft": "Every goal and its owner on one screen."})
     cue.resolve(tools, "q1", CUE, now).carry_out(tools, model, grounding=seen)
     assert seen in asked[0] and all(seen in p for p in asked if "independent checkers" in p)
+
+
+def test_this_weeks_step_is_found_past_the_first_page_of_goals_and_the_flow_says_it_is_already_there():
+    """A quest with hundreds of goals: the tool shows 100 a page, soonest due first, so this week's step sat past the first page and the flow said it was recording a new one."""
+    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
+    week = cue.Week.of(cue.today_in("America/Los_Angeles", now), "America/Los_Angeles")
+    older = [{"id": f"o{i}", "title": f"Older task {i}", "spec_solution_id": None, "completed": False, "abandoned": False, "due": "2026-01-01"} for i in range(230)]
+    mine = {"id": "k1", "title": cue.next_step_title("P3 Mobile app live on the Apple Store", week), "spec_solution_id": "esr_c", "completed": False, "abandoned": False,
+            "due": week.due, "assignee_name": "Cy"}
+    asked = []
+
+    def paged(args, ctx):
+        asked.append(dict(args))
+        rows = [g for g in older + [mine] if not (args.get("open_only", True) and g["completed"])]
+        offset, limit = int(args.get("offset") or 0), min(int(args.get("limit") or 25), 100)
+        return ToolResult(ok=True, data=rows[offset:offset + limit], text="one page")
+    tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=paged), write_goal([])])
+    resolved = cue.resolve(tools, "q1", CUE, now)
+    assert resolved.week_goal() is not None and "which is already on the quest" in resolved.doing() and len(asked) == 3
+
+
+def test_the_step_and_draft_are_written_for_what_the_person_asked():
+    calls, prompts = [], []
+    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
+    request = "what is missing for the automated build and test loop on the store release? make sure it happens"
+
+    def model(prompt):
+        prompts.append(prompt)
+        return json.dumps({"owners": ["Cy"], "draft": "", "human_step": "Cy sets up the automated build and test loop."})
+    resolved = cue.resolve(registry(calls), "q1", request + " apple store", now)
+    resolved.carry_out(registry(calls), model)
+    assert any("What the person asked for this turn" in p and "automated build and test loop" in p for p in prompts)
