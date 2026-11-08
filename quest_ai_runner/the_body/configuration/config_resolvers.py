@@ -49,6 +49,10 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
     chosen = getattr(cfg, "deep_runner", None)
     if chosen is not _AUTO_DEEP_RUNNER:
         return chosen  # an explicit instance, or None to disable
+    if not deep_runner_named(cfg):
+        picked = resolve_hub_pick(cfg, warn=warn)
+        if picked is not None:
+            return picked
     try:
         import shutil
 
@@ -100,6 +104,86 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
         if warn:
             _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
                          "execution work will be unavailable for this process", exc_info=True)
+        return None
+
+
+SELECT_ENV_NAMES = ("ESOI_SELECT_QUEST_AI_RUNNER_DELEGATED_AGENT_SESSIONS", "ESOI_SELECT_DELEGATED_AGENT_SESSIONS")
+DEFAULT_DEEP_PROVIDERS = ("anthropic",)   # a Claude Code login: what every deployment assumed before providers were declared
+
+
+def deep_runner_named(cfg: RunnerConfig) -> bool:
+    """Whether the consumer named the deep runner itself (a ``selections`` entry or esoi's ``ESOI_SELECT_`` variable), which wins
+    over the hub's pick."""
+    return bool((getattr(cfg, "selections", None) or {}).get("delegated-agent-sessions")) or any(os.getenv(n) for n in SELECT_ENV_NAMES)
+
+
+def nearest_hub_class(cls: Any) -> Any:
+    """The first hub (``hubofhubs``) class in ``cls``'s method resolution order: the hub arm a QAR binding is."""
+    return next((c for c in getattr(cls, "__mro__", ()) if c.__module__.startswith("hubofhubs.")), None)
+
+
+def qar_binding_of(hub_cls: Any) -> Any:
+    """QAR's own implementation whose nearest hub class is ``hub_cls`` (it carries QAR's settings), or None when QAR has none."""
+    from quest_ai_runner.the_self.assembler.resolve import names, resolve
+    for name in names("delegated-agent-sessions"):
+        try:
+            cls = resolve("delegated-agent-sessions", name)
+        except Exception:  # noqa: BLE001 -- an arm whose optional dependency is missing is simply not a binding here
+            continue
+        if isinstance(cls, type) and getattr(cls, "config_class", None) is not None and nearest_hub_class(cls) is hub_cls:
+            return cls
+    return None
+
+
+def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
+    """Build the arm the hub picks for the providers this deployment declared (``cfg.deep_providers``), or None.
+
+    The hub chooses among the arms (harness, provider, tier) whose harness can drive a declared provider: the best measured at the
+    latest cascade stage, else the best public prior or idea rating, and says which. A harness QAR binds (the Claude Code runners)
+    is built as QAR's binding, so it keeps QAR's settings; any other harness is the hub's class with QAR's goal settings. None
+    (the caller then builds the default) when no arm is eligible, the harness program is missing, or building fails."""
+    declared = list(getattr(cfg, "deep_providers", None) or DEFAULT_DEEP_PROVIDERS)
+    try:
+        import dataclasses
+        import inspect
+        import shutil
+
+        from hubofhubs.api import choose_agent_arm, harness_class
+        from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import goal_settings
+        from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
+
+        choice = choose_agent_arm(declared)
+        if choice is None:
+            if warn:
+                _log.warning("deep runner: the hub has no arm for the declared providers %s; using the default runner", declared)
+            return None
+        hub_cls = harness_class(choice.harness)
+        cls = qar_binding_of(hub_cls) or hub_cls
+        config_cls = cls.config_class
+        harness_binary = getattr(cls, "binary_name", "")
+        binary = harness_binary or os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
+        found = binary if os.path.sep in binary and os.access(binary, os.X_OK) else shutil.which(binary)
+        if not found:
+            if warn:
+                _log.warning("deep runner: the hub picked %s but its program %r is not on PATH; using the default runner", choice.arm, binary)
+            return None
+        fields = {f.name for f in dataclasses.fields(config_cls)}
+        wanted = dict(working_dir=os.getenv("QAR_DEEP_WORKING_DIR") or cfg.corpus_root or os.getcwd(),
+                      claude_path=binary, context_preamble=cfg.context_preamble or "")
+        config = config_cls(**{k: v for k, v in wanted.items() if k in fields})
+        accepted = inspect.signature(cls.__init__).parameters
+        extra = {k: v for k, v in dict(provider=choice.provider, tier=choice.tier, model_translator=cli_model,
+                                       settings=goal_settings).items() if k in accepted}
+        if cls is not hub_cls:
+            extra.pop("settings", None)   # QAR's binding reads its own settings
+        runner = cls(config, **extra)
+        log_level = _log.info if choice.basis == "measured" else _log.warning
+        log_level("deep runner: the hub's pick for providers %s is %s (%s; %s)%s", declared, choice.arm, choice.basis, choice.reason,
+                  "" if choice.basis == "measured" else ": NOT MEASURED, chosen by the fallback rule")
+        return runner
+    except Exception:  # noqa: BLE001 -- a failed pick must never stop the runner from starting
+        if warn:
+            _log.warning("deep runner: building the hub's pick failed; using the default runner", exc_info=True)
         return None
 
 

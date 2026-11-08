@@ -89,7 +89,7 @@ _FILE_SCALAR_FIELDS = {
     "context_updates_judge_relevance", "context_updates_relevance_tier",
     "context_updates_judge_admission", "context_updates_admission_tier",
     "context_updates_relay_log_path",
-    "rep_context_prefs", "context_preamble_doctrine", "vector_store", "selections", "mcp_drive",
+    "rep_context_prefs", "context_preamble_doctrine", "vector_store", "selections", "deep_providers", "mcp_drive",
     "context_sources_map", "context_sources_file", "drive_comments_auth", "inbound_mail_auth",
     "notion", "google_chat", "metric_sources",
     "feedback_ledger", "feedback_ledger_path",
@@ -279,6 +279,12 @@ class RunnerConfig:
     # default. Read by ``core.resolve.resolve`` at the selection sites; settable from a config file's
     # ``[selections]`` table, so switching an implementation is a config change, not code.
     selections: Dict[str, str] = field(default_factory=dict)
+    # The model providers this deployment holds credentials for (``anthropic``, ``openai``, ``gemini``, ``deepseek``; a Claude Code
+    # login counts as ``anthropic``). The deep runner is the arm the hub measured best among the agent harnesses that can drive one of
+    # them (``hubofhubs.api.choose_agent_arm``), unless ``deep_runner`` or a ``selections["delegated-agent-sessions"]`` entry names
+    # one. Empty means ``["anthropic"]``: the Claude Code login every deployment has assumed. Settable as ``deep_providers = [...]``
+    # in a config file.
+    deep_providers: List[str] = field(default_factory=list)
     # OPTIONAL USE-CASE-SPECIFIC INSTRUCTIONS provider (the GuidanceProvider role). When set, the
     # host app supplies a retrievable corpus of guidance cards (opaque text to the runner). The
     # orchestrator pre-selects the cards most relevant to each message into an "APPLICABLE

@@ -46,8 +46,11 @@ class SubprocessGoalRunner(HubSubprocessGoalRunner):
     config_class = SubprocessConfig   # the dataclass this runner is built from (core.resolve.resolve_config)
 
     def __init__(self, config: SubprocessConfig, *,
-                 model_translator: Optional[Callable[[Optional[str]], Optional[str]]] = None):
-        super().__init__(config, model_translator=model_translator)
+                 model_translator: Optional[Callable[[Optional[str]], Optional[str]]] = None,
+                 provider: str = "anthropic", tier: str = ""):
+        # ``provider`` and ``tier`` name the hub arm this runner is (see ``hubofhubs.api.choose_agent_arm``); the tier's model is
+        # used only when a call names no model, so the deep-model ladder still picks the model of every run it starts.
+        super().__init__(config, model_translator=model_translator, provider=provider, tier=tier)
         self._model_translator = model_translator
 
     def goal_settings(self) -> GoalSettings:
