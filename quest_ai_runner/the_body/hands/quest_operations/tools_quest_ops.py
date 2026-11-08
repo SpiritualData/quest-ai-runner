@@ -900,8 +900,8 @@ def schedule_of(timing: Mapping[str, Any]) -> tuple:
     return (repeat.get("freq"), tuple(days), repeat.get("interval") or 1) if repeat else (None, (), 1)
 
 
-#: Two step titles on the same schedule name the same routine when this share of their words is common to both (Jaccard): "Check how the 1000 subscribers are
-#: doing" and "Check how the 1000 paying subscribers are doing" do; "Monday standup" and "Check the subscribers" do not.
+#: Two step titles on the same schedule name the same routine when this share of their words is common to both (Jaccard): "Check how the 100 members are
+#: doing" and "Check how the 100 paying members are doing" do; "Monday standup" and "Check the members" do not.
 SAME_ROUTINE_WORDS = 0.6
 
 

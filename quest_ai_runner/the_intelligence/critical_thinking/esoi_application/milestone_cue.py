@@ -136,7 +136,7 @@ JUDGE_ASKS = 2      # an answer that names no offered option and is not NONE is 
 
 def judged_option(answer: Any, ids: Sequence[str], names: Optional[Mapping[str, str]] = None) -> Tuple[bool, Optional[str]]:
     """``(is a verdict, the chosen id)`` for one judgment answer: the id offered, the id without its prefix (``esr_``), or, when the whole answer is one offered
-    milestone's name or the label its name starts with ("P5" for "P5 Foundational product videos") and no other option shares it, that milestone. NONE is a verdict
+    milestone's name or the label its name starts with ("M2" for "M2 Launch the beta") and no other option shares it, that milestone. NONE is a verdict
     with no id. Anything else (an empty answer, an id that was not offered) is no verdict."""
     text = str(answer or "").strip()
     for rid in ids:

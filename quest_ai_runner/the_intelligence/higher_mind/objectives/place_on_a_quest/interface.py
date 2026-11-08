@@ -6,7 +6,7 @@ from typing import Any, Mapping, Optional
 from esoi import solution
 
 
-@solution("place-on-a-quest", kind="event", entry="place", example={"message": "lets get the apple store release moving", "previous": ""})
+@solution("place-on-a-quest", kind="event", entry="place", example={"message": "lets get the beta launch moving", "previous": ""})
 @typing.runtime_checkable
 class QuestPlacing(typing.Protocol):
     """Which of the person's quests a message belongs to, or none. The host (the Quest backend) owns the person's quests and supplies the
