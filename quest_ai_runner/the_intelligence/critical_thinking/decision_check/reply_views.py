@@ -35,13 +35,12 @@ PRODUCT_CLAIMS_VIEW = ("A statement in this drafted text about what a product, s
 EVIDENCE_CHARS = 6000
 GROUNDING_CHARS = 16000   # the reads and facts views see what the writer saw: the turn's reads and its context (a status snapshot, the quest's own state), not a cut of it
 NONE_TEXT = "(none)"
-# At most this many check calls in flight. Measured on the production replay (2026-11-08): with 8 at once plus the turn's own calls the provider answered
-# "concurrent connections exceeded" (429) and its retries put 6 to 19 s on single calls; at 4 the retries were short (0.4 to 0.9 s) but confirmations queued
-# behind the views for a whole call. 6 lets a view's confirmations start while the other views run.
-REPLY_CHECK_PARALLEL = 6
-# A check call still unanswered after this many seconds is sent once more and the first answer is taken: most calls answer in 1 to 2.5 s, the slow ones wait on
-# provider retries.
-REPLY_CHECK_HEDGE_SECONDS = 2.5
+# At most this many check calls in flight. Measured on the production replay (2026-11-08): the provider answers "concurrent connections exceeded" (429) for
+# this account as soon as a few calls overlap with live traffic, and each retry adds 0.4 to 1 s (a repeated one, many seconds). 8 at once put 6 to 19 s on single
+# calls; 6 at once with a 2.5 s hedge gave 14 to 29 retries on the slowest checks (p90 14.6 s); 4 with no hedge gave the fewest retries.
+REPLY_CHECK_PARALLEL = 4
+# A hedge (a slow call sent once more) adds load exactly when the provider is refusing load, so it is off; the hub's CallPool keeps it for a provider with headroom.
+REPLY_CHECK_HEDGE_SECONDS = 0.0
 
 
 def clip(text: Any, limit: int = EVIDENCE_CHARS) -> str:
