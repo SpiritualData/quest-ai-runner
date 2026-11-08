@@ -532,6 +532,12 @@ class RunBeginMixin:
                 return self._finish_understanding_clarify(
                     rs.res, emit=emit, exec_record=exec_record, user_message=rs.user_message,
                     ctx_meta=_ctx_meta)
+            # The resolved request goes to the same analyser a self-contained message gets, for its writes_text report only: a request for a piece of text that
+            # took this branch (a short message) was otherwise answered with questions instead of the piece.
+            analysed = take_status_flags(self._derive_goal_condition(rs.goal_condition or rs.user_message, now=now)[1])[0]
+            if analysed.get("writes_text") and rs.message_is_user_turn and not attachments:
+                rs.draft_in_chat = True
+                rs.writes_text = True
             # STAGE 1 produced a goal condition. Context ACCUMULATES across the stages: the
             # conversation context selected here flows FORWARD, so stage 2 (achievement-context
             # selection, below) and stage 3 (the planner) each START from what was already gathered

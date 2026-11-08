@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format is based on
 - chat_quality judge: the ground truth view is 80,000 characters, and when the reads run longer each long read is cut to a fair share (head and tail kept), so one large record dump no longer pushes the read a reply's figure came from out of the judge's view.
 
 ### Fixed
+- A request for a piece of text that takes the context-fetch understanding branch (a short message) is now analysed for `writes_text` too, so the reply is the draft rather than questions about it (one more fast-tier call on that branch).
 - Milestone step: the code-written lead states the step's own due date (the reply had given the milestone's target date as the due date); a new-source draft names exactly one source; questions for people are the questions alone, with no message or first-person wrapper around them.
 - A tool the planner names that is not a tool is told to the planner only (`planner_only`): the reply no longer opens with "I couldn't create it, the tool isn't available" for work it then does in the reply.
 - Milestone flow reading: a value stored in the host older than the day the metric record was last measured is no longer given as the current value (the record has moved on since).
