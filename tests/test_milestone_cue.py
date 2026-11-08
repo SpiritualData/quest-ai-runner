@@ -853,7 +853,7 @@ def test_one_cheap_call_chooses_the_owner_the_existing_goal_and_the_draft_and_a_
     resolved = cue.resolve(tools, "q1", CUE, now)
     receipt, _ = resolved.carry_out(tools, lambda prompt: asked.append(prompt) or json.dumps({"owner": "Cy", "draft": "Opening, three product points, call to action on the signup page"}))
     checks = [p for p in asked if "independent checkers" in p]
-    assert len(checks) == 1 and "Facts the draft was written from" in checks[0], "the new draft's claims are checked once, against the facts it was written from"
+    assert len(checks) == 2 and all("Facts the draft was written from" in c for c in checks), "the new draft's claims are checked by its two claims views, against the facts it was written from"
     asked[:] = [p for p in asked if p not in checks]
     assert len(asked) == 1 and "human_step" in asked[0] and "never a plan to write it" in asked[0] and "distinct alternatives" in asked[0] and "few neutral questions, each a full sentence ready to send" in asked[0] and "no em dashes" in asked[0]
     assert calls[0]["assignee"] == "Cy" and calls[0]["description"].endswith("\nDraft: Opening, three product points, call to action on the signup page")
@@ -1326,3 +1326,20 @@ def test_a_draft_claim_no_fact_supports_is_rewritten_or_removed_before_the_draft
         return json.dumps({"owner": "Cy", "draft": f"Watch the app go live. {invented} Sign up on the store page."})
     cue.resolve(tools, "q1", CUE, now).carry_out(tools, model)
     assert invented not in calls[0]["description"] and "Draft: Watch the app go live. Sign up on the store page." in calls[0]["description"]
+
+
+def test_the_turns_reads_reach_the_draft_call_and_the_draft_claim_check():
+    """A draft may state what a product does only from what the turn read or was shown: that text is in the draft call and in the claims check's evidence."""
+    calls, asked = [], []
+    read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda args, ctx: ToolResult(ok=True, data={"records": TABLES, "time_zone": "UTC"}, text="read"))
+    tools = ToolRegistry([read, list_goals([]), write_goal(calls)])
+    now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
+    seen = "The app keeps every goal and its owner on one screen."
+
+    def model(prompt):
+        asked.append(prompt)
+        if "independent checkers" in prompt:
+            return json.dumps({"findings": []})
+        return json.dumps({"owner": "Cy", "draft": "Every goal and its owner on one screen."})
+    cue.resolve(tools, "q1", CUE, now).carry_out(tools, model, grounding=seen)
+    assert seen in asked[0] and all(seen in p for p in asked if "independent checkers" in p)

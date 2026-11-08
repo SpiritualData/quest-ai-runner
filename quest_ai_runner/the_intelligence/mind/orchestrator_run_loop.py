@@ -17,6 +17,7 @@ from hubofhubs.api import (
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
+from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import turn_grounding
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, mutating_call_count, send_status_first, settle_already_set, track_alternatives, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
@@ -589,7 +590,7 @@ class RunLoopMixin:
                 send_status_first(self, emit, rs, gathered, user_turn=message_is_user_turn, doing=rs.cue_resolved.doing(), forced=True)
                 receipt = ""
                 try:
-                    receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision)
+                    receipt, tool_status = rs.cue_resolved.carry_out(self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered))
                     if isinstance(rs._ctx_meta, dict):
                         rs._ctx_meta["milestone_step_recorded"] = True       # the person-only steps are in the goal: no later ask turns the reply into a question to the chat user
                     receipt_entry = receipt_observation("create_or_update_quest_goal", receipt, tool_status)

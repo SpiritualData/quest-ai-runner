@@ -226,6 +226,9 @@ def truncated_tokens(text: str, allowed: str) -> List[str]:
             if re.search(r"[A-Za-z0-9][_.-][A-Za-z0-9]", t) and t.lower() not in known and any(k.startswith(t.lower()) for k in known)]
 
 
+GROUNDING_CHARS = 6000      # how much of the turn's reads and context the draft call is shown
+
+
 def supported_draft(draft: str, allowed: str) -> str:
     """The draft without any line that states a figure the records do not hold (a count of its own characters, an invented rate): a figure outside the milestone's record text is
     unsupported and its line is dropped, so a draft never carries a number that came from nowhere. List numbering and a [bracket] are not figures."""
@@ -463,6 +466,7 @@ class Resolved:
     stage_after: Optional[readiness.Stage] = None        # the same, from the goal as the write read it back
     owner_label: str = ""                                # who owns the step, as the milestone's record names them (with the account name when it differs)
     people: Tuple[str, ...] = ()                         # the people the milestone text names, as it writes them
+    grounding: str = ""                                  # what the turn read and was shown: the only source for a draft's claim about a product or past work
     human_step: str = ""                                 # the step only a person can do, as kept in the goal
     value_full: str = ""                                 # the metric record's whole text (whitespace collapsed): what a draft is written from, never a cut of it
     records_text: str = ""                               # the milestone's record and its metric records as the code read them
@@ -632,7 +636,9 @@ class Resolved:
                         + (f" The metric record's older text, history only and not the current value: {self.value}." if self.reading and self.value else "")
                         + f"\n\nThe milestone text:\n{clip(self.purpose, PURPOSE_CHARS) or '(none)'}\n\n"
                         + (f"What the milestone produces:\n{outputs}\n\n" if outputs else "")
-                        + f"Open goals on the same quest:\n{listing}\n\nReturn JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
+                        + f"Open goals on the same quest:\n{listing}\n\n"
+                        + (f"What this turn read and was shown (a fact here counts as a fact above):\n{clip(self.grounding, GROUNDING_CHARS)}\n\n" if self.grounding.strip() else "")
+                        + "Return JSON with these keys only: " + "; ".join(asks) + ". Reply with the JSON only.")
         data = parse_json(answer)
         goal = str(data.get("goal_id") or "")
         named = data.get("owners") if isinstance(data.get("owners"), list) else [data.get("owner")]
@@ -643,7 +649,7 @@ class Resolved:
             # Before the draft is kept in the goal, independent checks hold each claim in it to the facts it was written from: a claim nothing supports is rewritten from
             # them or removed (the reply check sees the reply only after the goal is written).
             from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import grounded_text
-            draft = grounded_text(draft, self.allowed_text(), decide)
+            draft = grounded_text(draft, self.allowed_text() + "\n" + self.grounding, decide)
         step = kept_step or " ".join(str(data.get("human_step") or "").split())
         people = data.get("people") if isinstance(data.get("people"), list) else []
         self.people = tuple(dict.fromkeys(str(n).strip(" .'\"") for n in people if str(n).strip(" .'\"")))
@@ -787,7 +793,7 @@ class Resolved:
         out = "\n\n".join(kept).strip()
         return out or str(text or "")
 
-    def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None) -> Tuple[str, str]:
+    def carry_out(self, registry: Any, decide: Optional[Callable[[str], str]] = None, grounding: str = "") -> Tuple[str, str]:
         """The keyed idempotent write, then its receipt: ``(receipt text, the tool's typed status)``. A goal already doing this milestone's next step under an older title is
         updated in place (renamed to the key, linked, moved to the week), never duplicated; a repeat finds the keyed goal and says it is already there. Each owner is tried as
         assignee in turn; with none that Quest accepts the step is written unassigned and the receipt says so. A tool the lane lacks, or a write that failed or is held, is a
@@ -796,6 +802,7 @@ class Resolved:
         if registry is None or registry.get("create_or_update_quest_goal") is None:
             raise LaneGap("this lane has no create_or_update_quest_goal tool, so the next step could not be recorded")
         ctx = ToolContext(quest_id=self.quest_id)
+        self.grounding = str(grounding or "")       # what the turn read and was shown: the only source a draft may take a claim about a product or past work from
         self.read_source(registry)
         base = self.goal_arguments()
         try:
