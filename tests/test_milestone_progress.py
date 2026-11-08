@@ -203,3 +203,16 @@ def test_a_metric_behind_its_source_is_read_as_the_increment_before_any_delivera
     assert made.status == "measured" and (made.before, made.after) == (2, 5) and made.parts == ["Current value: 5 (as of 2030-03-09, from the sheet)"]
     kept = next(args for name, args in registry.calls if name == "keep_milestone_deliverable")
     assert kept["increment"]["kind"] == "metric_read" and kept["increment"]["method"] == "read"
+
+
+def test_the_item_the_done_test_is_made_from_comes_first():
+    def answer(prompt):
+        if "Break the work this milestone needs" in prompt:
+            return json.dumps({"items": [
+                {"name": "a side note", "kind": "deliverable", "actor": "ai", "requirements": ["Is short"]},
+                {"name": "the scripts", "kind": "deliverable", "actor": "ai", "done_material": True, "requirements": ["Has an opening"]}]})
+        if "can an AI do it right now" in prompt:
+            return json.dumps({"verdicts": [{"n": 1, "ai_can": True}, {"n": 2, "ai_can": True}]})
+        return "{}"
+    items = milestone_progress.work_items("records", ["sol-1"], answer)
+    assert [i["name"] for i in items] == ["the scripts", "a side note"] and items[0]["checks"] == [True, True]

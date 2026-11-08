@@ -144,7 +144,8 @@ DECOMPOSE_PROMPT = """A team's milestone, from its own records:
 Break the work this milestone needs into at most 6 work items, in the order they would be done. Reply with JSON only:
 {{"items": [{{"name": "<what is made or done, short>", "kind": "deliverable" | "evidence" | "recommendation" | "outward",
 "actor": "ai" | "person", "outward": <true when the item publishes, sends, pays, records on camera, submits to a store or contacts someone>,
-"moves_parent": <true when doing it directly moves the milestone's own metric>, "inputs": [<record ids from above it needs>],
+"moves_parent": <true when doing it directly moves the milestone's own metric>, "done_material": <true for the one item whose output the done
+test itself is made of or published from (for published videos, their scripts; for a decision, the analysis that makes it)>, "inputs": [<record ids from above it needs>],
 "total": <how many units the milestone needs of this item, a whole number, or 1>, "requirements": ["<what one unit must meet to count>", ...],
 "step": "<for an item only a person can do: one full sentence saying what is done and, when the records say, by whom>"}}]}}
 A deliverable is a piece of the very thing the done test needs made, written now from the records: the content that will be published, sent, submitted or
@@ -378,7 +379,8 @@ def work_items(records: str, rids: Sequence[str], decide: Callable[[str], str]) 
         item["tools"] = [OUTWARD] if item.get("outward") is True or item["kind"] == "outward" else []
         item["checks"] = [str(item.get("actor") or "") == "ai", verdicts.get(n, False)]
         item["requirements"] = [str(r) for r in item.get("requirements") or [] if str(r).strip()][:5]
-    return items
+    # The item the done test is made from goes first, so the increment rule (which takes the first AI-doable deliverable) makes that, not a side piece.
+    return sorted(items, key=lambda i: i.get("done_material") is not True)
 
 
 def first_person_step(items: Sequence[Mapping[str, Any]], doable: Callable[[Mapping[str, Any]], bool]) -> str:
