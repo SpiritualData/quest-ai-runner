@@ -892,14 +892,30 @@ def schedule_of(timing: Mapping[str, Any]) -> tuple:
     return (repeat.get("freq"), tuple(days), repeat.get("interval") or 1) if repeat else (None, (), 1)
 
 
+#: Two step titles on the same schedule name the same routine when this share of their words is common to both (Jaccard): "Check how the 1000 subscribers are
+#: doing" and "Check how the 1000 paying subscribers are doing" do; "Monday standup" and "Check the subscribers" do not.
+SAME_ROUTINE_WORDS = 0.6
+
+
+def title_words(text: Any) -> frozenset:
+    return frozenset(re.findall(r"[a-z0-9]+", str(text or "").lower()))
+
+
+def same_routine(first: Any, second: Any) -> bool:
+    a, b = title_words(first), title_words(second)
+    return bool(a and b) and len(a & b) / len(a | b) >= SAME_ROUTINE_WORDS
+
+
 def workflow_already_there(workflows: List[Mapping[str, Any]], title: str, steps: List[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
-    """The workflow on the quest that already does what a new one would: it has the same title, or every new step is in it under the same
-    step title and the same schedule (the weekday and frequency of its repeat). Whose step it is does not matter; the same routine twice is a duplicate."""
+    """The workflow on the quest that already does what a new one would: it has the same title, or every new step is in it on the same schedule (the
+    weekday and frequency of its repeat) under the same step title or one worded nearly the same (``same_routine``). Whose step it is does not matter;
+    the same routine twice is a duplicate."""
     for workflow in workflows:
         if squash(workflow.get("title")) == squash(title):
             return workflow
-        have = {(squash(s.get("title")), schedule_of(s.get("timing") or {})) for s in workflow.get("steps") or []}
-        if steps and all((squash(s.get("title")), schedule_of(s.get("timing") or {})) in have for s in steps):
+        have = [(s.get("title"), schedule_of(s.get("timing") or {})) for s in workflow.get("steps") or []]
+        if steps and all(any(when == schedule_of(s.get("timing") or {}) and (squash(name) == squash(s.get("title")) or same_routine(name, s.get("title")))
+                             for name, when in have) for s in steps):
             return workflow
     return None
 
@@ -1048,7 +1064,7 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
         keywords=("workflow", "workflows", "create", "routine", "process", "steps", "repeat", "daily",
                   "weekly", "assistant", "schedule", "cadence", "remind", "reminder", "reminders", "recurring",
                   "every", "monday", "morning", "check", "recur"),
-        context_args={"quest_id": "quest_id"}, timeout_seconds=60.0)
+        context_args={"quest_id": "quest_id"}, timeout_seconds=60.0, reads_first=("list_quest_workflows",))
 
 
 def find_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:

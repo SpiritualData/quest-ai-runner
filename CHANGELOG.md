@@ -6,7 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `ToolSpec.reads_first`: a write that must see what exists first names its read (`create_quest_workflow` -> `list_quest_workflows`). Called before that read has run in the turn, the write is not run; the read runs in its place and the planner decides again from it, so an ensure-style order never makes a second copy of what is already there.
+- `ToolSpec.flow_owned`: an operation a flow runs in code (the milestone cue's goal write and metric reads) is never offered to the planner and a call to it by name is refused.
+- The request analyser reports `writes_text` (the person asked for a piece of text to use and nothing else). The turn is then a deliverable written in the reply: a planned write, task or deep run is turned into the answer, and the writer gets the draft directive (the whole piece, every part it normally has, no question about an optional choice, no "cannot publish").
+- `create_quest_workflow_spec` and `list_quest_workflows_spec` are in `quest_ai_runner.api`, so a host can offer the workflow tools over its own Quest client.
+
+### Changed
+- The milestone cue's judgment runs as two parallel views with the candidates in opposite orders; agreement is the verdict, a disagreement is settled by a third view. An answer naming no offered milestone (or naming its id without the `esr_` prefix, which now counts) is asked once more instead of read as NONE.
+- The verifier counts "already there as asked" as meeting a request to put something in place; the reply voice names what a stuck item waits on, who clears it and by when; the status snapshot names each priority's owner.
+- The tool-sized work notes no longer tell the planner to record a written deliverable as a goal: text the person asked for is the answer.
+- chat_quality judge: the ground truth view is 80,000 characters, and when the reads run longer each long read is cut to a fair share (head and tail kept), so one large record dump no longer pushes the read a reply's figure came from out of the judge's view.
+
 ### Fixed
+- An ensure-style reply whose repeated write had no data of its own no longer ends with a second "It's already set."
 - A status question reaches the status snapshot (and so the information budget of three sentences) whenever the reach judge's structured `asks_status` report or the request analyser's says so. Before, only the analyser's report counted, and a turn it did not flag ran the planner loop and could name the wrong priority or run past the budget. The judge's report is false for an order and for a count.
 - The snapshot's goal reads page through all goals of a quest (up to 1000), so a quest with hundreds of goals keeps its priority steps past the first page.
 

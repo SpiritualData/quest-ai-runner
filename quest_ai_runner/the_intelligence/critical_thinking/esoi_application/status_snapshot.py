@@ -80,7 +80,8 @@ def priorities(registry: Any, quest_id: str, tables: Mapping[str, Any]) -> List[
 
 def goal_line(g: Mapping[str, Any]) -> str:
     value = milestone_cue.value_line_of(str(g.get("text") or ""))
-    return f"- {g.get('title')} (due {g.get('due') or 'no date'}" + (f"; {value}" if value else "") + ")"
+    owner = g.get("assignee_name") or ""
+    return f"- {g.get('title')} (due {g.get('due') or 'no date'}" + (f"; owner {owner}" if owner else "") + (f"; {value}" if value else "") + ")"
 
 
 def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False) -> Optional[Dict[str, Any]]:

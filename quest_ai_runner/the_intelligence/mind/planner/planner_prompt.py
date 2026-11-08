@@ -791,15 +791,18 @@ DEEP_FOR_TOOL_WORK_NOTE = (
     "TOOL-SIZED WORK: you chose a deep run for a change to the person's own Quest records, and a tool in the TOOLS block performs it. A deep run is for "
     "files, code, long research or many steps. Plan it as a tool step now: if you have not yet read what exists, call the read-only tool first "
     "(for example list the workflows, read the spec records, list the goals); then make the write keyed by exact title or record id, "
-    "and report whether it was created, updated or already there.")
+    "and report whether it was created, updated or already there. "
+    "An order to WRITE something (a post, a caption, an email, an outline) is not a change to the records: the text itself is the work, so answer with it "
+    "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it.")
 
 ACT_WITHOUT_TOOL_NOTE = (
     "ORDER NOT CARRIED OUT: your user_intent is act, you chose to answer, and nothing has been changed this turn, while a tool in the TOOLS block can "
     "make a change in the person's Quest records. An answer that only restates a plan or asks which step to take is not the work. Plan a tool step now: "
     "if you have not yet read what exists, call the read-only tool first (the spec records, the goals, the workflows); then make the write keyed by exact "
-    "title or record id, and report whether it was created, updated or already there. Alternatives you wrote (posts, headlines) are recorded the same way, "
-    "one keyed goal each with its hypothesis and comparison metric. If no tool can do it, or the order is not the person's to give "
-    "here, answer and say why.")
+    "title or record id, and report whether it was created, updated or already there. If no tool can do it, or the order is not the person's to give "
+    "here, answer and say why. "
+    "An order to WRITE something (a post, a caption, an email, an outline) is not a change to the records: the text itself is the work, so answer with it "
+    "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it.")
 
 DEEP_FOR_CODE_CHECK_NOTE = (
     "CHECK THE DEEP TARGET: you chose a deep run on code or files. Before it starts, check whether the request is really a cue about a quest's "
@@ -844,6 +847,15 @@ A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only
 priorities that matter most (or the asker's own, when the question is about their own work) with their due days. Name the date of every figure. Leave out anything
 older than the snapshot (earlier campaigns, old notes, earlier replies) unless the question asked for it, add nothing the snapshot does not hold, and keep to the
 length for this kind of reply. Never use an em dash.
+"""
+
+DRAFT_ANSWER_DIRECTIVE = """\
+--- THIS REPLY IS THE DRAFT (set by the planner) ---
+The person asked you to write something (a post, a caption, an email, an outline). The reply IS that piece, written in full now and ready to use,
+with every part such a piece normally has (a social post: the caption and its hashtags; an email: the subject and the body). Choose any open option
+yourself (the angle, the account, the call to action); never ask about it, and never say you cannot create, save, post or publish it: nobody asked
+for that. Put in the copy no price, plan, offer, date or count the context does not hold as a fact for this purpose. Nothing before or after the
+piece except, at most, one short line. Never use an em dash.
 """
 
 SETTLED_ANSWER_DIRECTIVE = """\

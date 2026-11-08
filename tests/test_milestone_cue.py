@@ -585,6 +585,18 @@ def test_the_judgment_names_the_milestone_only_from_the_candidates_offered():
     assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: "") is None
 
 
+def test_an_answer_naming_no_option_is_asked_once_more_and_an_id_without_its_prefix_or_the_name_label_counts():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import JUDGE_ASKS, judged_option
+    ids = ["esr_aaaa1111bbbb", "esr_cccc2222dddd"]
+    names = {"esr_aaaa1111bbbb": "P4 Onboarding test", "esr_cccc2222dddd": "P5 Foundational product videos"}
+    assert judged_option("cccc2222dddd", ids) == (True, "esr_cccc2222dddd")
+    assert judged_option("P5", ids, names) == (True, "esr_cccc2222dddd") and judged_option("p5.", ids, names) == (True, "esr_cccc2222dddd")
+    assert judged_option("NONE", ids, names) == (True, None)
+    assert judged_option("fenix", ids, names) == (False, None) and judged_option("P6", ids, names) == (False, None)
+    asked = []
+    assert cue.resolve(registry(), "q1", CUE, decide=lambda prompt: asked.append(prompt) or "fenix") is None and len(asked) == JUDGE_ASKS
+
+
 def test_the_judgment_sees_only_a_few_model_free_candidates_and_no_call_is_made_when_none_clears_the_gate():
     asked = []
     assert cue.resolve(registry(), "q1", "write me a poem about tea", decide=lambda prompt: asked.append(prompt) or "esr_c") is None and asked == []
@@ -1275,3 +1287,5 @@ def test_a_draft_turn_on_a_quest_with_many_goals_finds_the_look_alikes_past_the_
     assert calls == []
     assert tail.count("Already on the quest:") == 1 and "FB push post A, FB push post B (left as they are)." in tail and "Grow subscribers task" not in tail
     assert "Post A: A story hook gets more clicks" in tail and "Post B: A question hook gets more signups" in tail and "Compared by:" in tail
+
+

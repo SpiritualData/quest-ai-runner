@@ -11,6 +11,7 @@ The client the factory returns needs: ``get_spec``, ``get_quest_autopilot`` (opt
 """
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, Callable, List, Mapping, Optional, Sequence
 
 from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
@@ -26,9 +27,12 @@ def milestone_flow_tools(client_factory: Callable[[], Any], metric_reader: Optio
     """The milestone flow's tools over ``client_factory() -> client``. ``metric_reader(name) -> {"value", "as_of", "source", "detail"}`` (raising ``MetricSourceError`` in plain words
     for a source it cannot read) adds ``read_metric_source``; leave it out when the host reads no source. ``recorded_reader(quest_id, metric_id) -> reading`` adds
     ``read_recorded_metric_value``, the latest value recorded for the metric record in the host's own store, which the flow asks before it runs the record's named source."""
-    specs = [read_spec_records_spec({}, client_factory), list_quest_goals_spec({}, client_factory), create_or_update_quest_goal_spec({}, client_factory)]
+    # The goal write and the metric reads belong to the flow's code step, which the milestone cue starts: the planner of a turn the cue did not claim is never shown them
+    # (``flow_owned``), so an ordinary request ("write an Instagram post", "remind me every Monday") is not turned into a goal. The two reads below stay offered.
+    specs = [read_spec_records_spec({}, client_factory), list_quest_goals_spec({}, client_factory),
+             dataclasses.replace(create_or_update_quest_goal_spec({}, client_factory), on_request_only=True, flow_owned=True)]
     if metric_reader is not None:
-        specs.append(metric_reader_spec(metric_reader, metric_source_names))
+        specs.append(dataclasses.replace(metric_reader_spec(metric_reader, metric_source_names), on_request_only=True, flow_owned=True))
     if recorded_reader is not None:
-        specs.append(recorded_reader_spec(recorded_reader))
+        specs.append(dataclasses.replace(recorded_reader_spec(recorded_reader), on_request_only=True, flow_owned=True))
     return specs

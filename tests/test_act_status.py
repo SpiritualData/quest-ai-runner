@@ -269,3 +269,11 @@ def test_the_workflow_listing_rows_carry_the_quests_plain_name():
     spec = ops.list_quest_workflows_spec({"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "k"}, client_factory=lambda: Named(PRODUCTION_SHAPED))
     rows = spec.handler({}, ToolContext(quest_id="q1")).data
     assert rows[0]["quest_name"] == "Launch Signups"
+
+
+def test_a_repeated_call_with_no_data_of_its_own_does_not_add_a_second_already_set_sentence():
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
+    full = {"locator": "tool:create_quest_workflow", "tool_status": "noop", "tool_data": {"title": "Weekly check-in"}}
+    repeat = {"locator": "tool:create_quest_workflow", "tool_status": "noop", "text": "ALREADY SUCCEEDED earlier this turn"}
+    phrases = already_in_place([full, repeat])
+    assert len(phrases) == 1 and "Weekly check-in" in phrases[0]

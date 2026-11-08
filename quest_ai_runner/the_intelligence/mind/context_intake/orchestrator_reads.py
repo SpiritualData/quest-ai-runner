@@ -465,6 +465,14 @@ class ReadsMixin:
                 emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not a tool",
                                         data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
                 continue
+            if spec is not None and spec.flow_owned:
+                # An operation a flow runs in code (the milestone cue's goal write and metric reads) is never shown to the planner (``ToolRegistry.select``); a call to it by name, from the
+                # prompt's own wording or the model's memory, is refused, so the flow's write is not reachable as a free planner tool. The flow's step invokes it through the registry.
+                gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value,
+                                 "text": f"TOOL {name} NOT RUN: it is not offered on this turn. Do not retry it; answer from what you read, or use a tool that is listed."})
+                emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not offered",
+                                        data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
+                continue
             if spec is not None and not call.get("companion"):
                 checked = tool_guards.check_quest_ids(spec, args, evidence() if evidence is not None else "", ctx.quest_id,
                                                       not_quest_ids=self.tools.names())
@@ -496,6 +504,15 @@ class ReadsMixin:
                                  "text": tool_guards.ORDER_REFUSAL.format(name=name)})
                 emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not ordered",
                                         data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
+                continue
+            owed = tool_guards.reads_owed(spec, gathered, self.tools) if not call.get("read_first_for") else []
+            if owed:
+                # A write that must see what exists first (``reads_first``): the read runs now in its place, and the planner decides again from it.
+                quest_arg = {"quest_id": args["quest_id"]} if args.get("quest_id") else {}
+                work[index:index] = [{"name": n, "args": dict(quest_arg), "companion": True, "read_first_for": name} for n in owed]
+                gathered.append({"kind": "query", "locator": f"read_first:{name}",
+                                 "text": tool_guards.READ_FIRST_NOTE.format(name=name, reads=", ".join(owed))})
+                log.info("tool %s: deferred until %s has run this turn", name, ", ".join(owed))
                 continue
             emit.status(f"Calling {name}…")
             emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}",

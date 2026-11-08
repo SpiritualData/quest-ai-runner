@@ -140,6 +140,21 @@ def companion_calls(spec: Any, args: Mapping[str, Any], pinned: Optional[str], s
     return [{"name": n, "args": {"quest_id": quest}} for n in names if (n, quest) not in done]
 
 
+def reads_owed(spec: Any, gathered: Iterable[Mapping[str, Any]], registry: Any) -> List[str]:
+    """The reads ``spec`` (a write) declares it needs first (``reads_first``) that have not run successfully this turn and that the registry offers."""
+    names: Sequence[str] = getattr(spec, "reads_first", ()) or ()
+    if not names or not getattr(spec, "mutates", False):
+        return []
+    done = {str(e.get("locator") or "")[5:] for e in gathered
+            if str(e.get("locator") or "").startswith("tool:") and e.get("tool_status") in ("applied", "noop")}
+    return [n for n in names if n not in done and registry is not None and registry.get(n) is not None]
+
+
+#: The receipt for a write whose required read had not run yet this turn.
+READ_FIRST_NOTE = ("TOOL {name} NOT RUN YET: it needs {reads} read first this turn, and that read has now run (its result is above). Decide again from "
+                   "what it shows: when what the person asked for is already there, make nothing and say it is already there; otherwise call {name} again.")
+
+
 #: The receipt for a change the person did not order (they asked how to do it, or whether, and that is all).
 ORDER_REFUSAL = ("TOOL {name} NOT RUN: the person asked a question and did not order this change. Answer it in words, with "
                  "the steps if they asked how, and change nothing.")

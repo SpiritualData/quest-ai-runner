@@ -13,6 +13,7 @@ solutions are close the one the quest lists first wins: a quest lists its soluti
 from __future__ import annotations
 
 import datetime
+import logging
 import math
 import re
 from dataclasses import dataclass, field
@@ -36,6 +37,9 @@ OWNED_WRITES = ("create_or_update_quest_goal", "create_quest_goal")       # goal
 CODE_ROUTED_ACTIONS = ("answer", "deep", "confirm", "clarify", "read")    # a plan that, for an act cue, the flow step runs before
 BEYOND_THE_WRITE_TARGET = "code_or_files"                                 # work a tool write cannot do: the one case a deep run may follow the receipt
 DELIVERABLE_TARGET = "draft_in_chat"                              # the planner reports a deliverable written in the reply: the first rung of the increment order
+
+
+log = logging.getLogger("quest-ai-runner.milestone-cue")
 
 
 class LaneGap(RuntimeError):
@@ -127,17 +131,50 @@ def candidates(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, 
     return [rid for score, rid in scored if score >= MIN_SCORE][:limit]
 
 
+JUDGE_ASKS = 2      # an answer that names no offered option and is not NONE is no verdict: the question is asked once more
+
+
+def judged_option(answer: Any, ids: Sequence[str], names: Optional[Mapping[str, str]] = None) -> Tuple[bool, Optional[str]]:
+    """``(is a verdict, the chosen id)`` for one judgment answer: the id offered, the id without its prefix (``esr_``), or, when the whole answer is one offered
+    milestone's name or the label its name starts with ("P5" for "P5 Foundational product videos") and no other option shares it, that milestone. NONE is a verdict
+    with no id. Anything else (an empty answer, an id that was not offered) is no verdict."""
+    text = str(answer or "").strip()
+    for rid in ids:
+        bare = rid.split("_", 1)[-1]
+        if rid in text or (len(bare) >= 6 and bare in text):
+            return True, rid
+    said = re.sub(r"[^\w ]+", "", text).strip().lower()
+    if said and names:
+        labels = {rid: {str(names.get(rid) or "").strip().lower(), (str(names.get(rid) or "").split() or [""])[0].lower()} - {""} for rid in ids}
+        matched = [rid for rid in ids if said in labels[rid]]
+        if len(matched) == 1:
+            return True, matched[0]
+    if re.search(rf"\b{NONE}\b", text, re.IGNORECASE):
+        return True, None
+    return False, None
+
+
 def judge(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], cue: str, ids: Sequence[str], decide: Callable[[str], str]) -> Optional[str]:
     """The one cheap model judgment: which of the candidate milestones, if any, is the message asking to move forward. NONE is a first-class answer (the message is about
-    something else: a reminder, a workflow, a recurring meeting, writing, a question). The reply is matched to the ids offered; anything that names none of them is NONE."""
+    something else: a reminder, a workflow, a recurring meeting, writing, a question). The reply is matched to the options offered (``judged_option``); an answer that names
+    no option and is not NONE is no verdict and is asked once more (``JUDGE_ASKS``), then read as NONE. (Measured offline on the chat cases, 2026-11-08: this one listing
+    question chose right on 22 of 23 milestone and non-milestone cues; one YES/NO question per candidate chose right on 20, saying YES to a wrong milestone.)"""
     solutions = dict(solutions_of(tables))
-    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {clip(solutions[rid].get('milestones'), VALUE_CHARS)}" for rid in ids if rid in solutions)
-    answer = decide("A person wrote this message in their quest's chat:\n\n" + str(cue).strip()[:1500]
-                    + "\n\nThese are milestones of the quest:\n" + listing
-                    + "\n\nIs the message asking to move one of these milestones forward (make progress on it, get it going)? Reply with that milestone's id exactly as listed. "
-                    f"Reply {NONE} if the message is about something else (a reminder, a workflow, a recurring meeting, writing content, preparing for a call, a question, "
-                    "a status check). Reply with nothing else.")
-    return next((rid for rid in ids if rid in str(answer)), None)
+    offered = [rid for rid in ids if rid in solutions]
+    listing = "\n".join(f"{rid}: {solutions[rid].get('name')} | done when: {clip(solutions[rid].get('milestones'), VALUE_CHARS)}" for rid in offered)
+    prompt = ("A person wrote this message in their quest's chat:\n\n" + str(cue).strip()[:1500]
+              + "\n\nThese are milestones of the quest:\n" + listing
+              + "\n\nIs the message asking to move one of these milestones forward (make progress on it, get it going)? Reply with that milestone's id exactly as listed. "
+              f"Reply {NONE} if the message is about something else (a reminder, a workflow, a recurring meeting, writing content, preparing for a call, a question, "
+              "a status check). Reply with nothing else.")
+    names = {rid: str(solutions[rid].get("name") or "") for rid in offered}
+    for attempt in range(JUDGE_ASKS):
+        answer = decide(prompt)
+        settled, chosen = judged_option(answer, offered, names)
+        if settled:
+            return chosen
+        log.info("milestone cue: the judgment answered %r, which names no option (ask %d of %d)", str(answer)[:300], attempt + 1, JUDGE_ASKS)
+    return None
 
 
 def applied_write_ran(gathered: Iterable[Mapping[str, Any]], registry: Any) -> bool:
@@ -824,6 +861,7 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         return None
     ids = candidates(tables, cue)
     if not ids:
+        log.info("milestone cue: no milestone clears the overlap gate")
         return None
     rid = ids[0]
     if decide is not None:
@@ -833,6 +871,7 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         except Exception as error:      # noqa: BLE001  a judgment that failed is a gap, not a guess either way
             raise LaneGap(f"deciding which milestone the message concerns failed ({type(error).__name__}: {error})") from error
         if rid is None:
+            log.info("milestone cue: the judgment matched none of %s", ids)
             return None
     row = dict(solutions_of(tables))[rid]
     week = Week.of(today_in(zone, now), zone)

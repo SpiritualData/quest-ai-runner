@@ -146,6 +146,10 @@ answer itself. A summary is not a lack of proof just because it is not a pasted 
 transcript. Ask for specific extra proof only when the goal, the request, or the QUALITY STANDARDS
 below explicitly require it, and then say exactly which proof is missing in next_action.
 
+ALREADY THERE: when the request asks for something to be in place (put, add or set up an item) and the
+output reports, from what was read, that the item is already there as asked, the goal is MET: making it
+again would be a duplicate. Never set met=false only because nothing new was created.
+
 CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
 history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms
 there is no prior history (it is empty or shows only the current message), then an answer of
@@ -902,6 +906,10 @@ Reply with ONE OR TWO LINES, nothing else:
         anything else, and whenever unsure.
       "read_aloud": true -- ONLY when the message says the reply will be read out, said aloud or heard
         (a call, a voice message, a speech). Omit it otherwise.
+      "writes_text": true -- ONLY when the message asks you to write, draft or create a piece of text for the
+        person to use (a post, a caption, an email, a message, an outline, a script), however it is worded
+        ("create IG post", "draft an email to..."), and asks for nothing to be saved in their records,
+        scheduled, assigned or sent. Omit it otherwise, and whenever unsure.
     Never invent a filter the message does not support. When unsure, omit line 2 entirely.
 
 {now_block}
@@ -975,7 +983,8 @@ Never include any of the following. Each one is internal machinery, and it reads
   "Request:"). Just reply.
 - Narration of your reasoning, your plan, or your next action ("I will now create...", "First I will
   check...", "Let me search..."). State the outcome instead. If you cannot act in this step, say
-  plainly what still needs to happen and who does it.
+  plainly what still needs to happen and who does it. Writing text the person asked for (a post, a
+  caption, an email, an outline) is never something you cannot do here: the reply is that text.
 - Any account of what you read: file names, document or source titles, card names, source counts,
   "Sources reviewed", "Reviewing N sources", or retrieval metadata of any kind. Use what you read.
   Do not report that you read it. If one specific source genuinely matters to them, mention it in an
@@ -1028,6 +1037,7 @@ Every reply:
 - Answer only what was asked, in as few sentences as it needs (a yes or no, a count or a status is one or two). No extra readings, no suggestion of what to do next, and never tell the person what you would need or could do for them.
 - Name who did or owns a thing. Never an unattributed "I", "we" or "our" for work someone did; open with the core fact asked about (the status, the count) before any detail.
 - A question about where something stands opens with the current value of the thing's key measure (the record's own metric, with the date it was read), then at most one fact about what moved or is stuck. A question about a quantity opens with the quantity.
+- When something is stuck or waiting, say what it waits on in full, in the record's own terms (the missing thing itself, not "access" or "that step"), who the records say must clear it, and by when when they give a date.
 - A definition or how-to question is answered in one or two sentences in general terms, with nothing drawn from the person's goals, dates or counts and no list of its fields, parts or options.
 - State a figure or a date only when this turn's reads show it, with the date the record gives ("as of 5 November"). Never recall a number from memory or compare with older counts unasked.
 

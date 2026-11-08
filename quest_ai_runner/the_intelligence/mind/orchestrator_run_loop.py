@@ -17,7 +17,7 @@ from hubofhubs.api import (
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, send_status_first, settle_already_set, track_alternatives, turn_outcome
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, mutating_call_count, send_status_first, settle_already_set, track_alternatives, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
 from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import is_eligible, trace_from_result
@@ -556,6 +556,14 @@ class RunLoopMixin:
                         continue
             if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
                 rs.draft_in_chat = True
+            if (getattr(rs, "writes_text", False) and message_is_user_turn and rs.cue_resolved is None
+                    and (rs.plan.action in ("deep", "confirm") or (rs.plan.action == "tool" and mutating_call_count(self, rs.plan.tool_calls or []) > 0))):
+                # The analyser reported a request for a piece of text and nothing else: a write, task or deep run does not stand in for the text. Reads stay.
+                log.info("Draft request: the planner chose %s for a request to write text; answering with the text", rs.plan.action)
+                rs.plan.action, rs.plan.tool_calls, rs.plan.deferred_deep, rs.plan.deep_brief = "answer", [], None, ""
+                rs.plan.deep_target = "draft_in_chat"
+            elif getattr(rs, "writes_text", False) and rs.plan.action == "answer" and rs.cue_resolved is None:
+                rs.plan.deep_target = "draft_in_chat"      # the answer is the piece: the reply standard for a deliverable, not a two-sentence report
             if (getattr(rs, "draft_in_chat", False) and step >= 2 and rs.plan.action in ("read", "tool")
                     and not any(getattr(self.tools.get(str((c or {}).get("name") or "")), "mutates", False) for c in (rs.plan.tool_calls or []) if self.tools is not None)):
                 # Copy for the person is written from what two rounds of reading found; a third round of searching is the waste, not the work.
@@ -944,6 +952,9 @@ class RunLoopMixin:
             # narration channel as the instant ack (a partial), so the plan/replan event itself
             # carries no duplicate text. When not narrating, the plan event keeps the terse rationale
             # as its expandable detail (legacy behavior).
+            log.info("planner decision step %d: action=%s user_intent=%s deep_target=%s reply_shape=%s asks_first=%s tools=%s rationale=%r", step, rs.plan.action,
+                     rs.plan.user_intent, getattr(rs.plan, "deep_target", None), getattr(rs.plan, "reply_shape", None), getattr(rs.plan, "asks_first", None),
+                     [str((c or {}).get("name")) for c in (rs.plan.tool_calls or [])], str(rs.plan.rationale or "")[:200])
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
                                     action=rs.plan.action, step=rs.steps,
                                     text=(None if narrator.enabled else (rs.plan.rationale or None))))

@@ -200,6 +200,9 @@ class ToolSpec:
     # "search the catalog" read, so a chat turn cannot drift into it; a run whose context lists it
     # in ``tool_pins`` is shown it, and it stays callable by name.
     on_request_only: bool = False
+    # An operation a flow of the orchestrator runs in code (the milestone cue's goal write and metric reads). The planner is never shown it and a call to it by name is refused;
+    # the flow's own step invokes it through the registry.
+    flow_owned: bool = False
     # An operation EVERY deep run owes, whatever its brief says (a standing instruction asks for it, as
     # ``record_metric_result`` is asked for). ``render_deep_block`` lists it after the tools the brief's
     # words selected, so it never takes one of their places; a chat turn still never sees it when it is
@@ -213,6 +216,10 @@ class ToolSpec:
     # and constraints live in its notes). The orchestrator runs them once per quest per turn, so an answer is never written from
     # half a quest (``core/tool_guards.py``). Only a read declares any.
     read_companions: Sequence[str] = ()
+    # Reads a WRITE needs to have seen first in the turn (``create_quest_workflow`` -> ``list_quest_workflows``: what already exists decides
+    # whether anything is made). A write called before its read has run this turn is not run: the read runs in its place and the planner
+    # decides again from what it shows (``core/tool_guards.py`` ``reads_owed``). Only a write declares any.
+    reads_first: Sequence[str] = ()
 
     def required(self) -> List[str]:
         return list((self.parameters or {}).get("required") or [])

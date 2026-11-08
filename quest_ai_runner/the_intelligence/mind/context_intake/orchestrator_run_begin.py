@@ -172,6 +172,7 @@ class RunBeginMixin:
         rs.turn_delivery: Optional[str] = None
         rs.turn_needs_records: Optional[bool] = None
         rs.status_snapshot = False             # a code-composed snapshot is in the gathered reads and the plan is forced to answer from it
+        rs.writes_text = False      # the request analyser's report: the message asks for a piece of text to use and nothing else (set after understanding)
         rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
         rs.records_free = False
         if hold_off_active:
@@ -570,6 +571,11 @@ class RunBeginMixin:
             rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
             rs.turn_information_only, rs.retrieval_constraints = take_information_only(rs.retrieval_constraints)
             status_flags, rs.retrieval_constraints = take_status_flags(rs.retrieval_constraints)
+            if status_flags.get("writes_text") and rs.message_is_user_turn and not attachments:
+                # The analyser's structured report: the person asked for a piece of text to use and nothing else. The deliverable is the reply (``draft_in_chat``):
+                # no tool write, task or deep run stands in for it (``orchestrator_run_loop``), and the writer is told to write it in full.
+                rs.draft_in_chat = True
+                rs.writes_text = True
             if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
                     and (status_flags["asks_status"] or self.reach_asks_status(rs.user_message))):
                 # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop. A chat with no quest
@@ -751,7 +757,7 @@ class RunBeginMixin:
         rs.cue_resolved = None
         rs.cue_gap = ""
         rs.cue_step_attempted = False
-        rs.draft_in_chat = False      # set when a plan reports a deliverable written in the reply
+        rs.draft_in_chat = bool(getattr(rs, "writes_text", False))      # set when a plan (or the analyser) reports a deliverable written in the reply
         if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None and not rs.turn_information_only:      # a question only asks to be told: no cue to find
             try:
                 rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message, decide=self.cheap_decision)

@@ -398,7 +398,8 @@ def already_in_place(gathered: Sequence[Any]) -> List[str]:
             phrase = act_status.already_phrase(g)
             if phrase not in out:
                 out.append(phrase)
-    return out
+    bare = act_status.already_phrase({})
+    return [p for p in out if p != bare] or out      # a repeat of a call (no data of its own) adds nothing to the sentence that names the item
 
 
 def track_alternatives(orch: Any, rs: Any, res: Any) -> bool:

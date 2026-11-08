@@ -64,3 +64,11 @@ def test_figure_check_uses_the_reread_and_splits_unverifiable_from_unsupported()
 def test_usage_reads_a_usage_object_under_another_event_name():
     assert PC.usage_of([{"event": "done", "data": {"usage": {"input_tokens": 90, "output_tokens": 12}}}]) == {"model_calls": 0, "tokens_in": 90, "tokens_out": 12}
     assert PC.usage_of([{"event": "done"}]) == {"model_calls": 0, "tokens_in": 0, "tokens_out": 0}
+
+
+def test_a_large_record_dump_does_not_push_a_later_read_out_of_the_judges_view():
+    reads = [{"source": "context", "text": "c" * 4000}, {"source": "tool:read_spec_records", "text": "s" * 60000},
+             {"source": "tool:list_quest_goals", "text": "598 matching goals " + "g" * 3000}]
+    truth = P.reads_text(reads)
+    assert len(truth) <= P.READS_BUDGET
+    assert "598 matching goals" in truth and "## tool:read_spec_records" in truth and "c" * 4000 in truth

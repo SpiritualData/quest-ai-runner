@@ -115,3 +115,96 @@ def test_the_value_recorded_in_the_hosts_store_is_read_before_the_named_source_a
     resolved2 = cue.resolve(registry2, "q1", "get the onboarding test moving", NOW, decide)
     resolved2.carry_out(registry2, decide)
     assert "Current value: 61 (as of 2026-11-03, from Funnel report)" in client2.created[0]["description"]
+
+
+def test_goal_write_and_metric_reads_are_not_offered_to_the_planner():
+    """The flow's code step owns the goal write and the metric reads: the planner of an ordinary turn is never shown them, the two plain reads stay."""
+    registry = ToolRegistry(milestone_flow_tools(lambda: None, lambda name: {}, recorded_reader=lambda quest, metric: {}))
+    offered = {spec.name for spec in registry.offered()}
+    hidden = {name for name in registry.names() if registry.get(name).on_request_only}
+    assert hidden == {"create_or_update_quest_goal", "read_metric_source", "read_recorded_metric_value"}
+    assert {name for name in registry.names() if registry.get(name).flow_owned} == hidden
+    assert registry.get("list_quest_goals").on_request_only is False and registry.get("read_spec_records").on_request_only is False
+    assert offered == {"list_quest_goals", "read_spec_records"}
+
+
+def test_a_planner_call_to_a_flow_owned_tool_is_refused_and_writes_nothing():
+    from types import SimpleNamespace
+
+    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+
+    written = []
+
+    class Client:
+        def __getattr__(self, name):
+            written.append(name)
+            raise AssertionError(f"the flow-owned tool must not run: {name}")
+
+    class Emit:
+        def __init__(self):
+            self.events = []
+
+        def emit(self, event):
+            self.events.append(event)
+
+        def status(self, text):
+            self.events.append(text)
+
+    host = SimpleNamespace(tools=ToolRegistry(milestone_flow_tools(lambda: Client())), cfg=SimpleNamespace(max_reads_per_step=4))
+    gathered = []
+    ReadsMixin.run_tool_calls(host, [{"name": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title": "IG post"}}], gathered=gathered, exec_record=SimpleNamespace(facts=[]),
+                              tool_ok_signatures=set(), emit=Emit(), steps=1, ctx=ToolContext(quest_id="q1"))
+    assert written == []
+    assert gathered and gathered[0]["tool_status"] == "refused" and "NOT RUN" in gathered[0]["text"]
+
+
+def test_a_write_that_reads_first_runs_its_read_in_its_place_and_runs_once_the_read_is_in():
+    from types import SimpleNamespace
+
+    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
+    from quest_ai_runner.the_world.tools.tools import ToolContext, ToolResult, ToolSpec
+
+    ran = []
+
+    def read(args, ctx):
+        ran.append("read")
+        return ToolResult(ok=True, text="1 workflow: Weekly check-in")
+
+    def write(args, ctx):
+        ran.append("write")
+        return ToolResult(ok=True, text="created")
+
+    registry = ToolRegistry([ToolSpec(name="list_things", handler=read, description="list"),
+                             ToolSpec(name="make_thing", handler=write, description="make", mutates=True, reads_first=("list_things",))])
+
+    class Emit:
+        def emit(self, event):
+            pass
+
+        def status(self, text):
+            pass
+
+    host = SimpleNamespace(tools=registry, cfg=SimpleNamespace(max_reads_per_step=4))
+    gathered = []
+    call = {"name": "make_thing", "args": {"quest_id": "q1", "title": "Weekly check-in"}}
+    ReadsMixin.run_tool_calls(host, [call], gathered=gathered, exec_record=SimpleNamespace(facts=[]), tool_ok_signatures=set(), emit=Emit(), steps=1,
+                              ctx=ToolContext(quest_id="q1"))
+    assert ran == ["read"], "the write waits for its read; the planner decides again from it"
+    assert any("NOT RUN YET" in str(g.get("text")) for g in gathered)
+    ReadsMixin.run_tool_calls(host, [call], gathered=gathered, exec_record=SimpleNamespace(facts=[]), tool_ok_signatures=set(), emit=Emit(), steps=2,
+                              ctx=ToolContext(quest_id="q1"))
+    assert ran == ["read", "write"]
+
+
+def test_a_workflow_worded_nearly_the_same_on_the_same_schedule_is_already_there():
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import workflow_already_there
+    weekly_monday = {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [0], "tz": "UTC"}}
+    existing = [{"workflowId": "w1", "title": "Monday check: how the 1000 subscribers are doing",
+                 "steps": [{"title": "Check how the 1000 subscribers are doing", "timing": weekly_monday}]}]
+    new = [{"title": "Check how the 1000 paying subscribers are doing", "timing": {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [0], "tz": "America/Los_Angeles"}}}]
+    assert workflow_already_there(existing, "Monday check: 1000 paying subscribers", new)["workflowId"] == "w1"
+    other = [{"title": "Monday standup with the team", "timing": weekly_monday}]
+    assert workflow_already_there(existing, "Standup", other) is None
+    thursday = [{"title": "Check how the 1000 subscribers are doing", "timing": {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [3]}}}]
+    assert workflow_already_there(existing, "Thursday check", thursday) is None

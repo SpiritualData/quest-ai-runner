@@ -588,6 +588,11 @@ PRODUCTION_SCOPE = ("production run: the assistant is the team's AI answering a 
                     "no test data was seeded")
 
 
+#: How much of the ground truth the judge is shown. A production turn reads whole specification records (tens of thousands of characters); a smaller view cut out
+#: the very record a reply's facts came from and the judge called them invented.
+GROUND_TRUTH_CHARS = 80000
+
+
 def build_prompt(case, evidence, changes, pre, truth, pivots, production=False):
     """``production`` swaps the dev world's framing (seeded ground truth, pinned quest, pivots) for the turn's own reads."""
     messages = case.get("messages") or [case["message"]]
@@ -606,7 +611,7 @@ def build_prompt(case, evidence, changes, pre, truth, pivots, production=False):
         forbidden=case.get("forbidden_side_effects") or "(none stated)",
         steps=json.dumps(case.get("steps") or [], indent=1)[:3000],
         evidence_notes=case.get("evidence_notes") or "(none)",
-        ground_truth=truth[:24000] + period_dates_note(),
+        ground_truth=truth[:GROUND_TRUTH_CHARS] + period_dates_note(),
         evidence=evidence_for_judge(evidence),
         changes="\n".join(f"- {c}" for c in changes) or "(no changes at all)",
         precheck=json.dumps(pre["checks"], indent=1)[:3500])

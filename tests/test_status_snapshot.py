@@ -59,8 +59,11 @@ def test_the_snapshot_holds_the_live_key_measure_the_priorities_in_ladder_order_
 def test_the_analyser_reports_the_status_shape_and_the_spoken_delivery_as_fields_not_filters():
     _, constraints = parse_goal_condition_reply('A script.\n{"asks_status": true, "read_aloud": true, "actor": "me"}')
     flags, rest = take_status_flags(constraints)
-    assert flags == {"asks_status": True, "read_aloud": True} and rest == {"actor": "me"}
-    assert take_status_flags(None)[0] == {"asks_status": False, "read_aloud": False}
+    assert flags == {"asks_status": True, "read_aloud": True, "writes_text": False} and rest == {"actor": "me"}
+    assert take_status_flags(None)[0] == {"asks_status": False, "read_aloud": False, "writes_text": False}
+    _, constraints = parse_goal_condition_reply('An Instagram post about the product.\n{"writes_text": true}')
+    flags, rest = take_status_flags(constraints)
+    assert flags["writes_text"] is True and rest is None
 
 
 class StatusProvider(StubProvider):

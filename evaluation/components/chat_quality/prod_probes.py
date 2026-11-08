@@ -392,8 +392,34 @@ def reads_of(gathered, context_views, per_item=2500, total=24000, reply=""):
     return out
 
 
-def reads_text(reads):
-    return "\n\n".join(f"## {r['source']}\n{r['text']}" for r in reads)
+#: The judge reads this much of the turn's reads (``judge.GROUND_TRUTH_CHARS`` of the ground truth, less room for its date note).
+READS_BUDGET = 78000
+
+
+def reads_text(reads, budget=READS_BUDGET):
+    """The turn's reads as the judge's ground truth, every read in it: when they run past ``budget`` characters, the long ones are cut to a fair share
+    (the short ones kept whole, the share each long read gets is what the short ones left over), each keeping its head and its tail, so one large
+    record dump never pushes a later read (the one the reply's figure came from) out of the judge's view."""
+    parts = [f"## {r['source']}\n{r['text']}" for r in reads]
+    if sum(len(p) + 2 for p in parts) <= budget or not parts:
+        return "\n\n".join(parts)
+    order = sorted(range(len(parts)), key=lambda i: len(parts[i]))
+    left, share, cut = budget, 0, {}
+    for n, i in enumerate(order):
+        share = left // (len(order) - n) - 2
+        if len(parts[i]) <= share:
+            left -= len(parts[i]) + 2
+            continue
+        for j in order[n:]:
+            cut[j] = max(share, 200)
+        break
+    out = []
+    for i, part in enumerate(parts):
+        if i in cut and len(part) > cut[i]:
+            half = (cut[i] - 40) // 2
+            part = part[:half] + "\n[... cut for length ...]\n" + part[-half:]
+        out.append(part)
+    return "\n\n".join(out)
 
 
 def estimate_tokens(*texts):
