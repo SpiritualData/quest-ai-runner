@@ -19,6 +19,9 @@ All notable changes to this project are documented here. The format is based on
 - chat_quality judge: the ground truth view is 80,000 characters, and when the reads run longer each long read is cut to a fair share (head and tail kept), so one large record dump no longer pushes the read a reply's figure came from out of the judge's view.
 
 ### Fixed
+- Reply check: the reads and facts views see what the writer was shown (the turn's reads and its context view, up to 16000 characters); held to the reads alone, a true sentence from the quest's own state was removed as unsupported.
+- Spoken figure cap: a date takes its year with it (`without_dates`), "5 of 10" is one figure and a parenthesised breakdown is not more figures (`figures_said`); a dated status was over the cap and cut.
+- The reply standard logs what still fails before its last repair; chat_quality's overlay keeps each record's judge input, ships the sibling hub package, and `rejudge.py` re-scores kept inputs with no new chat turn.
 - Reply check: a fourth view holds every factual sentence about the person's quest, work, people, dates, figures or events to the turn's reads (cap 8 calls, 4 in parallel).
 - Status replies: when the key measure's source cannot be read, the dated reading its metric record holds leads (said as last recorded), so an older figure from other text is not given; a reply about one milestone names where it stands, what blocks it, who owns the next step and by when, and ends on the last fact with no offer or question.
 - Status snapshot: a status question about one milestone (one cheap judgment over the model-free candidates, read from its last line) also gets that milestone's records (the metric record's dated text with what blocks it, the owners its text names) and its open next steps with due day and owner.

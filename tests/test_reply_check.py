@@ -67,3 +67,14 @@ def test_a_failed_chat_evaluation_case_becomes_a_mistake_of_the_view_its_recorde
     got = eval_failure_mistakes(rows, "2026-11-08")
     assert [(m.check_id, m.case_id, m.source) for m in got] == [("reads", "A", "eval_failure"), ("actions", "B", "eval_failure")]
     assert got[0].input_slice == "revenue page" and got[1].input_slice == "goal added x" and got[1].right == "it did change"
+
+
+def test_the_reads_and_facts_views_see_the_context_the_reply_was_written_from(monkeypatch):
+    # A true sentence taken from the turn's context (its status snapshot, the quest's own state) was removed as unsupported when the views saw only the reads.
+    ask = scripted({})
+    monkeypatch.setattr(V, "model_ask", lambda orch, tier: ask)
+    orch, rs = turn()
+    rs.context_view = "Quest state: the store release is on the test track only."
+    V.checked_reply(orch, rs, "The store release is on the test track only.")
+    facts_prompts = [p for p in ask.seen if "A statement of fact about" in p]
+    assert facts_prompts and "the store release is on the test track only" in facts_prompts[0]

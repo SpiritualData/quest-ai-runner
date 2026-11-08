@@ -702,6 +702,8 @@ class RunAnswerMixin:
                     measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
                                    resolved=turn_resolved, question=rs.user_message)
                 if measured.failed:
+                    log.info("Reply standard repair: still failing after %d round(s): %s", measurement_rounds,
+                             [(v.kind, list(v.values)[:6]) for v in measured.violations])
                     rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence)
                 log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
                 rs.reply_standard = {"shape": standard.shape, "repair_rounds": repair_rounds,

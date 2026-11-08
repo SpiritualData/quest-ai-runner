@@ -24,6 +24,7 @@ ASKS_VIEW = ("A question or request addressed to a named person who is not liste
 FACTS_VIEW = ("A statement of fact about the person's quest, work, people, dates, figures or events (something happened, was missed, is due, stands at a value) must be "
               "supported by the reads listed in the evidence. A plan, an offer, a question, advice and general knowledge are not this task.")
 EVIDENCE_CHARS = 6000
+GROUNDING_CHARS = 16000   # the reads and facts views see what the writer saw: the turn's reads and its context (a status snapshot, the quest's own state), not a cut of it
 NONE_TEXT = "(none)"
 
 
@@ -52,8 +53,8 @@ def present_text(participants: Sequence[Any]) -> str:
 def reply_binding(reads: str, executed: str, present: str, max_calls: int = 8) -> Dict[str, Any]:
     """The hub's Binding for a reply: four views, each shown only its own evidence."""
     return {"kind": "reply", "max_calls": max_calls, "parallel": 4, "views": [
-        {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads) or NONE_TEXT)},
-        {"id": "facts", "instruction": FACTS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads) or NONE_TEXT)},
+        {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
+        {"id": "facts", "instruction": FACTS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "actions", "instruction": ACTIONS_VIEW, "evidence": "Executed actions this turn:\n" + (clip(executed) or NONE_TEXT)},
         {"id": "asks", "instruction": ASKS_VIEW, "evidence": "Present in this conversation: " + (clip(present, 600) or NONE_TEXT)}]}
 
@@ -79,7 +80,11 @@ def checked_reply(orch: Any, rs: Any, text: str) -> str:
         if ask is None:
             return text
         meta = getattr(rs, "_ctx_meta", None) or {}
-        binding = reply_binding(reads_text(answer_evidence(getattr(rs, "gathered", None) or [])), tool_landed_account(getattr(rs, "exec_record", None)),
+        # What the reply may rest on is what its writer was shown: the turn's reads and the context it was written from (a status snapshot, the quest's own state).
+        # Held to the reads alone, a true sentence taken from that context was removed as unsupported.
+        context = str(getattr(rs, "context_view", "") or "").strip()
+        grounding = reads_text(answer_evidence(getattr(rs, "gathered", None) or [])) + (f"\n- the context the reply was written from: {context}" if context else "")
+        binding = reply_binding(grounding, tool_landed_account(getattr(rs, "exec_record", None)),
                                 present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 8)))
         result = AgreementCheck(plumbing=None).check(text, binding, ask)
         rs.reply_check = {k: result.get(k) for k in ("outcome", "calls", "agreement", "why")}

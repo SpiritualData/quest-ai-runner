@@ -480,7 +480,7 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
         if standard.forbid_markup and re.search(r"[*#`_>]|[\"“”]", text):
             m.violations.append(Violation("format", "write plain words only, with no asterisks, hashes, backticks, underscores or quotation marks"))
         if standard.max_figures is not None:
-            said_figures = len(NUMBER.findall(without_dates(text)))
+            said_figures = figures_said(text)
             if said_figures > standard.max_figures:
                 m.violations.append(Violation("figures", f"state at most {standard.max_figures} figures (you stated {said_figures}); keep the one that matters most"))
         if standard.max_exclamations is not None and text.count("!") > standard.max_exclamations:
@@ -495,8 +495,9 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
 
 
 def without_dates(text: str) -> str:
+    """``text`` with its dates taken out, each with the year written after it ("7 November 2026", "7 November, 2026"): a year left behind would read as a figure."""
     for stated, _ in dates_in(text or ""):
-        text = text.replace(stated, " ")
+        text = re.sub(re.escape(stated) + r"(?:,?\s+(?:19|20)\d{2}\b)?", " ", text)
     return text
 
 
@@ -535,6 +536,17 @@ def unrelated_sentences(draft: str, question: str, facts: Optional[List[str]]) -
         if (dates_in(sentence) or NUMBER.search(without_dates(sentence))) and not (topic_words(sentence) & basis):
             out.append(sentence.strip())
     return out
+
+
+RATIO = re.compile(r"\d[\d,.]*\s*%?\s+of\s+\d[\d,.]*")
+PARENTHESIS = re.compile(r"\([^()]*\)")
+
+
+def figures_said(text: str) -> int:
+    """How many figures a reply states, as a listener counts them: dates are not figures, "5 of 10" is one, and the numbers in parentheses after a figure are its
+    breakdown, not more figures. Counts numbers; reads no wording."""
+    plain = PARENTHESIS.sub(" ", without_dates(text or ""))
+    return len(NUMBER.findall(RATIO.sub(" 1 ", plain)))
 
 
 def sentences(text: str) -> List[str]:

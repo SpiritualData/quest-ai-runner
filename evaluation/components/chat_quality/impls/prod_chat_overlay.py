@@ -73,7 +73,7 @@ def changed_backend_files(checkout, base_ref):
 
 
 def ship_overlay(meter_say=print):
-    """Ship the changed backend files and the whole quest-ai-runner package into the container's /tmp/qoverlay. Returns the file list."""
+    """Ship the changed backend files, the whole quest-ai-runner package and the sibling hub package into the container's /tmp/qoverlay. Returns the file list."""
     checkout = backend_checkout()
     files = changed_backend_files(checkout, need("QAR_OVERLAY_BASE_REF"))
     host, directory = ssh_target()
@@ -84,12 +84,17 @@ def ship_overlay(meter_say=print):
     subprocess.run(["tar", "-C", str(stage), "-xf", "-"], input=pack, check=True)
     pack = subprocess.run(["tar", "-C", str(QAR_ROOT), "--exclude=__pycache__", "-cf", "-", "quest_ai_runner"], capture_output=True, check=True).stdout
     subprocess.run(["tar", "-C", str(stage / "qar"), "-xf", "-"], input=pack, check=True)
+    hub = Path(os.environ.get("QAR_OVERLAY_HUB_CHECKOUT") or QAR_ROOT.parent / "ai-hub-of-hubs-structure")
+    if (hub / "hubofhubs").is_dir():         # the sibling hub checkout goes too, so a hub change is measured with the rest
+        (stage / "hub").mkdir()
+        pack = subprocess.run(["tar", "-C", str(hub), "--exclude=__pycache__", "--exclude=tests", "-cf", "-", "hubofhubs"], capture_output=True, check=True).stdout
+        subprocess.run(["tar", "-C", str(stage / "hub"), "-xf", "-"], input=pack, check=True)
     archive = subprocess.run(["tar", "-C", str(stage), "-cf", "-", "."], capture_output=True, check=True).stdout
     subprocess.run(["rm", "-rf", str(stage)], check=True)
     done = remote_exec('sh -c "rm -rf /tmp/qoverlay && mkdir -p /tmp/qoverlay && tar -C /tmp/qoverlay -xf -"', data=archive)
     if done.returncode:
         raise RuntimeError(f"overlay could not be shipped: {done.stderr.decode()[-300:]}")
-    meter_say(f"chat_quality: overlay shipped: {len(files)} backend file(s) {files} and the quest_ai_runner package")
+    meter_say(f"chat_quality: overlay shipped: {len(files)} backend file(s) {files}, the quest_ai_runner package" + (" and the hubofhubs package" if (hub / "hubofhubs").is_dir() else ""))
     return files
 
 
@@ -216,7 +221,9 @@ def build(meter):
             if record.get("state"):
                 passed = passed and record["state"]["ok"]
             record.update(evidence=evidence, changes=changes_text, unexpected_writes=unexpected, other_writes=other, precheck=pre, judged=judged, score=J.final_score(pre, judged), passed=passed,
-                          messages=messages, attempted_writes=run.get("writes"), model_calls=run.get("model_calls", 0), replay_error=run.get("error"), model_calls_log=run.get("model_calls_log") or [],
+                          messages=messages, attempted_writes=run.get("writes"), model_calls=run.get("model_calls", 0), replay_error=run.get("error"), model_calls_log=run.get("model_calls_log") or [], qar_notes=run.get("qar_notes") or [],
+                          judge_input={"case": judged_case, "evidence": evidence, "changes": changes_text, "pre": pre, "truth": truth, "unexpected": unexpected,
+                                       "state": record.get("state")},
                           tool_calls=PC.tool_calls_of(run["frames"]), route=PC.route_of(run["frames"]),
                           frame_trace=[(f.get("t"), f.get("event"), str(f.get("text") or f.get("content") or "")[:110]) for f in run["frames"]][:80])
         except Exception as e:  # noqa: BLE001
@@ -224,7 +231,8 @@ def build(meter):
         record.setdefault("model_calls", 0)
         record.update(seconds=round(time.time() - started, 1), tokens_in=0, tokens_out=0, tokens_estimated=True)
         record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "changes", "unexpected_writes", "other_writes", "messages", "reads_seen", "unsupported_figures",
-                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "replay_error", "model_calls_log")}
+                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "replay_error", "model_calls_log",
+                                                          "qar_notes", "judge_input")}
         try:
             meter.record(max(1, record["model_calls"]))
         except Exception as e:  # noqa: BLE001

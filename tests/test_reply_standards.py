@@ -477,3 +477,11 @@ def test_an_unsupported_figure_is_rewritten_once_by_the_writer_and_only_cut_when
     cut, _ = without_unsupported(stubborn, text, evidence)
     assert "1,000" not in cut and "that access" not in cut and "next review" in cut        # the cut took the antecedent, so the sentence pointing at it went too
     assert without_unsupported(clean, "No figures here.", evidence) == ("No figures here.", [])
+
+
+def test_a_listener_counts_figures_not_the_years_of_dates_ratios_or_breakdowns():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import figures_said, without_dates
+    assert "2026" not in without_dates("Sales stood at 4 as of 7 November 2026, and 5 as of March 3, 2026.")
+    assert figures_said("Sales stood at 4 as of 7 November 2026.") == 1
+    assert figures_said("Sign-ups are at 50% (5 of 10, read 6 November), against a target of 100.") == 2
+    assert figures_said("3 of 12 people replied.") == 1
