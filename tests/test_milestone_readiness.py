@@ -317,6 +317,19 @@ def test_the_prompt_for_a_draft_gets_the_whole_record_value_and_a_cut_identifier
     assert cue.truncated_tokens("sources and users", "source users") == []
 
 
+def test_a_name_the_draft_call_made_up_does_not_stop_the_one_named_owner_from_being_the_label():
+    tables = {"solutions": {"esr_c": dict(TABLES["solutions"]["esr_c"], purpose="A new source tested on its own. Owners: Ann.")}, "metrics": TABLES["metrics"]}
+    base = tools([], member="Ops Account")
+    base.get("read_spec_records").handler = lambda a, c: ToolResult(ok=True, data={"records": tables, "time_zone": "UTC"}, text="r")
+
+    def decide(prompt):
+        assert "Which name in this text" not in prompt
+        return json.dumps({"draft": "Pitch.", "human_step": "Send it.", "people": ["Ann", "Zed Contact"]})
+    step = cue.resolve(base, "q1", "get the partner users moving", NOW, decide=None)
+    step.carry_out(base, decide)
+    assert step.owner_label == "Ann (account Ops Account)"
+
+
 def test_one_listed_owner_and_one_person_named_in_the_text_make_the_label_without_another_call():
     tables = {"solutions": {"esr_c": dict(TABLES["solutions"]["esr_c"], purpose="Travis runs partner outreach for Spiritual Data.")}, "metrics": TABLES["metrics"]}
     base = tools([], member="SpiritOperations")

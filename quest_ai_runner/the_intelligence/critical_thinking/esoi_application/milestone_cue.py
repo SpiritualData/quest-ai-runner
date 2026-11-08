@@ -574,9 +574,9 @@ class Resolved:
     DRAFT_FORM = ('"draft": the deliverable itself, never a plan to write it, written to be used as it is and short enough to send or use (under 120 words). Its type comes from what the milestone '
                   'needs, read from its done-when, what it produces and its text: for a milestone that depends on an outside party, a short message to that party stating what they get, the ask and '
                   'the next step (a partner pitch); for a milestone about a video, the words to be spoken, not notes about it; for copy to be compared, distinct alternatives with the metric they are '
-                  'compared by; for people to be asked, few neutral questions, each a full sentence ready to send; for a new source or channel, one named concrete source with a one-line hypothesis, '
-                  'a first test and the milestone metric; for a release or an announcement, the message to be published; a checklist of at most 5 steps only when none of these fits. '
-                  'Use only the facts above; never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
+                  'compared by; for people to be asked, few neutral questions, each a full sentence ready to send; for a new source or channel, one source the facts above name (when they name none, the kind of source to '
+                  'try first, labelled as a candidate with why) with a one-line hypothesis, a first test and the milestone metric; for a release or an announcement, the message to be published; a checklist of at most 5 steps only when none of these fits. '
+                  'Use only the facts above: never a person, place, group, platform or organisation they do not name; never state a figure that contradicts the current value above; no prices, dates, counts, rates or claims that are not given above, and never a count of its own characters, words or items; no first person '
                   '("I", "we", "our") unless the facts above name who is speaking; never a due date or deadline that is not in the facts above; no em dashes. '
                   'Leave no bracket slot, no angle slot and no blank to fill ("[source name]", "[link]"): fill each from the facts above and the reads; where a fact is unknown, name one concrete '
                   'candidate the records support, labelled as a candidate with why, or write the deliverable so it is sendable as it is (for example neutral questions to the person who knows)')
@@ -648,8 +648,10 @@ class Resolved:
         whole = lambda text: {w for w in re.findall(r"[a-z0-9]+", str(text).lower()) if len(w) > 2}
         if whole(account) & whole(self.purpose):
             return account
-        if len(self.owners) == 1 and len(self.people) == 1 and self.people[0].lower() in self.purpose.lower() and not whole(self.people[0]) & whole(account):
-            return f"{self.people[0]} (account {account})"
+        # Only the people the milestone text itself names count: a name the draft call made up (a contact it invented) is not a candidate for the owner.
+        named = [p for p in self.people if p.lower() in self.purpose.lower()]
+        if len(self.owners) == 1 and len(named) == 1 and not whole(named[0]) & whole(account):
+            return f"{named[0]} (account {account})"
         if decide is None:
             return account
         try:
