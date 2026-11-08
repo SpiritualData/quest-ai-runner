@@ -92,3 +92,26 @@ def test_a_reading_is_checked_the_same_way_whatever_reads_it():
             continue
         raise AssertionError(f"{text!r} was accepted as a reading")
     assert checked_reading('{"value": 1, "as_of": "2026-11-03"}', "Label")["source"] == "Label"
+
+
+def test_the_value_recorded_in_the_hosts_store_is_read_before_the_named_source_and_a_missing_one_falls_through():
+    asked = []
+    recorded = {"value": 70, "as_of": "2026-11-02", "source": "Admin dashboard", "detail": {}}
+
+    def recorded_reader(quest_id, metric_id):
+        asked.append((quest_id, metric_id))
+        if not recorded:
+            raise MetricSourceError("no value has been recorded for this metric yet")
+        return recorded
+    source_reading = {"value": 61, "as_of": "2026-11-03", "source": "Funnel report", "detail": {}}
+    client = Client()
+    registry = ToolRegistry(milestone_flow_tools(lambda: client, lambda name: source_reading, recorded_reader=recorded_reader))
+    resolved = cue.resolve(registry, "q1", "get the onboarding test moving", NOW, decide)
+    resolved.carry_out(registry, decide)
+    assert asked == [("q1", "met_1")] and "Current value: 70 (as of 2026-11-02, from Admin dashboard)" in client.created[0]["description"]
+    recorded.clear()
+    client2 = Client()
+    registry2 = ToolRegistry(milestone_flow_tools(lambda: client2, lambda name: source_reading, recorded_reader=recorded_reader))
+    resolved2 = cue.resolve(registry2, "q1", "get the onboarding test moving", NOW, decide)
+    resolved2.carry_out(registry2, decide)
+    assert "Current value: 61 (as of 2026-11-03, from Funnel report)" in client2.created[0]["description"]

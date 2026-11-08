@@ -162,6 +162,37 @@ def metric_reader_spec(read: Callable[[str], Mapping[str, Any]], names: Optional
         timeout_seconds=float(timeout_seconds) + 15.0)
 
 
+RECORDED_TOOL = "read_recorded_metric_value"
+
+
+def recorded_reader_spec(read: Callable[[str, str], Mapping[str, Any]]) -> ToolSpec:
+    """The ``read_recorded_metric_value`` tool over ``read(quest_id, metric_id) -> reading``: the latest value recorded for a metric record in the host's own store (in Quest, the
+    metric's collection), as the same checked reading a source gives (``value``, ``as_of``, ``source``, ``detail``). ``read`` raises ``MetricSourceError`` in plain words when the
+    metric has no recorded value or cannot be read. The milestone flow asks it before it runs the source a record names."""
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = str(args.get("quest_id") or getattr(ctx, "quest_id", "") or "").strip()
+        metric_id = str(args.get("metric_id") or "").strip()
+        try:
+            reading = reading_of(read(quest_id, metric_id))
+        except MetricSourceError as error:
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"Not read: {error}. Record no value for it.")
+        return ToolResult(ok=True, data={"name": metric_id, **reading},
+                          text=f"Recorded value of {metric_id}: {shown(reading['value'])} (as of {reading['as_of']}, from {reading['source']}).")
+
+    return ToolSpec(
+        name=RECORDED_TOOL,
+        handler=handler,
+        description="Read the latest value recorded for a metric record of a quest in the quest's own metric store: the value, the day it covers and who or what recorded it. Read only.",
+        when_to_use="A milestone's metric record has a value recorded for it and you need its current figure: state it with its date and source exactly as returned.",
+        when_not_to_use="Estimating or adjusting a value. Recording one: this only reads.",
+        parameters={"type": "object", "required": ["metric_id"], "properties": {
+            "quest_id": {"type": "string", "description": "The quest; defaults to this run's quest."},
+            "metric_id": {"type": "string", "description": "The metric record's id."}}},
+        mutates=False, workflow_step=False, origin="standard",
+        keywords=("metric", "value", "current", "recorded", "measure", "number", "milestone"),
+        context_args={"quest_id": "quest_id"}, timeout_seconds=30.0)
+
+
 def read_metric_source_spec(env: Mapping[str, str]) -> Optional[ToolSpec]:
     names = sorted(configured_sources(env))
     if not names:

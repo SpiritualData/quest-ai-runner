@@ -237,6 +237,7 @@ def owners_of(row: Mapping[str, Any]) -> List[str]:
 CURRENT_VALUE = "Current value:"
 VALUE_LINE = re.compile(r"(?m)^Current value:.*$")
 READ_TOOL = "read_metric_source"
+RECORDED_TOOL = "read_recorded_metric_value"       # the host own store of recorded metric values, asked before the record named source
 
 
 def current_value_line(value: Any, as_of: str, source: str) -> str:
@@ -620,9 +621,20 @@ class Resolved:
             or next((g for g in self.candidates if str(g.get("spec_solution_id") or "") == self.rid), None)
         existing = value_line_of(str((goal or {}).get("text") or (goal or {}).get("description") or ""))
         self.kept_line = existing if "(as of " in existing else ""
+        from quest_ai_runner.the_world.tools.tools import ToolContext
+        if self.metric_ids and registry is not None and registry.get(RECORDED_TOOL) is not None:
+            # The host's own store comes first: the latest value recorded for the metric record (in Quest, its collection's newest entry). No value recorded there is not a gap:
+            # the record's named source is tried next.
+            try:
+                recorded = registry.invoke(RECORDED_TOOL, {"quest_id": self.quest_id, "metric_id": self.metric_ids[0]}, ToolContext(quest_id=self.quest_id))
+            except Exception as error:      # noqa: BLE001  the next source is tried; the cause is kept if there is none
+                recorded = None
+                self.reading_gap = f"reading the value recorded for the metric failed ({type(error).__name__}: {error})"
+            if recorded is not None and recorded.ok and isinstance(recorded.data, Mapping) and recorded.data.get("as_of"):
+                self.reading = {k: recorded.data[k] for k in ("value", "as_of", "source", "detail") if k in recorded.data}
+                return
         if not self.source:
             return
-        from quest_ai_runner.the_world.tools.tools import ToolContext
         if registry is None or registry.get(READ_TOOL) is None:
             self.reading_gap = f"this lane has no {READ_TOOL} tool, so the source {self.source!r} could not be read"
             return
