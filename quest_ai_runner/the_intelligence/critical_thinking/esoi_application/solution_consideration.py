@@ -152,3 +152,87 @@ def after_milestone(made: Any, cue: Any, request: str, provider: Any, seconds: f
     except Exception:      # noqa: BLE001
         log.exception("after-milestone consideration failed")
         return ""
+
+
+# -- chat turns --------------------------------------------------------------------------------------------------------------------
+
+CARD_OWNER = "solution-consideration"
+CARD_CHARS = 6000
+LANDED: Dict[str, List[str]] = {}       # records root -> the solution card ids a background consideration wrote, for the next turn
+LANDED_LOCK = threading.Lock()
+
+
+def solution_card(brief: Mapping[str, Any], finding: Mapping[str, Any]) -> Dict[str, Any]:
+    """One touched solution as a managed card of the turn's card store (QAR's adapter of the hub's managed solution card): its generated
+    prompt and what its own pass found, rebuilt by this module only."""
+    sid = str(brief["solution_id"])
+    name = str(brief.get("name") or sid)
+    note = "What its own pass found:\n" + "\n".join(finding_lines(finding)) + "\n\nIts records:\n" + cut(str(brief.get("prompt") or ""), CARD_CHARS)
+    return {
+        "id": f"solution-{sid}", "name": f"Solution: {name}", "summary": f"Solution: {name}",
+        "description": f"The ESOI solution {name} ({sid}): its own records and its consideration of the latest request that touched it.",
+        "keywords": sorted({w for w in (name + " " + sid).lower().replace("-", " ").split() if len(w) > 2} | {"solution"}),
+        "conventions": [], "files": [],
+        "content": [{"id": "solution-consideration", "type": "note", "why": "This solution's records and its own pass on the request",
+                     "locator": {"text": note}}],
+        "scope_tags": [], "managed_by": CARD_OWNER, "managed_fields": ["name", "summary", "description", "keywords"],
+        "managed_items": ["solution-consideration"],
+        "provenance": {"created_by_task": "solution consideration", "model": "", "created_at": "", "last_verified_at": ""},
+    }
+
+
+def write_cards(store: Any, got: Mapping[str, Any]) -> List[str]:
+    """Writes each touched solution's card; returns the ids written."""
+    findings = {f["solution_id"]: f for f in (got.get("considered") or {}).get("findings") or []}
+    written: List[str] = []
+    for brief in (got.get("briefs") or {}).get("solutions") or []:
+        card = solution_card(brief, findings.get(brief["solution_id"], {}))
+        try:
+            if store.write_card(card["id"], card):
+                written.append(card["id"])
+        except Exception:      # noqa: BLE001  one card that cannot be written does not stop the others
+            log.exception("solution card not written: %s", card["id"])
+    return written
+
+
+def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> None:
+    """A chat turn that touches ESOI solutions: after the acknowledgement, each solution gets its own consideration; the touched solutions'
+    cards are written to the turn's card store and named in ``priority_card_ids`` so context assembly puts them first. It waits at most
+    ``solution_consideration_seconds``; a slower consideration finishes in the background and its cards ground the next turn on the same
+    records. A milestone turn is skipped (its own step runs ``after_milestone``). Never raises."""
+    try:
+        if ctx_meta is None or getattr(rs, "cue_resolved", None) is not None or not getattr(rs, "message_is_user_turn", True):
+            return
+        from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
+        from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
+        root = slice_root(str(ctx_meta.get("quest_folder") or "") or None)
+        store = card_writer(getattr(orch, "context_assembler", None))
+        ask = ask_for(getattr(orch, "provider", None))
+        if root is None or store is None or ask is None:
+            return
+        key = str(root)
+        with LANDED_LOCK:
+            earlier = LANDED.pop(key, [])
+        request = str(getattr(rs, "goal_condition", "") or getattr(rs, "user_message", ""))
+        box: Dict[str, Any] = {}
+
+        def run() -> None:
+            try:
+                got = consider(request, root, ask)
+                box["ids"] = write_cards(store, got) if got else []
+                if not box.get("seen"):
+                    return
+                with LANDED_LOCK:       # finished after the turn stopped waiting: the next turn on these records gets the cards
+                    LANDED[key] = box["ids"]
+            except Exception:      # noqa: BLE001
+                log.exception("chat-turn solution consideration failed")
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(float(core_settings().solution_consideration_seconds))
+        box["seen"] = True
+        ids = list(box.get("ids") or []) or earlier
+        if ids:
+            ctx_meta["priority_card_ids"] = list(dict.fromkeys(list(ctx_meta.get("priority_card_ids") or []) + ids))
+    except Exception:      # noqa: BLE001
+        log.exception("chat-turn solution consideration failed")

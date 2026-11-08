@@ -117,6 +117,8 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
             env.get("QAR_MODE_RELEASE_TIMEOUT_SECONDS"), d.mode_release_timeout_seconds),
         context_assembly_timeout_seconds=_float_or(
             env.get("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS"), d.context_assembly_timeout_seconds),
+        solution_consideration_seconds=_float_or(
+            env.get("QAR_SOLUTION_CONSIDERATION_SECONDS"), d.solution_consideration_seconds),
         guidance_selection_timeout_seconds=_float_or(
             env.get("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS"), d.guidance_selection_timeout_seconds),
         verify_context_max_chars=verify,

@@ -33,6 +33,7 @@ class CoreSettings:
     intent_judge_timeout_seconds: float = 8.0  # [QAR_INTENT_JUDGE_TIMEOUT_SECONDS]
     mode_release_timeout_seconds: float = 8.0  # [QAR_MODE_RELEASE_TIMEOUT_SECONDS]
     context_assembly_timeout_seconds: float = 30.0  # [QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS]
+    solution_consideration_seconds: float = 8.0  # [QAR_SOLUTION_CONSIDERATION_SECONDS]
     guidance_selection_timeout_seconds: float = 15.0  # [QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS]
     # How a turn's quest relates to recalled items: "fence" (an item of another quest is hidden) or "affinity" (kept, ranked
     # below the turn's own quest, labelled with where it came from). See core/scope_tags.py. [QAR_QUEST_SCOPE_MODE]

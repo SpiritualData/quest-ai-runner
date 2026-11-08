@@ -38,3 +38,40 @@ def test_no_records_or_no_provider_adds_nothing(tmp_path, monkeypatch):
     assert solution_consideration.brief_block("anything", str(tmp_path), Scripted()) == ""
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     assert solution_consideration.brief_block("anything", str(HUB), None) == ""
+
+
+class Store:
+    def __init__(self):
+        self.cards = {}
+
+    def write_card(self, card_id, card):
+        self.cards[card_id] = card
+        return True
+
+    def get_card(self, card_id):
+        return self.cards.get(card_id)
+
+
+class Orch:
+    def __init__(self, store, provider):
+        self.context_assembler, self.provider = store, provider
+
+
+def test_a_chat_turn_writes_the_touched_solutions_cards_and_puts_them_first(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    monkeypatch.setenv("QAR_SOLUTION_CONSIDERATION_SECONDS", "60")
+    store, meta = Store(), {"priority_card_ids": ["quest-folder-q1"]}
+    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
+    solution_consideration.for_turn(Orch(store, Scripted()), rs, meta)
+    assert "solution-cards-from-files" in store.cards and meta["priority_card_ids"][0] == "quest-folder-q1"
+    assert "solution-cards-from-files" in meta["priority_card_ids"]
+    assert "graphify_files: passed 3 of 63" in store.cards["solution-cards-from-files"]["content"][0]["locator"]["text"]
+
+
+def test_a_milestone_turn_is_left_to_its_own_step(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    store, meta = Store(), {}
+    solution_consideration.for_turn(Orch(store, Scripted()), SimpleNamespace(cue_resolved=object(), message_is_user_turn=True), meta)
+    assert store.cards == {} and "priority_card_ids" not in meta

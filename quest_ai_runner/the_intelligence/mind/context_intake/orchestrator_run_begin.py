@@ -24,6 +24,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records, take_status_flags
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
@@ -776,6 +777,11 @@ class RunBeginMixin:
             except milestone_cue.LaneGap as gap:
                 rs.cue_gap = str(gap)
                 log.warning("milestone cue: lane gap: %s", gap)
+
+        # EACH ESOI SOLUTION THE TURN TOUCHES gets its own consideration through the hub, after the acknowledgement and before context
+        # assembly: the touched solutions' cards are written and put first (``priority_card_ids``). Bounded by solution_consideration_seconds,
+        # a slower one grounds the next turn instead; a milestone turn is skipped (its own step judges the scopes above). Never raises.
+        solution_consideration.for_turn(self, rs, _ctx_meta)
 
         _assembled = None
         _ctx_future = None
