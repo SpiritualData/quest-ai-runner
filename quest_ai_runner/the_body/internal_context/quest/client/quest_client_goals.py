@@ -51,7 +51,7 @@ class GoalsMixin:
         return self._quest_team_cache.pop(quest_id, None) is not None
 
     def goals_from_owning_team(self, quest_id: str, failed_team: str,
-                                err: QuestApiError, *, resolved_now: bool) -> Dict[str, Any]:
+                                err: QuestApiError, *, resolved_now: bool, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Retry a failed team-scoped goals read on the team that actually owns the quest.
 
         Two rounds at most. The first uses the cached resolution (or resolves fresh when nothing
@@ -76,15 +76,20 @@ class GoalsMixin:
                      quest_id, failed_team, owner_tid)
             try:
                 return self._request(
-                    "GET", f"/api/teams/{owner_tid}/quests/{quest_id}/goals") or {}
+                    "GET", f"/api/teams/{owner_tid}/quests/{quest_id}/goals", params=params) or {}
             except QuestApiError as e:
                 tried.add(owner_tid)
                 err = e
         raise err
 
     def list_quest_goals(self, quest_id: str, *,
-                         team_id: Optional[str] = None) -> Dict[str, Any]:
+                         team_id: Optional[str] = None, spec_solution_id: Optional[str] = None,
+                         open_only: bool = False) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id}/goals — goals grouped by time period.
+
+        ``spec_solution_id`` asks the server for only the goals linked to that strategy or milestone record, ``open_only`` for only the goals neither
+        completed nor abandoned: a caller that needs a few goals of a quest with hundreds asks for those. A server too old to know the filters
+        answers with every goal, so a caller that relies on them filters the answer too.
 
         Returns {quest_id, outcome, period_groups: [{time_scope, period, period_label, goals: [{id,
         name, time_scope, period, period_label, deadline, completed, parent_goal_id}]}]}.
@@ -115,13 +120,18 @@ class GoalsMixin:
                 tid = self.owning_team_for(quest_id)
             if not tid:
                 raise QuestNotConfigured("team_id is required to list quest goals")
+            params: Dict[str, Any] = {}
+            if spec_solution_id:
+                params["spec_solution_id"] = spec_solution_id
+            if open_only:
+                params["open_only"] = "true"
             try:
-                return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
+                return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals", params=params or None) or {}
             except QuestApiError as e:
                 if team_id:
                     raise  # caller named the team: their call, their error
                 return self.goals_from_owning_team(
-                    quest_id, tid, e, resolved_now=resolved_now)
+                    quest_id, tid, e, resolved_now=resolved_now, params=params or None)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
             self.last_error = str(e)   # a tool reports why, so a repeat of it can be recognised

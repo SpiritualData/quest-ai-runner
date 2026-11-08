@@ -1345,8 +1345,9 @@ def test_the_turns_reads_reach_the_draft_call_and_the_draft_claim_check():
     assert seen in asked[0] and all(seen in p for p in asked if "independent checkers" in p)
 
 
-def test_this_weeks_step_is_found_past_the_first_page_of_goals_and_the_flow_says_it_is_already_there():
-    """A quest with hundreds of goals: the tool shows 100 a page, soonest due first, so this week's step sat past the first page and the flow said it was recording a new one."""
+def test_the_flow_asks_only_for_the_milestones_own_open_goals_and_finds_this_weeks_step():
+    """A quest with hundreds of goals: the tool showed one page of 100, soonest due first, so this week's step was never seen. The flow now asks the
+    lane for the goals linked to the milestone's record, open only, and gets only those."""
     now = datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc)
     week = cue.Week.of(cue.today_in("America/Los_Angeles", now), "America/Los_Angeles")
     older = [{"id": f"o{i}", "title": f"Older task {i}", "spec_solution_id": None, "completed": False, "abandoned": False, "due": "2026-01-01"} for i in range(230)]
@@ -1354,14 +1355,36 @@ def test_this_weeks_step_is_found_past_the_first_page_of_goals_and_the_flow_says
             "due": week.due, "assignee_name": "Cy"}
     asked = []
 
-    def paged(args, ctx):
+    def server(args, ctx):
         asked.append(dict(args))
-        rows = [g for g in older + [mine] if not (args.get("open_only", True) and g["completed"])]
-        offset, limit = int(args.get("offset") or 0), min(int(args.get("limit") or 25), 100)
-        return ToolResult(ok=True, data=rows[offset:offset + limit], text="one page")
-    tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=paged), write_goal([])])
+        rows = [g for g in older + [mine] if (not args.get("spec_solution_id") or g["spec_solution_id"] == args["spec_solution_id"])
+                and not (args.get("open_only", True) and g["completed"])]
+        return ToolResult(ok=True, data=rows[:min(int(args.get("limit") or 25), 100)], text="one page")
+    tools = ToolRegistry([read_spec(), ToolSpec(name="list_quest_goals", description="d", mutates=False, handler=server), write_goal([])])
     resolved = cue.resolve(tools, "q1", CUE, now)
-    assert resolved.week_goal() is not None and "which is already on the quest" in resolved.doing() and len(asked) == 3
+    assert asked == [{"quest_id": "q1", "spec_solution_id": "esr_c", "open_only": True, "limit": 100}]
+    assert resolved.week_goal() is not None and "which is already on the quest" in resolved.doing()
+
+
+def test_the_goals_tool_asks_the_server_for_the_linked_goals_and_filters_an_older_servers_full_answer():
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import list_quest_goals_spec
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+    calls = []
+
+    class Client:
+        def list_quest_goals(self, quest_id, **filters):
+            calls.append(filters)
+            goals = [{"id": "a", "title": "Linked", "spec_solution_id": "esr_c", "completed": False},
+                     {"id": "b", "title": "Other", "spec_solution_id": None, "completed": False}]       # an older server ignores the filters
+            return {"period_groups": [{"time_scope": "week", "period": "2026_W45", "goals": goals}]}
+
+        def list_assignable_members(self, quest_id):
+            return []
+    spec = list_quest_goals_spec({}, client_factory=Client)
+    result = spec.handler({"quest_id": "q1", "spec_solution_id": "esr_c"}, ToolContext(quest_id="q1"))
+    assert calls == [{"spec_solution_id": "esr_c", "open_only": True}] and [r["id"] for r in result.data] == ["a"]
+    spec.handler({"quest_id": "q1"}, ToolContext(quest_id="q1"))
+    assert calls[-1] == {}        # without a record the whole list is read, so the total stays the quest's count
 
 
 def test_the_step_and_draft_are_written_for_what_the_person_asked():

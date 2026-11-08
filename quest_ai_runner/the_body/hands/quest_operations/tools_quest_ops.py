@@ -638,7 +638,11 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         if not quest_id:
             return NO_QUEST
         client = factory()
-        payload = client.list_quest_goals(quest_id)
+        linked = str(args.get("spec_solution_id") or "").strip()
+        # Goals linked to one record are asked of the server (with open_only when asked), so a quest with hundreds of goals sends only those; the rows are
+        # filtered again below, so an older server's full answer gives the same result. Without it the whole list is read, so "N goals in all" stays the quest's count.
+        payload = (client.list_quest_goals(quest_id, spec_solution_id=linked, open_only=bool(args.get("open_only", True))) if linked
+                   else client.list_quest_goals(quest_id))
         if not isinstance(payload, dict) or "period_groups" not in payload:
             return ToolResult(ok=False, text=(
                 f"The goals of quest {quest_id} could not be read just now "
@@ -650,6 +654,8 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         total = len(rows)
         if args.get("open_only", True):
             rows = [r for r in rows if not r["completed"] and not r["abandoned"]]
+        if linked:
+            rows = [r for r in rows if r["spec_solution_id"] == linked]
         if args.get("assignee_user_id"):
             rows = [r for r in rows if r["assignee_user_id"] == str(args["assignee_user_id"])]
         needle = str(args.get("text_contains") or "").strip().lower()
@@ -693,6 +699,8 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         parameters={"type": "object", "properties": {
             "quest_id": QUEST_ID_PARAM,
             "assignee_user_id": {"type": "string", "description": "Only goals assigned to this user id."},
+            "spec_solution_id": {"type": "string",
+                                 "description": "Only goals linked to this strategy or milestone record id (read by the server, so only those are sent)."},
             "open_only": {"type": "boolean",
                           "description": "Hide done and abandoned goals (default true)."},
             "due_within_days": {"type": "integer",

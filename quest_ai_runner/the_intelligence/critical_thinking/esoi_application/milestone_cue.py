@@ -883,30 +883,23 @@ def records_read(tables: Mapping[str, Mapping[str, Mapping[str, Any]]], rid: str
     return "\n".join(parts)
 
 
-GOAL_PAGE = 100      # the tool's own page cap
-GOAL_PAGES = 20      # up to 2,000 open goals
-
-
-def goals_through(registry: Any, quest_id: str) -> List[Mapping[str, Any]]:
-    """The quest's open goals (every one this flow reads), all pages of the lane's ``list_quest_goals`` tool. One page used to be read: the tool caps a page at 100, soonest due
-    first, so on a quest with hundreds of goals this week's next step was never seen, the first message said it was being recorded with nothing ready, and the tool then updated
-    it in place. A lane without the tool, or a read that fails, is a ``LaneGap``: the reply must not claim a step is new when the goals could not be read."""
+def goals_through(registry: Any, quest_id: str, rid: Optional[str] = None) -> List[Mapping[str, Any]]:
+    """With ``rid``, the milestone's own open goals: the lane's ``list_quest_goals`` asked for the goals linked to the milestone's record
+    (``spec_solution_id``, the link the flow writes on every step it records), open only, which the server filters. Reading the quest's goals instead
+    showed one page of 100, soonest due first, so on a quest with hundreds of goals this week's step was never seen. Without ``rid``, the quest's goals
+    as the tool lists them (one page). A lane without the tool, or a read that fails, is a ``LaneGap``: the reply must not claim a step is new when the
+    goals could not be read."""
     if registry is None or registry.get("list_quest_goals") is None:
         raise LaneGap("this lane has no list_quest_goals tool, so the goals already on the milestone could not be listed")
     from quest_ai_runner.the_world.tools.tools import ToolContext
-    out: List[Mapping[str, Any]] = []
-    for _ in range(GOAL_PAGES):
-        try:
-            result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "open_only": True, "limit": GOAL_PAGE, "offset": len(out)}, ToolContext(quest_id=quest_id))
-        except Exception as error:      # noqa: BLE001
-            raise LaneGap(f"the quest's goals could not be listed ({type(error).__name__}: {error})") from error
-        if not result.ok:
-            raise LaneGap("the quest's goals could not be listed: " + str(result.text).strip()[:300])
-        page = [g for g in (result.data or []) if isinstance(g, Mapping)]
-        out += page
-        if len(page) < GOAL_PAGE:
-            break
-    return out
+    try:
+        args = {"quest_id": quest_id, "spec_solution_id": rid, "open_only": True, "limit": 100} if rid else {"quest_id": quest_id, "open_only": False, "limit": 200}
+        result = registry.invoke("list_quest_goals", args, ToolContext(quest_id=quest_id))
+    except Exception as error:      # noqa: BLE001
+        raise LaneGap(f"the quest's goals could not be listed ({type(error).__name__}: {error})") from error
+    if not result.ok:
+        raise LaneGap("the quest's goals could not be listed: " + str(result.text).strip()[:300])
+    return [g for g in (result.data or []) if isinstance(g, Mapping)]
 
 
 def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datetime] = None, decide: Optional[Callable[[str], str]] = None) -> Optional[Resolved]:
@@ -933,7 +926,7 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
             return None
     row = dict(solutions_of(tables))[rid]
     week = Week.of(today_in(zone, now), zone)
-    goals = goals_through(registry, quest_id)
+    goals = goals_through(registry, quest_id, rid)
     linked = metrics_of(tables, rid)
     metric = linked[0][1] if linked else None
     return Resolved(
