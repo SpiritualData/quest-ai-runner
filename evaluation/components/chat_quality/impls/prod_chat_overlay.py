@@ -249,6 +249,12 @@ def build(meter):
             passed = J.case_passed(judged_case, pre, judged) and not unexpected
             if record.get("state"):
                 passed = passed and record["state"]["ok"]
+            # The value gate (D x G x L x M) of a progress case, applied before the verdict counts: no measurable AI increment, no pass.
+            import value_gate
+            gate = value_gate.evaluate(judged_case, reads_seen, run.get("writes") or [], (judged or {}).get("verdict"))
+            if gate["applies"]:
+                passed = passed and gate["value"] == 1
+            record["value_gate"] = gate
             record.update(evidence=evidence, changes=changes_text, unexpected_writes=unexpected, other_writes=other, precheck=pre, judged=judged, score=J.final_score(pre, judged), passed=passed,
                           messages=messages, attempted_writes=run.get("writes"), model_calls=run.get("model_calls", 0), replay_error=run.get("error"), model_calls_log=run.get("model_calls_log") or [], qar_notes=run.get("qar_notes") or [],
                           provider_retries=run.get("provider_retries") or [],
@@ -261,7 +267,7 @@ def build(meter):
         record.setdefault("model_calls", 0)
         record.update(seconds=round(time.time() - started, 1), tokens_in=0, tokens_out=0, tokens_estimated=True)
         record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "changes", "unexpected_writes", "other_writes", "messages", "reads_seen", "unsupported_figures",
-                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "replay_error", "model_calls_log",
+                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "value_gate", "replay_error", "model_calls_log",
                                                           "qar_notes", "provider_retries", "judge_input")}
         try:
             meter.record(max(1, record["model_calls"]))

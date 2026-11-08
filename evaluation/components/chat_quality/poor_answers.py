@@ -79,12 +79,20 @@ def case_of(raw):
              f"ideal: {raw.get('ideal_handling') or 'not recorded'}",
              "The dev eval world holds no data of the organization this request came from, so a reply passes by honest, correctly routed, "
              "non-fabricating handling that follows the shape of the ideal, never by facts the world lacks."]
-    return dict(id=str(case_id), dataset="implicit", source=SOURCE, private=True, area=f"poor answers: {kind}", category=kind,
+    case = dict(id=str(case_id), dataset="implicit", source=SOURCE, private=True, area=f"poor answers: {kind}", category=kind,
                 capability=str(raw.get("capability_tested") or ""), message=text, conversation_scope="none", expected_routing="any",
                 rubric=[str(item) for item in raw["pass_criteria"]] if isinstance(raw.get("pass_criteria"), list) and raw["pass_criteria"]
                 else [item.format(kind=kind) for item in GENERIC_RUBRIC],     # the case's own criteria when it states them forbid_writes=False, pivots_change_answer=False,
                 precheck={"reply_regex": [r"\S"]}, evidence_notes=" ".join(notes),
-                **{key: raw[key] for key in ("effect", "state_check", "metric_probe", "increment", "increment_kind", "group", "cue_resolves_to", "esoi", "speed_class", "speed_target_seconds", "token_target", "history") if raw.get(key)}, **({"pinned": False} if raw.get("pinned") is False else {}), **({"channel": "voice"} if "voice" in str(raw.get("input_origin") or "") else {}))   # optional: the writes the case allows on the bounded production arm and how to count its effect
+                **{key: raw[key] for key in ("effect", "state_check", "metric_probe", "increment", "increment_kind", "group", "cue_resolves_to", "esoi", "speed_class", "speed_target_seconds", "token_target", "history",
+                                    "ai_doable", "deliverable_rubric", "increment_measure", "human_only") if raw.get(key)}, **({"pinned": False} if raw.get("pinned") is False else {}), **({"channel": "voice"} if "voice" in str(raw.get("input_origin") or "") else {}))   # optional: the writes the case allows on the bounded production arm and how to count its effect
+    if case.get("ai_doable"):       # a progress case: its deliverable is judged item by item, which the value gate reads (value_gate.py)
+        try:
+            from chat_quality import value_gate
+        except ImportError:         # loaded with the component folder itself on the path (the overlay arm, rejudge.py)
+            import value_gate
+        case["rubric"] = list(case["rubric"]) + value_gate.rubric_items(case)
+    return case
 
 
 def parse_cases(text):

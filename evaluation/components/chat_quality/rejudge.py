@@ -32,15 +32,37 @@ def kept_inputs(folder: Path, runs: int):
     return out
 
 
+def current_case(kept):
+    """The kept judged case with the dataset's CURRENT definition of the case laid over it (its rubric, pass criteria and value-gate fields), so a saved
+    reply is judged by today's standard; the replay's own additions to the rubric (the message-sequence item) and its notes are kept. The kept case as it
+    was when the dataset is absent or no longer holds the id."""
+    try:
+        from chat_quality import poor_answers
+    except ImportError:
+        import poor_answers
+    fresh = next((c for c in poor_answers.load_cases() if c["id"] == kept.get("id")), None)
+    if fresh is None:
+        return kept
+    import prod_probes
+    extra = [item for item in kept.get("rubric") or [] if item in (prod_probes.TWO_MESSAGE_ITEM, prod_probes.SINGLE_MESSAGE_ITEM)]
+    return dict(kept, **{k: v for k, v in fresh.items() if k not in ("evidence_notes", "rubric")}, rubric=list(fresh["rubric"]) + extra)
+
+
 def judged_once(record):
-    """(passed, score) of one fresh judgment of the record's kept input, under the run's own pass rule."""
+    """(passed, score, value gate) of one fresh judgment of the record's kept input, under today's pass rule: the judge's verdict, the state check, and the value gate of a
+    progress case (``value_gate.py``), read from the turn's recorded tool calls and writes."""
     import judge as J
+    import value_gate
     data = record["judge_input"]
-    judged = J.judge(data["case"], data["evidence"], data["changes"], data["pre"], data["truth"], {}, None, production=True, state=data.get("state"))
-    passed = J.case_passed(data["case"], data["pre"], judged) and not data.get("unexpected")
+    case = current_case(data["case"])
+    judged = J.judge(case, data["evidence"], data["changes"], data["pre"], data["truth"], {}, None, production=True, state=data.get("state"))
+    passed = J.case_passed(case, data["pre"], judged) and not data.get("unexpected")
     if data.get("state"):
         passed = passed and data["state"].get("ok", True)
-    return passed, J.final_score(data["pre"], judged)
+    gate = value_gate.evaluate(case, record.get("reads_seen") or [], record.get("attempted_writes") or [], (judged or {}).get("verdict"))
+    if gate["applies"]:
+        passed = passed and gate["value"] == 1
+    return passed, J.final_score(data["pre"], judged), gate
 
 
 def main():
@@ -56,10 +78,11 @@ def main():
     with ThreadPoolExecutor(args.parallel) as pool:
         results = list(pool.map(lambda job: (job[0], job[1], job[2].get("passed"), judged_once(job[2])), jobs))
     table = {}
-    for cid, run, original, (passed, score) in results:
-        table.setdefault((cid, run), {"original": original, "verdicts": [], "scores": []})
+    for cid, run, original, (passed, score, gate) in results:
+        table.setdefault((cid, run), {"original": original, "verdicts": [], "scores": [], "gates": []})
         table[(cid, run)]["verdicts"].append(passed)
         table[(cid, run)]["scores"].append(score)
+        table[(cid, run)]["gates"].append(gate)
     flipped = 0
     for (cid, run), row in sorted(table.items()):
         verdicts = row["verdicts"] + [row["original"]]
@@ -67,6 +90,9 @@ def main():
         flipped += unstable
         print(f"{cid:8} run {run + 1}: original {'PASS' if row['original'] else 'FAIL'} | re-judged {' '.join('PASS' if v else 'FAIL' for v in row['verdicts'])} "
               f"| scores {row['scores']}{'  <- judge flips' if unstable else ''}")
+        for gate in row["gates"][:1]:
+            if gate.get("applies"):
+                print(f"         value gate: value {gate['value']} (D {gate['D']} G {gate['G']} L {gate['L']} M {gate['M']}): {gate['why']}")
     print(f"rejudge: {flipped} of {len(table)} (case, run) verdicts flipped across {args.times} fresh judgments plus the original")
 
 
