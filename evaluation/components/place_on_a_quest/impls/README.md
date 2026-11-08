@@ -4,6 +4,8 @@ Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../../../quest
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
+| Learn from what is already placed, the model picks | `place-on-a-quest:example-vote-ranker` | [`evaluation/components/place_on_a_quest/impls/example_vote_ranker.py`](example_vote_ranker.py) |  |
+| A small learned prior over generic signals | `place-on-a-quest:learned-quest-prior` | [`evaluation/components/place_on_a_quest/impls/example_vote_ranker.py`](example_vote_ranker.py) |  |
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [`evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py`](shared_quest_ranker.py) |  |
 
 ## Where to go next

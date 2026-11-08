@@ -1,8 +1,8 @@
 """Loads the Quest backend's quest-picking code BY FILE PATH, so the arms measure the shipped functions and no application starts.
 
 Importing ``app.business.quests`` connects to Mongo and Qdrant at import time, which a metric must never do. The modules loaded here
-(``quest_aim.py``, which imports nothing, ``quest_pick_prompt.py``, which imports nothing of the application but its prompt texts and
-``quest_aim``, and ``quest_candidates.py``, whose only application imports are
+(``quest_aim.py``, which imports nothing, ``quest_pick_prompt.py``, which imports nothing of the application but its prompt texts, ``quest_aim`` and
+``quest_examples`` (also import free), and ``quest_candidates.py``, whose only application imports are
 ``app.core.cache`` at the top and the model call and prompt inside functions) are read from the sibling ``quest-backend`` checkout
 (``QAR_QUEST_BACKEND`` names another) after four small stand-ins for the application's modules are put in ``sys.modules``: a cache decorator that
 does not cache, a model call that raises (the arms replace the model step), and the prompt module loaded from its own file. The index
@@ -49,6 +49,8 @@ def backend():
         stand_in("app.core.cache", async_cache=no_cache)
         loaded_modules["aim"] = read_module("qb_quest_aim", "app/business/quests/quest_aim.py")
         stand_in("app.business.quests.quest_aim", **vars(loaded_modules["aim"]))
+        loaded_modules["examples"] = read_module("qb_quest_examples", "app/business/quests/quest_examples.py")
+        stand_in("app.business.quests.quest_examples", **vars(loaded_modules["examples"]))
         stand_in("app.core.llm_config", call_llm_async=no_model)
         stand_in("app.prompts.quest_candidate_prompts", **vars(read_module("qb_quest_candidate_prompts", "app/prompts/quest_candidate_prompts.py")))
         loaded_modules["prompts"] = read_module("qb_quest_pick_prompts", "app/prompts/quest_pick_prompts.py")
@@ -56,6 +58,12 @@ def backend():
         loaded_modules["pick"] = read_module("qb_quest_pick_prompt", "app/business/quests/quest_pick_prompt.py")
         loaded_modules["candidates"] = read_module("qb_quest_candidates", "app/business/quests/quest_candidates.py")
     return loaded_modules["pick"], loaded_modules["candidates"]
+
+
+def examples():
+    """The backend's ``quest_examples`` module (the pure part: item shapes, the vote, the fusion), as it ships."""
+    backend()
+    return loaded_modules["examples"]
 
 
 def ranking_system_prompt():

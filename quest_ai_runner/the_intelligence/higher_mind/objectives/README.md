@@ -57,7 +57,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Prediction store contract pass rate (`metric-persist-predictions`): leader `file_store`, 12 of 12 cases
 - Representative choice accuracy and thread consistency (`metric-select-a-rep`): leader `persona_resolver_precedence`, 14 of 16 cases
 - Two-sided long-term guidance (`metric-guide-toward-the-long-term-goal`): leader `guided_v2`, 9 of 10 cases
-- Quest placement accuracy over labelled messages, balanced with cost and time (`metric-place-on-a-quest`): leader `hybrid_candidate_ranker_model`, 48 of 50 cases
+- Quest placement accuracy over labelled messages, balanced with cost and time (`metric-place-on-a-quest`): leader `example_vote_ranker_model`, 50 of 50 cases
 
 ## Where to go next
 
@@ -105,6 +105,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py) |  |
 | Words and meaning candidates, the model picks | `place-on-a-quest:hybrid-candidate-ranker` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
 | The library judge over the quests it is given | `place-on-a-quest:library-quest-judge` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
+| Learn from what is already placed, the model picks | `place-on-a-quest:example-vote-ranker` | [evaluation/components/place_on_a_quest/impls/example_vote_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/example_vote_ranker.py) |  |
+| A small learned prior over generic signals | `place-on-a-quest:learned-quest-prior` | [evaluation/components/place_on_a_quest/impls/example_vote_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/example_vote_ranker.py) |  |
 
 ### Metrics
 
