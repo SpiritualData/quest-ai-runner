@@ -174,4 +174,4 @@ def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_reche
     made = milestone_progress.make_progress(cue(), Registry(), thin_first)
     assert made.depth["levels"] == 1 and made.depth["before"] < 1 and made.depth["after"] == 1 and made.depth["met"]
     assert made.after == 1 and "Call to action" in made.parts[-1]
-    assert "after building it out in 1 level(s) of parts" in made.reply_text()
+    assert "%" not in made.reply_text()          # the depth scores stay in the kept record, never as an unread figure in the reply

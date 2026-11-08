@@ -280,12 +280,8 @@ class Progress:
             return ""
         shown = lambda v: str(int(v)) if float(v).is_integer() else f"{v:g}"     # noqa: E731
         of = f" of {self.total}" if self.total else ""
-        line = f"{self.measure_name}: {shown(self.before)}{of} before, {shown(self.after)}{of} after (scored {self.as_of} by a check separate from the writer)."
-        if self.depth and self.depth.get("levels"):
-            pct = lambda v: f"{round(100 * float(v or 0))}%"      # noqa: E731
-            line += (f" This unit met {pct(self.depth.get('before'))} of its rubric in one call and {pct(self.depth.get('after'))} after building it out in "
-                     f"{self.depth.get('levels')} level(s) of parts.")
-        return line
+        # The depth loop's own scores stay in the kept increment's record (``depth``), not in the reply: a figure no read of the turn holds reads as invented.
+        return f"{self.measure_name}: {shown(self.before)}{of} before, {shown(self.after)}{of} after (scored {self.as_of} by a check separate from the writer)."
 
     def metric_line(self) -> str:
         if not self.metric_name:
@@ -547,7 +543,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     result = registry.invoke(KEEP_TOOL, {"quest_id": cue.quest_id, "title": title, "body": out.body(), "solution_id": cue.rid,
                                          "increment": {"kind": increment.get("kind"), "measure_id": increment.get("measure_id"), "measure_name": out.measure_name,
                                                        "before": out.before, "after": out.after, "total": out.total, "method": increment.get("method"),
-                                                       "as_of": day, "changed": out.after != out.before}}, ToolContext(quest_id=cue.quest_id))
+                                                       "as_of": day, "changed": out.after != out.before, "depth": out.depth}}, ToolContext(quest_id=cue.quest_id))
     if not getattr(result, "ok", False):
         raise milestone_cue.LaneGap(f"the deliverable for {cue.name!r} was not kept: {str(getattr(result, 'text', ''))[:300]}")
     out.kept_state = str((result.data or {}).get("state") or "")

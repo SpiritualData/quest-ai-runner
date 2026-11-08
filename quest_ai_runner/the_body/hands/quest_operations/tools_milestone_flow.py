@@ -28,7 +28,7 @@ from quest_ai_runner.the_world.tools.tools import ToolContext, ToolResult, ToolS
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 
 #: The fields of an increment the keep tool carries back, as measured by code (never the writer's say-so).
-INCREMENT_FIELDS = ("kind", "measure_id", "measure_name", "before", "after", "total", "unit", "method", "as_of", "changed", "simulated")
+INCREMENT_FIELDS = ("kind", "measure_id", "measure_name", "before", "after", "total", "unit", "method", "as_of", "changed", "simulated", "depth")
 
 
 def keep_milestone_deliverable_spec(client_factory: Callable[[], Any]) -> ToolSpec:
