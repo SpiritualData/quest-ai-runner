@@ -458,5 +458,31 @@ def with_rules(case, rules):
     return merged
 
 
+def history_turns(case):
+    """The prior turns a case seeds before its input, as ``[(role, text)]`` (role ``user`` or ``assistant``), from the case's ``history`` list of ``{"role", "text"}``."""
+    turns = []
+    for item in case.get("history") or []:
+        role, text = str((item or {}).get("role") or "").strip().lower(), str((item or {}).get("text") or "").strip()
+        if role in ("user", "assistant") and text:
+            turns.append((role, text))
+    return turns
+
+
+def history_pairs(case):
+    """The prior turns as the ``(user text, assistant text)`` pairs an in-process session keeps; a user turn with no reply after it pairs with an empty reply."""
+    pairs, pending = [], None
+    for role, text in history_turns(case):
+        if role == "user":
+            if pending is not None:
+                pairs.append((pending, ""))
+            pending = text
+        else:
+            pairs.append((pending or "", text))
+            pending = None
+    if pending is not None:
+        pairs.append((pending, ""))
+    return pairs
+
+
 def stamp(started):
     return round(time.time() - started, 1)

@@ -389,3 +389,26 @@ def test_the_safety_net_reports_concurrent_writes_apart_leaves_them_and_does_not
     assert not any(c[0] != "GET" for c in api.calls)                         # nothing was taken back
     record = safe.apply({"passed": True}, outcome)
     assert record["passed"] is True and record["concurrent_writes"] == outcome["concurrent"] and record["unexpected_writes"] == []
+
+
+HISTORY = [{"role": "user", "text": "first question"}, {"role": "assistant", "text": "first reply"}]
+
+
+def test_a_cases_prior_turns_become_session_pairs_and_the_chat_arm_sends_only_the_approved_user_turns(tmp_path):
+    import prod_probes as P
+    case = {"id": "X-1", "message": "second question", "history": HISTORY + [{"role": "user", "text": "dangling"}]}
+    assert P.history_turns(case)[0] == ("user", "first question")
+    assert P.history_pairs(case) == [("first question", "first reply"), ("dangling", "")]
+    assert P.history_pairs({"message": "x"}) == []
+    file = tmp_path / "cases.jsonl"
+    file.write_text(json.dumps({"case_id": "X-1", "input_text": "second question", "history": HISTORY}) + "\n" + json.dumps({"case_id": "X-2", "input_text": "z"}) + "\n")
+    approved = PC.load_allowed_histories(str(file))
+    assert PC.check_history({"id": "X-1", "history": HISTORY}, approved) == ["first question"]
+    assert PC.check_history({"id": "X-2"}, approved) == []
+    with pytest.raises(PC.GuardRefusal):
+        PC.check_history({"id": "X-1", "history": [{"role": "user", "text": "something else"}]}, approved)
+    sent = []
+    client = PC.ProdClient.__new__(PC.ProdClient)
+    client.stream_turn = lambda conv, text, started, **kw: sent.append((conv, text)) or iter(())
+    client.seed_history("c1", ["first question"], 0.0)
+    assert sent == [("c1", "first question")]

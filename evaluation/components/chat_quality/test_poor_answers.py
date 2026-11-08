@@ -122,3 +122,9 @@ def test_publishing_the_digest_never_touches_the_tracked_file(tmp_path, monkeypa
     poor_answers.publish_digest({})
     assert not local.exists()
     assert poor_answers.SOURCES_FILE.name == "case_sources.local.json" and "case_sources.local" in runner.NOT_DATASETS
+
+
+def test_a_records_prior_turns_travel_onto_its_case():
+    raw = dict(case_id="X-9", input_text="Invented follow-up", history=[{"role": "user", "text": "Invented first"}, {"role": "assistant", "text": "Invented reply"}], pass_criteria=["ok"])
+    assert poor_answers.case_of(raw)["history"] == raw["history"]
+    assert "history" not in poor_answers.case_of(dict(raw, history=None))

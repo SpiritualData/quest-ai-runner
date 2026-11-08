@@ -41,6 +41,7 @@ def build(meter):
     acted_as = PC.check_account(client.whoami())                                                 # refuses any account but the AI account
     environment = PC.environment_label()
     allowed = PC.load_allowed_cases(os.path.join(os.environ["QAR_PRIVATE_POOR_ANSWERS_DATASET"], "poorly_answered_inputs.jsonl"))
+    histories = PC.load_allowed_histories(os.path.join(os.environ["QAR_PRIVATE_POOR_ANSWERS_DATASET"], "poorly_answered_inputs.jsonl"))
     rules = P.load_rules(os.environ.get("QAR_PROD_CASE_RULES_FILE"))
     auto_run = os.environ.get("QAR_PROD_CHAT_AUTO_RUN", "1") != "0"
     J.OTHER_ACCOUNT_DATA.update(built=True, section="")
@@ -91,6 +92,7 @@ def build(meter):
         try:
             conv = client.create_conversation()
             record["conversation"] = conv
+            client.seed_history(conv, PC.check_history(case, histories), started)          # the case's approved prior user turns, before its input
             capped = None
             for event in client.stream_turn(conv, message, started, auto_run=auto_run):
                 events.append(event)

@@ -92,6 +92,25 @@ def load_allowed_cases(path):
     return allowed
 
 
+def load_allowed_histories(path):
+    """``{case_id: [(role, text)]}`` of the prior turns the private poorly answered file gives each case: the only prior turns this arm will ever send."""
+    approved = {}
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                row = json.loads(line)
+                approved[row["case_id"]] = [(str(t.get("role") or "").lower(), str(t.get("text") or "").strip()) for t in row.get("history") or [] if isinstance(t, dict)]
+    return approved
+
+
+def check_history(case, approved):
+    """The user turns a case seeds before its input, refused unless they are exactly the file's. Returns the user texts to send, in order."""
+    given = [(str(t.get("role") or "").lower(), str(t.get("text") or "").strip()) for t in case.get("history") or [] if isinstance(t, dict)]
+    if given != approved.get(case.get("id"), []):
+        raise GuardRefusal(f"prod_quest_chat: the prior turns of {case.get('id')} are not the approved ones; refusing to send them to production")
+    return [text for role, text in given if role == "user"]
+
+
 def check_case(case, allowed):
     """The case id must be one of the file's and the text sent must be exactly its input text. Any other input is refused."""
     case_id = case.get("id")
@@ -178,6 +197,13 @@ class ProdClient:
             raise RuntimeError(f"create conversation returned no id: {str(body)[:200]}")
         self.own_conversations.add(conv)
         return conv
+
+    def seed_history(self, conv, user_texts, started):
+        """Send the approved prior user turns of a case into the conversation this run created, each as a real turn the server answers, before the case's own input.
+        The chat has no route that stores a recorded assistant reply, so the prior replies are the server's own; an in-process arm seeds the recorded ones."""
+        for text in user_texts:
+            for _event in self.stream_turn(conv, text, started):
+                pass
 
     def stop(self, conv):
         try:

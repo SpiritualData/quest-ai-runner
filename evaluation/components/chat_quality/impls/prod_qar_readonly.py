@@ -267,7 +267,7 @@ def build_arm(meter, bounded):
         started = time.time()
         frames, final = [], None
         try:
-            session._session_history = []
+            session._session_history = P.history_pairs(case)           # the prior turns of the case, seeded before its input
             session._conv_id = f"qar_chat_{uuid.uuid4().hex}"
             session.pinned_quest, session._goal_id = None, None
             preamble, grounding = session.turn_grounding(message)
