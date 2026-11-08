@@ -92,7 +92,8 @@ class TestInstantAck:
         return _AckProvider()
 
     def test_instant_ack_off_by_default(self):
-        """Default config: no ack call, no extra status tick."""
+        """Default config: no ack model call (no partial), but the code-written acknowledgement status still opens
+        the turn (hubofhubs.api.Acknowledger contract: every live turn a person sent)."""
         events: List[Dict[str, Any]] = []
         provider = StubProvider(decisions=[{"action": "answer", "rationale": "done"}])
         orch = _make_orch(provider, StubRetrieval())
@@ -101,10 +102,10 @@ class TestInstantAck:
 
         partial_events = [e for e in events if e["type"] == EVENT_PARTIAL]
         assert not partial_events, "No EVENT_PARTIAL should be emitted when instant_ack=False"
-        # The first status should be "planning..." not "Looking into this..."
-        first_status = next((e for e in events if e["type"] == EVENT_STATUS), None)
-        assert first_status is not None
-        assert "looking" not in first_status.get("text", "").lower()
+        # The first status is the acknowledgement, marked kind "ack", and it comes only once.
+        statuses = [e for e in events if e["type"] == EVENT_STATUS]
+        assert statuses and statuses[0].get("data", {}).get("kind") == "ack"
+        assert sum(1 for e in statuses if e.get("data", {}).get("kind") == "ack") == 1
 
     def test_instant_ack_emits_immediate_status(self):
         """instant_ack=True: 'Looking into this...' is emitted before planning."""

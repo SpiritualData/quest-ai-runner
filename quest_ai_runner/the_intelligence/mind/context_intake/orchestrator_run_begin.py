@@ -230,6 +230,12 @@ class RunBeginMixin:
             on_detach = fan.detach
         emit = _Emitter(active_sink, mode, self._status, detach_check=detach_check, on_detach=on_detach)
         rs.emit = emit
+        # THE QUICK ACKNOWLEDGEMENT (the hub's contract, ``hubofhubs.api.Acknowledger``): a status marked kind "ack",
+        # written by code and sent before anything slow below (the recipe lookup, context search, any model call),
+        # on every live turn a person sent. A consumer that already acknowledged the turn (a web endpoint the
+        # moment its stream opened) sees the same line again, which changes nothing it shows.
+        if mode is Mode.LIVE and message_is_user_turn:
+            emit.ack()
         # The live work trace (core/work_trace.py): None unless the consumer opted in through context_meta["work_trace"].
         rs.trace = work_trace.start(emit, context_meta)
 
@@ -287,10 +293,6 @@ class RunBeginMixin:
         )
         rs.narrator = narrator
         if narrator.enabled:
-            try:
-                emit.status("Looking into this...")
-            except Exception:  # noqa: BLE001
-                pass
             narrator.begin(rs.user_message)
 
         # --- THE REACH JUDGE, started now so it overlaps everything before the first plan -------
