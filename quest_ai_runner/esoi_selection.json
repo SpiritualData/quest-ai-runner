@@ -273,6 +273,7 @@
  "esoi-application": {
   "default": "quest_spec_records",
   "modules": {
+   "metric_source": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source",
    "quest_spec_records": "quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit"
   }
  },
@@ -715,7 +716,6 @@
    "qar_guards": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },
- "run-applies-esoi": {
  "route-a-request": {
   "default": "planner_derived",
   "evidence": {
@@ -727,6 +727,7 @@
    "planner_derived": "quest_ai_runner.the_intelligence.mind.request_router.planner_derived"
   }
  },
+ "run-applies-esoi": {
   "default": "slice-and-writeback",
   "evidence": {
    "detail": "beaten by single_attempt: best guess, not yet significant: single_attempt 0.907 against slice_and_writeback 0.826 on the point estimate; no case counts or per-case rows allow a test",
