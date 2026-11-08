@@ -363,6 +363,9 @@ def test_the_planner_naming_an_operation_as_a_tool_or_as_a_quest_never_reaches_a
                            {"name": "get_reflection_context", "args": {}}], evidence=evidence, order_gate=lambda: False)
     assert ran == []
     assert "not a quest" in got[0]["text"] and "not a tool" in got[1]["text"] and "not ordered" not in got[1]["text"]
+    # A tool the planner made up is its own slip: the planner is told, the reply never reads it as work that could not be done.
+    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence
+    assert got[1].get("planner_only") and got[1] not in answer_evidence(got)
 
 
 def test_the_operation_names_are_the_adapters_operations():

@@ -459,8 +459,9 @@ class ReadsMixin:
             args = dict(call.get("args") or {})
             spec = self.tools.get(name) if self.tools is not None else None
             if spec is None and self.tools is not None:
-                # Not a tool (the planner named a retrieval operation or made one up): say so, never "not ordered".
-                gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value,
+                # Not a tool (the planner named a retrieval operation or made one up): say so to the planner, never "not ordered". It is the planner's own slip, not something
+                # the turn read or tried in the world, so it is planner_only: the reply never reports it as work that could not be done.
+                gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value, "planner_only": True,
                                  "text": f"TOOL {name} NOT RUN: it is not a tool. Available tools: {', '.join(self.tools.names()) or 'none'}."})
                 emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not a tool",
                                         data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
