@@ -485,3 +485,12 @@ def test_a_listener_counts_figures_not_the_years_of_dates_ratios_or_breakdowns()
     assert figures_said("Sales stood at 4 as of 7 November 2026.") == 1
     assert figures_said("Sign-ups are at 50% (5 of 10, read 6 November), against a target of 100.") == 2
     assert figures_said("3 of 12 people replied.") == 1
+
+
+def test_a_length_repair_that_loses_a_quoted_name_or_an_address_is_caught():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import lost_pointers, pointed_items
+    draft = 'It is already set. The "Weekly check-in: Friday review" workflow is on the quest, see https://example.org/q/1.'
+    held = pointed_items(draft)
+    assert "Weekly check-in: Friday review" in held and len(held) == 2
+    assert lost_pointers("It is already set.", held) == held
+    assert not lost_pointers('The "Weekly check-in: Friday review" workflow is already set: https://example.org/q/1', held)

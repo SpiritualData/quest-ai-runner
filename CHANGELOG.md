@@ -20,6 +20,9 @@ All notable changes to this project are documented here. The format is based on
 - chat_quality judge: the ground truth view is 80,000 characters, and when the reads run longer each long read is cut to a fair share (head and tail kept), so one large record dump no longer pushes the read a reply's figure came from out of the judge's view.
 
 ### Fixed
+- Reply standard repair: a length repair that loses a web address or a quoted name the draft held (where the person finds what the reply is about) is rejected and the longer draft ships (`pointed_items`, `lost_pointers`).
+- Reply check cap 12 calls: room for the hub's majority of confirmations before a removal.
+- chat_quality item judge: the views also see the harness checks (prechecks, state check) and the replay's rule that a blocked write counts as made.
 - Reply check: the reads and facts views see what the writer was shown (the turn's reads and its context view, up to 16000 characters); held to the reads alone, a true sentence from the quest's own state was removed as unsupported.
 - Spoken figure cap: a date takes its year with it (`without_dates`), "5 of 10" is one figure and a parenthesised breakdown is not more figures (`figures_said`); a dated status was over the cap and cut.
 - The reply standard logs what still fails before its last repair; chat_quality's overlay keeps each record's judge input, ships the sibling hub package, and `rejudge.py` re-scores kept inputs with no new chat turn.

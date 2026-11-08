@@ -25,7 +25,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text imp
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
-    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, measure, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, lost_pointers, measure, pointed_items, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
@@ -690,13 +690,13 @@ class RunAnswerMixin:
                     # An address the draft holds is an item the person may have asked for: it outranks a length or list cap.
                     # The hint names the addresses that must survive, and a repair that loses one is rejected (the
                     # address sets are compared, no prose is read); the longer draft ships.
-                    held = http_addresses(rs.text)
+                    held = pointed_items(rs.text)
                     candidate = _gen_answer(steering(measured.hint() + keep_addresses_hint(rs.text, held), rs.text))
                     repair_rounds += 1
                     measurement_rounds += 1
-                    if held - http_addresses(candidate):
+                    if lost_pointers(candidate, held):
                         log.info("Reply standard %s: repair dropped %d address(es) the draft held; kept the longer draft",
-                                 standard.shape, len(held - http_addresses(candidate)))
+                                 standard.shape, len(lost_pointers(candidate, held)))
                         break
                     rs.text = candidate
                     measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),

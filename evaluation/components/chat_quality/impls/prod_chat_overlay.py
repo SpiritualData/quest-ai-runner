@@ -216,7 +216,7 @@ def build(meter):
             judged_case["evidence_notes"] += " Figures in the reply that appear neither in the turn's reads nor in the user's message: " + (", ".join(absent) or "none") + "."
             record["reads_seen"], record["unsupported_figures"] = reads_seen, absent
             pre = J.precheck(judged_case, evidence, {}, {}, changes_text)
-            judged = J.judge(judged_case, evidence, changes_text, pre, truth, {}, None, production=True)
+            judged = J.judge(judged_case, evidence, changes_text, pre, truth, {}, None, production=True, state=record.get("state"))
             passed = J.case_passed(judged_case, pre, judged) and not unexpected
             if record.get("state"):
                 passed = passed and record["state"]["ok"]

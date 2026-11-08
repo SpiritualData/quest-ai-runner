@@ -50,7 +50,7 @@ def present_text(participants: Sequence[Any]) -> str:
     return "the person writing to us" + "".join(f", {n}" for n in names if n)
 
 
-def reply_binding(reads: str, executed: str, present: str, max_calls: int = 8) -> Dict[str, Any]:
+def reply_binding(reads: str, executed: str, present: str, max_calls: int = 12) -> Dict[str, Any]:
     """The hub's Binding for a reply: four views, each shown only its own evidence."""
     return {"kind": "reply", "max_calls": max_calls, "parallel": 4, "views": [
         {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
@@ -85,7 +85,7 @@ def checked_reply(orch: Any, rs: Any, text: str) -> str:
         context = str(getattr(rs, "context_view", "") or "").strip()
         grounding = reads_text(answer_evidence(getattr(rs, "gathered", None) or [])) + (f"\n- the context the reply was written from: {context}" if context else "")
         binding = reply_binding(grounding, tool_landed_account(getattr(rs, "exec_record", None)),
-                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 8)))
+                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 12)))
         result = AgreementCheck(plumbing=None).check(text, binding, ask)
         rs.reply_check = {k: result.get(k) for k in ("outcome", "calls", "agreement", "why")}
         log.info("Reply check: %s in %s calls (agreement %s): %s", result.get("outcome"), result.get("calls"), result.get("agreement"), result.get("why"))

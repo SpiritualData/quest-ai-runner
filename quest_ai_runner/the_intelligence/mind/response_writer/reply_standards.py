@@ -663,8 +663,25 @@ def steering(hint: str, previous: str) -> str:
     return f"A reviewer flagged this for one correction: {hint}\n\n--- YOUR PREVIOUS ANSWER ---\n{previous}"
 
 
+POINTED_NAME = re.compile(r"[\"“]([^\"”\n]{3,120})[\"”]")
+
+
+def pointed_items(text: str) -> frozenset:
+    """What a reply points the person to: its web addresses and the names it quotes (a goal's or workflow's exact title). A repair for length must keep them: they are
+    where the person finds what the reply is about. Compares text; reads no meaning."""
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
+    return http_addresses(text) | frozenset(m.group(1).strip() for m in POINTED_NAME.finditer(text or ""))
+
+
+def lost_pointers(candidate: str, held: Any) -> frozenset:
+    """The items of ``held`` the candidate no longer holds (an address by its normalised form, a quoted name by its text)."""
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
+    present = http_addresses(candidate)
+    return frozenset(item for item in (held or ()) if item not in present and item not in (candidate or ""))
+
+
 def keep_addresses_hint(draft: str, held: Any) -> str:
-    """The sentence added to a repair hint when the draft holds web addresses: they must survive the repair (the length cap yields)."""
+    """The sentence added to a repair hint when the draft holds web addresses or quoted names: they must survive the repair (the length cap yields)."""
     if not held:
         return ""
-    return " Keep every web address in the answer exactly as written, even if that leaves it longer than the limit."
+    return " Keep every web address and every quoted name in the answer exactly as written, even if that leaves it longer than the limit."

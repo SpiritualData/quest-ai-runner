@@ -14,7 +14,8 @@ VIEWS = 3
 EVIDENCE_CHARS = 14000
 OPTIONS = [{"id": "pass", "text": "the turn meets this item"}, {"id": "fail", "text": "the turn does not meet this item"}]
 INSTRUCTION = ("Does the turn meet this rubric item? {item}\n"
-               "Judge only this item, from the evidence: the person's message, the reply exactly as sent, what the turn read and the changes it attempted. "
+               "Judge only this item, from the evidence: the person's message, the reply exactly as sent, what the turn read, the changes it attempted and the harness checks. "
+               "In this replay every write is blocked and recorded: a write listed in the changes counts as made for an item about what exists after the run. "
                "Pick pass only if the evidence shows the item is met, and quote the words that show it. Pick fail when it is not met or the evidence does not show it, "
                "and quote the words that show that when there are any.")
 
@@ -24,7 +25,15 @@ def on() -> bool:
     return os.environ.get("QUAL_ITEM_VIEWS", "0") == "1"
 
 
-def evidence_text(case: Dict[str, Any], evidence: Dict[str, Any], changes: List[str], truth: str) -> str:
+def harness_text(pre: Any, state: Any) -> str:
+    """The harness's own checks, in words a view can quote: each precheck with its result, and the state check when the run made one."""
+    lines = [f"- precheck {c.get('name')}: {'ok' if c.get('ok') else 'FAILED'} ({c.get('detail')})" for c in ((pre or {}).get("checks") or []) if isinstance(c, dict)]
+    if isinstance(state, dict):
+        lines.append(f"- state check: {'ok' if state.get('ok') else 'FAILED'} ({state.get('why')})")
+    return "\n".join(lines) or "(none)"
+
+
+def evidence_text(case: Dict[str, Any], evidence: Dict[str, Any], changes: List[str], truth: str, pre: Any = None, state: Any = None) -> str:
     def clip(text: Any, limit: int) -> str:
         text = str(text or "")
         return text if len(text) <= limit else text[:limit] + " ...[cut]"
@@ -32,13 +41,14 @@ def evidence_text(case: Dict[str, Any], evidence: Dict[str, Any], changes: List[
             + "\n\nThe reply exactly as sent:\n" + clip(evidence.get("reply"), 4000)
             + "\n\nWhat the turn read:\n" + clip(truth, EVIDENCE_CHARS)
             + "\n\nThe changes the turn attempted:\n" + (clip("\n".join(changes or []), 2000) or "(none)")
-            + "\n\nNotes on the setting:\n" + clip(case.get("evidence_notes"), 2000))
+            + "\n\nThe harness checks:\n" + harness_text(pre, state)
+            + "\n\nNotes on the setting:\n" + clip(case.get("evidence_notes"), 3000))
 
 
-def refine(case: Dict[str, Any], verdict: Dict[str, Any], evidence: Dict[str, Any], changes: List[str], truth: str, ask) -> Dict[str, Any]:
+def refine(case: Dict[str, Any], verdict: Dict[str, Any], evidence: Dict[str, Any], changes: List[str], truth: str, ask, pre: Any = None, state: Any = None) -> Dict[str, Any]:
     """``verdict`` with each rubric item's pass decided by the majority of its draft and its views, the item's views kept, and the score recomputed by the judge's formula."""
     from hubofhubs.api import CheckBinding, MajorityVote, View
-    shown = evidence_text(case, evidence, changes, truth)
+    shown = evidence_text(case, evidence, changes, truth, pre, state)
 
     def decide(item: Dict[str, Any]) -> Dict[str, Any]:
         views = [View(f"view{n + 1}", INSTRUCTION.format(item=item["item"]), shown) for n in range(VIEWS)]

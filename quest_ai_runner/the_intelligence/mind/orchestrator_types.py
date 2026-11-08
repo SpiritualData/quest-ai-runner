@@ -253,7 +253,7 @@ class OrchestratorConfig:
     # to the actions it executed, and only a span an independent call confirms is rewritten or removed. Off until its measured result says it pays.
     reply_check: bool = False
     reply_check_tier: str = "fast"
-    reply_check_max_calls: int = 8
+    reply_check_max_calls: int = 12
     # LAST-RESORT DEEP RUN: when the turn's goal verdict is definitively NOT met and no deep run
     # was attempted this turn, run ONE deep pass before handing the user a non-answer (for example
     # "I don't have material on that, which file should I look in?"). Only applies when a deep

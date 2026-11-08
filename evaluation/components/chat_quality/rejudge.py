@@ -36,7 +36,7 @@ def judged_once(record):
     """(passed, score) of one fresh judgment of the record's kept input, under the run's own pass rule."""
     import judge as J
     data = record["judge_input"]
-    judged = J.judge(data["case"], data["evidence"], data["changes"], data["pre"], data["truth"], {}, None, production=True)
+    judged = J.judge(data["case"], data["evidence"], data["changes"], data["pre"], data["truth"], {}, None, production=True, state=data.get("state"))
     passed = J.case_passed(data["case"], data["pre"], judged) and not data.get("unexpected")
     if data.get("state"):
         passed = passed and data["state"].get("ok", True)
