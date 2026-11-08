@@ -111,6 +111,20 @@ def test_a_source_reading_as_recent_or_newer_replaces_the_records_reading():
     assert "Current value: 3 (as of 2026-11-03, from Funnel report)" in client.created[0]["description"]
 
 
+def test_a_stored_value_older_than_the_records_last_measure_is_not_the_current_value():
+    stale = {"value": 100, "as_of": "2026-11-01", "source": "Me", "detail": {}}
+    source_reading = {"value": 61, "as_of": "2026-11-03", "source": "Funnel report", "detail": {}}
+    client = Client()
+    registry = ToolRegistry(milestone_flow_tools(lambda: client, lambda name: source_reading, recorded_reader=lambda quest_id, metric_id: stale))
+    SPEC["records"][1]["fields"]["measured_through"] = "2026-11-02"
+    try:
+        resolved = cue.resolve(registry, "q1", "get the onboarding test moving", NOW, decide)
+    finally:
+        SPEC["records"][1]["fields"].pop("measured_through")
+    resolved.carry_out(registry, decide)
+    assert "Current value: 61 (as of 2026-11-03, from Funnel report)" in client.created[0]["description"] and "100" not in client.created[0]["description"]
+
+
 def test_a_reading_is_checked_the_same_way_whatever_reads_it():
     assert checked_reading('{"value": 7, "as_of": "2026-11-03", "source": "A"}')["value"] == 7
     for text in ("not json", '{"as_of": "2026-11-03", "source": "A"}', '{"value": 1, "as_of": "yesterday", "source": "A"}', '{"value": 1, "as_of": "2026-11-03"}'):

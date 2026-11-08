@@ -678,8 +678,11 @@ class Resolved:
                 recorded = None
                 self.reading_gap = f"reading the value recorded for the metric failed ({type(error).__name__}: {error})"
             if recorded is not None and recorded.ok and isinstance(recorded.data, Mapping) and recorded.data.get("as_of"):
-                self.reading = {k: recorded.data[k] for k in ("value", "as_of", "source", "detail") if k in recorded.data}
-                return
+                stored = {k: recorded.data[k] for k in ("value", "as_of", "source", "detail") if k in recorded.data}
+                # A stored value older than the day the metric record was last measured is not the current value: the record has moved on since, so it is not used.
+                if not self.record_date or str(stored["as_of"]) >= self.record_date[:10]:
+                    self.reading = stored
+                    return
         # Next, the reading the metric record itself holds, dated and sourced on its first line. Any value is a reading, 0 included. The named source is still read after
         # it and replaces it when it reads as recently or later; a source that cannot be read leaves the recorded reading standing, and the receipt says so.
         self.reading = self.recorded_reading()
