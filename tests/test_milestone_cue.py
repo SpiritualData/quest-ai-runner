@@ -266,8 +266,11 @@ def test_settle_plan_turns_a_deep_run_or_a_permission_question_into_the_answer_a
     resolved.settle_plan(ask, "RECEIPT")
     assert ask.action == "answer" and ask.confirm_question is None
     read = PlanDecision(action="read")
+    resolved.settle_plan(read, "")
+    assert read.action == "read"                 # the step made nothing: the turn may still read
+    read = PlanDecision(action="read")
     resolved.settle_plan(read, "RECEIPT")
-    assert read.action == "read"
+    assert read.action == "answer"               # the work is made: a further read only postpones the reply
     code = PlanDecision(action="deep", goal="g", deep_brief="build the page", deep_target="code_or_files")
     resolved.settle_plan(code, "RECEIPT: step recorded")
     assert code.action == "deep" and code.deep_brief.startswith("Already done by the runner before this run") and "RECEIPT: step recorded" in code.deep_brief

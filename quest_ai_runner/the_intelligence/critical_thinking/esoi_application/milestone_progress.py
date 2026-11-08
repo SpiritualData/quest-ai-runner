@@ -198,6 +198,21 @@ List the questions this decision needs answered (at most {limit}), and answer ea
 "source": "<the record or read it comes from, by name>", "quote": "<the exact words of that record or read the answer rests on, a few words, empty when unanswered>"}}]}}.
 Invent no figure, name or date. {no_em_dash}"""
 
+PART_PROMPT = """One unit of a team's deliverable misses one requirement. Write ONLY the few sentences that meet it, to be joined into the unit; do not
+rewrite the unit.
+
+The unit: {goal}
+The unit as it stands:
+{base}
+
+The requirement it misses: {requirement}
+
+The milestone's records and this turn's reads, the only source for any fact:
+{records}
+{grounding}
+
+Use only facts above; where a fact is missing, write "to be decided". Reply with JSON only: {{"part": "<the sentences>"}}. {no_em_dash}"""
+
 COMBINE_PROMPT = """Join these parts of one unit of a team's deliverable into the one unit, complete and in order, used as it is.
 
 The unit: {goal}
@@ -209,8 +224,9 @@ The unit as first written:
 Parts written to meet what it missed:
 {parts}
 
+Write ONE unit, not several versions: the first version with each part worked in where it belongs, about as long as the first version plus the parts.
 Keep every fact exactly as the parts and the first version give it; add none. Where a fact is missing, write "to be decided". Reply with JSON only:
-{{"part": "<the whole unit>"}}. {no_em_dash}"""
+{{"part": "<the one whole unit>"}}. {no_em_dash}"""
 
 SCORE_PROMPT = """Check one deliverable against its requirements. You did not write it; judge only what the text shows, against the records below.
 
@@ -468,14 +484,23 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                 return {"met": not missing, "score": len(met) / len(wanted) if wanted else 0.0, "missing": missing,
                         "reason": "meets every requirement" if not missing else "misses: " + "; ".join(missing)}
 
+            def piece_split(piece: Mapping[str, Any], checked: Mapping[str, Any]) -> List[Dict[str, Any]]:
+                # One sub-piece per requirement the check found missing, each asked for only the sentences that meet it (the parent's prompt asks for a
+                # whole unit, which made every sub-piece another whole version).
+                missing = [str(r) for r in checked.get("missing") or []] or list(piece.get("requirements") or [])
+                return [{"goal": f"{piece.get('goal')}: {req}", "requirements": [req], "solution_id": cue.rid,
+                         "prompt": PART_PROMPT.format(goal=piece.get("goal"), base=part, requirement=req, records=cue.records_text[:RECORD_CHARS * 2],
+                                                      grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)", no_em_dash=NO_EM_DASH)} for req in missing]
+
             def piece_combine(piece: Mapping[str, Any], base: str, parts: Sequence[Mapping[str, Any]]) -> str:
                 written = "\n\n".join(f"For: {p['requirements'][0]}\n{p['text']}" for p in parts if str(p.get("text") or "").strip())
                 answer = decide(COMBINE_PROMPT.format(goal=piece.get("goal"), requirements="; ".join(piece.get("requirements") or []), base=base,
                                                       parts=written or "(none)", no_em_dash=NO_EM_DASH))
                 return str(parse_json(answer).get("part") or base).strip()
-            deep = build_out(unit, piece_work, piece_check, combine=piece_combine, budget={"calls": DEPTH_CALLS, "depth": 2, "width": 4}, base=part)
+            deep = build_out(unit, piece_work, piece_check, split=piece_split, combine=piece_combine, budget={"calls": DEPTH_CALLS, "depth": 2, "width": 4}, base=part)
             out.depth = {k: deep.get(k) for k in ("before", "after", "calls", "levels", "stopped", "met")}
-            part = str(deep.get("text") or part).strip()
+            if float(deep.get("after") or 0) >= float(deep.get("before") or 0):
+                part = str(deep.get("text") or part).strip()       # depth that scored lower than the one-call unit is not kept
         part = grounded_text(part, allowed, decide) if part else ""
         # The overview is composed by code from the item and its count: a model-written list of units named topics the records never gave.
         out.overview = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".") + (
