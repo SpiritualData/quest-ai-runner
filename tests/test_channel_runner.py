@@ -243,19 +243,22 @@ def test_orchestrator_with_no_terminal_result_still_replies():
 
 def test_channel_sink_drops_chatter_throttles_milestones_remembers_result():
     transport = FakeTransport()
+    now = [0.0]
     sink = ChannelSink(transport, "chat-1", reply_to_message_id="m1",
-                       ack_after_seconds=0, progress_min_seconds=1000)
+                       ack_after_seconds=0, progress_min_seconds=1000, clock=lambda: now[0])
     sink.start()
     events = [
-        {"type": "status", "text": "thinking"},             # dropped
-        {"type": "plan", "text": "planning"},                # dropped
-        {"type": "read", "text": "reading a file"},          # dropped
-        {"type": "milestone", "text": "found something"},    # sent (first milestone)
-        {"type": "milestone", "text": "found more"},         # throttled
-        {"type": "tokens", "data": {}},                      # dropped
-        {"type": "result", "text": "final answer text"},     # remembered, not sent directly
+        (0, {"type": "status", "text": "thinking"}),               # dropped
+        (0, {"type": "plan", "text": "planning"}),                  # dropped
+        (5, {"type": "milestone", "text": "too early"}),            # short stretch: a status only, not sent
+        (1001, {"type": "read", "text": "reading a file"}),         # dropped
+        (1001, {"type": "milestone", "text": "found something"}),   # sent: usable after a long stretch
+        (1002, {"type": "interim", "text": "found more"}),          # the stretch restarted: not sent
+        (1003, {"type": "tokens", "data": {}}),                     # dropped
+        (1003, {"type": "result", "text": "final answer text"}),    # remembered, not sent directly
     ]
-    for ev in events:
+    for at, ev in events:
+        now[0] = at
         sink.on_event(ev)
     text = sink.finish(Result(kind="answer", text=None))
     assert text == "final answer text"

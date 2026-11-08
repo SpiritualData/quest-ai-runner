@@ -127,7 +127,7 @@ Env vars (see `cli.py`'s module docstring for the authoritative list, kept in sy
 | `QAR_CHANNEL_NAME` | The channel's name / dedup-key prefix. | `openclaw` |
 | `QAR_CHANNEL_ALLOWED_SENDERS` | Comma-separated sender ids. Empty = deny all. | (empty) |
 | `QAR_CHANNEL_ACK_AFTER_SECONDS` | Seconds before a "still working" ack, if the turn runs long. `<= 0` disables it. | `15` |
-| `QAR_CHANNEL_PROGRESS_MIN_SECONDS` | Minimum seconds between two milestone sends in one turn. | `20` |
+| `QAR_CHANNEL_PROGRESS_MIN_SECONDS` | The long stretch of the hub's communication policy (`hubofhubs.api.communicate`): a partial result (milestone or interim) is sent only when it carries something usable after at least this many seconds since the turn started or since the last one sent. | `20` |
 | `QAR_CHANNEL_TURN_TIMEOUT_SECONDS` | Outer wall-clock safety net per turn. `<= 0` disables it. | `900` |
 | `QAR_CHANNEL_STATE_PATH` | Dedup state file. Unset = in-memory only (no persistence across restarts). | unset |
 

@@ -26,7 +26,11 @@ Two things live here:
         (the spec's "decision-relay" outcome) -- no auto-resolution of Quest decision-requests from
         a channel reply happens here or anywhere in this lane; that is a separate trust decision,
         out of scope.
-      * a "milestone" event is throttled to at most one send per ``progress_min_seconds``.
+      * a "milestone" or "interim" event (a partial result) goes through the hub's communication policy
+        (``hubofhubs.api.TurnCommunicator``, long stretch = ``progress_min_seconds``): it is sent only when
+        the policy keeps it (something usable after a long stretch, with more to come, or a finding marked
+        to notify). A chat channel cannot replace a message, so what the policy shows only as a status is
+        not sent.
       * everything else (status/plan/read/replan/partial/exec/understanding/context/intent/
         tokens/overseer/mode_signal/card_thread/explanation/done) is DROPPED -- chat-appropriate
         chatter suppression, not a silent-failure risk (the terminal guarantee lives in ``finish``/
@@ -46,7 +50,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from hubofhubs.api import ConversationContext
-from hubofhubs.api import EVENT_DECISION, EVENT_MILESTONE, EVENT_RESULT
+from hubofhubs.api import EVENT_DECISION, EVENT_INTERIM, EVENT_MILESTONE, EVENT_RESULT
+from hubofhubs.api import CommunicationPolicy, TurnCommunicator
 from quest_ai_runner.the_consciousness.request_intake.interface import ChannelTransport, OutboundReply
 from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.conversation_session_store import ChatSessionStore
 
@@ -139,6 +144,7 @@ class ChannelSink:
         ack_after_seconds: float = DEFAULT_ACK_AFTER_SECONDS,
         progress_min_seconds: float = DEFAULT_PROGRESS_MIN_SECONDS,
         on_send: Optional[Callable[[OutboundReply], None]] = None,
+        clock: Callable[[], float] = time.monotonic,
     ):
         self._transport = transport
         self._chat_ref = chat_ref
@@ -152,7 +158,9 @@ class ChannelSink:
         self._lock = threading.Lock()
         self._terminal_sent = False
         self._closed = False
-        self._last_milestone_sent = 0.0
+        # The hub's communication policy decides which partial results are kept; the channel's progress
+        # spacing is the policy's long stretch.
+        self._talk = TurnCommunicator(CommunicationPolicy(long_stretch_seconds=self._progress_min_seconds), clock=clock)
         self._last_result_text: Optional[str] = None
         self._ack_timer: Optional[threading.Timer] = None
         self.sent_texts: set = set()      # the text of every message this turn sent: the same text is never sent twice
@@ -195,7 +203,7 @@ class ChannelSink:
                     self._last_result_text = text
             elif etype == EVENT_DECISION:
                 self._on_decision(event)
-            elif etype == EVENT_MILESTONE:
+            elif etype in (EVENT_MILESTONE, EVENT_INTERIM):
                 self._on_milestone(event)
             # else: chatter for this lane -- dropped by design (see module docstring).
         except Exception:  # noqa: BLE001 — a sink must never break the run it observes
@@ -216,13 +224,11 @@ class ChannelSink:
                                       reply_to_message_id=self._reply_to, kind="decision"))
 
     def _on_milestone(self, event: Dict[str, Any]) -> None:
-        now = time.monotonic()
         with self._lock:
             if self._terminal_sent or self._closed:
                 return
-            if now - self._last_milestone_sent < self._progress_min_seconds:
+            if not self._talk.decide(event).kept:
                 return
-            self._last_milestone_sent = now
         text = (event.get("text") or "").strip()
         if not text:
             return
