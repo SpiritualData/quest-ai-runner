@@ -434,11 +434,11 @@ def test_the_support_standard_limits_sentences_exclamations_and_asks_for_the_dat
     assert "date" not in kinds(measure("That is a hard week. Try an easy swim.", STANDARDS["support"], EVIDENCE, facts=["no dates in these facts"]))
 
 
-def test_a_length_breach_the_rewrites_did_not_fix_keeps_the_opening_and_the_closing_sentence():
+def test_a_length_breach_the_rewrites_did_not_fix_drops_the_sentence_the_question_needs_least():
     draft = "I can't issue a bank refund from here. I can only work with the records in this quest. If you have the refund, I can log it as a negative expense entry."
     m = measure(draft, STANDARDS["decline"], EVIDENCE)
     assert m.failed
-    fixed = repair(draft, STANDARDS["decline"], m, EVIDENCE)
+    fixed = repair(draft, STANDARDS["decline"], m, EVIDENCE, question="Can you refund my bank payment?")
     assert fixed == "I can't issue a bank refund from here. If you have the refund, I can log it as a negative expense entry."
     assert not measure(fixed, STANDARDS["decline"], EVIDENCE).failed
 
@@ -494,3 +494,61 @@ def test_a_length_repair_that_loses_a_quoted_name_or_an_address_is_caught():
     assert "Weekly check-in: Friday review" in held and len(held) == 2
     assert lost_pointers("It is already set.", held) == held
     assert not lost_pointers('The "Weekly check-in: Friday review" workflow is already set: https://example.org/q/1', held)
+
+
+def test_a_length_repair_keeps_the_answer_and_never_keeps_only_the_last_sentence():
+    """The live shape: an information reply of four sentences, the answer first and a hedge last; the repair used to keep the hedge alone."""
+    draft = ("The store release is still not out. The latest record is a note asking for a signing key, so that blocker is open. "
+             "The store track is internal only, with 0 public installs. I can't see anything newer than that, so this may have changed.")
+    std = STANDARDS["information"]
+    m = measure(draft, std, draft)
+    assert "length" in kinds(m)
+    fixed = repair(draft, std, m, draft, question="What's the status of the store release?")
+    assert fixed.startswith("The store release is still not out.") and "anything newer" not in fixed and len(fixed.split(". ")) == 3
+
+
+def test_a_drafted_text_the_reply_hands_over_is_not_counted_or_cut_by_a_length_repair():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import deliverable_texts, drafted_blocks, prose_count
+    letter = "Subject: Sign-up is open\n\nHi,\n\nWe are opening sign-ups in December. Please pass this on.\n\nThank you,\nThe team"
+    draft = "I updated the next step in place. Joey owns it. The step is due Sunday.\n\n" + letter + "\n\nThe metric is unchanged until the step is done."
+    assert drafted_blocks(draft) == [letter]
+    drafted = deliverable_texts(SimpleNamespace(draft_in_chat=True, plan=None), draft)
+    assert prose_count(draft, drafted) == 4 and deliverable_texts(SimpleNamespace(plan=None), draft) == []      # no deliverable in the plan: nothing is set aside
+    std = STANDARDS["settled"]
+    m = measure(draft, std, draft, drafted=drafted)
+    fixed = repair(draft, std, m, draft, question="can you push the ads forward?", drafted=drafted)
+    assert letter in fixed and fixed.startswith("I updated the next step in place.") and prose_count(fixed, drafted) <= 2
+
+
+def test_a_kept_drafts_own_questions_are_not_the_replys_questions_and_survive_the_repair():
+    """The live shape: a milestone step kept a list of neutral interview questions; they were counted as the reply asking four questions and cut."""
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import deliverable_texts
+    kept = "1) What problem would you want a mentor program to solve?\n2) What would make you commit time to it?\n3) What would you need from us first?"
+    reply = "I updated the next step in place. Sam owns it. The step is due Sunday.\n\n" + kept + "\n\nThe count is unchanged until an interview is filed."
+    rs = SimpleNamespace(cue_resolved=SimpleNamespace(draft=kept), plan=None)
+    drafted = deliverable_texts(rs, reply)
+    std = STANDARDS["settled"]
+    m = measure(reply, std, reply, drafted=drafted)
+    assert m.questions == 0 and m.list_lines == 0
+    fixed = repair(reply, std, m, reply, question="can you get the interviews moving?", drafted=drafted)
+    assert all(q in fixed for q in kept.splitlines()) and fixed.startswith("I updated the next step in place.")
+
+
+def test_a_sentence_left_pointing_at_a_removed_one_goes_with_it_but_a_definite_description_stays():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import drop_orphans
+    before = "The store release is not out. A signing key is missing. The quest's own check shows the same figure. Nothing newer is recorded."
+    after = "The store release is not out. The quest's own check shows the same figure. Nothing newer is recorded."
+    assert drop_orphans(before, after) == "The store release is not out. Nothing newer is recorded."
+
+
+def test_the_figure_pass_holds_a_reply_to_everything_the_writer_was_shown_not_a_cut_of_it():
+    """A figure deep in a long read or far into the context is still a figure the turn held: the cut evidence once took whole true sentences out."""
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import figure_evidence, without_unsupported
+    long_read = "filler " * 1000 + "Sign-ups created a first quest: 5 of 10."
+    rs = SimpleNamespace(user_message="status?", transcript="", context_view="context " * 1500 + "Paid users: 0 as of 7 November.",
+                         gathered=[{"locator": "quest details", "text": long_read}], _gen_answer=lambda steer: "")
+    text = "Paid users are at 0 as of 7 November. Sign-ups are at 5 of 10."
+    assert without_unsupported(rs, text, figure_evidence(rs)) == (text, [])

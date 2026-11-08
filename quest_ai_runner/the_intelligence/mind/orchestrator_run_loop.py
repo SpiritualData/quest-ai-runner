@@ -39,8 +39,8 @@ from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.mind.planner import handoff_gate
 from quest_ai_runner.the_intelligence.mind.planner.handoff_gate import HANDOFF_NOTE, must_hand_off
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
-from hubofhubs.api import evidence_of, relativize, remove_em_dashes
-from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import without_unsupported
+from hubofhubs.api import relativize, remove_em_dashes
+from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import figure_evidence, without_unsupported
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
 
@@ -194,7 +194,9 @@ class RunLoopMixin:
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
             if res.kind == "answer" and not getattr(rs, "draft_in_chat", False) and (res.text or "").strip():
                 # Every figure in a status or answer reply must be one this turn read (the hub's grounded_figures arm): a sentence that states one it did not is taken out.
-                res.text, dropped = without_unsupported(rs, res.text, evidence_of(rs.gathered, rs.context_view, rs.user_message))
+                # Held to everything the writer was shown (the reads and the context, uncut: the check reads digits only, so its size costs nothing). A cut of it
+                # (the first 5,000 characters of the context, 2,500 of each read) made true figures read as unsupported and took whole sentences out.
+                res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
                 if dropped:
                     log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
             track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there

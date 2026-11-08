@@ -7,12 +7,22 @@ text, never by reading what the reply means.
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, List, Tuple
 
 from hubofhubs.api import strip_unsupported
 
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import drop_orphans, steering
+
+
+def figure_evidence(rs: Any) -> str:
+    """What the writer was shown, for the figure pass: the person's message, the transcript, the context the reply was written from and every read of the turn, uncut."""
+    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence
+    parts = [str(getattr(rs, "user_message", "") or ""), str(getattr(rs, "transcript", "") or ""), str(getattr(rs, "context_view", "") or "")]
+    for item in answer_evidence(list(getattr(rs, "gathered", None) or [])):
+        parts.append(str(item.get("tool_text") or item.get("text") or item.get("content") or json.dumps(item, default=str)) if isinstance(item, dict) else str(item))
+    return "\n".join(parts)
 
 
 def without_unsupported(rs: Any, text: str, evidence: Any) -> Tuple[str, List[str]]:

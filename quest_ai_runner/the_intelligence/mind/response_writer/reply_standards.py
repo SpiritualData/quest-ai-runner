@@ -26,7 +26,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from hubofhubs.api import dates_in, day_count_errors, event_offset_errors
+from hubofhubs.api import Unit, cohere, dangling, dates_in, day_count_errors, event_offset_errors, joined, shorten, units_of
 
 SHAPE_YES_NO = "yes_no"
 SHAPE_ONE_STEP = "one_step"
@@ -429,12 +429,14 @@ def standard_for(plan: Any, *, user_intent: Optional[str] = None, delivery: Opti
 
 
 def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None,
-            facts: Optional[List[str]] = None, resolved: Any = None, question: Optional[str] = None) -> Measurements:
+            facts: Optional[List[str]] = None, resolved: Any = None, question: Optional[str] = None, drafted: Any = ()) -> Measurements:
     """Measure one draft against its situation's standard. Pure and never raises (a failure measures nothing). ``facts`` are the planner's own
-    ``facts_read`` quotes (structured), used only by a standard that asks the reply to state a date those facts hold."""
+    ``facts_read`` quotes (structured), used only by a standard that asks the reply to state a date those facts hold. ``drafted`` is the text the reply
+    hands over (``deliverable_texts``): its questions, list lines and sentences are the deliverable's, so the counts leave them out."""
     try:
         text = draft or ""
-        m = Measurements(shape=standard.shape, questions=text.count("?"), list_lines=len(LIST_LINE.findall(text)), chars=len(text))
+        own = prose_of(text, drafted)
+        m = Measurements(shape=standard.shape, questions=own.count("?"), list_lines=len(LIST_LINE.findall(own)), chars=len(text))
         index = EvidenceIndex.of(evidence, reads, figure_basis)
         m.unsupported = unsupported_values(text, index)
         if m.unsupported:
@@ -460,9 +462,9 @@ def measure(draft: str, standard: Standard, evidence: str, reads: Optional[str] 
                 f" (you asked {m.questions}); keep the one that lets you act"))
         if standard.max_list_lines is not None and m.list_lines > standard.max_list_lines:
             m.violations.append(Violation("list", f"write it as plain sentences, not a list ({m.list_lines} list lines)"))
-        if standard.max_sentences is not None and len(sentences(text)) > standard.max_sentences:
-            m.violations.append(Violation("length", f"write it in at most {standard.max_sentences} sentences (it has {len(sentences(text))}); "
-                                          "keep the part that answers, drop the rest"))
+        if standard.max_sentences is not None and prose_count(text, drafted) > standard.max_sentences:
+            m.violations.append(Violation("length", f"write it in at most {standard.max_sentences} sentences (it has {prose_count(text, drafted)}), not counting a drafted text you hand over; "
+                                          "keep the part that answers and any drafted text whole, drop the rest"))
         if standard.max_chars is not None and m.chars > standard.max_chars:
             m.violations.append(Violation("length", f"cut it to under {standard.max_chars} characters (it is {m.chars})"))
         if standard.voice_check:
@@ -553,95 +555,136 @@ def sentences(text: str) -> List[str]:
     return [s for s in SENTENCE_END.split(text or "") if s and s.strip()]
 
 
-REFERENCE_LEAD = re.compile(r"\b(?:that|this|these|those|the)\s+(?P<head>[A-Za-z][A-Za-z-]{3,})", re.IGNORECASE)
-REFERENCE_STEM = 5
-
-
-def stem_of(word: str) -> str:
-    return word.lower()[:REFERENCE_STEM]
-
-
-def orphaned_sentences(before: str, after: str, question: str = "") -> List[str]:
-    """Sentences of ``after`` that point back (by "that", "this", "these", "those" or "the" and a noun) to a noun whose only mention was in a sentence ``before`` held and ``after`` no
-    longer does: the reference lost its antecedent. A noun also found earlier in ``after``, elsewhere in the same sentence, or in the question is still anchored. Compares the words
-    of the two texts; it reads no meaning and never judges what a sentence says."""
-    kept = sentences(after)
-    kept_keys = {k.strip() for k in kept}
-    removed = " ".join(x for x in sentences(before) if x.strip() not in kept_keys)
-    if not removed.strip():
+def drafted_blocks(text: str) -> List[str]:
+    """The drafted text a reply hands over, found by layout, never by wording: the run of paragraphs from the first to the last paragraph holding a line that does not end
+    like a sentence ("Subject: ...", "Hi,", a sign-off) or a list line, when there are two such paragraphs or one of several lines. Used only on a turn whose plan says the
+    reply carries a deliverable (``deliverable_texts``): on any other turn a list is the reply's own and the limits count it."""
+    paragraphs = [p for p in re.split(r"\n\s*\n", text or "") if p.strip()]
+    shaped = [i for i, p in enumerate(paragraphs)
+              if any(line.strip() and (LIST_LINE.match(line) or not re.search(r"[.!?)\"”']\s*$", line.strip())) for line in p.splitlines())]
+    if not shaped or (len(shaped) == 1 and len(paragraphs[shaped[0]].strip().splitlines()) < 2):
         return []
-    removed_stems = {stem_of(w) for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", removed)}
-    asked_stems = {stem_of(w) for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", question or "")}
-    out: List[str] = []
-    earlier: set = set()
-    for sentence in kept:
-        words = [stem_of(w) for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", sentence)]
-        for match in REFERENCE_LEAD.finditer(sentence):
-            head = stem_of(match.group("head"))
-            others = sum(1 for w in words if w == head)
-            if head in removed_stems and head not in earlier and head not in asked_stems and others <= 1:
-                out.append(sentence.strip())
-                break
-        earlier.update(words)
+    return ["\n\n".join(paragraphs[shaped[0]:shaped[-1] + 1])]
+
+
+def deliverable_texts(rs: Any, text: str) -> List[str]:
+    """What the reply hands over, from structured state only: the draft a milestone step kept, and, when the plan says the deliverable is written in the reply
+    (``draft_in_chat``) or a draft was kept, the drafted blocks of the reply's layout. Empty on every other turn."""
+    kept = str(getattr(getattr(rs, "cue_resolved", None), "draft", "") or "").strip()
+    out = [kept] if kept else []
+    if kept or getattr(rs, "draft_in_chat", False) or getattr(getattr(rs, "plan", None), "deep_target", None) == "draft_in_chat":
+        out += drafted_blocks(text)
     return out
 
 
+LIST_PREFIX = re.compile(r"^\s*(?:>|[-*\u2022]|\d+[.)])\s*")
+
+
+def in_drafted(sentence: str, drafted: Any) -> bool:
+    plain = LIST_PREFIX.sub("", sentence or "").strip()
+    return bool(plain) and any(plain in d or sentence in d for d in drafted or () if d)
+
+
+def protected_units(text: str, drafted: Any = ()) -> List[Unit]:
+    """The sentences of ``text`` with the ones a repair must keep marked: those inside the drafted text and those carrying a web address or a quoted name."""
+    units = units_of(text)
+    held = pointed_items(text)
+    for u in units:
+        u.protected = in_drafted(u.text, drafted) or any(item in u.text for item in held)
+    return units
+
+
+def prose_of(text: str, drafted: Any = ()) -> str:
+    """The reply's own words: ``text`` without the sentences of a drafted text it hands over."""
+    if not drafted:
+        return text or ""
+    return " ".join(u.text for u in units_of(text) if not in_drafted(u.text, drafted))
+
+
+def prose_count(text: str, drafted: Any = ()) -> int:
+    """How many sentences of the reply's own prose a length limit counts: a drafted text it hands over is not counted."""
+    return sum(1 for u in units_of(text) if not in_drafted(u.text, drafted))
+
+
+def orphaned_sentences(before: str, after: str, question: str = "") -> List[str]:
+    """Sentences of ``after`` that point back to a sentence ``before`` held and ``after`` no longer does (the hub's ``dangling``: a pronoun opening right after a removed
+    sentence, "the same", or a demonstrative whose noun only a removed sentence said). Reads grammar words only, never what a sentence says."""
+    units = units_of(before)
+    remaining = [u.text for u in units_of(after)]
+    pool = list(remaining)
+    for u in units:
+        if u.text in pool:
+            pool.remove(u.text)
+        else:
+            u.kept = False
+    if pool:
+        return []
+    return [units[i].text for i in dangling(units, question)]
+
+
 def drop_orphans(before: str, after: str, question: str = "") -> str:
-    """``after`` without the sentences whose reference lost its antecedent to the repair that turned ``before`` into it (repeated until none is left). Never empties the reply."""
-    text = after
-    for _ in range(4):
-        lost = set(orphaned_sentences(before, text, question))
-        kept = [x for x in sentences(text) if x.strip() not in lost]
-        if not lost or not kept:
-            break
-        text = " ".join(x.strip() for x in kept)
-    return text
+    """``after`` without the sentences that point back to what the repair that turned ``before`` into it removed. Never empties the reply."""
+    units = units_of(before)
+    pool = [u.text for u in units_of(after)]
+    for u in units:
+        if u.text in pool:
+            pool.remove(u.text)
+        else:
+            u.kept = False
+    if pool or not any(u.kept for u in units):
+        return after
+    units, _ = cohere(units, question)
+    return joined(units) or after
 
 
 def repair(draft: str, standard: Standard, measurements: Measurements, evidence: str, reads: Optional[str] = None,
-           figure_basis: Optional[str] = None) -> str:
+           figure_basis: Optional[str] = None, question: str = "", facts: Optional[List[str]] = None, drafted: Any = ()) -> str:
     """The cheapest deterministic repair that is safe, for a draft that still breaks a measurement after the repair rounds.
 
-    Drops each sentence that states an unsupported value and every question after the allowed number. It never empties the reply:
-    when the repair would leave nothing, the draft is returned as it was. A list or a length breach has no safe mechanical repair
-    (cutting mid-thought changes the meaning), so it ships as written.
+    Drops each sentence that states an unsupported value and every question after the allowed number; a length breach removes the sentences the reply needs least (the hub's
+    ``shorten``: the answer, a sentence the question points to, a drafted text and a sentence with an address or quoted name are kept; a repeat or a sentence sharing no word
+    with the question goes first), never by position. A sentence left pointing back to a removed one goes too. It never empties the reply: when the repair would leave
+    nothing, the draft is returned as it was. A list breach has no safe mechanical repair, so it ships as written.
     """
     try:
         if not measurements.violations:
             return draft
         stray = {x.strip() for v in measurements.violations if v.kind == "unrelated" for x in v.values}
-        parts = [x for x in sentences(draft) if x.strip() not in stray] or sentences(draft)
+        units = protected_units(draft, drafted)
+        if all(u.text.strip() in stray for u in units):
+            stray = set()
         evidence_index = EvidenceIndex.of(evidence, reads, figure_basis)
-        kept: List[str] = []
         asked = 0
         trimmed_figure = False
-        for sentence in parts:
-            flagged = unsupported_values(sentence, evidence_index) if measurements.unsupported else []
+        for u in units:
+            if u.text.strip() in stray and not u.protected:
+                u.kept = False
+                continue
+            flagged = unsupported_values(u.text, evidence_index) if measurements.unsupported else []
             if flagged:
                 trimmed_figure = trimmed_figure or any(FIGURE.fullmatch(v) for v in flagged)
                 # keep the clauses that state nothing unsupported (split at commas, semicolons and colons: punctuation, not wording)
-                clauses = CLAUSE_SPLIT.split(sentence)
+                clauses = CLAUSE_SPLIT.split(u.text)
                 good = [c for c in clauses if not unsupported_values(c, evidence_index)]
                 if good and len(good) < len(clauses):
-                    sentence = " ".join(good).strip().rstrip(",;:") + "."
+                    u.text = " ".join(good).strip().rstrip(",;:") + "."
                 else:
+                    u.kept = False
                     continue
-            if "?" in sentence and standard.max_questions is not None:
-                asked += sentence.count("?")
+            if "?" in u.text and standard.max_questions is not None and not u.protected:
+                asked += u.text.count("?")
                 if asked > standard.max_questions:
-                    continue
-            kept.append(sentence.strip())
-        if kept and trimmed_figure:
+                    u.kept = False
+        if not any(u.kept for u in units):
+            return draft
+        if trimmed_figure:
             relation = computed_sentence(draft, evidence_index)
             if relation:
-                kept.append(relation)
-        if standard.max_sentences is not None and len(kept) > standard.max_sentences >= 2:
-            # Last resort for a length breach the rewrites did not fix: the opening sentences and the closing one (the decline and its
-            # alternative, the acknowledgement and the next step). Position only; no wording is read.
-            kept = kept[:standard.max_sentences - 1] + kept[-1:]
-        fixed = " ".join(kept) if kept else draft
-        if kept:
-            fixed = drop_orphans(draft, fixed)       # a reference whose sentence the repair removed is not left pointing at nothing
+                units.append(Unit(relation))
+        if standard.max_sentences is not None:
+            units = shorten(units, standard.max_sentences, question, " ".join(facts or []))
+        units, _ = cohere(units, question)      # a reference whose sentence the repair removed is not left pointing at nothing
+        fixed = joined(units) or draft
         if standard.forbid_markup:      # the last resort for a reply read aloud: the marks go, the words stay
             fixed = re.sub(r"[*#`_>]|[\"“”]", "", fixed)
         return fixed

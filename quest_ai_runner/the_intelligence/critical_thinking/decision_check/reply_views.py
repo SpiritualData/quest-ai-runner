@@ -48,14 +48,20 @@ def clip(text: Any, limit: int = EVIDENCE_CHARS) -> str:
     return raw if len(raw) <= limit else raw[:limit - 1].rstrip() + "…"
 
 
-def reads_text(gathered: Sequence[Any]) -> str:
-    """The turn's reads as plain text: each observation's source and text."""
+READ_MIN_CHARS = 800
+
+
+def reads_text(gathered: Sequence[Any], budget: int = GROUNDING_CHARS) -> str:
+    """The turn's reads as plain text: each observation's source and text, each given an even share of ``budget`` (at least ``READ_MIN_CHARS``). A fixed 800 characters a
+    read hid most of a long read (a quest's details, its goals) from the views, which then confirmed true sentences from it as unsupported."""
+    items = list(gathered or ())
+    share = max(READ_MIN_CHARS, budget // max(1, len(items)))
     lines: List[str] = []
-    for item in gathered or ():
+    for item in items:
         if isinstance(item, dict):
-            lines.append(f"- {item.get('locator') or item.get('source') or 'read'}: {clip(item.get('text') or item.get('content') or json.dumps(item, default=str)[:600], 800)}")
+            lines.append(f"- {item.get('locator') or item.get('source') or 'read'}: {clip(item.get('text') or item.get('content') or json.dumps(item, default=str), share)}")
         else:
-            lines.append(f"- {clip(item, 800)}")
+            lines.append(f"- {clip(item, share)}")
     return "\n".join(lines)
 
 
@@ -63,9 +69,10 @@ def turn_grounding(rs: Any, gathered: Optional[Sequence[Any]] = None) -> str:
     """What a reply or a draft may rest on: what its writer was shown, the turn's reads and the context it was written from (a status snapshot, the quest's own state).
     Held to the reads alone, a true sentence taken from that context was removed as unsupported."""
     from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence
-    context = str(getattr(rs, "context_view", "") or "").strip()
+    context = clip(str(getattr(rs, "context_view", "") or "").strip(), GROUNDING_CHARS // 2)
     reads = gathered if gathered is not None else (getattr(rs, "gathered", None) or [])
-    return reads_text(answer_evidence(reads or [])) + (f"\n- the context the reply was written from: {context}" if context else "")
+    # The reads share what the context leaves of the views' budget, so neither is cut off by the other.
+    return reads_text(answer_evidence(reads or []), max(READ_MIN_CHARS, GROUNDING_CHARS - len(context) - 400)) + (f"\n- the context the reply was written from: {context}" if context else "")
 
 
 def present_text(participants: Sequence[Any]) -> str:
@@ -74,9 +81,9 @@ def present_text(participants: Sequence[Any]) -> str:
     return "the person writing to us" + "".join(f", {n}" for n in names if n)
 
 
-def reply_binding(reads: str, executed: str, present: str, max_calls: int = 40) -> Dict[str, Any]:
-    """The hub's Binding for a reply: four views, each shown only its own evidence."""
-    return {"kind": "reply", "max_calls": max_calls, "parallel": REPLY_CHECK_PARALLEL, "hedge_after_seconds": REPLY_CHECK_HEDGE_SECONDS, "views": [
+def reply_binding(reads: str, executed: str, present: str, max_calls: int = 40, question: str = "") -> Dict[str, Any]:
+    """The hub's Binding for a reply: four views, each shown only its own evidence, and the question (what is left after a removal is held to it)."""
+    return {"kind": "reply", "max_calls": max_calls, "parallel": REPLY_CHECK_PARALLEL, "hedge_after_seconds": REPLY_CHECK_HEDGE_SECONDS, "question": question, "views": [
         {"id": "reads", "instruction": READS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "facts", "instruction": FACTS_VIEW, "evidence": "Reads this turn:\n" + (clip(reads, GROUNDING_CHARS) or NONE_TEXT)},
         {"id": "actions", "instruction": ACTIONS_VIEW, "evidence": "Executed actions this turn:\n" + (clip(executed) or NONE_TEXT)},
@@ -139,11 +146,12 @@ def checked_reply(orch: Any, rs: Any, text: str) -> str:
         meta = getattr(rs, "_ctx_meta", None) or {}
         grounding = turn_grounding(rs)
         binding = reply_binding(grounding, tool_landed_account(getattr(rs, "exec_record", None)),
-                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 40)))
+                                present_text(meta.get("participants")), int(getattr(cfg, "reply_check_max_calls", 40)), str(getattr(rs, "user_message", "") or ""))
         result = AgreementCheck(plumbing=None).check(text, binding, ask)
         rs.reply_check = {k: result.get(k) for k in ("outcome", "calls", "agreement", "why", "hedged")}
         keep_mistakes(result.get("mistakes") or [], str(getattr(cfg, "reply_check_mistakes_path", "") or ""))
-        log.info("Reply check: %s in %s calls (agreement %s, %s hedged): %s", result.get("outcome"), result.get("calls"), result.get("agreement"), result.get("hedged") or 0, result.get("why"))
+        log.info("Reply check: %s in %s calls (agreement %s, %s hedged, remainder %s): %s", result.get("outcome"), result.get("calls"), result.get("agreement"), result.get("hedged") or 0,
+                 result.get("cohered") or "untouched", result.get("why"))
         fixed = str(result.get("text") or "")
         return fixed if result.get("outcome") == "repaired" and fixed.strip() else text
     except Exception:  # noqa: BLE001 -- the check must never break the turn

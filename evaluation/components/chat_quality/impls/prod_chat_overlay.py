@@ -54,9 +54,28 @@ def ssh_target():
     return need("QAR_OVERLAY_SSH"), need("QAR_OVERLAY_REMOTE_DIR")
 
 
+def overlay_dir():
+    """The container folder the overlay is shipped to (``QAR_OVERLAY_REMOTE_TMP``, default /tmp/qoverlay): two runs side by side each use their own."""
+    value = os.environ.get("QAR_OVERLAY_REMOTE_TMP") or "/tmp/qoverlay"
+    if not re.fullmatch(r"/tmp/[A-Za-z0-9._-]+", value):
+        raise RuntimeError(f"QAR_OVERLAY_REMOTE_TMP must be a folder directly under /tmp, got {value!r}")
+    return value
+
+
+def exec_env_flags():
+    """``-e KEY=VALUE`` flags for the replay process from ``QAR_OVERLAY_ENV`` (space-separated KEY=VALUE pairs), e.g. ``QUEST_AI_REPLY_CHECK=false`` for an arm with the check off."""
+    flags = []
+    for pair in (os.environ.get("QAR_OVERLAY_ENV") or "").split():
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*=[A-Za-z0-9._/-]*", pair):
+            raise RuntimeError(f"QAR_OVERLAY_ENV holds an entry that is not KEY=VALUE: {pair!r}")
+        flags.append(f"-e {pair}")
+    return " ".join(flags)
+
+
 def remote_exec(command, stdin=None, data=None, timeout=900):
     host, directory = ssh_target()
-    return subprocess.run(["ssh", "-o", "BatchMode=yes", host, f"cd {directory} && docker compose exec -T quest-backend {command}"],
+    flags = exec_env_flags()
+    return subprocess.run(["ssh", "-o", "BatchMode=yes", host, f"cd {directory} && docker compose exec -T {flags + ' ' if flags else ''}quest-backend {command}"],
                           stdin=stdin, input=data, capture_output=True, timeout=timeout)
 
 
@@ -91,7 +110,8 @@ def ship_overlay(meter_say=print):
         subprocess.run(["tar", "-C", str(stage / "hub"), "-xf", "-"], input=pack, check=True)
     archive = subprocess.run(["tar", "-C", str(stage), "-cf", "-", "."], capture_output=True, check=True).stdout
     subprocess.run(["rm", "-rf", str(stage)], check=True)
-    done = remote_exec('sh -c "rm -rf /tmp/qoverlay && mkdir -p /tmp/qoverlay && tar -C /tmp/qoverlay -xf -"', data=archive)
+    target = overlay_dir()
+    done = remote_exec(f'sh -c "rm -rf {target} && mkdir -p {target} && tar -C {target} -xf -"', data=archive)
     if done.returncode:
         raise RuntimeError(f"overlay could not be shipped: {done.stderr.decode()[-300:]}")
     meter_say(f"chat_quality: overlay shipped: {len(files)} backend file(s) {files}, the quest_ai_runner package" + (" and the hubofhubs package" if (hub / "hubofhubs").is_dir() else ""))
@@ -106,7 +126,7 @@ def replay(payload, user, team):
     """Run the replay for ``payload`` (a list of cases) on the server. Returns (case records, summary, stderr tail)."""
     encoded = base64.b64encode(json.dumps(payload).encode()).decode()
     with open(replay_script(), "rb") as script:
-        done = remote_exec(f"python - --user {user} --team {team} --overlay /tmp/qoverlay --concurrency 1 --cases-b64 {encoded}", stdin=script)
+        done = remote_exec(f"python - --user {user} --team {team} --overlay {overlay_dir()} --concurrency 1 --cases-b64 {encoded}", stdin=script)
     records, summary = [], {}
     for line in done.stdout.decode("utf-8", "replace").splitlines():
         if line.startswith("@@CASE@@ "):

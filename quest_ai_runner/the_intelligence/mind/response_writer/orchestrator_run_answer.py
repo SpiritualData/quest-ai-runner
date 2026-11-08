@@ -26,6 +26,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text imp
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
+    deliverable_texts,
     CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, lost_pointers, measure, pointed_items, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
@@ -67,14 +68,14 @@ class RunAnswerMixin:
                                   (getattr(rs, "context_view", "") or "").replace(recent, ""), gathered, pool)
             facts = list(getattr(rs.plan, "facts_read", None) or [])
             resolved = self.resolved_facts_of(rs, gathered)
-            measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
+            measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message, drafted=deliverable_texts(rs, text))
             rounds = 0
             while measured.failed and rounds < repair_limit(cfg, standard):
                 text = write(steering(measured.hint(), text)) or text
                 rounds += 1
-                measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message)
+                measured = measure(text, standard, evidence, pool, basis, facts, resolved=resolved, question=rs.user_message, drafted=deliverable_texts(rs, text))
             if measured.failed:
-                text = repair(text, standard, measured, evidence, pool, basis)
+                text = repair(text, standard, measured, evidence, pool, basis, question=rs.user_message, facts=facts, drafted=deliverable_texts(rs, text))
             return text
         except Exception:  # noqa: BLE001 -- a standard must never break the turn
             return text
@@ -537,7 +538,7 @@ class RunAnswerMixin:
                                                 (getattr(rs, "context_view", "") or "").replace(getattr(rs, "recent_context_text", "") or "\0", ""),
                                                 gathered, figure_pool)
                 measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
-                                   resolved=turn_resolved, question=rs.user_message)
+                                   resolved=turn_resolved, question=rs.user_message, drafted=deliverable_texts(rs, rs.text))
                 standard_in_force = standard.shape != SHAPE_DEFAULT or measured.failed
                 log.info("Reply standard %s in force=%s before the verdict: %s", standard.shape, standard_in_force, measured.as_text())
             except Exception:  # noqa: BLE001 -- a standard must never break the turn
@@ -685,7 +686,7 @@ class RunAnswerMixin:
         if standard is not None and standard_in_force:
             try:
                 measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
-                                   resolved=turn_resolved, question=rs.user_message)
+                                   resolved=turn_resolved, question=rs.user_message, drafted=deliverable_texts(rs, rs.text))
                 measurement_rounds = 0     # the overseer's and the constraint's regenerations do not use up the rounds the measurements are owed
                 while measured.failed and measurement_rounds < repair_limit(cfg, standard):
                     if emit is not None:
@@ -703,11 +704,12 @@ class RunAnswerMixin:
                         break
                     rs.text = candidate
                     measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),
-                                   resolved=turn_resolved, question=rs.user_message)
+                                   resolved=turn_resolved, question=rs.user_message, drafted=deliverable_texts(rs, rs.text))
                 if measured.failed:
                     log.info("Reply standard repair: still failing after %d round(s): %s", measurement_rounds,
                              [(v.kind, list(v.values)[:6]) for v in measured.violations])
-                    rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence)
+                    rs.text = repair(rs.text, standard, measured, standard_evidence, figure_pool, figure_evidence,
+                                     question=rs.user_message, facts=list(getattr(rs.plan, "facts_read", None) or []), drafted=deliverable_texts(rs, rs.text))
                 log.info("Reply standard %s: %d repair round(s), %s", standard.shape, repair_rounds, measured.as_text())
                 rs.reply_standard = {"shape": standard.shape, "repair_rounds": repair_rounds,
                                      "still_failing": bool(measured.failed), "measured": measured.as_text()}
