@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import prodchat as PC  # noqa: E402
 import prodsafety as PS  # noqa: E402
+import prodreads as PR  # noqa: E402
 
 
 def configured():
@@ -137,10 +138,18 @@ def build(meter):
             judged_case["rubric"] = list(judged_case.get("rubric") or []) + [item]
             evidence = J.build_evidence([{"message": message, "events": frames}])
             reads_seen = PC.reads_from_stream(events)
+            rereads, unverifiable = PR.reread(client, events)         # the stream carries only read summaries: repeat the reads read-only, as evidence
+            reads_seen += rereads
             truth = P.reads_text(reads_seen)
-            unsupported = P.unsupported_figures(evidence.get("reply", ""), truth, message)
+            absent = P.unsupported_figures(evidence.get("reply", ""), truth, message)
+            unsupported, unverifiable_figures = PR.classify_figures(absent, unverifiable)
+            judged_case["evidence_notes"] += (f" The stream reports what the turn read only as summaries, so the reads were repeated read-only after the turn ({PR.AFTER_TURN}): the quest may have changed since. "
+                                              f"{PR.unverifiable_note(unverifiable)}").rstrip()
             judged_case["evidence_notes"] += " Figures in the reply that appear neither in the turn's reads nor in the user's message: " + (", ".join(unsupported) or "none") + "."
+            if unverifiable_figures:
+                judged_case["evidence_notes"] += " Figures not found in the re-reads but possibly from a read that could not be repeated (unverifiable, not contradicted): " + ", ".join(unverifiable_figures) + "."
             record["reads_seen"], record["unsupported_figures"] = reads_seen, unsupported
+            record["unverifiable_reads"], record["unverifiable_figures"] = unverifiable, unverifiable_figures
             pre = J.precheck(judged_case, evidence, {}, {}, changes_text)
             judged = J.judge(judged_case, evidence, changes_text, pre, truth, {}, None, production=True)
             passed = J.case_passed(judged_case, pre, judged) and not outcome["failed"]
@@ -162,12 +171,17 @@ def build(meter):
         if outcome is not None:
             safety.apply(record, outcome)
         usage = PC.usage_of(events)
+        record["tokens_estimated"] = False
+        if not usage["tokens_in"] and not usage["tokens_out"]:         # the production stream sent no usage under any event: a rough count, marked as one
+            record["tokens_estimated"] = True
+            usage["tokens_in"] = P.estimate_tokens(message, *(m.get("text") for m in record.get("stored_messages") or []))
+            usage["tokens_out"] = P.estimate_tokens(record.get("evidence", {}).get("reply", "") if isinstance(record.get("evidence"), dict) else "")
         names = [PC.event_name(e) for e in events]
         record.update(seconds=round(time.time() - started, 1), model_calls=usage["model_calls"], tokens_in=usage["tokens_in"], tokens_out=usage["tokens_out"],
                       route=PC.route_of(events), tool_calls=PC.tool_calls_of(events), replanned="replan" in names, still_working="interim" in names,
                       frame_trace=[(e.get("t"), PC.event_name(e), str(e.get("text") or e.get("content") or (e.get("data") or {}).get("text") or "")[:110]) for e in events][:80])
         record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "changes", "unexpected_writes", "tokens_in", "tokens_out", "state", "acted_as", "metric",
-                                                          "messages", "stored_messages", "message_standard", "metric_error", "reads_seen", "unsupported_figures", "route", "tool_calls",
+                                                          "messages", "stored_messages", "message_standard", "metric_error", "reads_seen", "unsupported_figures", "unverifiable_reads", "unverifiable_figures", "tokens_estimated", "route", "tool_calls",
                                                           "replanned", "still_working", "frame_trace", "conversation", "fingerprint_changes", "cleanup", "lane_gaps", "cleanup_error")}
         try:
             meter.record(max(1, record["model_calls"]))

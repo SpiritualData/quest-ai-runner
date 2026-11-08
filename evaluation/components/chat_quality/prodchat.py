@@ -276,10 +276,19 @@ def frames_of(events):
 
 
 def usage_of(events):
-    """``{"model_calls", "tokens_in", "tokens_out"}`` from the stream's ``tokens`` frames (the last cumulative count wins)."""
+    """``{"model_calls", "tokens_in", "tokens_out"}`` from the stream: the cumulative ``tokens`` frames (the last wins), else a ``usage`` object on any event (the ``done``
+    frame's ``data`` included) that carries ``tokens_in``/``tokens_out`` (or ``input_tokens``/``output_tokens``). The production stream may send neither; the counts are then 0."""
     tokens = [e.get("data") or {} for e in events if event_name(e) == "tokens"]
     last = tokens[-1] if tokens else {}
-    return {"model_calls": sum(model_calls_in(e) for e in events), "tokens_in": int(last.get("tokens_in") or 0), "tokens_out": int(last.get("tokens_out") or 0)}
+    tokens_in, tokens_out = int(last.get("tokens_in") or 0), int(last.get("tokens_out") or 0)
+    if not tokens_in and not tokens_out:
+        for e in events:
+            for holder in (e, e.get("data") or {}):
+                usage = holder.get("usage") if isinstance(holder, dict) else None
+                if isinstance(usage, dict):
+                    tokens_in = int(usage.get("tokens_in") or usage.get("input_tokens") or tokens_in or 0)
+                    tokens_out = int(usage.get("tokens_out") or usage.get("output_tokens") or tokens_out or 0)
+    return {"model_calls": sum(model_calls_in(e) for e in events), "tokens_in": tokens_in, "tokens_out": tokens_out}
 
 
 def route_of(events):
