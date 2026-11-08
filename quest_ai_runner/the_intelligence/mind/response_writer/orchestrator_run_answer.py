@@ -5,6 +5,7 @@ run-local namespace ``rs`` that ``RunMixin.run`` builds and hands from one phase
 """
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Optional
 
@@ -679,6 +680,8 @@ class RunAnswerMixin:
         # Code-built repair rounds: a measurement the draft still fails is fixed by regenerating with a hint built from the
         # measurement itself (it names the exact violation and repair), at most ``reply_standard_max_repairs`` times in all, each
         # re-measured. What still fails after the last round gets the cheapest safe deterministic repair. Never unbounded.
+        # The context the reply was written from, at debug level on its own logger: an evaluation replay records it as part of what the turn was shown.
+        logging.getLogger("quest-ai-runner.grounding").debug("Reply grounding: %s", str(getattr(rs, "context_view", "") or "")[:20000])
         if standard is not None and standard_in_force:
             try:
                 measured = measure(rs.text, standard, standard_evidence, figure_pool, figure_evidence, list(getattr(rs.plan, "facts_read", None) or []),

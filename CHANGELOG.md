@@ -20,6 +20,7 @@ All notable changes to this project are documented here. The format is based on
 - chat_quality judge: the ground truth view is 80,000 characters, and when the reads run longer each long read is cut to a fair share (head and tail kept), so one large record dump no longer pushes the read a reply's figure came from out of the judge's view.
 
 ### Fixed
+- The context a reply was written from is logged at debug level on `quest-ai-runner.grounding`, and a status turn logs its quest and placement; chat_quality's overlay counts that context as part of what the turn was shown (the judge's truth), so a figure the writer was given is not judged invented.
 - Reply standard repair: a length repair that loses a web address or a quoted name the draft held (where the person finds what the reply is about) is rejected and the longer draft ships (`pointed_items`, `lost_pointers`).
 - Reply check cap 12 calls: room for the hub's majority of confirmations before a removal.
 - chat_quality item judge: the views also see the harness checks (prechecks, state check) and the replay's rule that a blocked write counts as made.

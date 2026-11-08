@@ -590,6 +590,7 @@ class RunBeginMixin:
                 snapshot_quest = rs.quest_id
                 if not snapshot_quest:
                     quests = status_snapshot.reachable_quests(self.tools)
+                    log.info("Status turn: no quest open; %d reachable quest(s); find_quest offered=%s", len(quests), bool(self.tools.get("find_quest")))
                     from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
                     # The conversation's last exchange goes to the placement: a follow-up that names nothing continues the quest of the message before it.
                     previous = quoted_phrase.previous_reply(self.conversation_store, conv_id, rs.user_message) if self.conversation_store is not None and conv_id else ""
@@ -597,6 +598,8 @@ class RunBeginMixin:
                     if quests and not snapshot_quest:
                         rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
                                                        rationale="A status question that fits none of the asker's quests: one short question.")
+                log.info("Status turn: quest %s (%s), placement asked=%s", snapshot_quest or "none", "pinned" if rs.quest_id else "placed" if snapshot_quest else "unplaced",
+                         not rs.quest_id)
                 if snapshot_quest and rs._forced_plan is None:
                     emit.status("Reading where the quest stands…")
                     own = (rs.retrieval_constraints or {}).get("actor") == "me"

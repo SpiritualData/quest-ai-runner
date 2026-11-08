@@ -202,7 +202,8 @@ def build(meter):
             unexpected = PC.unexpected_writes(changes, effect, zero, set())
             changes_text = [f"{c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" for c in changes] + unexpected
             reads_seen = run.get("reads") or []
-            truth = P.reads_text(reads_seen)
+            # The evaluation's truth is everything the turn was shown: its reads and the context the reply was written from (real quest data the writer was given).
+            truth = P.reads_text(reads_seen) + (("\n\nTHE CONTEXT THE REPLY WAS WRITTEN FROM (shown to the writer this turn):\n" + run["grounding"]) if run.get("grounding") else "")
             judged_case = dict(case, evidence_notes=(f"{case.get('evidence_notes', '')} Environment: the production Quest AI chat turn replayed on production data with the checkout's code, every write blocked and recorded. "
                                                      "The 'changes' listed are the writes the turn ATTEMPTED (none was made); an UNEXPECTED WRITE line is an attempt the case does not allow.").strip())
             if zero:
