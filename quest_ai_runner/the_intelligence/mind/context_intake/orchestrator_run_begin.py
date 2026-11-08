@@ -633,6 +633,16 @@ class RunBeginMixin:
                     rs.context_view = (_filtered_block + "\n\n" + rs.context_view
                                     if rs.context_view else _filtered_block)
 
+        # A spoken turn may quote a word of the assistant's previous reply as the transcript heard it: it is tied to that word, and the reply says what it is.
+        if rs.message_is_user_turn and _ctx_meta.get("channel") == "voice" and self.conversation_store is not None and conv_id:
+            try:
+                from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
+                _phrase_note = quoted_phrase.note_for(self.conversation_store, conv_id, rs.user_message, self.cheap_decision)
+                if _phrase_note:
+                    rs.context_view = _phrase_note + ("\n\n" + rs.context_view if rs.context_view else "")
+            except Exception:  # noqa: BLE001 -- understanding a phrase is an addition, never a reason to fail the turn
+                log.debug("quoted phrase resolution skipped", exc_info=True)
+
         # Fix 5a: a handful of PRIOR user turns in this SAME conversation, for the overseer digest's
         # RECENT CONVERSATION section. Computed once (from whatever ``conv_ctx_text`` STAGE 1 pulled;
         # empty when no conversation_store/conv_id was in play), excluding the current turn's own
