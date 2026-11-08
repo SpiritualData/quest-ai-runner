@@ -25,8 +25,9 @@ class Registry:
             return SimpleNamespace(ok=True, data={"records": self.tables}, text="records")
         if name == "apply_spec_edit":
             change = args["change"]
-            if change["kind"] == "spec_edit":
-                self.tables["solutions"][change["target"]][change["field"]] = change["value"]
+            if change["kind"] in ("spec_edit", "metric_edit"):
+                table = "solutions" if change["kind"] == "spec_edit" else "metrics"
+                self.tables[table][change["target"]][change["field"]] = change["value"]
                 return SimpleNamespace(ok=True, data={"applied": True, "target": change["target"], "field": change["field"], "after": change["value"]}, text="Done")
             self.tables["metrics"].setdefault(change["key"], dict(change["fields"]))
             return SimpleNamespace(ok=True, data={"applied": True, "created": True, "target": change["key"]}, text="Done")
@@ -175,3 +176,30 @@ def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_reche
     assert made.depth["levels"] == 1 and made.depth["before"] < 1 and made.depth["after"] == 1 and made.depth["met"]
     assert made.after == 1 and "Call to action" in made.parts[-1]
     assert "%" not in made.reply_text()          # the depth scores stay in the kept record, never as an unread figure in the reply
+
+
+def test_the_writer_gets_research_and_proposes_units_on_its_own_tier():
+    written, researched = [], []
+
+    def writer(prompt):
+        written.append(prompt)
+        return json.dumps({"units": [{"n": 1, "topic": "Setting a first goal", "why": "the guide says users start with one goal", "source": "product guide"}],
+                           "part": "Opening line for tutorial 1. Set one goal. Call to action: try it today."})
+    made = milestone_progress.make_progress(cue(), Registry(), decide, write=writer, research=lambda q: researched.append(q) or "product guide: users start with one goal.",
+                                            tier="balanced")
+    assert researched and any("product guide: users start with one goal." in p for p in written if "You write one deliverable" in p)
+    assert "Proposed units (an AI proposal from the sources, to be agreed):\n1. Setting a first goal. Why: the guide says users start with one goal (source: product guide)" in made.overview
+    assert made.sources == "product guide: users start with one goal."
+
+
+def test_a_metric_behind_its_source_is_read_as_the_increment_before_any_deliverable():
+    registry = Registry()
+    registry.tables["metrics"]["met-1"].update(record="Current value: 2 (as of 2030-03-01, from the sheet)", source="sheet")
+    later = cue()
+    later.tables = registry.tables
+    later.source, later.metric_ids = "sheet", ["met-1"]
+    later.read_source = lambda reg: setattr(later, "reading", {"value": 5, "as_of": "2030-03-09", "source": "the sheet"})
+    made = milestone_progress.make_progress(later, registry, decide)
+    assert made.status == "measured" and (made.before, made.after) == (2, 5) and made.parts == ["Current value: 5 (as of 2030-03-09, from the sheet)"]
+    kept = next(args for name, args in registry.calls if name == "keep_milestone_deliverable")
+    assert kept["increment"]["kind"] == "metric_read" and kept["increment"]["method"] == "read"

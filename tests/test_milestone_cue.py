@@ -44,6 +44,7 @@ def cheap_model(monkeypatch):
         answer = progress_decide(prompt)      # the progress step's calls (work items, the check, the writer, the scorer), answered offline
         return "NONE" if answer == "{}" else answer
     monkeypatch.setattr(Orchestrator, "cheap_decision", fake)
+    monkeypatch.setattr(Orchestrator, "tier_writer", lambda self, tier: (lambda prompt: fake(self, prompt)))
 GOALS = [{"id": "g1", "title": "esr_c next step: week of 2026-10-26", "spec_solution_id": "esr_c", "completed": False, "abandoned": False, "due": "2026-11-01",
           "assignee_name": "Cy"},
          {"id": "g2", "title": "Unrelated", "spec_solution_id": None, "completed": False, "abandoned": False, "due": None}]

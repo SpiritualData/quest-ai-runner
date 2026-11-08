@@ -5,6 +5,7 @@ run-local namespace ``rs`` that ``RunMixin.run`` builds and hands from one phase
 """
 from __future__ import annotations
 
+import logging
 import json
 import time
 from types import SimpleNamespace
@@ -595,7 +596,30 @@ class RunLoopMixin:
                     # A progress turn makes one AI increment and measures it (milestone_progress): the deliverable, kept on the milestone's keyed goal, measured before and
                     # after by a check that is not the writer, and the milestone metric read again. Bookkeeping (an owner, a due date) is never the output.
                     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_progress
-                    made = milestone_progress.make_progress(rs.cue_resolved, self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered))
+                    tier = milestone_progress.writer_tier(self.cfg)
+
+                    def research(query: str) -> str:
+                        # The research piece of the deliverable: the product's own documents through the same card assembly the turn uses, and the web when it is
+                        # wired, each passage under its source. What it returns becomes part of the turn's reads.
+                        found = []
+                        cards = self.read_cards_context(query, rs.card_context)
+                        if str(getattr(cards, "text", "") or "").strip() and getattr(cards, "kind", "") != "error" and not str(cards.text).startswith("No topic/card context"):
+                            found.append(f"Product documents and topic cards ({cards.locator}):\n{str(cards.text)[:6000]}")
+                        if getattr(self, "web", None) is not None:
+                            try:
+                                web = self.web.search([query])
+                            except Exception as error:      # noqa: BLE001  the web is one source among several
+                                web = None
+                                log.info("milestone progress: web research failed: %s", error)
+                            if web is not None and str(getattr(web, "text", "") or "").strip() and getattr(web, "kind", "") != "error":
+                                found.append("Web search results (each under its link):\n" + str(web.text)[:4000])
+                        return "\n\n".join(found)
+                    made = milestone_progress.make_progress(rs.cue_resolved, self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered),
+                                                            write=self.tier_writer(tier), research=research, tier=tier)
+                    if made.sources:
+                        # What the writer was given beyond the tool reads is a read of this turn: the reply check, the figure pass and an evaluation see it as a source.
+                        gathered.append({"kind": "query", "locator": "research:milestone deliverable", "text": made.sources, "tool_status": "applied", "by_code": True})
+                        logging.getLogger("quest-ai-runner.grounding").debug("Turn read: research for the deliverable: %s", made.sources[:20000])
                     rs.cue_resolved.progress = made
                     if made.status != "measured":
                         raise milestone_cue.LaneGap(f"no AI increment could be made for {rs.cue_resolved.name!r}: {made.why}")

@@ -25,6 +25,8 @@ Env it reads:
   QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
                                                    read/answer/deep (default balanced; use fast
                                                    to reduce cost, best for complex routing)
+  QAR_MILESTONE_WRITER_TIER (optional)           — model tier a milestone progress turn writes its
+                                                   deliverable on (default fast; a measured arm)
   QAR_PLANNER_MODEL (optional)                   — a model id for the routing decision ALONE
                                                    (the decide call); other calls that share
                                                    QAR_PLANNER_TIER keep that tier's model

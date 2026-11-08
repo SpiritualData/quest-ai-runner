@@ -153,6 +153,8 @@ class OrchestratorConfig:
     # sequence are its to stamp). The ask-on-block path (a ``needs_person`` verdict files one deduplicated decision-
     # request) is NOT behind this switch: it only replaces text that looked like an ask but created nothing.
     interim_replies: bool = False
+    # The tier a milestone progress turn writes its deliverable on (QAR_MILESTONE_WRITER_TIER overrides it); the structured judgments stay on the cheap tier.
+    milestone_writer_tier: str = "fast"
     # critical-thinking:every_request_measured -- a chat turn that plans a change reads its metric before and after by the deep goal's own code
     # (``turn_metrics``). Off keeps ``deep_runs_only``; set from the selection of ``critical-thinking`` (``the_body/configuration/config.py``).
     measure_every_request: bool = False

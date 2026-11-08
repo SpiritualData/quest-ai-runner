@@ -149,7 +149,9 @@ Break the work this milestone needs into at most 6 work items, in the order they
 "step": "<for an item only a person can do: one full sentence saying what is done and, when the records say, by whom>"}}]}}
 A deliverable is a piece of the very thing the done test needs made, written now from the records: the content that will be published, sent, submitted or
 used (the words of a script, listing copy, a message, a question set, an analysis). A plan, a status report, a schedule, or a list of owners or dates is
-bookkeeping, never a deliverable. Evidence is answering the questions a decision needs from data or sources; actor is person for anything only a person can do. Give 3 or 4 requirements for each item an AI can make, each
+bookkeeping, never a deliverable. A comparison of options, a recommendation or a proposed list (topics, candidates) that a decision needs is a deliverable the AI
+proposes now, labelled as a proposal with its reasons and sources; it is never left for later. Evidence is answering the questions a decision needs from data or
+sources; actor is person for anything only a person can do. Give 3 or 4 requirements for each item an AI can make, each
 checkable by reading one unit's own text against the records (never by what happens later, outside the text, or after a person acts), and asking only for
 what can be written from the records: never a title, screen, shot, length, figure or date the records do not describe, and never one that waits on a
 decision people have not made yet (an agreed list, an approval). For anything that speaks
@@ -167,20 +169,21 @@ WRITE_PROMPT = """You write one deliverable for a team's milestone. It is used a
 The milestone, from its records:
 {records}
 
-What this turn read and was shown (the only source for any claim about the product, the team or past work):
+What this turn read and was shown, and the research gathered for this work (each source named; the only source for any fact about the product, the team or
+past work):
 {grounding}
 
 The work item: {item}
 Each unit must meet: {requirements}
 {kept}
-Reply with JSON only: {{"part": "<the next unit, complete, meeting every requirement above>"}}. The part is the unit itself, used as it is: for a video, the words to be
-spoken; for copy, the copy; for a message, the message; never notes, an outline or a plan about the unit unless the unit is itself an outline.
-Rules: use only facts the records or the reads state; never invent a feature, user, figure, price, date or name. Say of the product only what the records or
-the reads say it does, in their words; where they say little, write about the problem and the outcome the records name instead of describing features. In the
-overview, name only units the records name; where they name none, list the units by number alone, with no topic the records do not give. State no length,
-duration, count or date the records do not give. No first person
-plural unless the records say who speaks; no bracket or blank slot to fill: where the unit needs a fact the records and reads do not give, write
-"to be decided" in its place, never a plausible guess. {no_em_dash}"""
+Reply with JSON only: {{"units": [{{"n": <number>, "topic": "<what that unit covers>", "why": "<the reason, from the sources>", "source": "<the source it rests on>"}}],
+"part": "<the next unit, complete, meeting every requirement above>"}}. List every unit of the set in "units" (as many as the set needs); "part" is the next one
+in full. The part is the unit itself, used as it is: for a video, the words to be spoken; for copy, the copy; for a message, the message; never notes, an outline or
+a plan about the unit unless the unit is itself an outline.
+Facts and proposals are different. A fact (what the product does, a figure, a date, a name, a result) must come from the sources above, said as they say it;
+never invent one. A proposal (which topics to cover, which option to recommend, how to compare candidates) is your own work: make it, concretely, from the
+sources, and say why. Write "to be decided" only for a fact that only a person or an outside system can supply, never for a proposal you can make. No first
+person plural unless the records say who speaks; no bracket or blank slot to fill. {no_em_dash}"""
 
 EVIDENCE_PROMPT = """You gather the evidence a team's decision needs. Answer only from the records and the reads below; quote the exact words each answer rests on.
 
@@ -211,7 +214,8 @@ The milestone's records and this turn's reads, the only source for any fact:
 {records}
 {grounding}
 
-Use only facts above; where a fact is missing, write "to be decided". Reply with JSON only: {{"part": "<the sentences>"}}. {no_em_dash}"""
+Use only facts above; a proposal (a topic, a recommendation) is yours to make from them, with its reason. Write "to be decided" only for a fact only a
+person or an outside system can supply. Reply with JSON only: {{"part": "<the sentences>"}}. {no_em_dash}"""
 
 COMBINE_PROMPT = """Join these parts of one unit of a team's deliverable into the one unit, complete and in order, used as it is.
 
@@ -225,7 +229,7 @@ Parts written to meet what it missed:
 {parts}
 
 Write ONE unit, not several versions: the first version with each part worked in where it belongs, about as long as the first version plus the parts.
-Keep every fact exactly as the parts and the first version give it; add none. Where a fact is missing, write "to be decided". Reply with JSON only:
+Keep every fact exactly as the parts and the first version give it; add none. Keep each proposal with its reason. Reply with JSON only:
 {{"part": "<the one whole unit>"}}. {no_em_dash}"""
 
 SCORE_PROMPT = """Check one deliverable against its requirements. You did not write it; judge only what the text shows, against the records below.
@@ -267,6 +271,8 @@ class Progress:
     rubric_state: str = ""          # "reused" (kept on the record and read back), "kept" (defined this turn and written), or why it was not kept
     notes: str = ""                 # lines the milestone's parent and dependent solution passes add, after the person-only step
     depth: Optional[Mapping[str, Any]] = None       # the depth loop's account: rubric score of the one-call unit (before) and after depth, calls, levels, why it stopped
+    sources: str = ""               # what the writer was given beyond the turn's reads (the research it gathered), kept in the turn's read record
+    tier: str = ""                  # the tier the deliverable was written on
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
@@ -314,14 +320,15 @@ class Progress:
 class Scorer:
     """The judge the hub's ``measure`` calls: one scoring call per part (cached), a requirement met only when its quote is found in the part."""
 
-    def __init__(self, decide: Callable[[str], str], requirements: Sequence[str], reference: str = ""):
-        self.decide, self.requirements, self.cache, self.reference = decide, [str(r) for r in requirements], {}, reference
+    def __init__(self, decide: Callable[[str], str], requirements: Sequence[str], reference: Any = ""):
+        self.decide, self.requirements, self.cache, self.reference = decide, [str(r) for r in requirements], {}, reference      # text, or a callable read at scoring time
 
     VIEWS = 3       # independent scoring calls (alternate ones see the requirements in reverse order); a requirement is met when most of them find it, each with a quote
 
     def one_view(self, part: str, order: List[int]) -> List[bool]:
         listing = "\n".join(f"{n}. {self.requirements[k]}" for n, k in enumerate(order, 1))
-        data = parse_json(self.decide(SCORE_PROMPT.format(part=part[:4000], requirements=listing, reference=self.reference[:GROUNDING_CHARS] or "(none)")))
+        reference = str(self.reference() if callable(self.reference) else self.reference)
+        data = parse_json(self.decide(SCORE_PROMPT.format(part=part[:4000], requirements=listing, reference=reference[:GROUNDING_CHARS * 2] or "(none)")))
         met = [False] * len(self.requirements)
         text = squash(part)
         for row in data.get("verdicts") or []:
@@ -381,8 +388,13 @@ def first_person_step(items: Sequence[Mapping[str, Any]], doable: Callable[[Mapp
     return " ".join(str(theirs[0].get("step") or theirs[0]["name"]).split()) if theirs else ""
 
 
-def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], grounding: str = "", today: Optional[datetime.date] = None) -> Progress:
-    """The progress step for a resolved milestone ``cue`` (``milestone_cue.Resolved``). Raises ``milestone_cue.LaneGap`` when a read or the keep fails."""
+def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], grounding: str = "", today: Optional[datetime.date] = None,
+                  write: Optional[Callable[[str], str]] = None, research: Optional[Callable[[str], str]] = None, tier: str = "") -> Progress:
+    """The progress step for a resolved milestone ``cue`` (``milestone_cue.Resolved``). Raises ``milestone_cue.LaneGap`` when a read or the keep fails.
+    ``decide`` is the cheap call for the structured judgments (work items, checks, scoring); ``write`` writes the deliverable's prose (the tier chosen for
+    it, ``tier`` names it; ``decide`` when none); ``research(query) -> text`` reads the product's own documents and outside sources for the facts a
+    deliverable needs (each passage with its source)."""
+    write = write or decide
     from hubofhubs.api import CriticalThinkingComposition, MajorityVote, RecordFieldUpkeep, doable_by_ai
     from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import grounded_text
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
@@ -391,7 +403,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     day = (today or datetime.date.today()).isoformat()
     cue.read_source(registry)       # the milestone metric as its source reads now (the host's recorded value first); a source that cannot be read is said, never guessed
     tables = cue.tables or {}
-    metrics = dict(tables.get("metrics") or {})
+    metrics = {mid: with_reading_fields(m) for mid, m in dict(tables.get("metrics") or {}).items()}
     rids = [cue.rid, *cue.metric_ids]
     items = work_items(cue.records_text, rids, decide)
     means = [{"name": OUTWARD, "outward": True}]
@@ -433,7 +445,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     out = Progress(title=title, metric_name=str((metrics.get(cue.metric_ids[0]) or {}).get("name") or "") if cue.metric_ids else "",
                    metric_before=cue.current_text() if cue.reading else cue.value, as_of=day, rubric_state=rubric_state)
     source = cue.source
-    readers = {source: (lambda mid: dict(cue.reading))} if source and cue.reading else None
+    readers = {source: (lambda mid: dict(cue.reading))} if source and cue.reading else None      # the source as read this turn (Metric Upkeep compares its day)
     chosen: Dict[str, Any] = {}
 
     scorers: Dict[tuple, Scorer] = {}
@@ -442,35 +454,61 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         # The requirements a requirement belongs to are its work item's: one scoring call covers all of them for a part, before and after alike.
         owner = tuple(chosen.get("increment", {}).get("requirements") or ()) if requirement in (chosen.get("increment", {}).get("requirements") or ()) else next(
             (tuple(i["requirements"]) for i in items if requirement in (i.get("requirements") or [])), (str(requirement),))
-        scorer = scorers.setdefault(owner, Scorer(decide, owner, cue.records_text + "\n" + str(grounding or "")))
+        scorer = scorers.setdefault(owner, Scorer(decide, owner, sources_text))
         return scorer(requirement, part)
 
-    reference = cue.records_text + "\n" + cue.allowed_text() + "\n" + str(grounding or "")
+    found: Dict[str, str] = {}
+
+    def gather_research(item: Mapping[str, Any]) -> str:
+        """The research piece: the product's own documents and outside sources on what this work is about, each passage with its source, read once per
+        turn. What it returns counts as a read for the writer, the claim check and the scorer alike."""
+        if research is None or "text" in found:
+            return found.get("text", "")
+        try:
+            found["text"] = str(research(f"{item.get('name')}. {cue.name}. {cue.purpose}"[:600]) or "").strip()
+        except Exception as error:  # noqa: BLE001  research that could not run leaves the records and reads as the only sources
+            log.warning("milestone progress: research failed: %s: %s", type(error).__name__, error)
+            found["text"] = ""
+        out.sources = found["text"]
+        return found["text"]
+
+    def sources_text() -> str:
+        return "\n".join(t for t in (cue.records_text, cue.allowed_text(), str(grounding or ""), found.get("text", "")) if t)
+
+    def shown() -> str:
+        return ("\n\n".join(t for t in (str(grounding or "")[:GROUNDING_CHARS], ("Research gathered for this work:\n" + found["text"][:GROUNDING_CHARS]) if found.get("text") else "") if t)
+                or "(none)")
 
     def work(increment: Mapping[str, Any]) -> Mapping[str, Any]:
         item = dict(increment.get("item") or {})
         chosen.update(item=item, increment=dict(increment))
+        if increment.get("method") == "read":
+            reading = dict(item.get("reading") or {})
+            out.parts = [f"{milestone_cue.CURRENT_VALUE} {reading.get('value')} (as of {reading.get('as_of')}, from {reading.get('source') or cue.source})"]
+            out.overview = f"{out.metric_name or cue.name}, read from its source because the record was behind it."
+            return {"artifact": {"value": reading.get("value")}, "evidence_ref": title}
+        gather_research(item)
         if increment.get("method") == "evidence":
             return gather_evidence(item, increment, kept)
         total = item.get("total") if isinstance(item.get("total"), int) else None
         have = list((kept or {}).get("parts") or [])
         kept_note = (f"Already kept (do not repeat; write the next unit, number {len(have) + 1}):\n" + "\n".join(f"- {clip_line(p)}" for p in have)) if have else ""
-        data = parse_json(decide(WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
-                                                     item=item.get("name"), requirements="; ".join(increment.get("requirements") or []) or "(none given)",
-                                                     kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)))
-        allowed = reference
+        data = parse_json(write(WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
+                                                    item=item.get("name"), requirements="; ".join(increment.get("requirements") or []) or "(none given)",
+                                                    kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)))
+        allowed = sources_text()
         part = str(data.get("part") or "").strip()
         requirements = [str(r) for r in increment.get("requirements") or []]
         if part and requirements:
             # The unit is its own solution with the kept rubric as its metric: the hub's depth loop checks it (the separate scorer, never the writer), splits what
             # it misses into sub-pieces with their own sub-prompts, recombines and checks again within the request's budget.
             from hubofhubs.api import build_out
-            prompt = WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
+            prompt = WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
                                          item=item.get("name"), requirements="; ".join(requirements), kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)
             unit = {"goal": f"{item.get('name')}, unit {len(have) + 1}", "requirements": requirements, "prompt": prompt, "solution_id": cue.rid}
 
             def piece_work(piece: Mapping[str, Any]) -> str:
-                answer = decide(str(piece.get("prompt") or ""))
+                answer = write(str(piece.get("prompt") or ""))
                 return str(parse_json(answer).get("part") or answer or "").strip()
 
             def piece_check(text: str, piece: Mapping[str, Any]) -> Dict[str, Any]:
@@ -486,11 +524,11 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                 missing = [str(r) for r in checked.get("missing") or []] or list(piece.get("requirements") or [])
                 return [{"goal": f"{piece.get('goal')}: {req}", "requirements": [req], "solution_id": cue.rid,
                          "prompt": PART_PROMPT.format(goal=piece.get("goal"), base=part, requirement=req, records=cue.records_text[:RECORD_CHARS * 2],
-                                                      grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)", no_em_dash=NO_EM_DASH)} for req in missing]
+                                                      grounding=shown(), no_em_dash=NO_EM_DASH)} for req in missing]
 
             def piece_combine(piece: Mapping[str, Any], base: str, parts: Sequence[Mapping[str, Any]]) -> str:
                 written = "\n\n".join(f"For: {p['requirements'][0]}\n{p['text']}" for p in parts if str(p.get("text") or "").strip())
-                answer = decide(COMBINE_PROMPT.format(goal=piece.get("goal"), requirements="; ".join(piece.get("requirements") or []), base=base,
+                answer = write(COMBINE_PROMPT.format(goal=piece.get("goal"), requirements="; ".join(piece.get("requirements") or []), base=base,
                                                       parts=written or "(none)", no_em_dash=NO_EM_DASH))
                 return str(parse_json(answer).get("part") or base).strip()
             deep = build_out(unit, piece_work, piece_check, split=piece_split, combine=piece_combine, budget={"calls": DEPTH_CALLS, "depth": 2, "width": 4}, base=part)
@@ -498,19 +536,22 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             if float(deep.get("after") or 0) >= float(deep.get("before") or 0):
                 part = str(deep.get("text") or part).strip()       # depth that scored lower than the one-call unit is not kept
         part = grounded_text(part, allowed, decide) if part else ""
-        # The overview is composed by code from the item and its count: a model-written list of units named topics the records never gave.
-        out.overview = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".") + (
-            f" What each unit covers is {TO_BE_DECIDED} where the records do not name it." if total and total > 1 else "")
+        # The list of units is a proposal: the writer proposes what each covers, with its reason and source; its facts go through the same claim check.
+        units = [u for u in data.get("units") or [] if isinstance(u, Mapping) and str(u.get("topic") or "").strip()]
+        proposed = "\n".join(f"{n}. {' '.join(str(u['topic']).split())}. Why: {' '.join(str(u.get('why') or '').split()) or 'see the sources'}"
+                             + (f" (source: {' '.join(str(u['source']).split())})" if str(u.get("source") or "").strip() else "") for n, u in enumerate(units, 1))
+        head = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".")
+        out.overview = head + (("\nProposed units (an AI proposal from the sources, to be agreed):\n" + grounded_text(proposed, allowed, decide)) if proposed else "")
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}
 
     def gather_evidence(item: Mapping[str, Any], increment: Mapping[str, Any], kept: Any) -> Mapping[str, Any]:
         """Research increment: the questions the decision needs, each answered only with a quote code finds in the records or reads; the rest stay open
         ("to be decided"). Coverage is questions answered with a source out of questions asked."""
-        data = parse_json(decide(EVIDENCE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=str(grounding or "")[:GROUNDING_CHARS] or "(none)",
+        data = parse_json(write(EVIDENCE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
                                                         item=item.get("name"), requirements="; ".join(increment.get("requirements") or []) or "(none given)",
                                                         limit=EVIDENCE_QUESTIONS, no_em_dash=NO_EM_DASH)))
-        text = squash(reference)
+        text = squash(sources_text())
         questions = []
         for row in data.get("questions") or []:
             if not isinstance(row, Mapping) or not str(row.get("question") or "").strip():
@@ -561,6 +602,24 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
 
 
 EVIDENCE_QUESTIONS = 8
+
+
+def with_reading_fields(metric: Mapping[str, Any]) -> Dict[str, Any]:
+    """A metric record with the structured fields Metric Upkeep reads, taken from its own dated reading line when it has one (``Current value: <v> (as of
+    <day>, from <source>)``): ``value`` (a number when it is one) and ``measured_through`` (that day, unless the record states one)."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+    out = dict(metric)
+    line = str(metric.get("record") or "").strip().split("\n")[0].strip()
+    found = milestone_cue.Resolved.KEPT_READING.match(line)
+    if found:
+        raw = found.group("value").strip()
+        try:
+            out.setdefault("value", float(raw.replace(",", "")) if re.fullmatch(r"-?[\d,]+(?:\.\d+)?", raw) else raw)
+        except ValueError:
+            out.setdefault("value", raw)
+        if not str(out.get("measured_through") or "").strip():
+            out["measured_through"] = found.group("day").strip()[:10]
+    return out
 
 
 def whole_row(registry: Any, cue: Any) -> Mapping[str, Any]:
@@ -622,3 +681,14 @@ def milestone_pass(made: Progress, cue: Any, request: str = "") -> Dict[str, Any
             "risks": [f"Only a person can do: {made.ask}"] if made.ask else [], "conflicts": [],
             "knowledge": [rubric_entry(rubric.item, rubric.requirements, rubric.total, rubric.source)] if rubric else [],
             "candidates": [], "before": made.before, "after": made.after}
+
+
+WRITER_TIER_ENV = "QAR_MILESTONE_WRITER_TIER"
+
+
+def writer_tier(cfg: Any = None, environ: Optional[Mapping[str, str]] = None) -> str:
+    """The tier a milestone deliverable is written on: ``QAR_MILESTONE_WRITER_TIER`` when set (a measured arm can be run this way), else the
+    configuration's ``milestone_writer_tier``, else ``fast``. The structured calls (work items, checks, scoring) stay on the cheap tier whatever it is."""
+    import os
+    environ = os.environ if environ is None else environ
+    return str(environ.get(WRITER_TIER_ENV) or getattr(cfg, "milestone_writer_tier", "") or "fast").strip()
