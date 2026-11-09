@@ -221,22 +221,29 @@ def task_read(task_run):
         return None
     data = {"state": "updated" if measured.get("goal_found") else "created", "goal": {"name": measured.get("title")}, "increment": measured["increment"],
             "milestone_metric": measured.get("milestone_metric"), "kept_in_test_mode": "refused and recorded"}
-    return {"source": "tool keep_milestone_deliverable (the queued task, run after the turn)", "text": str(measured.get("line") or "") + "\n" + json.dumps(data, default=str)}
+    return {"source": "tool keep_milestone_deliverable (the queued task, run after the turn)",
+            "text": str(measured.get("measure_line") or measured.get("line") or "") + "\n" + json.dumps(data, default=str)}
 
 
 def task_notes(task_runs):
-    """What the judge is told about the background work the turn queued: each task's status, its report, the deliverable as it would be kept and its
-    measured before and after."""
+    """What the judge is told about the background work the turn queued: the deliverable it kept (in this replay every write is refused and recorded,
+    so the worker's refused goal write IS its keep, judged exactly as the turn's own attempted writes are), its measured before and after, and its report.
+    A "blocked in test mode" or "could not keep" line in the report is this replay's write block, never a failure of the work."""
     if not task_runs:
         return ""
     parts = []
     for n, run in enumerate(task_runs, 1):
         measured = run.get("measured") or {}
-        parts.append(f"QUEUED TASK {n}, run after the turn the way the lane's runner runs it (real deep worker, every write refused and recorded): "
-                     + (f"it could not run ({run['error']})." if run.get("error") else
-                        f"status {run.get('status')}. Its report: {str(run.get('result') or '')[:3000]} "
-                        + (f"The deliverable it made, as it would be kept on the goal '{measured.get('title')}':\n{str(measured.get('body') or '')[:12000]}\n"
-                           f"Measured by code on completion: {measured.get('line')}" if measured else "It reported no measured deliverable.")))
+        if run.get("error"):
+            parts.append(f"QUEUED TASK {n}: it could not run ({run['error']}).")
+            continue
+        kept = str(measured.get("body") or "")
+        parts.append(f"QUEUED TASK {n}, run after the turn the way the lane's runner runs it (real deep worker; every write refused and recorded, as the turn's are). "
+                     + (f"THE DELIVERABLE IT KEPT on the goal '{measured.get('title')}' (its goal write, recorded like any attempted write of this replay):\n"
+                        f"{kept[:12000]}\nMEASURED BY CODE on completion (a separate check, not the worker): {measured.get('measure_line') or measured.get('line')}. "
+                        if kept else "It kept no deliverable. ")
+                     + f"Its own report (a 'blocked in test mode' or 'could not keep' line there is this replay's write block, not a failure): "
+                     f"{str(run.get('result') or '')[:2000]}")
     return " " + " ".join(parts)
 
 

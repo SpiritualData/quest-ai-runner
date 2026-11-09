@@ -362,27 +362,34 @@ def solution_prompt(cue: Any, sid: str, task: str = "") -> str:
         return ""
 
 
-DEEP_BRIEF = """Make this deliverable for a team's milestone, to completion quality, and keep it.
+DEEP_BRIEF = """{opening}
 
-The work item: {item}
-Its rubric (every unit must meet each item; a separate check counts the units that do): {rubric}
-Already kept (continue after these; do not repeat them):
+The solution: {solution}. It serves the milestone {milestone}.
+Its metric: units of {item} that meet every item of its rubric, counted by a separate check (never by you): {rubric}
+Now: {before}. Already kept (continue after these; do not repeat them):
 {have}
 
-Where to keep it: the goal titled exactly "{title}" in this quest, its description starting with the line "Kept by Quest AI:" and then the deliverable,
-updated in place (never a second goal).
+Work from the solution's own records first (read them with the quest's specification tools: its record, its metric, its knowledge and the milestones it
+serves), then apply the evolvable-structure method to it: confirm the metric, build the deliverable with depth (split it into the pieces it needs, research
+and write each with its own sub-prompt or sub-agent, check each against the rubric, recombine and check again) until every unit meets the rubric or the work
+is spent, and measure before and after.
+
+Keep it: the goal titled exactly "{title}" in this quest, its description starting with the line "Kept by Quest AI:" and then the deliverable, updated in
+place (never a second goal). Write each unit the rubric is checked on (one script, one entry, one option) as its own part, each starting with a line
+"--- Part N ---" (N from 1), after a short overview. A fact (what the product does, a figure, a link, a name) only as a source says it; a proposal labelled
+as one; no placeholder and no blank slot.
 
 {records}
 
 What the turn read (each source named):
 {grounding}
 
-Build it out with depth: research what it needs (the product's documents and outside sources, each named), write each part, and check each against the
-rubric before keeping it. Write each unit the rubric is checked on (one script, one entry, one option) as its own part, each starting with a line
-"--- Part N ---" (N from 1), after a short overview. A fact (what the product does, a figure, a link, a name) only as a source says it, with the source; a proposal labelled as one;
-no placeholder and no blank slot. Always end your output with a line that says only "DELIVERABLE:", then the deliverable itself, exactly as you kept it or
-tried to keep it, even when keeping it failed: code measures it from there. {no_em_dash}
+End your output with two sections, in this order: a line that says only "SOURCES:", then each source you used with the exact passage each fact rests on
+(copied, a sentence or two), which the separate check reads; then a line that says only "DELIVERABLE:", then the deliverable itself, exactly as you kept it
+or tried to keep it, even when keeping it failed (code measures it from there). {no_em_dash}
 {record}"""
+SKILL_OPENING = "Carry out the {skill} skill on one solution of a team's quest, to completion quality, and keep what it makes."
+PLAIN_OPENING = "Make the deliverable of one solution of a team's quest, to completion quality, and keep it."
 
 
 EVIDENCE_FORM = """The deliverable is evidence for a decision: the questions the decision needs, each answered from a source you read (the records, the
@@ -391,15 +398,19 @@ fact no source gives. Research each open question before leaving it open."""
 
 
 def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have: Sequence[str], title: str, records: str, grounding: str,
-                      record: Optional[Mapping[str, Any]] = None, form: str = "") -> Tuple[str, str]:
+                      record: Optional[Mapping[str, Any]] = None, form: str = "", skill: str = "", solution: str = "", milestone: str = "") -> Tuple[str, str]:
     """``(goal, brief)`` for the deep harness: the work item as the goal, and the brief from the deliverable's solution records, its rubric, what is kept
     and where it is kept. ``record`` (the quest, milestone, goal title, rubric and before) becomes the code-written work record line the task executor
     reads when the work finishes, to measure and keep it (``milestone_completion``)."""
     goal = f"Make {item.get('name')} to its rubric and keep it on the goal '{title}'"
-    brief = DEEP_BRIEF.format(item=item.get("name"), rubric="; ".join(requirements) or "(none recorded)",
+    before = (record or {}).get("before")
+    total = (record or {}).get("total")
+    brief = DEEP_BRIEF.format(opening=SKILL_OPENING.format(skill=skill) if skill else PLAIN_OPENING, solution=solution or str(item.get("name")),
+                              milestone=milestone or "named in the records below", item=item.get("name"), rubric="; ".join(requirements) or "(none recorded)",
+                              before=f"{before or 0}" + (f" of {total}" if total else ""),
                               have="\n".join(f"- {clip_line(p)}" for p in have) or "(nothing yet)", title=title, records=records,
                               grounding=str(grounding or "")[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH,
-                              record=work_record_line(record) if record else "")
+                              record=work_record_line(dict(record, skill=skill) if skill else record) if record else "")
     if form == "evidence":
         brief = EVIDENCE_FORM + "\n\n" + brief
     return goal, brief

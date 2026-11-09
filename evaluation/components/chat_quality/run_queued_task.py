@@ -225,7 +225,7 @@ def main(argv=None) -> int:
         if record and tried and (not measured or measured.get("status") == "no_deliverable" or not float(measured.get("after") or 0) > float(record.get("before") or 0)):
             # The worker's refused keep is the attempted keep: measured the same way as a kept deliverable (the scorer, the goal, the metric again).
             again = milestone_completion.measure_on_completion(record, milestone_completion.DELIVERABLE_LINE + "\n" + tried, executor._orch.tools,
-                                                               executor._orch.cheap_decision, reference=task_text)
+                                                               executor._orch.cheap_decision, reference=task_text + "\n\n" + str(outcome.result or ""))
             if not measured or float(again.get("after") or 0) >= float(measured.get("after") or 0):
                 measured = dict(again, from_attempted_keep=True)
         out.update(status=outcome.status, result=outcome.result, measured=measured, model_calls=snap["model_calls"],

@@ -1217,5 +1217,5 @@ def test_a_progress_turn_with_a_queued_deep_harness_hands_the_deliverable_there_
     queue = StubDeepRunner(output="task #3 launched", deferred=True)
     result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([]),
                           deep_runners={DEFERRED_RUNNER_KEY: queue}).run(CUE, quest_id="q1")
-    assert len(queue.calls) == 1 and "Its rubric" in queue.calls[0]["brief"] and "Kept by Quest AI:" in queue.calls[0]["brief"]
+    assert len(queue.calls) == 1 and "Its metric" in queue.calls[0]["brief"] and "Kept by Quest AI:" in queue.calls[0]["brief"]
     assert "background work" in result.text and "I wrote" not in result.text

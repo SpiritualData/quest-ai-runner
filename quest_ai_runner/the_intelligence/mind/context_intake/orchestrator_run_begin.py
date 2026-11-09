@@ -260,7 +260,8 @@ class RunBeginMixin:
         if (rs.deep_goal or "").strip():
             rs.caller_deep_plan = PlanDecision(
                 action="deep", goal=_truncate_goal(rs.deep_goal.strip()),
-                deep_brief=rs.user_message, rationale="the caller started this deep run directly")
+                deep_brief=rs.user_message, rationale="the caller started this deep run directly",
+                deep_difficulty=(context_meta or {}).get("deep_difficulty") or None)      # the caller's kind of work picks the start the cascade measured for it
             rs._forced_plan = rs.caller_deep_plan
         if (self.recipes is not None and cfg.recipe_fast_path and cfg.recipe_deep
                 and mode is Mode.LIVE and message_is_user_turn and not attachments

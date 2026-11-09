@@ -23,12 +23,26 @@ WORK_RECORD = "Milestone work record: "
 DELIVERABLE_LINE = "DELIVERABLE:"
 KEPT_MARKER = "Kept by Quest AI:"
 RECORD_FIELDS = ("quest_id", "milestone_id", "milestone_metric_id", "title", "item", "requirements", "before", "total", "measure_name", "metric_id",
-                 "method")
+                 "method", "skill", "kind")
 
 
 def work_record_line(record: Mapping[str, Any]) -> str:
     """The one structured line a deep brief carries for its completion: the fields of ``RECORD_FIELDS`` as JSON after ``WORK_RECORD``."""
     return WORK_RECORD + json.dumps({k: record[k] for k in RECORD_FIELDS if k in record}, sort_keys=True, ensure_ascii=False)
+
+
+def with_work_skill(text: str, record: Mapping[str, Any], skills_root: str) -> str:
+    """``text`` with an instruction to read and carry out the skill the work record names, found under this lane's ``skills_root``; ``text`` unchanged
+    when no skill is named, the name is not a plain folder name, or the lane holds no such skill."""
+    import os
+    skill = str(record.get("skill") or "").strip()
+    if not skill or not skills_root or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", skill):
+        return text
+    path = os.path.join(skills_root, skill, "SKILL.md")
+    if not os.path.isfile(path):
+        log.warning("milestone work: the skill %r is not under this lane's skills root; the plain brief runs", skill)
+        return text
+    return f"First read the skill at {path} (and the files it points to) and carry it out for this work.\n\n{text}"
 
 
 def work_record_of(text: Any) -> Optional[Dict[str, Any]]:
@@ -131,6 +145,7 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
                                             "solution_id": record.get("milestone_id"), "increment": increment},
                              ToolContext(quest_id=str(record["quest_id"])))
     common = {"before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
+              "measure_line": progress.increment_line(),
               "goal_found": bool(kept_text), "milestone_metric": metric_again(registry, record)}
     if not getattr(result, "ok", False):
         return dict(common, status="not_kept", line=f"The finished deliverable was measured ({progress.increment_line()}) but not kept: {str(getattr(result, 'text', ''))[:200]}")

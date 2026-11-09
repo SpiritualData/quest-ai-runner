@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-241 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+243 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -95,6 +95,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_TIMEOUT_SECONDS` |  | `the_body/configuration/config_core_settings.py`, `the_intelligence/mind/delegation/goal_runner_contract.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_WORKING_DIR` |  | `the_body/configuration/config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
+| `QAR_DEEP_WORK_SKILL` | The skill (by name) a milestone deliverable's deep worker carries out on the deliverable's solution; the lane that runs the work reads it from its skills root (QAR_SKILLS_ROOT). Unset, the plain brief runs. | `the_intelligence/critical_thinking/esoi_application/milestone_facts.py` | - |
 | `QAR_DISCOVERY_TEAM_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_DRY_RUN_DEEP` | Set to real to keep the real deep worker in a dry run (QAR_DRY_RUN_WRITES=1): it runs with the same environment, so every tool process it starts is in the dry run too and a Quest write it asks for is refused and recorded. Used to replay a queued task the way the lane would. Unset, the worker is the stub. | `the_world/tools/dry_run_writes.py` | - |
 | `QAR_DRY_RUN_RECORD_FILE` | A JSON-lines file every process of one dry run appends its refused tool writes to (the tool and its whole arguments), so a replay that started a deep worker can read what the worker's own tool processes would have written. Unset, nothing is appended. | `the_world/tools/dry_run_writes.py` | - |
@@ -201,6 +202,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_RUNNER_LABEL` |  | `the_body/configuration/cli_config.py` | `.env.example` |
 | `QAR_SCIENCE_DAILY_LIMIT` | Real scholarly searches one process may make per UTC day (default 300, 0 for no cap). OpenAlex bills about $1 per 1,000 searches against a $1 a day free allowance. | `the_world/science/tools_science.py` | `docs/how-to/tools.md` |
 | `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `the_consciousness/terminal/interactive_session_commands.py` | - |
+| `QAR_SKILLS_ROOT` | The folder holding the skills this lane's deep worker may be asked to carry out (one folder per skill with its SKILL.md), such as the skill a milestone deliverable's work names; also the root of the representatives' skill folders. | `the_consciousness/request_intake/executor.py` | - |
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `the_body/configuration/walk_settings.py`, `the_world/tools/file_reading/files_search_worker.py`, `the_world/tools/file_reading/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `the_body/configuration/card_store_settings.py` | - |
 | `QAR_SOLUTION_CONSIDERATION_MIN_SCORE` | The records-index score a solution needs for a pass in a deep run (default 0: the hub gate's DEFAULT_MIN_SCORE, fixed from its relevance cases). CoreSettings.solution_consideration_min_score. | `the_body/configuration/config_core_settings.py` | `.env.example` |

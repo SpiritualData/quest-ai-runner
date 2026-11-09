@@ -23,6 +23,7 @@ it can be unit-tested against a mock Quest client + stub brain with no network.
 from __future__ import annotations
 
 import inspect
+import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -475,6 +476,14 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         run_scope_tags = task_scope_tags(task)
         if run_scope_tags:
             context_meta = {**(context_meta or {}), "scope_tags": run_scope_tags}
+        # A milestone deliverable's work (its brief carries the code-written work record) is a deep run the caller decided on: the skill it names is loaded
+        # from this lane's skills root, and its kind starts it on the tier the harness cascade measured best for that kind of work.
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+        work_record = milestone_completion.work_record_of(text)
+        if work_record is not None:
+            text = milestone_completion.with_work_skill(text, work_record, os.environ.get("QAR_SKILLS_ROOT", ""))
+            if work_record.get("kind"):
+                context_meta = {**(context_meta or {}), "deep_difficulty": str(work_record["kind"])}
 
         # Cooperative mid-run cancellation: a THROTTLED check (see _build_cancel_check) threaded
         # into the orchestrator so a human hitting "stop" while this task is in_progress can abort
@@ -530,10 +539,10 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
 
         decisions_before = self._open_decision_ids(quest_id)
         try:
-            result: OrchestratorResult = run_once(
-                text, resume_session_id,
-                self._direct_deep_extra(self._task_text(task) or text,
-                                        _run_accepts(self._orch.run, "deep_goal"), task))
+            first_extra = (({"deep_goal": "Complete this task: " + " ".join(str(work_record.get("item") or "the milestone deliverable").split())}
+                            if _run_accepts(self._orch.run, "deep_goal") else None) if work_record is not None else
+                           self._direct_deep_extra(self._task_text(task) or text, _run_accepts(self._orch.run, "deep_goal"), task))
+            result: OrchestratorResult = run_once(text, resume_session_id, first_extra)
             # AUTOMATIC FOLLOW-UP RUNS: while the ask is clearly unfinished and nothing waits on a
             # person, run again for the remaining items (see ``runner/auto_followup.py``).
             result = self._follow_up_while_incomplete(
@@ -606,7 +615,9 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             return
         output = "\n\n".join(str(getattr(d, "output", "") or "") for d in (getattr(result, "deep_results", None) or [])) or str(getattr(result, "text", "") or "")
         try:
-            measured = milestone_completion.measure_on_completion(record, output, getattr(self._orch, "tools", None), self._orch.cheap_decision, reference=text)
+            # The scorer checks the deliverable against what the worker was given and what it read (its output names and quotes its sources).
+            measured = milestone_completion.measure_on_completion(record, output, getattr(self._orch, "tools", None), self._orch.cheap_decision,
+                                                                  reference=text + "\n\n" + output)
         except Exception as error:  # noqa: BLE001  the run's own report stands; the measurement failure is said in it
             log.warning("milestone completion: measuring the finished work failed: %s: %s", type(error).__name__, error)
             measured = {"line": f"The finished deliverable could not be measured ({type(error).__name__})."}

@@ -158,6 +158,9 @@ class OrchestratorConfig:
     # A milestone deliverable is made through the harness the ESOI cascade selected for work (the deep agent): inline when the deployment runs deep work
     # inline, as a background task when it queues it (the turn acknowledges). Off, or with no deep runner wired, the in-turn writer and depth loop make it.
     milestone_work_on_deep_harness: bool = True
+    # The skill the deep worker carries out on a milestone deliverable's solution (by name; the lane that runs the work finds it under its skills root,
+    # QAR_SKILLS_ROOT). QAR_DEEP_WORK_SKILL overrides it; empty sends the plain brief.
+    deep_work_skill: str = ""
     # critical-thinking:every_request_measured -- a chat turn that plans a change reads its metric before and after by the deep goal's own code
     # (``turn_metrics``). Off keeps ``deep_runs_only``; set from the selection of ``critical-thinking`` (``the_body/configuration/config.py``).
     measure_every_request: bool = False

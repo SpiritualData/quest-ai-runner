@@ -313,3 +313,21 @@ def test_pause_then_resume_continues_the_same_claude_session(tmp_path, monkeypat
     assert "--resume" in argv and session in argv      # the SAME session, on the same thread
     saved = json.loads((tmp_path / "sessions" / f"{session}.json").read_text())
     assert saved["ran"][0] == "a" and "b" not in saved["ran"]   # a was kept, b never ran
+
+
+def test_a_milestone_work_task_runs_as_a_caller_deep_run_of_its_kind_with_the_lanes_skill(tmp_path, monkeypatch):
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    (tmp_path / "method-x").mkdir()
+    (tmp_path / "method-x" / "SKILL.md").write_text("# Method X")
+    monkeypatch.setenv("QAR_SKILLS_ROOT", str(tmp_path))
+    seen: Dict[str, Any] = {}
+
+    class Recording(FixedOrchestrator):
+        def run(self, text, *args, deep_goal=None, **kwargs):
+            seen.update(text=text, deep_goal=deep_goal, meta=kwargs.get("context_meta") or {})
+            return OrchestratorResult(kind="cancelled", exit_reason="cancelled")
+    record = {"quest_id": "q1", "title": "G", "item": "the scripts", "requirements": ["r"], "before": 0, "skill": "method-x", "kind": "hard"}
+    TaskExecutor(PauseClient(), Recording(paused_result())).execute(
+        {"task_id": "atask_9", "text": "Make it.\n" + milestone_completion.work_record_line(record)})
+    assert seen["deep_goal"] == "Complete this task: the scripts" and seen["meta"].get("deep_difficulty") == "hard"
+    assert seen["text"].startswith(f"First read the skill at {tmp_path}/method-x/SKILL.md")

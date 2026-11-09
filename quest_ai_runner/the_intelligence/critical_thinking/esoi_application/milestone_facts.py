@@ -226,3 +226,14 @@ def writer_tier(cfg: Any = None, environ: Optional[Mapping[str, str]] = None) ->
     import os
     environ = os.environ if environ is None else environ
     return str(environ.get(WRITER_TIER_ENV) or getattr(cfg, "milestone_writer_tier", "") or "fast").strip()
+
+
+WORK_SKILL_ENV = "QAR_DEEP_WORK_SKILL"
+
+
+def work_skill(cfg: Any = None, environ: Optional[Mapping[str, str]] = None) -> str:
+    """The skill the deep worker carries out on a milestone deliverable's solution, by name: ``QAR_DEEP_WORK_SKILL`` when set, else the configuration's
+    ``deep_work_skill``, else none (the plain brief)."""
+    import os
+    environ = os.environ if environ is None else environ
+    return str(environ.get(WORK_SKILL_ENV) or getattr(cfg, "deep_work_skill", "") or "").strip()

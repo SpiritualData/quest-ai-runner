@@ -9,6 +9,7 @@ import hashlib
 
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .milestone_depth import STATUS_WORDS, marked_claims
 from .milestone_depth import ANSWER_PROMPT, COMBINE_PROMPT, EVIDENCE_PROMPT, EVIDENCE_QUESTIONS, PART_PROMPT, WRITE_PROMPT, checked_line, deliverable_brief, held_source, kept_step, solution_prompt, stems5, supported_sentences, without_rubric_echo
 from .milestone_facts import DELIVERABLES, DEPTH_CALLS, GROUNDING_CHARS, KEEP_TOOL, NO_EM_DASH, OUTWARD, RECORD_CHARS, TO_BE_DECIDED, ToolSpecEdit, clip_line, kept_follow_on, kept_parts, log, parse_json, quest_metric_fields, questions_of, render_questions, squash, whole_row, with_reading_fields, without_ids
 from .milestone_reply import Progress
@@ -72,9 +73,13 @@ def first_person_step(items: Sequence[Mapping[str, Any]], doable: Callable[[Mapp
     return " ".join(str(theirs[0].get("step") or theirs[0]["name"]).split()) if theirs else ""
 
 
+#: The kind of work a milestone deliverable is for the harness cascade: the runner that executes it starts on the tier the hub measured best for it.
+WORK_KIND = "hard"
+
+
 def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], grounding: str = "", today: Optional[datetime.date] = None,
                   write: Optional[Callable[[str], str]] = None, research: Optional[Callable[[str], str]] = None, tier: str = "",
-                  deep: Optional[Callable[[str, str], Mapping[str, Any]]] = None) -> Progress:
+                  deep: Optional[Callable[[str, str], Mapping[str, Any]]] = None, skill: str = "") -> Progress:
     """The progress step for a resolved milestone ``cue`` (``milestone_cue.Resolved``). Raises ``milestone_cue.LaneGap`` when a read or the keep fails.
     ``decide`` is the cheap call for the structured judgments (work items, checks, scoring); ``write`` writes the deliverable's prose (the tier chosen for
     it, ``tier`` names it; ``decide`` when none); ``research(query) -> text`` reads the product's own documents and outside sources for the facts a
@@ -150,6 +155,10 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             if researched:
                 pinned = [r for r in first["requirements"] if r == DECISION_REQUIREMENT]
                 first["requirements"] = pinned + [r for r in researched if r not in pinned][:5 - len(pinned)]
+            # A requirement that waits on a status the records do not hold ("on the agreed list" while the list is a proposal) can never be met by the
+            # work: it is dropped by code, the same rule the deliverable's own sentences follow.
+            first["requirements"] = [r for r in first["requirements"] if not [m for m in marked_claims(r, reference_now) if STATUS_WORDS.fullmatch(m)]] \
+                or first["requirements"]
             owner = str(out_home.get("id") or "")
             entry = rubric_entry(first["name"], first["requirements"], first.get("total") if isinstance(first.get("total"), int) else None,
                                  ", ".join(cited + [f"{cue.rid}", "Quest AI", day]), kind=first["kind"], done="" if owner else digest)
@@ -248,6 +257,11 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         cleaned_cache[key] = now.strip()
         return cleaned_cache[key]
 
+    def work_solution() -> str:
+        """The solution the deliverable's work is carried out on: the deliverable's own solution (classified or created), else the milestone's."""
+        sid = str(out_home.get("id") or "")
+        return f"{(out_home.get('row') or {}).get('name') or sid} (record {sid})" if sid else f"{cue.name} (record {cue.rid})"
+
     def solution_records() -> str:
         """The deliverable's solution as the hub generates its prompt from its own network of records (records, metric, knowledge), then the milestone's
         records: the writer and the deep agent work from the solution, not from an ad hoc description."""
@@ -330,8 +344,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title,
                       "item": item.get("name"), "requirements": requirements, "method": "evidence",
                       "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": None,
-                      "measure_name": f"Questions for {item.get('name')} answered with a source", "metric_id": increment.get("measure_id")}
-            goal, brief = deliverable_brief(item, requirements, [], title, solution_records(), shown(), record=record, form="evidence")
+                      "measure_name": f"Questions for {item.get('name')} answered with a source", "metric_id": increment.get("measure_id"), "kind": WORK_KIND}
+            goal, brief = deliverable_brief(item, requirements, [], title, solution_records(), shown(), record=record, form="evidence", skill=skill,
+                                            solution=work_solution(), milestone=f"{cue.name} (record {cue.rid})")
             got = dict(deep(goal, brief) or {})
             out.handed_off = {"goal": goal, "queued": bool(got.get("deferred")), "error": str(got.get("error") or "")}
             if got.get("deferred") or not str(got.get("output") or "").strip():
@@ -361,8 +376,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             before = increment.get("before")
             record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title, "item": item.get("name"), "requirements": requirements,
                       "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": total,
-                      "measure_name": f"Units of {item.get('name')} meeting their requirements", "metric_id": increment.get("measure_id")}
-            goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown(), record=record)
+                      "measure_name": f"Units of {item.get('name')} meeting their requirements", "metric_id": increment.get("measure_id"), "kind": WORK_KIND}
+            goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown(), record=record, skill=skill,
+                                            solution=work_solution(), milestone=f"{cue.name} (record {cue.rid})")
             got = dict(deep(goal, brief) or {})
             out.handed_off = {"goal": goal, "queued": bool(got.get("deferred")), "error": str(got.get("error") or "")}
             if got.get("deferred") or not str(got.get("output") or "").strip():

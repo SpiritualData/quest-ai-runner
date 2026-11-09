@@ -511,7 +511,22 @@ def test_the_deep_brief_carries_the_work_record_the_task_executor_measures_on_co
     made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: briefs.append(brief) or {"output": "queued", "deferred": True})
     record = milestone_completion.work_record_of(briefs[0])
     assert made.status == "handed_off" and record["title"] == made.title and record["milestone_id"] == "sol-1" and record["before"] == 0
-    assert record["requirements"] == ["Has an opening", "Ends with a call to action"] and 'line that says only "DELIVERABLE:"' in briefs[0]
+    assert record["requirements"] == ["Has an opening", "Ends with a call to action"] and '"DELIVERABLE:"' in briefs[0] and '"SOURCES:"' in briefs[0]
+    assert record["kind"] == "hard" and briefs[0].startswith("Make the deliverable of one solution")
+
+
+def test_with_a_work_skill_the_worker_carries_it_out_on_the_solution_and_the_lane_finds_it(tmp_path):
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    briefs = []
+    milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda g, b: briefs.append(b) or {"output": "queued", "deferred": True}, skill="method-x")
+    record = milestone_completion.work_record_of(briefs[0])
+    assert briefs[0].startswith("Carry out the method-x skill on one solution") and record["skill"] == "method-x"
+    (tmp_path / "method-x").mkdir()
+    (tmp_path / "method-x" / "SKILL.md").write_text("# Method X")
+    text = milestone_completion.with_work_skill(briefs[0], record, str(tmp_path))
+    assert text.startswith(f"First read the skill at {tmp_path}/method-x/SKILL.md") and text.endswith(briefs[0])
+    assert milestone_completion.with_work_skill("t", {"skill": "../etc"}, str(tmp_path)) == "t"
+    assert milestone_completion.with_work_skill("t", {"skill": "absent"}, str(tmp_path)) == "t"
 
 
 def test_evidence_work_goes_to_the_deep_harness_with_the_question_form():

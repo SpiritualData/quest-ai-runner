@@ -62,6 +62,7 @@ from .milestone_facts import (  # noqa: F401
     whole_row,
     with_reading_fields,
     without_ids,
+    work_skill,
     writer_tier,
 )
 from .milestone_rubric import (  # noqa: F401
