@@ -78,10 +78,10 @@ class IntentsMixin:
             return None
 
     def refresh_spec(self, subject_type: str, subject_id: str, *, reason: str = "manual",
-                     force: bool = False) -> Dict[str, Any]:
+                     force: bool = False, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """POST .../refresh: the one hash-gated spec update. Unchanged inputs write nothing (``skipped``)."""
         return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/refresh",
-                                  {"reason": reason, "force": bool(force)})
+                                  {"reason": reason, "force": bool(force)}, human_statement=human_statement)
 
     def refresh_metric_values(self, quest_id: str) -> Dict[str, Any]:
         """Refresh the measured values of a quest's metric records that name a source: each source is read through the lane's ``metric_sources`` and the
@@ -90,14 +90,18 @@ class IntentsMixin:
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.metric_refresh import refresh_metric_values
         return {"quest_id": quest_id, "records": refresh_metric_values(self, quest_id)}
 
-    def create_spec_record(self, subject_type: str, subject_id: str, record_type: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def create_spec_record(self, subject_type: str, subject_id: str, record_type: str, fields: Dict[str, Any],
+                           *, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """POST /api/intents/specs/{subjectType}/{subjectId}/records: one new record (problem, ideal, solution, implementation or metric) of
         the specification. The server answers 403 when the quest's autopilot is off, and a record the AI writes stays the AI's."""
-        return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/records", {"type": record_type, "fields": fields})
+        return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/records", {"type": record_type, "fields": fields},
+                                  human_statement=human_statement)
 
     def edit_spec_record(self, record_id: str, fields: Dict[str, Any], expected_revision: int,
-                         *, status: Optional[str] = None, milestone_entries: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """PATCH /api/intents/records/{recordId}. A field the person edited answers 409 FIELD_LOCKED. ``milestone_entries`` (a solution only)
+                         *, status: Optional[str] = None, milestone_entries: Optional[List[Dict[str, Any]]] = None,
+                         human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH /api/intents/records/{recordId}. A field the person edited answers 409 FIELD_LOCKED unless ``human_statement`` (the
+        person's verbatim words asking for this change) is given. ``milestone_entries`` (a solution only)
         replaces the structured milestones with the whole list given."""
         body: Dict[str, Any] = {"expectedRevision": int(expected_revision)}
         if fields:
@@ -106,10 +110,57 @@ class IntentsMixin:
             body["status"] = status
         if milestone_entries is not None:
             body["milestoneEntries"] = milestone_entries
-        return self.intent_write("PATCH", f"/api/intents/records/{record_id}", body)
+        return self.intent_write("PATCH", f"/api/intents/records/{record_id}", body, human_statement=human_statement)
+
+    def archive_spec_record(self, record_id: str, *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """DELETE /api/intents/records/{recordId}: archive one record (refused for the AI unless ``human_statement`` carries the person's words)."""
+        return self.intent_write("DELETE", f"/api/intents/records/{record_id}", {}, human_statement=human_statement)
+
+    def create_intent(self, name: str, vision_statement: str = "", *, owner_type: str = "user", owner_id: Optional[str] = None,
+                      after_intent_id: Optional[str] = None, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/intents: a new top intent."""
+        body: Dict[str, Any] = {"ownerType": owner_type, "name": name, "visionStatement": vision_statement}
+        if owner_id:
+            body["ownerId"] = owner_id
+        if after_intent_id:
+            body["afterIntentId"] = after_intent_id
+        return self.intent_write("POST", "/api/intents", body, human_statement=human_statement)
+
+    def update_intent(self, intent_id: str, expected_revision: int, *, name: Optional[str] = None,
+                      vision_statement: Optional[str] = None, opportunity: Optional[str] = None,
+                      human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH /api/intents/{intentId}: rename, change the vision or the opportunity (a person's own held as an ask for the AI)."""
+        body: Dict[str, Any] = {"expectedRevision": int(expected_revision)}
+        for key, value in (("name", name), ("visionStatement", vision_statement), ("opportunity", opportunity)):
+            if value is not None:
+                body[key] = value
+        return self.intent_write("PATCH", f"/api/intents/{intent_id}", body, human_statement=human_statement)
+
+    def delete_intent(self, intent_id: str, *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """DELETE /api/intents/{intentId}."""
+        return self.intent_write("DELETE", f"/api/intents/{intent_id}", {}, human_statement=human_statement)
+
+    def reorder_intents(self, intent_ids: List[str], *, owner_type: str = "user", owner_id: Optional[str] = None,
+                        human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """PUT /api/intents/order: exactly the owner's active intents in the new order."""
+        body: Dict[str, Any] = {"ownerType": owner_type, "intentIds": list(intent_ids)}
+        if owner_id:
+            body["ownerId"] = owner_id
+        return self.intent_write("PUT", "/api/intents/order", body, human_statement=human_statement)
+
+    def suggest_milestones(self, record_id: str, feedback: str = "", *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/intents/records/{recordId}/suggest-milestones: a drafted ladder, not saved."""
+        return self.intent_write("POST", f"/api/intents/records/{record_id}/suggest-milestones", {"feedback": feedback},
+                                 human_statement=human_statement)
+
+    def set_milestone_met(self, record_id: str, milestone_id: str, met: bool, *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH /api/intents/records/{recordId}/milestones/{milestoneId}/met: mark a structured milestone met or not met."""
+        return self.intent_write("PATCH", f"/api/intents/records/{record_id}/milestones/{milestone_id}/met", {"met": bool(met)},
+                                 human_statement=human_statement)
 
     def place_quest(self, quest_id: str, intent_id: Optional[str], *, implementation_id: Optional[str] = None,
-                    owner_type: str = "user", owner_id: Optional[str] = None) -> Dict[str, Any]:
+                    owner_type: str = "user", owner_id: Optional[str] = None,
+                    human_statement: Optional[str] = None) -> Dict[str, Any]:
         """PUT /api/intents/placements for one quest (``intent_id`` None puts it back to unsorted)."""
         move: Dict[str, Any] = {"questId": quest_id, "intentId": intent_id}
         if implementation_id:
@@ -117,19 +168,24 @@ class IntentsMixin:
         body: Dict[str, Any] = {"ownerType": owner_type, "moves": [move]}
         if owner_id:
             body["ownerId"] = owner_id
-        return self.intent_write("PUT", "/api/intents/placements", body)
+        return self.intent_write("PUT", "/api/intents/placements", body, human_statement=human_statement)
 
     def create_sub_intent(self, record_id: str, name: str, opportunity: str, *, vision_statement: str = "",
-                          reveal: Optional[str] = None) -> Dict[str, Any]:
+                          reveal: Optional[str] = None, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """POST /api/intents/records/{recordId}/sub-intents: make an implementation record of an intent its
         own intent. From an AI caller the server never creates it: it answers 202 ``{"pending": True,
         "decisionId": ...}`` (an ask the person approves in "Asks for you"), which is returned unchanged."""
         body: Dict[str, Any] = {"name": name, "visionStatement": vision_statement, "opportunity": opportunity}
         if reveal:
             body["reveal"] = reveal
-        return self.intent_write("POST", f"/api/intents/records/{record_id}/sub-intents", body)
+        return self.intent_write("POST", f"/api/intents/records/{record_id}/sub-intents", body, human_statement=human_statement)
 
-    def intent_write(self, method: str, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    def intent_write(self, method: str, path: str, body: Dict[str, Any], *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """Send one intents write. A non-blank ``human_statement`` (the person's verbatim words asking for exactly this change) is sent as
+        ``humanStatement``: the server then treats the call as the person's for its AI guards. Blank or absent sends nothing."""
+        if (human_statement or "").strip():
+            body = {**body, "humanStatement": human_statement}
+        body = body or None     # a bare DELETE sends no body
         try:
             return self._request(method, path, body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:

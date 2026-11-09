@@ -171,6 +171,18 @@ _NEVER_CODE = ("This tool is the ONLY way this changes: never write code, edit a
 _SUGGEST_INSTEAD = ("Do not use it off the back of small work inside the quest (a task, a "
                     "progress note, one new goal): suggest the change in your reply instead.")
 
+_HUMAN_STATEMENT_PARAM = {
+    "type": "string",
+    "description": ("The person's own words asking for exactly this change, verbatim. Omit unless they "
+                    "asked for it; a field the person edited can only be changed with their words."),
+}
+
+
+def _statement_kwargs(args: Dict[str, Any]) -> Dict[str, Any]:
+    statement = str(args.get("human_statement") or "").strip()
+    return {"human_statement": statement} if statement else {}
+
+
 _ASKED_PARAM = {
     "type": "boolean",
     "description": ("True ONLY when the user's own message explicitly asked for THIS change. It "
@@ -230,7 +242,8 @@ def quest_field_tool_spec(field_name: str, env: Mapping[str, str],
                                               f"{spec_text.label}. Suggest it in your reply instead."))
         try:
             result = factory().edit_quest_field(quest_id, {field_name: value.strip()},
-                                                actor="ai", user_requested=requested)
+                                                actor="ai", user_requested=requested,
+                                                **_statement_kwargs(args))
         except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
             return write_failed(e, f"Nothing was written: the update of {field_name} on quest {quest_id} failed")
         return result_of_write(
@@ -259,10 +272,11 @@ def quest_field_tool_spec(field_name: str, env: Mapping[str, str],
                                           f"information into the current value rather than "
                                           f"replacing it with a fragment.")},
                 "user_asked_for_this_field": _ASKED_PARAM,
+                "human_statement": _HUMAN_STATEMENT_PARAM,
             },
         },
         mutates=True,
-        workflow_hidden_params=("user_asked_for_this_field",),  # a step cannot assert the user asked; Quest's field-write gate decides
+        workflow_hidden_params=("user_asked_for_this_field", "human_statement"),  # a step cannot assert the user asked; Quest's field-write gate decides
         origin="standard",
         keywords=("quest", "field", "update", "change", "set", field_name.replace("_", " "),
                   *spec_text.label.lower().replace("(", " ").replace(")", " ").split()),
@@ -306,7 +320,8 @@ def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> 
         try:
             result = client.edit_quest_field(quest_id, {"measurable_outcomes": current + [item]},
                                              actor="ai",
-                                             user_requested=bool(args.get("user_asked_for_this_field")))
+                                             user_requested=bool(args.get("user_asked_for_this_field")),
+                                             **_statement_kwargs(args))
         except Exception as e:  # QuestWriteError: refused, failed, or sent and not answered
             return write_failed(e, f"Nothing was written: adding the measurable outcome to quest {quest_id} failed")
         return result_of_write(
@@ -335,10 +350,11 @@ def add_measurable_outcome_spec(env: Mapping[str, str], client_factory=None) -> 
                 "target_unit": {"type": "string", "description": "Its unit, e.g. 'subscribers'."},
                 "start_value": {"type": "number", "description": "Baseline, when known."},
                 "user_asked_for_this_field": _ASKED_PARAM,
+                "human_statement": _HUMAN_STATEMENT_PARAM,
             },
         },
         mutates=True,
-        workflow_hidden_params=("user_asked_for_this_field",),  # a step cannot assert the user asked; Quest's field-write gate decides
+        workflow_hidden_params=("user_asked_for_this_field", "human_statement"),  # a step cannot assert the user asked; Quest's field-write gate decides
         origin="standard",
         keywords=("quest", "measurable", "outcome", "metric", "success", "target", "kpi", "add"),
         context_args={"quest_id": "quest_id"},

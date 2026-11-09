@@ -26,6 +26,17 @@ OWNER_TYPES = ("user", "team", "org")
 OPPORTUNITY_MAX = 400
 REVEAL_LEVELS = ("private", "existence", "name", "full")
 
+HUMAN_STATEMENT_PARAM = {"type": "string", "description": (
+    "The person's own words asking for exactly this change, verbatim. Omit unless they asked for it; a field the person "
+    "edited can only be changed with their words.")}
+
+
+def statement_kwargs(args: Mapping[str, Any]) -> Dict[str, Any]:
+    """``human_statement`` for a client call, only when the run holds the person's non-blank words."""
+    statement = str(args.get("human_statement") or "").strip()
+    return {"human_statement": statement} if statement else {}
+
+
 OWNER_PARAMS = {
     "owner_type": {"type": "string", "enum": list(OWNER_TYPES),
                    "description": "Whose intents: user (default), team or org."},
@@ -65,8 +76,9 @@ def refusal_text(result: Mapping[str, Any], what: str) -> str:
     code = str(result.get("code") or "")
     if code == "FIELD_LOCKED":
         fields = ", ".join(result.get("lockedFields") or []) or "that field"
-        return (f"Not changed: the person edited {fields}, so it is theirs and you may not write it. "
-                f"Leave it; if you think it should change, say so in your reply as text.")
+        return (f"Not changed: the person edited {fields}, so it is theirs. It is changed only with human_statement, "
+                f"the person's own words asking for this change. Without those, leave it and say in your reply as text "
+                f"what you think should change.")
     if code == "REVISION_CONFLICT":
         return (f"Not changed: the record changed since you read it ({what}). Read it again with "
                 f"get_spec and decide whether the edit still applies.")
@@ -193,7 +205,8 @@ def refresh_spec_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         if reason not in REFRESH_REASONS:
             return ToolResult(ok=False, text=f"reason must be one of {', '.join(REFRESH_REASONS)}.")
         client = factory()
-        result = client.refresh_spec(subject_type, subject_id, reason=reason, force=bool(args.get("force")))
+        result = client.refresh_spec(subject_type, subject_id, reason=reason, force=bool(args.get("force")),
+                                      **statement_kwargs(args))
         if result.get("refused"):
             return refusal_result(result, f"{subject_type} {subject_id}")
         if result.get("pending"):
@@ -225,7 +238,8 @@ def refresh_spec_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             **SUBJECT_PARAMS,
             "reason": {"type": "string", "enum": list(REFRESH_REASONS),
                        "description": "Why: autopilot, chat, task, first_open, onboarding or manual."},
-            "force": {"type": "boolean", "description": "Skip the unchanged-inputs gate. Rarely right."}}},
+            "force": {"type": "boolean", "description": "Skip the unchanged-inputs gate. Rarely right."},
+            "human_statement": HUMAN_STATEMENT_PARAM}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,
         keywords=("spec", "specification", "esoi", "refresh", "intent", "problem", "solution", "gap"),
         timeout_seconds=120.0)
@@ -250,7 +264,7 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                     "Not changed: pass expected_revision (from get_spec), or the subject the record "
                     "belongs to so its revision can be read."))
             revision = row.get("revision")
-        result = client.edit_spec_record(record_id, fields, int(revision))
+        result = client.edit_spec_record(record_id, fields, int(revision), **statement_kwargs(args))
         if result.get("refused"):
             return refusal_result(result, record_id)
         return ToolResult(ok=True, data=result, text=(
@@ -266,9 +280,9 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                      "what it cannot see or could reward wrongly. A costly metric's cascading_conditionals list its "
                      "stages cheapest first, as `name [key=value | key=value]` joined by ` > ` (esoi cascade). A "
                      "field the person edited is "
-                     "refused; derived columns cannot be written."),
+                     "changed only with human_statement (their own words asking for it); derived columns cannot be written."),
         when_to_use="A record you wrote is wrong or out of date and refresh_spec did not fix it.",
-        when_not_to_use=("A field the person wrote or edited. Rewriting a record that is already "
+        when_not_to_use=("A field the person wrote or edited, unless they asked for this change in words you can quote as human_statement. Rewriting a record that is already "
                          "right. Rows marked from the quest (edit the quest field instead)."),
         parameters={"type": "object", "required": ["record_id", "fields"], "properties": {
             **SUBJECT_PARAMS,
@@ -276,7 +290,8 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             "fields": {"type": "object", "description": "Column name to new text (a list of ids for id columns; a solution's tags "
                                                                       "are a list of {tag, risk_ids} objects, each naming the problem ids it mitigates)."},
             "expected_revision": {"type": "integer",
-                                  "description": "The revision you read; looked up from the subject when omitted."}}},
+                                  "description": "The revision you read; looked up from the subject when omitted."},
+            "human_statement": HUMAN_STATEMENT_PARAM}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,
         keywords=("spec", "specification", "record", "edit", "esoi", "intent"),
         timeout_seconds=45.0)
@@ -395,7 +410,7 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         result = client.place_quest(quest_id, intent_id,
                                     implementation_id=str(args.get("implementation_id") or "").strip() or None,
                                     owner_type=str(args.get("owner_type") or "user"),
-                                    owner_id=args.get("owner_id") or None)
+                                    owner_id=args.get("owner_id") or None, **statement_kwargs(args))
         if result.get("refused"):
             return refusal_result(result, quest_id)
         if result.get("pending") is True:
@@ -427,7 +442,7 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
             "intent_id": {"type": "string", "description": "Any intent id from list_intents, sub-intents included; empty = unsorted."},
             "implementation_id": {"type": "string",
                                   "description": "The implementation record this quest carries out, if known."},
-            **OWNER_PARAMS}},
+            **OWNER_PARAMS, "human_statement": HUMAN_STATEMENT_PARAM}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,
         keywords=("place", "move", "sort", "intent", "quest", "group", "unsorted"),
         context_args={"quest_id": "quest_id"}, timeout_seconds=45.0)
@@ -451,7 +466,8 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
             return ToolResult(ok=False, text=f"reveal must be one of {', '.join(REVEAL_LEVELS)} (default private).")
         client = factory()
         result = client.create_sub_intent(record_id, name, opportunity, reveal=reveal,
-                                          vision_statement=str(args.get("vision_statement") or "").strip())
+                                          vision_statement=str(args.get("vision_statement") or "").strip(),
+                                          **statement_kwargs(args))
         if result.get("refused"):
             return refusal_result(result, record_id)
         if result.get("pending") is True:
@@ -481,7 +497,8 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
             "reveal": {"type": "string", "enum": list(REVEAL_LEVELS),
                        "description": "How much of the new intent other owners may see; default private. Leave unset unless the person asked."},
             "opportunity": {"type": "string",
-                            "description": f"Why it earns its own intent, one or two sentences (max {OPPORTUNITY_MAX} characters)."}}},
+                            "description": f"Why it earns its own intent, one or two sentences (max {OPPORTUNITY_MAX} characters)."},
+            "human_statement": HUMAN_STATEMENT_PARAM}},
         mutates=True, workflow_step=False, origin="standard", on_request_only=True,
         keywords=("sub", "intent", "split", "implementation", "opportunity", "nested", "child"),
         timeout_seconds=45.0)

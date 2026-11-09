@@ -141,7 +141,7 @@ def test_a_field_the_person_edited_is_refused_not_reported_as_changed():
     backend = StubIntentsBackend()
     result = invoke(intents.edit_spec_record_spec, backend,
                     {"record_id": "esr_1", "fields": {"goals": "Run daily"}, "expected_revision": 3})
-    assert not result.ok and "person edited goals" in result.text and "may not write it" in result.text
+    assert not result.ok and "person edited goals" in result.text and "human_statement" in result.text
     assert backend.records["esr_1"]["fields"]["goals"] == "Run 3 times" and backend.writes == 0
 
 
@@ -268,6 +268,46 @@ def test_client_calls_the_contract_paths_in_camel_case_and_never_sends_an_actor(
     assert client.sent[3][3] == {"expectedRevision": 2, "fields": {"name": "x"}}
     assert client.sent[4][3] == {"ownerType": "user", "moves": [{"questId": "q1", "intentId": None}]}
     assert all("actor" not in json.dumps(body or {}).lower() for _, _, _, body in client.sent)
+
+
+def test_human_statement_is_sent_as_camel_case_only_when_non_blank():
+    client = Recorder(reply={})
+    client.edit_spec_record("esr_1", {"goals": "x"}, 2, human_statement="  change the goals to x ")
+    client.edit_spec_record("esr_1", {"goals": "x"}, 2, human_statement="   ")
+    client.edit_spec_record("esr_1", {"goals": "x"}, 2)
+    client.archive_spec_record("esr_1", human_statement="archive it")
+    client.archive_spec_record("esr_1")
+    assert client.sent[0][3]["humanStatement"] == "  change the goals to x "
+    assert all("humanStatement" not in body for _, _, _, body in client.sent[1:3])
+    assert client.sent[3][:2] == ("DELETE", "/api/intents/records/esr_1") and client.sent[3][3] == {"humanStatement": "archive it"}
+    assert client.sent[4][3] is None
+
+
+def test_human_statement_reaches_place_and_sub_intent_bodies():
+    client = Recorder(reply={})
+    client.place_quest("q1", "int_a", human_statement="put it there")
+    client.create_sub_intent("esr_9", "Running", "Own races", human_statement="split it")
+    assert client.sent[0][3]["humanStatement"] == "put it there"
+    assert client.sent[1][3]["humanStatement"] == "split it"
+
+
+def test_edit_spec_record_tool_passes_human_statement_only_when_given_and_describes_it():
+    seen = []
+
+    class Backend(StubIntentsBackend):
+        def edit_spec_record(self, record_id, fields, expected_revision, **kw):
+            seen.append(kw)
+            return {"recordId": record_id, "revision": expected_revision + 1}
+
+    invoke(intents.edit_spec_record_spec, Backend(), {"record_id": "esr_1", "fields": {"goals": "x"}, "expected_revision": 3})
+    invoke(intents.edit_spec_record_spec, Backend(), {"record_id": "esr_1", "fields": {"goals": "x"}, "expected_revision": 3,
+                                                      "human_statement": "please change goals"})
+    assert seen == [{}, {"human_statement": "please change goals"}]
+    spec = intents.edit_spec_record_spec(CREDS)
+    assert spec.parameters["properties"]["human_statement"]["description"] == (
+        "The person's own words asking for exactly this change, verbatim. Omit unless they asked for it; "
+        "a field the person edited can only be changed with their words.")
+    assert "refused" not in spec.description and "human_statement" in spec.description
 
 
 def test_a_409_becomes_an_explicit_refusal_with_the_locked_fields():
