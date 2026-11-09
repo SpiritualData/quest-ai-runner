@@ -525,6 +525,14 @@ class Resolved:
     KEPT_READING = re.compile(r"^Current value:\s*(?P<value>.*?)\s*\(as of (?P<day>[^,)]+), from (?P<source>.*)\)\s*$")
 
 
+def reading_value(record: str) -> str:
+    """The metric's current value as a reader says it: a dated reading line (``Current value: <v> (as of <day>, from <source>)``) gives ``<v> (as of <day>)``;
+    any other record its first sentence. A plain first-sentence cut of a reading line stopped at its colon and showed "Current value"."""
+    line = str(record or "").strip().split("\n")[0].strip()
+    found = Resolved.KEPT_READING.match(line)
+    return f"{found.group('value').strip()} (as of {found.group('day').strip()})" if found else first_sentence(record)
+
+
 def read_through(registry: Any, quest_id: str) -> Tuple[Mapping[str, Any], str]:
     """``(tables, time zone)`` from the lane's ``read_spec_records`` tool. ``({}, "")`` when the lane has no such tool (it keeps no specifications: not a failure).
     A read that fails is a ``LaneGap`` with the tool's own words."""
@@ -601,7 +609,7 @@ def resolve(registry: Any, quest_id: str, cue: str, now: Optional[datetime.datet
         rid=rid, name=str(row.get("name") or rid), row=row, metric_ids=[mid for mid, _ in linked], owners=owners_of(row), week=week, tables=tables,
         facts=fact_block(tables, cue, week.monday, goals, zone, rid), quest_id=quest_id, request=str(cue or "").strip(),
         done_when=clip(row.get("milestones"), VALUE_CHARS).rstrip("."),
-        value=first_sentence(str(metric.get("record") or "")) if metric else "",
+        value=reading_value(str(metric.get("record") or "")) if metric else "",
         value_full=" ".join(str(metric.get("record") or "").split()) if metric else "",
         purpose=str(row.get("purpose") or ""), candidates=candidate_goals(goals, rid, str(row.get("name") or rid)), source=source_of(tables, rid, row), records_text=records_read(tables, rid, row),
         record_date=measured_through_of(tables, rid, row) or next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", str(metric.get("record") or ""))), "") if metric else "",

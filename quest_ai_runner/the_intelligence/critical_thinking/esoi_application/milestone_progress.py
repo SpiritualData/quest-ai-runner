@@ -183,7 +183,9 @@ in full. The part is the unit itself, used as it is: for a video, the words to b
 a plan about the unit unless the unit is itself an outline.
 Facts and proposals are different. A fact (what the product does, a figure, a date, a name, a result) must come from the sources above, said as they say it;
 never invent one. A proposal (which topics to cover, which option to recommend, how to compare candidates) is your own work: make it, concretely, from the
-sources, and say why. Write "to be decided" only for a fact that only a person or an outside system can supply, never for a proposal you can make. No first
+sources, and say why. When the work compares options or prepares a decision, end with an explicit recommendation of one option, labelled as a proposal,
+with its reasoning, even when the evidence is thin (say how thin). Write "to be decided" only for a fact that only a person or an outside system can supply,
+never for a proposal you can make. No first
 person plural unless the records say who speaks; no bracket or blank slot to fill. {no_em_dash}"""
 
 EVIDENCE_PROMPT = """You gather the evidence a team's decision needs. Answer only from the records and the reads below; quote the exact words each answer rests on.
@@ -435,7 +437,8 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
     from quest_ai_runner.the_world.tools.tools import ToolContext
 
-    day = (today or datetime.date.today()).isoformat()
+    # The day in the quest's own time zone (the week the cue was resolved in), so a date in the reply is the person's today.
+    day = (today or milestone_cue.today_in(getattr(cue.week, "zone", "") or "")).isoformat()
     cue.read_source(registry)       # the milestone metric as its source reads now (the host's recorded value first); a source that cannot be read is said, never guessed
     tables = cue.tables or {}
     metrics = {mid: with_reading_fields(m) for mid, m in dict(tables.get("metrics") or {}).items()}
@@ -592,8 +595,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                              + (f" (source: {' '.join(str(u['source']).split())})" if str(u.get("source") or "").strip() else "") for n, u in enumerate(units, 1))
         head = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".")
         if proposed:
-            proposed, dropped = supported_sentences(grounded_text(proposed, allowed, decide), allowed, decide)
-            out.unsupported += dropped
+            proposed = grounded_text(proposed, allowed, decide)       # a proposed topic is a proposal, so only the claim check reads the list
         out.overview = head + (("\nProposed units (an AI proposal from the sources, to be agreed):\n" + proposed) if proposed else "")
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}
@@ -630,7 +632,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     out.total = (made.get("after") or made.get("before") or {}).get("total") or (item.get("total") if isinstance(item.get("total"), int) and item.get("total") > 1 else None)
     out.before = (made.get("before") or {}).get("value")
     out.after = (made.get("after") or {}).get("value")
-    out.ask = first_person_step(items, doable)
+    out.ask = without_ids(first_person_step(items, doable))
     proposal = next((a.get("proposed_source") for a in made.get("actions") or [] if isinstance(a.get("proposed_source"), Mapping)), None)
     if proposal:
         out.notes = (f"To make {out.metric_name or 'the milestone metric'} readable here (an AI proposal, kept on the milestone's record): read "
@@ -671,7 +673,7 @@ What the product's own documents and outside sources say about this kind of deli
 {research}
 
 Give 3 to 5 requirements a reader can check on one unit's own text: what a good unit of this kind contains and how it is shaped (for a script, for example,
-the spoken words, an opening hook, a few concrete points, a call to action, a length a reader can count). Each requirement must be one the done test or the
+the spoken words, an opening hook, a few concrete points, a call to action). Each requirement must be one the done test or the
 sources support; none may ask for a fact the sources do not give or wait on a decision people have not made. Reply with JSON only:
 {{"requirements": [{{"text": "<the requirement>", "source": "<the source or the done test it comes from, by name>"}}]}}. Do not use em dashes."""
 
@@ -794,6 +796,14 @@ def questions_of(text: str) -> Optional[Dict[str, Any]]:
             found.setdefault(a.group("n"), {}).update(answer=a.group("a").strip() if answered else "", source=(a.group("s") or "").strip() if answered else "")
     questions = [v for _, v in sorted(found.items(), key=lambda kv: int(kv[0])) if v.get("question")]
     return {"questions": questions} if questions else None
+
+
+RECORD_ID = re.compile(r"\s*\((?:[a-z]{2,8}_[0-9a-f]{8,})\)|\b[a-z]{2,8}_[0-9a-f]{10,}\b")
+
+
+def without_ids(text: str) -> str:
+    """The text without internal record ids (``rep_4e8c0da18324``, ``esr_...``): a reader sees names, never ids."""
+    return " ".join(RECORD_ID.sub("", str(text or "")).split())
 
 
 def clip_line(text: str, limit: int = 160) -> str:

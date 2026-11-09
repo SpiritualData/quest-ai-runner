@@ -251,3 +251,9 @@ def test_the_deliverable_to_make_is_confirmed_by_independent_views():
     picked = milestone_progress.confirmed_item_order(items, lambda i: True, "records", lambda prompt: json.dumps({"pick": "i1", "quote": "the scripts"}))
     assert [i["name"] for i in picked] == ["the scripts", "a side note"]
     assert milestone_progress.confirmed_item_order(items[:1], lambda i: True, "records", lambda prompt: "{}") == items[:1]
+
+
+def test_a_dated_reading_is_said_as_its_value_and_ids_never_reach_the_reader():
+    assert milestone_cue.reading_value("Current value: 0 (as of 2030-03-08, from the funnel dashboard)\nmore") == "0 (as of 2030-03-08)"
+    assert milestone_cue.reading_value("0 of 6. Read on Monday.") == "0 of 6"
+    assert milestone_progress.without_ids("Ann (rep_4e8c0da18324) publishes each video.") == "Ann publishes each video."
