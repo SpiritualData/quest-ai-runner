@@ -61,3 +61,44 @@ def test_the_workers_refused_goal_write_is_the_attempted_keep():
             {"tool": "list_quest_goals", "args": {}},
             {"tool": "create_or_update_quest_goal", "args": {"title": "M1 deliverables", "description": "Kept by Quest AI: the scripts"}}]
     assert rq.attempted_keep(rows, "M1 deliverables") == "Kept by Quest AI: the scripts" and rq.attempted_keep(rows[:2], "M1 deliverables") == ""
+
+
+def test_quest_is_reached_only_through_the_read_forwarder():
+    import subprocess
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import run_queued_task as rq
+    seen = []
+
+    class Upstream(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            return
+
+        def do_GET(self):
+            seen.append(("GET", self.path, self.headers.get("Authorization")))
+            body = b'{"ok": true}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):
+            seen.append(("POST", self.path, None))
+            self.send_response(201)
+            self.end_headers()
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
+    threading.Thread(target=upstream.serve_forever, daemon=True).start()
+    forwarder = rq.QuestReadForwarder(f"http://127.0.0.1:{upstream.server_address[1]}")
+
+    def curl(*extra):
+        return subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--noproxy", "*", *extra], capture_output=True, text=True, timeout=10).stdout
+    assert curl("-H", "Authorization: Bearer k", forwarder.url + "/api/goals?x=1") == "200"
+    for method in ("POST", "PATCH", "DELETE", "PUT"):
+        assert curl("-X", method, "-d", "{}", forwarder.url + "/api/goals/g1") == "403"
+    assert seen == [("GET", "/api/goals?x=1", "Bearer k")]                     # nothing but the read reached Quest
+    assert forwarder.refused == ["POST /api/goals/g1", "PATCH /api/goals/g1", "DELETE /api/goals/g1", "PUT /api/goals/g1"]
+    proxy = rq.FilteringProxy(refuse=("quest.example",))
+    import socket
+    with socket.create_connection(("127.0.0.1", proxy.port), timeout=5) as conn:
+        conn.sendall(b"CONNECT quest.example:443 HTTP/1.1\r\nHost: quest.example:443\r\n\r\n")
+        assert conn.recv(100).startswith(b"HTTP/1.1 403")

@@ -81,3 +81,13 @@ def test_finished_evidence_counts_the_questions_answered_with_a_named_source():
     output = "DELIVERABLE:\nQ1. How are sign-ups counted?\nA1. By the source tag. (source: Funnel guide)\nQ2. Which videos carry it?\nA2. to be decided"
     got = mc.measure_on_completion(record, output, Registry(), scorer)
     assert got["status"] == "measured" and (got["after"], got["total"]) == (1, 2) and got["increment"]["kind"] == "evidence"
+
+
+def test_a_whole_set_without_separators_is_scored_one_unit_per_heading():
+    body = ("Six scripts for the videos.\n\n## Video 1: First steps\nOpening line one.\nCall to action: go.\n\n"
+            "## Video 2: The plan\nOpening line two.\nNo ending here.\n\n**Video 3: Habits**\nOpening line three.\nCall to action: try it.")
+    units = mc.units_by_heading(body)
+    assert units[0] == "Six scripts for the videos." and len(units) == 4 and units[3].startswith("**Video 3: Habits**")
+    got = mc.measure_on_completion(RECORD, "DELIVERABLE:\n" + body, Registry(), scorer)
+    assert (got["before"], got["after"]) == (0, 2) and got["body"].count("--- Part") == 3
+    assert mc.units_by_heading("One plain script.\nCall to action: go.") == ["One plain script.\nCall to action: go."]

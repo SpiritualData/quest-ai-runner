@@ -14,7 +14,8 @@ from __future__ import annotations
 import datetime
 import json
 import logging
-from typing import Any, Callable, Dict, Mapping, Optional
+import re
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 log = logging.getLogger("quest-ai-runner.milestone-completion")
 
@@ -50,6 +51,24 @@ def deliverable_of(output: Any) -> str:
     return text[at + len(DELIVERABLE_LINE):].strip() if at >= 0 else ""
 
 
+HEADING = re.compile(r"^(?:#{1,6}\s+\S.*|\*\*[^*\n]{2,120}\*\*:?|__[^_\n]{2,120}__:?)\s*$")
+
+
+def units_by_heading(text: str) -> List[str]:
+    """``[preamble, unit, unit, ...]`` when ``text`` is a set of units under headings (markdown headings or lines that are only bold), each unit with its
+    heading; ``[text]`` when it holds fewer than two headed units. Structure only: the units a rubric names one by one (a script per video) are written
+    under one heading each."""
+    pieces: List[List[str]] = [[]]
+    for line in str(text or "").splitlines():
+        if HEADING.match(line.strip()):
+            pieces.append([line])
+        else:
+            pieces[-1].append(line)
+    blocks = ["\n".join(p).strip() for p in pieces]
+    units = [b for b in blocks[1:] if b and len(b.splitlines()) > 1]
+    return [blocks[0]] + units if len(units) > 1 else [str(text or "").strip()]
+
+
 def kept_goal_text(registry: Any, record: Mapping[str, Any]) -> str:
     """The description of the milestone's keyed goal as it stands now ("" when it cannot be read or holds nothing)."""
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
@@ -80,6 +99,11 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
     parts = mp.kept_parts(kept_text)
     if mp.kept_parts(part):
         parts = mp.kept_parts(part)     # the deliverable is a whole kept body (its parts under their separators): it is the goal's text now
+    elif len(units_by_heading(part)) > 1:
+        overview_now, units = units_by_heading(part)[0], units_by_heading(part)[1:]
+        overview = overview or overview_now
+        parts = [u for u in units if mp.squash(u) not in mp.squash(kept_text)] if kept_text else units
+        parts = mp.kept_parts(kept_text) + parts       # a whole set without separators: one unit per heading, each scored on its own
     elif mp.squash(part) not in mp.squash(kept_text):
         parts = parts + [part]          # the worker did not keep it on the goal itself: code keeps it as the next part
     before = float(record.get("before") or 0)

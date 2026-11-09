@@ -378,7 +378,8 @@ What the turn read (each source named):
 {grounding}
 
 Build it out with depth: research what it needs (the product's documents and outside sources, each named), write each part, and check each against the
-rubric before keeping it. A fact (what the product does, a figure, a link, a name) only as a source says it, with the source; a proposal labelled as one;
+rubric before keeping it. Write each unit the rubric is checked on (one script, one entry, one option) as its own part, each starting with a line
+"--- Part N ---" (N from 1), after a short overview. A fact (what the product does, a figure, a link, a name) only as a source says it, with the source; a proposal labelled as one;
 no placeholder and no blank slot. Always end your output with a line that says only "DELIVERABLE:", then the deliverable itself, exactly as you kept it or
 tried to keep it, even when keeping it failed: code measures it from there. {no_em_dash}
 {record}"""

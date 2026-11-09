@@ -5,7 +5,8 @@ recorded there too (all of them in one shared record file), and it works in a sc
 
 Outward acts outside Quest are closed: every request leaves through a local proxy that refuses the hosts that send, post or publish (mail, chat, social,
 code hosts, spreadsheets and documents) and lets reading through (web pages, search); git cannot push, the mail key is one that is refused, and the worker
-has only the MCP servers the runner passes.
+has only the MCP servers the runner passes. Quest itself is reached only through a local read forwarder (GET and HEAD pass, every other method is refused
+and recorded) and its real host is refused at the proxy, so no request, by a tool or typed by hand, can change Quest.
 
 Used by the overlay replay (``impls/prod_chat_overlay.py``) after a chat turn queued background work: the turn's recorded task is run here, and what it
 made is judged with the turn. A milestone deliverable the worker tried to keep (a refused goal write) counts as the attempted keep: it is measured the
@@ -13,17 +14,21 @@ same way the completion step measures a kept one.
 
     python run_queued_task.py --config LANE_TOML [--env-file LANE_ENV] --task TASK_JSON_FILE
 
-Prints one line ``@@TASK@@ {json}`` with ``{status, result, measured, writes, attempted_keep, model_calls, error}``.
+Prints one line ``@@TASK@@ {json}`` with ``{status, result, measured, writes, attempted_keep, refused_hosts, refused_quest_requests, model_calls, error}``.
 """
 import argparse
+import http.client
 import json
 import os
 import select
 import socket
+import ssl
 import sys
 import tempfile
 import threading
 import traceback
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 #: Hosts (and their subdomains) that send, post or publish: no request reaches them from a replay. Everything else may be read.
 OUTWARD_HOSTS = ("resend.com", "sendgrid.net", "sendgrid.com", "mailgun.net", "postmarkapp.com", "smtp.gmail.com", "gmail.googleapis.com",
@@ -48,7 +53,8 @@ def outward(host: str) -> bool:
 class FilteringProxy:
     """A local HTTPS proxy (CONNECT only) that refuses the outward hosts and tunnels the rest, so reading works and sending does not."""
 
-    def __init__(self) -> None:
+    def __init__(self, refuse: tuple = ()) -> None:
+        self.refuse = tuple(h.lower() for h in refuse)        # more hosts refused here (the real Quest host: Quest is reached only through the read forwarder)
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind(("127.0.0.1", 0))
@@ -73,7 +79,7 @@ class FilteringProxy:
             line = head.split(b"\r\n", 1)[0].decode("latin-1")
             method, target = (line.split(" ") + ["", ""])[:2]
             host, _, port = target.rpartition(":") if method == "CONNECT" else ("", "", "")
-            if method != "CONNECT" or not host or outward(host):
+            if method != "CONNECT" or not host or outward(host) or host.lower() in self.refuse:
                 self.refused.append(f"{method} {target}")
                 client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
                 return
@@ -93,6 +99,54 @@ class FilteringProxy:
             return
         finally:
             client.close()
+
+
+class QuestReadForwarder:
+    """The only way the replay reaches Quest: a local HTTP server that passes GET and HEAD to the real Quest API (directly, over TLS) and refuses and
+    records every other method, so no request of the runner or the worker, by tool or by hand, can change Quest."""
+
+    def __init__(self, base_url: str) -> None:
+        parts = urlsplit(base_url)
+        self.host, self.port, self.prefix = parts.hostname or "", parts.port or (443 if parts.scheme == "https" else 80), parts.path.rstrip("/")
+        self.secure = parts.scheme == "https"
+        self.refused = []
+        forwarder = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args) -> None:      # quiet: the refusals are recorded, the reads are the run's own
+                return
+
+            def relay(self) -> None:
+                connection = (http.client.HTTPSConnection(forwarder.host, forwarder.port, context=ssl.create_default_context(), timeout=60)
+                              if forwarder.secure else http.client.HTTPConnection(forwarder.host, forwarder.port, timeout=60))
+                headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "connection", "proxy-connection")}
+                connection.request(self.command, forwarder.prefix + self.path, headers=headers)
+                answer = connection.getresponse()
+                body = answer.read()
+                self.send_response(answer.status)
+                for key, value in answer.getheaders():
+                    if key.lower() not in ("transfer-encoding", "connection", "content-length"):
+                        self.send_header(key, value)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(body)
+
+            def refuse(self) -> None:
+                forwarder.refused.append(f"{self.command} {self.path}")
+                body = json.dumps({"detail": "Refused in replay: only reads reach Quest, and nothing was changed."}).encode()
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            do_GET = do_HEAD = relay
+            do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = refuse
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
 
 def no_outward_acts(scratch: str, proxy_url: str) -> dict:
@@ -129,14 +183,21 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     scratch = tempfile.mkdtemp(prefix="qar-task-replay-")
     record_file = os.path.join(scratch, "refused_writes.jsonl")
-    out = {"status": None, "result": "", "measured": None, "writes": [], "attempted_keep": "", "refused_hosts": [], "model_calls": 0, "error": None}
-    proxy = FilteringProxy()
+    out = {"status": None, "result": "", "measured": None, "writes": [], "attempted_keep": "", "refused_hosts": [], "refused_quest_requests": [],
+           "model_calls": 0, "error": None}
+    proxy = forwarder = None
     try:
         with open(args.task, encoding="utf-8") as handle:
             task = json.load(handle)
         if args.env_file:
             from quest_ai_runner.the_consciousness.request_intake.lane import load_env_file
             load_env_file(args.env_file)
+        # Quest is reached only through the read forwarder: the runner and the worker get its address, and the real host is refused at the proxy.
+        real_quest = (os.environ.get("QUEST_BASE_URL") or "").strip()
+        forwarder = QuestReadForwarder(real_quest) if real_quest else None
+        proxy = FilteringProxy(refuse=(forwarder.host,) if forwarder else ())
+        if forwarder:
+            os.environ["QUEST_BASE_URL"] = forwarder.url
         # After the lane's own file, so the confinement always wins over anything it sets.
         os.environ.update({"QAR_DRY_RUN_WRITES": "1", "QAR_DRY_RUN_DEEP": "real", "QAR_DRY_RUN_SCRATCH": scratch, "QAR_DEEP_WORKING_DIR": scratch,
                            "QAR_STATE_PATH": os.path.join(scratch, "state.json"), "QAR_DRY_RUN_RECORD_FILE": record_file})
@@ -173,7 +234,8 @@ def main(argv=None) -> int:
     except Exception as error:  # noqa: BLE001  the replay reports what failed; the judge sees it
         out["error"] = f"{type(error).__name__}: {error}"
         traceback.print_exc(file=sys.stderr)
-    out["refused_hosts"] = list(proxy.refused)
+    out["refused_hosts"] = list(proxy.refused) if proxy else []
+    out["refused_quest_requests"] = list(forwarder.refused) if forwarder else []
     print("@@TASK@@ " + json.dumps(out, default=str, ensure_ascii=False))
     return 0
 
