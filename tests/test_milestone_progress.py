@@ -112,7 +112,7 @@ def test_the_rubric_is_kept_on_the_milestones_record_once_and_the_next_turn_reus
     registry = Registry()
     first = milestone_progress.make_progress(cue(), registry, decide)
     knowledge = registry.tables["solutions"]["sol-1"]["knowledge"]
-    assert first.rubric_state == "kept" and knowledge.startswith("[best guess] Deliverable rubric for the tutorial list and the script for the next tutorial (6 units): ")
+    assert first.rubric_state == "kept" and knowledge.startswith("[best guess] Deliverable rubric for the tutorial list and the script for the next tutorial (6 units) (done test ")
     assert "Has an opening; Ends with a call to action (source: sol-1, Quest AI, " in knowledge
     asked = []
 
@@ -305,3 +305,65 @@ def test_a_unit_that_depends_on_the_proposed_list_is_done_in_the_same_turn_and_m
     assert "--- Then, depending on it: the script for one tutorial ---\nCall to action: set your first goal today." in kept
     assert milestone_progress.kept_follow_on("Kept by Quest AI: " + kept) == ("the script for one tutorial", "Call to action: set your first goal today.")
     assert "Then, depending on it, the script for one tutorial: 0 before, 1 after of 6 planned" in made.reply_text()
+
+
+def test_a_number_or_status_word_the_sources_do_not_hold_is_rewritten_or_taken_out():
+    reference = "The milestone: 13 sign-ups, 10 with no source. Done when the niche is confirmed from funnel data."
+    assert milestone_progress.marked_claims("Of 13 sign-ups, 10 had no source.", reference) == []
+    assert milestone_progress.marked_claims("A niche counts at 30 sign-ups and 20 percent conversion.", reference) == ["30", "20"]
+    assert milestone_progress.marked_claims("The list of 6 videos is agreed.", reference) == ["agreed"]
+    assert milestone_progress.marked_claims("It was cross-checked against the admin user list.", reference) == ["cross-checked"]
+    assert milestone_progress.marked_claims("The niche is confirmed from funnel data.", reference) == []          # held by a source sentence about the same thing
+    rewrite = lambda prompt: json.dumps({"sentences": [{"n": 1, "text": "The threshold is to be set from the funnel dashboard."}]})   # noqa: E731
+    assert milestone_progress.checked_line("A niche counts at 30 sign-ups.", reference, rewrite) == "The threshold is to be set from the funnel dashboard."
+    assert milestone_progress.checked_line("Scripts for the 6 agreed videos", reference, lambda p: "{}") == "Scripts for the 6 videos"
+
+
+def test_the_work_item_is_pinned_by_what_the_done_test_is_made_of():
+    items = [{"name": "a test plan", "kind": "deliverable", "actor": "ai", "checks": [True, True], "inputs": [], "requirements": ["r"]},
+             {"name": "a weekly note", "kind": "deliverable", "actor": "ai", "checks": [True, True], "inputs": [], "requirements": ["r"]},
+             {"name": "decide the niche", "kind": "outward", "actor": "person", "checks": [False, False], "inputs": [], "tools": ["outward_act"]}]
+    doable = lambda i: i["actor"] == "ai"      # noqa: E731
+    c = cue()
+    decision = milestone_progress.pinned_items(items, milestone_progress.DECISION, doable, c, "Niche confirmed", "", decide)
+    assert decision[0]["name"].startswith("Comparison of the options") and decision[0]["requirements"][0] == milestone_progress.DECISION_REQUIREMENT
+    assert [i["name"] for i in decision[1:]] == ["decide the niche"]          # no other AI deliverable is left for the ladder to pick
+    others = milestone_progress.pinned_items(items, milestone_progress.OTHERS, doable, c, "Users from a source", "", decide)
+    assert others[0]["kind"] == "evidence" and [i["name"] for i in others[1:]] == ["decide the niche"]
+    assert milestone_progress.done_test_class(c, "No (as of 2030-03-01)", lambda p: "{}") == milestone_progress.DECISION     # a yes/no metric is a decision by code
+
+
+def test_a_kept_rubric_stays_the_item_until_the_done_test_changes():
+    registry = Registry()
+    first = milestone_progress.make_progress(cue(), registry, decide)
+    knowledge = registry.tables["solutions"]["sol-1"]["knowledge"]
+    changed = cue()
+    changed.row = dict(changed.row, knowledge=knowledge)
+    changed.done_when = "Ten tutorials are published"
+    again = milestone_progress.make_progress(changed, registry, decide)
+    assert first.rubric_state == "kept" and again.rubric_state == "kept"         # a new done test frees the pinned item: it is defined again
+
+
+def test_depth_checks_the_unit_as_it_will_be_kept():
+    asked = []
+
+    def stripping(prompt):
+        asked.append(prompt)
+        if "Classify each numbered sentence" in prompt:      # the claim check finds the opening an unsupported fact, so the kept text lacks it
+            return json.dumps({"sentences": [{"n": n, "kind": "fact" if "Opening" in line else "plain", "quote": ""}
+                                             for n, line in enumerate(prompt.split("The sentences:")[1].strip().splitlines()[:-1], 1) if line[:1].isdigit()]})
+        return decide(prompt)
+    made = milestone_progress.make_progress(cue(), Registry(), stripping)
+    assert made.depth is None or made.depth.get("before", 0) < 1.0             # the loop never sees the raw text as met
+    assert all("Opening line" not in p for p in made.parts)
+
+
+def test_the_reply_names_every_artifact_kept_on_the_record():
+    registry = Registry()
+    made = milestone_progress.make_progress(cue(), registry, decide)
+    reply = made.reply_text()
+    assert "Also kept on the milestone's record this turn:" in reply and "The rubric each unit of the tutorial list" in reply
+    lines = milestone_progress.kept_artifacts([{"edit": {"field": "knowledge", "value": "[best guess] Source proposal for metric met-1: read the funnel export; "
+                                                                                     "a person connects the export (source: met-1 record, 2030-03-09)"}, "state": "kept"}],
+                                             "", {"met-1": {"name": "Users from a source"}})
+    assert lines == ["A proposal (the AI's, to be agreed) for making Users from a source readable here: read the funnel export; a person connects the export."]
