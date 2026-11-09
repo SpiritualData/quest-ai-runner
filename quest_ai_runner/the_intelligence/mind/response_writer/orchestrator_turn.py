@@ -4,8 +4,11 @@ Split out of ``orchestrator.py`` by definition; ``orchestrator`` re-exports ever
 """
 from __future__ import annotations
 
+import logging
 import re
 import threading
+import time
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, register, render_prompt
@@ -14,7 +17,19 @@ from hubofhubs.api import STEP_NARRATION, answer_with_reasoning
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import EVENT_PARTIAL, EVENT_STATUS, Mode  # noqa: F401  (EVENT_STATUS and Mode stay importable from here)
 from hubofhubs.api import Emitter as HubEmitter, TurnCardCache  # noqa: F401
-from hubofhubs.api import ProgressEvent
+from hubofhubs.api import MODEL_ACK_TARGET_SECONDS, ProgressEvent
+
+
+log = logging.getLogger("quest-ai-runner")
+
+# Every quick-ack outcome of this process, by name, so a failed or dropped acknowledgement is counted and not just logged:
+# "emitted", "quiet" (the model had nothing specific to say), "repeat" (it would have repeated an earlier line),
+# "dropped_late" (not ready before the next beat or the final reply), "failed" (the call raised or the provider refused).
+ACK_OUTCOMES: Counter = Counter()
+
+
+class NarrationFailed(Exception):
+    """The first-beat call failed (a refusal or a provider error): counted and logged, never shown."""
 
 
 # The per-turn cache and the event router are the hub's (hubofhubs.orchestrate.turn); the old names stay importable.
@@ -64,6 +79,11 @@ class Narrator:
     with no double-counting of the seed.
     """
 
+    # THE QUICK ACK, as the hub's contract names it (``hubofhubs.api.model_ack_event``): the code-written placeholder goes out first
+    # (``Emitter.ack``), then THIS first beat, one fast-tier call started at the turn's start, goes out as an ack status marked
+    # ``stage: "model"`` (and as the narration partial, which voice consumers speak). The reply path never waits for it: when the
+    # turn's next beat or its final reply comes first, the late ack is dropped, logged and counted in ``ACK_OUTCOMES``.
+
     DEFAULT_SYSTEM = (
         "You are working on the user's request right now and you keep them company while you work, "
         "saying in the first person what you are about to do or what you just noticed. Each line "
@@ -99,6 +119,11 @@ class Narrator:
         self._system = (system_prompt or self.DEFAULT_SYSTEM).strip()
         self.enabled = bool(enabled and provider is not None)
         self._said: List[str] = []
+        self._began_at: Optional[float] = None
+        self._closed = False             # the turn moved on (a later beat or the final reply): a first beat still unspoken is dropped
+        self.ack_outcome: Optional[str] = None
+        self.ack_seconds: Optional[float] = None   # turn start (begin) to the moment the model ack was emitted
+        self.ack_error: Optional[str] = None
         self._first_future: Optional[Any] = None
         self._executor: Optional[ThreadPoolExecutor] = None
         # Guards _said + the emit call so the background first beat (emitted from its own thread the
@@ -130,16 +155,18 @@ class Narrator:
         # narration call yields no beat at all, never the stand-in.
         outcomes = getattr(self._provider, "step_outcomes", None)
         if isinstance(outcomes, dict) and outcomes.get(STEP_NARRATION):
-            return None
+            raise NarrationFailed(str(outcomes.get(STEP_NARRATION))[:200])
         return line
 
-    def _say(self, line: Optional[str]) -> None:
+    def _say(self, line: Optional[str], *, ack: bool = False) -> bool:
+        """Speak ``line`` as a narration partial. With ``ack`` it is the model ack: also sent as an ack status of stage "model",
+        and dropped (False) when the turn has already moved on. Returns True when something went out."""
         if not line:
-            return
+            return False
         # Defensive brand cleanup: never speak em dashes even if the model slips one in.
         line = line.strip().replace("—", ", ").replace(" -- ", ", ")
         if not line:
-            return
+            return False
         # Emit with a trailing space so consecutive beats (ack, then each per-step beat) read as
         # separate sentences when a consumer streams them into one bubble, instead of running
         # together ("...this.I'm pulling up..."). The clean line (no trailing space) is what we
@@ -147,12 +174,24 @@ class Narrator:
         # Locked: the ack beat emits from the background thread while relay() beats emit from the
         # main thread; the lock keeps append+emit atomic so the two never interleave.
         with self._lock:
+            if ack and self._closed:
+                return False
             self._said.append(line)
+            if ack and self._began_at is not None:
+                self.ack_seconds = round(time.monotonic() - self._began_at, 2)
             try:
                 self._emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=line + " ",
                                               data={"narration": True}))
             except Exception:  # noqa: BLE001 — narration must never break the run
                 pass
+            if ack:
+                try:
+                    model_ack = getattr(self._emit, "model_ack", None)
+                    if model_ack is not None:
+                        model_ack(line)
+                except Exception:  # noqa: BLE001 — the ack must never break the run
+                    pass
+            return True
 
     def begin(self, user_message: str) -> None:
         """Start the first beat concurrently AND emit it the instant it is ready.
@@ -165,6 +204,7 @@ class Narrator:
         """
         if not self.enabled or not self.model_ack:
             return
+        self._began_at = time.monotonic()
         # The whole message when it is a normal one; a longer one is cut WITH a marker, because an unmarked cut
         # ends mid-sentence and the one-line ack then tells the user their message was cut off.
         from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import cap_section
@@ -184,33 +224,64 @@ class Narrator:
         caught): the ack is exactly the beat that repeats a generic "let me look into that" shape
         turn after turn when the consumer has no cross-turn memory to give it.
         """
+        outcome = "emitted"
         try:
             line = self._gen(moment)
             clean = (line or "").strip()
-            if clean and self._is_repeat(clean):
-                return
-            self._say(clean)
-        except Exception:  # noqa: BLE001 — narration must never break the run
-            pass
+            if not clean:
+                outcome = "quiet"
+            elif self._is_repeat(clean):
+                outcome = "repeat"
+            elif not self._say(clean, ack=True):
+                outcome = "dropped_late"
+        except Exception as exc:  # noqa: BLE001 — narration must never break the run
+            outcome = "failed"
+            self.ack_error = f"{type(exc).__name__}: {str(exc)[:160]}"
+        self._record_outcome(outcome)
 
-    def flush_first(self) -> None:
-        """Join barrier: wait for the background first beat to finish emitting before the planner
-        loop emits any later (relay) beat, so the ack always comes first. The beat emits ITSELF the
-        instant it is ready (see ``begin`` / ``_gen_and_say``), so this no longer emits — it only
-        joins and cleans up. A timeout just proceeds (a very slow beat still emits when ready)."""
-        if self._first_future is None:
-            return
-        try:
-            self._first_future.result(timeout=5.0)
-        except Exception:  # noqa: BLE001 — timeout / cancelled / provider error: skip
-            pass
-        finally:
+    def _record_outcome(self, outcome: str) -> None:
+        """Settle the first beat's outcome once: counted in ``ACK_OUTCOMES``, and a failure or a drop is logged, never silent."""
+        with self._lock:
+            if self.ack_outcome is not None:
+                return
+            self.ack_outcome = outcome
+        ACK_OUTCOMES[outcome] += 1
+        if outcome == "failed":
+            log.warning("Quick acknowledgement failed (dropped, the turn goes on): %s", self.ack_error)
+        elif outcome == "dropped_late":
+            log.warning("Quick acknowledgement was not ready before the turn moved on (dropped)")
+
+    def close(self) -> None:
+        """The turn moved on (its final reply is ready): a first beat still being written is dropped, never emitted late, and counted."""
+        with self._lock:
+            self._closed = True
+            pending = self._first_future is not None and not self._first_future.done()
+        if pending:
+            self._record_outcome("dropped_late")
             try:
                 if self._executor is not None:
                     self._executor.shutdown(wait=False)
             except Exception:  # noqa: BLE001
                 pass
-            self._first_future = None
+
+    def report(self) -> Dict[str, Any]:
+        """How the turn's quick ack went (outcome, seconds from the turn's start to the model ack, error), for a consumer or a test."""
+        return {"outcome": self.ack_outcome, "seconds": self.ack_seconds, "error": self.ack_error,
+                "target_seconds": MODEL_ACK_TARGET_SECONDS}
+
+    def flush_first(self) -> None:
+        """Clean up the first beat's thread if it has finished. It NEVER waits: the reply path is not held for the ack. A first beat still
+        being written when a later beat (``relay``) or the final reply (``close``) comes is dropped, so the ack always precedes the
+        planner's rationale and never follows it."""
+        fut = self._first_future
+        if fut is None or not fut.done():
+            return
+        try:
+            if self._executor is not None:
+                self._executor.shutdown(wait=False)
+        except Exception:  # noqa: BLE001
+            pass
+        self._first_future = None
 
     def relay(self, line: Optional[str]) -> None:
         """Emit a pre-composed beat (the planner's conversational rationale). No LLM call.
@@ -225,6 +296,9 @@ class Narrator:
         clean = line.strip()
         if clean and self._is_repeat(clean):
             return
+        # A later beat is here: an ack still being written would arrive after it, so it is dropped (counted), not shown late.
+        if self._first_future is not None and not self._first_future.done():
+            self.close()
         self._say(clean)
 
     def _is_repeat(self, line: str) -> bool:

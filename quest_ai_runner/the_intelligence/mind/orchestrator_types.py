@@ -607,6 +607,9 @@ class OrchestratorResult:
     # ``Narrator`` / ``run(prior_narration=...)``) reads this back and passes the last few lines
     # forward as the next turn's ``prior_narration``. The orchestrator persists nothing itself.
     narration_said: List[str] = field(default_factory=list)
+    # How the quick model acknowledgement went this turn: {"outcome": emitted | quiet | repeat | dropped_late | failed | None,
+    # "seconds": turn start to the ack, "error", "target_seconds"}. Empty when narration is off.
+    narration_ack: Dict[str, Any] = field(default_factory=dict)
     # The USER-FACING "how I got this" payload for this turn, when one was produced (see
     # core/answer_explanation.py and OrchestratorConfig.explain_answer). Also emitted live as
     # EVENT_EXPLANATION; carried here as well so a NON-streaming consumer can persist it from the

@@ -24,7 +24,6 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records, take_status_flags
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
@@ -283,13 +282,13 @@ class RunBeginMixin:
         # is overridable by the consumer via cfg.narration_system_prompt.
         narrator = Narrator(
             provider=self.provider,
-            model=self.registry.resolve_tier(cfg.planner_tier),
+            model=self.registry.resolve_tier("fast"),   # the quick ack is written at the fast tier (a tier, never a model name)
             emit=emit,
             persona=rep_preamble or "",
             transcript_tail=transcript,
             system_prompt=cfg.narration_system_prompt,
             enabled=bool(cfg.narrate or cfg.instant_ack),
-            model_ack=not getattr(cfg, "cheap_information_turns", True),   # the cheap arm opens with the code-written status, not a model call
+            model_ack=True,   # the quick model ack runs on every live turn, cheap information turns included (the placeholder status goes out first, by code)
             prior_narration=prior_narration,
         )
         rs.narrator = narrator
@@ -777,12 +776,6 @@ class RunBeginMixin:
             except milestone_cue.LaneGap as gap:
                 rs.cue_gap = str(gap)
                 log.warning("milestone cue: lane gap: %s", gap)
-
-        # EACH ESOI SOLUTION THE TURN TOUCHES gets its own consideration through the hub, in a background thread started here, after the
-        # acknowledgement, in parallel with context assembly and the planner (never waited on): each solution's card is written as soon as its
-        # own pass returns and joins ``priority_card_ids``, so whatever reads the turn's cards after that puts it first. A milestone turn is
-        # skipped (its own step judges the scopes above). Never raises.
-        solution_consideration.for_turn(self, rs, _ctx_meta)
 
         _assembled = None
         _ctx_future = None

@@ -99,7 +99,9 @@ class RunLoopMixin:
             # passes it back in as ``run(prior_narration=...)`` is what lets the ack stop reopening
             # every turn with its own recent generic shape; see ``Narrator``.
             if narrator.enabled:
+                narrator.close()      # the reply is ready: a quick ack still being written is dropped (counted), never shown after it
                 res.narration_said = list(narrator._said)
+                res.narration_ack = narrator.report()
             # Tear down the background overseer worker (Fix 1). ``wait=False`` mirrors the
             # context-assembly teardown: any still-running consult (a bounded provider call) finishes
             # on its own without blocking the return, and is never joined synchronously here.
