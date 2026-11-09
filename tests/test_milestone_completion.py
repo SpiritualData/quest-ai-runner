@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion as mc
 
-RECORD = {"quest_id": "q-1", "milestone_id": "sol-1", "title": "M1 Tutorials published deliverables", "item": "tutorial scripts",
+RECORD = {"quest_id": "q-1", "milestone_id": "sol-1", "milestone_metric_id": "met-1", "title": "M1 Tutorials published deliverables", "item": "tutorial scripts",
           "requirements": ["Has an opening", "Ends with a call to action"], "before": 0, "total": 6, "measure_name": "Tutorial scripts meeting the rubric",
           "metric_id": "met-1"}
 
@@ -20,6 +20,8 @@ class Registry:
 
     def invoke(self, name, args, ctx=None):
         self.calls.append((name, args))
+        if name == "read_spec_records":
+            return SimpleNamespace(ok=True, data={"records": {"metrics": {"met-1": {"name": "Tutorials published", "record": "Current value: 0 of 6"}}}}, text="records")
         if name == "list_quest_goals":
             return SimpleNamespace(ok=True, data=[{"title": RECORD["title"], "text": self.kept, "spec_solution_id": "sol-1"}], text="goals")
         return SimpleNamespace(ok=True, data={"state": "updated"}, text="kept")
@@ -41,15 +43,16 @@ def test_a_finished_background_deliverable_is_measured_and_kept_with_before_and_
     got = mc.measure_on_completion(RECORD, output, registry, scorer, today=datetime.date(2030, 3, 9))
     assert got["status"] == "measured" and (got["before"], got["after"]) == (0, 1)
     assert got["line"].startswith("Tutorial scripts meeting the rubric: 0 before, 1 after of 6 planned")
-    name, args = registry.calls[-1]
-    assert name == "keep_milestone_deliverable" and args["increment"]["after"] == 1 and "Opening line for tutorial 1" in args["body"]
+    assert any(n == "keep_milestone_deliverable" and a["increment"]["after"] == 1 and "Opening line for tutorial 1" in a["body"] for n, a in registry.calls)
+    assert got["milestone_metric"] == {"id": "met-1", "record": "Current value: 0 of 6"} and got["increment"]["method"] == "rubric"
 
 
 def test_a_deliverable_the_worker_already_kept_is_measured_not_added_twice_and_no_deliverable_keeps_nothing():
     unit = "Opening line for tutorial 1. Call to action: try it today."
     registry = Registry(kept="Kept by Quest AI: Overview:\nTutorials.\n\n--- Part 1 ---\n" + unit)
     got = mc.measure_on_completion(RECORD, "DELIVERABLE:\n" + unit, registry, scorer)
-    assert got["after"] == 1 and registry.calls[-1][1]["body"].count(unit) == 1
+    kept = next(a for n, a in registry.calls if n == "keep_milestone_deliverable")
+    assert got["after"] == 1 and kept["body"].count(unit) == 1
     empty = Registry()
     assert mc.measure_on_completion(RECORD, "I could not finish.", empty, scorer)["status"] == "no_deliverable" and not any(n == "keep_milestone_deliverable" for n, _ in empty.calls)
 

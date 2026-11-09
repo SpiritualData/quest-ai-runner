@@ -12,7 +12,9 @@ package of this checkout into the container's ``/tmp/qoverlay`` (nothing is inst
 no SSE transport, no parked-decision shortcut, and the reply and the user message are not stored. The model calls are real production calls.
 
 Environment: ``QAR_PRIVATE_POOR_ANSWERS_DATASET`` (approved ids and texts), ``QAR_PROD_CASE_RULES_FILE``, ``QAR_OVERLAY_SSH`` (user@host), ``QAR_OVERLAY_REMOTE_DIR`` (the compose directory), ``QAR_OVERLAY_BASE_REF`` (the deployed backend commit), ``QAR_OVERLAY_USER`` (the caller's user id),
-``QAR_PROD_QUEST_ID``, ``QAR_PROD_TEAM_ID``, ``QAR_OVERLAY_BACKEND`` (optional: the quest-backend checkout), ``QAR_OVERLAY_SEED_FROM_LAST`` (optional: 1 makes each case read the specification edits its last saved replay made, as if they had landed).
+``QAR_PROD_QUEST_ID``, ``QAR_PROD_TEAM_ID``, ``QAR_OVERLAY_BACKEND`` (optional: the quest-backend checkout), ``QAR_OVERLAY_SEED_FROM_LAST`` (optional: 1 makes each case read the specification edits its last saved replay made, as if they had landed),
+``QAR_OVERLAY_TASK_LANE_CONFIG`` (the configuration file of the lane whose runner executes the queued tasks; with it, a task the turn queued is run after the
+turn the way that runner would, in a dry run that keeps the real deep worker, and judged with the turn) and ``QAR_OVERLAY_TASK_SECONDS`` (its time limit, default 2400).
 PAID in production model calls; the judge is ``claude -p``."""
 PAID = True
 ALTERNATIVE = True
@@ -178,6 +180,63 @@ def seed_from_last(case_id, environ=None):
     return seed
 
 
+TASK_LANE_ENV, TASK_SECONDS_ENV = "QAR_OVERLAY_TASK_LANE_CONFIG", "QAR_OVERLAY_TASK_SECONDS"
+
+
+def queued_tasks(writes):
+    """The task documents the turn queued (the replay keeps a queued task whole), in order."""
+    return [w["document"] for w in writes or [] if isinstance(w.get("document"), dict) and "assistant_task" in str(w.get("collection") or "").lower()]
+
+
+def run_queued(task, environ=None):
+    """Run one queued task the way the lane's runner would (``run_queued_task.py``: the lane's configuration, the task executor, the real deep worker,
+    every write refused and recorded). Returns its ``@@TASK@@`` report, or ``{"error"}`` when it could not run."""
+    import tempfile
+    environ = os.environ if environ is None else environ
+    config = (environ.get(TASK_LANE_ENV) or "").strip()
+    if not config:
+        return {"error": f"not run: {TASK_LANE_ENV} is not set"}
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as handle:
+        json.dump(task, handle, default=str)
+        path = handle.name
+    script = Path(__file__).resolve().parents[1] / "run_queued_task.py"
+    try:
+        done = subprocess.run([sys.executable, str(script), "--config", config, "--task", path], capture_output=True, timeout=int(environ.get(TASK_SECONDS_ENV) or 2400))
+    except subprocess.TimeoutExpired:
+        return {"error": "the queued task did not finish within its time limit"}
+    finally:
+        os.unlink(path)
+    line = next((l for l in done.stdout.decode("utf-8", "replace").splitlines() if l.startswith("@@TASK@@ ")), None)
+    return json.loads(line[len("@@TASK@@ "):]) if line else {"error": "the task replay printed no result: " + done.stderr.decode("utf-8", "replace")[-400:]}
+
+
+def task_read(task_run):
+    """The queued task's measured, kept deliverable as one recorded tool result (the shape the value gate reads), or None when it measured nothing.
+    The keep itself was refused in the dry run, so its state is what the keep would have been: updated when the goal existed, else created."""
+    measured = task_run.get("measured") or {}
+    if not isinstance(measured.get("increment"), dict):
+        return None
+    data = {"state": "updated" if measured.get("goal_found") else "created", "goal": {"name": measured.get("title")}, "increment": measured["increment"],
+            "milestone_metric": measured.get("milestone_metric"), "kept_in_test_mode": "refused and recorded"}
+    return {"source": "tool keep_milestone_deliverable (the queued task, run after the turn)", "text": str(measured.get("line") or "") + "\n" + json.dumps(data, default=str)}
+
+
+def task_notes(task_runs):
+    """What the judge is told about the background work the turn queued: each task's status, its report, the deliverable as it would be kept and its
+    measured before and after."""
+    if not task_runs:
+        return ""
+    parts = []
+    for n, run in enumerate(task_runs, 1):
+        measured = run.get("measured") or {}
+        parts.append(f"QUEUED TASK {n}, run after the turn the way the lane's runner runs it (real deep worker, every write refused and recorded): "
+                     + (f"it could not run ({run['error']})." if run.get("error") else
+                        f"status {run.get('status')}. Its report: {str(run.get('result') or '')[:3000]} "
+                        + (f"The deliverable it made, as it would be kept on the goal '{measured.get('title')}':\n{str(measured.get('body') or '')[:12000]}\n"
+                           f"Measured by code on completion: {measured.get('line')}" if measured else "It reported no measured deliverable.")))
+    return " " + " ".join(parts)
+
+
 def category_of(collection):
     name = str(collection).lower()
     if any(w in name for w in IGNORED_WORDS):
@@ -267,10 +326,16 @@ def build(meter):
             unexpected = PC.unexpected_writes(changes, effect, zero, set())
             changes_text = [f"{c['category']} {c['change']} {c['id']} {c.get('label', '')!r}" for c in changes] + unexpected
             reads_seen = run.get("reads") or []
+            # Background work the turn queued is run now, the way the lane's runner would, and judged with the turn (its kept deliverable and measurement).
+            task_runs = [run_queued(task) for task in queued_tasks(run.get("writes") or [])]
+            record["queued_tasks"] = task_runs
+            reads_seen = reads_seen + [r for r in (task_read(t) for t in task_runs) if r]
             # The evaluation's truth is everything the turn was shown: its reads and the context the reply was written from (real quest data the writer was given).
             truth = P.reads_text(reads_seen) + (("\n\nTHE CONTEXT THE REPLY WAS WRITTEN FROM (shown to the writer this turn):\n" + run["grounding"]) if run.get("grounding") else "")
+            truth += "".join(f"\n\nTHE QUEUED TASK'S OWN REPORT (the background work, its sources named in it):\n{str(t.get('result') or '')[:6000]}" for t in task_runs if t.get("result"))
             judged_case = dict(case, evidence_notes=(f"{case.get('evidence_notes', '')} Environment: the production Quest AI chat turn replayed on production data with the checkout's code, every write blocked and recorded. "
-                                                     "The 'changes' listed are the writes the turn ATTEMPTED (none was made); an UNEXPECTED WRITE line is an attempt the case does not allow.").strip())
+                                                     "The 'changes' listed are the writes the turn ATTEMPTED (none was made); an UNEXPECTED WRITE line is an attempt the case does not allow."
+                                                     + task_notes(task_runs)).strip())
             if zero:
                 record["state"] = dict(ok=not changes, why="no write attempted" if not changes else f"{len(changes)} write(s) attempted on a case that writes nothing")
             sequence, item = P.sequence_note(judged_case, messages, None)
@@ -309,7 +374,7 @@ def build(meter):
         record.setdefault("model_calls", 0)
         record.update(seconds=round(time.time() - started, 1), tokens_in=0, tokens_out=0, tokens_estimated=True)
         record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "ack_seconds", "ack_text", "model_ack_seconds", "model_ack_text", "model_ack_calls", "planner_first_thought", "replay_reply", "replay_reads", "changes", "unexpected_writes", "other_writes", "messages", "reads_seen", "unsupported_figures",
-                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "value_gate", "verdict", "seed_spec", "replay_error", "model_calls_log",
+                                                          "route", "tool_calls", "frame_trace", "attempted_writes", "state", "value_gate", "verdict", "seed_spec", "replay_error", "model_calls_log", "queued_tasks",
                                                           "qar_notes", "provider_retries", "judge_input")}
         try:
             meter.record(max(1, record["model_calls"]))

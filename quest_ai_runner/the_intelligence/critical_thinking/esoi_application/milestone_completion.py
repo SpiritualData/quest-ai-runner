@@ -20,7 +20,7 @@ log = logging.getLogger("quest-ai-runner.milestone-completion")
 
 WORK_RECORD = "Milestone work record: "
 DELIVERABLE_LINE = "DELIVERABLE:"
-RECORD_FIELDS = ("quest_id", "milestone_id", "title", "item", "requirements", "before", "total", "measure_name", "metric_id")
+RECORD_FIELDS = ("quest_id", "milestone_id", "milestone_metric_id", "title", "item", "requirements", "before", "total", "measure_name", "metric_id")
 
 
 def work_record_line(record: Mapping[str, Any]) -> str:
@@ -92,7 +92,24 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
                                                           "before": before, "after": after, "total": total, "method": "rubric", "as_of": day,
                                                           "changed": after != before}},
                              ToolContext(quest_id=str(record["quest_id"])))
+    increment = {"kind": "deliverable", "measure_id": record.get("metric_id"), "measure_name": progress.measure_name, "before": before, "after": after,
+                 "total": total, "method": "rubric", "as_of": day, "changed": after != before}
+    common = {"before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
+              "goal_found": bool(kept_text), "milestone_metric": metric_again(registry, record)}
     if not getattr(result, "ok", False):
-        return {"status": "not_kept", "before": before, "after": after, "total": total, "body": progress.body(),
-                "line": f"The finished deliverable was measured ({progress.increment_line()}) but not kept: {str(getattr(result, 'text', ''))[:200]}"}
-    return {"status": "measured", "before": before, "after": after, "total": total, "body": progress.body(), "line": progress.increment_line()}
+        return dict(common, status="not_kept", line=f"The finished deliverable was measured ({progress.increment_line()}) but not kept: {str(getattr(result, 'text', ''))[:200]}")
+    return dict(common, status="measured", line=progress.increment_line())
+
+
+def metric_again(registry: Any, record: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """The milestone's metric record read again after the work was kept (its id and first line), None when it cannot be read."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
+    mid = str(record.get("milestone_metric_id") or "")
+    try:
+        tables, _ = milestone_cue.read_through(registry, str(record["quest_id"]))
+    except milestone_cue.LaneGap as gap:
+        log.warning("milestone completion: the metric could not be read again: %s", gap)
+        return None
+    metrics = dict(tables.get("metrics") or {})
+    found = metrics.get(mid) or next((m for m in metrics.values() if str(record.get("milestone_id") or "") in (m.get("solution_ids") or [])), None)
+    return {"id": mid, "record": str(found.get("record") or "").split("\n")[0][:300]} if isinstance(found, Mapping) else None
