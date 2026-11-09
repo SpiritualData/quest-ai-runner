@@ -217,3 +217,15 @@ def test_when_the_key_measure_cannot_be_read_the_dated_reading_its_record_holds_
     finally:
         TABLES["metrics"]["m"].pop("record")
     assert "KEY MEASURE AS LAST RECORDED" in text and "Paid subscribers: 0 (as of 2026-11-07, from Revenue analytics)" in text
+
+
+def test_a_request_the_analyser_reads_as_status_but_the_reach_judge_reads_as_a_change_is_work_not_a_snapshot():
+    class AnalyserSaysStatus(JudgeProvider):
+        def __init__(self, verdict):
+            super().__init__(verdict)
+            self.analyser = 'Get the first item moving.\n{"asks_status": true}'
+    provider = AnalyserSaysStatus({"reach": "inside", "asks_status": False, "asks_change": True})
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), tools=_tools(),
+                        config=OrchestratorConfig(overseer=True, planner_reach_judge=True, read_reach_summary="the quest's own records"))
+    res = orch.run("can we get the first item moving?", mode=Mode.LIVE, sink=RecordingSink(), quest_id="q1", context_meta={"user_id": "u1"})
+    assert not any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered) and provider.planner_calls >= 1

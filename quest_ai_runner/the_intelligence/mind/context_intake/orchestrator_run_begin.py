@@ -587,7 +587,9 @@ class RunBeginMixin:
                 rs.draft_in_chat = True
                 rs.writes_text = True
             if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
-                    and (status_flags["asks_status"] or self.reach_asks_status(rs.user_message))):
+                    and (status_flags["asks_status"] or self.reach_asks_status(rs.user_message)) and not self.reach_asks_change(rs.user_message)):
+                # Two structured reports decide it: a status shape from either the analyser or the reach verdict, and no change asked for in the reach verdict
+                # ("can we get X moving?" reads as status to the analyser and as a change to the reach judge: it is work, not a status answer).
                 # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop. A chat with no quest
                 # open first places the question on one of the asker's quests (the quest placement); when none fits, the turn asks one short question.
                 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
