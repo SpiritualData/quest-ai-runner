@@ -102,3 +102,16 @@ def test_quest_is_reached_only_through_the_read_forwarder():
     with socket.create_connection(("127.0.0.1", proxy.port), timeout=5) as conn:
         conn.sendall(b"CONNECT quest.example:443 HTTP/1.1\r\nHost: quest.example:443\r\n\r\n")
         assert conn.recv(100).startswith(b"HTTP/1.1 403")
+
+
+def test_the_workers_skill_read_is_traced_from_its_own_session(tmp_path, monkeypatch):
+    import json as js
+    import run_queued_task as rq
+    scratch = "/tmp/qar-task-replay-abc"
+    folder = tmp_path / "projects" / scratch.replace("/", "-")
+    folder.mkdir(parents=True)
+    event = {"timestamp": "t1", "message": {"content": [{"type": "tool_use", "name": "Read", "input": {"file_path": "/skills/method-x/SKILL.md"}}]}}
+    (folder / "s.jsonl").write_text(js.dumps(event) + "\n" + js.dumps({"message": {"content": [{"type": "text", "text": "SKILL.md"}]}}) + "\n")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    lines = rq.skill_reads(scratch)
+    assert len(lines) == 1 and "Read" in lines[0] and "method-x/SKILL.md" in lines[0]

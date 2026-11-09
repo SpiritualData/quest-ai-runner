@@ -175,6 +175,33 @@ def attempted_keep(rows, title: str) -> str:
     return ""
 
 
+def skill_reads(scratch: str, skill_marker: str = "SKILL.md"):
+    """The worker's own tool calls that read a skill file, from its session transcripts (the worker ran in ``scratch``, so its sessions sit in the
+    project folder named after that path): one trace line each, never assumed."""
+    root = os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "projects")
+    slug = scratch.replace("/", "-").replace(".", "-").replace("_", "-")
+    found = []
+    try:
+        folders = [os.path.join(root, d) for d in os.listdir(root) if d.endswith(slug.lstrip("-")) or d == slug]
+    except OSError:
+        return found
+    for folder in folders:
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith(".jsonl"):
+                continue
+            with open(os.path.join(folder, name), encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    if skill_marker in line and '"tool_use"' in line:
+                        try:
+                            event = json.loads(line)
+                        except ValueError:
+                            continue
+                        for block in ((event.get("message") or {}).get("content") or []):
+                            if isinstance(block, dict) and block.get("type") == "tool_use" and skill_marker in json.dumps(block.get("input")):
+                                found.append(f"{event.get('timestamp', '')} {block.get('name')} {json.dumps(block.get('input'))[:200]}")
+    return found
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True, help="the lane's configuration file (the production runner's)")
@@ -234,6 +261,7 @@ def main(argv=None) -> int:
     except Exception as error:  # noqa: BLE001  the replay reports what failed; the judge sees it
         out["error"] = f"{type(error).__name__}: {error}"
         traceback.print_exc(file=sys.stderr)
+    out["skill_reads"] = skill_reads(scratch)          # the trace that the worker actually read the skill it was told to carry out
     out["refused_hosts"] = list(proxy.refused) if proxy else []
     out["refused_quest_requests"] = list(forwarder.refused) if forwarder else []
     print("@@TASK@@ " + json.dumps(out, default=str, ensure_ascii=False))
