@@ -12,16 +12,17 @@ def rec(i, ack, ack_s, thought, thought_s):
             "planner_first_thought": {"rationale": thought, "seconds": thought_s}}
 
 
-def test_selection_rule_gate_then_share_then_cost():
-    arms = {"model_ack": dict(passing=5, inside_gate=True, extra_calls_per_turn=1),
-            "mind_thought": dict(passing=6, inside_gate=False, extra_calls_per_turn=0),
-            "hybrid": dict(passing=5, inside_gate=True, extra_calls_per_turn=1)}
-    assert ack_arms.select(arms, 6) in ("model_ack", "hybrid"), "an arm over the gate is never chosen alone"
-    arms["mind_thought"]["inside_gate"] = True
-    assert ack_arms.select(arms, 6) == "mind_thought", "within one case in six the cheaper arm wins"
-    arms["mind_thought"]["passing"] = 2
-    assert ack_arms.select(arms, 6) in ("model_ack", "hybrid")
-    assert ack_arms.select({"a": dict(passing=1, inside_gate=False, extra_calls_per_turn=0)}, 6) == "none inside the gate"
+def test_selection_rule_share_then_seconds_then_cost_with_no_time_gate():
+    arms = {"model_ack": dict(passing=5, median_seconds=6.0, extra_calls_per_turn=1),
+            "mind_thought": dict(passing=2, median_seconds=9.0, extra_calls_per_turn=0),
+            "hybrid": dict(passing=5, median_seconds=6.0, extra_calls_per_turn=1)}
+    assert ack_arms.select(arms, 6) in ("model_ack", "hybrid"), "a slow arm that passes more is chosen: seconds are a cost, not a gate"
+    arms["mind_thought"]["passing"] = 5
+    arms["mind_thought"]["median_seconds"] = 4.0
+    assert ack_arms.select(arms, 6) == "mind_thought", "within one case in six, the faster arm wins"
+    arms["model_ack"]["passing"] = 6
+    arms["model_ack"]["median_seconds"] = 20.0
+    assert ack_arms.select(arms, 6) == "model_ack", "an intelligent ack beats a faster worse one when the difference is a case or more"
 
 
 def test_all_three_items_must_pass_by_majority_and_a_missing_line_fails():
@@ -36,6 +37,6 @@ def test_all_three_items_must_pass_by_majority_and_a_missing_line_fails():
     records = [rec("A", "I'll look at your marathon plan.", 1.8, "I'll read your goals.", 6.0)]
     got = ack_arms.score(records, fake_ask)
     assert got["arms"]["model_ack"]["rows"][0]["ok"] is False
-    assert got["arms"]["model_ack"]["median_seconds"] == 1.8 and got["arms"]["model_ack"]["inside_gate"]
-    assert got["arms"]["mind_thought"]["median_seconds"] == 6.0 and not got["arms"]["mind_thought"]["inside_gate"]
+    assert got["arms"]["model_ack"]["median_seconds"] == 1.8 and got["arms"]["model_ack"]["target_met"]
+    assert got["arms"]["mind_thought"]["median_seconds"] == 6.0 and not got["arms"]["mind_thought"]["target_met"]
     assert ack_arms.judge_line(records[0], "", fake_ask) == {"ok": False, "items": {}, "note": "no line"}
