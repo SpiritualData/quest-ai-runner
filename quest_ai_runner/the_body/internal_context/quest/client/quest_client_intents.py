@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode
 
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError, QuestNotConfigured, log
 
@@ -184,7 +185,10 @@ class IntentsMixin:
         """Send one intents write. A non-blank ``human_statement`` (the person's verbatim words asking for exactly this change) is sent as
         ``humanStatement``: the server then treats the call as the person's for its AI guards. Blank or absent sends nothing."""
         if (human_statement or "").strip():
-            body = {**body, "humanStatement": human_statement}
+            if method == "DELETE":      # the backend reads a DELETE's words from the query string: a DELETE has no body
+                path = f"{path}?{urlencode({'humanStatement': human_statement})}"
+            else:
+                body = {**body, "humanStatement": human_statement}
         body = body or None     # a bare DELETE sends no body
         try:
             return self._request(method, path, body=body) or {}

@@ -279,7 +279,7 @@ def test_human_statement_is_sent_as_camel_case_only_when_non_blank():
     client.archive_spec_record("esr_1")
     assert client.sent[0][3]["humanStatement"] == "  change the goals to x "
     assert all("humanStatement" not in body for _, _, _, body in client.sent[1:3])
-    assert client.sent[3][:2] == ("DELETE", "/api/intents/records/esr_1") and client.sent[3][3] == {"humanStatement": "archive it"}
+    assert client.sent[3][:2] == ("DELETE", "/api/intents/records/esr_1?humanStatement=archive+it") and client.sent[3][3] is None   # a DELETE has no body: the words ride in the query string
     assert client.sent[4][3] is None
 
 
