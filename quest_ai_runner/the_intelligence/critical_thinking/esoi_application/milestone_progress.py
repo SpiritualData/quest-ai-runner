@@ -205,7 +205,8 @@ a plan about the unit unless the unit is itself an outline.
 Facts and proposals are different. A fact (what the product does, a figure, a date, a name, a result) must come from the sources above, said as they say it;
 never invent one. A proposal (which topics to cover, which option to recommend, how to compare candidates) is your own work: make it, concretely, from the
 sources, and say why. When the work compares options or prepares a decision, end with an explicit recommendation of one option, labelled as a proposal,
-with its reasoning, even when the evidence is thin (say how thin). Write "to be decided" only for a fact that only a person or an outside system can supply,
+with its reasoning, even when the evidence is thin (say how thin). Name an option only when a source names it, with that source; never a placeholder option
+("Candidate B", "another niche"); when the sources name fewer than two, say so and name what would supply another. Write "to be decided" only for a fact that only a person or an outside system can supply,
 never for a proposal you can make. No first
 person plural unless the records say who speaks; no bracket or blank slot to fill. {no_em_dash}"""
 
@@ -225,14 +226,14 @@ List the questions this decision needs answered (at most {limit}), and answer ea
 "source": "<the record or read it comes from, by name>", "quote": "<the exact words of that record or read the answer rests on, a few words, empty when unanswered>"}}]}}.
 Invent no figure, name or date. {no_em_dash}"""
 
-PART_PROMPT = """One unit of a team's deliverable misses one requirement. Write ONLY the few sentences that meet it, to be joined into the unit; do not
-rewrite the unit.
+PART_PROMPT = """Write the few sentences one unit of a team's deliverable still lacks, as content of the unit itself (the words used as they are: for a script, the
+words spoken), to be combined into it. Never write about the unit, its requirements or this instruction.
 
-The unit: {goal}
+The deliverable: {item}
 The unit as it stands:
 {base}
 
-The requirement it misses: {requirement}
+What the unit still lacks: {need}
 
 The milestone's records and this turn's reads, the only source for any fact:
 {records}
@@ -240,6 +241,22 @@ The milestone's records and this turn's reads, the only source for any fact:
 
 Use only facts above; a proposal (a topic, a recommendation) is yours to make from them, with its reason. Write "to be decided" only for a fact only a
 person or an outside system can supply. Reply with JSON only: {{"part": "<the sentences>"}}. {no_em_dash}"""
+
+COMBINE_PROMPT = """Write one unit of a team's deliverable as a single coherent text, used as it is (for a script, the words spoken, in order), from the unit as it
+stood and the added pieces below. Keep what each piece adds; drop repeats, notes, instructions and anything about the unit itself.
+
+The deliverable: {item}
+The unit as it stood:
+{base}
+
+Added pieces:
+{pieces}
+
+The milestone's records and this turn's reads, the only source for any fact:
+{records}
+{grounding}
+
+State a fact (what the product does, a figure, a link, a name) only as the sources say it. Reply with JSON only: {{"part": "<the whole unit>"}}. {no_em_dash}"""
 
 SCORE_PROMPT = """Check one deliverable against its requirements. You did not write it; judge only what the text shows, against the records below.
 
@@ -352,7 +369,9 @@ The sentences:
 {sentences}
 
 For each sentence, say its kind: "fact" (it states something about the product, a team, people, figures, dates, places or past results), "proposal" (it
-proposes, recommends, compares or plans, and is worded as such), or "plain" (a greeting, a call to action, a transition, or "to be decided"). For a fact,
+proposes, recommends, compares or plans, and is worded as such), or "plain" (a greeting, a call to action, a transition, or "to be decided"). A sentence that
+says what a product does, has, costs or offers, or where to find it (a feature, a price, a link, an offer, a figure), is a "fact" even inside a proposal, a
+spoken line or a call to action; so is an example presented as real. For a fact,
 quote the exact words of the sources it rests on (a few words, copied exactly), or leave the quote empty when no source states it. Reply with JSON only:
 {{"sentences": [{{"n": <number>, "kind": "fact" | "proposal" | "plain", "quote": "<exact words from the sources, or empty>"}}]}}."""
 
@@ -403,12 +422,18 @@ def supported_sentences(text: str, reference: str, decide: Callable[[str], str],
         else:
             units[k].kept = False
             removed.append(units[k].text)
+    # A sentence that leans on a removed one (a back-reference right after it) goes with it, so nothing kept rests on a fact that was taken out.
+    from hubofhubs.api import cohere
+    before = {k for k, u in enumerate(units) if u.kept}
+    units, _ = cohere(units, "", None)
+    removed += [units[k].text for k in sorted(before) if not units[k].kept]
     return joined(units), removed
 
 
 #: Words that state a status (a decision made, a check done). A sentence may carry one only when the sources show it, in a sentence about the same thing.
 STATUS_WORDS = re.compile(r"\b(?:agreed|confirmed|approved|verified|validated|signed off|finali[sz]ed|cross[- ]checked|checked against|double[- ]checked)\b", re.IGNORECASE)
 ORDINAL_LIMIT = 10
+LINK = re.compile(r"\b(?:https?://\S+|(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|ai|app|co|dev|me|tv|us|uk)\b(?:/\S*)?)", re.IGNORECASE)
 NUMBER = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
 CONTENT_WORD = re.compile(r"[a-z]{5,}")
 REPHRASE_PROMPT = """Each numbered sentence below states a number, a threshold or a status word ("agreed", "confirmed", "checked against ...") that the sources
@@ -424,6 +449,34 @@ The sentences:
 Reply with JSON only: {{"sentences": [{{"n": <number>, "text": "<the rewritten sentence>"}}]}}. {no_em_dash}"""
 
 
+#: A sentence about the deliverable itself (its rubric, its requirements, what "this script" covers) is the scorer's language, never the deliverable's.
+META = re.compile(r"\b(?:rubric|requirements?)\b|\bthis (?:script|unit|deliverable|draft|piece|section)\b|\b(?:the|each|every) (?:script|unit) (?:must|should|covers|names|is written)\b",
+                  re.IGNORECASE)
+ECHO_SHARE = 0.5        # a sentence whose content words are at least half one rubric line's (and three or more) repeats the rubric
+
+
+def stems5(text: str) -> set:
+    return {w[:5] for w in CONTENT_WORD.findall(str(text or "").lower())}
+
+
+def without_rubric_echo(text: str, rubric: Sequence[str]) -> Tuple[str, List[str]]:
+    """``(text, removed)``: the sentences that speak about the deliverable (``META``) or repeat a rubric line's words taken out by code, so the rubric and the
+    scorer's wording never reach the kept text; the deliverable keeps only its own content."""
+    from hubofhubs.api import joined, units_of
+    units = units_of(text)
+    lines = [stems5(r) for r in rubric if str(r).strip()]
+    whole = [squash(r).rstrip(".") for r in rubric if len(str(r).split()) >= 2]
+    removed = []
+    for u in units:
+        words = stems5(u.text)
+        echo = (any(len(words & line) >= 3 and len(words & line) >= ECHO_SHARE * len(words) for line in lines)
+                or any(w and w in squash(u.text) for w in whole))
+        if (META.search(u.text) or echo) and sum(x.kept for x in units) > 1:
+            u.kept = False
+            removed.append(u.text)
+    return joined(units), removed
+
+
 def marked_claims(sentence: str, reference: str) -> List[str]:
     """The numbers and status words in ``sentence`` the sources do not hold, found by code: a number must appear in ``reference`` as a number of its own
     (thousands separators aside); a status word must appear in a sentence of ``reference`` that shares at least two content words with ``sentence``, so a
@@ -436,6 +489,9 @@ def marked_claims(sentence: str, reference: str) -> List[str]:
         if number.isdigit() and int(number) <= ORDINAL_LIMIT and not rate:
             continue        # a small whole number counts or orders the deliverable's own pieces (unit 2, three points); a rate or a figure must be held
         if not re.search(r"(?<![\d.])" + re.escape(number) + r"(?![\d])", source):
+            out.append(m.group(0))
+    for m in LINK.finditer(sentence):
+        if m.group(0).lower().rstrip("/.") not in str(reference or "").lower():
             out.append(m.group(0))
     words = set(CONTENT_WORD.findall(sentence.lower()))
     for m in STATUS_WORDS.finditer(sentence):
@@ -472,6 +528,38 @@ def without_markers(text: str, reference: str) -> str:
     for marker in marked_claims(text, reference):
         text = re.sub(r"\s*\b" + re.escape(marker) + r"\b", "", text, count=1)
     return " ".join(text.split())
+
+
+STEP_PROMPT = """The one step only a person can do next, after the AI's work below:
+{step}
+
+What the AI kept (the deliverable) and the records:
+{kept}
+
+Rewrite the step so everything it points to (a list, copy, a link, a script, a proposal, a scheme) is something the kept deliverable or the records hold, called
+by the name it has there; drop any pointer to something they do not hold. Keep who does it when the records say. One sentence. Reply with JSON only:
+{{"step": "<the step>"}}. {no_em_dash}"""
+POINTER = re.compile(r"\b(?:the|its|their) (?:proposed|drafted|suggested|new|tagged) ([a-z]+(?: [a-z]+)?)", re.IGNORECASE)
+
+
+def kept_step(step: str, kept: str, reference: str, decide: Optional[Callable[[str], str]]) -> str:
+    """The person-only step, pointing only at what the turn kept or the records hold: a step that points at a proposed or drafted thing the kept text does not
+    name (found by code) is rewritten once from the kept text and checked again; then the line rule (``checked_line``) applies."""
+    step = " ".join(str(step or "").split())
+    if not step:
+        return step
+    known = squash(kept + " " + reference)
+    def missing(text: str) -> List[str]:
+        out = []
+        for m in POINTER.finditer(text):
+            words = [w[:5] for w in re.findall(r"[a-z]{4,}", m.group(1).lower())]
+            if words and not any(w in known for w in words):
+                out.append(m.group(1))
+        return out
+    if missing(step) and decide is not None:
+        again = " ".join(str(parse_json(decide(STEP_PROMPT.format(step=step, kept=(kept + "\n\n" + reference)[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH))).get("step") or "").split())
+        step = again if again and not missing(again) else POINTER.sub(lambda m: m.group(0) if not missing(m.group(0)) else "the kept deliverable", step)
+    return checked_line(step, kept + "\n" + reference, decide)
 
 
 def checked_line(text: str, reference: str, decide: Optional[Callable[[str], str]]) -> str:
@@ -679,17 +767,27 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         return ("\n\n".join(t for t in (str(grounding or "")[:GROUNDING_CHARS], ("Research gathered for this work:\n" + found["text"][:GROUNDING_CHARS]) if found.get("text") else "") if t)
                 or "(none)")
 
+    cleaned_cache: Dict[str, str] = {}
+    rubric_lines: List[str] = [str(r) for i in items for r in i.get("requirements") or []]     # the scorer's words, never the deliverable's
+
     def cleaned(text: str) -> str:
-        """``text`` as it will be kept: each claim checked by ``grounded_text``, then the sentence check (facts on a source, numbers and status words held)."""
+        """``text`` as it will be kept: sentences about the deliverable or repeating its rubric out, each claim checked by ``grounded_text``, then the sentence
+        check (facts on a source quote, numbers, links and status words held, and what leans on a removed sentence removed with it). Once per text."""
         text = str(text or "").strip()
         if not text:
             return ""
+        key = hashlib.sha1(text.encode("utf-8")).hexdigest()
+        if key in cleaned_cache:
+            return cleaned_cache[key]
+        now, echoed = without_rubric_echo(text, rubric_lines)
+        out.unsupported += echoed
         allowed = sources_text()
-        text = grounded_text(text, allowed, decide) or ""
-        if text:
-            text, dropped = supported_sentences(text, allowed, decide)
+        now = grounded_text(now, allowed, decide) or ""
+        if now:
+            now, dropped = supported_sentences(now, allowed, decide)
             out.unsupported += dropped
-        return text.strip()
+        cleaned_cache[key] = now.strip()
+        return cleaned_cache[key]
 
     def write_unit(item: Mapping[str, Any], requirements: List[str], have: List[str], note: str = "") -> Tuple[str, Dict[str, Any], Optional[Dict[str, Any]]]:
         """One unit of a deliverable: written on the writer's tier from the records, the reads and the research, then built out by the hub's depth loop when the
@@ -700,8 +798,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         data = parse_json(write(WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
                                                     item=item.get("name"), requirements="; ".join(requirements) or "(none given)",
                                                     kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)))
-        # The unit as it will be kept is what the depth loop checks: a check of the raw text found it met, then the claim check took out what met it.
-        part = cleaned(str(data.get("part") or ""))
+        part = str(data.get("part") or "").strip()
         depth = None
         if part and requirements:
             # The unit is its own solution with the kept rubric as its metric: the hub's depth loop checks it (the separate scorer, never the writer), splits what
@@ -709,15 +806,17 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             from hubofhubs.api import build_out
             prompt = WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
                                          item=item.get("name"), requirements="; ".join(requirements), kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)
-            unit = {"goal": f"{item.get('name')}, unit {len(have) + 1}", "requirements": requirements, "prompt": prompt, "solution_id": cue.rid}
+            unit = {"goal": f"{item.get('name')}, unit {len(have) + 1}", "requirements": requirements, "prompt": prompt, "solution_id": cue.rid, "whole": True}
 
             def piece_work(piece: Mapping[str, Any]) -> str:
                 answer = str(write(str(piece.get("prompt") or "")) or "")
                 # The part as asked (JSON); a plain-text answer is the part itself; an empty or malformed JSON answer is no part (never raw JSON in the unit).
-                # It is checked as it will be kept, so the loop stops on the scorer's verdict of the kept words.
-                return cleaned(str(parse_json(answer).get("part") or ("" if answer.strip().startswith("{") else answer)))
+                return str(parse_json(answer).get("part") or ("" if answer.strip().startswith("{") else answer)).strip()
 
             def piece_check(text: str, piece: Mapping[str, Any]) -> Dict[str, Any]:
+                # The whole unit is scored as it will be kept (after the sentence check), so depth stops on the scorer's verdict of the kept words; a sub-piece
+                # is a draft of sentences for the combine pass and is scored as written.
+                text = cleaned(text) if piece.get("whole") else text
                 wanted = [str(r) for r in piece.get("requirements") or []]
                 met = [r for r in wanted if judge(r, text)] if text.strip() else []
                 missing = [r for r in wanted if r not in met]
@@ -729,18 +828,24 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                 # whole unit, which made every sub-piece another whole version).
                 missing = [str(r) for r in checked.get("missing") or []] or list(piece.get("requirements") or [])
                 return [{"goal": f"{piece.get('goal')}: {req}", "requirements": [req], "solution_id": cue.rid,
-                         "prompt": PART_PROMPT.format(goal=piece.get("goal"), base=part, requirement=req, records=cue.records_text[:RECORD_CHARS * 2],
+                         "prompt": PART_PROMPT.format(item=item.get("name"), base=part, need=req, records=cue.records_text[:RECORD_CHARS * 2],
                                                       grounding=shown(), no_em_dash=NO_EM_DASH)} for req in missing]
 
             def piece_combine(piece: Mapping[str, Any], base: str, parts: Sequence[Mapping[str, Any]]) -> str:
-                # The parts' own sentences are kept exactly, after the unit as it stood: a model rewrite of the join lost what a part had met (measured: the
-                # part met its requirement and the recombined text did not).
-                return "\n\n".join([base.strip()] + [str(p["text"]).strip() for p in parts if str(p.get("text") or "").strip()]).strip()
+                # One pass writes the whole unit again from the unit as it stood, the pieces and the sources, as a single text (stitched pieces read as notes);
+                # with no answer the pieces are joined as written. The loop then scores it as kept and keeps the better of before and after.
+                pieces = [str(p["text"]).strip() for p in parts if str(p.get("text") or "").strip()]
+                if not pieces:
+                    return base
+                answer = parse_json(write(COMBINE_PROMPT.format(item=item.get("name"), base=base.strip(), pieces="\n\n".join(f"- {x}" for x in pieces),
+                                                                records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(), no_em_dash=NO_EM_DASH)))
+                return str(answer.get("part") or "").strip() or "\n\n".join([base.strip()] + pieces)
             deep = build_out(unit, piece_work, piece_check, split=piece_split, combine=piece_combine, budget={"calls": DEPTH_CALLS, "depth": 2, "width": 4}, base=part)
             depth = {k: deep.get(k) for k in ("before", "after", "calls", "levels", "stopped", "met")}
             if float(deep.get("after") or 0) >= float(deep.get("before") or 0):
                 part = str(deep.get("text") or part).strip()       # depth that scored lower than the one-call unit is not kept
-        return part, data, depth
+        # The sentence check runs once on the final text (the same cached pass the loop scored), so the kept words are the ones the scorer judged.
+        return cleaned(part), data, depth
 
     def work(increment: Mapping[str, Any]) -> Mapping[str, Any]:
         item = dict(increment.get("item") or {})
@@ -790,10 +895,12 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         questions = questions[:EVIDENCE_QUESTIONS]
         rendered = render_questions(questions) if questions else ""
         if rendered:
-            # The answers go through the same sentence check as any deliverable: each fact in them must rest on words code finds in the sources.
-            rendered, dropped = supported_sentences(rendered, sources_text(), decide, keep_line_starts=True)
+            # The answers go through the same sentence check as any deliverable: each fact in them must rest on words code finds in the sources. An answer the
+            # check emptied is open again ("to be decided", no source), and the evidence is rendered again from the questions, so the counts match the text.
+            checked, dropped = supported_sentences(rendered, sources_text(), decide, keep_line_starts=True)
             out.unsupported += dropped
-            questions = (questions_of(rendered) or {}).get("questions") or questions
+            questions = (questions_of(checked) or {}).get("questions") or questions
+            rendered = render_questions(questions)
         out.parts = [rendered] if rendered else []
         out.overview = f"The questions the decision needs, each answered from a cited record or read; the rest are {TO_BE_DECIDED}."
         return {"artifact": {"questions": questions} if questions else None, "evidence_ref": title}
@@ -822,7 +929,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     out.total = (made.get("after") or made.get("before") or {}).get("total") or (item.get("total") if isinstance(item.get("total"), int) and item.get("total") > 1 else None)
     out.before = (made.get("before") or {}).get("value")
     out.after = (made.get("after") or {}).get("value")
-    out.ask = checked_line(without_ids(first_person_step(items, doable)), sources_text(), decide)
+    out.ask = kept_step(without_ids(first_person_step(items, doable)), out.body(), sources_text(), decide)
     out.method = str(increment.get("method") or "")
     if out.status == "measured" and increment.get("kind") == "deliverable":
         # The ladder follows dependencies inside the turn: the next AI-doable unit that needs this one (a script for the first item of a proposed list) is
@@ -939,8 +1046,8 @@ def confirmed_item_order(items: List[Dict[str, Any]], doable: Callable[[Mapping[
 MADE, DECISION, OTHERS = "made", "decision", "others"
 YES_NO = {"yes", "no", "true", "false"}
 CLASS_PICK = "What is this milestone's done test made of? Pick one."
-DECISION_REQUIREMENT = ("Names two or more options, each from a cited record or source, compares them on the evidence that exists, and recommends one, "
-                        "labelled as a proposal, with its reasoning")
+DECISION_REQUIREMENT = ("Names each option a record or a source names, each with that source (never a placeholder option), says plainly when the sources "
+                        "give fewer than two, compares them on the evidence that exists, and recommends one, labelled as a proposal, with its reasoning")
 EVIDENCE_REQUIREMENTS = ["Each answer names its source and rests on words in it", "Says plainly what the sources do not give"]
 
 
@@ -1073,6 +1180,7 @@ def render_questions(questions: Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+SOURCE_LABEL = re.compile(r"\(source: [^)]*\)")
 QUESTION_LINE = re.compile(r"^Q(?P<n>\d+)\. (?P<q>.+)$")
 ANSWER_LINE = re.compile(r"^A(?P<n>\d+)\. (?P<a>.+?)(?: \(source: (?P<s>[^)]*)\))?$")
 
@@ -1085,7 +1193,8 @@ def questions_of(text: str) -> Optional[Dict[str, Any]]:
         if q:
             found.setdefault(q.group("n"), {})["question"] = q.group("q")
         elif a:
-            answered = a.group("a").strip() != TO_BE_DECIDED and a.group("s")
+            answer = SOURCE_LABEL.sub("", a.group("a")).strip(" .;:,")
+            answered = answer and answer != TO_BE_DECIDED and a.group("s")
             found.setdefault(a.group("n"), {}).update(answer=a.group("a").strip() if answered else "", source=(a.group("s") or "").strip() if answered else "")
     questions = [v for _, v in sorted(found.items(), key=lambda kv: int(kv[0])) if v.get("question")]
     return {"questions": questions} if questions else None

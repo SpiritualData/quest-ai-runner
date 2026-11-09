@@ -163,9 +163,9 @@ def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_reche
     def thin_first(prompt):
         if "You write one deliverable" in prompt and "## This part" not in prompt:
             return json.dumps({"part": "Opening line for tutorial 1. Teach the product."})          # misses the call to action
-        if "misses one requirement" in prompt:
+        if "still lacks" in prompt:
             return json.dumps({"part": "Call to action: try it today."})
-        if "Join these parts" in prompt:
+        if "as a single coherent text" in prompt:            # the combine pass writes the whole unit from the unit and its pieces
             return json.dumps({"part": "Opening line for tutorial 1. Teach the product. Call to action: try it today."})
         if "Check one deliverable" in prompt:
             text = prompt.split("The text:", 1)[1]
@@ -367,3 +367,38 @@ def test_the_reply_names_every_artifact_kept_on_the_record():
                                                                                      "a person connects the export (source: met-1 record, 2030-03-09)"}, "state": "kept"}],
                                              "", {"met-1": {"name": "Users from a source"}})
     assert lines == ["A proposal (the AI's, to be agreed) for making Users from a source readable here: read the funnel export; a person connects the export."]
+
+
+def test_no_rubric_line_reaches_a_kept_artifact():
+    def echoing(prompt):
+        if "You write one deliverable" in prompt:       # the writer repeats its rubric and talks about the unit, around the real content
+            return json.dumps({"part": "Opening line for tutorial 1. This script has an opening and ends with a call to action. Has an opening. "
+                                       "Teach the product. Call to action: try it today."})
+        return decide(prompt)
+    registry = Registry()
+    made = milestone_progress.make_progress(cue(), registry, echoing)
+    body = registry.goals[made.title]
+    rubric = [r for r in ("Has an opening", "Ends with a call to action")]
+    for unit in made.parts:
+        assert not any(r.lower() in unit.lower() for r in rubric) and "this script" not in unit.lower()
+    assert "Opening line for tutorial 1" in body and "Has an opening." not in body.split("--- Part 1 ---")[1]
+    text, removed = milestone_progress.without_rubric_echo("A clear hook. The unit names the single topic and ends with a call to action.",
+                                                          ["Names the single topic explicitly and ends with a call to action"])
+    assert text == "A clear hook." and removed
+
+
+def test_an_answer_the_check_emptied_is_open_again_never_a_bare_source():
+    found = milestone_progress.questions_of("Q1. How many?\nA1. (source: the record)\nQ2. Who?\nA2. The owner. (source: the record)")
+    assert found["questions"][0]["answer"] == "" and found["questions"][1]["answer"] == "The owner."
+
+
+def test_the_person_step_points_only_at_what_was_kept():
+    rewrite = lambda prompt: json.dumps({"step": "A person adds the tagged link from the kept list to each video."})      # noqa: E731
+    step = milestone_progress.kept_step("A person pastes the proposed copy into each video.", "Tagged link list: one link per video.", "", rewrite)
+    assert step == "A person adds the tagged link from the kept list to each video."
+    assert milestone_progress.kept_step("A person records the video.", "Script.", "", lambda p: "{}") == "A person records the video."
+
+
+def test_a_link_or_product_claim_needs_a_source():
+    assert milestone_progress.marked_claims("Start today at example.org.", "The records name no site.") == ["example.org"]
+    assert milestone_progress.marked_claims("Start today at example.org.", "Sign up at example.org/start.") == []
