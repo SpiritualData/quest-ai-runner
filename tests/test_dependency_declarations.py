@@ -55,8 +55,8 @@ def test_every_library_the_hub_imports_is_declared_for_the_all_extra():
 
 # The exact strings quest-backend/requirements.txt and conceptai install. One direct URL per package across every consumer:
 # a different ref for the same package cannot be resolved together. Change these and the other files in one release.
-SHARED_ESOI = "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.5.0#subdirectory=implementations/python"
-SHARED_HUB = "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.5.1"
+SHARED_ESOI = "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.6.0#subdirectory=implementations/python"
+SHARED_HUB = "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.6.0"
 
 
 def test_the_two_direct_url_dependencies_are_the_strings_every_consumer_installs():
