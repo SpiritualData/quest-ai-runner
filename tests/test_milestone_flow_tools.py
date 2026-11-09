@@ -262,5 +262,5 @@ def test_a_lane_offers_the_keep_tool_to_the_code_that_measures_finished_backgrou
     from quest_ai_runner.the_world.tools.tools import STANDARD_TOOL_BUILDERS
     build = STANDARD_TOOL_BUILDERS["keep_milestone_deliverable"]
     assert build({}) is None
-    spec = build({"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "qsk_test"})
+    spec = build({"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "qsk_..."})
     assert spec is not None and spec.name == "keep_milestone_deliverable" and spec.flow_owned and spec.on_request_only
