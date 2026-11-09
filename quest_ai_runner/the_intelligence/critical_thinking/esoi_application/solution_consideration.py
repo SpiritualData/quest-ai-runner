@@ -251,6 +251,9 @@ def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional
     try:
         if ctx_meta is None or getattr(rs, "cue_resolved", None) is not None or not getattr(rs, "message_is_user_turn", True):
             return None
+        from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
+        if not core_settings().solution_consideration_in_chat:
+            return None
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
         store = card_writer(getattr(orch, "context_assembler", None))

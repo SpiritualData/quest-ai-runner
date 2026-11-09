@@ -111,3 +111,14 @@ def test_the_turn_never_waits_and_a_card_lands_before_the_parent_passes(monkeypa
     assert "solution-cards-from-files" in store.cards and thread.is_alive()       # landed while the parent passes still run
     gate.set()
     thread.join(60)
+
+
+def test_the_off_switch_turns_chat_consideration_off(monkeypatch):
+    from types import SimpleNamespace
+    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    assert core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "0"}).solution_consideration_in_chat is False
+    monkeypatch.setattr("quest_ai_runner.the_body.configuration.runtime_settings.core_settings",
+                        lambda: core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "0"}))
+    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
+    assert solution_consideration.for_turn(Orch(Store(), Scripted()), rs, {}) is None

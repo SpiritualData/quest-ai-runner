@@ -96,6 +96,9 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
               if review_raw else DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS)
 
     gate_raw = env.get("QAR_NOTE_FLOOR_RELEVANCE_GATED")
+    consider_raw = env.get("QAR_SOLUTION_CONSIDERATION")
+    consider = d.solution_consideration_in_chat if consider_raw is None or not consider_raw.strip() else \
+        consider_raw.strip().lower() not in ("0", "false", "no", "off")
     gated = d.note_floor_relevance_gated if gate_raw is None or not gate_raw.strip() else \
         gate_raw.strip().lower() not in ("0", "false", "no", "off")
 
@@ -123,6 +126,7 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
         quest_scope_mode=(env.get("QAR_QUEST_SCOPE_MODE") or d.quest_scope_mode).strip().lower()
         if (env.get("QAR_QUEST_SCOPE_MODE") or "").strip().lower() in ("fence", "affinity") else d.quest_scope_mode,
         note_floor_relevance_gated=gated,
+        solution_consideration_in_chat=consider,
         note_floor_fresh_minutes=_float_or(
             env.get("QAR_NOTE_FLOOR_FRESH_MINUTES"), d.note_floor_fresh_minutes, positive=False),
         deep_prompt_token_budget=budget,
