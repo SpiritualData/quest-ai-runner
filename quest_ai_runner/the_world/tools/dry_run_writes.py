@@ -413,6 +413,20 @@ def declare_read_command(argv: Any) -> None:
     STATE["read_commands"].add(tuple(str(a) for a in argv))
 
 
+DEEP_RUNNER_PACKAGE = "delegated_agent_sessions"     # the hub's agent harnesses: a process they start is the deep worker
+
+
+def started_by_deep_runner() -> bool:
+    """True when the process being started is started by one of the hub's agent harnesses (the deep worker, whatever program the lane selected)."""
+    import sys
+    frame = sys._getframe(1)
+    while frame is not None:
+        if DEEP_RUNNER_PACKAGE in frame.f_code.co_filename:
+            return True
+        frame = frame.f_back
+    return False
+
+
 def check_process(argv: Any) -> None:
     parts = [str(a) for a in (argv if isinstance(argv, (list, tuple)) else [argv])]
     if tuple(parts) in STATE["read_commands"]:
@@ -427,7 +441,7 @@ def check_process(argv: Any) -> None:
         if rest[:1] and rest[0] in READ_GIT and not (rest[0] == "config" and any(a for a in rest[1:] if not a.startswith("--get"))):
             return
     names = {os.path.basename(p) for p in parts[:6]}
-    if names & MODEL_CLI_NAMES and real_deep():
+    if real_deep() and (names & MODEL_CLI_NAMES or started_by_deep_runner()):
         RECORDER.model_call(f"deep worker | {caller_label()}")      # the real worker, its own tool processes in the same dry run (the environment carries it)
         return
     if names & MODEL_CLI_NAMES:

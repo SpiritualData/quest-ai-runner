@@ -14,7 +14,8 @@ no SSE transport, no parked-decision shortcut, and the reply and the user messag
 Environment: ``QAR_PRIVATE_POOR_ANSWERS_DATASET`` (approved ids and texts), ``QAR_PROD_CASE_RULES_FILE``, ``QAR_OVERLAY_SSH`` (user@host), ``QAR_OVERLAY_REMOTE_DIR`` (the compose directory), ``QAR_OVERLAY_BASE_REF`` (the deployed backend commit), ``QAR_OVERLAY_USER`` (the caller's user id),
 ``QAR_PROD_QUEST_ID``, ``QAR_PROD_TEAM_ID``, ``QAR_OVERLAY_BACKEND`` (optional: the quest-backend checkout), ``QAR_OVERLAY_SEED_FROM_LAST`` (optional: 1 makes each case read the specification edits its last saved replay made, as if they had landed),
 ``QAR_OVERLAY_TASK_LANE_CONFIG`` (the configuration file of the lane whose runner executes the queued tasks; with it, a task the turn queued is run after the
-turn the way that runner would, in a dry run that keeps the real deep worker, and judged with the turn) and ``QAR_OVERLAY_TASK_SECONDS`` (its time limit, default 2400).
+turn the way that runner would, in a dry run that keeps the real deep worker, and judged with the turn), ``QAR_OVERLAY_TASK_LANE_ENV`` (that lane's KEY=VALUE file) and
+``QAR_OVERLAY_TASK_SECONDS`` (its time limit, default 2400).
 PAID in production model calls; the judge is ``claude -p``."""
 PAID = True
 ALTERNATIVE = True
@@ -180,7 +181,7 @@ def seed_from_last(case_id, environ=None):
     return seed
 
 
-TASK_LANE_ENV, TASK_SECONDS_ENV = "QAR_OVERLAY_TASK_LANE_CONFIG", "QAR_OVERLAY_TASK_SECONDS"
+TASK_LANE_ENV, TASK_ENV_FILE_ENV, TASK_SECONDS_ENV = "QAR_OVERLAY_TASK_LANE_CONFIG", "QAR_OVERLAY_TASK_LANE_ENV", "QAR_OVERLAY_TASK_SECONDS"
 
 
 def queued_tasks(writes):
@@ -201,7 +202,9 @@ def run_queued(task, environ=None):
         path = handle.name
     script = Path(__file__).resolve().parents[1] / "run_queued_task.py"
     try:
-        done = subprocess.run([sys.executable, str(script), "--config", config, "--task", path], capture_output=True, timeout=int(environ.get(TASK_SECONDS_ENV) or 2400))
+        env_file = (environ.get(TASK_ENV_FILE_ENV) or "").strip()
+        done = subprocess.run([sys.executable, str(script), "--config", config, "--task", path] + (["--env-file", env_file] if env_file else []),
+                              capture_output=True, timeout=int(environ.get(TASK_SECONDS_ENV) or 2400))
     except subprocess.TimeoutExpired:
         return {"error": "the queued task did not finish within its time limit"}
     finally:

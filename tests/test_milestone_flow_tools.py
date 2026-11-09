@@ -256,3 +256,11 @@ def test_a_record_named_whole_comes_back_uncut_and_the_others_stay_cut():
     finally:
         SPEC["records"][0]["fields"].pop("knowledge")
     assert cut.endswith("...") and len(cut) < len(long_text) and whole == long_text
+
+
+def test_a_lane_offers_the_keep_tool_to_the_code_that_measures_finished_background_work_never_to_a_planner():
+    from quest_ai_runner.the_world.tools.tools import STANDARD_TOOL_BUILDERS
+    build = STANDARD_TOOL_BUILDERS["keep_milestone_deliverable"]
+    assert build({}) is None
+    spec = build({"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "qsk_test"})
+    assert spec is not None and spec.name == "keep_milestone_deliverable" and spec.flow_owned and spec.on_request_only

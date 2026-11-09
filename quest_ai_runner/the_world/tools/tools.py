@@ -898,6 +898,7 @@ from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops  # n
 from quest_ai_runner.the_body.hands.quest_operations import tools_quest_work  # noqa: E402,F401
 from quest_ai_runner.the_body.hands.quest_operations import tools_quest_goals  # noqa: E402,F401
 from quest_ai_runner.the_body.hands.quest_operations import tools_quest_intents  # noqa: E402,F401
+from quest_ai_runner.the_body.hands.quest_operations import tools_milestone_flow  # noqa: E402,F401
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import tools_repo_specs  # noqa: E402,F401
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import tools_metric_source  # noqa: E402,F401
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results  # noqa: E402,F401

@@ -93,3 +93,16 @@ def milestone_flow_tools(client_factory: Callable[[], Any], metric_reader: Optio
     specs.append(keep_milestone_deliverable_spec(client_factory))
     specs.append(dataclasses.replace(apply_spec_edit_spec({}, client_factory), on_request_only=True, flow_owned=True))
     return specs
+
+
+def keep_milestone_deliverable_for_lane(env: Mapping[str, str]) -> Optional[ToolSpec]:
+    """``keep_milestone_deliverable`` for a lane's standard tool set: the code that measures a milestone deliverable's finished background work keeps it
+    through it (``milestone_completion``). Owned by that code and never offered to a planner; None without Quest credentials."""
+    from quest_ai_runner.the_world.tools.tools import quest_client_from_env, quest_credentials_present
+    if not quest_credentials_present(env):
+        return None
+    return dataclasses.replace(keep_milestone_deliverable_spec(lambda: quest_client_from_env(env)), on_request_only=True, flow_owned=True)
+
+
+from quest_ai_runner.the_world.tools.tools import STANDARD_TOOL_BUILDERS  # noqa: E402
+STANDARD_TOOL_BUILDERS["keep_milestone_deliverable"] = keep_milestone_deliverable_for_lane
