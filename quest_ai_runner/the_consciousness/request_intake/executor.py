@@ -590,10 +590,29 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
                 session_id=terminal_session_id(result) or resume_session_id)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
+        self.measure_milestone_work(text, result)
         return self.report(task_id, result, conv_id, request_text=text,
                            rep_preamble=rep_preamble,
                            card_id=(task.get("card_id") or None),
                            autopilot_composed=composed_by_autopilot)
+
+    def measure_milestone_work(self, text: str, result: OrchestratorResult) -> None:
+        """A task that is a milestone deliverable's background work (its brief carries the code-written work record) is measured and kept by code when
+        its run finishes: the deliverable against its rubric by the same separate scorer the turn uses, before and after on the milestone's keyed goal
+        (``milestone_completion``). The increment line is added to the run's result, so the done report says it. Never raises."""
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+        record = milestone_completion.work_record_of(text)
+        if record is None:
+            return
+        output = "\n\n".join(str(getattr(d, "output", "") or "") for d in (getattr(result, "deep_results", None) or [])) or str(getattr(result, "text", "") or "")
+        try:
+            measured = milestone_completion.measure_on_completion(record, output, getattr(self._orch, "tools", None), self._orch.cheap_decision, reference=text)
+        except Exception as error:  # noqa: BLE001  the run's own report stands; the measurement failure is said in it
+            log.warning("milestone completion: measuring the finished work failed: %s: %s", type(error).__name__, error)
+            measured = {"line": f"The finished deliverable could not be measured ({type(error).__name__})."}
+        line = str(measured.get("line") or "").strip()
+        if line and hasattr(result, "text"):
+            result.text = (str(result.text or "").rstrip() + "\n\n" + line).strip()
 
     # --- per-task working directory (quest_folder_map) ------------------------
 
