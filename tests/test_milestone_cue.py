@@ -1049,7 +1049,7 @@ def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_titl
     same_titles = [dict(A_EXISTING, title="FB push post A", goal_id=""), dict(B_NEW, title="FB push post B", goal_id="")]
     tail = alternatives_flow.run(tools, "q1", "write a couple of facebook posts for the push", "reply", lambda prompt: asked.append(prompt) or (alt_answer(*same_titles) if "Other goals on the quest" in prompt else same_post_of(prompt, {"Post one in full": "p1", "Post two in full": "p2"})))
     assert "FB push post A" in asked[0].split("Other goals on the quest that look like these")[1] and "Budget review" not in asked[0]
-    assert "Already on the quest: FB push post A, FB push post B (left as they are)." in tail and "A story hook gets more clicks" in tail and "Compared by:" in tail
+    assert "FB push post A (already on the quest, left exactly as it is)" in tail and "FB push post B (already on the quest, left exactly as it is)" in tail and "A story hook gets more clicks" in tail and "Compared by:" in tail
     assert calls == []          # nothing is created beside a person's series
 
 
