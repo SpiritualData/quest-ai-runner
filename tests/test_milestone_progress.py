@@ -29,7 +29,7 @@ class Registry:
                 table = "solutions" if change["kind"] == "spec_edit" else "metrics"
                 self.tables[table][change["target"]][change["field"]] = change["value"]
                 return SimpleNamespace(ok=True, data={"applied": True, "target": change["target"], "field": change["field"], "after": change["value"]}, text="Done")
-            self.tables["metrics"].setdefault(change["key"], dict(change["fields"]))
+            self.tables.setdefault(change.get("table") or "metrics", {}).setdefault(change["key"], dict(change["fields"]))
             return SimpleNamespace(ok=True, data={"applied": True, "created": True, "target": change["key"]}, text="Done")
         state = "updated" if args["title"] in self.goals else "created"
         self.goals[args["title"]] = args["body"]
@@ -449,3 +449,28 @@ def test_an_open_question_is_its_own_researched_piece():
     made = milestone_progress.make_progress(cue(), Registry(), decomposing, research=research)
     assert made.depth and made.depth["before"] == 0 and made.depth["after"] == 1 and made.depth["stopped"] == "met"
     assert "By the tag utm_source. (source: Funnel guide)" in made.parts[0]
+
+
+def test_the_deliverable_is_filed_under_its_own_solution_created_once_and_reused():
+    def filing(prompt):
+        if "Name the KIND of deliverable it is" in prompt:
+            return json.dumps({"kind": "tutorial scripts", "purpose": "Short spoken scripts that teach one task each."})
+        return decide(prompt)
+    registry = Registry()
+    first = milestone_progress.make_progress(cue(), registry, filing)
+    home = registry.tables["solutions"].get("Tutorial scripts")
+    assert home is not None and home["knowledge"].startswith("[best guess] Deliverable rubric for the tutorial list and the script for the next tutorial")
+    assert "knowledge" not in registry.tables["solutions"]["sol-1"]            # the rubric belongs to the deliverable's solution, not the milestone
+    assert "A new solution record: Tutorial scripts." in first.reply_text()
+
+    asked = []
+
+    def again(prompt):
+        asked.append(prompt)
+        if "Which of these solutions is the one whose own work makes this deliverable" in prompt:
+            return json.dumps({"pick": "Tutorial scripts", "quote": "Tutorial scripts"})
+        return filing(prompt)
+    later = cue()
+    later.tables = json.loads(json.dumps(registry.tables))
+    found = milestone_progress.deliverable_home(later, {"name": "tutorial scripts for the next tutorial"}, None, again)
+    assert found and found["id"] == "Tutorial scripts" and found["created"] is False

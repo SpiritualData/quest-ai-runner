@@ -716,6 +716,8 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         rubric = None
     metric_name = str((metrics.get(cue.metric_ids[0]) or {}).get("name") or "") if cue.metric_ids else ""
     reference_now = "\n".join(t for t in (cue.records_text, cue.allowed_text(), str(grounding or ""), day) if t)
+    out_home: Dict[str, Any] = {}       # the deliverable's own solution (classified, or created when none fits)
+    home_rubric = None
     if rubric is not None:
         # The record keeps the work item and its rubric from an earlier turn: that is the work item now, for the writer and the scorer alike. It was agreed when it
         # was defined (both checks), so it is not judged again; the work items of this turn only give the person-only step and what moves the metric.
@@ -731,19 +733,33 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         if first is not None:
             # The item's own name is held to the sentence rule (no status word or number the sources do not hold) before it is kept anywhere.
             first["name"] = checked_line(first["name"], reference_now, decide) or first["name"]
+            # Part 1 of work quality: the deliverable is classified to its own solution among the quest's records (the hub's placement path), and that
+            # solution is created when none fits. Its record owns the deliverable's rubric, so any milestone making this kind of thing reuses it.
+            home = deliverable_home(cue, first, spec_edit, decide)
+            home_row = dict((home or {}).get("row") or {})
+            home_rubric = kept_rubric(home_row) if home_row else None
+            out_home.update(home or {})
+        if first is not None and home_rubric is not None:
+            first.update(name=home_rubric.item, kind=home_rubric.kind, requirements=list(home_rubric.requirements), kept_rubric=True)
+            if home_rubric.total:
+                first["total"] = home_rubric.total
+            rubric_state = "reused from its solution"
+        elif first is not None:
             # Defined once, with depth: what a good deliverable of this kind is, researched from the product's documents, cited sources and the done test,
-            # agreed by a second view, and kept on the milestone's own record through ESOI Application (the same gate and autopilot rules as any spec edit),
-            # so every later turn reuses it instead of drifting.
+            # agreed by a second view, and kept on the deliverable's own solution record (else the milestone's) through ESOI Application (the same gate and
+            # autopilot rules as any spec edit), so every later turn reuses it instead of drifting.
             researched, cited = researched_rubric(first, cue, research, decide) if first["kind"] == "deliverable" else ([], [])
             if researched:
                 pinned = [r for r in first["requirements"] if r == DECISION_REQUIREMENT]
                 first["requirements"] = pinned + [r for r in researched if r not in pinned][:5 - len(pinned)]
+            owner = str(out_home.get("id") or "")
             entry = rubric_entry(first["name"], first["requirements"], first.get("total") if isinstance(first.get("total"), int) else None,
-                                 ", ".join(cited + [f"{cue.rid}", "Quest AI", day]), kind=first["kind"], done=digest)
+                                 ", ".join(cited + [f"{cue.rid}", "Quest AI", day]), kind=first["kind"], done="" if owner else digest)
             stored = kept_rubric({"knowledge": entry})
             first["requirements"] = stored.requirements if stored else first["requirements"]     # the words as stored, so a later turn's reuse scores the same rubric
-            answer = spec_edit.apply({"edit": {"kind": "spec_edit", "target": cue.rid, "field": "knowledge", "value": with_entry(row.get("knowledge"), entry)}})
-            if answer.get("applied"):
+            held = home_row.get("knowledge") if owner else row.get("knowledge")
+            answer = spec_edit.apply({"edit": {"kind": "spec_edit", "target": owner or cue.rid, "field": "knowledge", "value": with_entry(held, entry)}})
+            if answer.get("applied") and not owner:
                 knowledge_now = with_entry(row.get("knowledge"), entry)
             rubric_state = "kept" if answer.get("applied") else ("proposed" if answer.get("proposed") else "not kept: " + str(answer.get("reason") or "refused")[:200])
     moved_by = "person" if [i for i in items if i.get("moves_parent")] and not any(doable(i) for i in items if i.get("moves_parent")) else "ai"
@@ -1210,6 +1226,59 @@ def kept_artifacts(written: Sequence[Mapping[str, Any]], knowledge_before: str, 
         elif edit.get("field"):
             out.append(f"The {edit.get('field')} field of a record, updated" + held)
     return [" ".join(a.split()).rstrip(".") + "." for a in out if a.strip()]
+
+
+HOME_PICK = ("Which of these solutions is the one whose own work makes this deliverable (its records describe making this kind of thing)? Pick none when "
+             "none of them is.")
+KIND_PROMPT = """A team's work item: {item} (for the milestone: {milestone}).
+
+Name the KIND of deliverable it is, generically, so other work of the same kind is filed with it: a plural noun phrase of 2 to 4 words (for example "video
+scripts", "option comparisons", "funnel evidence answers"). Reply with JSON only: {{"kind": "<the name>", "purpose": "<one sentence: what this kind of deliverable
+is for>"}}. Do not use em dashes."""
+NONE_FITS = "none"
+
+
+def deliverable_home(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: Callable[[str], str]) -> Optional[Dict[str, Any]]:
+    """The deliverable's own solution: the quest's records classified by the hub's placement path (the records index the solution consideration uses), the pick confirmed by Decision Check's two views among the found solutions and "none"; when none fits, a solution for this kind of deliverable is
+    created through ESOI Application. ``{"id", "row", "created"}``, or None when nothing could be classified or created."""
+    from hubofhubs.api import MajorityVote
+    from hubofhubs.api import RecordsIndex
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.solution_consideration import quest_network
+    tables = cue.tables or {}
+    solutions = dict(tables.get("solutions") or {})
+    try:
+        # The records index ranks the quest's solutions for the deliverable (no model call); the gate the consideration passes use is for scope, not filing,
+        # so the best few are offered and Decision Check's views decide.
+        found = [f for f in RecordsIndex().relevant(f"{item.get('name')}. {cue.name}", quest_network(str(cue.quest_id), tables), depth=1)["solutions"]
+                 if str(f.get("solution_id") or "") not in ("", cue.rid) and str(f.get("solution_id")) in solutions][:4]
+    except Exception as error:  # noqa: BLE001  no classification: the solution is created
+        log.warning("milestone progress: classifying the deliverable failed: %s: %s", type(error).__name__, error)
+        found = []
+    if found:
+        options = [{"id": str(f["solution_id"]), "text": f"{solutions[str(f['solution_id'])].get('name') or f.get('name')}: "
+                    + clip_line(solutions[str(f['solution_id'])].get('purpose'), 200)} for f in found] + [
+            {"id": NONE_FITS, "text": "none of these makes this kind of deliverable"}]
+        evidence = f"The deliverable: {item.get('name')} (for the milestone {cue.name}).\nThe solutions:\n" + "\n".join(f"{o['id']}: {o['text']}" for o in options)
+        binding = {"kind": "pick", "options": options, "views": [{"id": "makes-it", "instruction": HOME_PICK, "evidence": evidence},
+                                                                  {"id": "kind-of-thing", "instruction": HOME_PICK + " Read the deliverable first.", "evidence": evidence}],
+                   "max_calls": 3, "parallel": 2}
+        try:
+            pick = str(MajorityVote(plumbing=None).check(NONE_FITS, binding, decide).get("pick") or NONE_FITS)
+        except Exception:  # noqa: BLE001  the draft (none) stands
+            pick = NONE_FITS
+        if pick in solutions:
+            return {"id": pick, "row": dict(solutions[pick]), "created": False}
+    data = parse_json(decide(KIND_PROMPT.format(item=item.get("name"), milestone=cue.name)))
+    kind = " ".join(str(data.get("kind") or "").split()).strip(" .")
+    if not kind:
+        return None
+    purpose = " ".join(str(data.get("purpose") or "").split()) or f"Makes {kind}."
+    fields = {"name": kind[:1].upper() + kind[1:], "purpose": purpose}
+    answer = spec_edit.apply({"edit": {"kind": "record_add", "table": "solutions", "key": fields["name"], "fields": fields}})
+    sid = str(answer.get("target") or "")
+    if not answer.get("applied") or not sid:
+        return None
+    return {"id": sid, "row": fields, "created": bool(answer.get("created", True))}
 
 
 def with_reading_fields(metric: Mapping[str, Any]) -> Dict[str, Any]:
