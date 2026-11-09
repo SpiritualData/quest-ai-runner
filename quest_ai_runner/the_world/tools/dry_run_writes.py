@@ -40,6 +40,9 @@ ENV = "QAR_DRY_RUN_WRITES"
 #: ``real`` keeps the real deep worker in a dry run: it runs, with this process's environment (so the dry run holds in every tool process it starts:
 #: a Quest write it asks for is refused and recorded there too), to prove work the production runner would do. Unset, the worker is the stub.
 DEEP_ENV = "QAR_DRY_RUN_DEEP"
+#: A JSON-lines file every process of one dry run appends its refused tool writes to (the call and its whole arguments), so the run that started a worker
+#: can read what the worker's own tool processes would have written. Unset, nothing is appended.
+RECORD_FILE_ENV = "QAR_DRY_RUN_RECORD_FILE"
 SCRATCH_ENV = "QAR_DRY_RUN_SCRATCH"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -331,8 +334,38 @@ def tool_call(spec: Any, name: str, args: Mapping[str, Any]):
     if unbound:     # the call names no quest: the real tool would say so and the planner would find the quest, so test mode says the same instead of "blocked"
         return ToolResult(ok=False, status=ToolStatus.REFUSED, text=(f"{name}: no quest is known for this call. Call again with {unbound[0]} set to the id of the quest the "
                                                                     "request is about, taken from the quests listed in context (find_quest lists them)."))
-    RECORDER.write("tool", f"{name} {summarize(dict(args))}", tool=name)
+    RECORDER.write("tool", f"{name} {summarize(dict(args))}", tool=name, args=dict(args))      # the whole call, so a replay can judge what it would have kept
+    shared_record(name, args)
     return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"Blocked in test mode: {name} was not run and nothing was changed.")
+
+
+def shared_record(name: str, args: Mapping[str, Any]) -> None:
+    """Append one refused tool write to the dry run's shared record file (``QAR_DRY_RUN_RECORD_FILE``), when one is named. Never raises."""
+    path = os.environ.get(RECORD_FILE_ENV, "").strip()
+    if not path:
+        return
+    import json
+    try:
+        with STATE["originals"].get("open", builtins.open)(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"tool": name, "args": dict(args), "t": time.time()}, default=str) + "\n")
+    except OSError as error:
+        logging.getLogger(__name__).warning("dry run: the shared record could not be written: %s", error)
+
+
+def shared_writes(path: str) -> List[Dict[str, Any]]:
+    """The refused tool writes every process of the dry run appended to ``path``, in order ([] when there are none)."""
+    import json
+    rows = []
+    try:
+        with STATE["originals"].get("open", builtins.open)(path, encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    rows.append(json.loads(line))
+                except ValueError:
+                    continue
+    except OSError:
+        return []
+    return rows
 
 
 # --- the deep worker ----------------------------------------------------------------------------

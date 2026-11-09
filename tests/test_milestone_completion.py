@@ -67,3 +67,17 @@ def test_the_task_executor_measures_a_finished_milestone_task_and_adds_the_line_
     plain = SimpleNamespace(text="Done.", deep_results=[])
     TaskExecutor.measure_milestone_work(holder, "an ordinary task", plain)
     assert plain.text == "Done."
+
+
+def test_a_whole_kept_body_the_worker_wrote_is_measured_part_by_part():
+    registry = Registry()
+    body = "Kept by Quest AI: Overview:\nTutorials.\n\n--- Part 1 ---\nOpening line one. Call to action: go.\n\n--- Part 2 ---\nOpening line two. Call to action: try."
+    got = mc.measure_on_completion(RECORD, "DELIVERABLE:\n" + body, registry, scorer)
+    assert got["after"] == 2 and "--- Part 2 ---" in got["body"]
+
+
+def test_finished_evidence_counts_the_questions_answered_with_a_named_source():
+    record = dict(RECORD, method="evidence", total=None)
+    output = "DELIVERABLE:\nQ1. How are sign-ups counted?\nA1. By the source tag. (source: Funnel guide)\nQ2. Which videos carry it?\nA2. to be decided"
+    got = mc.measure_on_completion(record, output, Registry(), scorer)
+    assert got["status"] == "measured" and (got["after"], got["total"]) == (1, 2) and got["increment"]["kind"] == "evidence"

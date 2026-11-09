@@ -39,14 +39,25 @@ def test_the_tasks_measured_keep_is_a_read_the_value_gate_counts_and_the_judge_i
     assert prod_chat_overlay.task_read({"error": "x"}) is None
 
 
-def test_the_replayed_task_can_reach_only_the_model_providers_and_quest():
-    import os
-    import run_queued_task
-    os.environ["QUEST_BASE_URL"] = "https://quest.example"
-    try:
-        env = run_queued_task.no_outward_acts("/tmp/x")
-    finally:
-        os.environ.pop("QUEST_BASE_URL")
-    assert env["HTTPS_PROXY"] == run_queued_task.DEAD_PROXY and "quest.example" in env["NO_PROXY"] and ".anthropic.com" in env["NO_PROXY"]
-    assert env["GIT_SSH_COMMAND"] == "false" and env["GIT_CONFIG_KEY_0"] == "credential.helper" and env["GIT_CONFIG_VALUE_0"] == ""
-    assert env["RESEND_API_KEY"] == "blocked-in-replay" and env["QAR_DEEP_STRICT_MCP"] == "1" and "SSH_AUTH_SOCK" in run_queued_task.OUTWARD_UNSET
+def test_the_replayed_task_reads_the_web_but_cannot_send_post_or_push():
+    import socket
+    import run_queued_task as rq
+    assert rq.outward("api.resend.com") and rq.outward("sheets.googleapis.com") and rq.outward("discord.com") and rq.outward("github.com")
+    assert not rq.outward("example.org") and not rq.outward("api.anthropic.com") and not rq.outward("generativelanguage.googleapis.com")
+    proxy = rq.FilteringProxy()
+    with socket.create_connection(("127.0.0.1", proxy.port), timeout=5) as conn:
+        conn.sendall(b"CONNECT api.resend.com:443 HTTP/1.1\r\nHost: api.resend.com:443\r\n\r\n")
+        assert conn.recv(100).startswith(b"HTTP/1.1 403")
+    with socket.create_connection(("127.0.0.1", proxy.port), timeout=5) as conn:
+        conn.sendall(b"POST http://hooks.example/x HTTP/1.1\r\nHost: hooks.example\r\n\r\n")          # plain HTTP never passes
+        assert conn.recv(100).startswith(b"HTTP/1.1 403")
+    env = rq.no_outward_acts("/tmp/x", f"http://127.0.0.1:{proxy.port}")
+    assert env["GIT_SSH_COMMAND"] == "false" and env["GIT_CONFIG_VALUE_0"] == "" and env["RESEND_API_KEY"] == "blocked-in-replay" and env["QAR_DEEP_STRICT_MCP"] == "1"
+
+
+def test_the_workers_refused_goal_write_is_the_attempted_keep():
+    import run_queued_task as rq
+    rows = [{"tool": "create_or_update_quest_goal", "args": {"title": "Other goal", "description": "not this"}},
+            {"tool": "list_quest_goals", "args": {}},
+            {"tool": "create_or_update_quest_goal", "args": {"title": "M1 deliverables", "description": "Kept by Quest AI: the scripts"}}]
+    assert rq.attempted_keep(rows, "M1 deliverables") == "Kept by Quest AI: the scripts" and rq.attempted_keep(rows[:2], "M1 deliverables") == ""

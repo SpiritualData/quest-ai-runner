@@ -20,12 +20,14 @@ log = logging.getLogger("quest-ai-runner.milestone-completion")
 
 WORK_RECORD = "Milestone work record: "
 DELIVERABLE_LINE = "DELIVERABLE:"
-RECORD_FIELDS = ("quest_id", "milestone_id", "milestone_metric_id", "title", "item", "requirements", "before", "total", "measure_name", "metric_id")
+KEPT_MARKER = "Kept by Quest AI:"
+RECORD_FIELDS = ("quest_id", "milestone_id", "milestone_metric_id", "title", "item", "requirements", "before", "total", "measure_name", "metric_id",
+                 "method")
 
 
 def work_record_line(record: Mapping[str, Any]) -> str:
     """The one structured line a deep brief carries for its completion: the fields of ``RECORD_FIELDS`` as JSON after ``WORK_RECORD``."""
-    return WORK_RECORD + json.dumps({k: record.get(k) for k in RECORD_FIELDS}, sort_keys=True, ensure_ascii=False)
+    return WORK_RECORD + json.dumps({k: record[k] for k in RECORD_FIELDS if k in record}, sort_keys=True, ensure_ascii=False)
 
 
 def work_record_of(text: Any) -> Optional[Dict[str, Any]]:
@@ -74,26 +76,36 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
     kept_text = kept_goal_text(registry, record)
     body_now = kept_text.split(mp.OVERVIEW_HEAD, 1)[-1] if mp.OVERVIEW_HEAD in kept_text else kept_text
     overview = body_now.split("\n--- Part", 1)[0].strip() if "--- Part" in body_now else ""
+    part = part.split(KEPT_MARKER, 1)[-1].strip() if part.startswith(KEPT_MARKER) else part
     parts = mp.kept_parts(kept_text)
-    if mp.squash(part) not in mp.squash(kept_text):
+    if mp.kept_parts(part):
+        parts = mp.kept_parts(part)     # the deliverable is a whole kept body (its parts under their separators): it is the goal's text now
+    elif mp.squash(part) not in mp.squash(kept_text):
         parts = parts + [part]          # the worker did not keep it on the goal itself: code keeps it as the next part
-    scorer = mp.Scorer(decide, requirements, reference)
-    met = [p for p in parts if requirements and all(scorer(r, p) for r in requirements)]
     before = float(record.get("before") or 0)
-    after = float(len(met))
-    total = record.get("total") if isinstance(record.get("total"), int) else None
+    method = "evidence" if record.get("method") == "evidence" else "rubric"
+    if method == "evidence":
+        # Evidence counts the questions answered with a named source (structure, not the worker's say-so); the answers are the kept part.
+        questions = list((mp.questions_of(part) or {}).get("questions") or [])
+        if not questions:
+            return {"status": "no_deliverable", "line": "The finished work held no questions and answers to measure, so nothing was kept or counted."}
+        parts = [mp.render_questions(questions)]
+        after = float(sum(1 for q in questions if q.get("answer") and q.get("source")))
+        total = len(questions)
+    else:
+        scorer = mp.Scorer(decide, requirements, reference)
+        met = [p for p in parts if requirements and all(scorer(r, p) for r in requirements)]
+        after = float(len(met))
+        total = record.get("total") if isinstance(record.get("total"), int) else None
     day = (today or datetime.date.today()).isoformat()
     progress = mp.Progress(title=str(record["title"]), item=str(record.get("item") or ""), overview=overview or f"{record.get('item')}.", parts=parts,
                            measure_name=str(record.get("measure_name") or f"Units of {record.get('item')} meeting their requirements"),
-                           before=before, after=after, total=total, as_of=day, method="rubric")
+                           before=before, after=after, total=total, as_of=day, method=method)
+    increment = {"kind": "evidence" if method == "evidence" else "deliverable", "measure_id": record.get("metric_id"), "measure_name": progress.measure_name,
+                 "before": before, "after": after, "total": total, "method": method, "as_of": day, "changed": after != before}
     result = registry.invoke(mp.KEEP_TOOL, {"quest_id": record["quest_id"], "title": record["title"], "body": progress.body(),
-                                            "solution_id": record.get("milestone_id"),
-                                            "increment": {"kind": "deliverable", "measure_id": record.get("metric_id"), "measure_name": progress.measure_name,
-                                                          "before": before, "after": after, "total": total, "method": "rubric", "as_of": day,
-                                                          "changed": after != before}},
+                                            "solution_id": record.get("milestone_id"), "increment": increment},
                              ToolContext(quest_id=str(record["quest_id"])))
-    increment = {"kind": "deliverable", "measure_id": record.get("metric_id"), "measure_name": progress.measure_name, "before": before, "after": after,
-                 "total": total, "method": "rubric", "as_of": day, "changed": after != before}
     common = {"before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
               "goal_found": bool(kept_text), "milestone_metric": metric_again(registry, record)}
     if not getattr(result, "ok", False):

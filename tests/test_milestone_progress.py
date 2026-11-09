@@ -502,7 +502,7 @@ def test_long_work_queued_on_the_deep_harness_is_acknowledged_with_its_before():
     made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: {"output": "task queued", "deferred": True})
     assert made.status == "handed_off" and made.before == 0
     reply = made.reply_text()
-    assert reply.startswith("I started") and "background work" in reply and "0 now of 6 planned" in reply and "The one step only a person can do" in reply
+    assert reply.startswith("I queued") and "not done yet" in reply and "a new goal" in reply and "0 now of 6 planned" in reply and "The one step only a person can do" in reply
 
 
 def test_the_deep_brief_carries_the_work_record_the_task_executor_measures_on_completion():
@@ -512,3 +512,20 @@ def test_the_deep_brief_carries_the_work_record_the_task_executor_measures_on_co
     record = milestone_completion.work_record_of(briefs[0])
     assert made.status == "handed_off" and record["title"] == made.title and record["milestone_id"] == "sol-1" and record["before"] == 0
     assert record["requirements"] == ["Has an opening", "Ends with a call to action"] and 'line that says only "DELIVERABLE:"' in briefs[0]
+
+
+def test_evidence_work_goes_to_the_deep_harness_with_the_question_form():
+    briefs = []
+
+    def decomposing(prompt):
+        if "Break the work this milestone needs" in prompt:
+            return json.dumps({"items": [{"name": "Evidence on sign-ups", "kind": "evidence", "actor": "ai", "outward": False, "moves_parent": False,
+                                          "inputs": ["sol-1"], "total": 1, "requirements": ["Each answer names its source"]}]})
+        if "can an AI do it right now" in prompt:
+            return json.dumps({"verdicts": [{"n": 1, "ai_can": True}]})
+        if "What is this milestone's done test made of" in prompt:
+            return json.dumps({"pick": "others"})
+        return decide(prompt)
+    made = milestone_progress.make_progress(cue(), Registry(), decomposing, deep=lambda g, b: briefs.append(b) or {"output": "queued", "deferred": True})
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    assert made.status == "handed_off" and 'written as lines "Q1.' in briefs[0] and milestone_completion.work_record_of(briefs[0])["method"] == "evidence"

@@ -379,12 +379,18 @@ What the turn read (each source named):
 
 Build it out with depth: research what it needs (the product's documents and outside sources, each named), write each part, and check each against the
 rubric before keeping it. A fact (what the product does, a figure, a link, a name) only as a source says it, with the source; a proposal labelled as one;
-no placeholder and no blank slot. End your output with a line that says only "DELIVERABLE:", then the deliverable itself, exactly as kept. {no_em_dash}
+no placeholder and no blank slot. Always end your output with a line that says only "DELIVERABLE:", then the deliverable itself, exactly as you kept it or
+tried to keep it, even when keeping it failed: code measures it from there. {no_em_dash}
 {record}"""
 
 
+EVIDENCE_FORM = """The deliverable is evidence for a decision: the questions the decision needs, each answered from a source you read (the records, the
+product's documents, the web), written as lines "Q1. <question>" then "A1. <answer> (source: <what it rests on, by name>)"; "A1. to be decided" only for a
+fact no source gives. Research each open question before leaving it open."""
+
+
 def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have: Sequence[str], title: str, records: str, grounding: str,
-                      record: Optional[Mapping[str, Any]] = None) -> Tuple[str, str]:
+                      record: Optional[Mapping[str, Any]] = None, form: str = "") -> Tuple[str, str]:
     """``(goal, brief)`` for the deep harness: the work item as the goal, and the brief from the deliverable's solution records, its rubric, what is kept
     and where it is kept. ``record`` (the quest, milestone, goal title, rubric and before) becomes the code-written work record line the task executor
     reads when the work finishes, to measure and keep it (``milestone_completion``)."""
@@ -393,4 +399,6 @@ def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have
                               have="\n".join(f"- {clip_line(p)}" for p in have) or "(nothing yet)", title=title, records=records,
                               grounding=str(grounding or "")[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH,
                               record=work_record_line(record) if record else "")
+    if form == "evidence":
+        brief = EVIDENCE_FORM + "\n\n" + brief
     return goal, brief

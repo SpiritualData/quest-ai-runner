@@ -43,6 +43,7 @@ class Progress:
     method: str = ""                                           # how the increment was measured: rubric, evidence or read
     kept_artifacts: List[str] = field(default_factory=list)    # each record write this turn made or proposed besides the goal, said for the reader
     handed_off: Optional[Dict[str, Any]] = None                 # the deliverable's work handed to the deep harness: its goal, and whether it was queued
+    goal_exists: bool = False                                   # the milestone's keyed goal was already there before this turn (it is updated in place)
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
@@ -83,11 +84,14 @@ class Progress:
         Work handed to the deep harness as background work is acknowledged instead: what is being made, where it will be kept, and its before."""
         if self.status == "handed_off":
             shown = lambda v: str(int(v)) if float(v).is_integer() else f"{v:g}"     # noqa: E731
-            lines = [f"I started {self.item[:1].lower() + self.item[1:] if self.item[:2] != self.item[:2].upper() else self.item} as background work: the deep agent "
-                     f"builds it to its rubric and keeps it on the goal '{self.title}'."]
+            where = (f"the goal '{self.title}', which is already there, so it is updated in place (no second goal)" if self.goal_exists
+                     else f"a new goal '{self.title}'")
+            lines = [f"I queued {self.item[:1].lower() + self.item[1:] if self.item[:2] != self.item[:2].upper() else self.item} as background work, not done yet: "
+                     f"the deep agent builds it to its rubric and keeps it on {where}."]
             if self.before is not None:
                 lines.append(f"{self.measure_name}: {shown(self.before)} now" + (f" of {self.total} planned" if self.total else "")
-                             + f" (counted: units in which a separate check found every rubric item; {self.as_of}); the count is taken again when the work is kept.")
+                             + f" (counted: units in which a separate check found every rubric item; {self.as_of}). When the work finishes, code counts it again"
+                             " and keeps the before and after on that goal.")
             if self.kept_artifacts:
                 lines.append("Also kept on the milestone's record this turn:\n" + "\n".join(f"- {a}" for a in self.kept_artifacts))
             if self.ask:

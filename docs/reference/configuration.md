@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-240 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+241 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -97,6 +97,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_WORKING_DIR` |  | `the_body/configuration/config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_DRY_RUN_DEEP` | Set to real to keep the real deep worker in a dry run (QAR_DRY_RUN_WRITES=1): it runs with the same environment, so every tool process it starts is in the dry run too and a Quest write it asks for is refused and recorded. Used to replay a queued task the way the lane would. Unset, the worker is the stub. | `the_world/tools/dry_run_writes.py` | - |
+| `QAR_DRY_RUN_RECORD_FILE` | A JSON-lines file every process of one dry run appends its refused tool writes to (the tool and its whole arguments), so a replay that started a deep worker can read what the worker's own tool processes would have written. Unset, nothing is appended. | `the_world/tools/dry_run_writes.py` | - |
 | `QAR_DRY_RUN_SCRATCH` | Folder a dry run (QAR_DRY_RUN_WRITES=1) redirects file writes into; default a new folder under the system temp folder. | `the_world/tools/dry_run_writes.py` | - |
 | `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (the_world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `the_world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md`, `docs/how-to/tools.md` |
 | `QAR_EMBEDDER_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py`, `the_body/internal_context/card_store/qdrant_embedders.py` | `docs/how-to/context-card-stores.md` |

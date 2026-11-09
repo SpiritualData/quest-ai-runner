@@ -1,43 +1,124 @@
 """Run ONE queued task the way the lane's production runner would, with every write confined: the lane's own configuration builds the runner, the task
 executor runs the task (the brain, then the deep harness the lane selected), and a dry run (``QAR_DRY_RUN_WRITES``) refuses and records every write,
 with the real deep worker kept (``QAR_DRY_RUN_DEEP=real``): its own tool processes inherit the dry run, so a Quest write it asks for is refused and
-recorded there too, and it works in a scratch folder.
+recorded there too (all of them in one shared record file), and it works in a scratch folder (no goal-folder mapping).
+
+Outward acts outside Quest are closed: every request leaves through a local proxy that refuses the hosts that send, post or publish (mail, chat, social,
+code hosts, spreadsheets and documents) and lets reading through (web pages, search); git cannot push, the mail key is one that is refused, and the worker
+has only the MCP servers the runner passes.
 
 Used by the overlay replay (``impls/prod_chat_overlay.py``) after a chat turn queued background work: the turn's recorded task is run here, and what it
-made (the run's report, a milestone deliverable's measurement and kept body, the refused writes) is judged with the turn.
+made is judged with the turn. A milestone deliverable the worker tried to keep (a refused goal write) counts as the attempted keep: it is measured the
+same way the completion step measures a kept one.
 
     python run_queued_task.py --config LANE_TOML [--env-file LANE_ENV] --task TASK_JSON_FILE
 
-Prints one line ``@@TASK@@ {json}`` with ``{status, result, measured, writes, model_calls, error}``.
+Prints one line ``@@TASK@@ {json}`` with ``{status, result, measured, writes, attempted_keep, model_calls, error}``.
 """
 import argparse
 import json
 import os
+import select
+import socket
 import sys
 import tempfile
+import threading
 import traceback
 
-
-#: Hosts the replay may reach: the model providers, the embedding service, this machine, and Quest (whose writes the dry run refuses). Every other
-#: host goes through a proxy that does not exist, so no script the worker runs can send mail, post to a chat or a social account, push to a git host or
-#: write a spreadsheet. The worker's own web search runs at the model provider; fetching an arbitrary page is refused here (a replay limit).
-REACHABLE = ("localhost", "127.0.0.1", "::1", ".anthropic.com", "anthropic.com", ".claude.ai", "claude.ai", "generativelanguage.googleapis.com",
-             "api.voyageai.com")
-DEAD_PROXY = "http://127.0.0.1:9"
+#: Hosts (and their subdomains) that send, post or publish: no request reaches them from a replay. Everything else may be read.
+OUTWARD_HOSTS = ("resend.com", "sendgrid.net", "sendgrid.com", "mailgun.net", "postmarkapp.com", "smtp.gmail.com", "gmail.googleapis.com",
+                 "sheets.googleapis.com", "docs.googleapis.com", "drive.googleapis.com", "chat.googleapis.com", "calendar.googleapis.com",
+                 "slides.googleapis.com", "script.googleapis.com", "hooks.slack.com", "slack.com", "discord.com", "discordapp.com", "api.github.com",
+                 "github.com", "gitlab.com", "bitbucket.org", "api.twitter.com", "api.x.com", "graph.facebook.com", "api.linkedin.com",
+                 "api.notion.com", "api.trello.com", "api.telegram.org", "api.twilio.com", "api.buffer.com", "youtube.googleapis.com",
+                 "www.googleapis.com", "oauth2.googleapis.com", "api.tactiq.io")
 #: Credentials an outward act would use, taken out of the replay's environment (the worker inherits it).
 OUTWARD_UNSET = ("SSH_AUTH_SOCK", "GH_TOKEN", "GITHUB_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "SLACK_BOT_TOKEN", "DISCORD_TOKEN", "NOTION_API_KEY")
+#: Tools a worker keeps a goal's text with; a refused call of one is the attempted keep.
+GOAL_WRITE_TOOLS = ("keep_milestone_deliverable", "create_or_update_quest_goal", "update_goal", "update_quest_goal", "create_goal", "create_quest_goal")
+GOAL_TEXT_ARGS = ("body", "description", "text", "notes")
 
 
-def no_outward_acts(scratch: str) -> dict:
-    """The environment that keeps the replayed task from acting outside Quest: every host but the reachable ones behind a dead proxy, git unable to push
-    (no SSH, no credential helper, no gh login), the mail key replaced by one that is refused, and the worker limited to the MCP servers the runner
-    passes (none of the person's own connectors)."""
-    quest_host = (os.environ.get("QUEST_BASE_URL") or "").split("://", 1)[-1].split("/", 1)[0]
-    reachable = ",".join(REACHABLE + ((quest_host,) if quest_host else ()))
-    return {"HTTPS_PROXY": DEAD_PROXY, "HTTP_PROXY": DEAD_PROXY, "https_proxy": DEAD_PROXY, "http_proxy": DEAD_PROXY, "ALL_PROXY": DEAD_PROXY,
-            "NO_PROXY": reachable, "no_proxy": reachable, "GIT_SSH_COMMAND": "false", "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "false",
+def outward(host: str) -> bool:
+    """True when ``host`` is one of ``OUTWARD_HOSTS`` or a subdomain of one."""
+    host = host.lower().strip(".")
+    return any(host == h or host.endswith("." + h) for h in OUTWARD_HOSTS)
+
+
+class FilteringProxy:
+    """A local HTTPS proxy (CONNECT only) that refuses the outward hosts and tunnels the rest, so reading works and sending does not."""
+
+    def __init__(self) -> None:
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server.bind(("127.0.0.1", 0))
+        self.server.listen(64)
+        self.port = self.server.getsockname()[1]
+        self.refused = []
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self) -> None:
+        while True:
+            client, _ = self.server.accept()
+            threading.Thread(target=self.handle, args=(client,), daemon=True).start()
+
+    def handle(self, client: socket.socket) -> None:
+        try:
+            head = b""
+            while b"\r\n\r\n" not in head and len(head) < 65536:
+                chunk = client.recv(4096)
+                if not chunk:
+                    return
+                head += chunk
+            line = head.split(b"\r\n", 1)[0].decode("latin-1")
+            method, target = (line.split(" ") + ["", ""])[:2]
+            host, _, port = target.rpartition(":") if method == "CONNECT" else ("", "", "")
+            if method != "CONNECT" or not host or outward(host):
+                self.refused.append(f"{method} {target}")
+                client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+                return
+            upstream = socket.create_connection((host, int(port or 443)), timeout=30)
+            client.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            pair = [client, upstream]
+            while True:
+                ready, _, _ = select.select(pair, [], [], 300)
+                if not ready:
+                    return
+                for sock in ready:
+                    data = sock.recv(65536)
+                    if not data:
+                        return
+                    (upstream if sock is client else client).sendall(data)
+        except OSError:
+            return
+        finally:
+            client.close()
+
+
+def no_outward_acts(scratch: str, proxy_url: str) -> dict:
+    """The environment that keeps the replayed task from acting outside Quest: every request through the filtering proxy (the model providers and this
+    machine directly), git unable to push (no SSH, no credential helper, no gh login), the mail key replaced by one that is refused, and the worker limited
+    to the MCP servers the runner passes (none of the person's own connectors)."""
+    direct = "localhost,127.0.0.1,::1"
+    return {"HTTPS_PROXY": proxy_url, "HTTP_PROXY": proxy_url, "https_proxy": proxy_url, "http_proxy": proxy_url, "ALL_PROXY": proxy_url,
+            "NO_PROXY": direct, "no_proxy": direct, "GIT_SSH_COMMAND": "false", "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "false",
             "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "credential.helper", "GIT_CONFIG_VALUE_0": "", "GH_CONFIG_DIR": os.path.join(scratch, "gh"),
             "RESEND_API_KEY": "blocked-in-replay", "QAR_DEEP_STRICT_MCP": "1"}
+
+
+def attempted_keep(rows, title: str) -> str:
+    """The text of the last refused goal write that names the milestone's keyed goal (or of the last one when none names a title), "" when none."""
+    for row in reversed(rows or []):
+        args = row.get("args") or {}
+        if row.get("tool") not in GOAL_WRITE_TOOLS:
+            continue
+        named = str(args.get("title") or args.get("name") or "").strip()
+        if named and title and named != title.strip():
+            continue
+        text = next((str(args[k]) for k in GOAL_TEXT_ARGS if str(args.get(k) or "").strip()), "")
+        if text:
+            return text
+    return ""
 
 
 def main(argv=None) -> int:
@@ -47,7 +128,9 @@ def main(argv=None) -> int:
     parser.add_argument("--env-file", default="", help="the lane's KEY=VALUE file, loaded the way the lane loads it")
     args = parser.parse_args(argv)
     scratch = tempfile.mkdtemp(prefix="qar-task-replay-")
-    out = {"status": None, "result": "", "measured": None, "writes": [], "model_calls": 0, "error": None}
+    record_file = os.path.join(scratch, "refused_writes.jsonl")
+    out = {"status": None, "result": "", "measured": None, "writes": [], "attempted_keep": "", "refused_hosts": [], "model_calls": 0, "error": None}
+    proxy = FilteringProxy()
     try:
         with open(args.task, encoding="utf-8") as handle:
             task = json.load(handle)
@@ -56,26 +139,41 @@ def main(argv=None) -> int:
             load_env_file(args.env_file)
         # After the lane's own file, so the confinement always wins over anything it sets.
         os.environ.update({"QAR_DRY_RUN_WRITES": "1", "QAR_DRY_RUN_DEEP": "real", "QAR_DRY_RUN_SCRATCH": scratch, "QAR_DEEP_WORKING_DIR": scratch,
-                           "QAR_STATE_PATH": os.path.join(scratch, "state.json")})
-        os.environ.update(no_outward_acts(scratch))
+                           "QAR_STATE_PATH": os.path.join(scratch, "state.json"), "QAR_DRY_RUN_RECORD_FILE": record_file})
+        os.environ.update(no_outward_acts(scratch, f"http://127.0.0.1:{proxy.port}"))
         for name in OUTWARD_UNSET:
             os.environ.pop(name, None)
+        os.chdir(scratch)
         from quest_ai_runner import load_config
         from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
         from quest_ai_runner.the_world.tools import dry_run_writes
         dry_run_writes.install()
-        poller = Poller(load_config(args.config), state_path=os.environ["QAR_STATE_PATH"])
+        cfg = load_config(args.config)
+        cfg.quest_folder_map = None          # the worker works in the scratch folder, never in a goal's mapped folder
+        poller = Poller(cfg, state_path=os.environ["QAR_STATE_PATH"])
         executor = poller.task_executor()
-        # The worker keeps the Quest key: its Quest tools (the runner's tool processes) need it to read, and they run in the same dry run, so every Quest
-        # write they make is refused and recorded. Without it the worker had no Quest tools at all, which production never lacks (measured 2026-11-08).
-        # A request the worker would send to Quest by hand, outside its tools, is the one path this replay does not confine.
         outcome = executor.execute(task)
         snap = dry_run_writes.RECORDER.snapshot()
-        out.update(status=outcome.status, result=outcome.result, measured=getattr(executor, "milestone_measured", None),
-                   writes=[{k: w.get(k) for k in ("kind", "what", "tool")} for w in snap["writes"] if not w.get("internal")], model_calls=snap["model_calls"])
+        measured = getattr(executor, "milestone_measured", None)
+        task_text = str(task.get("text") or task.get("title") or task.get("description") or "")
+        record = milestone_completion.work_record_of(task_text)
+        shared = dry_run_writes.shared_writes(record_file)
+        tried = attempted_keep(shared, (record or {}).get("title", ""))
+        out["attempted_keep"] = tried
+        if record and tried and (not measured or measured.get("status") == "no_deliverable" or not float(measured.get("after") or 0) > float(record.get("before") or 0)):
+            # The worker's refused keep is the attempted keep: measured the same way as a kept deliverable (the scorer, the goal, the metric again).
+            again = milestone_completion.measure_on_completion(record, milestone_completion.DELIVERABLE_LINE + "\n" + tried, executor._orch.tools,
+                                                               executor._orch.cheap_decision, reference=task_text)
+            if not measured or float(again.get("after") or 0) >= float(measured.get("after") or 0):
+                measured = dict(again, from_attempted_keep=True)
+        out.update(status=outcome.status, result=outcome.result, measured=measured, model_calls=snap["model_calls"],
+                   writes=[{k: w.get(k) for k in ("kind", "what", "tool")} for w in snap["writes"] if not w.get("internal")]
+                   + [{"kind": "tool (worker)", "what": f"{r.get('tool')} {str(r.get('args'))[:240]}", "tool": r.get("tool")} for r in shared])
     except Exception as error:  # noqa: BLE001  the replay reports what failed; the judge sees it
         out["error"] = f"{type(error).__name__}: {error}"
         traceback.print_exc(file=sys.stderr)
+    out["refused_hosts"] = list(proxy.refused)
     print("@@TASK@@ " + json.dumps(out, default=str, ensure_ascii=False))
     return 0
 

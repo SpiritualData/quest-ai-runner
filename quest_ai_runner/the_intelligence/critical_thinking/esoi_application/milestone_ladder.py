@@ -181,7 +181,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                  "sources": [cue.source] if cue.source else []}
     decision = MajorityVote(plumbing=None)
     composition = CriticalThinkingComposition(None, spec_edit, None, None, decision, RecordFieldUpkeep(esoi=spec_edit, decision=decision))
-    out = Progress(title=title, metric_name=metric_name,
+    out = Progress(title=title, metric_name=metric_name, goal_exists=kept_goal is not None,
                    metric_before=cue.current_text() if cue.reading else cue.value, as_of=day, rubric_state=rubric_state)
     source = cue.source
     def unreadable(mid: str) -> Mapping[str, Any]:
@@ -323,6 +323,33 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             out.overview = f"{out.metric_name or cue.name}, read from its source because the record was behind it."
             return {"artifact": {"value": reading.get("value")}, "evidence_ref": title}
         gather_research(item)
+        if increment.get("method") == "evidence" and deep is not None:
+            # Evidence is research work too: the deep harness answers the questions (its own reads and web research, each answer with its source).
+            requirements = [str(r) for r in increment.get("requirements") or []]
+            before = increment.get("before")
+            record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title,
+                      "item": item.get("name"), "requirements": requirements, "method": "evidence",
+                      "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": None,
+                      "measure_name": f"Questions for {item.get('name')} answered with a source", "metric_id": increment.get("measure_id")}
+            goal, brief = deliverable_brief(item, requirements, [], title, solution_records(), shown(), record=record, form="evidence")
+            got = dict(deep(goal, brief) or {})
+            out.handed_off = {"goal": goal, "queued": bool(got.get("deferred")), "error": str(got.get("error") or "")}
+            if got.get("deferred") or not str(got.get("output") or "").strip():
+                out.overview = f"{item.get('name')}."
+                return {"artifact": None, "evidence_ref": title}
+            out.handed_off = None
+            from .milestone_completion import deliverable_of
+            found = questions_of(deliverable_of(got.get("output")) or str(got.get("output") or "")) or {}
+            questions = list(found.get("questions") or [])
+            rendered = render_questions(questions) if questions else ""
+            if rendered:
+                checked, dropped = supported_sentences(rendered, sources_text() + "\n" + str(got.get("output") or ""), decide, keep_line_starts=True)
+                out.unsupported += dropped
+                questions = (questions_of(checked) or {}).get("questions") or questions
+                rendered = render_questions(questions)
+            out.parts = [rendered] if rendered else []
+            out.overview = f"The questions the decision needs, each answered from a cited source; the rest are {TO_BE_DECIDED}."
+            return {"artifact": {"questions": questions} if questions else None, "evidence_ref": title}
         if increment.get("method") == "evidence":
             return gather_evidence(item, increment, kept)
         total = item.get("total") if isinstance(item.get("total"), int) else None
