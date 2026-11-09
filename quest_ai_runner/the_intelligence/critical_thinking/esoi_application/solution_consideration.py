@@ -129,7 +129,8 @@ def render(briefs: Mapping[str, Any], considered: Mapping[str, Any]) -> str:
 
 def consider(request: str, root: Any, ask: Callable[[str], str], found: Optional[List[Mapping[str, Any]]] = None,
              own_passes: Optional[Mapping[str, Callable[..., Mapping[str, Any]]]] = None,
-             on_finding: Optional[Callable[[Mapping[str, Any], Mapping[str, Any]], Any]] = None) -> Dict[str, Any]:
+             on_finding: Optional[Callable[[Mapping[str, Any], Mapping[str, Any]], Any]] = None,
+             limits: Optional[Mapping[str, int]] = None) -> Dict[str, Any]:
     """The hub's flow for one request over the records at ``root``: relevant solutions (or ``found``), their briefs, their passes.
     ``on_finding(finding, brief)`` is called for each relevant solution as soon as its own pass returns, before the parent passes."""
     from hubofhubs.api import NetworkPasses, RecordsIndex, briefs, network_of
@@ -140,7 +141,8 @@ def consider(request: str, root: Any, ask: Callable[[str], str], found: Optional
     prepared = briefs(network_of(records), solutions, request)
     by_id = {b["solution_id"]: b for b in prepared.get("solutions") or []}
     hook = (lambda finding: on_finding(finding, by_id.get(finding["solution_id"], {}))) if on_finding is not None else None
-    return {"briefs": prepared, "considered": dict(NetworkPasses(None).consider(request, prepared, own_passes=own_passes, ask=ask, on_finding=hook))}
+    return {"briefs": prepared, "considered": dict(NetworkPasses(None).consider(request, prepared, own_passes=own_passes, ask=ask, on_finding=hook,
+                                                                                  limits=limits))}
 
 
 def brief_block(request: str, working_dir: Optional[str], provider: Any, status: Optional[Callable[[str], None]] = None,
@@ -258,23 +260,40 @@ def write_cards(store: Any, got: Mapping[str, Any]) -> List[str]:
     return written
 
 
+class OutOfTime(RuntimeError):
+    """The chat turn's consideration budget ran out before this model call."""
+
+
 def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional[threading.Thread]:
-    """A chat turn that touches ESOI solutions: each solution gets its own consideration in a background thread started after the
-    acknowledgement, in parallel with context assembly and the planner. Each relevant solution's card (its generated prompt and its own
-    pass's finding) is written the moment its pass returns, before the parent passes, and its id is added to the turn's
-    ``priority_card_ids`` list, so whatever reads the turn's cards after that (assembly, a mid-turn card read) puts it first. The turn never
-    waits for it. A milestone turn is skipped (its own step runs ``after_milestone``). Returns the thread (for tests), never raises."""
+    """A chat turn that touches ESOI solutions, in a background thread started after the acknowledgement, in parallel with context assembly
+    and the planner; the turn never waits for it. Cheap by structure:
+
+    * **Gate**: the records index (no model call) names the solutions; only those at or above the gate's score (the hub's
+      ``DEFAULT_MIN_SCORE``, fixed from its relevance cases, or ``solution_consideration_min_score``) get a pass; none, and nothing runs.
+    * **Cap**: one pass per selected solution, at most one parent pass, no dependent passes.
+    * **Budget**: ``solution_consideration_budget_seconds`` from the start; a model call after it is not made and a card after it is not
+      added; what was left out is logged and recorded on the turn's meta (``solution_consideration``), never hidden.
+
+    Each selected solution's card (its generated prompt and its own pass's finding) is written as its pass returns and named in
+    ``priority_card_ids``. ``solution_consideration_mode`` separates the costs for measuring: ``full``; ``calls_only`` (the passes run, no
+    card is written or put first); ``cards_only`` (the cards, from the records alone, are written and put first, no model call). A milestone
+    turn is skipped (its own step runs ``after_milestone``). Returns the thread (for tests), never raises."""
     try:
         if ctx_meta is None or getattr(rs, "cue_resolved", None) is not None or not getattr(rs, "message_is_user_turn", True):
             return None
         from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
-        if not core_settings().solution_consideration_in_chat:
+        settings = core_settings()
+        if not settings.solution_consideration_in_chat:
             return None
+        from hubofhubs.api import DEFAULT_MIN_SCORE, RecordsIndex, selected
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
+        mode = settings.solution_consideration_mode
+        budget = float(settings.solution_consideration_budget_seconds)
+        min_score = float(settings.solution_consideration_min_score or DEFAULT_MIN_SCORE)
         store = card_writer(getattr(orch, "context_assembler", None))
-        ask = ask_for(getattr(orch, "provider", None))
-        if store is None or ask is None:
+        model = ask_for(getattr(orch, "provider", None))
+        if store is None or (model is None and mode != "cards_only"):
             return None
         priority = ctx_meta.get("priority_card_ids")
         if not isinstance(priority, list):
@@ -284,9 +303,23 @@ def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional
         quest_id = str(getattr(rs, "quest_id", "") or "")
         tools = getattr(orch, "tools", None)
         request = str(getattr(rs, "goal_condition", "") or getattr(rs, "user_message", ""))
+        began = time.monotonic()
+        tally = {"late_cards": 0, "calls_refused": 0}
 
-        def landed(finding: Mapping[str, Any], brief: Mapping[str, Any]) -> None:
-            if not brief:
+        def in_time() -> bool:
+            return time.monotonic() - began <= budget
+
+        def ask(prompt: str) -> str:
+            if not in_time():
+                tally["calls_refused"] += 1
+                raise OutOfTime(f"the {budget:g} s budget ran out")
+            return model(prompt)
+
+        def put_first(finding: Mapping[str, Any], brief: Mapping[str, Any]) -> None:
+            if not brief or mode == "calls_only":
+                return
+            if not in_time():
+                tally["late_cards"] += 1
                 return
             card = solution_card(brief, finding)
             if store.write_card(card["id"], card):
@@ -295,7 +328,6 @@ def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional
                         priority.append(card["id"])
 
         def run() -> None:
-            began = time.monotonic()
             try:
                 root: Any = slice_root(folder)
                 if root is None and quest_id and tools is not None:
@@ -305,15 +337,27 @@ def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional
                 if root is None:
                     ctx_meta["solution_consideration"] = {"status": "no records"}
                     return
-                if root is not None:
-                    got = consider(request, root, ask, on_finding=landed)
-                    ctx_meta["solution_consideration"] = {"status": "done", "cards": list(priority), "seconds": round(time.monotonic() - began, 1)}
-                    log.info("Solution consideration: %d solution card(s) for %s in %.1fs", len((got.get("briefs") or {}).get("solutions") or []),
-                             getattr(root, "root", root), time.monotonic() - began)
-                    findings = {f["solution_id"]: f for f in (got.get("considered") or {}).get("findings") or []}
-                    for brief in (got.get("briefs") or {}).get("solutions") or []:      # the cards again, now with the scopes above judged
-                        card = solution_card(brief, findings.get(brief["solution_id"], {}), got.get("considered") or {})
-                        store.write_card(card["id"], card)
+                found = RecordsIndex().relevant(request, root if hasattr(root, "classify") else str(root), depth=1)["solutions"]
+                chosen = [{**f, "dependents": {}} for f in selected(found, min_score)]      # no dependent passes in a chat turn
+                if not chosen:
+                    ctx_meta["solution_consideration"] = {"status": "gated", "top_score": max((f.get("score") or 0 for f in found), default=0),
+                                                          "min_score": min_score}
+                    log.info("Solution consideration: gated, no solution at or above %g (top %g)", min_score,
+                             ctx_meta["solution_consideration"]["top_score"])
+                    return
+                if mode == "cards_only":
+                    from hubofhubs.api import briefs, network_of
+                    prepared = briefs(network_of(root if hasattr(root, "classify") else str(root)), chosen, request)
+                    for brief in prepared.get("solutions") or []:
+                        put_first({}, brief)
+                else:
+                    consider(request, root, ask, chosen, on_finding=put_first, limits={"depth": 1, "calls": len(chosen) + 1})
+                ctx_meta["solution_consideration"] = {"status": "done", "mode": mode, "solutions": [f["solution_id"] for f in chosen],
+                                                      "cards": [c for c in priority if c.startswith("solution-")], **tally,
+                                                      "seconds": round(time.monotonic() - began, 1)}
+                log.info("Solution consideration: %s, %d solution(s) at or above %g, %d card(s) put first, %d late card(s), %d call(s) past the "
+                         "%g s budget, %.1fs", mode, len(chosen), min_score, len(ctx_meta["solution_consideration"]["cards"]),
+                         tally["late_cards"], tally["calls_refused"], budget, time.monotonic() - began)
             except Exception as error:      # noqa: BLE001  never fails the turn, never silent either
                 failed(ctx_meta, error)
         thread = threading.Thread(target=run, name="solution-consideration", daemon=True)
