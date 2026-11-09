@@ -108,6 +108,11 @@ def ship_overlay(meter_say=print):
         (stage / "hub").mkdir()
         pack = subprocess.run(["tar", "-C", str(hub), "--exclude=__pycache__", "--exclude=tests", "-cf", "-", "hubofhubs"], capture_output=True, check=True).stdout
         subprocess.run(["tar", "-C", str(stage / "hub"), "-xf", "-"], input=pack, check=True)
+    library = Path(os.environ.get("QAR_OVERLAY_ESOI_CHECKOUT") or QAR_ROOT.parent / "evolvable-structure") / "implementations" / "python"
+    if (library / "esoi").is_dir():          # the esoi library the hub and this package build on goes too: the deployed copy may lack what they now call
+        (stage / "esoi").mkdir()
+        pack = subprocess.run(["tar", "-C", str(library), "--exclude=__pycache__", "--exclude=tests", "-cf", "-", "esoi"], capture_output=True, check=True).stdout
+        subprocess.run(["tar", "-C", str(stage / "esoi"), "-xf", "-"], input=pack, check=True)
     model_layer = os.environ.get("QAR_OVERLAY_CONCEPTAI_CHECKOUT")       # optional: the model-calling library checkout the release will pin, measured with the rest
     if model_layer and (Path(model_layer) / "conceptai").is_dir():
         (stage / "conceptai").mkdir()
@@ -122,7 +127,8 @@ def ship_overlay(meter_say=print):
     if done.returncode:
         raise RuntimeError(f"overlay could not be shipped: {done.stderr.decode()[-300:]}")
     meter_say(f"chat_quality: overlay shipped: {len(files)} backend file(s) {files}, the quest_ai_runner package" + (" and the hubofhubs package" if (hub / "hubofhubs").is_dir() else "")
-              + (" and the conceptai package" if model_layer and (Path(model_layer) / "conceptai").is_dir() else ""))
+              + (" and the conceptai package" if model_layer and (Path(model_layer) / "conceptai").is_dir() else "")
+              + (" and the esoi package" if (library / "esoi").is_dir() else ""))
     return files
 
 

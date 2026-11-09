@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 log = logging.getLogger("quest-ai-runner.solution-consideration")
@@ -198,6 +199,21 @@ def after_milestone(made: Any, cue: Any, request: str, provider: Any, seconds: f
 CARD_OWNER = "solution-consideration"
 CARD_CHARS = 6000
 CARD_LOCK = threading.Lock()
+FAILURES = {"count": 0, "said": False}      # chat-turn considerations that failed in this process; the first is said as a warning
+
+
+def failed(ctx_meta: Dict[str, Any], error: BaseException) -> None:
+    """A consideration that failed is never silent: the turn's meta says so (``solution_consideration``), the process says it once as a
+    warning (a missing library or records cannot fail quietly on every turn) and counts every failure after that."""
+    with CARD_LOCK:
+        FAILURES["count"] += 1
+        first = not FAILURES["said"]
+        FAILURES["said"] = True
+    ctx_meta["solution_consideration"] = {"status": "failed", "error": f"{type(error).__name__}: {error}"[:300], "failures_in_process": FAILURES["count"]}
+    if first:
+        log.warning("Solution consideration failed and will be counted on every turn after this one: %s: %s", type(error).__name__, error, exc_info=error)
+    else:
+        log.info("Solution consideration failed (%d in this process): %s: %s", FAILURES["count"], type(error).__name__, error)
 
 
 def solution_card(brief: Mapping[str, Any], finding: Mapping[str, Any], considered: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
@@ -279,20 +295,27 @@ def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional
                         priority.append(card["id"])
 
         def run() -> None:
+            began = time.monotonic()
             try:
                 root: Any = slice_root(folder)
                 if root is None and quest_id and tools is not None:
                     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import read_through
                     tables, _ = read_through(tools, quest_id)       # the quest's own records, through the backend API
                     root = quest_network(quest_id, tables) if tables else None
+                if root is None:
+                    ctx_meta["solution_consideration"] = {"status": "no records"}
+                    return
                 if root is not None:
                     got = consider(request, root, ask, on_finding=landed)
+                    ctx_meta["solution_consideration"] = {"status": "done", "cards": list(priority), "seconds": round(time.monotonic() - began, 1)}
+                    log.info("Solution consideration: %d solution card(s) for %s in %.1fs", len((got.get("briefs") or {}).get("solutions") or []),
+                             getattr(root, "root", root), time.monotonic() - began)
                     findings = {f["solution_id"]: f for f in (got.get("considered") or {}).get("findings") or []}
                     for brief in (got.get("briefs") or {}).get("solutions") or []:      # the cards again, now with the scopes above judged
                         card = solution_card(brief, findings.get(brief["solution_id"], {}), got.get("considered") or {})
                         store.write_card(card["id"], card)
-            except Exception:      # noqa: BLE001
-                log.exception("chat-turn solution consideration failed")
+            except Exception as error:      # noqa: BLE001  never fails the turn, never silent either
+                failed(ctx_meta, error)
         thread = threading.Thread(target=run, name="solution-consideration", daemon=True)
         thread.start()
         return thread

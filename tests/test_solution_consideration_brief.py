@@ -122,3 +122,22 @@ def test_the_off_switch_turns_chat_consideration_off(monkeypatch):
                         lambda: core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "0"}))
     rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
     assert solution_consideration.for_turn(Orch(Store(), Scripted()), rs, {}) is None
+
+
+def test_a_failing_consideration_is_said_once_and_recorded_on_every_turn(monkeypatch, caplog):
+    import logging
+    from types import SimpleNamespace
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    monkeypatch.setattr(solution_consideration, "FAILURES", {"count": 0, "said": False})
+
+    def broken(*args, **kwargs):
+        raise ImportError("no solution consideration in this esoi")
+    monkeypatch.setattr(solution_consideration, "consider", broken)
+    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
+    metas = [{}, {}]
+    with caplog.at_level(logging.INFO, logger="quest-ai-runner.solution-consideration"):
+        for meta in metas:
+            solution_consideration.for_turn(Orch(Store(), Scripted()), rs, meta).join(10)
+    assert [m["solution_consideration"]["status"] for m in metas] == ["failed", "failed"]
+    assert metas[1]["solution_consideration"]["failures_in_process"] == 2
+    assert sum(1 for r in caplog.records if r.levelname == "WARNING" and "Solution consideration failed" in r.getMessage()) == 1
