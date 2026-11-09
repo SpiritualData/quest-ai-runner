@@ -18,6 +18,28 @@ import tempfile
 import traceback
 
 
+#: Hosts the replay may reach: the model providers, the embedding service, this machine, and Quest (whose writes the dry run refuses). Every other
+#: host goes through a proxy that does not exist, so no script the worker runs can send mail, post to a chat or a social account, push to a git host or
+#: write a spreadsheet. The worker's own web search runs at the model provider; fetching an arbitrary page is refused here (a replay limit).
+REACHABLE = ("localhost", "127.0.0.1", "::1", ".anthropic.com", "anthropic.com", ".claude.ai", "claude.ai", "generativelanguage.googleapis.com",
+             "api.voyageai.com")
+DEAD_PROXY = "http://127.0.0.1:9"
+#: Credentials an outward act would use, taken out of the replay's environment (the worker inherits it).
+OUTWARD_UNSET = ("SSH_AUTH_SOCK", "GH_TOKEN", "GITHUB_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "SLACK_BOT_TOKEN", "DISCORD_TOKEN", "NOTION_API_KEY")
+
+
+def no_outward_acts(scratch: str) -> dict:
+    """The environment that keeps the replayed task from acting outside Quest: every host but the reachable ones behind a dead proxy, git unable to push
+    (no SSH, no credential helper, no gh login), the mail key replaced by one that is refused, and the worker limited to the MCP servers the runner
+    passes (none of the person's own connectors)."""
+    quest_host = (os.environ.get("QUEST_BASE_URL") or "").split("://", 1)[-1].split("/", 1)[0]
+    reachable = ",".join(REACHABLE + ((quest_host,) if quest_host else ()))
+    return {"HTTPS_PROXY": DEAD_PROXY, "HTTP_PROXY": DEAD_PROXY, "https_proxy": DEAD_PROXY, "http_proxy": DEAD_PROXY, "ALL_PROXY": DEAD_PROXY,
+            "NO_PROXY": reachable, "no_proxy": reachable, "GIT_SSH_COMMAND": "false", "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "false",
+            "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "credential.helper", "GIT_CONFIG_VALUE_0": "", "GH_CONFIG_DIR": os.path.join(scratch, "gh"),
+            "RESEND_API_KEY": "blocked-in-replay", "QAR_DEEP_STRICT_MCP": "1"}
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True, help="the lane's configuration file (the production runner's)")
@@ -35,6 +57,9 @@ def main(argv=None) -> int:
         # After the lane's own file, so the confinement always wins over anything it sets.
         os.environ.update({"QAR_DRY_RUN_WRITES": "1", "QAR_DRY_RUN_DEEP": "real", "QAR_DRY_RUN_SCRATCH": scratch, "QAR_DEEP_WORKING_DIR": scratch,
                            "QAR_STATE_PATH": os.path.join(scratch, "state.json")})
+        os.environ.update(no_outward_acts(scratch))
+        for name in OUTWARD_UNSET:
+            os.environ.pop(name, None)
         from quest_ai_runner import load_config
         from quest_ai_runner.the_consciousness.request_intake.poller import Poller
         from quest_ai_runner.the_world.tools import dry_run_writes

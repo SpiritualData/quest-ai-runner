@@ -37,3 +37,16 @@ def test_the_tasks_measured_keep_is_a_read_the_value_gate_counts_and_the_judge_i
     notes = prod_chat_overlay.task_notes([RUN])
     assert "QUEUED TASK 1" in notes and "Opening line." in notes and "0 before, 1 after of 6 planned" in notes
     assert prod_chat_overlay.task_read({"error": "x"}) is None
+
+
+def test_the_replayed_task_can_reach_only_the_model_providers_and_quest():
+    import os
+    import run_queued_task
+    os.environ["QUEST_BASE_URL"] = "https://quest.example"
+    try:
+        env = run_queued_task.no_outward_acts("/tmp/x")
+    finally:
+        os.environ.pop("QUEST_BASE_URL")
+    assert env["HTTPS_PROXY"] == run_queued_task.DEAD_PROXY and "quest.example" in env["NO_PROXY"] and ".anthropic.com" in env["NO_PROXY"]
+    assert env["GIT_SSH_COMMAND"] == "false" and env["GIT_CONFIG_KEY_0"] == "credential.helper" and env["GIT_CONFIG_VALUE_0"] == ""
+    assert env["RESEND_API_KEY"] == "blocked-in-replay" and env["QAR_DEEP_STRICT_MCP"] == "1" and "SSH_AUTH_SOCK" in run_queued_task.OUTWARD_UNSET
