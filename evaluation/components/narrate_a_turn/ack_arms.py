@@ -49,11 +49,11 @@ def lines_of(record: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 
 
 def evidence_text(record: Dict[str, Any], line: str) -> str:
-    reads = "\n".join(f"- {str(r.get('source') or r)[:160]}" for r in (record.get("reads") or [])[:20] if not str(r.get("source") or "").startswith("context view")) or "(none)"
-    return ("The person's message:\n" + str(record.get("input") or "")[:2000]
+    reads = "\n".join(f"- {str(r.get('source') or r)[:160]}" for r in (record.get("reads") or record.get("replay_reads") or [])[:20] if not str(r.get("source") or "").startswith("context view")) or "(none)"
+    return ("The person's message:\n" + str(record.get("input") or ((record.get("judge_input") or {}).get("case") or {}).get("input") or "")[:2000]
             + "\n\nThe line the AI said first:\n" + line
             + "\n\nWhat the turn read:\n" + reads
-            + "\n\nThe reply exactly as sent:\n" + str(record.get("reply") or "")[:4000])
+            + "\n\nThe reply exactly as sent:\n" + str(record.get("reply") or record.get("replay_reply") or "")[:4000])
 
 
 def judge_line(record: Dict[str, Any], line: str, ask: Callable[[str], str]) -> Dict[str, Any]:
@@ -82,11 +82,11 @@ def score(records: List[Dict[str, Any]], ask: Callable[[str], str], arms=("model
         rows = []
         for rec in records:
             got = lines_of(rec)[arm]
-            key = (rec["id"], got["line"])
+            key = (rec.get("id") or rec.get("case_id"), got["line"])
             if key not in judged:        # the hybrid's first line is the model ack's: one judgment serves both
                 judged[key] = judge_line(rec, got["line"], ask)
             verdict = judged[key]
-            rows.append({"id": rec["id"], "line": got["line"], "seconds": got["seconds"], "ok": verdict["ok"], "items": verdict.get("items"), "calls": got["calls"]})
+            rows.append({"id": rec.get("id") or rec.get("case_id"), "line": got["line"], "seconds": got["seconds"], "ok": verdict["ok"], "items": verdict.get("items"), "calls": got["calls"]})
         times = [r["seconds"] for r in rows if isinstance(r["seconds"], (int, float))]
         median = round(statistics.median(times), 2) if times else None
         out["arms"][arm] = {"passing": sum(1 for r in rows if r["ok"]), "of": len(rows), "median_seconds": median,
