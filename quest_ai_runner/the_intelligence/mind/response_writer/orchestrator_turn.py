@@ -264,6 +264,10 @@ class Narrator:
             except Exception:  # noqa: BLE001
                 pass
 
+    def said(self) -> List[str]:
+        """This turn's own narration lines so far (a copy), for a consumer that records them for the next turn."""
+        return list(self._said)
+
     def report(self) -> Dict[str, Any]:
         """How the turn's quick ack went (outcome, seconds from the turn's start to the model ack, error), for a consumer or a test."""
         return {"outcome": self.ack_outcome, "seconds": self.ack_seconds, "error": self.ack_error,
