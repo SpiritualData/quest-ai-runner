@@ -288,7 +288,9 @@ class RunBeginMixin:
             transcript_tail=transcript,
             system_prompt=cfg.narration_system_prompt,
             enabled=bool(cfg.narrate or cfg.instant_ack),
-            model_ack=True,   # the quick model ack runs on every live turn, cheap information turns included (the placeholder status goes out first, by code)
+            # The quick model ack runs on every live turn, cheap information turns included (the placeholder status goes out first, by code).
+            # A consumer that already started it at the TURN's start, before its own pre-run work, says so in context_meta and gets one call, not two.
+            model_ack=not (context_meta or {}).get("quick_ack_early"),
             prior_narration=prior_narration,
         )
         rs.narrator = narrator
