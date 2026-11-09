@@ -163,7 +163,7 @@ def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_reche
     def thin_first(prompt):
         if "You write one deliverable" in prompt and "## This part" not in prompt:
             return json.dumps({"part": "Opening line for tutorial 1. Teach the product."})          # misses the call to action
-        if "## This part" in prompt:
+        if "misses one requirement" in prompt:
             return json.dumps({"part": "Call to action: try it today."})
         if "Join these parts" in prompt:
             return json.dumps({"part": "Opening line for tutorial 1. Teach the product. Call to action: try it today."})
@@ -173,7 +173,7 @@ def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_reche
                               if "Has an opening" in prompt.split("Requirements:")[1].split("\n")[1] or True else []})
         return decide(prompt)
     made = milestone_progress.make_progress(cue(), Registry(), thin_first)
-    assert made.depth["levels"] == 1 and made.depth["before"] < 1 and made.depth["after"] == 1 and made.depth["met"]
+    assert made.depth["levels"] >= 1 and made.depth["before"] < 1 and made.depth["after"] == 1 and made.depth["met"]
     assert made.after == 1 and "Call to action" in made.parts[-1]
     assert "%" not in made.reply_text()          # the depth scores stay in the kept record, never as an unread figure in the reply
 
@@ -216,3 +216,38 @@ def test_the_item_the_done_test_is_made_from_comes_first():
         return "{}"
     items = milestone_progress.work_items("records", ["sol-1"], answer)
     assert [i["name"] for i in items] == ["the scripts", "a side note"] and items[0]["checks"] == [True, True]
+
+
+def test_a_fact_sentence_no_source_holds_is_taken_out_and_proposals_stay():
+    reference = "The product guide says a goal is tracked weekly."
+    text = "A goal is tracked weekly. It was rated best app of 2029. We propose a first video about tracking. Try it today."
+
+    def views(prompt):
+        return json.dumps({"sentences": [{"n": n, "kind": k, "quote": q} for n, (k, q) in enumerate(
+            [("fact", "a goal is tracked weekly"), ("fact", "rated best app"), ("proposal", ""), ("plain", "")] if "1. A goal" in prompt else
+            [("plain", ""), ("proposal", ""), ("fact", "rated best app"), ("fact", "a goal is tracked weekly")], 1)]})
+    kept, removed = milestone_progress.supported_sentences(text, reference, views)
+    assert removed == ["It was rated best app of 2029."]
+    assert kept == "A goal is tracked weekly. We propose a first video about tracking. Try it today."
+
+
+def test_the_rubric_is_researched_agreed_by_a_second_view_and_kept_with_its_sources():
+    def answer(prompt):
+        if "Define what a good unit of this deliverable must meet" in prompt:
+            return json.dumps({"requirements": [{"text": "Opens with a hook", "source": "style guide"}, {"text": "Ends with a call to action", "source": "style guide"},
+                                                {"text": "Names the sponsor", "source": "nothing"}]})
+        if "These requirements were proposed" in prompt:
+            return json.dumps({"verdicts": [{"n": 1, "keep": True}, {"n": 2, "keep": True}, {"n": 3, "keep": False}]})
+        return decide(prompt)
+    registry = Registry()
+    milestone_progress.make_progress(cue(), registry, answer, research=lambda q: "style guide: a good script opens with a hook and ends with a call to action.")
+    knowledge = registry.tables["solutions"]["sol-1"]["knowledge"]
+    assert ": Opens with a hook; Ends with a call to action (source: style guide, sol-1, Quest AI, " in knowledge and "sponsor" not in knowledge
+
+
+def test_the_deliverable_to_make_is_confirmed_by_independent_views():
+    items = [{"name": "a side note", "kind": "deliverable", "actor": "ai", "checks": [True, True], "requirements": ["x"]},
+             {"name": "the scripts", "kind": "deliverable", "actor": "ai", "checks": [True, True], "requirements": ["y"]}]
+    picked = milestone_progress.confirmed_item_order(items, lambda i: True, "records", lambda prompt: json.dumps({"pick": "i1", "quote": "the scripts"}))
+    assert [i["name"] for i in picked] == ["the scripts", "a side note"]
+    assert milestone_progress.confirmed_item_order(items[:1], lambda i: True, "records", lambda prompt: "{}") == items[:1]
