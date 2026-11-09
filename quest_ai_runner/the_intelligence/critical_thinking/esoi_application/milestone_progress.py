@@ -203,7 +203,7 @@ Reply with JSON only: {{"units": [{{"n": <number>, "topic": "<what that unit cov
 in full. The part is the unit itself, used as it is: for a video, the words to be spoken; for copy, the copy; for a message, the message; never notes, an outline or
 a plan about the unit unless the unit is itself an outline.
 Facts and proposals are different. A fact (what the product does, a figure, a date, a name, a result) must come from the sources above, said as they say it;
-never invent one. A proposal (which topics to cover, which option to recommend, how to compare candidates) is your own work: make it, concretely, from the
+never invent one. A point about the product restates a passage of the sources in its words; an example or a speaker the sources do not give is left out. A proposal (which topics to cover, which option to recommend, how to compare candidates) is your own work: make it, concretely, from the
 sources, and say why. When the work compares options or prepares a decision, end with an explicit recommendation of one option, labelled as a proposal,
 with its reasoning, even when the evidence is thin (say how thin). Name an option only when a source names it, with that source; never a placeholder option
 ("Candidate B", "another niche"); when the sources name fewer than two, say so and name what would supply another. Write "to be decided" only for a fact that only a person or an outside system can supply,
@@ -542,6 +542,21 @@ by the name it has there; drop any pointer to something they do not hold. Keep w
 POINTER = re.compile(r"\b(?:the|its|their) (?:proposed|drafted|suggested|new|tagged) ([a-z]+(?: [a-z]+)?)", re.IGNORECASE)
 
 
+def held_source(label: Any, reference: str) -> str:
+    """``label`` (a source a writer named) when the turn's reads hold it: most of its content words appear in ``reference``. "" for a source the turn never
+    read, so no deliverable cites one."""
+    label = " ".join(str(label or "").replace("(", " ").replace(")", " ").split())
+    words = stems5(label)
+    if not label or not words:
+        return ""
+    known = stems5(reference)
+    held = len(words & known)
+    return label if held >= min(2, len(words)) and held / len(words) >= SOURCE_SHARE else ""
+
+
+SOURCE_SHARE = 0.75      # the share of a source label's content words the reads must hold for the label to stand
+
+
 def kept_step(step: str, kept: str, reference: str, decide: Optional[Callable[[str], str]]) -> str:
     """The person-only step, pointing only at what the turn kept or the records hold: a step that points at a proposed or drafted thing the kept text does not
     name (found by code) is rewritten once from the kept text and checked again; then the line rule (``checked_line``) applies."""
@@ -665,6 +680,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     # The day in the quest's own time zone (the week the cue was resolved in), so a date in the reply is the person's today.
     day = (today or milestone_cue.today_in(getattr(cue.week, "zone", "") or "")).isoformat()
     cue.read_source(registry)       # the milestone metric as its source reads now (the host's recorded value first); a source that cannot be read is said, never guessed
+    row = whole_row(registry, cue)          # whole records first: the work items, the writer and the checks all read past the cut
     tables = cue.tables or {}
     metrics = {mid: with_reading_fields(m) for mid, m in dict(tables.get("metrics") or {}).items()}
     rids = [cue.rid, *cue.metric_ids]
@@ -672,7 +688,6 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     means = [{"name": OUTWARD, "outward": True}]
     doable = lambda item: doable_by_ai(item, means, rids)      # noqa: E731
     spec_edit = ToolSpecEdit(registry, cue.quest_id)
-    row = whole_row(registry, cue)
     rubric = kept_rubric(row)
     rubric_state = ""
     knowledge_now = str(row.get("knowledge") or "")
@@ -754,6 +769,10 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             return found.get("text", "")
         try:
             found["text"] = str(research(f"{item.get('name')}. {cue.name}. {cue.purpose}"[:600]) or "").strip()
+            if DECISION_REQUIREMENT in (item.get("requirements") or []):
+                # A decision compares options: the options themselves are researched too (the product's documents and outside sources that name them).
+                options = str(research(f"options to choose between for: {cue.done_when}. {cue.purpose}"[:600]) or "").strip()
+                found["text"] = "\n\n".join(t for t in (found["text"], options) if t)
         except Exception as error:  # noqa: BLE001  research that could not run leaves the records and reads as the only sources
             log.warning("milestone progress: research failed: %s: %s", type(error).__name__, error)
             found["text"] = ""
@@ -867,7 +886,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         units = [u for u in data.get("units") or [] if isinstance(u, Mapping) and str(u.get("topic") or "").strip()]
         out.proposed_units = [" ".join(str(u["topic"]).split()) for u in units]
         proposed = "\n".join(f"{n}. {' '.join(str(u['topic']).split())}. Why: {' '.join(str(u.get('why') or '').split()) or 'see the sources'}"
-                             + (f" (source: {' '.join(str(u['source']).split())})" if str(u.get("source") or "").strip() else "") for n, u in enumerate(units, 1))
+                             + (f" (source: {held_source(u.get('source'), allowed)})" if held_source(u.get("source"), allowed) else "") for n, u in enumerate(units, 1))
         head = checked_line(f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else "."), allowed, decide)
         if proposed:
             # A proposed topic is a proposal and stays; the facts given as its reasons must rest on a source like any other.
@@ -889,7 +908,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             if not isinstance(row, Mapping) or not str(row.get("question") or "").strip():
                 continue
             quote = squash(row.get("quote"))
-            grounded = bool(str(row.get("answer") or "").strip()) and bool(str(row.get("source") or "").strip()) and len(quote) >= 3 and quote in text
+            grounded = (bool(str(row.get("answer") or "").strip()) and bool(held_source(row.get("source"), sources_text())) and len(quote) >= 3 and quote in text)
             questions.append({"question": " ".join(str(row["question"]).split()), "answer": " ".join(str(row.get("answer") or "").split()) if grounded else "",
                               "source": " ".join(str(row.get("source") or "").split()) if grounded else ""})
         questions = questions[:EVIDENCE_QUESTIONS]
@@ -1159,16 +1178,28 @@ def with_reading_fields(metric: Mapping[str, Any]) -> Dict[str, Any]:
 
 def whole_row(registry: Any, cue: Any) -> Mapping[str, Any]:
     """The milestone's Solution record with its columns whole (the turn's read cuts long values, and the kept rubric line is read back whole); the row the
-    cue holds when the lane cannot read it whole."""
+    cue holds when the lane cannot read it whole. The same read returns the milestone's metric records whole, and the cue's ``records_text`` (what the writer,
+    the claim check and the reader of the turn's reads see) is rebuilt from them, so a fact past the cut is a fact the turn read."""
     from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
     if registry is None or registry.get("read_spec_records") is None:
         return cue.row
     try:
-        result = registry.invoke("read_spec_records", {"quest_id": cue.quest_id, "whole_record_ids": [cue.rid]}, ToolContext(quest_id=cue.quest_id))
+        result = registry.invoke("read_spec_records", {"quest_id": cue.quest_id, "whole_record_ids": [cue.rid, *cue.metric_ids]}, ToolContext(quest_id=cue.quest_id))
     except Exception:  # noqa: BLE001  the cue's own row stands
         return cue.row
     data = getattr(result, "data", None) or {}
-    return ((data.get("records") or {}).get("solutions") or {}).get(cue.rid) or cue.row if getattr(result, "ok", False) else cue.row
+    if not getattr(result, "ok", False):
+        return cue.row
+    records = data.get("records") or {}
+    row = (records.get("solutions") or {}).get(cue.rid) or cue.row
+    if records.get("metrics") and isinstance(cue.tables, Mapping):
+        tables = {k: dict(v) for k, v in cue.tables.items()}
+        tables["metrics"] = dict(tables.get("metrics") or {}, **{mid: m for mid, m in (records.get("metrics") or {}).items() if mid in cue.metric_ids})
+        tables["solutions"] = dict(tables.get("solutions") or {}, **{cue.rid: row})
+        cue.tables = tables
+        cue.records_text = milestone_cue.records_read(tables, cue.rid, row)
+    return row
 
 
 def render_questions(questions: Sequence[Mapping[str, Any]]) -> str:

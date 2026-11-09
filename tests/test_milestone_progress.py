@@ -402,3 +402,24 @@ def test_the_person_step_points_only_at_what_was_kept():
 def test_a_link_or_product_claim_needs_a_source():
     assert milestone_progress.marked_claims("Start today at example.org.", "The records name no site.") == ["example.org"]
     assert milestone_progress.marked_claims("Start today at example.org.", "Sign up at example.org/start.") == []
+
+
+def test_a_source_label_stands_only_for_a_source_the_turn_read():
+    reads = "Metric record: Sign-ups by source. Recorded: 13 sign-ups. Product guide: getting started with your first goal."
+    assert milestone_progress.held_source("Metric record: Sign-ups by source", reads) == "Metric record: Sign-ups by source"
+    assert milestone_progress.held_source("Product card 'Proposed niche candidates'", reads) == ""
+
+
+def test_the_whole_metric_records_are_read_and_the_records_text_rebuilt():
+    long_record = "Current value: 0 of 6. " + "x" * 300 + " The tail fact: 42 links."
+
+    class Whole(Registry):
+        def invoke(self, name, args, ctx=None):
+            if name == "read_spec_records" and "met-1" in (args.get("whole_record_ids") or []):
+                tables = json.loads(json.dumps(self.tables))
+                tables["metrics"]["met-1"]["record"] = long_record
+                return SimpleNamespace(ok=True, data={"records": tables}, text="records")
+            return super().invoke(name, args, ctx)
+    c = cue()
+    milestone_progress.whole_row(Whole(), c)
+    assert "The tail fact: 42 links." in c.records_text
