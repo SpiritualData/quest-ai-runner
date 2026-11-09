@@ -37,6 +37,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
 ENV = "QAR_DRY_RUN_WRITES"
+#: ``real`` keeps the real deep worker in a dry run: it runs, with this process's environment (so the dry run holds in every tool process it starts:
+#: a Quest write it asks for is refused and recorded there too), to prove work the production runner would do. Unset, the worker is the stub.
+DEEP_ENV = "QAR_DRY_RUN_DEEP"
 SCRATCH_ENV = "QAR_DRY_RUN_SCRATCH"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -259,6 +262,11 @@ def active(environ: Optional[Mapping[str, str]] = None) -> bool:
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
+def real_deep(environ: Optional[Mapping[str, str]] = None) -> bool:
+    """True when ``QAR_DRY_RUN_DEEP`` is ``real``: the deep worker runs in the dry run instead of the stub."""
+    return str((os.environ if environ is None else environ).get(DEEP_ENV, "")).strip().lower() == "real"
+
+
 def summarize(value: Any, limit: int = 240) -> str:
     text = " ".join(str(value).split())
     return text if len(text) <= limit else text[:limit] + "..."
@@ -355,7 +363,7 @@ class DryDeepRunner:
 
 def wrap_deep(runner: Any) -> Any:
     """The stub for a deep runner (a dict or list of them keeps its shape), or the runner itself when a dry run is off or it is None."""
-    if not active() or runner is None:
+    if not active() or runner is None or real_deep():
         return runner
     if isinstance(runner, dict):
         return {key: wrap_deep(value) for key, value in runner.items()}
@@ -419,6 +427,9 @@ def check_process(argv: Any) -> None:
         if rest[:1] and rest[0] in READ_GIT and not (rest[0] == "config" and any(a for a in rest[1:] if not a.startswith("--get"))):
             return
     names = {os.path.basename(p) for p in parts[:6]}
+    if names & MODEL_CLI_NAMES and real_deep():
+        RECORDER.model_call(f"deep worker | {caller_label()}")      # the real worker, its own tool processes in the same dry run (the environment carries it)
+        return
     if names & MODEL_CLI_NAMES:
         no_tools = "--tools" in parts and parts[parts.index("--tools") + 1: parts.index("--tools") + 2] == [""]
         harmless = parts[-1] in ("--help", "--version")

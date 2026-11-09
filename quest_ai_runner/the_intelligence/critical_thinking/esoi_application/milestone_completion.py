@@ -93,6 +93,6 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
                                                           "changed": after != before}},
                              ToolContext(quest_id=str(record["quest_id"])))
     if not getattr(result, "ok", False):
-        return {"status": "not_kept", "before": before, "after": after, "total": total,
+        return {"status": "not_kept", "before": before, "after": after, "total": total, "body": progress.body(),
                 "line": f"The finished deliverable was measured ({progress.increment_line()}) but not kept: {str(getattr(result, 'text', ''))[:200]}"}
-    return {"status": "measured", "before": before, "after": after, "total": total, "line": progress.increment_line()}
+    return {"status": "measured", "before": before, "after": after, "total": total, "body": progress.body(), "line": progress.increment_line()}

@@ -610,6 +610,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         except Exception as error:  # noqa: BLE001  the run's own report stands; the measurement failure is said in it
             log.warning("milestone completion: measuring the finished work failed: %s: %s", type(error).__name__, error)
             measured = {"line": f"The finished deliverable could not be measured ({type(error).__name__})."}
+        self.milestone_measured = measured          # what was measured and kept (a replay of the task reads it)
         line = str(measured.get("line") or "").strip()
         if line and hasattr(result, "text"):
             result.text = (str(result.text or "").rstrip() + "\n\n" + line).strip()

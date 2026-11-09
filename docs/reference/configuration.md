@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-239 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+240 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -96,6 +96,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_WORKING_DIR` |  | `the_body/configuration/config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
 | `QAR_DISCOVERY_TEAM_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_DRY_RUN_DEEP` | Set to real to keep the real deep worker in a dry run (QAR_DRY_RUN_WRITES=1): it runs with the same environment, so every tool process it starts is in the dry run too and a Quest write it asks for is refused and recorded. Used to replay a queued task the way the lane would. Unset, the worker is the stub. | `the_world/tools/dry_run_writes.py` | - |
 | `QAR_DRY_RUN_SCRATCH` | Folder a dry run (QAR_DRY_RUN_WRITES=1) redirects file writes into; default a new folder under the system temp folder. | `the_world/tools/dry_run_writes.py` | - |
 | `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (the_world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `the_world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md`, `docs/how-to/tools.md` |
 | `QAR_EMBEDDER_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py`, `the_body/internal_context/card_store/qdrant_embedders.py` | `docs/how-to/context-card-stores.md` |
@@ -201,7 +202,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `the_consciousness/terminal/interactive_session_commands.py` | - |
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `the_body/configuration/walk_settings.py`, `the_world/tools/file_reading/files_search_worker.py`, `the_world/tools/file_reading/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_SOLUTION_CONSIDERATION_SECONDS` | How long a chat turn waits, after its acknowledgement, for each touched ESOI solution's own consideration (default 8); a slower one finishes in the background and grounds the next turn. CoreSettings.solution_consideration_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_SOLUTION_CONSIDERATION_MIN_SCORE` | The records-index score a solution needs for a pass in a deep run (default 0: the hub gate's DEFAULT_MIN_SCORE, fixed from its relevance cases). CoreSettings.solution_consideration_min_score. | `the_body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
 | `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `the_consciousness/terminal/__main__.py`, `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | `docs/explanation/metric-results.md`, `docs/explanation/spec-selection.md` |
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `the_consciousness/terminal/cli_quest.py` | - |

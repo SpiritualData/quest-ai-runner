@@ -331,7 +331,11 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         if deep is not None:
             # Part 3: the work runs through the harness the ESOI cascade selected for work (the deep agent), from the solution's brief. A queued run is
             # background work: acknowledged, its before measured, kept by the worker on the same goal; an inline run comes back and is measured here.
-            goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown())
+            before = increment.get("before")
+            record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "title": title, "item": item.get("name"), "requirements": requirements,
+                      "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": total,
+                      "measure_name": f"Units of {item.get('name')} meeting their requirements", "metric_id": increment.get("measure_id")}
+            goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown(), record=record)
             got = dict(deep(goal, brief) or {})
             out.handed_off = {"goal": goal, "queued": bool(got.get("deferred")), "error": str(got.get("error") or "")}
             if got.get("deferred") or not str(got.get("output") or "").strip():

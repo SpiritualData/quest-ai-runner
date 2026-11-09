@@ -8,6 +8,7 @@ import re
 
 from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple
 
+from .milestone_completion import work_record_line
 from .milestone_facts import GROUNDING_CHARS, NO_EM_DASH, clip_line, log, parse_json, squash
 
 
@@ -378,14 +379,18 @@ What the turn read (each source named):
 
 Build it out with depth: research what it needs (the product's documents and outside sources, each named), write each part, and check each against the
 rubric before keeping it. A fact (what the product does, a figure, a link, a name) only as a source says it, with the source; a proposal labelled as one;
-no placeholder and no blank slot. End your output with the deliverable itself, exactly as kept. {no_em_dash}"""
+no placeholder and no blank slot. End your output with a line that says only "DELIVERABLE:", then the deliverable itself, exactly as kept. {no_em_dash}
+{record}"""
 
 
-def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have: Sequence[str], title: str, records: str, grounding: str) -> Tuple[str, str]:
+def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have: Sequence[str], title: str, records: str, grounding: str,
+                      record: Optional[Mapping[str, Any]] = None) -> Tuple[str, str]:
     """``(goal, brief)`` for the deep harness: the work item as the goal, and the brief from the deliverable's solution records, its rubric, what is kept
-    and where it is kept."""
+    and where it is kept. ``record`` (the quest, milestone, goal title, rubric and before) becomes the code-written work record line the task executor
+    reads when the work finishes, to measure and keep it (``milestone_completion``)."""
     goal = f"Make {item.get('name')} to its rubric and keep it on the goal '{title}'"
     brief = DEEP_BRIEF.format(item=item.get("name"), rubric="; ".join(requirements) or "(none recorded)",
                               have="\n".join(f"- {clip_line(p)}" for p in have) or "(nothing yet)", title=title, records=records,
-                              grounding=str(grounding or "")[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH)
+                              grounding=str(grounding or "")[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH,
+                              record=work_record_line(record) if record else "")
     return goal, brief

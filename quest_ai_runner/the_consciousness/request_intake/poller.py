@@ -649,14 +649,7 @@ class Poller(PassesMixin, SyncMixin):
         # Opt-in: refresh the task's linked quest folder's QUEST_SYNC.md before running, when
         # cfg.quest_folder_map maps this task's goal/quest to a local folder.
         self._pull_quest_folder_for(task)
-        executor = TaskExecutor(self.client, self._orch(),
-                                quest_folder_map=getattr(self.cfg, "quest_folder_map", None),
-                                autopilot_pass=self._autopilot,
-                                quest_folder_zones=getattr(
-                                    self.cfg, "quest_folder_zones", True),
-                                update_engine=self._update_engine,
-                                guidance_manager=_guidance_manager_of(self.cfg))
-        outcome = executor.execute(task, rep_preamble=rep_preamble)
+        outcome = self.task_executor().execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
         # Opt-in push-back: after the run, write the local skill file back up to Quest when the
         # configured direction asks for it. Best-effort and AFTER the task is reported — a sync
@@ -670,6 +663,16 @@ class Poller(PassesMixin, SyncMixin):
         if getattr(outcome, "status", None) not in ("waiting", "paused"):
             self._record_rep_turn(task, target, outcome)
         return task_id
+
+    def task_executor(self) -> TaskExecutor:
+        """The executor this lane runs a claimed task with (its client, brain, folder map, autopilot, update engine and guidance), one per task. Also
+        the entry point for running one task the way the lane would without claiming it, such as a replay of a queued task in a dry run."""
+        return TaskExecutor(self.client, self._orch(),
+                            quest_folder_map=getattr(self.cfg, "quest_folder_map", None),
+                            autopilot_pass=self._autopilot,
+                            quest_folder_zones=getattr(self.cfg, "quest_folder_zones", True),
+                            update_engine=self._update_engine,
+                            guidance_manager=_guidance_manager_of(self.cfg))
 
     # --- the usage-limit lane pause (see core.usage_limit) -----------------------
 

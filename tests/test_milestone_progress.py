@@ -503,3 +503,12 @@ def test_long_work_queued_on_the_deep_harness_is_acknowledged_with_its_before():
     assert made.status == "handed_off" and made.before == 0
     reply = made.reply_text()
     assert reply.startswith("I started") and "background work" in reply and "0 now of 6 planned" in reply and "The one step only a person can do" in reply
+
+
+def test_the_deep_brief_carries_the_work_record_the_task_executor_measures_on_completion():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    briefs = []
+    made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: briefs.append(brief) or {"output": "queued", "deferred": True})
+    record = milestone_completion.work_record_of(briefs[0])
+    assert made.status == "handed_off" and record["title"] == made.title and record["milestone_id"] == "sol-1" and record["before"] == 0
+    assert record["requirements"] == ["Has an opening", "Ends with a call to action"] and 'line that says only "DELIVERABLE:"' in briefs[0]

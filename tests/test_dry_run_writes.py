@@ -120,6 +120,18 @@ def test_the_deep_run_is_stubbed(on):
     assert set(dry.wrap_deep({"a": Real()})) == {"a"}
 
 
+def test_with_the_real_deep_worker_kept_it_runs_and_its_cli_may_start_with_tools(on, monkeypatch):
+    monkeypatch.setenv(dry.DEEP_ENV, "real")
+    class Real:
+        def run_goal(self, **kw):
+            return "ran"
+    real = Real()
+    assert dry.wrap_deep(real) is real
+    dry.check_process(["claude", "-p", "--permission-mode", "acceptEdits", "--mcp-config", "tools.json"])      # the worker itself starts
+    with pytest.raises(dry.DryRunBlocked):
+        dry.check_process(["git", "push", "origin", "main"])                                              # nothing else is let out
+
+
 def test_a_bounded_run_makes_only_the_allowed_write_for_real(on):
     ran = []
     def note(args, ctx):
