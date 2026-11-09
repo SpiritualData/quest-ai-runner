@@ -297,7 +297,7 @@ def build(meter):
                                  "failed": [{"item": str(r.get("item"))[:200], "evidence": str(r.get("evidence"))[:300]} for r in verdict.get("rubric") or [] if not r.get("pass")]}
             record.update(evidence=evidence, changes=changes_text, unexpected_writes=unexpected, other_writes=other, precheck=pre, judged=judged, score=J.final_score(pre, judged), passed=passed,
                           messages=messages, attempted_writes=run.get("writes"), model_calls=run.get("model_calls", 0), replay_error=run.get("error"), model_calls_log=run.get("model_calls_log") or [], qar_notes=run.get("qar_notes") or [],
-                          provider_retries=run.get("provider_retries") or [],
+                          provider_retries=run.get("provider_retries") or [], ack_seconds=run.get("ack_seconds"),
                           judge_input={"case": judged_case, "evidence": evidence, "changes": changes_text, "pre": pre, "truth": truth, "unexpected": unexpected,
                                        "state": record.get("state")},
                           tool_calls=PC.tool_calls_of(run["frames"]), route=PC.route_of(run["frames"]),
@@ -306,7 +306,7 @@ def build(meter):
             record.update(error=f"{type(e).__name__}: {e}", score=None, passed=False)
         record.setdefault("model_calls", 0)
         record.update(seconds=round(time.time() - started, 1), tokens_in=0, tokens_out=0, tokens_estimated=True)
-        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "changes", "unexpected_writes", "other_writes", "messages", "reads_seen", "unsupported_figures",
+        record["log_extra"] = {k: record.get(k) for k in ("environment", "model_calls", "seconds", "ack_seconds", "changes", "unexpected_writes", "other_writes", "messages", "reads_seen", "unsupported_figures",
                                                           "route", "tool_calls", "frame_trace", "attempted_writes", "state", "value_gate", "verdict", "seed_spec", "replay_error", "model_calls_log",
                                                           "qar_notes", "provider_retries", "judge_input")}
         try:
