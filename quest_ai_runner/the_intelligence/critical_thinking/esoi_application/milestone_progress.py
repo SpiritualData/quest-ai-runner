@@ -322,13 +322,17 @@ quote the exact words of the sources it rests on (a few words, copied exactly), 
 SUPPORT_VIEWS = 2       # independent classifications; a sentence one of them finds to be an unsupported fact is taken out
 
 
-def supported_sentences(text: str, reference: str, decide: Callable[[str], str]) -> Tuple[str, List[str]]:
+def supported_sentences(text: str, reference: str, decide: Callable[[str], str], keep_line_starts: bool = False) -> Tuple[str, List[str]]:
     """``(text, removed)``: every sentence that states a fact must rest on words code finds in ``reference`` (the records, the turn's reads and the research);
     one that does not is taken out. Two independent classifications (the second sees the sentences in reverse order); a sentence either finds to be a fact
     with no quote in the sources is removed, so a missed invention needs both to miss it. Proposals and plain sentences stay. The structure, not the
-    wording, decides: a quote is checked by code."""
+    wording, decides: a quote is checked by code. With ``keep_line_starts`` the first sentence of each line (a proposed item's own name) is never taken out;
+    the sentences that argue for it are checked like any other."""
     from hubofhubs.api import joined, units_of
     units = units_of(text)
+    starts = {k for k, u in enumerate(units) if keep_line_starts and (k == 0 or "\n" in (u.lead or ""))}
+    # A list number ("1.") is split off as its own sentence: the sentence after it is the item's name.
+    starts |= {k + 1 for k in list(starts) if k + 1 < len(units) and re.fullmatch(r"\d+[.)]", units[k].text.strip())}
     if not units:
         return text, []
     source = squash(reference)
@@ -346,6 +350,7 @@ def supported_sentences(text: str, reference: str, decide: Callable[[str], str])
             quote = squash(row.get("quote"))
             if row.get("kind") == "fact" and not (len(quote.split()) >= 3 and quote in source):
                 unsupported.add(k)
+    unsupported -= starts
     removed = [units[k].text for k in sorted(unsupported)]
     for k in unsupported:
         if sum(u.kept for u in units) > 1:
@@ -595,7 +600,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                              + (f" (source: {' '.join(str(u['source']).split())})" if str(u.get("source") or "").strip() else "") for n, u in enumerate(units, 1))
         head = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".")
         if proposed:
-            proposed = grounded_text(proposed, allowed, decide)       # a proposed topic is a proposal, so only the claim check reads the list
+            # A proposed topic is a proposal and stays; the facts given as its reasons must rest on a source like any other.
+            proposed, dropped = supported_sentences(grounded_text(proposed, allowed, decide), allowed, decide, keep_line_starts=True)
+            out.unsupported += dropped
         out.overview = head + (("\nProposed units (an AI proposal from the sources, to be agreed):\n" + proposed) if proposed else "")
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}

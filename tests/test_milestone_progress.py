@@ -257,3 +257,16 @@ def test_a_dated_reading_is_said_as_its_value_and_ids_never_reach_the_reader():
     assert milestone_cue.reading_value("Current value: 0 (as of 2030-03-08, from the funnel dashboard)\nmore") == "0 (as of 2030-03-08)"
     assert milestone_cue.reading_value("0 of 6. Read on Monday.") == "0 of 6"
     assert milestone_progress.without_ids("Ann (rep_4e8c0da18324) publishes each video.") == "Ann publishes each video."
+
+
+def test_a_proposed_items_name_stays_while_its_unsupported_reasons_go():
+    text = "1. Video about goals. The guide says goals are tracked.\n2. Video about teams. Trusted by thousands of teams."
+    marks = {"Video about goals.": ("fact", ""), "The guide says goals are tracked.": ("fact", "goals are tracked weekly"),
+             "Video about teams.": ("fact", ""), "Trusted by thousands of teams.": ("fact", "")}
+
+    def views(prompt):
+        lines = [l for l in prompt.split("The sentences:")[1].splitlines() if l[:1].isdigit() and ". " in l]
+        return json.dumps({"sentences": [{"n": n, "kind": marks[l.split(". ", 1)[1]][0], "quote": marks[l.split(". ", 1)[1]][1]} for n, l in enumerate(lines, 1)
+                                         if l.split(". ", 1)[1] in marks]})
+    kept, removed = milestone_progress.supported_sentences(text, "Goals are tracked weekly.", views, keep_line_starts=True)
+    assert removed == ["Trusted by thousands of teams."] and "Video about teams." in kept and "Video about goals." in kept
