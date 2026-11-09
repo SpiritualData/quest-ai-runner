@@ -66,6 +66,9 @@ def main(argv=None) -> int:
         dry_run_writes.install()
         poller = Poller(load_config(args.config), state_path=os.environ["QAR_STATE_PATH"])
         executor = poller.task_executor()
+        # The runner's own client and tools hold the Quest key already (built above from a copy of the environment); the worker is started later with
+        # this process's environment, so without the key it cannot reach Quest except through the runner's refused writes.
+        os.environ.pop("QUEST_API_KEY", None)
         outcome = executor.execute(task)
         snap = dry_run_writes.RECORDER.snapshot()
         out.update(status=outcome.status, result=outcome.result, measured=getattr(executor, "milestone_measured", None),
