@@ -40,6 +40,13 @@ def test_no_records_or_no_provider_adds_nothing(tmp_path, monkeypatch):
     assert solution_consideration.brief_block("anything", str(HUB), None) == ""
 
 
+def consideration_on(monkeypatch):
+    """Chat-turn consideration is off by default (it measured slower replies); these tests turn it on."""
+    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
+    monkeypatch.setattr("quest_ai_runner.the_body.configuration.runtime_settings.core_settings",
+                        lambda: core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "1"}))
+
+
 class Store:
     def __init__(self):
         self.cards = {}
@@ -58,6 +65,7 @@ class Orch:
 
 
 def test_a_chat_turn_writes_the_touched_solutions_cards_and_puts_them_first(monkeypatch):
+    consideration_on(monkeypatch)
     from types import SimpleNamespace
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     store, meta = Store(), {"priority_card_ids": ["quest-folder-q1"]}
@@ -90,6 +98,7 @@ def test_quest_held_records_form_the_network_without_a_folder():
 
 
 def test_the_turn_never_waits_and_a_card_lands_before_the_parent_passes(monkeypatch):
+    consideration_on(monkeypatch)
     import threading
     from types import SimpleNamespace
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
@@ -113,6 +122,12 @@ def test_the_turn_never_waits_and_a_card_lands_before_the_parent_passes(monkeypa
     thread.join(60)
 
 
+def test_chat_consideration_is_off_by_default_and_the_switch_turns_it_on(monkeypatch):
+    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
+    assert core_settings_from_env({}).solution_consideration_in_chat is False
+    assert core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "1"}).solution_consideration_in_chat is True
+
+
 def test_the_off_switch_turns_chat_consideration_off(monkeypatch):
     from types import SimpleNamespace
     from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
@@ -125,6 +140,7 @@ def test_the_off_switch_turns_chat_consideration_off(monkeypatch):
 
 
 def test_a_failing_consideration_is_said_once_and_recorded_on_every_turn(monkeypatch, caplog):
+    consideration_on(monkeypatch)
     import logging
     from types import SimpleNamespace
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
