@@ -66,9 +66,9 @@ def main(argv=None) -> int:
         dry_run_writes.install()
         poller = Poller(load_config(args.config), state_path=os.environ["QAR_STATE_PATH"])
         executor = poller.task_executor()
-        # The runner's own client and tools hold the Quest key already (built above from a copy of the environment); the worker is started later with
-        # this process's environment, so without the key it cannot reach Quest except through the runner's refused writes.
-        os.environ.pop("QUEST_API_KEY", None)
+        # The worker keeps the Quest key: its Quest tools (the runner's tool processes) need it to read, and they run in the same dry run, so every Quest
+        # write they make is refused and recorded. Without it the worker had no Quest tools at all, which production never lacks (measured 2026-11-08).
+        # A request the worker would send to Quest by hand, outside its tools, is the one path this replay does not confine.
         outcome = executor.execute(task)
         snap = dry_run_writes.RECORDER.snapshot()
         out.update(status=outcome.status, result=outcome.result, measured=getattr(executor, "milestone_measured", None),
