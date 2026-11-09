@@ -92,6 +92,8 @@ class Progress:
                 lines.append(f"{self.measure_name}: {shown(self.before)} now" + (f" of {self.total} planned" if self.total else "")
                              + f" (counted: units in which a separate check found every rubric item; {self.as_of}). When the work finishes, code counts it again"
                              " and keeps the before and after on that goal.")
+            if self.metric_name:
+                lines.append(f"Milestone metric ({self.metric_name}) now: {self.metric_before or 'not recorded'}.")
             if self.kept_artifacts:
                 lines.append("Also kept on the milestone's record this turn:\n" + "\n".join(f"- {a}" for a in self.kept_artifacts))
             if self.ask:

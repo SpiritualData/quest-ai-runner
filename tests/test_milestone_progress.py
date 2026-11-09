@@ -362,7 +362,7 @@ def test_the_reply_names_every_artifact_kept_on_the_record():
     registry = Registry()
     made = milestone_progress.make_progress(cue(), registry, decide)
     reply = made.reply_text()
-    assert "Also kept on the milestone's record this turn:" in reply and "The rubric each unit of the tutorial list" in reply
+    assert "Also kept on the milestone's record this turn:" in reply and "The rubric for the tutorial list" in reply
     lines = milestone_progress.kept_artifacts([{"edit": {"field": "knowledge", "value": "[best guess] Source proposal for metric met-1: read the funnel export; "
                                                                                      "a person connects the export (source: met-1 record, 2030-03-09)"}, "state": "kept"}],
                                              "", {"met-1": {"name": "Users from a source"}})
@@ -544,3 +544,9 @@ def test_evidence_work_goes_to_the_deep_harness_with_the_question_form():
     made = milestone_progress.make_progress(cue(), Registry(), decomposing, deep=lambda g, b: briefs.append(b) or {"output": "queued", "deferred": True})
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
     assert made.status == "handed_off" and 'written as lines "Q1.' in briefs[0] and milestone_completion.work_record_of(briefs[0])["method"] == "evidence"
+
+
+def test_a_reader_sees_names_never_bare_record_ids_and_the_ack_states_the_metric():
+    assert milestone_progress.without_ids("Ana files the confirmation under goal 7a3f6c39.") == "Ana files the confirmation."
+    made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: {"output": "queued", "deferred": True})
+    assert "Milestone metric (Tutorials published) now: " in made.reply_text()

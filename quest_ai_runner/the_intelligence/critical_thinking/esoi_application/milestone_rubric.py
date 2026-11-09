@@ -292,7 +292,7 @@ def kept_artifacts(written: Sequence[Mapping[str, Any]], knowledge_before: str, 
                 before.add(line)
                 rubric = kept_rubric({"knowledge": line})
                 if rubric is not None:
-                    out.append(f"The rubric each unit of {rubric.item} is scored against: " + "; ".join(rubric.requirements) + held)
+                    out.append(f"The rubric for {rubric.item} ({len(rubric.requirements)} requirements each unit is checked on), kept on its solution's record" + held)
                     continue
                 claim = KNOWLEDGE_SOURCE.sub("", KNOWLEDGE_KIND.sub("", line))
                 proposal = SOURCE_PROPOSAL.match(claim)

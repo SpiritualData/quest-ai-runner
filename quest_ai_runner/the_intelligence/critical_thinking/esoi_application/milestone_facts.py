@@ -204,7 +204,7 @@ def questions_of(text: str) -> Optional[Dict[str, Any]]:
     return {"questions": questions} if questions else None
 
 
-RECORD_ID = re.compile(r"\s*\((?:[a-z]{2,8}_[0-9a-f]{8,})\)|\b[a-z]{2,8}_[0-9a-f]{10,}\b")
+RECORD_ID = re.compile(r"\s*\((?:[a-z]{2,8}_[0-9a-f]{8,})\)|\b[a-z]{2,8}_[0-9a-f]{10,}\b|\s*\b(?:under |in |on )?(?:goal|task|record|id) [0-9a-f]{8,}\b")
 
 
 def without_ids(text: str) -> str:
