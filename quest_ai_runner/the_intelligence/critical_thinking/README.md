@@ -51,6 +51,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Runs that leave a durable, attributed record of what they changed (`metric-track-runs-on-records`)
 - Drafted metrics accepted per unit of cost (`metric-draft-a-metric`): leader `capped_model_draft`, 10 of 10 cases
 - Specification selection pass rate (`metric-spec-selection`): leader `lexical_vector_gated`, 70 of 76 cases
+- Work classification: the deliverable filed under the right solution (`metric-work-classification`)
+- and 2 more: all 12 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -109,6 +111,9 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Runs that leave a durable, attributed record of what they changed (`metric-track-runs-on-records`): `esoi run record_tracking`
 - Drafted metrics accepted per unit of cost (`metric-draft-a-metric`): `esoi run draft_a_metric --impl capped_model_draft`
 - Specification selection pass rate (`metric-spec-selection`): `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
+- Work classification: the deliverable filed under the right solution (`metric-work-classification`): `python evaluation/components/chat_quality/work_parts.py --records <records folder> --dataset <private dataset folder>`
+- ESOI application: the deliverable meets its solution's own rubric (`metric-work-esoi-application`): `python evaluation/components/chat_quality/work_parts.py --records <records folder> --dataset <private dataset folder>`
+- Harness: the work ran to a deliverable within its budget (`metric-work-harness`): `python evaluation/components/chat_quality/work_parts.py --records <records folder> --dataset <private dataset folder>`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*
