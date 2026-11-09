@@ -75,7 +75,7 @@ def test_a_progress_cue_makes_a_measured_kept_increment_and_one_person_step():
     kept = dict(registry.calls[names.index("keep_milestone_deliverable")][1])
     assert kept["title"] == "M1 Tutorials published deliverables" and kept["increment"]["before"] == 0 and kept["increment"]["after"] == 1
     reply = made.reply_text()
-    assert reply.index("Opening line for tutorial 1") < reply.index("0 of 6 before, 1 of 6 after") < reply.index("The one step only a person can do")
+    assert reply.index("Opening line for tutorial 1") < reply.index("0 before, 1 after of 6 planned (counted: units in which a separate check found every rubric item") < reply.index("The one step only a person can do")
     assert reply.count("only a person can do") == 1
 
 
@@ -156,7 +156,7 @@ def test_the_milestone_pass_shapes_a_made_progress_without_running_the_work_agai
                                        status="measured", ask="publish it")
     found = milestone_progress.milestone_pass(made, cue(), "get it moving")
     assert found["solution_id"] == "sol-1" and found["target"] == {"metric_id": "met-1", "value": 6, "done_when": TABLES["solutions"]["sol-1"]["milestones"]}
-    assert found["needs"].startswith("the script: Scripts meeting the rubric: 0 of 6 before, 1 of 6 after") and found["risks"] == ["Only a person can do: publish it"]
+    assert found["needs"].startswith("the script: Scripts meeting the rubric: 0 before, 1 after of 6 planned") and found["risks"] == ["Only a person can do: publish it"]
 
 
 def test_a_unit_short_of_its_rubric_is_built_out_by_the_hub_depth_loop_and_rechecked():
@@ -270,3 +270,38 @@ def test_a_proposed_items_name_stays_while_its_unsupported_reasons_go():
                                          if l.split(". ", 1)[1] in marks]})
     kept, removed = milestone_progress.supported_sentences(text, "Goals are tracked weekly.", views, keep_line_starts=True)
     assert removed == ["Trusted by thousands of teams."] and "Video about teams." in kept and "Video about goals." in kept
+
+
+def test_a_unit_that_depends_on_the_proposed_list_is_done_in_the_same_turn_and_measured():
+    asked = []
+
+    def answer(prompt):
+        asked.append(prompt)
+        if "Break the work this milestone needs" in prompt:
+            return json.dumps({"items": [
+                {"name": "the tutorial list", "kind": "deliverable", "actor": "ai", "done_material": True, "total": 1, "requirements": ["Has an opening"]},
+                {"name": "the script for one tutorial", "kind": "deliverable", "actor": "ai", "depends_on": "the tutorial list", "total": 6,
+                 "requirements": ["Ends with a call to action"]},
+                {"name": "publishing", "kind": "outward", "actor": "person", "outward": True, "moves_parent": True, "step": "Publish them."}]})
+        if "can an AI do it right now" in prompt:
+            return json.dumps({"verdicts": [{"n": 1, "ai_can": True}, {"n": 2, "ai_can": True}, {"n": 3, "ai_can": False}]})
+        if "Which of these work items" in prompt:
+            return json.dumps({"pick": "i0", "quote": "the tutorial list"})
+        if "You write one deliverable" in prompt and "the script for one tutorial" in prompt:
+            return json.dumps({"part": "Call to action: set your first goal today."})
+        if "You write one deliverable" in prompt:
+            return json.dumps({"units": [{"n": 1, "topic": "Setting a first goal", "why": "users start there", "source": "guide"}], "part": "Opening line for the list."})
+        if "Check one deliverable" in prompt:
+            text, wanted = prompt.split("The text:", 1)[1].split("Requirements:", 1)
+            reqs = [l.split(". ", 1)[1] for l in wanted.splitlines() if l[:1].isdigit()]
+            quote = {"Has an opening": "Opening line", "Ends with a call to action": "Call to action"}
+            return json.dumps({"verdicts": [{"n": n, "meets": quote[r] in text, "quote": quote[r]} for n, r in enumerate(reqs, 1)]})
+        return decide(prompt)
+    registry = Registry()
+    made = milestone_progress.make_progress(cue(), registry, answer)
+    assert made.follow_on["item"] == "the script for one tutorial" and (made.follow_on["before"], made.follow_on["after"], made.follow_on["total"]) == (0.0, 1.0, 6)
+    assert any("Write the unit for the first proposed item: Setting a first goal." in p for p in asked)
+    kept = registry.goals[made.title]
+    assert "--- Then, depending on it: the script for one tutorial ---\nCall to action: set your first goal today." in kept
+    assert milestone_progress.kept_follow_on("Kept by Quest AI: " + kept) == ("the script for one tutorial", "Call to action: set your first goal today.")
+    assert "Then, depending on it, the script for one tutorial: 0 before, 1 after of 6 planned" in made.reply_text()

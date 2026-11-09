@@ -36,6 +36,8 @@ OUTWARD = "outward_act"
 DELIVERABLES = "deliverables"
 PART_SEPARATOR = "\n\n--- Part {n} ---\n"
 PART_SPLIT = re.compile(r"\n*--- Part \d+ ---\n")
+FOLLOW_SEPARATOR = "\n\n--- Then, depending on it: {item} ---\n"
+FOLLOW_SPLIT = re.compile(r"\n*--- Then, depending on it: (?P<item>.+?) ---\n")
 OVERVIEW_HEAD = "Overview:\n"
 GROUNDING_CHARS = 12000
 DEPTH_CALLS = 16       # the depth loop's call budget for one unit (work and check calls; the hub default)
@@ -145,7 +147,8 @@ Break the work this milestone needs into at most 6 work items, in the order they
 {{"items": [{{"name": "<what is made or done, short>", "kind": "deliverable" | "evidence" | "recommendation" | "outward",
 "actor": "ai" | "person", "outward": <true when the item publishes, sends, pays, records on camera, submits to a store or contacts someone>,
 "moves_parent": <true when doing it directly moves the milestone's own metric>, "done_material": <true for the one item whose output the done
-test itself is made of or published from (for published videos, their scripts; for a decision, the analysis that makes it)>, "inputs": [<record ids from above it needs>],
+test itself is made of or published from (for published videos, their scripts; for a decision, the analysis that makes it)>,
+"depends_on": "<the name of the item above whose output this one needs first, exactly as written, or empty>", "inputs": [<record ids from above it needs>],
 "total": <how many units the milestone needs of this item, a whole number, or 1>, "requirements": ["<what one unit must meet to count>", ...],
 "step": "<for an item only a person can do: one full sentence saying what is done and, when the records say, by whom>"}}]}}
 A deliverable is a piece of the very thing the done test needs made, written now from the records: the content that will be published, sent, submitted or
@@ -262,21 +265,34 @@ class Progress:
     sources: str = ""               # what the writer was given beyond the turn's reads (the research it gathered), kept in the turn's read record
     tier: str = ""                  # the tier the deliverable was written on
     unsupported: List[str] = field(default_factory=list)     # sentences taken out because they stated a fact no source holds
+    proposed_units: List[str] = field(default_factory=list)  # the topics the writer proposed for the set's units, in order
+    follow_on: Optional[Dict[str, Any]] = None                 # the next unit that depends on this one, done in the same turn: item, part, before, after, total
+    method: str = ""                                           # how the increment was measured: rubric, evidence or read
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
         out = (OVERVIEW_HEAD + self.overview.strip()) if self.overview.strip() else ""
         for n, part in enumerate(self.parts, 1):
             out += PART_SEPARATOR.format(n=n) + part.strip()
+        if self.follow_on and self.follow_on.get("part"):
+            out += FOLLOW_SEPARATOR.format(item=self.follow_on["item"]) + str(self.follow_on["part"]).strip()
         return out.strip()
 
     def increment_line(self) -> str:
         if self.before is None or self.after is None:
             return ""
         shown = lambda v: str(int(v)) if float(v).is_integer() else f"{v:g}"     # noqa: E731
-        of = f" of {self.total}" if self.total else ""
-        # The depth loop's own scores stay in the kept increment's record (``depth``), not in the reply: a figure no read of the turn holds reads as invented.
-        return f"{self.measure_name}: {shown(self.before)}{of} before, {shown(self.after)}{of} after (scored {self.as_of} by a check separate from the writer)."
+        # Every count says what it counts (its basis), so a reader can trace it to what the code counted; the depth loop's own scores stay in the record.
+        basis = {"rubric": "units in which a separate check found every rubric item, each with a quote from the unit",
+                 "evidence": "questions answered with a quote found in the records, the turn's reads or the research",
+                 "read": "the value its source reads"}.get(self.method, "measured by code")
+        of = (f" of {self.total} {'asked' if self.method == 'evidence' else 'planned'}" if self.total else "")
+        line = f"{self.measure_name}: {shown(self.before)} before, {shown(self.after)} after{of} (counted: {basis}; {self.as_of})."
+        if self.follow_on and self.follow_on.get("part"):
+            f = self.follow_on
+            line += (f" Then, depending on it, {f['item']}: {shown(f['before'])} before, {shown(f['after'])} after"
+                     + (f" of {f['total']} planned" if f.get("total") else "") + " (counted the same way).")
+        return line
 
     def metric_line(self) -> str:
         if not self.metric_name:
@@ -396,9 +412,15 @@ class Scorer:
         return self.verdicts(part)[self.requirements.index(requirement)]
 
 
+def kept_follow_on(text: str) -> Tuple[str, str]:
+    """``(item, unit)`` of the follow-on unit a kept deliverable goal holds after its parts, else ``("", "")``."""
+    pieces = FOLLOW_SPLIT.split(str(text or ""), maxsplit=1)
+    return (pieces[1].strip(), pieces[2].strip()) if len(pieces) == 3 else ("", "")
+
+
 def kept_parts(text: str) -> List[str]:
     """The parts a kept deliverable goal holds (after its overview), in order; [] for none."""
-    body = str(text or "")
+    body = FOLLOW_SPLIT.split(str(text or ""), maxsplit=1)[0]
     pieces = PART_SPLIT.split(body)
     return [p.strip() for p in pieces[1:] if p.strip()]
 
@@ -535,26 +557,17 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         return ("\n\n".join(t for t in (str(grounding or "")[:GROUNDING_CHARS], ("Research gathered for this work:\n" + found["text"][:GROUNDING_CHARS]) if found.get("text") else "") if t)
                 or "(none)")
 
-    def work(increment: Mapping[str, Any]) -> Mapping[str, Any]:
-        item = dict(increment.get("item") or {})
-        chosen.update(item=item, increment=dict(increment))
-        if increment.get("method") == "read":
-            reading = dict(item.get("reading") or {})
-            out.parts = [f"{milestone_cue.CURRENT_VALUE} {reading.get('value')} (as of {reading.get('as_of')}, from {reading.get('source') or cue.source})"]
-            out.overview = f"{out.metric_name or cue.name}, read from its source because the record was behind it."
-            return {"artifact": {"value": reading.get("value")}, "evidence_ref": title}
-        gather_research(item)
-        if increment.get("method") == "evidence":
-            return gather_evidence(item, increment, kept)
+    def write_unit(item: Mapping[str, Any], requirements: List[str], have: List[str], note: str = "") -> Tuple[str, Dict[str, Any], Optional[Dict[str, Any]]]:
+        """One unit of a deliverable: written on the writer's tier from the records, the reads and the research, then built out by the hub's depth loop when the
+        separate check finds it short of its requirements. Returns the unit, the writer's answer (its proposed units) and the depth account."""
         total = item.get("total") if isinstance(item.get("total"), int) else None
-        have = list((kept or {}).get("parts") or [])
         kept_note = (f"Already kept (do not repeat; write the next unit, number {len(have) + 1}):\n" + "\n".join(f"- {clip_line(p)}" for p in have)) if have else ""
+        kept_note = (kept_note + "\n" + note).strip()
         data = parse_json(write(WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
-                                                    item=item.get("name"), requirements="; ".join(increment.get("requirements") or []) or "(none given)",
+                                                    item=item.get("name"), requirements="; ".join(requirements) or "(none given)",
                                                     kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)))
-        allowed = sources_text()
         part = str(data.get("part") or "").strip()
-        requirements = [str(r) for r in increment.get("requirements") or []]
+        depth = None
         if part and requirements:
             # The unit is its own solution with the kept rubric as its metric: the hub's depth loop checks it (the separate scorer, never the writer), splits what
             # it misses into sub-pieces with their own sub-prompts, recombines and checks again within the request's budget.
@@ -564,8 +577,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             unit = {"goal": f"{item.get('name')}, unit {len(have) + 1}", "requirements": requirements, "prompt": prompt, "solution_id": cue.rid}
 
             def piece_work(piece: Mapping[str, Any]) -> str:
-                answer = write(str(piece.get("prompt") or ""))
-                return str(parse_json(answer).get("part") or answer or "").strip()
+                answer = str(write(str(piece.get("prompt") or "")) or "")
+                # The part as asked (JSON); a plain-text answer is the part itself; an empty or malformed JSON answer is no part (never raw JSON in the unit).
+                return str(parse_json(answer).get("part") or ("" if answer.strip().startswith("{") else answer)).strip()
 
             def piece_check(text: str, piece: Mapping[str, Any]) -> Dict[str, Any]:
                 wanted = [str(r) for r in piece.get("requirements") or []]
@@ -587,15 +601,34 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                 # part met its requirement and the recombined text did not).
                 return "\n\n".join([base.strip()] + [str(p["text"]).strip() for p in parts if str(p.get("text") or "").strip()]).strip()
             deep = build_out(unit, piece_work, piece_check, split=piece_split, combine=piece_combine, budget={"calls": DEPTH_CALLS, "depth": 2, "width": 4}, base=part)
-            out.depth = {k: deep.get(k) for k in ("before", "after", "calls", "levels", "stopped", "met")}
+            depth = {k: deep.get(k) for k in ("before", "after", "calls", "levels", "stopped", "met")}
             if float(deep.get("after") or 0) >= float(deep.get("before") or 0):
                 part = str(deep.get("text") or part).strip()       # depth that scored lower than the one-call unit is not kept
+        return part, data, depth
+
+    def work(increment: Mapping[str, Any]) -> Mapping[str, Any]:
+        item = dict(increment.get("item") or {})
+        chosen.update(item=item, increment=dict(increment))
+        if increment.get("method") == "read":
+            reading = dict(item.get("reading") or {})
+            out.parts = [f"{milestone_cue.CURRENT_VALUE} {reading.get('value')} (as of {reading.get('as_of')}, from {reading.get('source') or cue.source})"]
+            out.overview = f"{out.metric_name or cue.name}, read from its source because the record was behind it."
+            return {"artifact": {"value": reading.get("value")}, "evidence_ref": title}
+        gather_research(item)
+        if increment.get("method") == "evidence":
+            return gather_evidence(item, increment, kept)
+        total = item.get("total") if isinstance(item.get("total"), int) else None
+        have = list((kept or {}).get("parts") or [])
+        part, data, depth = write_unit(item, [str(r) for r in increment.get("requirements") or []], have)
+        out.depth = depth
+        allowed = sources_text()
         part = grounded_text(part, allowed, decide) if part else ""
         if part:
             part, dropped = supported_sentences(part, allowed, decide)
             out.unsupported += dropped
         # The list of units is a proposal: the writer proposes what each covers, with its reason and source; its facts go through the same claim check.
         units = [u for u in data.get("units") or [] if isinstance(u, Mapping) and str(u.get("topic") or "").strip()]
+        out.proposed_units = [" ".join(str(u["topic"]).split()) for u in units]
         proposed = "\n".join(f"{n}. {' '.join(str(u['topic']).split())}. Why: {' '.join(str(u.get('why') or '').split()) or 'see the sources'}"
                              + (f" (source: {' '.join(str(u['source']).split())})" if str(u.get("source") or "").strip() else "") for n, u in enumerate(units, 1))
         head = f"{item.get('name')}" + (f": {total} units, written one per turn, in order." if total and total > 1 else ".")
@@ -623,12 +656,35 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             questions.append({"question": " ".join(str(row["question"]).split()), "answer": " ".join(str(row.get("answer") or "").split()) if grounded else "",
                               "source": " ".join(str(row.get("source") or "").split()) if grounded else ""})
         questions = questions[:EVIDENCE_QUESTIONS]
-        out.parts = [render_questions(questions)] if questions else []
+        rendered = render_questions(questions) if questions else ""
+        if rendered:
+            # The answers go through the same sentence check as any deliverable: each fact in them must rest on words code finds in the sources.
+            rendered, dropped = supported_sentences(rendered, sources_text(), decide, keep_line_starts=True)
+            out.unsupported += dropped
+            questions = (questions_of(rendered) or {}).get("questions") or questions
+        out.parts = [rendered] if rendered else []
         out.overview = f"The questions the decision needs, each answered from a cited record or read; the rest are {TO_BE_DECIDED}."
         return {"artifact": {"questions": questions} if questions else None, "evidence_ref": title}
 
     made = composition.progress(milestone, metrics, items, work, judge=judge, means=means, readers=readers, today=day, ask=decide,
                                 kept=kept)
+    def follow_on_unit(follow: Dict[str, Any]) -> Dict[str, Any]:
+        researched, _ = researched_rubric(follow, cue, research, decide)
+        requirements = researched or [str(r) for r in follow.get("requirements") or []]
+        first = out.proposed_units[0] if out.proposed_units else ""
+        kept_item, kept_unit = kept_follow_on(kept_text)
+        before = 1.0 if kept_unit and requirements and all(judge(r, kept_unit) for r in requirements) else 0.0
+        part, _, depth = write_unit(follow, requirements, [], note=(f"Write the unit for the first proposed item: {first}." if first else ""))
+        allowed = sources_text()
+        part = grounded_text(part, allowed, decide) if part else ""
+        if part:
+            part, dropped = supported_sentences(part, allowed, decide)
+            out.unsupported += dropped
+        met = bool(part) and bool(requirements) and all(judge(r, part) for r in requirements)
+        total = follow.get("total") if isinstance(follow.get("total"), int) and follow.get("total") > 1 else None
+        return {"item": str(follow.get("name") or ""), "part": part, "before": before, "after": max(before, 1.0 if met else 0.0), "total": total,
+                "requirements": requirements, "depth": depth}
+
     out.status = str(made.get("status") or "")
     increment = dict(made.get("increment") or {})
     item = dict(increment.get("item") or {})
@@ -640,6 +696,13 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     out.before = (made.get("before") or {}).get("value")
     out.after = (made.get("after") or {}).get("value")
     out.ask = without_ids(first_person_step(items, doable))
+    out.method = str(increment.get("method") or "")
+    if out.status == "measured" and increment.get("kind") == "deliverable":
+        # The ladder follows dependencies inside the turn: the next AI-doable unit that needs this one (a script for the first item of a proposed list) is
+        # done now too, measured the same way, so a proposal never stops the turn at waiting for it to be agreed.
+        follow = dependent_item(items, str(item.get("name") or ""), doable)
+        if follow is not None:
+            out.follow_on = follow_on_unit(follow)
     proposal = next((a.get("proposed_source") for a in made.get("actions") or [] if isinstance(a.get("proposed_source"), Mapping)), None)
     if proposal:
         out.notes = (f"To make {out.metric_name or 'the milestone metric'} readable here (an AI proposal, kept on the milestone's record): read "
@@ -651,7 +714,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     result = registry.invoke(KEEP_TOOL, {"quest_id": cue.quest_id, "title": title, "body": out.body(), "solution_id": cue.rid,
                                          "increment": {"kind": increment.get("kind"), "measure_id": increment.get("measure_id"), "measure_name": out.measure_name,
                                                        "before": out.before, "after": out.after, "total": out.total, "method": increment.get("method"),
-                                                       "as_of": day, "changed": out.after != out.before, "depth": out.depth}}, ToolContext(quest_id=cue.quest_id))
+                                                       "as_of": day, "changed": out.after != out.before, "depth": out.depth,
+                                                       "follow_on": {k: (out.follow_on or {}).get(k) for k in ("item", "before", "after", "total")} if out.follow_on else None}},
+                         ToolContext(quest_id=cue.quest_id))
     if not getattr(result, "ok", False):
         raise milestone_cue.LaneGap(f"the deliverable for {cue.name!r} was not kept: {str(getattr(result, 'text', ''))[:300]}")
     out.kept_state = str((result.data or {}).get("state") or "")
@@ -803,6 +868,13 @@ def questions_of(text: str) -> Optional[Dict[str, Any]]:
             found.setdefault(a.group("n"), {}).update(answer=a.group("a").strip() if answered else "", source=(a.group("s") or "").strip() if answered else "")
     questions = [v for _, v in sorted(found.items(), key=lambda kv: int(kv[0])) if v.get("question")]
     return {"questions": questions} if questions else None
+
+
+def dependent_item(items: Sequence[Dict[str, Any]], name: str, doable: Callable[[Mapping[str, Any]], bool]) -> Optional[Dict[str, Any]]:
+    """The AI-doable deliverable whose ``depends_on`` names ``name`` (case and spacing aside), else None."""
+    key = " ".join(name.lower().split())
+    return next((i for i in items if str(i.get("kind") or "") == "deliverable" and doable(i) and " ".join(str(i.get("name") or "").lower().split()) != key
+                 and key and " ".join(str(i.get("depends_on") or "").lower().split()) == key), None)
 
 
 RECORD_ID = re.compile(r"\s*\((?:[a-z]{2,8}_[0-9a-f]{8,})\)|\b[a-z]{2,8}_[0-9a-f]{10,}\b")

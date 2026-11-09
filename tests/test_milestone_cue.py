@@ -430,7 +430,9 @@ def run_tool(client, **extra):
     from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
     from quest_ai_runner.the_world.tools.tools import ToolContext
     spec = create_or_update_quest_goal_spec({}, client_factory=lambda: client)
-    args = {"quest_id": "q1", "title": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True, "user_asked_for_this_field": True, **extra}
+    # A fixed period (the week of KEYED): a test that left it to "this week" changed outcome when the calendar week rolled over.
+    args = {"quest_id": "q1", "title": KEYED, "period": "2026_W45", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True,
+            "user_asked_for_this_field": True, **extra}
     return spec.handler(args, ToolContext(quest_id="q1"))
 
 
