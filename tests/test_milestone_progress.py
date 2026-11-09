@@ -423,3 +423,29 @@ def test_the_whole_metric_records_are_read_and_the_records_text_rebuilt():
     c = cue()
     milestone_progress.whole_row(Whole(), c)
     assert "The tail fact: 42 links." in c.records_text
+
+
+def test_an_open_question_is_its_own_researched_piece():
+    def research(query):
+        return "Funnel guide: sign-ups from video links are counted by the tag utm_source." if "counted" in query else "Guide: nothing on that."
+
+    def answering(prompt):
+        if "List the questions this decision needs" in prompt:
+            return json.dumps({"questions": [{"question": "How are sign-ups from video links counted?", "answer": "", "source": "", "quote": ""}]})
+        if "Answer one question a team's decision needs" in prompt:
+            return json.dumps({"answer": "By the tag utm_source.", "source": "Funnel guide", "quote": "counted by the tag utm_source"})
+        return decide(prompt)
+    items = [{"name": "Evidence on sign-ups", "kind": "evidence", "actor": "ai", "outward": False, "moves_parent": False, "inputs": ["sol-1"], "total": 1,
+              "requirements": ["Each answer names its source"]}]
+
+    def decomposing(prompt):
+        if "Break the work this milestone needs" in prompt:
+            return json.dumps({"items": items})
+        if "can an AI do it right now" in prompt:
+            return json.dumps({"verdicts": [{"n": 1, "ai_can": True}]})
+        if "What is this milestone's done test made of" in prompt:
+            return json.dumps({"pick": "others"})
+        return answering(prompt)
+    made = milestone_progress.make_progress(cue(), Registry(), decomposing, research=research)
+    assert made.depth and made.depth["before"] == 0 and made.depth["after"] == 1 and made.depth["stopped"] == "met"
+    assert "By the tag utm_source. (source: Funnel guide)" in made.parts[0]

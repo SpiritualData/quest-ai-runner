@@ -199,9 +199,10 @@ The work item: {item}
 Each unit must meet: {requirements}
 {kept}
 Reply with JSON only: {{"units": [{{"n": <number>, "topic": "<what that unit covers>", "why": "<the reason, from the sources>", "source": "<the source it rests on>"}}],
-"part": "<the next unit, complete, meeting every requirement above>"}}. List every unit of the set in "units" (as many as the set needs); "part" is the next one
-in full. The part is the unit itself, used as it is: for a video, the words to be spoken; for copy, the copy; for a message, the message; never notes, an outline or
-a plan about the unit unless the unit is itself an outline.
+"part": "<the text the requirements above are checked on, complete>"}}. List every unit of the set in "units" (as many as the set needs). The requirements are
+checked on "part" alone, so "part" is the very thing they describe: when they speak of a whole set (a list, every entry, the full list), "part" is that whole
+set written out, each entry with what the requirements ask of it; when they speak of one unit, "part" is the next unit in full. The part is used as it is: for a
+video, the words to be spoken; for copy, the copy; for a list, the list; never notes or a plan about it.
 Facts and proposals are different. A fact (what the product does, a figure, a date, a name, a result) must come from the sources above, said as they say it;
 never invent one. A point about the product restates a passage of the sources in its words; an example or a speaker the sources do not give is left out. A proposal (which topics to cover, which option to recommend, how to compare candidates) is your own work: make it, concretely, from the
 sources, and say why. When the work compares options or prepares a decision, end with an explicit recommendation of one option, labelled as a proposal,
@@ -225,6 +226,19 @@ List the questions this decision needs answered (at most {limit}), and answer ea
 {{"questions": [{{"question": "<one full sentence>", "answer": "<the answer, or empty when the records and reads do not give it>",
 "source": "<the record or read it comes from, by name>", "quote": "<the exact words of that record or read the answer rests on, a few words, empty when unanswered>"}}]}}.
 Invent no figure, name or date. {no_em_dash}"""
+
+ANSWER_PROMPT = """Answer one question a team's decision needs, only from the records and the reads below; quote the exact words the answer rests on.
+
+The question: {question}
+
+The milestone's records:
+{records}
+
+What this turn read and the research gathered (each source named):
+{grounding}
+
+Reply with JSON only: {{"answer": "<the answer, or empty when the sources do not give it>", "source": "<the record or read it comes from, by name>",
+"quote": "<the exact words of that source the answer rests on, a few words>"}}. Invent no figure, name or date. {no_em_dash}"""
 
 PART_PROMPT = """Write the few sentences one unit of a team's deliverable still lacks, as content of the unit itself (the words used as they are: for a script, the
 words spoken), to be combined into it. Never write about the unit, its requirements or this instruction.
@@ -892,6 +906,11 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             # A proposed topic is a proposal and stays; the facts given as its reasons must rest on a source like any other.
             proposed, dropped = supported_sentences(grounded_text(proposed, allowed, decide), allowed, decide, keep_line_starts=True)
             out.unsupported += dropped
+        # When the part is itself the set (most proposed topics are in it), the list is not repeated above it.
+        topics = [stems5(t) for t in out.proposed_units if stems5(t)]
+        in_part = sum(1 for t in topics if len(t & stems5(part)) * 2 >= len(t))
+        if topics and in_part * 2 >= len(topics):
+            proposed = ""
         out.overview = head + (("\nProposed units (an AI proposal from the sources, to be agreed):\n" + proposed) if proposed else "")
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}
@@ -912,6 +931,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             questions.append({"question": " ".join(str(row["question"]).split()), "answer": " ".join(str(row.get("answer") or "").split()) if grounded else "",
                               "source": " ".join(str(row.get("source") or "").split()) if grounded else ""})
         questions = questions[:EVIDENCE_QUESTIONS]
+        out.depth = deepen_evidence(questions, item)
         rendered = render_questions(questions) if questions else ""
         if rendered:
             # The answers go through the same sentence check as any deliverable: each fact in them must rest on words code finds in the sources. An answer the
@@ -923,6 +943,36 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         out.parts = [rendered] if rendered else []
         out.overview = f"The questions the decision needs, each answered from a cited record or read; the rest are {TO_BE_DECIDED}."
         return {"artifact": {"questions": questions} if questions else None, "evidence_ref": title}
+
+    def deepen_evidence(questions: List[Dict[str, Any]], item: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        """Depth for evidence: each question the first pass left open is its own piece, with its own research (the question itself, against the product's
+        documents and outside sources) and its own answering call; an answer stands only with a quote code finds in the sources and a source the turn read.
+        Pieces run until every question is answered or the budget is spent. Returns the depth account (answered share before and after, calls, why it stopped)."""
+        if not questions:
+            return None
+        share = lambda: sum(1 for q in questions if q.get("answer")) / len(questions)      # noqa: E731
+        before, calls = share(), 0
+        for q in [q for q in questions if not q.get("answer")]:
+            if calls + 2 > DEPTH_CALLS:
+                break
+            more = ""
+            if research is not None:
+                calls += 1
+                try:
+                    more = str(research(f"{q['question']} {cue.name}"[:600]) or "").strip()
+                except Exception as error:  # noqa: BLE001  the question stays open
+                    log.warning("milestone progress: question research failed: %s: %s", type(error).__name__, error)
+                if more:
+                    found["text"] = "\n\n".join(t for t in (found.get("text", ""), more) if t)
+                    out.sources = found["text"]
+            calls += 1
+            data = parse_json(write(ANSWER_PROMPT.format(question=q["question"], records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(), no_em_dash=NO_EM_DASH)))
+            quote, allowed = squash(data.get("quote")), sources_text()
+            if str(data.get("answer") or "").strip() and len(quote) >= 3 and quote in squash(allowed) and held_source(data.get("source"), allowed):
+                q.update(answer=" ".join(str(data["answer"]).split()), source=" ".join(str(data["source"]).split()))
+        after = share()
+        return {"before": round(before, 3), "after": round(after, 3), "calls": calls, "levels": 1 if calls else 0,
+                "stopped": "met" if after == 1 else ("budget" if calls + 2 > DEPTH_CALLS else "rechecked"), "met": after == 1}
 
     made = composition.progress(milestone, metrics, items, work, judge=judge, means=means, readers=readers, today=day, ask=decide,
                                 kept=kept)
@@ -1023,13 +1073,17 @@ def researched_rubric(item: Mapping[str, Any], cue: Any, research: Optional[Call
         return [], []
     if not found:
         return [], []
-    data = parse_json(decide(RUBRIC_PROMPT.format(item=item.get("name"), done_when=cue.done_when, purpose=clip_line(cue.purpose, 600), research=found[:GROUNDING_CHARS])))
+    fixed = [str(r) for r in item.get("requirements") or [] if str(r) == DECISION_REQUIREMENT]
+    data = parse_json(decide(RUBRIC_PROMPT.format(item=item.get("name"), done_when=cue.done_when, purpose=clip_line(cue.purpose, 600), research=found[:GROUNDING_CHARS])
+                             + ("\nEvery requirement must agree with this fixed one (never ask for the opposite, such as a single option where it compares several): "
+                                + fixed[0] if fixed else "")))
     proposed = [r for r in data.get("requirements") or [] if isinstance(r, Mapping) and str(r.get("text") or "").strip()][:5]
     if not proposed:
         return [], []
     listing = "\n".join(f"{n}. {r['text']}" for n, r in enumerate(proposed, 1))
     verdicts = {int(v.get("n")): v.get("keep") is True for v in parse_json(decide(RUBRIC_CHECK_PROMPT.format(
-        item=item.get("name"), research=found[:GROUNDING_CHARS], listing=listing, done_when=cue.done_when))).get("verdicts") or []
+        item=item.get("name"), research=found[:GROUNDING_CHARS], listing=listing, done_when=cue.done_when)
+        + ("\nKeep a requirement only when it also agrees with this fixed one: " + fixed[0] if fixed else ""))).get("verdicts") or []
         if isinstance(v, Mapping) and str(v.get("n") or "").isdigit()}
     kept = [r for n, r in enumerate(proposed, 1) if verdicts.get(n)]
     if len(kept) < 2:
