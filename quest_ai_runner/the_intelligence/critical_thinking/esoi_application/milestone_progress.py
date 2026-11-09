@@ -318,6 +318,7 @@ class Progress:
     follow_on: Optional[Dict[str, Any]] = None                 # the next unit that depends on this one, done in the same turn: item, part, before, after, total
     method: str = ""                                           # how the increment was measured: rubric, evidence or read
     kept_artifacts: List[str] = field(default_factory=list)    # each record write this turn made or proposed besides the goal, said for the reader
+    handed_off: Optional[Dict[str, Any]] = None                 # the deliverable's work handed to the deep harness: its goal, and whether it was queued
 
     def body(self) -> str:
         """The deliverable as kept on the goal: the overview, then each part under its separator."""
@@ -354,7 +355,20 @@ class Progress:
         return f"Milestone metric ({self.metric_name}): {self.metric_before or 'not recorded'}; it could not be read again just now."
 
     def reply_text(self) -> str:
-        """The reply, composed by code: the deliverable first, then the measured increment, the milestone metric read again, then the one person-only step."""
+        """The reply, composed by code: the deliverable first, then the measured increment, the milestone metric read again, then the one person-only step.
+        Work handed to the deep harness as background work is acknowledged instead: what is being made, where it will be kept, and its before."""
+        if self.status == "handed_off":
+            shown = lambda v: str(int(v)) if float(v).is_integer() else f"{v:g}"     # noqa: E731
+            lines = [f"I started {self.item[:1].lower() + self.item[1:] if self.item[:2] != self.item[:2].upper() else self.item} as background work: the deep agent "
+                     f"builds it to its rubric and keeps it on the goal '{self.title}'."]
+            if self.before is not None:
+                lines.append(f"{self.measure_name}: {shown(self.before)} now" + (f" of {self.total} planned" if self.total else "")
+                             + f" (counted: units in which a separate check found every rubric item; {self.as_of}); the count is taken again when the work is kept.")
+            if self.kept_artifacts:
+                lines.append("Also kept on the milestone's record this turn:\n" + "\n".join(f"- {a}" for a in self.kept_artifacts))
+            if self.ask:
+                lines.append(f"The one step only a person can do: {self.ask.rstrip('.')}.")
+            return "\n\n".join(lines)
         item = self.item.rstrip(".")
         item = item[0].lower() + item[1:] if item[:2] != item[:2].upper() else item          # "Scripts for ..." reads "scripts for ..." mid-sentence; an acronym stays
         what = f"{item} (part {len(self.parts)}" + (f" of {self.total})" if self.total else ")") if self.parts else item
@@ -680,11 +694,14 @@ def first_person_step(items: Sequence[Mapping[str, Any]], doable: Callable[[Mapp
 
 
 def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], grounding: str = "", today: Optional[datetime.date] = None,
-                  write: Optional[Callable[[str], str]] = None, research: Optional[Callable[[str], str]] = None, tier: str = "") -> Progress:
+                  write: Optional[Callable[[str], str]] = None, research: Optional[Callable[[str], str]] = None, tier: str = "",
+                  deep: Optional[Callable[[str, str], Mapping[str, Any]]] = None) -> Progress:
     """The progress step for a resolved milestone ``cue`` (``milestone_cue.Resolved``). Raises ``milestone_cue.LaneGap`` when a read or the keep fails.
     ``decide`` is the cheap call for the structured judgments (work items, checks, scoring); ``write`` writes the deliverable's prose (the tier chosen for
     it, ``tier`` names it; ``decide`` when none); ``research(query) -> text`` reads the product's own documents and outside sources for the facts a
-    deliverable needs (each passage with its source)."""
+    deliverable needs (each passage with its source). ``deep(goal, brief) -> {"output", "deferred", "error"}`` runs work through the harness the ESOI cascade
+    selected for work (the deep agent); when given, a deliverable is made there from its solution's brief, never by the cheap writer: an inline result is
+    measured and kept here, a queued one (long work, a background task) is acknowledged with its before measured."""
     write = write or decide
     from hubofhubs.api import CriticalThinkingComposition, MajorityVote, RecordFieldUpkeep, doable_by_ai
     from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import grounded_text
@@ -739,6 +756,8 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             home_row = dict((home or {}).get("row") or {})
             home_rubric = kept_rubric(home_row) if home_row else None
             out_home.update(home or {})
+            if home and home.get("created") and isinstance(cue.tables, Mapping):
+                cue.tables = dict(cue.tables, solutions=dict(cue.tables.get("solutions") or {}, **{home["id"]: home_row}))
         if first is not None and home_rubric is not None:
             first.update(name=home_rubric.item, kind=home_rubric.kind, requirements=list(home_rubric.requirements), kept_rubric=True)
             if home_rubric.total:
@@ -761,6 +780,18 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             answer = spec_edit.apply({"edit": {"kind": "spec_edit", "target": owner or cue.rid, "field": "knowledge", "value": with_entry(held, entry)}})
             if answer.get("applied") and not owner:
                 knowledge_now = with_entry(row.get("knowledge"), entry)
+            if owner and answer.get("applied"):
+                home_row["knowledge"] = with_entry(held, entry)
+                if isinstance(cue.tables, Mapping):
+                    cue.tables = dict(cue.tables, solutions=dict(cue.tables.get("solutions") or {}, **{owner: home_row}))
+            if owner and out_home.get("created"):
+                # The created solution gets its own metric: units of the deliverable meeting its rubric (the rubric said in the metric's purpose).
+                spec_edit.apply({"edit": {"kind": "record_add", "table": "metrics", "key": f"{home_row.get('name') or first['name']} meeting their rubric",
+                                          "fields": quest_metric_fields({"name": f"{home_row.get('name') or first['name']} meeting their rubric",
+                                                                         "purpose": f"Counts the units of {home_row.get('name') or first['name']} that meet every rubric item.",
+                                                                         "record": "Current value: 0", "solution_ids": [owner], "rubric": first["requirements"],
+                                                                         "total": first.get("total") if isinstance(first.get("total"), int) else None,
+                                                                         "unit": "units"})}})
             rubric_state = "kept" if answer.get("applied") else ("proposed" if answer.get("proposed") else "not kept: " + str(answer.get("reason") or "refused")[:200])
     moved_by = "person" if [i for i in items if i.get("moves_parent")] and not any(doable(i) for i in items if i.get("moves_parent")) else "ai"
     title = str((kept_goal or {}).get("title") or (kept_goal or {}).get("name") or f"{cue.name} {DELIVERABLES}").strip()
@@ -838,13 +869,21 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         cleaned_cache[key] = now.strip()
         return cleaned_cache[key]
 
+    def solution_records() -> str:
+        """The deliverable's solution as the hub generates its prompt from its own network of records (records, metric, knowledge), then the milestone's
+        records: the writer and the deep agent work from the solution, not from an ad hoc description."""
+        sid = str(out_home.get("id") or "")
+        own = solution_prompt(cue, sid, str(chosen.get("item", {}).get("name") or "")) if sid else ""
+        return "\n\n".join(t for t in ((f"The deliverable's own solution, from its records:\n{own}" if own else ""),
+                                         "The milestone, from its records:\n" + cue.records_text[:RECORD_CHARS * 2]) if t)
+
     def write_unit(item: Mapping[str, Any], requirements: List[str], have: List[str], note: str = "") -> Tuple[str, Dict[str, Any], Optional[Dict[str, Any]]]:
         """One unit of a deliverable: written on the writer's tier from the records, the reads and the research, then built out by the hub's depth loop when the
         separate check finds it short of its requirements. Returns the unit, the writer's answer (its proposed units) and the depth account."""
         total = item.get("total") if isinstance(item.get("total"), int) else None
         kept_note = (f"Already kept (do not repeat; write the next unit, number {len(have) + 1}):\n" + "\n".join(f"- {clip_line(p)}" for p in have)) if have else ""
         kept_note = (kept_note + "\n" + note).strip()
-        data = parse_json(write(WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
+        data = parse_json(write(WRITE_PROMPT.format(records=solution_records(), grounding=shown(),
                                                     item=item.get("name"), requirements="; ".join(requirements) or "(none given)",
                                                     kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)))
         part = str(data.get("part") or "").strip()
@@ -853,7 +892,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             # The unit is its own solution with the kept rubric as its metric: the hub's depth loop checks it (the separate scorer, never the writer), splits what
             # it misses into sub-pieces with their own sub-prompts, recombines and checks again within the request's budget.
             from hubofhubs.api import build_out
-            prompt = WRITE_PROMPT.format(records=cue.records_text[:RECORD_CHARS * 2], grounding=shown(),
+            prompt = WRITE_PROMPT.format(records=solution_records(), grounding=shown(),
                                          item=item.get("name"), requirements="; ".join(requirements), kept=kept_note, total=total or "the", no_em_dash=NO_EM_DASH)
             unit = {"goal": f"{item.get('name')}, unit {len(have) + 1}", "requirements": requirements, "prompt": prompt, "solution_id": cue.rid, "whole": True}
 
@@ -909,7 +948,20 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             return gather_evidence(item, increment, kept)
         total = item.get("total") if isinstance(item.get("total"), int) else None
         have = list((kept or {}).get("parts") or [])
-        part, data, depth = write_unit(item, [str(r) for r in increment.get("requirements") or []], have)
+        requirements = [str(r) for r in increment.get("requirements") or []]
+        if deep is not None:
+            # Part 3: the work runs through the harness the ESOI cascade selected for work (the deep agent), from the solution's brief. A queued run is
+            # background work: acknowledged, its before measured, kept by the worker on the same goal; an inline run comes back and is measured here.
+            goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown())
+            got = dict(deep(goal, brief) or {})
+            out.handed_off = {"goal": goal, "queued": bool(got.get("deferred")), "error": str(got.get("error") or "")}
+            if got.get("deferred") or not str(got.get("output") or "").strip():
+                out.parts, out.overview = have, f"{item.get('name')}."
+                return {"artifact": None, "evidence_ref": title}
+            out.handed_off = None
+            part, data, depth = cleaned(str(got.get("output") or "")), {}, None
+        else:
+            part, data, depth = write_unit(item, requirements, have)
         out.depth = depth
         allowed = sources_text()
         # The list of units is a proposal: the writer proposes what each covers, with its reason and source; its facts go through the same claim check.
@@ -1004,7 +1056,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         return {"item": str(follow.get("name") or ""), "part": part, "before": before, "after": max(before, 1.0 if met else 0.0), "total": total,
                 "requirements": requirements, "depth": depth}
 
-    out.status = str(made.get("status") or "")
+    out.status = "handed_off" if out.handed_off and out.handed_off.get("queued") else str(made.get("status") or "")
     increment = dict(made.get("increment") or {})
     item = dict(increment.get("item") or {})
     out.item = str(item.get("name") or "the next deliverable")
@@ -1024,6 +1076,10 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             out.follow_on = follow_on_unit(follow)
     # Every artifact this turn kept or proposed on the records is named in the reply, from the writes code recorded (never from what the writer says).
     out.kept_artifacts = kept_artifacts(spec_edit.written, knowledge_start, metrics)
+    if out.status == "handed_off":
+        out.kept_artifacts = kept_artifacts(spec_edit.written, knowledge_start, metrics)
+        out.before = (made.get("before") or {}).get("value") if made.get("before") else out.before
+        return out
     if out.status != "measured":
         out.why = str(made.get("message") or out.status)
         return out
@@ -1279,6 +1335,50 @@ def deliverable_home(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: 
     if not answer.get("applied") or not sid:
         return None
     return {"id": sid, "row": fields, "created": bool(answer.get("created", True))}
+
+
+def solution_prompt(cue: Any, sid: str, task: str = "") -> str:
+    """The hub's generated prompt for solution ``sid`` from the quest's own network of records (its records, metric and knowledge), "" when the quest's
+    records do not hold it or the network cannot be built."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.solution_consideration import quest_network
+    try:
+        network = quest_network(str(cue.quest_id), cue.tables or {})
+        if not network.has(sid):
+            return ""
+        return str((network.prompt(sid, task) or {}).get("text") or "")[:GROUNDING_CHARS]
+    except Exception as error:  # noqa: BLE001  the milestone's records stand alone
+        log.warning("milestone progress: the solution's prompt could not be built: %s: %s", type(error).__name__, error)
+        return ""
+
+
+DEEP_BRIEF = """Make this deliverable for a team's milestone, to completion quality, and keep it.
+
+The work item: {item}
+Its rubric (every unit must meet each item; a separate check counts the units that do): {rubric}
+Already kept (continue after these; do not repeat them):
+{have}
+
+Where to keep it: the goal titled exactly "{title}" in this quest, its description starting with the line "Kept by Quest AI:" and then the deliverable,
+updated in place (never a second goal).
+
+{records}
+
+What the turn read (each source named):
+{grounding}
+
+Build it out with depth: research what it needs (the product's documents and outside sources, each named), write each part, and check each against the
+rubric before keeping it. A fact (what the product does, a figure, a link, a name) only as a source says it, with the source; a proposal labelled as one;
+no placeholder and no blank slot. End your output with the deliverable itself, exactly as kept. {no_em_dash}"""
+
+
+def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have: Sequence[str], title: str, records: str, grounding: str) -> Tuple[str, str]:
+    """``(goal, brief)`` for the deep harness: the work item as the goal, and the brief from the deliverable's solution records, its rubric, what is kept
+    and where it is kept."""
+    goal = f"Make {item.get('name')} to its rubric and keep it on the goal '{title}'"
+    brief = DEEP_BRIEF.format(item=item.get("name"), rubric="; ".join(requirements) or "(none recorded)",
+                              have="\n".join(f"- {clip_line(p)}" for p in have) or "(nothing yet)", title=title, records=records,
+                              grounding=str(grounding or "")[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH)
+    return goal, brief
 
 
 def with_reading_fields(metric: Mapping[str, Any]) -> Dict[str, Any]:

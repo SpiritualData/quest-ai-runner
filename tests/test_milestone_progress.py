@@ -474,3 +474,32 @@ def test_the_deliverable_is_filed_under_its_own_solution_created_once_and_reused
     later.tables = json.loads(json.dumps(registry.tables))
     found = milestone_progress.deliverable_home(later, {"name": "tutorial scripts for the next tutorial"}, None, again)
     assert found and found["id"] == "Tutorial scripts" and found["created"] is False
+
+
+def test_with_a_deep_harness_the_deliverable_is_made_there_from_its_solution_brief_never_by_the_writer():
+    briefs, written = [], []
+
+    def deep(goal, brief):
+        briefs.append((goal, brief))
+        return {"output": "Opening line for tutorial 1. Teach the product. Call to action: try it today.", "deferred": False}
+
+    def no_writer(prompt):
+        if "You write one deliverable" in prompt:
+            written.append(prompt)
+        if "Name the KIND of deliverable it is" in prompt:
+            return json.dumps({"kind": "tutorial scripts", "purpose": "Short spoken scripts that teach one task each."})
+        return decide(prompt)
+    registry = Registry()
+    made = milestone_progress.make_progress(cue(), registry, no_writer, deep=deep)
+    assert not written and len(briefs) == 1
+    goal, brief = briefs[0]
+    assert "Has an opening" in brief and made.title in brief and "The deliverable's own solution, from its records" in brief
+    assert made.status == "measured" and (made.before, made.after) == (0, 1) and registry.goals[made.title]
+    assert "Tutorial scripts meeting their rubric" in registry.tables["metrics"]          # the created solution has its own metric
+
+
+def test_long_work_queued_on_the_deep_harness_is_acknowledged_with_its_before():
+    made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: {"output": "task queued", "deferred": True})
+    assert made.status == "handed_off" and made.before == 0
+    reply = made.reply_text()
+    assert reply.startswith("I started") and "background work" in reply and "0 now of 6 planned" in reply and "The one step only a person can do" in reply

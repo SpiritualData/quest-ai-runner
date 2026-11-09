@@ -475,9 +475,10 @@ def close_with_metric(orch: Any, rs: Any, res: Any) -> None:
     Nothing is added to a turn that sent no first message, so an information request or a plain reply stays one message."""
     sent = getattr(rs, "status_first", None)
     made = getattr(getattr(rs, "cue_resolved", None), "progress", None)
-    if made is not None and getattr(made, "status", "") == "measured" and getattr(res, "kind", "") in ("answer", "deep"):
+    if made is not None and getattr(made, "status", "") in ("measured", "handed_off") and getattr(res, "kind", "") in ("answer", "deep"):
         # A progress turn's reply is composed by code, deliverable first: the deliverable as kept, its measure before and after, the milestone metric read
-        # again, then at most one step only a person can do. The model's prose around it adds nothing a reader can check, so it is not kept.
+        # again, then at most one step only a person can do; work handed to the deep harness as background work is acknowledged with its before. The model's
+        # prose around it adds nothing a reader can check, so it is not kept.
         res.text = made.reply_text()
         for part in getattr(res, "deep_results", None) or []:
             if isinstance(getattr(part, "output", None), str):

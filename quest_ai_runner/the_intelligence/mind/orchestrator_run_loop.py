@@ -9,7 +9,7 @@ import logging
 import json
 import time
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import (
@@ -22,6 +22,7 @@ from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_vie
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, mutating_call_count, send_status_first, settle_already_set, track_alternatives, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DEFERRED_RUNNER_KEY
 from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import is_eligible, trace_from_result
 from hubofhubs.api import CardThreadDecision, ExecutionFact, parse_card_thread
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import deep_metric_data
@@ -616,14 +617,28 @@ class RunLoopMixin:
                             if web is not None and str(getattr(web, "text", "") or "").strip() and getattr(web, "kind", "") != "error":
                                 found.append("Web search results (each under its link):\n" + str(web.text)[:4000])
                         return "\n\n".join(found)
+                    deep_work = None
+                    queue_runner = (self.deep_runners or {}).get(DEFERRED_RUNNER_KEY) if cfg.deferred_deep_queued else None
+                    if getattr(cfg, "milestone_work_on_deep_harness", True) and (queue_runner is not None or self._has_deep_execution_capability()):
+                        def deep_work(goal: str, brief: str) -> Dict[str, Any]:
+                            # The deliverable's work on the harness the ESOI cascade selected for work: the deferred queue in a queued deployment (a
+                            # background task the turn acknowledges), else the deep runner the classifier picks, inline.
+                            plan = PlanDecision(action="deep", goal=goal, deep_brief=brief, deep_target="other", deep_difficulty="complex",
+                                                rationale="the milestone's deliverable, made from its own solution's records")
+                            res = self._run_deep(plan, rs.user_message, self._answer_model(plan, "balanced", hint=rs.model_hint), emit=emit,
+                                                 exec_record=exec_record, gathered=gathered, ctx_meta=rs._ctx_meta, runner_override=queue_runner,
+                                                 user_ordered=True, run_control=rs.run_control, card_context=rs.card_context)
+                            first = next(iter(getattr(res, "deep_results", None) or []), None)
+                            return {"output": str(getattr(first, "output", "") or getattr(res, "text", "") or ""),
+                                    "deferred": bool(getattr(first, "deferred", False)), "error": str(getattr(first, "error", "") or "")}
                     made = milestone_progress.make_progress(rs.cue_resolved, self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered),
-                                                            write=self.tier_writer(tier), research=research, tier=tier)
+                                                            write=self.tier_writer(tier), research=research, tier=tier, deep=deep_work)
                     if made.sources:
                         # What the writer was given beyond the tool reads is a read of this turn: the reply check, the figure pass and an evaluation see it as a source.
                         gathered.append({"kind": "query", "locator": "research:milestone deliverable", "text": made.sources, "tool_status": "applied", "by_code": True})
                         logging.getLogger("quest-ai-runner.grounding").debug("Turn read: research for the deliverable: %s", made.sources[:20000])
                     rs.cue_resolved.progress = made
-                    if made.status != "measured":
+                    if made.status not in ("measured", "handed_off"):
                         raise milestone_cue.LaneGap(f"no AI increment could be made for {rs.cue_resolved.name!r}: {made.why}")
                     receipt = made.reply_text()
                     try:

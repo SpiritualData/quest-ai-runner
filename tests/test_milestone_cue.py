@@ -1205,3 +1205,17 @@ def test_the_milestone_judgment_names_bookkeeping_as_none():
     asked = []
     cue.judge(TABLES, CUE, ["esr_c"], lambda prompt: asked.append(prompt) or "NONE")
     assert "an owner, a due date or a reminder" in asked[0]
+
+
+def test_a_progress_turn_with_a_queued_deep_harness_hands_the_deliverable_there_and_acknowledges():
+    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DEFERRED_RUNNER_KEY
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from .conftest import StubDeepRunner, StubProvider, StubRetrieval
+    provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
+    config = OrchestratorConfig(overseer=False, deferred_deep_queued=True)
+    queue = StubDeepRunner(output="task #3 launched", deferred=True)
+    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=config, tools=registry([]),
+                          deep_runners={DEFERRED_RUNNER_KEY: queue}).run(CUE, quest_id="q1")
+    assert len(queue.calls) == 1 and "Its rubric" in queue.calls[0]["brief"] and "Kept by Quest AI:" in queue.calls[0]["brief"]
+    assert "background work" in result.text and "I wrote" not in result.text
