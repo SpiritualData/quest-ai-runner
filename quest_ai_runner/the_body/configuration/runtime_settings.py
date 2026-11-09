@@ -39,12 +39,7 @@ class CoreSettings:
     quest_scope_mode: str = "fence"
     verify_context_max_chars: int = 24000  # [QAR_VERIFY_CONTEXT_MAX_CHARS]
     note_floor_relevance_gated: bool = True  # [QAR_NOTE_FLOOR_RELEVANCE_GATED]
-    # Off by default: on the production overlay (12 cases) it made the median reply 10.6 s slower and the p90 39 s slower with no change in
-    # pass rate, though it never delays the acknowledgement. Deep runs and milestone steps consider each solution regardless.
-    solution_consideration_in_chat: bool = False  # [QAR_SOLUTION_CONSIDERATION]
-    solution_consideration_mode: str = "full"  # [QAR_SOLUTION_CONSIDERATION_MODE] full | calls_only | cards_only (measuring)
-    solution_consideration_budget_seconds: float = 15.0  # [QAR_SOLUTION_CONSIDERATION_BUDGET_SECONDS]
-    solution_consideration_min_score: float = 0.0  # [QAR_SOLUTION_CONSIDERATION_MIN_SCORE] 0: the hub gate's default
+    solution_consideration_min_score: float = 0.0  # [QAR_SOLUTION_CONSIDERATION_MIN_SCORE] work runs: 0 is the hub gate's default
     note_floor_fresh_minutes: float = 5.0  # [QAR_NOTE_FLOOR_FRESH_MINUTES]
     deep_prompt_token_budget: Optional[int] = None  # [QAR_DEEP_PROMPT_TOKEN_BUDGET]
     deep_timeout_seconds: Optional[float] = None  # [QAR_DEEP_TIMEOUT_SECONDS]; None = no cap

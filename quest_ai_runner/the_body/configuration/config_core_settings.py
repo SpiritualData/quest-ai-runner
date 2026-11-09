@@ -96,11 +96,6 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
               if review_raw else DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS)
 
     gate_raw = env.get("QAR_NOTE_FLOOR_RELEVANCE_GATED")
-    mode_raw = (env.get("QAR_SOLUTION_CONSIDERATION_MODE") or "").strip().lower()
-    consider_mode = mode_raw if mode_raw in ("full", "calls_only", "cards_only") else d.solution_consideration_mode
-    consider_raw = env.get("QAR_SOLUTION_CONSIDERATION")
-    consider = d.solution_consideration_in_chat if consider_raw is None or not consider_raw.strip() else \
-        consider_raw.strip().lower() not in ("0", "false", "no", "off")
     gated = d.note_floor_relevance_gated if gate_raw is None or not gate_raw.strip() else \
         gate_raw.strip().lower() not in ("0", "false", "no", "off")
 
@@ -128,9 +123,6 @@ def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSetti
         quest_scope_mode=(env.get("QAR_QUEST_SCOPE_MODE") or d.quest_scope_mode).strip().lower()
         if (env.get("QAR_QUEST_SCOPE_MODE") or "").strip().lower() in ("fence", "affinity") else d.quest_scope_mode,
         note_floor_relevance_gated=gated,
-        solution_consideration_in_chat=consider,
-        solution_consideration_mode=consider_mode,
-        solution_consideration_budget_seconds=_float_or(env.get("QAR_SOLUTION_CONSIDERATION_BUDGET_SECONDS"), d.solution_consideration_budget_seconds),
         solution_consideration_min_score=_float_or(env.get("QAR_SOLUTION_CONSIDERATION_MIN_SCORE"), d.solution_consideration_min_score, positive=False),
         note_floor_fresh_minutes=_float_or(
             env.get("QAR_NOTE_FLOOR_FRESH_MINUTES"), d.note_floor_fresh_minutes, positive=False),

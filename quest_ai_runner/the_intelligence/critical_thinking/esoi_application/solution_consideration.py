@@ -1,4 +1,4 @@
-"""Each ESOI solution a deep goal touches gets its own consideration, through the hub (QAR's wiring of hubofhubs ``relevant-solutions`` and
+"""Each ESOI solution a piece of WORK touches gets its own consideration, through the hub (QAR's wiring of hubofhubs ``relevant-solutions`` and
 ``solution-passes``).
 
 For a goal whose working folder holds ESOI records (an ``esoi.toml`` at or above it, or ``QAR_SPEC_ROOT``): the hub names the solutions the
@@ -10,6 +10,10 @@ found, so the worker reads that solution's memory before general knowledge.
 After a milestone step (``after_milestone``), the milestone's own solution is not passed again: its finding is the measured step itself
 (``milestone_progress.milestone_pass``), and only its scopes above and its dependents get passes, when the milestone's solution is in records this
 lane can read. Everything here is bounded by a time limit and never raises: no records, no provider or a slow pass is an empty block.
+
+Only work runs it: a deep run (``brief_block``, called where the turn's own decision has already sent the goal to a deep worker) and a
+milestone step (``after_milestone``). A quick chat answer or lookup never does. It is gated (only solutions the records index scores at or
+above the hub gate's threshold get a pass) and capped (one pass per selected solution, at most one parent pass, no dependent passes).
 """
 from __future__ import annotations
 
@@ -145,21 +149,36 @@ def consider(request: str, root: Any, ask: Callable[[str], str], found: Optional
                                                                                   limits=limits))}
 
 
+def chosen_for(request: str, root: Any, min_score: float = 0.0) -> List[Mapping[str, Any]]:
+    """The solutions a work request gets passes for: those the records index (no model call) scores at or above the hub gate's threshold
+    (``min_score``, else the hub's ``DEFAULT_MIN_SCORE``, fixed from its relevance cases), each with its nearest scope above only."""
+    from hubofhubs.api import DEFAULT_MIN_SCORE, RecordsIndex, selected
+    found = RecordsIndex().relevant(request, root if hasattr(root, "classify") else str(root), depth=1)["solutions"]
+    return [{**f, "dependents": {}} for f in selected(found, float(min_score or DEFAULT_MIN_SCORE))]
+
+
 def brief_block(request: str, working_dir: Optional[str], provider: Any, status: Optional[Callable[[str], None]] = None,
-                seconds: float = TIMEOUT_SECONDS) -> str:
-    """The block for a deep goal's brief ("" when the folder holds no ESOI records, there is no provider, or it ran out of time)."""
+                seconds: float = TIMEOUT_SECONDS, min_score: float = 0.0) -> str:
+    """The block for a deep goal's brief: "" when the folder holds no ESOI records, there is no provider, no solution passes the gate
+    (the request concerns none enough: nothing is added), or it ran out of time. Capped: one pass per selected solution and at most one
+    parent pass, no dependent passes. A failure is said (a warning once per process), never silent."""
     try:
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
         root = slice_root(working_dir)
         ask = ask_for(provider)
         if root is None or ask is None:
             return ""
+        from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
+        chosen = chosen_for(request, root, min_score or core_settings().solution_consideration_min_score)
+        if not chosen:
+            log.info("Solution consideration: gated, the goal concerns no solution above the threshold")
+            return ""
         if status is not None:
             status("Reading what each part of the design this touches already knows.")
-        got = bounded(lambda: consider(request, root, ask), seconds)
+        got = bounded(lambda: consider(request, root, ask, chosen, limits={"depth": 1, "calls": len(chosen) + 1}), seconds)
         return render(got["briefs"], got["considered"]) if got else ""
-    except Exception:      # noqa: BLE001
-        log.exception("solution consideration block failed")
+    except Exception as error:      # noqa: BLE001
+        failed({}, error)
         return ""
 
 
@@ -182,7 +201,7 @@ def after_milestone(made: Any, cue: Any, request: str, provider: Any, seconds: f
             return ""
         finding = milestone_pass(made, cue, request)
         found = [{"solution_id": sid, "name": network.name(sid), "score": 0.0, "via": [], "chain": network.chain(sid), "dependents": network.dependents(sid)}]
-        got = bounded(lambda: consider(request, root, ask, found, {sid: lambda req, brief: finding}), seconds)
+        got = bounded(lambda: consider(request, root, ask, found, {sid: lambda req, brief: finding}, limits={"depth": 1, "calls": 2}), seconds)
         if not got:
             return ""
         considered = got["considered"]
@@ -198,16 +217,14 @@ def after_milestone(made: Any, cue: Any, request: str, provider: Any, seconds: f
 
 # -- chat turns --------------------------------------------------------------------------------------------------------------------
 
-CARD_OWNER = "solution-consideration"
-CARD_CHARS = 6000
-CARD_LOCK = threading.Lock()
-FAILURES = {"count": 0, "said": False}      # chat-turn considerations that failed in this process; the first is said as a warning
+FAILURE_LOCK = threading.Lock()
+FAILURES = {"count": 0, "said": False}      # considerations that failed in this process; the first is said as a warning
 
 
 def failed(ctx_meta: Dict[str, Any], error: BaseException) -> None:
     """A consideration that failed is never silent: the turn's meta says so (``solution_consideration``), the process says it once as a
     warning (a missing library or records cannot fail quietly on every turn) and counts every failure after that."""
-    with CARD_LOCK:
+    with FAILURE_LOCK:
         FAILURES["count"] += 1
         first = not FAILURES["said"]
         FAILURES["said"] = True
@@ -216,153 +233,3 @@ def failed(ctx_meta: Dict[str, Any], error: BaseException) -> None:
         log.warning("Solution consideration failed and will be counted on every turn after this one: %s: %s", type(error).__name__, error, exc_info=error)
     else:
         log.info("Solution consideration failed (%d in this process): %s: %s", FAILURES["count"], type(error).__name__, error)
-
-
-def solution_card(brief: Mapping[str, Any], finding: Mapping[str, Any], considered: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-    """One touched solution as a managed card of the turn's card store (QAR's adapter of the hub's managed solution card): its generated
-    prompt and what its own pass found, rebuilt by this module only."""
-    sid = str(brief["solution_id"])
-    name = str(brief.get("name") or sid)
-    above = [f"- {p.get('name') or p['solution_id']}: {p.get('why') or ''}" for p in (considered or {}).get("parents") or []
-             if sid in descendants_of(p, considered or {})]
-    note = ("What its own pass found:\n" + "\n".join(finding_lines(finding)) + (("\nThe scopes above found:\n" + "\n".join(above)) if above else "")
-            + "\n\nIts records:\n" + cut(str(brief.get("prompt") or ""), CARD_CHARS))
-    return {
-        "id": f"solution-{sid}", "name": f"Solution: {name}", "summary": f"Solution: {name}",
-        "description": f"The ESOI solution {name} ({sid}): its own records and its consideration of the latest request that touched it.",
-        "keywords": sorted({w for w in (name + " " + sid).lower().replace("-", " ").split() if len(w) > 2} | {"solution"}),
-        "conventions": [], "files": [],
-        "content": [{"id": "solution-consideration", "type": "note", "why": "This solution's records and its own pass on the request",
-                     "locator": {"text": note}}],
-        "scope_tags": [], "managed_by": CARD_OWNER, "managed_fields": ["name", "summary", "description", "keywords"],
-        "managed_items": ["solution-consideration"],
-        "provenance": {"created_by_task": "solution consideration", "model": "", "created_at": "", "last_verified_at": ""},
-    }
-
-
-def descendants_of(parent: Mapping[str, Any], considered: Mapping[str, Any]) -> List[str]:
-    """The solutions under a parent pass, through the levels between."""
-    from hubofhubs.api import descendants
-    return descendants(parent["solution_id"], list(considered.get("parents") or []))
-
-
-def write_cards(store: Any, got: Mapping[str, Any]) -> List[str]:
-    """Writes each touched solution's card; returns the ids written."""
-    findings = {f["solution_id"]: f for f in (got.get("considered") or {}).get("findings") or []}
-    written: List[str] = []
-    for brief in (got.get("briefs") or {}).get("solutions") or []:
-        card = solution_card(brief, findings.get(brief["solution_id"], {}))
-        try:
-            if store.write_card(card["id"], card):
-                written.append(card["id"])
-        except Exception:      # noqa: BLE001  one card that cannot be written does not stop the others
-            log.exception("solution card not written: %s", card["id"])
-    return written
-
-
-class OutOfTime(RuntimeError):
-    """The chat turn's consideration budget ran out before this model call."""
-
-
-def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional[threading.Thread]:
-    """A chat turn that touches ESOI solutions, in a background thread started after the acknowledgement, in parallel with context assembly
-    and the planner; the turn never waits for it. Cheap by structure:
-
-    * **Gate**: the records index (no model call) names the solutions; only those at or above the gate's score (the hub's
-      ``DEFAULT_MIN_SCORE``, fixed from its relevance cases, or ``solution_consideration_min_score``) get a pass; none, and nothing runs.
-    * **Cap**: one pass per selected solution, at most one parent pass, no dependent passes.
-    * **Budget**: ``solution_consideration_budget_seconds`` from the start; a model call after it is not made and a card after it is not
-      added; what was left out is logged and recorded on the turn's meta (``solution_consideration``), never hidden.
-
-    Each selected solution's card (its generated prompt and its own pass's finding) is written as its pass returns and named in
-    ``priority_card_ids``. ``solution_consideration_mode`` separates the costs for measuring: ``full``; ``calls_only`` (the passes run, no
-    card is written or put first); ``cards_only`` (the cards, from the records alone, are written and put first, no model call). A milestone
-    turn is skipped (its own step runs ``after_milestone``). Returns the thread (for tests), never raises."""
-    try:
-        if ctx_meta is None or getattr(rs, "cue_resolved", None) is not None or not getattr(rs, "message_is_user_turn", True):
-            return None
-        from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
-        settings = core_settings()
-        if not settings.solution_consideration_in_chat:
-            return None
-        from hubofhubs.api import DEFAULT_MIN_SCORE, RecordsIndex, selected
-        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
-        from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
-        mode = settings.solution_consideration_mode
-        budget = float(settings.solution_consideration_budget_seconds)
-        min_score = float(settings.solution_consideration_min_score or DEFAULT_MIN_SCORE)
-        store = card_writer(getattr(orch, "context_assembler", None))
-        model = ask_for(getattr(orch, "provider", None))
-        if store is None or (model is None and mode != "cards_only"):
-            return None
-        priority = ctx_meta.get("priority_card_ids")
-        if not isinstance(priority, list):
-            priority = list(priority or [])
-            ctx_meta["priority_card_ids"] = priority       # one list, shared with every copy of the turn's meta, so a card added later is seen
-        folder = str(ctx_meta.get("quest_folder") or "") or None
-        quest_id = str(getattr(rs, "quest_id", "") or "")
-        tools = getattr(orch, "tools", None)
-        request = str(getattr(rs, "goal_condition", "") or getattr(rs, "user_message", ""))
-        began = time.monotonic()
-        tally = {"late_cards": 0, "calls_refused": 0}
-
-        def in_time() -> bool:
-            return time.monotonic() - began <= budget
-
-        def ask(prompt: str) -> str:
-            if not in_time():
-                tally["calls_refused"] += 1
-                raise OutOfTime(f"the {budget:g} s budget ran out")
-            return model(prompt)
-
-        def put_first(finding: Mapping[str, Any], brief: Mapping[str, Any]) -> None:
-            if not brief or mode == "calls_only":
-                return
-            if not in_time():
-                tally["late_cards"] += 1
-                return
-            card = solution_card(brief, finding)
-            if store.write_card(card["id"], card):
-                with CARD_LOCK:
-                    if card["id"] not in priority:
-                        priority.append(card["id"])
-
-        def run() -> None:
-            try:
-                root: Any = slice_root(folder)
-                if root is None and quest_id and tools is not None:
-                    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import read_through
-                    tables, _ = read_through(tools, quest_id)       # the quest's own records, through the backend API
-                    root = quest_network(quest_id, tables) if tables else None
-                if root is None:
-                    ctx_meta["solution_consideration"] = {"status": "no records"}
-                    return
-                found = RecordsIndex().relevant(request, root if hasattr(root, "classify") else str(root), depth=1)["solutions"]
-                chosen = [{**f, "dependents": {}} for f in selected(found, min_score)]      # no dependent passes in a chat turn
-                if not chosen:
-                    ctx_meta["solution_consideration"] = {"status": "gated", "top_score": max((f.get("score") or 0 for f in found), default=0),
-                                                          "min_score": min_score}
-                    log.info("Solution consideration: gated, no solution at or above %g (top %g)", min_score,
-                             ctx_meta["solution_consideration"]["top_score"])
-                    return
-                if mode == "cards_only":
-                    from hubofhubs.api import briefs, network_of
-                    prepared = briefs(network_of(root if hasattr(root, "classify") else str(root)), chosen, request)
-                    for brief in prepared.get("solutions") or []:
-                        put_first({}, brief)
-                else:
-                    consider(request, root, ask, chosen, on_finding=put_first, limits={"depth": 1, "calls": len(chosen) + 1})
-                ctx_meta["solution_consideration"] = {"status": "done", "mode": mode, "solutions": [f["solution_id"] for f in chosen],
-                                                      "cards": [c for c in priority if c.startswith("solution-")], **tally,
-                                                      "seconds": round(time.monotonic() - began, 1)}
-                log.info("Solution consideration: %s, %d solution(s) at or above %g, %d card(s) put first, %d late card(s), %d call(s) past the "
-                         "%g s budget, %.1fs", mode, len(chosen), min_score, len(ctx_meta["solution_consideration"]["cards"]),
-                         tally["late_cards"], tally["calls_refused"], budget, time.monotonic() - began)
-            except Exception as error:      # noqa: BLE001  never fails the turn, never silent either
-                failed(ctx_meta, error)
-        thread = threading.Thread(target=run, name="solution-consideration", daemon=True)
-        thread.start()
-        return thread
-    except Exception:      # noqa: BLE001
-        log.exception("chat-turn solution consideration failed")
-        return None

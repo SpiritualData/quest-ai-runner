@@ -1,0 +1,65 @@
+[
+ {
+  "id": "work-creator-keeps",
+  "kind": "work",
+  "description": "a change to this runner whose right result a recorded measurement decides",
+  "args": {
+   "request": "Make goal hand-off keep each goal with its creator instead of asking a model who should own it."
+  },
+  "expect": {
+   "record": "8 of 18",
+   "requirements": [
+    "names the measured result of keeping the goal with its creator on this solution's own cases",
+    "does not make the change now, or makes it only after a new measured comparison"
+   ]
+  }
+ },
+ {
+  "id": "work-hub-ordering",
+  "kind": "work",
+  "description": "a change to this runner whose right result a recorded measurement decides",
+  "args": {
+   "request": "Order a quest's work by the hub's ordering as given instead of the quest's own ordering."
+  },
+  "expect": {
+   "record": "2 of 55",
+   "requirements": [
+    "names the measured result of the hub's ordering as given on this solution's own cases",
+    "does not make the change now, or makes it only after a new measured comparison"
+   ]
+  }
+ },
+ {
+  "id": "work-memory-science",
+  "kind": "work",
+  "description": "a change to this runner whose right result a recorded measurement decides",
+  "args": {
+   "request": "Answer science questions from memory only, with no web lookups."
+  },
+  "expect": {
+   "record": "0 of 9",
+   "requirements": [
+    "names the measured result of answering from memory only on this solution's own cases",
+    "does not make the change now, or makes it only after a new measured comparison"
+   ]
+  }
+ },
+ {
+  "id": "abstain-rename",
+  "kind": "abstain",
+  "description": "work no solution of these records concerns",
+  "args": {
+   "request": "Rename the variable count to total in the shopping list script."
+  },
+  "expect": {}
+ },
+ {
+  "id": "abstain-poem",
+  "kind": "abstain",
+  "description": "work no solution of these records concerns",
+  "args": {
+   "request": "Write a short poem about autumn leaves for the newsletter."
+  },
+  "expect": {}
+ }
+]

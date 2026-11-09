@@ -1,23 +1,26 @@
-"""QAR's wiring of the hub's per-solution consideration: the deep brief block over a records root, with a scripted provider (no model call)."""
+"""QAR's wiring of the hub's per-solution consideration for work: the deep brief block over a records root (gated and capped), Quest-held
+records as rows, and a failure that is said, with a scripted provider (no model call)."""
 import json
+import logging
 from pathlib import Path
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 
 HUB = Path(__file__).resolve().parents[2] / "ai-hub-of-hubs-structure"
+GRAPHIFY = "Switch Cards From Files to the Graphify arm."
 
 
 class Scripted:
     """Answers every pass in the shape it asks for; counts the calls."""
 
-    def __init__(self):
-        self.calls = 0
+    def __init__(self, combination=False):
+        self.calls, self.combination = 0, combination
 
     def answer(self, messages, model=None, **kwargs):
         self.calls += 1
         prompt = messages[-1]["content"]
         if "Its children's own passes found" in prompt:
-            return json.dumps({"combination_effect": False, "why": "no effect"})
+            return json.dumps({"combination_effect": self.combination, "why": "no effect"})
         if "This solution relies on" in prompt:
             return json.dumps({"still_holds": True, "why": "unchanged"})
         return json.dumps({"applies": True, "needs": "a measured comparison", "target": {"metric_id": "metric-x", "value": "1", "done_when": "measured"},
@@ -27,10 +30,23 @@ class Scripted:
 def test_the_brief_carries_each_touched_solutions_prompt_and_its_finding(monkeypatch):
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     provider = Scripted()
-    block = solution_consideration.brief_block("Should Cards From Files switch to the Graphify arm?", str(HUB), provider)
+    block = solution_consideration.brief_block(GRAPHIFY, str(HUB), provider)
     assert "### Cards From Files (cards-from-files)" in block
     assert "graphify_files: passed 3 of 63" in block and "Conflict with its records: results: it already lost" in block
-    assert "### The scopes above" in block and provider.calls >= 2
+
+
+def test_a_goal_no_solution_concerns_is_gated_and_makes_no_model_call(monkeypatch):
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    provider = Scripted()
+    assert solution_consideration.brief_block("thanks, that is all for today", str(HUB), provider) == "" and provider.calls == 0
+
+
+def test_the_cap_is_one_pass_per_selected_solution_and_one_parent_pass(monkeypatch):
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    provider = Scripted(combination=True)       # every scope above says it is affected, so only the cap stops the climb
+    chosen = solution_consideration.chosen_for(GRAPHIFY, str(HUB))
+    solution_consideration.brief_block(GRAPHIFY, str(HUB), provider)
+    assert chosen and provider.calls == len(chosen) + 1
 
 
 def test_no_records_or_no_provider_adds_nothing(tmp_path, monkeypatch):
@@ -38,52 +54,6 @@ def test_no_records_or_no_provider_adds_nothing(tmp_path, monkeypatch):
     assert solution_consideration.brief_block("anything", str(tmp_path), Scripted()) == ""
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     assert solution_consideration.brief_block("anything", str(HUB), None) == ""
-
-
-def consideration_on(monkeypatch):
-    """Chat-turn consideration is off by default (it measured slower replies); these tests turn it on."""
-    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
-    monkeypatch.setattr("quest_ai_runner.the_body.configuration.runtime_settings.core_settings",
-                        lambda: core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "1"}))
-
-
-class Store:
-    def __init__(self):
-        self.cards = {}
-
-    def write_card(self, card_id, card):
-        self.cards[card_id] = card
-        return True
-
-    def get_card(self, card_id):
-        return self.cards.get(card_id)
-
-
-class Orch:
-    def __init__(self, store, provider):
-        self.context_assembler, self.provider = store, provider
-
-
-def test_a_chat_turn_writes_the_touched_solutions_cards_and_puts_them_first(monkeypatch):
-    consideration_on(monkeypatch)
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    store, meta = Store(), {"priority_card_ids": ["quest-folder-q1"]}
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    thread = solution_consideration.for_turn(Orch(store, Scripted()), rs, meta)
-    assert thread is not None
-    thread.join(60)
-    assert "solution-cards-from-files" in store.cards and meta["priority_card_ids"][0] == "quest-folder-q1"
-    assert "solution-cards-from-files" in meta["priority_card_ids"]
-    assert "graphify_files: passed 3 of 63" in store.cards["solution-cards-from-files"]["content"][0]["locator"]["text"]
-
-
-def test_a_milestone_turn_is_left_to_its_own_step(monkeypatch):
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    store, meta = Store(), {}
-    assert solution_consideration.for_turn(Orch(store, Scripted()), SimpleNamespace(cue_resolved=object(), message_is_user_turn=True), meta) is None
-    assert store.cards == {} and "priority_card_ids" not in meta
 
 
 def test_quest_held_records_form_the_network_without_a_folder():
@@ -97,122 +67,15 @@ def test_quest_held_records_form_the_network_without_a_folder():
     assert "Short titles did better" in found["briefs"]["solutions"][0]["prompt"]
 
 
-def test_the_turn_never_waits_and_a_card_lands_before_the_parent_passes(monkeypatch):
-    consideration_on(monkeypatch)
-    import threading
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    gate = threading.Event()
-
-    class Slow(Scripted):
-        def answer(self, messages, model=None, **kwargs):
-            if "Its children's own passes found" in messages[-1]["content"]:
-                gate.wait(30)        # the parent passes hold until the test has seen the solution's card
-            return super().answer(messages, model, **kwargs)
-
-    store, meta = Store(), {}
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    thread = solution_consideration.for_turn(Orch(store, Slow()), rs, meta)
-    for _ in range(300):
-        if "solution-cards-from-files" in meta.get("priority_card_ids", []):
-            break
-        threading.Event().wait(0.1)
-    assert "solution-cards-from-files" in store.cards and thread.is_alive()       # landed while the parent passes still run
-    gate.set()
-    thread.join(60)
-
-
-def test_chat_consideration_is_off_by_default_and_the_switch_turns_it_on(monkeypatch):
-    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
-    assert core_settings_from_env({}).solution_consideration_in_chat is False
-    assert core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "1"}).solution_consideration_in_chat is True
-
-
-def test_the_off_switch_turns_chat_consideration_off(monkeypatch):
-    from types import SimpleNamespace
-    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    assert core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "0"}).solution_consideration_in_chat is False
-    monkeypatch.setattr("quest_ai_runner.the_body.configuration.runtime_settings.core_settings",
-                        lambda: core_settings_from_env({"QAR_SOLUTION_CONSIDERATION": "0"}))
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    assert solution_consideration.for_turn(Orch(Store(), Scripted()), rs, {}) is None
-
-
-def test_a_failing_consideration_is_said_once_and_recorded_on_every_turn(monkeypatch, caplog):
-    consideration_on(monkeypatch)
-    import logging
-    from types import SimpleNamespace
+def test_a_failing_consideration_is_said_once_as_a_warning(monkeypatch, caplog):
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     monkeypatch.setattr(solution_consideration, "FAILURES", {"count": 0, "said": False})
 
     def broken(*args, **kwargs):
         raise ImportError("no solution consideration in this esoi")
-    monkeypatch.setattr(solution_consideration, "consider", broken)
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    metas = [{}, {}]
+    monkeypatch.setattr(solution_consideration, "chosen_for", broken)
     with caplog.at_level(logging.INFO, logger="quest-ai-runner.solution-consideration"):
-        for meta in metas:
-            solution_consideration.for_turn(Orch(Store(), Scripted()), rs, meta).join(10)
-    assert [m["solution_consideration"]["status"] for m in metas] == ["failed", "failed"]
-    assert metas[1]["solution_consideration"]["failures_in_process"] == 2
+        assert solution_consideration.brief_block(GRAPHIFY, str(HUB), Scripted()) == ""
+        assert solution_consideration.brief_block(GRAPHIFY, str(HUB), Scripted()) == ""
+    assert solution_consideration.FAILURES["count"] == 2
     assert sum(1 for r in caplog.records if r.levelname == "WARNING" and "Solution consideration failed" in r.getMessage()) == 1
-
-
-def settings_with(monkeypatch, **env):
-    from quest_ai_runner.the_body.configuration.config_core_settings import core_settings_from_env
-    values = {"QAR_SOLUTION_CONSIDERATION": "1", **env}
-    monkeypatch.setattr("quest_ai_runner.the_body.configuration.runtime_settings.core_settings", lambda: core_settings_from_env(values))
-
-
-def test_a_turn_about_no_solution_is_gated_and_makes_no_model_call(monkeypatch):
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    settings_with(monkeypatch)
-    provider, meta = Scripted(), {}
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="thanks, that is all for today")
-    solution_consideration.for_turn(Orch(Store(), provider), rs, meta).join(30)
-    assert meta["solution_consideration"]["status"] == "gated" and provider.calls == 0
-
-
-def test_the_cap_allows_one_pass_per_selected_solution_and_one_parent_pass(monkeypatch):
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    settings_with(monkeypatch)
-
-    class Climbing(Scripted):
-        def answer(self, messages, model=None, **kwargs):
-            if "Its children's own passes found" in messages[-1]["content"]:
-                self.calls += 1
-                return json.dumps({"combination_effect": True, "why": "it changes"})
-            return super().answer(messages, model, **kwargs)
-    provider, meta = Climbing(), {}
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    solution_consideration.for_turn(Orch(Store(), provider), rs, meta).join(60)
-    done = meta["solution_consideration"]
-    assert done["status"] == "done" and provider.calls == len(done["solutions"]) + 1
-
-
-def test_a_spent_budget_makes_no_more_calls_and_says_what_was_left_out(monkeypatch):
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    settings_with(monkeypatch, QAR_SOLUTION_CONSIDERATION_BUDGET_SECONDS="0.0001")
-    provider, meta, store = Scripted(), {}, Store()
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    solution_consideration.for_turn(Orch(store, provider), rs, meta).join(60)
-    done = meta["solution_consideration"]
-    assert provider.calls == 0 and done["calls_refused"] >= 1 and not done["cards"]
-
-
-def test_the_measuring_modes_separate_the_calls_from_the_cards(monkeypatch):
-    from types import SimpleNamespace
-    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    settings_with(monkeypatch, QAR_SOLUTION_CONSIDERATION_MODE="cards_only")
-    provider, meta, store = Scripted(), {}, Store()
-    solution_consideration.for_turn(Orch(store, provider), rs, meta).join(60)
-    assert provider.calls == 0 and "solution-cards-from-files" in meta["priority_card_ids"]
-    settings_with(monkeypatch, QAR_SOLUTION_CONSIDERATION_MODE="calls_only")
-    provider, meta, store = Scripted(), {}, Store()
-    solution_consideration.for_turn(Orch(store, provider), rs, meta).join(60)
-    assert provider.calls >= 1 and store.cards == {} and not meta.get("priority_card_ids")
