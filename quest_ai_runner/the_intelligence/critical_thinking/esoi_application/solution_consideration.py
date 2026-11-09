@@ -127,15 +127,19 @@ def render(briefs: Mapping[str, Any], considered: Mapping[str, Any]) -> str:
 
 
 def consider(request: str, root: Any, ask: Callable[[str], str], found: Optional[List[Mapping[str, Any]]] = None,
-             own_passes: Optional[Mapping[str, Callable[..., Mapping[str, Any]]]] = None) -> Dict[str, Any]:
-    """The hub's flow for one request over the records at ``root``: relevant solutions (or ``found``), their briefs, their passes."""
+             own_passes: Optional[Mapping[str, Callable[..., Mapping[str, Any]]]] = None,
+             on_finding: Optional[Callable[[Mapping[str, Any], Mapping[str, Any]], Any]] = None) -> Dict[str, Any]:
+    """The hub's flow for one request over the records at ``root``: relevant solutions (or ``found``), their briefs, their passes.
+    ``on_finding(finding, brief)`` is called for each relevant solution as soon as its own pass returns, before the parent passes."""
     from hubofhubs.api import NetworkPasses, RecordsIndex, briefs, network_of
     records = root if hasattr(root, "classify") else str(root)
     solutions = list(found) if found is not None else list(RecordsIndex().relevant(request, records)["solutions"])
     if not solutions:
         return {}
     prepared = briefs(network_of(records), solutions, request)
-    return {"briefs": prepared, "considered": dict(NetworkPasses(None).consider(request, prepared, own_passes=own_passes, ask=ask))}
+    by_id = {b["solution_id"]: b for b in prepared.get("solutions") or []}
+    hook = (lambda finding: on_finding(finding, by_id.get(finding["solution_id"], {}))) if on_finding is not None else None
+    return {"briefs": prepared, "considered": dict(NetworkPasses(None).consider(request, prepared, own_passes=own_passes, ask=ask, on_finding=hook))}
 
 
 def brief_block(request: str, working_dir: Optional[str], provider: Any, status: Optional[Callable[[str], None]] = None,
@@ -193,16 +197,18 @@ def after_milestone(made: Any, cue: Any, request: str, provider: Any, seconds: f
 
 CARD_OWNER = "solution-consideration"
 CARD_CHARS = 6000
-LANDED: Dict[str, List[str]] = {}       # records root -> the solution card ids a background consideration wrote, for the next turn
-LANDED_LOCK = threading.Lock()
+CARD_LOCK = threading.Lock()
 
 
-def solution_card(brief: Mapping[str, Any], finding: Mapping[str, Any]) -> Dict[str, Any]:
+def solution_card(brief: Mapping[str, Any], finding: Mapping[str, Any], considered: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """One touched solution as a managed card of the turn's card store (QAR's adapter of the hub's managed solution card): its generated
     prompt and what its own pass found, rebuilt by this module only."""
     sid = str(brief["solution_id"])
     name = str(brief.get("name") or sid)
-    note = "What its own pass found:\n" + "\n".join(finding_lines(finding)) + "\n\nIts records:\n" + cut(str(brief.get("prompt") or ""), CARD_CHARS)
+    above = [f"- {p.get('name') or p['solution_id']}: {p.get('why') or ''}" for p in (considered or {}).get("parents") or []
+             if sid in descendants_of(p, considered or {})]
+    note = ("What its own pass found:\n" + "\n".join(finding_lines(finding)) + (("\nThe scopes above found:\n" + "\n".join(above)) if above else "")
+            + "\n\nIts records:\n" + cut(str(brief.get("prompt") or ""), CARD_CHARS))
     return {
         "id": f"solution-{sid}", "name": f"Solution: {name}", "summary": f"Solution: {name}",
         "description": f"The ESOI solution {name} ({sid}): its own records and its consideration of the latest request that touched it.",
@@ -214,6 +220,12 @@ def solution_card(brief: Mapping[str, Any], finding: Mapping[str, Any]) -> Dict[
         "managed_items": ["solution-consideration"],
         "provenance": {"created_by_task": "solution consideration", "model": "", "created_at": "", "last_verified_at": ""},
     }
+
+
+def descendants_of(parent: Mapping[str, Any], considered: Mapping[str, Any]) -> List[str]:
+    """The solutions under a parent pass, through the levels between."""
+    from hubofhubs.api import descendants
+    return descendants(parent["solution_id"], list(considered.get("parents") or []))
 
 
 def write_cards(store: Any, got: Mapping[str, Any]) -> List[str]:
@@ -230,50 +242,57 @@ def write_cards(store: Any, got: Mapping[str, Any]) -> List[str]:
     return written
 
 
-def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> None:
-    """A chat turn that touches ESOI solutions: after the acknowledgement, each solution gets its own consideration; the touched solutions'
-    cards are written to the turn's card store and named in ``priority_card_ids`` so context assembly puts them first. It waits at most
-    ``solution_consideration_seconds``; a slower consideration finishes in the background and its cards ground the next turn on the same
-    records. A milestone turn is skipped (its own step runs ``after_milestone``). Never raises."""
+def for_turn(orch: Any, rs: Any, ctx_meta: Optional[Dict[str, Any]]) -> Optional[threading.Thread]:
+    """A chat turn that touches ESOI solutions: each solution gets its own consideration in a background thread started after the
+    acknowledgement, in parallel with context assembly and the planner. Each relevant solution's card (its generated prompt and its own
+    pass's finding) is written the moment its pass returns, before the parent passes, and its id is added to the turn's
+    ``priority_card_ids`` list, so whatever reads the turn's cards after that (assembly, a mid-turn card read) puts it first. The turn never
+    waits for it. A milestone turn is skipped (its own step runs ``after_milestone``). Returns the thread (for tests), never raises."""
     try:
         if ctx_meta is None or getattr(rs, "cue_resolved", None) is not None or not getattr(rs, "message_is_user_turn", True):
-            return
-        from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
+            return None
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
-        root: Any = slice_root(str(ctx_meta.get("quest_folder") or "") or None)
         store = card_writer(getattr(orch, "context_assembler", None))
         ask = ask_for(getattr(orch, "provider", None))
         if store is None or ask is None:
-            return
-        if root is None and getattr(rs, "quest_id", None) and getattr(orch, "tools", None) is not None:
-            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import read_through
-            tables, _ = read_through(orch.tools, rs.quest_id)       # the quest's own records, through the backend API
-            root = quest_network(str(rs.quest_id), tables) if tables else None
-        if root is None:
-            return
-        key = str(getattr(root, "root", root))
-        with LANDED_LOCK:
-            earlier = LANDED.pop(key, [])
+            return None
+        priority = ctx_meta.get("priority_card_ids")
+        if not isinstance(priority, list):
+            priority = list(priority or [])
+            ctx_meta["priority_card_ids"] = priority       # one list, shared with every copy of the turn's meta, so a card added later is seen
+        folder = str(ctx_meta.get("quest_folder") or "") or None
+        quest_id = str(getattr(rs, "quest_id", "") or "")
+        tools = getattr(orch, "tools", None)
         request = str(getattr(rs, "goal_condition", "") or getattr(rs, "user_message", ""))
-        box: Dict[str, Any] = {}
+
+        def landed(finding: Mapping[str, Any], brief: Mapping[str, Any]) -> None:
+            if not brief:
+                return
+            card = solution_card(brief, finding)
+            if store.write_card(card["id"], card):
+                with CARD_LOCK:
+                    if card["id"] not in priority:
+                        priority.append(card["id"])
 
         def run() -> None:
             try:
-                got = consider(request, root, ask)
-                box["ids"] = write_cards(store, got) if got else []
-                if not box.get("seen"):
-                    return
-                with LANDED_LOCK:       # finished after the turn stopped waiting: the next turn on these records gets the cards
-                    LANDED[key] = box["ids"]
+                root: Any = slice_root(folder)
+                if root is None and quest_id and tools is not None:
+                    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import read_through
+                    tables, _ = read_through(tools, quest_id)       # the quest's own records, through the backend API
+                    root = quest_network(quest_id, tables) if tables else None
+                if root is not None:
+                    got = consider(request, root, ask, on_finding=landed)
+                    findings = {f["solution_id"]: f for f in (got.get("considered") or {}).get("findings") or []}
+                    for brief in (got.get("briefs") or {}).get("solutions") or []:      # the cards again, now with the scopes above judged
+                        card = solution_card(brief, findings.get(brief["solution_id"], {}), got.get("considered") or {})
+                        store.write_card(card["id"], card)
             except Exception:      # noqa: BLE001
                 log.exception("chat-turn solution consideration failed")
-        thread = threading.Thread(target=run, daemon=True)
+        thread = threading.Thread(target=run, name="solution-consideration", daemon=True)
         thread.start()
-        thread.join(float(core_settings().solution_consideration_seconds))
-        box["seen"] = True
-        ids = list(box.get("ids") or []) or earlier
-        if ids:
-            ctx_meta["priority_card_ids"] = list(dict.fromkeys(list(ctx_meta.get("priority_card_ids") or []) + ids))
+        return thread
     except Exception:      # noqa: BLE001
         log.exception("chat-turn solution consideration failed")
+        return None

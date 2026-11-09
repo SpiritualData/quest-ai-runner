@@ -60,10 +60,11 @@ class Orch:
 def test_a_chat_turn_writes_the_touched_solutions_cards_and_puts_them_first(monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
-    monkeypatch.setenv("QAR_SOLUTION_CONSIDERATION_SECONDS", "60")
     store, meta = Store(), {"priority_card_ids": ["quest-folder-q1"]}
     rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
-    solution_consideration.for_turn(Orch(store, Scripted()), rs, meta)
+    thread = solution_consideration.for_turn(Orch(store, Scripted()), rs, meta)
+    assert thread is not None
+    thread.join(60)
     assert "solution-cards-from-files" in store.cards and meta["priority_card_ids"][0] == "quest-folder-q1"
     assert "solution-cards-from-files" in meta["priority_card_ids"]
     assert "graphify_files: passed 3 of 63" in store.cards["solution-cards-from-files"]["content"][0]["locator"]["text"]
@@ -73,7 +74,7 @@ def test_a_milestone_turn_is_left_to_its_own_step(monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     store, meta = Store(), {}
-    solution_consideration.for_turn(Orch(store, Scripted()), SimpleNamespace(cue_resolved=object(), message_is_user_turn=True), meta)
+    assert solution_consideration.for_turn(Orch(store, Scripted()), SimpleNamespace(cue_resolved=object(), message_is_user_turn=True), meta) is None
     assert store.cards == {} and "priority_card_ids" not in meta
 
 
@@ -86,3 +87,27 @@ def test_quest_held_records_form_the_network_without_a_folder():
     found = solution_consideration.consider("publish the weekly video", network, lambda prompt: scripted.answer([{"role": "user", "content": prompt}]))
     assert found["briefs"]["solutions"][0]["solution_id"] == "weekly-video"
     assert "Short titles did better" in found["briefs"]["solutions"][0]["prompt"]
+
+
+def test_the_turn_never_waits_and_a_card_lands_before_the_parent_passes(monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
+    gate = threading.Event()
+
+    class Slow(Scripted):
+        def answer(self, messages, model=None, **kwargs):
+            if "Its children's own passes found" in messages[-1]["content"]:
+                gate.wait(30)        # the parent passes hold until the test has seen the solution's card
+            return super().answer(messages, model, **kwargs)
+
+    store, meta = Store(), {}
+    rs = SimpleNamespace(cue_resolved=None, message_is_user_turn=True, goal_condition="Should Cards From Files switch to the Graphify arm?")
+    thread = solution_consideration.for_turn(Orch(store, Slow()), rs, meta)
+    for _ in range(300):
+        if "solution-cards-from-files" in meta.get("priority_card_ids", []):
+            break
+        threading.Event().wait(0.1)
+    assert "solution-cards-from-files" in store.cards and thread.is_alive()       # landed while the parent passes still run
+    gate.set()
+    thread.join(60)

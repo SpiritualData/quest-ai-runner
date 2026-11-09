@@ -778,9 +778,10 @@ class RunBeginMixin:
                 rs.cue_gap = str(gap)
                 log.warning("milestone cue: lane gap: %s", gap)
 
-        # EACH ESOI SOLUTION THE TURN TOUCHES gets its own consideration through the hub, after the acknowledgement and before context
-        # assembly: the touched solutions' cards are written and put first (``priority_card_ids``). Bounded by solution_consideration_seconds,
-        # a slower one grounds the next turn instead; a milestone turn is skipped (its own step judges the scopes above). Never raises.
+        # EACH ESOI SOLUTION THE TURN TOUCHES gets its own consideration through the hub, in a background thread started here, after the
+        # acknowledgement, in parallel with context assembly and the planner (never waited on): each solution's card is written as soon as its
+        # own pass returns and joins ``priority_card_ids``, so whatever reads the turn's cards after that puts it first. A milestone turn is
+        # skipped (its own step judges the scopes above). Never raises.
         solution_consideration.for_turn(self, rs, _ctx_meta)
 
         _assembled = None
