@@ -78,9 +78,11 @@
    "context-intake": "quest_ai_runner",
    "context-retriever": "quest_ai_runner",
    "critical-thinking": "quest_ai_runner",
+   "decision-check": "quest_ai_runner",
    "delegated-agent-sessions": "quest_ai_runner",
    "describe-an-attachment": "quest_ai_runner",
    "detect-a-stalled-run": "quest_ai_runner",
+   "digest-records-for-a-need": "quest_ai_runner",
    "esoi-application": "quest_ai_runner",
    "feed-context-sources": "quest_ai_runner",
    "feedback-learning": "quest_ai_runner",
@@ -186,7 +188,6 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "digest_by_need": "quest_ai_runner.the_intelligence.subconscious.digest_by_need",
    "per_lane_assembly": "quest_ai_runner.the_intelligence.subconscious.area_context_retriever"
   }
  },
@@ -232,6 +233,12 @@
    "instruction_only": "quest_ai_runner.the_self.integrity.prompts.standing_instructions"
   }
  },
+ "decision-check": {
+  "default": "",
+  "modules": {
+   "chat_reply_views": "quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views"
+  }
+ },
  "delegated-agent-sessions": {
   "default": "subprocess",
   "evidence": {
@@ -269,6 +276,17 @@
   "modules": {
    "goal_runner": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner",
    "live_reviewer": "quest_ai_runner.the_intelligence.critical_thinking.area"
+  }
+ },
+ "digest-records-for-a-need": {
+  "default": "digest_by_need",
+  "evidence": {
+   "detail": "the selected implementation has no recorded row",
+   "p": null,
+   "verdict": "UNMEASURED"
+  },
+  "modules": {
+   "digest_by_need": "quest_ai_runner.the_intelligence.subconscious.digest_by_need"
   }
  },
  "esoi-application": {
@@ -476,9 +494,9 @@
  "place-on-a-quest": {
   "default": "hybrid-candidate-ranker",
   "evidence": {
-   "detail": "hybrid_candidate_ranker_model leads hybrid_candidate_ranker (hybrid_candidate_ranker 0.692 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.405, 50 of 50 cases disagree); hybrid_candidate_ranker_model is better than library_quest_judge (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=9.07e-12, 50 of 50 cases disagree); hybrid_candidate_ranker_model leads shared_quest_ranker (shared_quest_ranker 0.593 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.48, 50 of 50 cases disagree); hybrid_candidate_ranker_model leads shared_quest_ranker_model (shared_quest_ranker_model 0.899 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.357, 50 of 50 cases disagree)",
+   "detail": "beaten by example_vote_ranker_model: best guess, not yet significant: example_vote_ranker_model leads hybrid_candidate_ranker_model (example_vote_ranker_model 0.939 against hybrid_candidate_ranker_model 0.909; two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.96, 50 of 50 cases disagree); more cases would settle it; hybrid_candidate_ranker_model leads hybrid_candidate_ranker (hybrid_candidate_ranker 0.692 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.608, 50 of 50 cases disagree); hybrid_candidate_ranker_model is better than library_quest_judge (two-sided exact sign test on per-case balanced scores, Holm-adjusted p=1.13e-11, 50 of 50 cases disagree); hybrid_candidate_ranker_model leads shared_quest_ranker (shared_quest_ranker 0.593 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.96, 50 of 50 cases disagree); hybrid_candidate_ranker_model leads shared_quest_ranker_model (shared_quest_ranker_model 0.899 against hybrid_candidate_ranker_model 0.909; best guess, not yet significant, two-sided exact sign test on per-case balanced scores, Holm-adjusted p=0.476, 50 of 50 cases disagree)",
    "p": 0.0,
-   "verdict": "WIN"
+   "verdict": "LOSS"
   },
   "modules": {
    "hybrid-candidate-ranker": "quest_ai_runner.the_intelligence.higher_mind.objectives.place_on_a_quest.quest_placement",

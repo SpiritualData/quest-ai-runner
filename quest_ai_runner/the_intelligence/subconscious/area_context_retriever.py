@@ -16,6 +16,8 @@ from esoi import Lazy
 from hubofhubs.api import AssembledContext, ContextAssembler, VectorStore
 from hubofhubs.api import ReferenceResolver
 
+from quest_ai_runner.the_intelligence.subconscious.interface import NeedDigesting
+
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search import search_cards_and_specs
 
 
@@ -26,10 +28,14 @@ class PerLaneAssembly:
     in, ``search`` ranks cards and specification records, and the other lines delegate to the member that owns them."""
     REQUIRES = ()     # the seats it is handed; ``choose`` and ``search`` read none, so a caller that only chooses passes none
 
-    def __init__(self, references: Lazy[ReferenceResolver] = None, index: Lazy[VectorStore] = None) -> None:
-        self.references, self.index = references, index
+    def __init__(self, references: Lazy[ReferenceResolver] = None, index: Lazy[VectorStore] = None, digests: Lazy[NeedDigesting] = None) -> None:
+        self.references, self.index, self.digests = references, index, digests
 
     def choose(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, assembler: Optional[ContextAssembler] = None) -> AssembledContext:
+        if meta and meta.get("source_groups"):         # a request that brings source groups is a need over records: the digest solution reads them
+            if self.digests is None:
+                raise ValueError("source_groups are read by digest-records-for-a-need: hand it in with options")
+            return self.digests.digest_need(task_text, meta=meta)
         if assembler is None:
             raise ValueError("choose reads the lane's context assembler: pass it as assembler=")
         return assembler.assemble(task_text, meta=meta)

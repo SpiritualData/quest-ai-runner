@@ -1,4 +1,4 @@
-"""``choose-the-context:digest_by_need``: a large body of records reaches the prompt as a few cited findings, never as raw entries. The model is a stub that
+"""``digest-records-for-a-need:digest_by_need``: a large body of records reaches the prompt as a few cited findings, never as raw entries. The model is a stub that
 records its calls; nothing here spends anything."""
 import json
 import re
@@ -55,7 +55,7 @@ def collection(name="Training log", count=ENTRIES, prefix="entry", text_of=None)
 
 def call(provider, groups, need=NEED, cache=None, **meta):
     arm = DigestByNeed(provider, cache=cache)
-    return arm.choose(need, meta={"source_groups": groups, **meta})
+    return arm.digest_need(need, meta={"source_groups": groups, **meta})
 
 
 def test_sixty_entries_reach_the_prompt_as_three_cited_findings():
@@ -142,12 +142,24 @@ def test_windows_are_bounded_and_every_window_keeps_its_records_in_order():
 
 
 def test_no_model_reports_every_unread_group_skipped():
-    context = DigestByNeed(None).choose(NEED, meta={"source_groups": [collection()]})
+    context = DigestByNeed(None).digest_need(NEED, meta={"source_groups": [collection()]})
     assert [s["status"] for s in context.sources if "source_group" in s] == ["skipped"] and context.context_view == "" and context.partial is True
 
 
 def test_the_one_line_entry_reaches_the_arm_with_the_stubbed_model():
     provider = StubProvider()
+    context = quest_ai_runner.run("digest-records-for-a-need", {"task_text": NEED, "meta": {"source_groups": [collection()]}}, environ={},
+                                  provided={"vendor-model-caller": provider})
+    assert set(context.card_ids) == {f"entry:{n}" for n in MATTER} and provider.calls
+
+
+def test_the_entry_needs_no_arm_name_the_selected_arm_answers():
+    from quest_ai_runner.the_self.assembler.resolve import chosen_name
+    assert chosen_name("digest-records-for-a-need") == "digest_by_need"
+
+
+def test_choose_the_context_hands_source_groups_to_the_digest_solution():
+    provider = StubProvider()
     context = quest_ai_runner.run("choose-the-context", {"task_text": NEED, "meta": {"source_groups": [collection()]}}, environ={},
-                                  arms={"choose-the-context": "digest_by_need"}, provided={"vendor-model-caller": provider})
+                                  provided={"vendor-model-caller": provider})
     assert set(context.card_ids) == {f"entry:{n}" for n in MATTER} and provider.calls

@@ -1,6 +1,6 @@
 # Digest a large collection for one need
 
-A prompt that holds every entry of a large collection is neither affordable nor readable. The `choose-the-context` arm `digest_by_need` lets the
+A prompt that holds every entry of a large collection is neither affordable nor readable. The `digest-records-for-a-need` solution (a nested Subconscious solution; its selected arm is `digest_by_need`) lets the
 need decide what is read and to what depth: it reads the records one source group at a time with cheap sub-analyses and hands the planner a few
 cited findings. The library knows nothing about where records live. The host turns its own collections, notes and insights into source groups.
 
@@ -12,10 +12,11 @@ from quest_ai_runner.api import DigestSourceGroup, DigestUnit
 
 log = DigestSourceGroup("collection:training", "Training log", loader=lambda: [DigestUnit(f"entry:{n}", f"Entry {n}", text) for n, text in rows])
 context = quest_ai_runner.run(
-    "choose-the-context",
-    {"task_text": "What has this person already tried that bears on running without pain?", "meta": {"source_groups": [log], "background": "Run a marathon"}},
-    arms={"choose-the-context": "digest_by_need"})
+    "digest-records-for-a-need",
+    {"task_text": "What has this person already tried that bears on running without pain?", "meta": {"source_groups": [log], "background": "Run a marathon"}})
 ```
+
+No arm is named: the selected arm answers. `choose-the-context` hands a request that brings `source_groups` to this solution, so a caller of that line gets the same answer.
 
 `run` builds the arm with the model seat the lane already has (`provided={"vendor-model-caller": ...}` supplies another); every cap has a default and
 `meta` overrides only what differs (`max_analyses`, `window_chars`, `concurrency`, `direct_chars` and the rest of `DEFAULTS` in
@@ -40,7 +41,7 @@ Statuses: `analysed`, `cached`, `nothing_relevant`, `failed`, `skipped` (over th
   read again, another need makes another digest from the same records, and a changed record re-reads only its window. Pass any `DigestCache`
   (`get` and `put`) as `meta["cache"]` to keep digests somewhere durable; the default lives as long as the arm.
 - A failed window is not cached, so the next call retries only it.
-- The prompts are `choose-the-context.digest-head` (rules, need and background: the cached prefix) and `choose-the-context.digest-group` (the group's
+- The prompts are `digest-records-for-a-need.digest-head` (rules, need and background: the cached prefix) and `digest-records-for-a-need.digest-group` (the group's
   records: the volatile tail), built with `PromptLayers` and free of em dashes.
 
 ## Measuring it

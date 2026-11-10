@@ -42,9 +42,9 @@ RECORDS:
 {records}
 """
 
-HEAD_SPEC = declare("choose-the-context.digest-head", solution="choose-the-context", metric="metric-digest-by-need", tier="fast",
+HEAD_SPEC = declare("digest-records-for-a-need.digest-head", solution="digest-records-for-a-need", metric="metric-digest-by-need", tier="fast",
                     cache_layer="head", template=HEAD_TEMPLATE)
-TAIL_SPEC = declare("choose-the-context.digest-group", solution="choose-the-context", metric="metric-digest-by-need", tier="fast",
+TAIL_SPEC = declare("digest-records-for-a-need.digest-group", solution="digest-records-for-a-need", metric="metric-digest-by-need", tier="fast",
                     cache_layer="tail", template=TAIL_TEMPLATE, writes_text=False)
 
 

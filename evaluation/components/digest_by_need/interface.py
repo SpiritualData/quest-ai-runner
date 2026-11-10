@@ -1,4 +1,4 @@
-"""The digest-by-need function (the metric ``metric-digest-by-need`` of ``choose-the-context``). Every implementation is ONE function:
+"""The digest-by-need function (the metric ``metric-digest-by-need`` of ``digest-records-for-a-need``). Every implementation is ONE function:
 
     digest(case: dict) -> {"cited": list, "context_chars": int, "max_prompt_chars": int, "calls": int, "rerun_calls": int, "statuses": dict}
 

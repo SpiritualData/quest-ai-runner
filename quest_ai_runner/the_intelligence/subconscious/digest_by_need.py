@@ -1,4 +1,4 @@
-"""``choose-the-context:digest_by_need``: a need reads a large body of the person's records one group at a time, as sub-analyses, and receives cited findings.
+"""``digest-records-for-a-need:digest_by_need``: a need reads a large body of the person's records one group at a time, as sub-analyses, and receives cited findings.
 
 A single prompt holding every entry of a big collection is neither affordable nor readable. This arm lets the need decide what is read and to what
 depth. The need (a question, plus the background it is asked in) goes to one cheap-tier sub-analysis per window of ONE source group; each returns the
@@ -11,10 +11,9 @@ reported ``skipped``); a digest is cached under (need, background, content of th
 need makes a different digest from the same records; a group that cannot be read or answered is reported ``failed`` with its reason, never dropped and
 never failing the call; a body small enough to read whole (``direct_chars`` and ``direct_records``) is handed on as it is, with status ``direct``.
 
-The call (``choose``) takes the need as ``task_text`` and everything specific in ``meta``:
+The call (``digest_need``) takes the need as ``task_text`` and everything specific in ``meta``; the selected arm answers, so the call names no arm:
 
-    quest_ai_runner.run("choose-the-context", {"task_text": need, "meta": {"source_groups": [SourceGroup(...)], "background": outcome}},
-                        arms={"choose-the-context": "digest_by_need"})
+    quest_ai_runner.run("digest-records-for-a-need", {"task_text": need, "meta": {"source_groups": [SourceGroup(...)], "background": outcome}})
 
 ``meta`` keys: ``source_groups`` (required), ``background``, ``need_key`` (a stable name for the need; default a hash of its text), ``cache`` (a
 ``DigestCache``; default one that lives as long as the arm), and any cap below by name. The answer is the hub's ``AssembledContext``: ``context_view`` is
@@ -32,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from esoi import implementation
-from hubofhubs.api import AssembledContext, ContextAssembler, ModelCalling, STEP_SELECT, answer_with_reasoning
+from hubofhubs.api import AssembledContext, ModelCalling, STEP_SELECT, answer_with_reasoning
 from hubofhubs.api import card_selection
 
 from quest_ai_runner.the_intelligence.subconscious.digest_prompts import records_block
@@ -121,9 +120,9 @@ class Digester:
         self.reused = 0
 
     def read_window(self, need: str, background: str, window: Window) -> None:
-        head = render_prompt("choose-the-context.digest-head", need=need, background=background or "(none given)", finding_chars=self.caps["finding_chars"],
+        head = render_prompt("digest-records-for-a-need.digest-head", need=need, background=background or "(none given)", finding_chars=self.caps["finding_chars"],
                              max_findings=self.caps["max_findings"], no_em_dash=NO_EM_DASH_RULE)
-        tail = render_prompt("choose-the-context.digest-group", group_title=window.group.title, records=records_block([(u.source_id, u.text) for u in window.units]))
+        tail = render_prompt("digest-records-for-a-need.digest-group", group_title=window.group.title, records=records_block([(u.source_id, u.text) for u in window.units]))
         prompt = PromptLayers(head=head, tail=tail)
         try:
             raw = answer_with_reasoning(self.provider, [{"role": "user", "content": prompt.render()}], model=self.model, reasoning="minimal",
@@ -243,7 +242,7 @@ def assembled(result: DigestResult) -> AssembledContext:
                             partial=any(r.status in UNREAD_STATUSES for r in result.groups))
 
 
-@implementation("choose-the-context", "digest_by_need", scope="quest_ai_runner")
+@implementation("digest-records-for-a-need", "digest_by_need", scope="quest_ai_runner")
 class DigestByNeed:
     """Reads a large body of records one source group at a time for one need and hands on cited findings (module docstring). The model is a
     constructor need (the ``vendor-model-caller`` seat); with none, every group that is not cached is reported skipped and nothing is invented."""
@@ -272,7 +271,7 @@ class DigestByNeed:
         key = need_key or hashlib.sha1(need.encode()).hexdigest()[:16]
         return Digester(self.provider, self.model, cache if cache is not None else self.cache, settings).digest(clip(need, 1500), clip(background, 600), key, groups)
 
-    def choose(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, assembler: Optional[ContextAssembler] = None) -> AssembledContext:
+    def digest_need(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
         meta = dict(meta or {})
         groups = meta.get("source_groups")
         if not groups:

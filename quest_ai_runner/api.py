@@ -63,7 +63,7 @@ from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_learni
 from quest_ai_runner.the_intelligence.subconscious.context_retriever.personal_lexicon import (
     CombinedBackground, CorpusBackground, LanguageBaseline, LexiconTerm, build_personal_lexicon, lexicon_term_strings, terms_within_budget)
 
-# Choose The Context (choose-the-context): the records a need is read from by the digest_by_need arm; a host builds them, ``run`` reads them
+# Digest Records For A Need (digest-records-for-a-need): the records a need is read from by the selected arm; a host builds them, ``run`` reads them
 from quest_ai_runner.the_intelligence.subconscious.digest_sources import SourceGroup as DigestSourceGroup, Unit as DigestUnit
 
 # Intuition (persist-predictions): the anticipation engine's learner, patterns and predictions

@@ -34,7 +34,7 @@ Steps for a task you already know you want to do.
   paths and real addresses out of a public repository.
 - **[Implementing adapters](how-to/adapters.md)**: the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
-- **[Digesting a large collection for one need](how-to/digest-a-large-collection.md)**: read a big body of records with cheap sub-analyses and hand the planner a few cited findings (the `digest_by_need` arm), with a cache, caps and the status of every group.
+- **[Digesting a large collection for one need](how-to/digest-a-large-collection.md)**: read a big body of records with cheap sub-analyses and hand the planner a few cited findings (the `digest-records-for-a-need` solution), with a cache, caps and the status of every group.
 - **[Direct tools](how-to/tools.md)**: actions the brain calls in one planner step with no deep run
   (standard `send_quest_email`, plus your own tools declared in TOML with when to use and when
   not to), shown only when relevant to the request, and callable from a deep run by shell.

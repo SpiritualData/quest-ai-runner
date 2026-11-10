@@ -17,6 +17,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Chosen Context](context_retriever/README.md) (sub-intent): The planner reads the material the request concerns, however the request is worded.
 - Intuition (solution with no page of its own, its implementations are in this intent's records)
 - Cards From Files (solution with no page of its own, its implementations are in this intent's records)
+- Digest Records For A Need (solution with no page of its own, its implementations are in this intent's records): Lets a step that needs something from hundreds of records read all of them without a prompt that holds them, so cost and prompt size stay bounded and every finding can be traced to a record the person can open.
 
 ## Solutions at a glance
 
@@ -24,13 +25,24 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 |---|---|---|---|---|
 | Intuition | `the-intuition` | `quest_ai_runner.run("the-intuition", 'quest-id')` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
 | Cards From Files | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
-| Choose The Context | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner, Cited findings from a large body of records, bounded and cached |
+| Choose The Context | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
+| Digest Records For A Need | `digest-records-for-a-need` | `quest_ai_runner.run("digest-records-for-a-need", 'What do my notes say about why I sleep badly?')` | Digest by need (sub-analyses over source groups) (`digest_by_need`) | Cited findings from a large body of records, bounded and cached |
 
 ## Solutions from a library
 
 - [Intuition](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`the-intuition`): What comes to mind for a request without being asked for: cards and facts the Subconscious offers because they are close to the request, which the Mind may take or ignore. Adopted from the library `hub`.
 - [Cards From Files](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`cards-from-files`): Proposes a proportionate, current set of cards for material a consumer already keeps in files, without writing them. Adopted from the library `hub`.
 - [Context Retriever](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/subconscious/README.md) (`choose-the-context`): Cuts a corpus (files, the text of cards, or the turns of a conversation) into units at natural boundaries and returns, for a request, the units that answer it best first within a token budget, or nothing when the request needs no context. Specializes the library `hub`.
+
+## Problems and ideals
+
+**Problems**
+
+- Records Too Large To Read Whole (`prob-records-too-large-to-read`): A step that needs something from hundreds of the person's records either puts them all in one prompt, which costs more with every entry and buries what matters, or reads a few and misses the rest, and nothing says which record a statement rests on.
+
+**Ideals**
+
+- Findings Traced To Records (`ideal-findings-traced-to-records`): What a step is told about the person's records is the part that bears on its need, and every statement names the record it rests on.
 
 ## Metrics and their leaders
 
@@ -48,11 +60,19 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Parent intent: [Intelligence](../README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/the_intelligence/subconscious/cards_from_files](cards_from_files/README.md), [quest_ai_runner/the_intelligence/subconscious/intuition](intuition/README.md)
-- Records: [intent.csv](intent.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
 ## The full record
+
+### Problems
+
+- Records Too Large To Read Whole (`prob-records-too-large-to-read`): A step that needs something from hundreds of the person's records either puts them all in one prompt, which costs more with every entry and buries what matters, or reads a few and misses the rest, and nothing says which record a statement rests on.
+
+### Ideals
+
+- Findings Traced To Records (`ideal-findings-traced-to-records`): What a step is told about the person's records is the part that bears on its need, and every statement names the record it rests on.
 
 ### Solutions
 
@@ -60,7 +80,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 |---|---|---|---|
 | Intuition | `the-intuition` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
 | Cards From Files | `cards-from-files` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
-| Choose The Context | `choose-the-context` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner, Cited findings from a large body of records, bounded and cached |
+| Choose The Context | `choose-the-context` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
+| Digest Records For A Need | `digest-records-for-a-need` | Digest by need (sub-analyses over source groups) (`digest_by_need`) | Cited findings from a large body of records, bounded and cached |
 
 ### Implementations
 
@@ -74,8 +95,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Index everything (broken baseline) | `cards-from-files:index_everything` | [evaluation/components/choose_what_to_index/broken/index_everything.py](../../../evaluation/components/choose_what_to_index/broken/index_everything.py) |  |
 | Path and title rules, no model call (floor, proposed) | `cards-from-files:path_rules` | [evaluation/components/label_context_cards/impls/path_rules.py](../../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
 | Per-lane assembly of the context members (today) | `choose-the-context:per_lane_assembly` | [quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py](area_context_retriever.py) | [context_retriever](context_retriever/README.md) |
-| Digest by need (sub-analyses over source groups) | `choose-the-context:digest_by_need` | [quest_ai_runner/the_intelligence/subconscious/digest_by_need.py](digest_by_need.py) |  |
-| Whole collection in one prompt (broken baseline) | `choose-the-context:whole_collection` | [evaluation/components/digest_by_need/broken/whole_collection.py](../../../evaluation/components/digest_by_need/broken/whole_collection.py) |  |
+| Digest by need (sub-analyses over source groups) | `digest-records-for-a-need:digest_by_need` | [quest_ai_runner/the_intelligence/subconscious/digest_by_need.py](digest_by_need.py) |  |
+| Whole collection in one prompt (broken baseline) | `digest-records-for-a-need:whole_collection` | [evaluation/components/digest_by_need/broken/whole_collection.py](../../../evaluation/components/digest_by_need/broken/whole_collection.py) |  |
 | Fast-tier model writes metadata and categories (today) | `cards-from-files:fast_model_labels` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/card_metadata_generator.py](cards_from_files/card_metadata_generator.py) |  |
 | QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/qar_topic_bootstrap.py](cards_from_files/qar_topic_bootstrap.py) |  |
 | Atomic file prediction store | `the-intuition:file` | [quest_ai_runner/the_intelligence/subconscious/intuition/anticipation_store.py](intuition/anticipation_store.py) |  |

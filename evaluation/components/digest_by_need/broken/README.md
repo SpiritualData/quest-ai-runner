@@ -4,7 +4,7 @@ Breadcrumb: [Top](../../../../esoi/README.md) > [Intelligence](../../../../quest
 
 | Implementation | Handle | Code | Selected |
 |---|---|---|---|
-| Whole collection in one prompt (broken baseline) | `choose-the-context:whole_collection` | [`evaluation/components/digest_by_need/broken/whole_collection.py`](whole_collection.py) |  |
+| Whole collection in one prompt (broken baseline) | `digest-records-for-a-need:whole_collection` | [`evaluation/components/digest_by_need/broken/whole_collection.py`](whole_collection.py) |  |
 
 ## Where to go next
 
