@@ -201,7 +201,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_RUNNER_ENV_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_RUNNER_LABEL` |  | `the_body/configuration/cli_config.py` | `.env.example` |
 | `QAR_SCIENCE_DAILY_LIMIT` | Real scholarly searches one process may make per UTC day (default 300, 0 for no cap). OpenAlex bills about $1 per 1,000 searches against a $1 a day free allowance. | `the_world/science/tools_science.py` | `docs/how-to/tools.md` |
-| `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `the_consciousness/terminal/interactive_session_commands.py` | - |
+| `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `the_consciousness/terminal/interactive_session_commands.py`, `the_world/tools/delegated_agent_sessions/hub_loop_runner.py` | - |
 | `QAR_SKILLS_ROOT` | The folder holding the skills this lane's deep worker may be asked to carry out (one folder per skill with its SKILL.md), such as the skill a milestone deliverable's work names; also the root of the representatives' skill folders. | `the_consciousness/request_intake/executor.py` | - |
 | `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `the_body/configuration/walk_settings.py`, `the_world/tools/file_reading/files_search_worker.py`, `the_world/tools/file_reading/files_server.py` | - |
 | `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `the_body/configuration/card_store_settings.py` | - |

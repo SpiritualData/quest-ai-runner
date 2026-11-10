@@ -113,6 +113,16 @@ def test_the_hubs_own_loop_is_handed_the_web_only_when_a_search_backend_is_confi
     assert tools["web_search"].run(" tide pools ") == "results for tide pools" and tools["read_page"].run("https://example.org why") == "error: blocked"
 
 
+def test_the_hubs_own_loop_is_handed_the_lanes_skills(tmp_path):
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
+    assert hub_loop_runner.skill_tools({"QAR_SKILLS_DIR": str(tmp_path / "none")}) == {}
+    (tmp_path / "send-mail").mkdir()
+    (tmp_path / "send-mail" / "SKILL.md").write_text("---\nname: send-mail\ndescription: How to send a mail.\n---\nUse the wrapper.\n")
+    tools = hub_loop_runner.skill_tools({"QAR_SKILLS_DIR": str(tmp_path)})
+    assert tools["list_skills"].run("") == "send-mail: How to send a mail." and "Use the wrapper." in tools["read_skill"].run("send-mail")
+    assert tools["read_skill"].run("../etc").startswith("error") and tools["read_skill"].run("missing").startswith("error")
+
+
 def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, picks, monkeypatch):
     table, _ = picks
     assert type(resolve_deep_runner(cfg(deep_providers=["openai"]))) is SubprocessGoalRunner   # nothing eligible: the default

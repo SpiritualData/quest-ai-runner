@@ -11,6 +11,7 @@ from esoi import implementation
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
 from hubofhubs.api import GoalSettings, SolutionLoopRunner as HubSolutionLoopRunner, Tool
@@ -25,7 +26,7 @@ class HubLoopRunner(HubSolutionLoopRunner):
     config_class = SubprocessConfig
 
     def __init__(self, config: Optional[SubprocessConfig] = None, **arguments: Any):
-        arguments.setdefault("tools", web_tools(os.environ) or None)
+        arguments.setdefault("tools", {**skill_tools(os.environ), **web_tools(os.environ)} or None)
         super().__init__(config, **arguments)
 
     def goal_settings(self) -> GoalSettings:
@@ -60,3 +61,47 @@ def web_tools(env: Mapping[str, str]) -> Dict[str, Tool]:
 
     return {"web_search": Tool("search the live web for a query; returns titles, links and snippets", search),
             "read_page": Tool("read one web page: the URL, then optionally a space and what to look for in it", read)}
+
+
+def skills_folder(env: Mapping[str, str]) -> Optional[Path]:
+    """The folder of this lane's skills (one folder per skill holding ``SKILL.md``): ``QAR_SKILLS_DIR`` when set, else ``.claude/skills`` under
+    the home folder; None when there is none."""
+    named = env.get("QAR_SKILLS_DIR") or ""
+    folder = Path(named).expanduser() if named else Path(env.get("HOME") or Path.home()) / ".claude" / "skills"
+    return folder if folder.is_dir() else None
+
+
+def skill_tools(env: Mapping[str, str]) -> Dict[str, Tool]:
+    """The lane's skills as tools for the loop (none when the lane has no skills folder). The external agent this runner stands in for loads
+    skills by itself; the loop is handed them: ``list_skills`` gives each skill's name and what it is for, ``read_skill`` gives one skill's text."""
+    folder = skills_folder(env)
+    if folder is None:
+        return {}
+
+    def described(text: str) -> str:
+        for line in text.splitlines()[:12]:
+            if line.lower().startswith("description:"):
+                return " ".join(line.split(":", 1)[1].split())[:200]
+        return ""
+
+    def listed(_argument: str) -> str:
+        lines = []
+        for path in sorted(folder.iterdir()):
+            try:
+                lines.append(f"{path.name}: {described((path / 'SKILL.md').read_text(encoding='utf-8', errors='replace'))}")
+            except OSError:
+                continue
+        return "\n".join(lines) or "(no skills)"
+
+    def read(name: str) -> str:
+        name = name.strip().strip("/")
+        if not name or "/" in name or name.startswith("."):
+            return "error: give one skill name from list_skills"
+        try:
+            return (folder / name / "SKILL.md").read_text(encoding="utf-8", errors="replace")[:20000]
+        except OSError:
+            return f"error: no skill named {name!r}; use list_skills"
+
+    return {"list_skills": Tool("list this lane's skills (runbooks for kinds of task) with what each is for; look before doing a kind of task "
+                                "the goal or context ties to a skill, a person or a system", listed),
+            "read_skill": Tool("read one skill by name (from list_skills) and follow it", read)}
