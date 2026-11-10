@@ -181,6 +181,16 @@ class IntentsMixin:
             body["reveal"] = reveal
         return self.intent_write("POST", f"/api/intents/records/{record_id}/sub-intents", body, human_statement=human_statement)
 
+    def get_publisher_profile(self, user_id: str) -> Dict[str, Any]:
+        """GET /api/spec-library/publishers/{userId}: the page a spec's "By <name>" link opens (name, bio, websiteUrl, avatarUrl,
+        expertiseTags, canEdit). A refusal dict (``refused``, ``status``) when the server does not have the route yet or the user is unknown."""
+        return self.intent_write("GET", f"/api/spec-library/publishers/{user_id}", {})
+
+    def set_publisher_profile(self, user_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """PUT /api/spec-library/publishers/{userId}: only the given fields change (name, bio, websiteUrl, avatarUrl, expertiseTags; an empty
+        string clears one). Only the user themself may write their own profile; a personal API key acts as its owner here."""
+        return self.intent_write("PUT", f"/api/spec-library/publishers/{user_id}", dict(fields))
+
     def intent_write(self, method: str, path: str, body: Dict[str, Any], *, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """Send one intents write. A non-blank ``human_statement`` (the person's verbatim words asking for exactly this change) is sent as
         ``humanStatement``: the server then treats the call as the person's for its AI guards. Blank or absent sends nothing."""
