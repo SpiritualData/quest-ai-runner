@@ -4,7 +4,7 @@ A mixin of ``QuestClient`` (see ``quest_client.py``): methods only, state lives 
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import (
@@ -469,6 +469,42 @@ class QuestsMixin:
         """
         return self._write("DELETE", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
                            label="Deleting the experiment")
+
+    def list_investigations(self, quest_id: str, **filters: Any) -> List[Dict[str, Any]]:
+        """GET /api/quests/{quest_id}/investigations: what was looked into on the quest, newest first. ``filters``: ``research_question_id``,
+        ``goal_id``, ``solution_id`` (a strategy id, or the quest's own id for the whole quest). Raises ``QuestApiError``/``QuestNotConfigured``."""
+        params = {k: v for k, v in filters.items() if v}
+        resp = self._request("GET", f"/api/quests/{quest_id}/investigations", params=params or None) or {}
+        return [r for r in (resp.get("investigations") if isinstance(resp, dict) else resp) or [] if isinstance(r, dict)]
+
+    def earlier_investigations(self, quest_id: str, solution_ids: Sequence[str] = (), research_question_id: str = "") -> List[Dict[str, Any]]:
+        """GET .../investigations/earlier: the earlier investigations that bear on a new one about these strategies (those on each, on every strategy
+        above it up to the whole quest, and on the experiment), each with ``reuse`` (``fresh``, ``partial`` or ``stale``) and ``on``."""
+        params = {"solution_ids": ",".join(solution_ids), "research_question_id": research_question_id}
+        resp = self._request("GET", f"/api/quests/{quest_id}/investigations/earlier", params={k: v for k, v in params.items() if v}) or {}
+        return [r for r in resp.get("investigations") or [] if isinstance(r, dict)]
+
+    def investigation_solutions(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET .../investigations/solutions: the strategies an investigation can bear on, ``{id, name, parent_id}``; the quest's own id is the whole quest."""
+        resp = self._request("GET", f"/api/quests/{quest_id}/investigations/solutions") or {}
+        return [r for r in resp.get("solutions") or [] if isinstance(r, dict)]
+
+    def record_investigation(self, quest_id: str, question: str, **fields: Any) -> WriteResult:
+        """POST /api/quests/{quest_id}/investigations: record one investigation. ``fields`` are the endpoint's keys: ``solution_ids`` (at least one),
+        ``decision``, ``research_question_id``, ``goal_id``, ``extends_investigation_id``, ``asked_by_kind`` and ``carried_out_by`` (``person`` | ``quest_ai``),
+        ``origin``, ``kind``, ``size``, ``method``, ``criteria``, ``sources``, ``queries``, ``found``, ``screened_out``, ``items``, ``synthesis``,
+        ``limitations``, ``decisions``, ``refresh_on``. Raises like ``create_habit``."""
+        body: Dict[str, Any] = {"question": question}
+        body.update({k: v for k, v in fields.items() if v is not None})
+        return self._write("POST", f"/api/quests/{quest_id}/investigations", body=body, label="Recording the investigation")
+
+    def mark_investigation_item(self, quest_id: str, investigation_id: str, item_id: str, applied: bool, **fields: Any) -> WriteResult:
+        """POST .../investigations/{id}/items/{item}/applied: say what a finding changed (``what``) or why it changed nothing (``reason``); ``kind`` and
+        ``record_id`` name the changed record. Raises like ``create_habit``."""
+        body: Dict[str, Any] = {"applied": bool(applied), "by_kind": "quest_ai"}
+        body.update({k: v for k, v in fields.items() if v is not None})
+        return self._write("POST", f"/api/quests/{quest_id}/investigations/{investigation_id}/items/{item_id}/applied", body=body,
+                           label="Recording what the finding changed")
 
     def get_my_quest(self, quest_id: str) -> Dict[str, Any]:
         """GET /api/quests/{quest_id}/state — fetch one account-wide quest's full state.

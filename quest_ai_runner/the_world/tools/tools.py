@@ -904,4 +904,5 @@ from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import 
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results  # noqa: E402,F401
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_values  # noqa: E402,F401
 from quest_ai_runner.the_body.hands.quest_operations import tools_quest_experiments  # noqa: E402,F401
+from quest_ai_runner.the_body.hands.quest_operations import tools_quest_investigations  # noqa: E402,F401
 from quest_ai_runner.the_world.science import tools_science  # noqa: E402,F401

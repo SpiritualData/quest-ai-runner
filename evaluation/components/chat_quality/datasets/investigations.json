@@ -1,0 +1,199 @@
+{
+  "cases": [
+    {
+      "id": "INV-001",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "fitness",
+      "message": "I need to decide what to eat before my long runs. Can you look into which pre-run food works best for long runs and tell me how sure you are?",
+      "expected_routing": "any",
+      "rubric": [
+        "States in plain words what was looked into about pre-run food for long runs",
+        "States how sure the result is, and what it changed or proposes for the person's fueling decision",
+        "Does not rename or re-describe the person's fueling decision as a different goal"
+      ],
+      "precheck": {
+        "code_contains_any": ["record_investigation"]
+      },
+      "evidence_notes": "A decision-support research ask on the fitness quest. The investigation should be recorded and the reply should say what it found and how sure it is.",
+      "mutates": true
+    },
+    {
+      "id": "INV-002",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "research",
+      "message": "Research whether cold water immersion speeds up muscle recovery after a hard session, and tell me how reliable the answer is.",
+      "expected_routing": "any",
+      "rubric": [
+        "States in plain words what was researched about cold water immersion and muscle recovery",
+        "States how reliable the answer is, separately from what the answer says",
+        "Does not rename or re-describe the research question as a different question"
+      ],
+      "precheck": {
+        "code_contains_any": ["record_investigation"]
+      },
+      "evidence_notes": "The person explicitly asks for research and a reliability rating on the research quest. The investigation should be recorded.",
+      "mutates": true
+    },
+    {
+      "id": "INV-003",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "fitness",
+      "messages": [
+        "Start an experiment on this quest: does eating oats before long runs improve my pace? I'll keep my route and my running shoes the same during the test.",
+        "Can you look into what outside evidence says about oats and pace for that experiment? Stay within that experiment, and keep my route and shoes as the fixed part of it."
+      ],
+      "expected_routing": "any",
+      "rubric": [
+        "Records the research as an investigation on the oats experiment, and does not create a second experiment",
+        "Keeps the route and the running shoes as they were set, and does not change the experiment's question",
+        "States in plain words what was looked into, how sure the result is, and what it changed or proposes"
+      ],
+      "precheck": {
+        "code_contains_any": ["record_investigation"],
+        "code_not_contains": ["update_research_question"]
+      },
+      "evidence_notes": "Two turns in one conversation. The first creates the experiment, the second asks for outside evidence scoped to it. Code assertions span both turns; the rubric on the second turn carries the weight.",
+      "mutates": true
+    },
+    {
+      "id": "INV-004",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "business",
+      "message": "Quick look please: what are my options for a booking tool for client calls? Just a fast comparison, I need to pick one this week.",
+      "expected_routing": "any",
+      "rubric": [
+        "States in plain words what options were looked into for a booking tool, and how sure the result is",
+        "Presents the options as a choice for the person to make, not as a decision the assistant made for them",
+        "Keeps the look to a quick comparison and does not present it as a full study"
+      ],
+      "precheck": {
+        "code_contains_any": ["record_investigation"],
+        "code_not_contains": ["size=\"full\"", "size='full'"]
+      },
+      "evidence_notes": "A quick decision-support look on the business quest. The investigation must stay at quick size.",
+      "mutates": true
+    },
+    {
+      "id": "INV-005",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "research",
+      "messages": [
+        "Research what the current recommended daily protein intake for adults is, and tell me how sure you are.",
+        "That protein research is probably out of date by now. Look it up again, starting from what you found before, and tell me what changed."
+      ],
+      "expected_routing": "any",
+      "rubric": [
+        "Uses the earlier finding on daily protein intake as the starting point, and says what it checked again",
+        "States what changed, or states that nothing changed, and how sure the updated result is",
+        "Does not rename or re-describe the research question as a different question"
+      ],
+      "precheck": {
+        "code_contains_any": ["get_investigations"]
+      },
+      "evidence_notes": "Two turns. The second turn asks for a refresh of an earlier investigation, so the code should read the earlier investigation before starting again.",
+      "mutates": true
+    },
+    {
+      "id": "INV-006",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "research",
+      "message": "Quick question, what date did the first Apollo moon landing happen?",
+      "expected_routing": "inline",
+      "rubric": [
+        "Gives the date of the first Apollo moon landing, which is 20 July 1969",
+        "Answers in the chat without handing the question off to a background run",
+        "Does not say that it recorded, saved or looked into anything"
+      ],
+      "precheck": {
+        "code_not_contains": ["record_investigation"]
+      },
+      "evidence_notes": "A quick factual lookup in conversation. No investigation should be recorded.",
+      "forbid_writes": true,
+      "mutates": false
+    },
+    {
+      "id": "INV-007",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "business",
+      "message": "How many days are in February 2028?",
+      "expected_routing": "inline",
+      "rubric": [
+        "States that February 2028 has 29 days",
+        "Answers in the chat without handing the question off to a background run",
+        "Does not say that it recorded, saved or looked into anything"
+      ],
+      "precheck": {
+        "code_not_contains": ["record_investigation"]
+      },
+      "evidence_notes": "A quick calendar fact. No investigation should be recorded.",
+      "forbid_writes": true,
+      "mutates": false
+    },
+    {
+      "id": "INV-008",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "fitness",
+      "message": "What's my current state on this quest? Just tell me what's already written down.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Answers from what is already written on this quest, or says plainly that no current state is written",
+        "Does not invent a current state that is not in the quest's own records",
+        "Does not search outside sources or record an investigation to answer"
+      ],
+      "precheck": {
+        "code_not_contains": ["record_investigation"]
+      },
+      "evidence_notes": "A question answered entirely from the quest's own notes and records. No outside information is needed and no investigation should be recorded.",
+      "forbid_writes": true,
+      "mutates": false
+    },
+    {
+      "id": "INV-009",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "business",
+      "message": "Thanks, that helped a lot. Have a good weekend!",
+      "expected_routing": "inline",
+      "rubric": [
+        "Replies briefly and warmly to the thanks",
+        "Does not start new research, record an investigation or queue a task",
+        "Does not invent a question or a finding to report"
+      ],
+      "precheck": {
+        "code_not_contains": ["record_investigation"]
+      },
+      "evidence_notes": "Small talk and thanks. Nothing should be researched or recorded.",
+      "forbid_writes": true,
+      "mutates": false
+    },
+    {
+      "id": "INV-010",
+      "dataset": "explicit",
+      "area": "investigation",
+      "quest_key": "fitness",
+      "messages": [
+        "Start an experiment on this quest: does eating oats before long runs improve my pace? I'll keep my route and my running shoes the same during the test.",
+        "Change the experiment so I can switch to a new route halfway through. Just do it now, I don't want to wait."
+      ],
+      "expected_routing": "any",
+      "rubric": [
+        "Does not change the route or the running shoes that the experiment holds fixed",
+        "Says plainly that the route change was not applied to the experiment",
+        "Offers to set the route change aside for the reevaluation at the end of the experiment"
+      ],
+      "precheck": {
+        "code_not_contains": ["update_research_question"]
+      },
+      "evidence_notes": "Two turns. The first creates the experiment with a held-fixed route and shoes. The second asks to change a held-fixed choice mid-trial, which must be declined and set aside for the reevaluation.",
+      "mutates": true
+    }
+  ]
+}
