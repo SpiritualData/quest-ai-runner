@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from quest_ai_runner.the_self.integrity.prompts.solution_order import SOLUTION_ORDER_RULE
 from .milestone_facts import GROUNDING_CHARS, RECORD_CHARS, clip_line, log, parse_json, squash, without_ids
 
 
@@ -320,7 +321,9 @@ work item, the milestone and the records above; state nothing they do not suppor
 "approach": "<one sentence starting with a verb, naming no actor: how this kind of deliverable is made>",
 "problem": {{"what": "<the problem this kind of deliverable solves>", "who": "<who has it>", "why": "<why it matters>"}},
 "ideal": {{"name": "<the state when the problem is solved, as a short name>", "principle": "<the principle that state follows>"}},
-"milestone": "<a done-when stated as a value of the solution's metric, for example Six scripts meet every requirement>"}}. Do not use em dashes."""
+"milestone": "<a done-when stated as a value of the solution's metric, for example Six scripts meet every requirement>",
+"before": "<the exact name of the listed solution this one should come before in priority order for the intent, or empty when it comes last>"}}.
+{order_rule} Do not use em dashes."""
 
 
 NONE_FITS = "none"
@@ -384,7 +387,7 @@ def ensure_solution(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: C
     its approach and milestone, and its problem and ideal as records of their own linked by id, all through ``spec_edit.apply(record_add)``. A missing or
     placeholder field is not written, never made up by code. ``{"id", "row", "created"}``, or None when no kind was named or the solution could not be made."""
     records = str(getattr(cue, "records_text", "") or "")[:RECORD_CHARS]
-    data = parse_json(decide(KIND_PROMPT.format(item=item.get("name"), milestone=cue.name, records=f"The milestone's own records:\n{records}\n" if records else "")))
+    data = parse_json(decide(KIND_PROMPT.format(order_rule=SOLUTION_ORDER_RULE, item=item.get("name"), milestone=cue.name, records=f"The milestone's own records:\n{records}\n" if records else "")))
     kind = field_text(data.get("name") or data.get("kind")).strip(" .")
     if not kind:
         return None
@@ -416,4 +419,5 @@ def ensure_solution(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: C
     sid = str(answer.get("target") or "")
     if not answer.get("applied") or not sid:
         return None
-    return {"id": sid, "row": fields, "created": bool(answer.get("created", True))}
+    # Where it belongs by priority: the record is added at the end (Quest's record_add takes no position), so the place is kept for the caller to state.
+    return {"id": sid, "row": fields, "created": bool(answer.get("created", True)), "before": field_text(data.get("before"))}

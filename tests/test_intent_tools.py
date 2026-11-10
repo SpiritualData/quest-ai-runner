@@ -367,3 +367,9 @@ def test_create_sub_intent_passes_reveal_and_rejects_unknown_levels():
     assert not seen
     invoke(intents.create_sub_intent_spec, Backend(), {"record_id": "esr_9", "name": "Running", "opportunity": "x"})
     assert seen["reveal"] is None
+
+
+def test_apply_spec_edit_says_solutions_are_kept_in_priority_order():
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_intents import apply_spec_edit_spec
+    text = apply_spec_edit_spec({}).description
+    assert "priority order for the intent" in text and "sub-intent" in text and "—" not in text

@@ -381,7 +381,8 @@ def apply_spec_edit_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                      "sets one column of one record; {kind: record_add, table: problems|ideals|solutions|implementations|metrics, key: the record's "
                      "name, fields: {column: value}} adds a record once (a repeat adds nothing; an implementation also needs fields.solution_id); "
                      "{kind: milestone_add, target: solution_record_id, key: the milestone sentence, fields: {metric: metric_record_id, "
-                     "strategy: how}} adds a milestone to a solution's ladder once. Result status: applied, already there, proposed (waiting for the "
+                     "strategy: how}} adds a milestone to a solution's ladder once. Solutions are kept in priority order for the intent (what it needs first, and what others depend on, comes first); "
+                     "a new solution is added at the end, so name in your note the solution it should come before. Elaborate a solution only through a sub-intent, never a parent-solution link. Result status: applied, already there, proposed (waiting for the "
                      "owner: NOT done) or refused (the message says why, for example a field the person edited). No em dashes in any value."),
         when_to_use=("A record, metric or milestone of the quest's specification needs to exist or change, and repeating the call must not duplicate it. "
                      "Read the records first with read_spec_records. A request to move or make progress on a milestone is this: work out the "

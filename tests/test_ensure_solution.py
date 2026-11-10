@@ -53,3 +53,12 @@ def test_no_kind_creates_nothing():
 
 def test_the_old_kind_key_still_names_the_kind():
     assert make({"kind": "option comparisons", "purpose": "Compares options."})[1]["id"] == "Option comparisons"
+
+
+def test_the_solution_prompt_carries_the_order_rule_and_the_place_by_priority_is_kept():
+    prompts, edits = [], Edits()
+    cue_ = cue()
+    found = milestone_rubric.ensure_solution(cue_, {"name": "tutorial scripts"}, edits, lambda p: (prompts.append(p), json.dumps({**FULL, "before": "Launch page"}))[1])
+    assert "priority order for the intent" in prompts[0] and "never by appending" in prompts[0] and "sub-intent" in prompts[0]
+    assert "—" not in prompts[0] and "before" in prompts[0]
+    assert found["before"] == "Launch page"

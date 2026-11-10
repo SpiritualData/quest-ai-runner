@@ -91,3 +91,9 @@ def test_the_readiness_block_tells_the_run_to_follow_the_metrics_cascade():
     text = esoi.render({"records": records}, esoi.pick_solution(records), refreshed=False)
     assert "cheapest cascading stage first" in text and "a stage not run stays empty" in text
     assert "—" not in text
+
+
+def test_a_proposed_solution_is_asked_for_by_priority_and_through_sub_intents():
+    text = esoi.render({"records": []}, None, False)
+    assert "priority order for the intent" in text and "never by appending" in text and "sub-intent" in text
+    assert "—" not in text
