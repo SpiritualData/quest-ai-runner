@@ -11,12 +11,25 @@ from esoi import implementation
 
 import json
 import os
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from hubofhubs.api import GoalSettings, SolutionLoopRunner as HubSolutionLoopRunner, Tool
 
 from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, goal_settings
+
+
+LANE_TOOLS = ("create_decision", "add_quest_note")      # the lane's own operations the loop is handed, run in process with the lane's settings
+
+
+@dataclass
+class RunScope:
+    """What the lane tools of ONE run need: who asked, which run, and the decisions the run raised."""
+    requester_user_id: Optional[str] = None
+    run_id: Optional[str] = None
+    raised: List[str] = field(default_factory=list)
 
 
 @implementation("delegated-agent-sessions", "hub_loop")
@@ -28,10 +41,68 @@ class HubLoopRunner(HubSolutionLoopRunner):
     def __init__(self, config: Optional[SubprocessConfig] = None, **arguments: Any):
         arguments.setdefault("tools", {**skill_tools(os.environ), **web_tools(os.environ)} or None)
         super().__init__(config, **arguments)
+        self.scope = threading.local()
+        self.tools = {**(self.tools or {}), **lane_tools(self.scope, os.environ, arguments.get("registry"))} or None
+
+    def run_goal(self, *, control: Any = None, **arguments: Any) -> Any:
+        """The hub's run, with this run's requester and run id behind the lane tools; a decision raised through them is the run's ``decision_id`` (the consumer
+        reads that as "needs you")."""
+        self.scope.current = RunScope(arguments.get("requester_user_id"), arguments.get("run_id"))
+        try:
+            result = super().run_goal(control=control, **arguments)
+            raised = self.scope.current.raised
+        finally:
+            self.scope.current = None
+        if raised and not getattr(result, "decision_id", None):
+            result.decision_id, result.met = raised[-1], False
+        return result
 
     def goal_settings(self) -> GoalSettings:
         """QAR's goal settings, read from the environment at call time (QAR is the consumer that owns its settings)."""
         return goal_settings()
+
+
+def argument_shape(parameters: Mapping[str, Any]) -> str:
+    """One line for a tool's JSON argument shape: ``{"summary": string (required), "kind": string}``."""
+    required = set(parameters.get("required") or [])
+    items = [f'"{name}": {(prop or {}).get("type", "value")}' + (" (required)" if name in required else "") for name, prop in (parameters.get("properties") or {}).items()]
+    return "{" + ", ".join(items) + "}"
+
+
+def lane_tools(scope: Any, env: Mapping[str, str], registry: Any = None) -> Dict[str, Tool]:
+    """The lane's own operations as tools for the loop, built from QAR's tool registry for a lane (the catalog the planner is shown), so ``USE: create_decision
+    {...}`` runs in process with the lane's settings instead of through a command line in the sandbox. Each tool keeps its registry description and
+    its JSON argument shape in one line. None are handed when the registry cannot be built."""
+    try:
+        from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+        registry = registry or build_tool_registry(env)
+    except Exception:  # noqa: BLE001 -- a lane without the catalog still runs deep work
+        return {}
+
+    def tool_for(name: str) -> Optional[Tool]:
+        spec = registry.get(name)
+        if spec is None:
+            return None
+
+        def run(given: str) -> str:
+            try:
+                args = json.loads(given) if given.strip() else {}
+            except ValueError as error:
+                raise ValueError(f"the input must be one JSON object like {argument_shape(spec.parameters)}: {error}") from error
+            current = getattr(scope, "current", None) or RunScope()
+            context = ToolContext(user_id=current.requester_user_id, task_id=current.run_id, meta={"asker_user_id": current.requester_user_id or ""})
+            outcome = registry.invoke(name, args, context)
+            if not outcome.ok:
+                raise RuntimeError(outcome.text)
+            if name == "create_decision":
+                data = outcome.data if isinstance(outcome.data, Mapping) else {}
+                ident = str(data.get("decision_id") or data.get("id") or "")
+                if ident:
+                    current.raised.append(ident)
+            return outcome.text
+        return Tool(f"{' '.join(str(spec.description).split())} Input: one JSON object {argument_shape(spec.parameters)}", run)
+
+    return {name: tool for name in LANE_TOOLS if (tool := tool_for(name)) is not None}
 
 
 def claude_login_research(env: Mapping[str, str]) -> Any:
