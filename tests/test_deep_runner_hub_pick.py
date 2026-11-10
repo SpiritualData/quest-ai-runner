@@ -168,3 +168,23 @@ def test_hard_work_starts_on_the_tier_measured_best_for_hard_work(programs, pick
     pinned.orchestrator.deep_model_ladder = ["haiku", "sonnet", "opus"]
     resolve_deep_runner(pinned)
     assert pinned.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # the operator's choice wins
+
+
+def test_the_native_tool_loop_runs_only_when_named(programs, tmp_path, monkeypatch):
+    from hubofhubs.api import NativeToolLoopRunner, choose_agent_arm
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+    skills = tmp_path / "skills" / "demo"
+    skills.mkdir(parents=True)
+    (skills / "SKILL.md").write_text("description: a demo\n")
+    monkeypatch.setenv("QAR_SKILLS_DIR", str(tmp_path / "skills"))
+    runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "native_loop"}))
+    assert type(runner) is native_loop_runner.NativeLoopRunner and isinstance(runner, NativeToolLoopRunner) and runner.on_trial
+    assert runner.goal_settings().escalation_marker                 # QAR's settings, not the hub's empty defaults
+    assert str(tmp_path / "skills") in runner.notes                 # the frame names the lane's skills folder (a native session loads none of its own)
+    for difficulty in ("", "hard"):                                  # the hub's real standings never hand a consumer a harness on trial
+        assert choose_agent_arm(["anthropic"], difficulty=difficulty).harness != "native_tool_loop_runner"
+
+
+def test_the_native_tool_loop_note_is_empty_without_a_skills_folder(tmp_path):
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+    assert native_loop_runner.skills_note({"QAR_SKILLS_DIR": str(tmp_path / "none"), "HOME": str(tmp_path / "nohome")}) == ""
