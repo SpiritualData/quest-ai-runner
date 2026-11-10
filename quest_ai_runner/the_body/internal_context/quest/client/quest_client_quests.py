@@ -427,7 +427,8 @@ class QuestsMixin:
         ``fields`` are the endpoint's optional keys: ``context``, ``hypotheses`` (``[{statement, sub_question_id?}]``),
         ``purpose``, ``sub_questions`` (``[{question, answer_method?}]``), ``assumptions`` (list of str),
         ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date``,
-        ``conditions``. Raises like ``create_habit``.
+        ``conditions``, and the focused-attention keys ``focus``, ``attention_user_ids``, ``reevaluate_on``, ``reevaluate_when``,
+        ``held_fixed``, ``inside``, ``left_out`` and ``phase``. Raises like ``create_habit``.
         """
         body: Dict[str, Any] = {"question": question}
         body.update({k: v for k, v in fields.items() if v is not None})
@@ -445,6 +446,20 @@ class QuestsMixin:
         """
         return self._write("PATCH", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
                            body=changes, label="Changing the experiment")
+
+    def reevaluate_experiment(self, quest_id: str, research_question_id: str, **record: Any) -> WriteResult:
+        """POST /api/quests/{quest_id}/research-questions/{id}/reevaluate: record what the trial period taught and the decision.
+
+        ``record``: ``learned`` (required), ``changed``, ``decision`` (``continue`` | ``change`` | ``end``), ``next_experiment``,
+        ``next_reevaluate_on`` (YYYY-MM-DD) and, for ``change``, ``changes`` (the focus keys to replace). Raises like ``create_habit``.
+        """
+        return self._write("POST", f"/api/quests/{quest_id}/research-questions/{research_question_id}/reevaluate", body=record,
+                           label="Recording the reevaluation")
+
+    def add_experiment_note(self, quest_id: str, research_question_id: str, text: str) -> WriteResult:
+        """POST .../research-questions/{id}/reevaluation-notes: set a thought aside to weigh at the experiment's reevaluation. Raises like ``create_habit``."""
+        return self._write("POST", f"/api/quests/{quest_id}/research-questions/{research_question_id}/reevaluation-notes", body={"text": text},
+                           label="Setting the thought aside for the reevaluation")
 
     def delete_experiment(self, quest_id: str, research_question_id: str) -> WriteResult:
         """DELETE /api/quests/{quest_id}/research-questions/{id}: permanently remove one experiment.

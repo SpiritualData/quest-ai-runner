@@ -25,6 +25,22 @@ from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 # over the listing, so no second endpoint or hand-written database query is ever needed.
 
 EXPERIMENT_STATUSES = ("open", "experimenting", "concluded")
+EXPERIMENT_PHASES = ("planned", "running", "reevaluating", "ended")
+#: The focused-attention keys of an experiment (a trial period): what is tried, whose attention, when it is reevaluated, what is held fixed, inside and left out.
+FOCUS_KEYS = ("focus", "attention_user_ids", "reevaluate_on", "reevaluate_when", "held_fixed", "inside", "left_out", "phase")
+_FOCUS_PARAMS = {
+    "focus": {"type": "string", "description": ("What is being tried, in one line and the person's framing: a question or a way of thinking. "
+                                                "Qualitative is fine; never invent a number or metric.")},
+    "attention_user_ids": {"type": "array", "items": {"type": "string"},
+                           "description": "Whose attention it directs (owner or team member user ids). Only if they named someone; empty means their own. On an edit the FULL list."},
+    "reevaluate_on": {"type": "string", "description": "YYYY-MM-DD when the trial period ends and it is reevaluated; '' clears."},
+    "reevaluate_when": {"type": "string", "description": "A condition in words, if they gave one instead of a date."},
+    "held_fixed": {"type": "array", "items": {"type": "string"},
+                   "description": "What is set in stone until the reevaluation, as they said it. On an edit the FULL list."},
+    "inside": {"type": "array", "items": {"type": "string"}, "description": "What is inside this exploration. On an edit the FULL list."},
+    "left_out": {"type": "array", "items": {"type": "string"}, "description": "What is left out for now. On an edit the FULL list."},
+    "phase": {"type": "string", "enum": list(EXPERIMENT_PHASES)},
+}
 
 
 _EXPERIMENT_FILLER = frozenset({
@@ -139,6 +155,16 @@ _EXPERIMENT_ASSUMPTIONS_PARAM = {
 def _experiment_line(row: Mapping[str, Any]) -> str:
     bits = [f"[{row.get('research_question_id')}] {row.get('question')}",
             f"status {row.get('status')}"]
+    if row.get("phase"):
+        bits.append(f"phase {row['phase']}" + (" (reevaluation DUE)" if row.get("reevaluation_due") else ""))
+    if row.get("focus"):
+        bits.append(f"focus: {str(row['focus'])[:160]}")
+    if row.get("reevaluate_on"):
+        bits.append(f"reevaluate on {row['reevaluate_on']}")
+    if row.get("held_fixed"):
+        bits.append("held fixed until then: " + " | ".join(str(x)[:100] for x in row["held_fixed"]))
+    if row.get("left_out"):
+        bits.append("left out: " + " | ".join(str(x)[:100] for x in row["left_out"]))
     if row.get("kind") == "default":
         bits.append("the quest's own question")
     if _hypotheses_of(row):
@@ -239,7 +265,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                                               f"reply instead."))
         fields = {k: args[k] for k in ("context", "purpose", "sub_questions", "assumptions",
                                        "linked_goal_ids", "linked_collection_ids", "start_date",
-                                       "end_date", "conditions")
+                                       "end_date", "conditions", *FOCUS_KEYS)
                   if args.get(k) not in (None, "", [])}
         hypotheses = _as_hypotheses(args.get("hypotheses", args.get("hypothesis")))
         if hypotheses:
@@ -290,6 +316,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                                           "description": "Habit / collection ids that collect its data."},
                 "start_date": {"type": "string", "description": "YYYY-MM-DD, if given."},
                 "end_date": {"type": "string", "description": "YYYY-MM-DD, if given."},
+                **_FOCUS_PARAMS,
                 "user_asked_for_this_field": _EXPERIMENT_ASKED_PARAM,
             },
         },
@@ -308,7 +335,7 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
     factory = client_factory or (lambda: quest_client_from_env(env))
     editable = ("question", "context", "hypotheses", "purpose", "sub_questions", "assumptions",
                 "status", "conclusion", "linked_goal_ids", "linked_collection_ids", "start_date",
-                "end_date", "conditions")
+                "end_date", "conditions", *FOCUS_KEYS)
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = _quest_id(args, ctx)
@@ -326,7 +353,9 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
         changes = {k: args[k] for k in editable if k in args and args[k] is not None}
         if "hypotheses" in changes:
             changes["hypotheses"] = _as_hypotheses(changes["hypotheses"])
-        if not changes:
+        note = str(args.get("note_for_reevaluation") or "").strip()
+        reevaluation = args.get("reevaluation") if isinstance(args.get("reevaluation"), dict) else None
+        if not changes and not note and not reevaluation:
             return ToolResult(ok=False, text="Nothing to change: give at least one field.")
         if changes.get("status") and changes["status"] not in EXPERIMENT_STATUSES:
             return ToolResult(ok=False, text=f"status must be one of {list(EXPERIMENT_STATUSES)}.")
@@ -344,8 +373,21 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                 f"person started. Use find_quest_experiments to find the experiment they mean. "
                 f"Pass confirm_default=true only when they are explicitly talking about the "
                 f"quest's own question."))
+        held = [k for k in ("held_fixed", "inside", "left_out", "reevaluate_on", "reevaluate_when", "focus", "attention_user_ids")
+                if k in changes and changes[k] != before.get(k)]
+        if (held and before.get("phase") == "running" and before.get("held_fixed") and not note and not reevaluation
+                and not args.get("person_chose_to_reopen")):
+            return ToolResult(ok=False, text=(
+                f"Not changed: experiment {rid} is running and holds {held} fixed until its reevaluation"
+                f"{' on ' + str(before['reevaluate_on']) if before.get('reevaluate_on') else ''}. Tell the person, and offer to set the "
+                f"thought aside for the reevaluation (note_for_reevaluation). Pass person_chose_to_reopen=true only when they said they "
+                f"want to change it now anyway."))
         try:
-            updated = factory().update_experiment(quest_id, rid, **changes)
+            updated = factory().update_experiment(quest_id, rid, **changes) if changes else before
+            if note:
+                updated = data_of(factory().add_experiment_note(quest_id, rid, note)) or updated
+            if reevaluation:
+                updated = data_of(factory().reevaluate_experiment(quest_id, rid, **reevaluation)) or updated
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was changed")
         updated = data_of(updated)
@@ -355,7 +397,8 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                         if k in before and before.get(k) != changes[k])
         return ToolResult(ok=True, data=updated,
                           text=(f"Updated experiment {rid} on quest {quest_id}: "
-                                f"{', '.join(sorted(changes))} (status now {updated.get('status')})."
+                                f"{', '.join(sorted(changes) + (['note_for_reevaluation'] if note else []) + (['reevaluation'] if reevaluation else []))} "
+                                f"(status now {updated.get('status')}, phase {updated.get('phase')})."
                                 + (f" Previously: {was}." if was else "")))
 
     return ToolSpec(
@@ -401,6 +444,13 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                                           "description": "The FULL new list of linked habit / collection ids."},
                 "start_date": {"type": "string", "description": "YYYY-MM-DD, or '' to clear."},
                 "end_date": {"type": "string", "description": "YYYY-MM-DD, or '' to clear."},
+                **_FOCUS_PARAMS,
+                "note_for_reevaluation": {"type": "string", "description": ("A thought to set aside and weigh at the reevaluation instead of acting on it now. "
+                                                                           "Use it when the person raises something a running experiment holds fixed.")},
+                "reevaluation": {"type": "object", "description": ("Record the reevaluation after the person said what they learned: {learned (required), changed, "
+                                                                   "decision: continue|change|end, next_experiment, next_reevaluate_on, changes (the focus keys to "
+                                                                   "replace, for decision change)}.")},
+                "person_chose_to_reopen": {"type": "boolean", "description": "True only when the person said, in their own words, to change what a running experiment holds fixed now."},
                 "user_asked_for_this_field": _EXPERIMENT_ASKED_PARAM,
             },
         },

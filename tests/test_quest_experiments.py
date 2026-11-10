@@ -340,3 +340,67 @@ def test_an_experiment_proposal_is_created_when_none_is_open_and_other_kinds_are
                                   quest_id="q1")["decision_id"] == "dec_new"
     client.create_decision("Pay invoice", kind="approve", quest_id="q1")
     assert [b["kind"] for b in sent] == [EXPERIMENT_PROPOSAL_KIND, "approve"]
+
+
+def focus_row(**over):
+    base = dict(research_question_id="rq_focus", question="Is writing first helping?", focus="Write before any email",
+                phase="running", reevaluation_due=False, days_to_reevaluation=9, reevaluate_on="2026-11-19",
+                attention_user_ids=["user_2"], held_fixed=["Write 6 to 8 am", "Same chapter order"], inside=["Morning writing"],
+                left_out=["Changing the outline"], reevaluation_notes=[{"note_id": "n1", "text": "Try evenings", "at": "2026-11-10"}],
+                reevaluations=[])
+    return running_row(**{**base, **over})
+
+
+def test_trial_period_shows_focus_attention_held_fixed_and_the_date_in_the_prompt_and_the_folder():
+    rows = [DEFAULT_ROW, focus_row()]
+    brief = experiments_brief_section(rows, quest_id=QUEST_ID)
+    assert "Write before any email" in brief and "reevaluate on 2026-11-19" in brief
+    assert "held fixed until then (do not reopen): Write 6 to 8 am; Same chapter order" in brief and "left out for now: Changing the outline" in brief
+    assert "thoughts set aside for the reevaluation: Try evenings" in brief and "attention: user_2" in brief
+    assert "NOT re-decided until its reevaluation date" in brief and "REEVALUATION DUE:" not in brief
+    block = render_experiments_block(rows)
+    assert "**Held fixed until then (do not reopen):** Write 6 to 8 am; Same chapter order" in block and "**Status:** running (a trial period)" in block
+
+
+def test_a_due_reevaluation_comes_first_and_is_asked_for_not_recorded():
+    due = focus_row(research_question_id="rq_due", focus="Cold showers")
+    due.update(reevaluation_due=True, phase="reevaluating", reevaluate_on="2026-11-09")
+    two = [focus_row(), due]
+    text = experiments_brief_section(two, quest_id=QUEST_ID)
+    assert "REEVALUATION DUE: 1 experiment(s)" in text and "experiment_reevaluation" in text and "Do not record the reevaluation yourself" in text
+    assert text.index("Cold showers") < text.index("Write before any email")       # due ones lead, and two experiments run at once
+    assert "[REEVALUATION DUE, ask what was learned]" in text
+
+
+def test_an_older_row_with_no_focus_fields_reads_as_before():
+    old = running_row()
+    assert "focus:" not in render_experiments_brief([old]) and "[RUNNING, help carry it out]" in render_experiments_brief([old])
+
+
+def test_update_tool_refuses_to_reopen_what_a_running_experiment_holds_fixed_and_sets_the_thought_aside():
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_experiments import update_quest_experiment_spec
+    from quest_ai_runner.the_world.tools.tools import ToolContext
+
+    calls = []
+
+    class FakeClient:
+        def list_experiments(self, quest_id):
+            return [focus_row()]
+
+        def update_experiment(self, quest_id, rid, **changes):
+            calls.append(("update", changes))
+            return {"research_question_id": rid, "status": "experimenting", "phase": "running"}
+
+        def add_experiment_note(self, quest_id, rid, text):
+            calls.append(("note", text))
+            return {"research_question_id": rid, "status": "experimenting", "phase": "running"}
+
+    spec = update_quest_experiment_spec({}, client_factory=lambda: FakeClient())
+    ctx = ToolContext(quest_id=QUEST_ID) if "quest_id" in getattr(ToolContext, "__dataclass_fields__", {}) else ToolContext()
+    base = {"quest_id": QUEST_ID, "research_question_id": "rq_focus", "user_asked_for_this_field": True}
+    refused = spec.handler({**base, "held_fixed": ["Write at night"]}, ctx)
+    assert not refused.ok and "note_for_reevaluation" in refused.text and not calls
+    noted = spec.handler({**base, "note_for_reevaluation": "Maybe write at night"}, ctx)
+    assert noted.ok and calls == [("note", "Maybe write at night")]
+    chosen = spec.handler({**base, "held_fixed": ["Write at night"], "person_chose_to_reopen": True}, ctx)
+    assert chosen.ok and calls[-1] == ("update", {"held_fixed": ["Write at night"]})

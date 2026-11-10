@@ -44,6 +44,14 @@ STATUS_OPEN = "open"
 STATUS_EXPERIMENTING = "experimenting"
 STATUS_CONCLUDED = "concluded"
 
+#: An experiment is a trial period of focused attention. Quest derives ``phase`` (planned | running | reevaluating | ended) and ``reevaluation_due``
+#: on every row; a row from an older Quest has neither, and its ``status`` means the phase (open, experimenting, concluded).
+PHASE_PLANNED = "planned"
+PHASE_RUNNING = "running"
+PHASE_REEVALUATING = "reevaluating"
+PHASE_ENDED = "ended"
+PHASE_OF_STATUS = {STATUS_OPEN: PHASE_PLANNED, STATUS_EXPERIMENTING: PHASE_RUNNING, STATUS_CONCLUDED: PHASE_ENDED}
+
 #: Characters the compact prompt form may use. About 1000 tokens: enough for a few running
 #: experiments in detail, small enough that it never crowds out the quest's own brief.
 EXPERIMENTS_BRIEF_MAX_CHARS = 4000
@@ -94,8 +102,48 @@ def is_default(exp: Dict[str, Any]) -> bool:
     return str(exp.get("kind") or "") == KIND_DEFAULT
 
 
+def phase_of(exp: Dict[str, Any]) -> str:
+    """The experiment's phase as Quest reports it, else the one its older ``status`` means."""
+    phase = str(exp.get("phase") or "")
+    return phase if phase in (PHASE_PLANNED, PHASE_RUNNING, PHASE_REEVALUATING, PHASE_ENDED) else PHASE_OF_STATUS.get(str(exp.get("status") or STATUS_OPEN), PHASE_PLANNED)
+
+
 def is_running(exp: Dict[str, Any]) -> bool:
-    return str(exp.get("status") or "") == STATUS_EXPERIMENTING
+    return phase_of(exp) in (PHASE_RUNNING, PHASE_REEVALUATING)
+
+
+def is_due(exp: Dict[str, Any]) -> bool:
+    """Its reevaluation is due: the date arrived on a running experiment. Read from Quest's own flag, never worked out from the date here."""
+    return bool(exp.get("reevaluation_due")) and not is_default(exp)
+
+
+def focus_lines(exp: Dict[str, Any], limit: int = 0) -> List[str]:
+    """What makes the experiment a trial period of focused attention, as short lines: the focus, whose attention, when it is reevaluated, what is held
+    fixed until then, what is inside and left out, thoughts set aside, and the last reevaluation. Empty for an experiment with none of it."""
+    out: List[str] = []
+    if clean_text(exp.get("focus")):
+        out.append(f"focus: {one_line(exp['focus'], limit)}")
+    if exp.get("attention_user_ids"):
+        out.append("attention: " + ", ".join(str(u) for u in exp["attention_user_ids"]))
+    if is_due(exp):
+        out.append("REEVALUATION DUE" + (f" (set for {exp['reevaluate_on']})" if exp.get("reevaluate_on") else ""))
+    elif exp.get("reevaluate_on"):
+        out.append(f"reevaluate on {exp['reevaluate_on']}")
+    elif clean_text(exp.get("reevaluate_when")):
+        out.append(f"reevaluate when: {one_line(exp['reevaluate_when'], limit)}")
+    for label, key in (("held fixed until then (do not reopen)", "held_fixed"), ("inside", "inside"), ("left out for now", "left_out")):
+        items = [one_line(x, limit) for x in exp.get(key) or [] if clean_text(x)]
+        if items:
+            out.append(f"{label}: " + "; ".join(items))
+    notes = [one_line(n.get("text") if isinstance(n, dict) else n, limit) for n in exp.get("reevaluation_notes") or []]
+    if notes:
+        out.append("thoughts set aside for the reevaluation: " + "; ".join(notes))
+    done = [r for r in exp.get("reevaluations") or [] if isinstance(r, dict)]
+    if done:
+        last = done[-1]
+        out.append(f"last reevaluation {day_of(last.get('at'))}, decision {last.get('decision')}: learned {one_line(last.get('learned'), limit)}"
+                   + (f"; it changed: {one_line(last.get('changed'), limit)}" if clean_text(last.get("changed")) else ""))
+    return out
 
 
 def is_engaged(exp: Dict[str, Any]) -> bool:
@@ -139,6 +187,9 @@ def day_of(value: Any) -> str:
 
 
 def status_label(exp: Dict[str, Any]) -> str:
+    if exp.get("phase"):
+        return {PHASE_PLANNED: "planned (not started)", PHASE_RUNNING: "running (a trial period)",
+                PHASE_REEVALUATING: "reevaluating (the date has arrived)", PHASE_ENDED: "ended"}.get(phase_of(exp), phase_of(exp))
     status = str(exp.get("status") or STATUS_OPEN)
     return {STATUS_EXPERIMENTING: "experimenting (running, collecting data)",
             STATUS_OPEN: "open (asked, nothing running yet)",
@@ -183,6 +234,11 @@ def render_experiment_full(exp: Dict[str, Any]) -> List[str]:
              f"- **Owner (asked by user id):** {exp.get('user_id') or '(unknown)'}",
              f"- **Dates:** start {exp.get('start_date') or '(not set)'}, end {exp.get('end_date') or '(not set)'}",
              f"- **Created / updated:** {day_of(exp.get('created_at'))} / {day_of(exp.get('updated_at'))}"]
+    for line in focus_lines(exp):
+        lines.append(f"- **{line.split(':', 1)[0].capitalize()}:**{line.split(':', 1)[1]}" if ":" in line else f"- **{line}**")
+    related = [r for r in exp.get("related_records") or [] if isinstance(r, dict)]
+    if related:
+        lines.append("- **Bears on:** " + "; ".join(f"{r.get('kind')} {one_line(r.get('label')) or r.get('record_id')}" for r in related))
     if clean_text(exp.get("purpose")):
         lines += ["- **Purpose:**"] + block_quote(exp["purpose"])
     if is_default(exp):
@@ -273,9 +329,10 @@ def render_experiments_block(experiments: List[Dict[str, Any]]) -> str:
 def ordered_experiments(experiments: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     def rank(e: Dict[str, Any]) -> int:
         if is_default(e) and not is_engaged(e):
-            return 3
-        return {STATUS_EXPERIMENTING: 0, STATUS_OPEN: 1, STATUS_CONCLUDED: 2}.get(
-            str(e.get("status") or STATUS_OPEN), 1)
+            return 4
+        if is_due(e):
+            return 0
+        return {PHASE_RUNNING: 1, PHASE_REEVALUATING: 1, PHASE_PLANNED: 2, PHASE_ENDED: 3}.get(phase_of(e), 2)
     return sorted(experiments, key=rank)  # stable: Quest's own order inside a rank
 
 
@@ -283,15 +340,14 @@ def ordered_experiments(experiments: Iterable[Dict[str, Any]]) -> List[Dict[str,
 
 def brief_entry(exp: Dict[str, Any], detail: bool) -> str:
     rid = exp.get("research_question_id") or "?"
-    mark = {STATUS_EXPERIMENTING: "RUNNING, help carry it out",
-            STATUS_OPEN: "OPEN, not collecting data yet",
-            STATUS_CONCLUDED: "CONCLUDED"}.get(str(exp.get("status") or STATUS_OPEN), "OPEN")
+    mark = {PHASE_RUNNING: "RUNNING, help carry it out", PHASE_REEVALUATING: "REEVALUATION DUE, ask what was learned",
+            PHASE_PLANNED: "PLANNED, not started", PHASE_ENDED: "ENDED"}.get(phase_of(exp), "PLANNED")
     if is_default(exp) and not is_engaged(exp):
         mark = "the quest's own question, untouched"
     head = f"- [{mark}] {one_line(exp.get('question'), 200)} (id {rid})"
     if not detail:
         return head
-    bits: List[str] = []
+    bits: List[str] = list(focus_lines(exp, 160))
     hyps = hypothesis_lines(exp, 160)
     if hyps:
         bits.append("hypotheses: " + " | ".join(hyps[:3]) + (f" (+{len(hyps) - 3} more)" if len(hyps) > 3 else ""))
@@ -308,7 +364,7 @@ def brief_entry(exp: Dict[str, Any], detail: bool) -> str:
     goals, colls = exp.get("linked_goal_ids") or [], exp.get("linked_collection_ids") or []
     if goals or colls:
         bits.append(f"collecting data through {len(goals)} goal(s) and {len(colls)} habit(s)/collection(s)")
-    elif str(exp.get("status") or "") != STATUS_CONCLUDED and not is_default(exp):
+    elif phase_of(exp) != PHASE_ENDED and not is_default(exp) and not exp.get("focus"):
         bits.append("nothing is linked to collect its data yet")
     analyses = [a for a in (exp.get("analyses") or []) if isinstance(a, dict)]
     if analyses:
@@ -343,7 +399,7 @@ def render_experiments_brief(experiments: List[Dict[str, Any]],
         if shown < len(rows):
             body.append(f"- ... and {len(rows) - shown} more, in {QUEST_SYNC_FILE}")
         return "\n".join(body + [pointer])
-    live = [is_engaged(e) and str(e.get("status") or STATUS_OPEN) != STATUS_CONCLUDED for e in rows]
+    live = [is_engaged(e) and phase_of(e) != PHASE_ENDED for e in rows]
     for details in ([True] * len(rows), live, [False] * len(rows)):
         out = assemble(details, len(rows))
         if len(out) <= max_chars:
@@ -363,6 +419,19 @@ CARRY_FORWARD_TEXT = (
     "is yours to do. For an OPEN one, say what would start it. Do not start, conclude, rewrite or "
     "spend money on an experiment yourself: where one should change, say what and why, and let the "
     "person decide.")
+
+FOCUSED_ATTENTION_TEXT = (
+    "A running experiment is a trial period of focused attention: its focus is where attention goes now (read it first, and keep your work "
+    "inside it), and what it holds fixed is NOT re-decided until its reevaluation date. Never reopen a held-fixed choice before then: say which "
+    "experiment holds it and until when, and write the thought down as a note to weigh at the reevaluation instead. Never force a number onto a "
+    "qualitative focus.")
+
+REEVALUATION_DUE_TEXT = (
+    "REEVALUATION DUE: {count} experiment(s) below have reached their reevaluation date. Raise ONE decision-request per due experiment (kind "
+    "experiment_reevaluation) asking, in plain words: what was learned, what that changed, and the decision (continue, change or end), and put what "
+    "the data and notes already show in the request so the person only has to confirm or correct it. Do not record the reevaluation yourself.")
+
+EXPERIMENT_REEVALUATION_KIND = "experiment_reevaluation"
 
 PROPOSE_TEXT = (
     "This quest has no experiment of its own yet, and experiments are core to how a quest learns "
@@ -398,7 +467,11 @@ def experiments_brief_section(experiments: Optional[List[Dict[str, Any]]], *, qu
     if experiments is None:
         return ""
     if has_experiment(experiments):
-        return CARRY_FORWARD_TEXT + "\n\n" + render_experiments_brief(experiments, max_chars)
+        due = sum(1 for e in experiments if is_due(e))
+        head = CARRY_FORWARD_TEXT + " " + FOCUSED_ATTENTION_TEXT
+        if due:
+            head += "\n\n" + REEVALUATION_DUE_TEXT.format(count=due)
+        return head + "\n\n" + render_experiments_brief(experiments, max_chars)
     if planning != "plan_and_work":
         return ""
     if proposal_open or not may_propose:

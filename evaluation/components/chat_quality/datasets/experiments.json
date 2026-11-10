@@ -766,6 +766,109 @@
    ],
    "forbid_writes": true,
    "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. The product's aim is the option most likely to work for this person, checked by a metric, with uncertainty turned into an experiment; the existing overrun changes the answer."
+  },
+  {
+   "id": "EXPT-027",
+   "dataset": "explicit",
+   "area": "experiment focus",
+   "quest_key": "fitness",
+   "expected_routing": "inline",
+   "rubric": [
+    "Creates the experiment with the focus in the person's own framing (writing the training log each morning, how it changes their thinking about training)",
+    "Holds the training schedule fixed in the experiment and sets a reevaluation about three weeks out, as the person said",
+    "Does not add a number, metric, target or hypothesis the person never gave to this qualitative experiment",
+    "Reports what it created honestly, matching what it did"
+   ],
+   "evidence_notes": "A qualitative experiment: a focus and what is held fixed, with no forced metric.",
+   "message": "Start an experiment on this quest: for the next three weeks I want to try writing my training log every morning before I look at anything else. I am not measuring anything, I just want to see how it changes how I think about training. Keep my training schedule fixed until then, and I will look back on it in three weeks.",
+   "mutates": true,
+   "precheck": {
+    "code_contains_any": [
+     "create_research_question"
+    ],
+    "code_not_contains": [
+     "update_quest_fields",
+     "insert(",
+     "update_one("
+    ]
+   }
+  },
+  {
+   "id": "EXPT-028",
+   "dataset": "explicit",
+   "area": "experiment focus",
+   "quest_key": "fitness",
+   "expected_routing": "inline",
+   "rubric": [
+    "Does not change the training schedule or the experiment's held-fixed choice in this turn",
+    "Says the running experiment holds the training schedule fixed until its reevaluation date and names that experiment",
+    "Offers to note the thought (moving long runs to Fridays) for the reevaluation instead",
+    "Does not lecture or refuse to discuss the idea"
+   ],
+   "evidence_notes": "The first turn makes the running experiment; the second raises a change to what it holds fixed.",
+   "messages": [
+    "Start an experiment on this quest: for the next three weeks I want to try writing my training log every morning before I look at anything else. I am not measuring anything, I just want to see how it changes how I think about training. Keep my training schedule fixed until then, and I will look back on it in three weeks.",
+    "Actually I think I should move my long runs to Fridays starting this week. Can you update my plan for that?"
+   ],
+   "mutates": true,
+   "precheck": {
+    "code_not_contains": [
+     "update_quest_fields",
+     "insert(",
+     "update_one("
+    ]
+   }
+  },
+  {
+   "id": "EXPT-029",
+   "dataset": "explicit",
+   "area": "experiment focus",
+   "quest_key": "fitness",
+   "expected_routing": "inline",
+   "rubric": [
+    "Reads the quest's experiments and tells the person that the experiment about the morning training log has reached its reevaluation date",
+    "Walks through the reevaluation in plain words: what was learned, what that changed, and the decision (continue, change or end)",
+    "Asks the person to answer before recording anything and does not record a reevaluation or end the experiment on its own"
+   ],
+   "evidence_notes": "The experiment is created with a reevaluation date of today so it is due in the second turn.",
+   "messages": [
+    "Start an experiment on this quest with the focus of writing my training log every morning, hold my training schedule fixed, and reevaluate it today.",
+    "What should I focus on this week?"
+   ],
+   "mutates": true,
+   "precheck": {
+    "code_not_contains": [
+     "insert(",
+     "update_one(",
+     "update_quest_fields"
+    ]
+   }
+  },
+  {
+   "id": "EXPT-030",
+   "dataset": "explicit",
+   "area": "experiment focus",
+   "quest_key": "fitness",
+   "expected_routing": "inline",
+   "rubric": [
+    "Lists both experiments as running at once, each with its own focus",
+    "Names what each one holds fixed or leaves out, without mixing the two up",
+    "Does not claim either experiment has ended or has a number, metric or result it was never given"
+   ],
+   "evidence_notes": "Two experiments run at the same time for one person; both are described correctly.",
+   "messages": [
+    "Start an experiment on this quest: for the next three weeks I want to try writing my training log every morning before I look at anything else. I am not measuring anything, I just want to see how it changes how I think about training. Keep my training schedule fixed until then, and I will look back on it in three weeks.",
+    "Also start a second experiment: for three weeks I will try sleeping with the phone in another room, and I will leave out any change to my diet. Reevaluate it in three weeks.",
+    "Which experiments am I running right now, and what is each one about?"
+   ],
+   "mutates": true,
+   "precheck": {
+    "code_not_contains": [
+     "insert(",
+     "update_one(",
+     "update_quest_fields"
+    ]
+   }
   }
  ]
 }
