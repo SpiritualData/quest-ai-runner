@@ -160,6 +160,20 @@ def chosen_for(request: str, root: Any, min_score: float = 0.0) -> List[Mapping[
 NEAREST_BELOW_GATE = 2      # the solutions named when none passes the gate
 
 
+def touched_ids(request: str, working_dir: Optional[str]) -> List[str]:
+    """The ids of the folder's recorded solutions a deep goal concerns (the same gated ranking the brief block uses, no model call), so what a run
+    learns is kept under the solution it worked on. Never raises: [] when the folder holds no records or the ranking fails."""
+    try:
+        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
+        from quest_ai_runner.the_body.configuration.runtime_settings import core_settings
+        root = slice_root(working_dir)
+        if root is None:
+            return []
+        return [str(f.get("id")) for f in chosen_for(request, root, core_settings().solution_consideration_min_score) if f.get("id")]
+    except Exception:      # noqa: BLE001
+        return []
+
+
 def define_block(request: str, root: Any) -> str:
     """The short block for a deep goal whose folder holds records but no solution passing the gate: the nearest solutions below it (the same
     ranking, no model call) and the instruction to extend one or define a new solution in the folder's own records before the work."""

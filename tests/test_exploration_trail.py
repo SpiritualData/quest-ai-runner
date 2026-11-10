@@ -100,3 +100,21 @@ def test_recording_failure_never_raises(work, monkeypatch):
 def test_goal_key_falls_back_to_the_folder():
     assert et.goal_key_of({"quest_id": "q1"}) == "q1"
     assert et.goal_key_of(None) == et.UNKEYED_GOAL
+
+
+def test_a_trail_is_kept_and_read_by_solution_first_then_by_the_wider_scope(tmp_path):
+    from quest_ai_runner.the_intelligence.mind.delegation import exploration_trail as et
+
+    class Store:
+        def __init__(self):
+            self.kept = {"solution:s1": [{"path": "a.md", "runs": 1, "changed": True}], "q1": [{"path": "a.md", "runs": 2, "changed": False}, {"path": "b.md", "runs": 1, "changed": False}]}
+
+        def ranked(self, working_dir, key, limit=0):
+            return self.kept.get(key, [])
+    for name in ("a.md", "b.md"):
+        (tmp_path / name).write_text("x")
+    keys = et.scope_keys({"quest_id": "q1"}, ["s1", "", "s1"])
+    assert keys == ["solution:s1", "q1"]
+    block = et.where_things_are(str(tmp_path), keys, store=Store())
+    assert "on this solution used" in block and block.index("a.md (changed)") < block.index("b.md") and block.count("- a.md") == 1
+    assert et.scope_keys(None) == [et.UNKEYED_GOAL]

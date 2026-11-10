@@ -326,7 +326,8 @@ work item, the milestone and the records above; state nothing they do not suppor
 NONE_FITS = "none"
 
 
-def deliverable_home(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: Callable[[str], str]) -> Optional[Dict[str, Any]]:
+def deliverable_home(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: Callable[[str], str],
+                     specify: Optional[Callable[[str], str]] = None) -> Optional[Dict[str, Any]]:
     """The deliverable's own solution: the quest's records classified by the hub's placement path (the records index the solution consideration uses), the pick confirmed by Decision Check's two views among the found solutions and "none"; when none fits, a solution for this kind of deliverable is
     created through ESOI Application. ``{"id", "row", "created"}``, or None when nothing could be classified or created."""
     from hubofhubs.api import MajorityVote
@@ -356,7 +357,8 @@ def deliverable_home(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: 
             pick = NONE_FITS
         if pick in solutions:
             return {"id": pick, "row": dict(solutions[pick]), "created": False}
-    return ensure_solution(cue, item, spec_edit, decide)
+    # Classifying among recorded solutions is a judgment (cheap tier); creating one is specification (``specify``, the balanced tier).
+    return ensure_solution(cue, item, spec_edit, specify or decide)
 
 
 NO_VALUE = frozenset({"", "none", "n/a", "na", "tbd", "todo", "unknown", "null", "...", "?"})

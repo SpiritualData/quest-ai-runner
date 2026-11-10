@@ -633,7 +633,7 @@ class RunLoopMixin:
                                     "deferred": bool(getattr(first, "deferred", False)), "error": str(getattr(first, "error", "") or "")}
                     made = milestone_progress.make_progress(rs.cue_resolved, self.tools, self.cheap_decision, grounding=turn_grounding(rs, gathered),
                                                             write=self.tier_writer(tier), research=research, tier=tier, deep=deep_work,
-                                                            skill=milestone_progress.work_skill(cfg))
+                                                            skill=milestone_progress.work_skill(cfg), specify=self.tier_writer(milestone_progress.SPEC_TIER))
                     if made.sources:
                         # What the writer was given beyond the tool reads is a read of this turn: the reply check, the figure pass and an evaluation see it as a source.
                         gathered.append({"kind": "query", "locator": "research:milestone deliverable", "text": made.sources, "tool_status": "applied", "by_code": True})

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Creating specification runs on the balanced tier (`SPEC_TIER`): a new solution with its problem, ideal and milestone, and the ways a solution can be carried out. Classifying among recorded solutions and scoring stay on the cheap tier.
+- The file trail of deep runs is kept and read by solution first (the solution a milestone work record names, and the folder's recorded solutions a goal concerns), then by quest for work that names none.
+
 - A solution created for a deliverable kind carries its approach and a milestone, with its problem and ideal as linked records (one fast tier call, as before). A deep goal whose records fit no solution gets a block naming the nearest ones and telling the worker to extend one or define a new one first.
 - Milestone work on a solution with no implementation on record chooses an approach among distinct ways by the rubric (the hub's `choose_approach`) and keeps the chosen way and the ways not taken as that solution's implementation records.
 - Deep prompts carry a "Where things are" block: the files earlier runs on the goal read and changed, and a map of the working folder. Each deep run's files are recorded when it finishes (`QAR_TRAIL_DIR`). Offline `exploration_baseline.py` counts looks before the first change in saved sessions.

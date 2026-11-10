@@ -19,7 +19,7 @@ from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_sele
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics, run_hint, working_dir_of
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
-from quest_ai_runner.the_intelligence.mind.delegation.exploration_trail import goal_key_of, record_run_trail, where_things_are
+from quest_ai_runner.the_intelligence.mind.delegation.exploration_trail import record_run_trail, scope_keys, where_things_are
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
 from hubofhubs.api import ExecutionFact, ExecutionRecord, classify_exec_phase
@@ -516,7 +516,12 @@ class DeepRunMixin:
             # instead of searching (no model call; "" without a working folder). It rides in the context preamble, where the prompt
             # budget cuts it before the request, and in the brief for a runner that takes no preamble.
             run_working_dir = working_dir_of(terminal_runner, working_dir_override)
-            run_goal_key = goal_key_of(ctx_meta)
+            # Kept and read by SOLUTION first (the scope of focused progress): the solution a milestone work record names, and the folder's recorded
+            # solutions the goal concerns; then the quest, for work that names none.
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_completion import work_record_of
+            work_record = work_record_of(brief) or {}
+            run_goal_key = scope_keys(ctx_meta, [work_record.get("solution_id") or "", work_record.get("milestone_id") or ""]
+                                      + solution_consideration.touched_ids(f"{user_message}\n{goal}", run_working_dir))
             where_block = where_things_are(run_working_dir, run_goal_key)
             announce_model_selection(terminal_runner)
 

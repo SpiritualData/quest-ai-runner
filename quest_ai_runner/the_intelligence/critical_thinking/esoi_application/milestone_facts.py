@@ -228,6 +228,10 @@ def writer_tier(cfg: Any = None, environ: Optional[Mapping[str, str]] = None) ->
     return str(environ.get(WRITER_TIER_ENV) or getattr(cfg, "milestone_writer_tier", "") or "fast").strip()
 
 
+#: The tier specification is created on (a new solution with its problem, ideal and milestone; the ways a solution can be carried out). Later work
+#: is framed by these records, so they are not written on the cheap tier the judgments use. A tier, never a model: the lane maps it.
+SPEC_TIER = "balanced"
+
 WORK_SKILL_ENV = "QAR_DEEP_WORK_SKILL"
 
 

@@ -105,7 +105,8 @@ WORK_KIND = "hard"
 
 def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], grounding: str = "", today: Optional[datetime.date] = None,
                   write: Optional[Callable[[str], str]] = None, research: Optional[Callable[[str], str]] = None, tier: str = "",
-                  deep: Optional[Callable[[str, str], Mapping[str, Any]]] = None, skill: str = "") -> Progress:
+                  deep: Optional[Callable[[str, str], Mapping[str, Any]]] = None, skill: str = "",
+                  specify: Optional[Callable[[str], str]] = None) -> Progress:
     """The progress step for a resolved milestone ``cue`` (``milestone_cue.Resolved``). Raises ``milestone_cue.LaneGap`` when a read or the keep fails.
     ``decide`` is the cheap call for the structured judgments (work items, checks, scoring); ``write`` writes the deliverable's prose (the tier chosen for
     it, ``tier`` names it; ``decide`` when none); ``research(query) -> text`` reads the product's own documents and outside sources for the facts a
@@ -113,6 +114,9 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     selected for work (the deep agent); when given, a deliverable is made there from its solution's brief, never by the cheap writer: an inline result is
     measured and kept here, a queued one (long work, a background task) is acknowledged with its before measured."""
     write = write or decide
+    # Creating structure (a new solution with its problem, ideal and milestone; the ways a solution can be carried out) is specification, which later
+    # work is framed by: it runs on its own tier (``specify``, the balanced tier), never on the cheap one the judgments use.
+    specify = specify or decide
     from hubofhubs.api import CriticalThinkingComposition, MajorityVote, RecordFieldUpkeep, doable_by_ai
     from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import grounded_text
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
@@ -163,7 +167,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             first["name"] = checked_line(first["name"], reference_now, decide) or first["name"]
             # Part 1 of work quality: the deliverable is classified to its own solution among the quest's records (the hub's placement path), and that
             # solution is created when none fits. Its record owns the deliverable's rubric, so any milestone making this kind of thing reuses it.
-            home = deliverable_home(cue, first, spec_edit, decide)
+            home = deliverable_home(cue, first, spec_edit, decide, specify=specify)
             home_row = dict((home or {}).get("row") or {})
             home_rubric = kept_rubric(home_row) if home_row else None
             out_home.update(home or {})
@@ -316,7 +320,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             return ""
         try:
             from .approach_choice import approach_block
-            text, records = approach_block(frame_text() + "\n" + solution_records()[:RECORD_CHARS], requirements, decide, solution_id=sid)
+            text, records = approach_block(frame_text() + "\n" + solution_records()[:RECORD_CHARS], requirements, specify, solution_id=sid)
             for record in records:
                 fields = {k: v for k, v in record.items() if k not in ("name", "selected") and v}
                 spec_edit.apply({"edit": {"kind": "record_add", "table": "implementations", "key": record["name"], "fields": fields}})
@@ -406,7 +410,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             # Evidence is research work too: the deep harness answers the questions (its own reads and web research, each answer with its source).
             requirements = [str(r) for r in increment.get("requirements") or []]
             before = increment.get("before")
-            record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title,
+            record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "solution_id": str(out_home.get("id") or cue.rid), "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title,
                       "item": item.get("name"), "requirements": requirements, "method": "evidence",
                       "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": None,
                       "measure_name": f"Questions for {item.get('name')} answered with a source", "metric_id": increment.get("measure_id"), "kind": WORK_KIND}
@@ -439,7 +443,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             # Part 3: the work runs through the harness the ESOI cascade selected for work (the deep agent), from the solution's brief. A queued run is
             # background work: acknowledged, its before measured, kept by the worker on the same goal; an inline run comes back and is measured here.
             before = increment.get("before")
-            record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title, "item": item.get("name"), "requirements": requirements,
+            record = {"quest_id": cue.quest_id, "milestone_id": cue.rid, "solution_id": str(out_home.get("id") or cue.rid), "milestone_metric_id": cue.metric_ids[0] if cue.metric_ids else "", "title": title, "item": item.get("name"), "requirements": requirements,
                       "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": total,
                       "measure_name": f"Units of {item.get('name')} meeting their requirements", "metric_id": increment.get("measure_id"), "kind": WORK_KIND}
             goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown(), record=record, skill=skill,

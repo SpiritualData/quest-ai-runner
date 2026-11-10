@@ -3,9 +3,9 @@ import json
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.approach_choice import approach_block
 
-PROPOSALS = {"most direct": {"name": "Direct draft", "how": "Write it straight away.", "disadvantage": "Misses edge cases."},
-             "reuses the most": {"name": "Reuse the template", "how": "Adapt the existing template.", "disadvantage": "Inherits its limits."},
-             "careful specialist": {"name": "Specialist review", "how": "Draft, then check a list.", "disadvantage": "Slower."}}
+PROPOSALS = {"way already recorded": {"name": "Direct draft", "how": "Write it straight away.", "disadvantage": "Misses edge cases."},
+             "hardest to meet": {"name": "Reuse the template", "how": "Adapt the existing template.", "disadvantage": "Inherits its limits."},
+             "changes the form": {"name": "Specialist review", "how": "Draft, then check a list.", "disadvantage": "Slower."}}
 
 
 def decide(prompt):

@@ -36,6 +36,7 @@ from .milestone_facts import (  # noqa: F401
     FOLLOW_SPLIT,
     GROUNDING_CHARS,
     KEEP_TOOL,
+    SPEC_TIER,
     NO_EM_DASH,
     OUTWARD,
     OVERVIEW_HEAD,
