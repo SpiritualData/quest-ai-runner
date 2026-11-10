@@ -22,11 +22,11 @@ from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_sea
 
 @implementation("choose-the-context", "per_lane_assembly")
 class PerLaneAssembly:
-    """The reference resolver and the vector index, each handed in as a seat and built on first use; ``choose`` reads the lane's assembler passed
+    """The reference resolver and the vector index, each handed in as a seat (optional, built on first use); ``choose`` reads the lane's assembler passed
     in, ``search`` ranks cards and specification records, and the other lines delegate to the member that owns them."""
-    REQUIRES = ()     # the seats it is handed
+    REQUIRES = ()     # the seats it is handed; ``choose`` and ``search`` read none, so a caller that only chooses passes none
 
-    def __init__(self, references: Lazy[ReferenceResolver], index: Lazy[VectorStore]) -> None:
+    def __init__(self, references: Lazy[ReferenceResolver] = None, index: Lazy[VectorStore] = None) -> None:
         self.references, self.index = references, index
 
     def choose(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, assembler: Optional[ContextAssembler] = None) -> AssembledContext:
@@ -35,10 +35,14 @@ class PerLaneAssembly:
         return assembler.assemble(task_text, meta=meta)
 
     def resolve(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> str:
+        if self.references is None:
+            raise ValueError("resolve follows a card pointer through the references seat: hand it in with options")
         return self.references.resolve(locator, max_chars=max_chars)
 
     def search(self, task: str, views: Sequence[Any], **settings: Any) -> Any:
         return search_cards_and_specs(task, views, **settings)
 
     def find(self, query: str, *, scope: Optional[Dict[str, Any]] = None, top_k: int = 8) -> List[Any]:
+        if self.index is None:
+            raise ValueError("find searches by meaning through the index seat: hand it in with options")
         return self.index.search(query, scope=scope, top_k=top_k)
