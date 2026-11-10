@@ -500,3 +500,15 @@ def test_only_the_stop_route_of_a_task_this_run_may_remove_is_allowed():
             client.allow_write("POST", path)
     client.removable.add(("tasks", "t1"))
     client.allow_write("POST", "/api/assistant-tasks/t1/undo")
+
+
+def test_a_task_queued_for_hours_with_no_runner_does_not_hold_every_case():
+    import datetime
+    old = datetime.datetime.fromtimestamp(NOON_PT - 5 * 3600, datetime.timezone.utc).isoformat()
+    fresh = datetime.datetime.fromtimestamp(NOON_PT - 600, datetime.timezone.utc).isoformat()
+    stuck = {"task_id": "stuck", "status": "queued", "created_at": old, "updated_at": old}
+    assert PC.autopilot_window(NOON_PT, {}, [stuck]) is None
+    assert PC.stale_queued_tasks(NOON_PT, [stuck, {"task_id": "new", "status": "queued", "updated_at": fresh}]) == ["stuck"]
+    assert "runnable now" in PC.autopilot_window(NOON_PT, {}, [{"task_id": "new", "status": "queued", "updated_at": fresh}])
+    assert "runnable now" in PC.autopilot_window(NOON_PT, {}, [{"task_id": "undated", "status": "queued"}])      # no date to judge by: still held
+    assert "running" in PC.autopilot_window(NOON_PT, {}, [stuck, {"task_id": "live", "status": "running"}])

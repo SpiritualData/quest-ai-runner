@@ -694,6 +694,8 @@ def autopilot_window(now, autopilot, tasks, minutes=10):
             return f"autopilot window: task {task.get('task_id')} is {status}"
         date, clock = task.get("scheduled_date"), task.get("scheduled_time")
         if not date:
+            if stale_queue(now, task):
+                continue      # no runner has taken it in hours, so it will not start during a case; holding every case for it measures nothing
             return f"autopilot window: queued task {task.get('task_id')} has no schedule and is runnable now"
         for zone in [(autopilot or {}).get("run_timezone") or "UTC"]:      # a schedule is in the quest's own zone; UTC only when it has none
             when = local_epoch(date, clock or "00:00", zone)
@@ -707,6 +709,30 @@ def autopilot_window(now, autopilot, tasks, minutes=10):
             if when is not None and now - minutes * 60 <= when <= horizon:
                 return f"autopilot window: the daily autopilot run time {run_time} ({zone}) is within {minutes} minutes"
     return None
+
+
+STALE_QUEUE_SECONDS = 2 * 3600      # a task with no schedule that sat queued this long is not about to run: no runner is taking it
+
+
+def stale_queue(now, task, seconds=STALE_QUEUE_SECONDS):
+    """Whether a queued task with no schedule has waited so long, untouched, that no runner is taking it (its team is not polled, or it
+    needs a runner that does not exist). Such a task would hold every write-capable case forever; it is a routing fault to report, not a
+    run about to start. Judged from the task's last change, else its creation."""
+    import datetime
+    stamp = str(task.get("updated_at") or task.get("created_at") or "")
+    try:
+        when = datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=datetime.timezone.utc)
+    return now - when.timestamp() > seconds
+
+
+def stale_queued_tasks(now, tasks):
+    """The ids of the queued, unscheduled tasks ``autopilot_window`` passes over as stale, for the run to name as a routing fault."""
+    return [str(t.get("task_id")) for t in tasks or []
+            if str(t.get("status") or "").lower() == "queued" and not t.get("scheduled_date") and stale_queue(now, t)]
 
 
 def local_epoch(date, clock, zone):
@@ -729,6 +755,10 @@ def wait_for_clear(client, now=time.time, sleep=time.sleep, max_wait=900, step=3
         autopilot = (state.get("state") or state).get("autopilot") or {}
         reason = autopilot_window(now(), autopilot, tasks, minutes)
         if reason is None or waited >= max_wait:
+            stale = stale_queued_tasks(now(), tasks)
+            if reason is None and stale and not waited:
+                print(f"  ROUTING FAULT: queued task(s) {', '.join(stale)} have waited over {STALE_QUEUE_SECONDS // 3600} hours with no runner "
+                      f"taking them (check that a lane polls their team); the case runs without waiting for them", flush=True)
             return reason
         sleep(step)
         waited += step
