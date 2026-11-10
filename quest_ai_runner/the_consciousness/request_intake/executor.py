@@ -452,6 +452,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             self._report_progress,
             on_milestone=lambda ev: self._on_milestone(task_id, conv_id, ev,
                                                        card_id=card_id),
+            goal=str(task.get("text") or ""),
         )
 
         # Build a scope for finding RELATED past conversations (the orchestrator's Step 1, User

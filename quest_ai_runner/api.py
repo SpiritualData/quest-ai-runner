@@ -114,7 +114,7 @@ from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 # The milestone flow's tools over a host's own Quest client, and the shapes a host's client and metric reader return
 from quest_ai_runner.the_body.hands.quest_operations.tools_milestone_flow import milestone_flow_tools
 # The workflow tools over a host's own Quest client (list first; create reports an existing workflow as already there)
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import create_quest_workflow_spec, find_quest_spec, list_quest_workflows_spec
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import add_quest_note_spec, create_quest_workflow_spec, find_quest_spec, list_quest_workflows_spec
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import MetricSourceError, checked_reading
 from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateLinkWebResearch
@@ -225,6 +225,7 @@ __all__ = [
     "WriteResult",
     "checked_reading",
     "milestone_flow_tools",
+    "add_quest_note_spec",
     "create_quest_workflow_spec",
     "find_quest_spec",
     "list_quest_workflows_spec",

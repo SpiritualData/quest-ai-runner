@@ -13,6 +13,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_repor
 from quest_ai_runner.the_world.tools.tools_status import record_worked
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_body.intake_sources.context_updates import parse_manifest, parse_usage_notes, render_receipt, strip_usage_block
+from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import REPORT_STYLE_PERSON
 from quest_ai_runner.the_consciousness.request_intake.executor_support import (
     ExecutionOutcome, _model_used_note, client_accepts_named_param, client_accepts_session_id, metric_facts, metric_report_data,
     terminal_session_id)
@@ -207,13 +208,16 @@ class ReportingMixin:
             # chat should read as the AI reporting its own finished work. The synthesized report
             # is CLAIM-CHECKED against the run's execution record before it replaces the raw
             # summary; any doubt keeps the raw (already goal-verified) output.
-            done_report = self._compose_done_report(request_text, summary, result, rep_preamble)
+            done_report = self._compose_done_report(request_text, summary, result, rep_preamble, for_person=bool(conv_id))
             # Read the usage lines from the RAW summary, not the fold-back: the receipt is the
             # run's own account of what it did with the person's material, and the rewrite that
             # makes a transcript tail read as a report is free to drop it.
             done_report = self._with_context_receipt(done_report, request_text, run_output=summary,
                                                       autopilot_composed=autopilot_composed)
-            done_report += _model_used_note(deep)
+            # The model that ran the work is part of the run record (the task's own stream), never of the report a person reads.
+            used_note = _model_used_note(deep).strip().strip("()")
+            if used_note:
+                self._report_progress(task_id, "status", text=used_note)
             _unconfirmed = [d.unconfirmed_note for d in deep if getattr(d, "unconfirmed_note", "")]
             if _unconfirmed:
                 done_report += ("\n\nNot independently confirmed: " + "; ".join(_unconfirmed))
@@ -474,8 +478,11 @@ class ReportingMixin:
 
     def _compose_done_report(self, request_text: Optional[str], raw_summary: str,
                              result: OrchestratorResult,
-                             rep_preamble: Optional[str] = None) -> str:
+                             rep_preamble: Optional[str] = None, for_person: bool = False) -> str:
         """Fold a fully met deep run's raw output into the done message posted back to the user.
+
+        ``for_person`` is the request's origin, a structured fact: the task came from a person's chat (it has a conversation), so the report is the short
+        one written for that person (what was done, what it added and where, one real caveat), not the engineering shape with test steps.
 
         Uses the orchestrator's report synthesis (same prompt shape as the interactive after-deep
         fold-back, worker tier) so the message reads as the AI reporting its own finished work,
@@ -492,8 +499,8 @@ class ReportingMixin:
         if not callable(synthesize) or not callable(claim_check):
             return raw_summary        # older/stub brains: keep the raw verified output
         try:
-            synthesized = (synthesize(request, raw_summary,
-                                      rep_preamble=rep_preamble) or "").strip()
+            synthesized = (synthesize(request, raw_summary, rep_preamble=rep_preamble,
+                                      **({"report_style": REPORT_STYLE_PERSON} if for_person and client_accepts_named_param(synthesize, "report_style") else {})) or "").strip()
             if not synthesized or synthesized == raw_summary:
                 return raw_summary
             unbacked = claim_check(request, synthesized,

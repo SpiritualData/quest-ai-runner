@@ -30,6 +30,9 @@ from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_pr
 from hubofhubs.api import normalize_url_for_match
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import NOT_QUEUED_NOTE
 from quest_ai_runner.the_world.tools.tools_status import fact_is_held
+
+#: The one line a turn says when it has handed the rest to a longer run: still working, nothing stopped, nothing to approve, no Resume.
+HANDOFF_REPLY = "I've started the rest of this as a longer run, and I'll post the result here as soon as it is done."
 from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up, turn_awaits_person
 from quest_ai_runner.the_consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
 
@@ -532,6 +535,13 @@ class RunCloseMixin:
                                                       card_context=rs.card_context)
                             if _rem_res.kind == "cancelled":
                                 return finish(_rem_res)
+                            if any(getattr(d, "deferred", False) and d.met and not (d.error or "").strip() for d in (_rem_res.deep_results or [])):
+                                # The remediation was QUEUED as a longer run (the runner confirmed the hand-off): the work is going on, not stopped and
+                                # not waiting for a go-ahead, so the turn says that in one line and ends as a hand-off. The result posts when the run finishes.
+                                rs.text = HANDOFF_REPLY
+                                rs.handed_off_goal = _truncate_goal(rs.user_message)
+                                rs._deferred_handoff_confirmed = True
+                                break
                             if not attachments:
                                 self._recipe_learn_deep(
                                     rs.user_message, PlanDecision(action="deep", goal=rs.user_message,
@@ -755,6 +765,7 @@ class RunCloseMixin:
                                   model=rs.model, exit_reason=_exit_reason,
                                   goal_verdict=rs._last_verdict,
                                   decision_id=rs._parked_decision_id)
+        _res.handed_off_goal = getattr(rs, "handed_off_goal", "")
         if rs._claim_corrected:
             # The reply had to be corrected for honesty and the claimed work never executed: flag
             # the result so a background task maps to needs_you/failed, never a false done.

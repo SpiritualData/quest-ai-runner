@@ -2525,6 +2525,36 @@
         ]
       },
       "evidence_notes": "Added 2026-11-10 from a live failure. An explicit, reversible, in-scope order to save a researched table as a note was answered with the text and a request for a go-ahead, after the turn spent its attempts re-checking web figures. The request analyser now reports saves_to_records, so the reply text is not taken as the whole work; the web guidance says a typical-cost question is answered from one search's ranges and sources."
+    },
+    {
+      "id": "EXP-090",
+      "dataset": "explicit",
+      "area": "note saved and reported for the person",
+      "quest_key": "family",
+      "conversation_scope": "quest",
+      "message": "Add a note to this quest with a short budget table for retiling the bathroom floor myself (tile, thinset, grout and tools, as rough ranges) and the three steps to do first.",
+      "expected_routing": "any",
+      "rubric": [
+        "The note was added in this turn, and the reply says so in a few lines: what it added and where to see it (the quest), with no request for a go-ahead",
+        "The reply says that the table and the three steps are in the note, and names no more than one real caveat",
+        "The reply reads as written for the person: no 'How to test' steps, no 'Still open' engineering notes, no model name, no tool or command names",
+        "If any part is handed to a longer run, the reply says in one line that it is still working and will post the result; it never says it stopped, ran out of tries, or asks the person to approve what they already asked for"
+      ],
+      "forbid_writes": false,
+      "precheck": {
+        "reply_not_contains": [
+          "How to test",
+          "Completed with model",
+          "Still open",
+          "Should I add",
+          "Tell me to go ahead",
+          "most tries"
+        ],
+        "code_contains_any": [
+          "add_quest_note"
+        ]
+      },
+      "evidence_notes": "Added 2026-11-10 from a live failure: the note was saved but the person was told it was not, asked for a go-ahead already given, then given a developer's test plan ending with the model name. The saved note is written as list lines, not a pipe table, because the notes screen shows plain text (backend test `test_chat_note_tool_e2e.py` pins it)."
     }
   ]
 }

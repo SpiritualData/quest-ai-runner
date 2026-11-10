@@ -252,6 +252,33 @@ def _model_used_note(deep: List[Any]) -> str:
     return f"\n\n(Completed with {label}: {', '.join(models)}.)"
 
 
+#: What a run is doing, in the words a person reads, by the tool it calls (``run_description``). A tool with no entry gets the generic line.
+TOOL_PHRASES = {
+    "add_quest_note": "Adding a note to the quest",
+    "create_or_update_quest_goal": "Adding a goal to the quest",
+    "create_quest_workflow": "Setting up a workflow on the quest",
+    "list_quest_goals": "Reading the quest's goals",
+    "list_quest_notes": "Reading the quest's notes",
+}
+DESCRIPTION_CHARS = 90
+
+
+def run_description(event: ProgressEvent, goal: str = "") -> str:
+    """A plain sentence for what a run is doing at this event, for the run row a person sees; "" when there is nothing to say.
+
+    Only structure decides it: the tool an event names (``TOOL_PHRASES``), else the task's own goal as "Working on: <goal>". A host name, a command line
+    and a path never appear in it (they stay in the event's own text and data for a developer to expand)."""
+    data = event.data if isinstance(event.data, dict) else {}
+    tool = str(data.get("tool") or "")
+    if tool in TOOL_PHRASES:
+        return TOOL_PHRASES[tool]
+    if event.type in ("exec", "tool_call", "status", "plan", "read", "replan") or tool:
+        first = " ".join(str(goal or "").split())
+        if first:
+            return "Working on: " + (first if len(first) <= DESCRIPTION_CHARS else first[:DESCRIPTION_CHARS - 3].rstrip() + "...")
+    return ""
+
+
 class _TaskProgressSink:
     """Routes orchestrator events to the task's live progress stream.
 
@@ -262,7 +289,8 @@ class _TaskProgressSink:
     """
     _SKIP = frozenset({"partial"})
 
-    def __init__(self, task_id: str, report_fn: Callable, on_milestone: Optional[Callable]):
+    def __init__(self, task_id: str, report_fn: Callable, on_milestone: Optional[Callable], goal: str = ""):
+        self._goal = goal
         self._task_id = task_id
         self._report = report_fn
         self._on_milestone = on_milestone
@@ -271,7 +299,11 @@ class _TaskProgressSink:
         if event.type in self._SKIP:
             return
         try:
-            self._report(self._task_id, event.type, text=event.text, data=event.data)
+            description = run_description(event, self._goal)
+            data = event.data
+            if description:
+                data = {**(data if isinstance(data, dict) else {}), "description": description}
+            self._report(self._task_id, event.type, text=event.text, data=data)
         except Exception:  # noqa: BLE001
             pass
         try:

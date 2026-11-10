@@ -58,6 +58,10 @@ from esoi import SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, SOURCE
 
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, register
 
+#: Who a finished run's report is written for, a structured fact of the request's origin (``executor_reporting``): ``person`` is a report for the
+#: person who asked in a chat; the default is the engineering shape (what was done, how to test, what is open) for a task read in the task view.
+REPORT_STYLE_PERSON = "person"
+
 #: What a card IS, as the ``used.cards`` entries of the payload name it (``orchestrator_events.card_kind`` reads it from the card's structure).
 CARD_KINDS = ("quest", "goal", "note", "guide", "conversation", "other")
 

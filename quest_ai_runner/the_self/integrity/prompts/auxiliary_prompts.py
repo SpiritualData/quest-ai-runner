@@ -1141,6 +1141,30 @@ Rules:
 {result}
 """
 
+# The same report for the PERSON who asked in a chat (``REPORT_STYLE_PERSON``): short, in their words, no test plan, no engineering notes.
+SYNTHESIZE_PERSON_REPORT_PROMPT = """\
+You already DID the work a person asked for in a chat. Below is their request and the ACTUAL OUTPUT/RESULT of the work. Write the short message you
+post back into that chat, for that person, in plain text with no markdown symbols and no headings:
+
+- Line 1 to 3: what was done, in the words the person uses, grounded only in the RESULT. Say what it added and where they can see it (the quest or
+  note by its name, with its link when the RESULT gives one). Claim only what the RESULT shows happened.
+- A table or list the work saved is described in one phrase (for example "a short budget list and the three first steps"), not copied back.
+- At most ONE more line, and only for a real caveat the person must know (something they asked for that is not done, or a figure that may be
+  wrong). Leave it out when there is none.
+- No test steps, no "how to test", no "still open" section, no engineering remarks (formatting of the saved text, tool names, commands, paths,
+  model names, session or run details). Do not say "I will", "shall I", or ask permission for work that is already done.
+- Never use an em dash. Use a comma, a colon, parentheses, or two sentences instead.
+
+=== USER REQUEST ===
+{request}
+
+=== YOUR PRE-WORK PROPOSAL (context only; may be obsolete now that the work is done) ===
+{proposal}
+
+=== ACTUAL RESULT OF THE WORK YOU JUST DID ===
+{result}
+"""
+
 # Synthesize the reply after a CONFIRMED deferred hand-off (deferred_deep_queued deployments): the
 # work was NOT executed this turn, it was queued as a background task, so the reply must report a
 # hand-off, never a result. Only used after the enqueue is confirmed (a deferred deep result with

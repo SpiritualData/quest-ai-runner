@@ -240,6 +240,8 @@ def turn_outcome(res: Any) -> Dict[str, Any]:
             return {"outcome": "met"}
         reason = next((getattr(d, "stop_reason", "") for d in unmet if getattr(d, "stop_reason", "")), "") or "attempt_cap"
         return {"outcome": "stopped", "stop_reason": reason}
+    if getattr(res, "exit_reason", "") == "deferred":
+        return {"outcome": "met"}      # handed to a longer run: it is going on, the turn did not stop
     verdict = getattr(res, "goal_verdict", None)
     if isinstance(verdict, dict) and not verdict.get("met"):
         # The verifier's own enum: the reply is complete but part of it could not be confirmed. Not a failure to try enough.

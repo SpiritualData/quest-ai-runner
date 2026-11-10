@@ -851,7 +851,9 @@ A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only
 priorities that matter most (or the asker's own, when the question is about their own work) with their due days. Name the date of every figure. Leave out anything
 older than the snapshot (earlier campaigns, old notes, earlier replies) unless the question asked for it, add nothing the snapshot does not hold, and keep to the
 length for this kind of reply. When the snapshot is of the asker's quests together, there is no key measure to open with: name the one goal asked for (or the few asked for) with
-its quest, due day and the reason from the snapshot's goals, in the length for this kind of reply. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
+its quest, due day and the reason from the snapshot's goals, in the length for this kind of reply. Name ONE goal and keep to it: the reason and any next step
+belong to that same goal, and a goal you mention as overdue or related is never offered as a second answer. Write every date the way a person reads it ("1 November",
+"this Friday"), never as 2026-11-01. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
 next step and by when. End on the last fact: no offer, no question and no list beyond what was asked. Never use an em dash.
 """
 

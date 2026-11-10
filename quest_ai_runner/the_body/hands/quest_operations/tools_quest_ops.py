@@ -507,12 +507,48 @@ def update_outcome_progress_spec(env: Mapping[str, str], client_factory=None) ->
         context_args={"quest_id": "quest_id"}, timeout_seconds=45.0)
 
 
+def table_cells(line: str) -> List[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def is_table_row(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
+
+
+def plain_note_text(text: str) -> str:
+    """A note's text with every pipe table turned into a short list. The quest's notes screen shows plain text with links, not tables, so a saved table
+    came out as columns separated by ``|`` on one line. Each data row becomes ``- <first cell>: <the other cells>`` (a column header names a cell when
+    there are more than two columns). Text that holds no table is returned as it was."""
+    lines = str(text or "").replace("\r\n", "\n").split("\n")
+    out: List[str] = []
+    i = 0
+    while i < len(lines):
+        if not is_table_row(lines[i]):
+            out.append(lines[i])
+            i += 1
+            continue
+        block: List[List[str]] = []
+        while i < len(lines) and is_table_row(lines[i]):
+            cells = table_cells(lines[i])
+            if not all(set(c) <= set("-: ") for c in cells):      # a separator row (---|:--:) carries no data
+                block.append(cells)
+            i += 1
+        header, rows = (block[0], block[1:]) if len(block) > 1 else ([], block)
+        for cells in rows:
+            rest = cells[1:]
+            if len(header) == len(cells) and len(cells) > 2:
+                rest = [f"{header[k]} {cells[k]}" for k in range(1, len(cells)) if cells[k]]
+            out.append(f"- {cells[0]}: {'; '.join(c for c in rest if c)}".rstrip(": "))
+    return "\n".join(out)
+
+
 def add_quest_note_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         quest_id = quest_id_of(args, ctx)
-        text = str(args.get("text") or "").strip()
+        text = plain_note_text(str(args.get("text") or "")).strip()
         if not quest_id:
             return NO_QUEST
         if not text:
@@ -540,7 +576,7 @@ def add_quest_note_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec
                          "(create_decision), or a result (that is your result)."),
         parameters={"type": "object", "required": ["text"], "properties": {
             "quest_id": QUEST_ID_PARAM,
-            "text": {"type": "string", "description": "The note, in plain words."}}},
+            "text": {"type": "string", "description": "The note, in plain words and short lines. The notes screen shows plain text: write a table as a list, one line per row."}}},
         mutates=True, workflow_step=False, origin="standard",
         keywords=("note", "notes", "thread", "write", "record", "finding", "hand", "off", "save", "remember",
                   "jot"),

@@ -10,7 +10,8 @@ from typing import Any
 
 from hubofhubs.api import AnswerKit, AnsweringMixin as HubAnsweringMixin
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import (
-    REPLY_VOICE_SYSTEM, SYNTHESIZE_AFTER_DEEP_PROMPT, SYNTHESIZE_TASK_REPORT_PROMPT, SYNTHESIZE_AFTER_QUEUED_PROMPT)
+    REPLY_VOICE_SYSTEM, SYNTHESIZE_AFTER_DEEP_PROMPT, SYNTHESIZE_PERSON_REPORT_PROMPT, SYNTHESIZE_TASK_REPORT_PROMPT, SYNTHESIZE_AFTER_QUEUED_PROMPT)
+from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import REPORT_STYLE_PERSON
 from quest_ai_runner.the_self.integrity.prompts.prompt_layers import compose_layers
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _grounding_block, grounding_answer_tail, grounding_context_layer
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import provider_call_accepts_layers
@@ -61,6 +62,20 @@ class AnsweringMixin(HubAnsweringMixin):
     _synthesize_after_deep = HubAnsweringMixin.synthesize_after_deep
     _synthesize_after_queued = HubAnsweringMixin.synthesize_after_queued
     _answer_subquestions = HubAnsweringMixin.answer_subquestions
+
+    def synthesize_task_report(self, request: str, deep_output: str, *, report_style: str = "", **kwargs: Any) -> str:
+        """The hub's finished-work report, in the shape for who it is written for: ``REPORT_STYLE_PERSON`` is the short report for the person who asked in
+        a chat; no style is the engineering shape. The style is a structured fact of the request's origin, never read from words."""
+        if report_style != REPORT_STYLE_PERSON:
+            return super().synthesize_task_report(request, deep_output, **kwargs)
+        transcript, rep_preamble, tier = kwargs.get("transcript", ""), kwargs.get("rep_preamble"), kwargs.get("tier", "balanced")
+        try:
+            return self.synthesize_after_deep(
+                request, prior_answer="", deep_output=deep_output, transcript=transcript, model=self.registry.resolve_tier(tier),
+                rep_preamble=rep_preamble, prompt_template=SYNTHESIZE_PERSON_REPORT_PROMPT)
+        except Exception:  # noqa: BLE001  a report rewrite must never break task reporting
+            self.answer_kit.log.warning("person report synthesis failed; using raw output", exc_info=True)
+            return deep_output
 
     def verify_goal(self, *args: Any, **kwargs: Any) -> Any:
         """The done-check, looked up at call time so a test or a replay that replaces ``_verify_goal`` is honoured."""

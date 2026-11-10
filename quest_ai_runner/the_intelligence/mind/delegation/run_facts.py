@@ -314,6 +314,10 @@ def end_report_data(result: Any) -> Dict[str, Any]:
     if facts or getattr(result, "deep_results", None):
         return facts
     from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
+    if getattr(result, "exit_reason", "") == "deferred":
+        # Handed to a longer run: not a stop, so no attempt cap and no Resume; ``left`` is the work the run is doing.
+        left = " ".join(str(getattr(result, "handed_off_goal", "") or "").split())[:LEFT_CHARS]
+        return {"end_reason": "handed_off", **({"left": left} if left else {})}
     outcome = turn_outcome(result)
     if outcome.get("outcome") != "stopped" or outcome.get("stop_reason") != "attempt_cap":
         return {}
