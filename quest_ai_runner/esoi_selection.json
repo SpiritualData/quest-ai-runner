@@ -132,6 +132,7 @@
    "spec-selection": "quest_ai_runner",
    "system-integrity": "quest_ai_runner",
    "take-in-the-world": "quest_ai_runner",
+   "terminal-session": "quest_ai_runner",
    "the-intuition": "quest_ai_runner",
    "the-mind": "quest_ai_runner",
    "the-science": "quest_ai_runner",
@@ -252,6 +253,7 @@
    "hub_loop": "quest_ai_runner.the_world.tools.delegated_agent_sessions.hub_loop_runner",
    "lean_guarded": "quest_ai_runner.the_body.configuration.deep_launch",
    "mcp_write": "quest_ai_runner.the_body.configuration.config_resolvers",
+   "native_loop": "quest_ai_runner.the_world.tools.delegated_agent_sessions.native_loop_runner",
    "stream_json": "quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream",
    "subprocess": "quest_ai_runner.the_intelligence.mind.delegation.goal_runner"
   }
@@ -671,6 +673,7 @@
   "modules": {
    "model_beat": "quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn",
    "model_explanation": "quest_ai_runner.the_intelligence.critical_thinking.goal_completion.orchestrator_judges",
+   "run_facts": "quest_ai_runner.the_intelligence.mind.delegation.run_facts",
    "terminal_trail": "quest_ai_runner.the_consciousness.terminal.textual_ui_trail",
    "trail": "quest_ai_runner.the_intelligence.mind.response_writer.work_trace"
   }
@@ -700,7 +703,8 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
-   "in_memory": "quest_ai_runner.the_intelligence.mind.delegation.inbox"
+   "in_memory": "quest_ai_runner.the_intelligence.mind.delegation.inbox",
+   "resume_session": "quest_ai_runner.the_intelligence.mind.delegation.resume_request"
   }
  },
  "replay-known-operations": {
@@ -829,6 +833,13 @@
   "default": "ways_in",
   "modules": {
    "ways_in": "quest_ai_runner.the_consciousness.ways_in"
+  }
+ },
+ "terminal-session": {
+  "default": "textual_screen",
+  "modules": {
+   "hub_terminal": "quest_ai_runner.the_consciousness.terminal.hub_terminal",
+   "textual_screen": "quest_ai_runner.the_consciousness.terminal.textual_session"
   }
  },
  "the-intuition": {

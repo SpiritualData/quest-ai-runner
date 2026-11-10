@@ -27,3 +27,4 @@ prioritization,metric-order-quest-work
 feedback-learning,metric-store-feedback
 run-applies-esoi,metric-iterate-by-spec
 route-a-request,metric-route-a-request
+terminal-session,metric-terminal-requirements

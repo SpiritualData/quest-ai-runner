@@ -145,8 +145,11 @@ def in_use(entry, environ: Mapping[str, str]) -> bool:
 
 def requirements_report(environ: Optional[Mapping[str, str]] = None, assembler=None) -> Report:
     """The unmet requirements of what QAR's assembly would use, checked offline against ``environ`` (default: the process
-    environment). Safe to call at any time: no model call, no network, no value printed."""
-    environ = os.environ if environ is None else environ
+    environment plus what the lane's config supplies: its ``env`` table and fields such as ``corpus_root``, which stands for ``QAR_CORPUS_ROOT``; the
+    process environment wins, as it does at run time). Safe to call at any time: no model call, no network, no value printed."""
+    if environ is None:
+        from quest_ai_runner.the_body.configuration.config_environment import lane_supplied_environment
+        environ = {**lane_supplied_environment(), **os.environ}
     entries, unresolved = selected_entries(assembler)
     entries = [entry for entry in entries if in_use(entry, environ)]
     skipped = unused_seats(environ)

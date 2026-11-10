@@ -19,6 +19,47 @@ if TYPE_CHECKING:
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
 
+# Config fields that stand for an environment variable a hub requirement names: the requirement check reads the variable, the lane supplies the field.
+FIELD_ENVIRONMENT = {"corpus_root": "QAR_CORPUS_ROOT", "quest_base_url": "QUEST_BASE_URL", "quest_api_key": "QUEST_API_KEY", "team_id": "QUEST_TEAM_ID"}
+LANE_SUPPLIED: Dict[str, str] = {}
+
+
+def supplied_environment(file_cfg: Optional[RunnerConfig]) -> Dict[str, str]:
+    """What a lane's config file supplies as environment, for the requirement check, WITHOUT touching ``os.environ`` (a variable set there would change what
+    other code defaults to): its ``env`` table and the fields in ``FIELD_ENVIRONMENT``. Nothing from a key file is read, and no value is returned that is blank."""
+    out: Dict[str, str] = {}
+    if file_cfg is None:
+        return out
+    for key, value in (file_cfg.env or {}).items():
+        if str(value):
+            out[str(key)] = str(value)
+    for name, variable in FIELD_ENVIRONMENT.items():
+        value = getattr(file_cfg, name, None)
+        if value:
+            out.setdefault(variable, str(value))
+    return out
+
+
+def note_lane_config(file_cfg: Optional[RunnerConfig]) -> None:
+    """Remember what the lane's config supplies, so ``poll --check`` and ``doctor`` judge the lane as it will run, not the bare process environment."""
+    LANE_SUPPLIED.clear()
+    LANE_SUPPLIED.update(supplied_environment(file_cfg))
+
+
+def lane_supplied_environment() -> Dict[str, str]:
+    """What the lane's config supplies: the config this process already loaded, else the file ``QAR_CONFIG_FILE`` names, else nothing."""
+    if LANE_SUPPLIED:
+        return dict(LANE_SUPPLIED)
+    path = os.getenv("QAR_CONFIG_FILE")
+    if not path:
+        return {}
+    try:
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig
+        return supplied_environment(RunnerConfig.from_file(path))
+    except Exception:  # noqa: BLE001 -- a check never fails because the config could not be read; the lane itself says so at start
+        return {}
+
+
 def apply_config_environment(file_cfg: Optional[RunnerConfig]) -> None:
     """Apply a config file's ``env_files`` / ``env_aliases`` / ``env`` to ``os.environ``.
 

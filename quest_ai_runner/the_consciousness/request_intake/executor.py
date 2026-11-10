@@ -33,6 +33,7 @@ from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_li
 from hubofhubs.api import Mode
 from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorResult
 from quest_ai_runner.the_intelligence.mind.delegation.requester import requester_from_task
+from quest_ai_runner.the_intelligence.mind.delegation.resume_request import is_resume_request, resume_note
 from hubofhubs.api import ControlMessage, RunControl
 from quest_ai_runner.the_intelligence.mind.delegation.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
 
@@ -405,6 +406,18 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
                 text=("Picked up your message that arrived before this started."
                       if _n == 1 else
                       f"Picked up your {_n} messages that arrived before this started."))
+
+        # A RESUME the person asked for (the short message Quest's Resume sends, on the thread or already claimed above): the run that ended at a limit
+        # left a session, so THAT session is continued with a note of what was left, and the run does not start over. The handle is the one Quest hands
+        # back (``resume_session_id``) or, failing that, the one the earlier report carried in its ``result_data``. With no handle nothing is claimed
+        # and the run is told how the earlier run ended, as any follow-up is. See ``resume_request``.
+        if any(is_resume_request(t) for t in [self._task_text(task), *_initial_texts]):
+            earlier = task.get("result_data") if isinstance(task.get("result_data"), dict) else {}
+            handle = resume_session_id or str(earlier.get("resume_handle") or "").strip() or None
+            if handle:
+                resume_session_id = handle
+                text = f"{text}\n\n{resume_note(str(earlier.get('left') or ''), str(earlier.get('end_reason') or ''))}"
+                self._report_progress(task_id, "status", text="Resuming the earlier session where it stopped.")
 
         # Fetch goal + quest context + conversation history from Quest API if available, and build
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on

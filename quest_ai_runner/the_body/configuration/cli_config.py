@@ -23,6 +23,7 @@ from quest_ai_runner.the_self.assembler.hub import make_provider
 from quest_ai_runner.the_world.tools.connected_system_operations.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from quest_ai_runner.the_body.configuration.config import (
     RunnerConfig, apply_config_environment, apply_file_defaults, parse_decision_assignees, resolve_config_objects)
+from quest_ai_runner.the_body.configuration.config_environment import note_lane_config
 
 
 def _auto_backend(environ=None, which=shutil.which) -> str:
@@ -302,6 +303,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # QAR_* knob (including the nested OrchestratorConfig ones no TOML field reaches) in the same
     # file as everything else, instead of in a Python consumer written once per lane.
     apply_config_environment(file_cfg)
+    note_lane_config(file_cfg)
 
     corpus = os.getenv("QAR_CORPUS_ROOT") or (file_cfg.corpus_root if file_cfg else None)
     retrieval = FilesAdapter(corpus) if corpus else None

@@ -42,6 +42,9 @@ def add_chat_command(sub) -> None:
     chat_p.add_argument("--continue", "-c", dest="resume", action="store_const", const="last",
                         help="continue the most recent conversation for this corpus "
                              "(same as --resume last)")
+    chat_p.add_argument("--screen", choices=("chat", "hub"), default="chat",
+                        help="chat (default): the saved-conversation screen; hub: the hub's terminal, which runs a goal on a real "
+                             "harness while you watch, stop, resume and steer it, and takes a line after a run as a follow-up")
     chat_p.add_argument("--list-conversations", action="store_true",
                         help="list saved chat conversations for this corpus (newest first) and exit")
 

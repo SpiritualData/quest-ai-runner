@@ -144,7 +144,7 @@ def test_deep_runner_default_and_override(monkeypatch, tmp_path):
     fake.chmod(0o755)
     monkeypatch.setenv("QAR_CLAUDE_PATH", str(fake))
     cfg = RunnerConfig(corpus_root=str(tmp_path))
-    assert type(resolve_deep_runner(cfg)).__name__ == "SubprocessGoalRunner"
+    assert hasattr(resolve_deep_runner(cfg), "run_goal")      # the default is the hub's measured pick, whichever harness that is today
     cfg = RunnerConfig(corpus_root=str(tmp_path), selections={"delegated-agent-sessions": "acp"})
     assert type(resolve_deep_runner(cfg)).__name__ == "AcpDeepRunner"
     # a ladder rung is not a standalone worker: reported, not raised

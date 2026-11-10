@@ -72,7 +72,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
 | `QAR_CONTEXT_UPDATES_STATE_PATH` |  | `the_body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
 | `QAR_CONVERSATION_SEARCH` | false/0/off disables searching past conversations as context. | `the_body/configuration/cli_config.py` | - |
-| `QAR_CORPUS_ROOT` | Fills the 'root' option of file-editing:files; declared by the hub. | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/cli_cards.py`, `the_consciousness/terminal/cli_chat.py` +3 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
+| `QAR_CORPUS_ROOT` | Fills the 'root' option of file-editing:files; declared by the hub. | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_consciousness/terminal/cli_cards.py` +4 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
 | `QAR_DAILY_TOKEN_LIMIT` |  | `the_world/model_plumbing/spend/usage.py` | `.env.example` |
 | `QAR_DAILY_USAGE_PATH` |  | `the_consciousness/terminal/interactive_session_status.py`, `the_world/model_plumbing/spend/usage.py` | `.env.example` |
 | `QAR_DECISION_ASSIGNEE` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py` | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/adapters.md` +2 |

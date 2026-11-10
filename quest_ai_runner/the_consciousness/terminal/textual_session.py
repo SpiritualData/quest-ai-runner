@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
 
+from esoi import implementation
+
 if TYPE_CHECKING:
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
@@ -69,6 +71,14 @@ def start_textual_interactive(
         # Ctrl+C pressed — exit cleanly without traceback
         pass
     return saved_conversation_id(app, resume)
+
+
+@implementation("terminal-session", "textual_screen")
+class TextualScreen:
+    """The conversation screen of this package (saved conversations, the picker, personas, the model-tier menu), built on Textual before the hub had a terminal of its own."""
+
+    def start(self, config: "RunnerConfig", **options) -> Optional[str]:
+        return start_textual_interactive(config, **options)
 
 
 def saved_conversation_id(app, resume=None) -> Optional[str]:

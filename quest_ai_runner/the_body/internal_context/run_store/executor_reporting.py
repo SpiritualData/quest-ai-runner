@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import Assignee, file_ask
 from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult, _strip_future_context
+from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_report_data
 from quest_ai_runner.the_world.tools.tools_status import record_worked
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_body.intake_sources.context_updates import parse_manifest, parse_usage_notes, render_receipt, strip_usage_block
@@ -128,7 +129,9 @@ class ReportingMixin:
         # something a model wrote; they ride in ``result_data`` next to the outcome stamp. Empty
         # for a run with neither a metric nor a gap, and then nothing below changes: the report
         # is sent exactly as it was before this existed.
-        metric_data = metric_report_data(result)
+        # THE END FACTS ride in the same ``result_data`` (``end_reason``, ``resume_handle``, spend, ceilings, ``outside_folder``, ``left``,
+        # ``stop_decision``; see ``run_facts.end_facts``): only what the run knows, so a run with none adds nothing.
+        metric_data = {**metric_report_data(result), **end_report_data(result)}
         with_metrics = {"result_data": metric_data} if metric_data else {}
         done_metrics = {"metric_data": metric_data} if metric_data else {}
         if result.kind == "answer":

@@ -65,6 +65,10 @@ def _cmd_chat(args, log) -> int:
                 log.error("chat not ready: %s", p)
             return 1
         from quest_ai_runner.the_self.assembler.hub_requirements import requirements_report
+        if getattr(args, "config", None):                 # what the lane's config file supplies counts as met, as it does for `poll --check`
+            from quest_ai_runner.the_body.configuration.config import RunnerConfig
+            from quest_ai_runner.the_body.configuration.config_environment import note_lane_config
+            note_lane_config(RunnerConfig.from_file(args.config))
         report = requirements_report()
         for line in report.lines():
             log.info("hub requirements: %s", line)
@@ -74,6 +78,10 @@ def _cmd_chat(args, log) -> int:
         log.info("chat prerequisites OK")
         return 0
 
+    if getattr(args, "screen", "chat") == "hub":
+        # The hub's screen: a goal run on a real harness in this folder, the person named by the name form (`chat NAME`) as who the AI acts for.
+        from quest_ai_runner.the_consciousness.terminal.hub_terminal import HubTerminal
+        return HubTerminal().start(person=getattr(args, "rep_positional", None) or args.rep or "")
     cfg = _config_from_env(getattr(args, "config", None))
     # chat only needs a model provider — Quest credentials and a retrieval
     # adapter are optional (no corpus = no grounding, but still works).

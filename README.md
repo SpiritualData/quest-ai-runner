@@ -238,6 +238,19 @@ quest-ai-runner chat                # ask a question; /quit prints the resume co
 quest-ai-runner chat --continue     # reopen the latest conversation
 ```
 
+## In a terminal
+
+Everything runs from the `quest-ai-runner` command (also `python -m quest_ai_runner`).
+
+| Command | What it does |
+|---|---|
+| `quest-ai-runner chat` | Opens the conversation screen: ask a question, see the answer with its sources, `/quit` prints the command that resumes it. `chat --check` confirms the provider and context store first. |
+| `quest-ai-runner chat --continue` (or `-c`) | Reopens the latest saved conversation; `--resume` with no id picks one from a searchable list, `--resume ID` names one, `--list-conversations` lists them. |
+| `quest-ai-runner chat NAME` | The person name form: `NAME` is the AI representative the session speaks as (`--rep NAME` is the same). When a folder `NAME/CLAUDE.md` exists under the corpus root it is loaded as the persona. |
+| `quest-ai-runner chat --screen hub` | The hub's terminal instead of the conversation screen: type a goal and it runs on a real harness in this folder while you watch each step and helper, press Escape to stop and keep the session, type `resume` to continue it, type a line to steer it, and type a line after a run to continue the same session. `/harness` switches harness between runs; `/help` lists the rest. |
+| `quest-ai-runner poll` | Runs the executor lane that polls Quest for due tasks (`--check` validates the configuration and key, `--once` scans once and exits). |
+| `quest-ai-runner doctor` | Lists what is unmet in the environment and the fix for each, and detects a stale console script. |
+
 **Use the brain from Python:**
 
 ```python

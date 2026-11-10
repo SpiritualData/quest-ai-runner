@@ -26,6 +26,8 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool impo
 from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import is_eligible, trace_from_result
 from hubofhubs.api import CardThreadDecision, ExecutionFact, parse_card_thread
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import deep_metric_data
+from quest_ai_runner.the_intelligence.mind.delegation.resume_request import LEDGER as RESUME_LEDGER
+from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_report_data
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     context_not_reassembled_observation, lane_gap_observation, planner_full_view_start, receipt_observation, planner_note_observation, read_spec_key, repeated_read_observation, split_context_reassembly, split_mixed_reads,
     split_repeated_reads)
@@ -85,6 +87,8 @@ class RunLoopMixin:
             metric_data = deep_metric_data(res)
             res.metric_results = list(metric_data["metrics"])
             res.metric_missing = bool(metric_data.get("metric_missing"))
+            # Where a run that did not finish can be continued from, for the person's Resume in this conversation (``resume_request``).
+            RESUME_LEDGER.note(getattr(rs, "conv_id", None), end_report_data(res))
             res.retrieval_constraints = rs.retrieval_constraints
             res.mode_signal = rs.mode_signal_detected
             # PER-IDEA THREADING: the topic this turn was assigned to. Present on EVERY terminal
@@ -285,7 +289,7 @@ class RunLoopMixin:
                                         data={**({"exit_reason": res.exit_reason,
                                                   "goal_verdict": res.goal_verdict} if res.exit_reason else {}),
                                               **(metric_data if res.deep_results else {}),
-                                              **turn_outcome(res)}))
+                                              **end_report_data(res), **turn_outcome(res)}))
             elif res.kind == "confirm":
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
@@ -301,7 +305,7 @@ class RunLoopMixin:
                     data={**({"future_context": _future,
                               "exit_reason": res.exit_reason,
                               "goal_verdict": res.goal_verdict} if (_future or res.exit_reason) else {}),
-                          **metric_data, **turn_outcome(res)}))
+                          **metric_data, **end_report_data(res), **turn_outcome(res)}))
             # --- "EXPLAIN HOW I GOT THIS" (opt-in; see core/answer_explanation.py) -------------
             # ORDER IS THE POINT: this runs AFTER the terminal EVENT_RESULT above, so the answer
             # has already left for the consumer's screen. The reader is reading while this is

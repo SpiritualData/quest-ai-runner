@@ -19,6 +19,7 @@ from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_sele
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics, run_hint, working_dir_of
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
+from quest_ai_runner.the_intelligence.mind.delegation.run_facts import RunFacts
 from quest_ai_runner.the_intelligence.mind.delegation.exploration_trail import record_run_trail, scope_keys, where_things_are
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
@@ -303,6 +304,8 @@ class DeepRunMixin:
         # "Starting on sonnet, with a stronger model ready" for those told a person a deep run was
         # starting when none was. Once per deep run, whichever subgoal reaches it first.
         selection_announced = threading.Event()
+        # What this run says about itself while it works (helpers, structure, spend, the hub's own stop decision) and when it ends: see ``run_facts``.
+        run_facts = RunFacts(emit.emit, goal=user_message) if emit is not None else None
         selection_lock = threading.Lock()
         # SIBLINGS DO NOT PILE UP MORE ASKS: set the moment any subgoal of this fan-out parks on a
         # human decision (``DeepResult.decision_id``). Checked by every OTHER subgoal's attempt
@@ -608,6 +611,8 @@ class DeepRunMixin:
                             fact.failed = True
                 except Exception:  # noqa: BLE001 — recording must never break the run
                     pass
+                if run_facts is not None:
+                    run_facts.take(ev)
                 # No ``wants_emit`` guard needed here: this callback is handed to a runner ONLY
                 # when that rung's caps say it accepts ``emit``, which already requires a sink.
                 if emit is not None:
@@ -1398,6 +1403,8 @@ class DeepRunMixin:
         # normal "deep" result. This is the point that decides whether the CALLER (Orchestrator.run)
         # sees this as a genuine (possibly partial) deep outcome or a cancelled one.
         if cancel_check is not None and cancel_check():
+            if run_facts is not None:
+                run_facts.finish([r for r in all_results if r is not None])
             # The workers' results ride along (a stopped or paused worker names the session a
             # later resume continues, and may hand back messages it never confirmed); a caller
             # that only checks ``kind`` is unaffected.
@@ -1406,6 +1413,8 @@ class DeepRunMixin:
                                       exit_reason="cancelled")
 
         deep_results = [r for r in all_results if r is not None]
+        if run_facts is not None:
+            run_facts.finish(deep_results)
         # ONE ASK, BUT NEVER AT THE COST OF WHAT ALREADY HAPPENED (structural, on ``decision_id``,
         # never on any result's own text -- hard rule #3).
         #

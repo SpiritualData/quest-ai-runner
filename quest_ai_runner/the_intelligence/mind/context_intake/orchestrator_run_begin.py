@@ -36,6 +36,7 @@ from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_contex
     build_item_usage_hint, filter_relevant, quest_scope_key, render_recent_cards)
 from hubofhubs.api import AbridgedTurnState, collect_abridged_items, render_abridged_notice
 
+from quest_ai_runner.the_intelligence.mind.delegation.resume_request import LEDGER as RESUME_LEDGER, is_resume_request
 
 class RunBeginMixin:
     """Starting a turn: set-up of run-local state and the context gathered before planning."""
@@ -120,6 +121,17 @@ class RunBeginMixin:
         # handing the same id to a second deep call would put two workers in one transcript.
         pending_resume: Dict[str, Optional[str]] = {
             "id": (resume_session_id or "").strip() or None}
+
+        # A RESUME the person asked for in this chat (a short "continue" after a run that ended at a limit): the session that run left is
+        # continued, so the work already done is not started over. Read from the person's own words only; see ``resume_request``.
+        if not pending_resume["id"] and message_is_user_turn and is_resume_request(rs.user_message):
+            left_over = RESUME_LEDGER.take(conv_id)
+            if left_over:
+                pending_resume["id"] = left_over["handle"]
+            else:       # the ledger is in memory and a restart forgets it: the host may hand back the handle it stored with the reply
+                stored = str((context_meta or {}).get("available_resume_handle") or "").strip()
+                if stored:
+                    pending_resume["id"] = stored
 
         def take_resume_session() -> Optional[str]:
             sid = pending_resume["id"]

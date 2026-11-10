@@ -135,6 +135,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Route read off the planner decision | `route-a-request:planner_derived` | [quest_ai_runner/the_intelligence/mind/request_router/planner_derived.py](request_router/planner_derived.py) |  |
 | One cheap classifier call | `route-a-request:single_classifier` | [evaluation/components/route_a_request/impls/single_classifier.py](../../../evaluation/components/route_a_request/impls/single_classifier.py) |  |
 | Always information | `route-a-request:majority_floor` | [evaluation/components/route_a_request/impls/majority_floor.py](../../../evaluation/components/route_a_request/impls/majority_floor.py) |  |
+| Run facts relay over the hub's data form (producer of the run-state ticks) | `quest-work-shown:run_facts` | [quest_ai_runner/the_intelligence/mind/delegation/run_facts.py](delegation/run_facts.py) |  |
+| Resume the stored session (the person's short message) | `receive-input-mid-run:resume_session` | [quest_ai_runner/the_intelligence/mind/delegation/resume_request.py](delegation/resume_request.py) |  |
 | The loop planner decides the route | `planner:planner_route` | [quest_ai_runner/the_intelligence/mind/planner/message_routing.py](planner/message_routing.py) |  |
 | One cheap model call per turn writes the beat (today) | `quest-work-shown:model_beat` | [quest_ai_runner/the_intelligence/mind/response_writer/orchestrator_turn.py](response_writer/orchestrator_turn.py) |  |
 | The Trail (live line, one summary line, expandable groups) | `quest-work-shown:trail` | [quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py](response_writer/work_trace.py) |  |
