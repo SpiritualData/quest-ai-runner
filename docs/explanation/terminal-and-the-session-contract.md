@@ -15,16 +15,18 @@ page maps this repository's terminal to that contract and lists, in order, the s
 | Steps (`Step`) | `exec` events rolled up as counts (`DeepMixin._summarize_exec_lines`) and the Trail from `work_trace` events, drawn by the hub's renderers |
 | Approve (`Approve`, `Refuse`) | a decision ask, answered by the next line once the turn ends |
 | Usage and result (`Usage`, `Finished`) | elapsed time; since 2026-11-10 the closing line adds the cost (only when a run reported one) and the files changed (`result_items`) |
-| Helpers (`AgentStarted`, `AgentEnded`) | none; the jobs list is flat |
+| Helpers (`AgentStarted`, `AgentEnded`) | since 2026-11-10 `session_contract.TurnSession` reads the hub loop's own `session` events: a line when a helper starts and ends under its parent, the tree again before the closing line, the solution a run serves, and blocked steps with the reason |
 
-`tests/test_terminal_requirements.py` scores this table: 9 of 23 requirements before the closing line named cost and files, 11 of 23 after
-(metric `metric-terminal-requirements`).
+`tests/test_terminal_requirements.py` scores this table: 9 of 23 requirements at the start, 11 of 23 after the closing line named cost and files, 17 of 23
+after the terminal read the session contract (metric `metric-terminal-requirements`). Still missing: stopping or steering one helper (X8), a step that
+waits for approval inside the run (X9) and a question answered while the run goes on (X22), a harness switch (X11), a plain fallback without Textual (X13).
 
 ## The steps to one contract, in order
 
-1. **Adapter, additive.** A small QAR module turns the events of a deep run (`ProgressEvent` and the stream runner's raw lines) into the hub's session
-   events, using the hub's adapters. It changes no screen. Gain: one place that knows QAR's event shapes.
-2. **Controls through `Harness.control`.** `TerminalRunControl` is already the stream runner's `RunControl`; wrapping it as a hub `Harness`
+1. **Adapter, additive (done).** `session_contract.py` turns the events of a deep run (the `session` events of the hub loop, the stream runner's raw lines
+   once it forwards them) into the hub's session events with the hub's adapters, and `support_of(runner)` says which controls a runner honours
+   (`unsupported_line` words a missing one in a single plain line). The terminal writes its lines and the closing helper tree.
+2. **Controls through `Harness.control`.** The hub loop now takes the `RunControl` the terminal already hands a stream worker, so a typed note and `/pause` reach `hub_loop` too (the terminal's `/pause` guard still names the stream runner only; widen it with `support_of`). `TerminalRunControl` is already the stream runner's `RunControl`; wrapping it as a hub `Harness`
    makes Stop, Steer and Resume the same calls for every harness. Gain: switching harness (X11) needs no terminal change.
 3. **Draw `Waiting` while the run goes on.** Today a question is written when a step ends and `open_ask_takes` refuses an answer during a turn. With a
    `Waiting` event the question shows at once and Approve or Refuse answers it. Gain: X9, X19, X22.

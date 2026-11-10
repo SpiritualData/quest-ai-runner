@@ -13,6 +13,8 @@ from types import SimpleNamespace
 
 from hubofhubs.api import DeepResult
 from quest_ai_runner.the_consciousness.terminal import textual_ui_control, textual_ui_deep
+from hubofhubs.api import ProgressEvent
+from quest_ai_runner.the_consciousness.terminal.session_contract import TurnSession
 from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import result_items
 from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
 
@@ -21,7 +23,7 @@ from .test_terminal_run_control import KEY, make_control, run_in_thread
 
 TERMINAL = Path(textual_ui_control.__file__).resolve().parent
 ALL_IDS = [f"X{n}" for n in range(1, 24)]
-MET = {"X1", "X2", "X3", "X4", "X5", "X6", "X10", "X16", "X17", "X18", "X21"}
+MET = {"X1", "X2", "X3", "X4", "X5", "X6", "X7", "X10", "X12", "X14", "X15", "X16", "X17", "X18", "X19", "X20", "X21"}
 
 
 def code() -> str:
@@ -53,7 +55,23 @@ def stop_resume_steer(tmp_path):
     return {"stop": bool(stopped.cancelled and stopped.session_id), "resume": bool(resumed.met), "steer": steer_ok}
 
 
+def contract_session():
+    """A scripted run in the hub's session contract, through the terminal's own adapter: the lines and the closing tree it writes."""
+    def event(**data):
+        return ProgressEvent(type="session", data=data)
+    turn = TurnSession()
+    lines = []
+    for item in (event(type="run-started", goal="g", solution="notes", milestone="notes are right"),
+                 event(type="agent-started", agent_id="h1", parent_id="main", task="write the tests", solution="tests"),
+                 event(type="agent-started", agent_id="h2", parent_id="h1", task="fixtures", solution=""),
+                 event(type="waiting", ask_id="a", question="Run deploy?", preview="creates deployed.txt"),
+                 event(type="step", step_id="s", kind="tool", label="deploy", state="blocked", detail="you refused it")):
+        lines += turn.take(item)
+    return lines, turn.closing_lines()
+
+
 def results(tmp_path):
+    lines, closing = contract_session()
     session = stop_resume_steer(tmp_path)
     kinds = textual_ui_deep.DeepMixin
     summary = kinds._summarize_exec_lines(["Read: a.txt", "Edit: b.txt", "$ pytest -q"])
@@ -66,20 +84,20 @@ def results(tmp_path):
         "X4": (session["stop"], "Escape stops the worker and keeps its session"),
         "X5": (session["resume"], "a resume continues the kept session"),
         "X6": (session["steer"], "a message typed while the worker runs is taken once"),
-        "X7": (has(r"parent_tool_use_id|parent_id|subagent|sub-agent"), "a tree of helpers with their parents"),
+        "X7": (any("`-" in row or "└" in row for row in closing) and any(row.startswith("  ↳") for row in lines), "a tree of helpers with their parents"),
         "X8": (has(r"stop_agent|steer_agent"), "stop or steer one helper"),
         "X9": (False, "a step waits for approval inside the run (a planner confirm waits, but only between steps)"),
         "X10": (any("changed" in item for item in shown), "the closing line names the files changed"),
         "X11": (has(r"/harness"), "switch harness from the terminal"),
-        "X12": (has(r"session_events"), "consumes the shared events and controls"),
+        "X12": (any(row.startswith("↳ helper") for row in lines) and has(r"RunControl"), "consumes the shared events and the shared control"),
         "X13": (has(r"def plain_chat|--plain"), "a plain fallback without Textual or a cursor"),
-        "X14": (has(r"\bserves:|Serves the solution"), "the solution and milestone the work serves"),
-        "X15": (has(r"solution hierarchy|agent_solution"), "helpers follow the solution hierarchy"),
+        "X14": (any(row.startswith("Serves notes: notes are right") for row in lines), "the solution and milestone the work serves"),
+        "X15": (any("(tests)" in row for row in lines), "helpers carry the solution they serve"),
         "X16": (has(r"work_trace", r"render"), "the trail is drawn from structural events"),
         "X17": (has(r"metric_lines", r"\bbefore\b", r"\bafter\b"), "metric before and after in the milestone block"),
         "X18": (has(r"alt\+t|alt\+d"), "detail opens on a key, not by default"),
-        "X19": (has(r"will change:|It will change"), "what will change is shown before a risky step"),
-        "X20": (has(r"Blocked or refused"), "blocked or refused steps listed with the reason"),
+        "X19": (any("It will change: creates deployed.txt" in row for row in lines), "what will change is shown with a question a run waits on"),
+        "X20": ("  deploy: you refused it" in closing, "blocked steps listed with the reason"),
         "X21": (session["resume"] and has("/resume"), "resume after a stop"),
         "X22": (not re.search(r"def open_ask_takes.*?_turn_active", code(), re.S), "a question can be answered while the run goes on"),
         "X23": (False, "not scripted: judged on the hub page by the person"),

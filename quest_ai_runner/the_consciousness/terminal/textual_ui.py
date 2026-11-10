@@ -71,6 +71,9 @@ if TYPE_CHECKING:
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
+from quest_ai_runner.the_consciousness.terminal.session_contract import TurnSession  # noqa: E402
+
+
 class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, ActionsMixin, ControlMixin, TrailMixin, App):
     """Textual REPL over an `InteractiveSession`'s orchestrator brain."""
 
@@ -230,6 +233,7 @@ class QuestAITerminal(StartupMixin, CommandsMixin, TurnMixin, DeepMixin, Actions
         self._deep_plan_shown = False
         self._deep = _DeepRunTracker()
         self._deep_seen: set = set()
+        self._turn_session = TurnSession()
         self._deep_event_count = 0
         # Deep runs whose full output has already been written to the scrollback
         # transcript, so we persist each task's output exactly once.

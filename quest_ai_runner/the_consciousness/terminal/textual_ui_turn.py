@@ -14,6 +14,7 @@ from quest_ai_runner.the_consciousness.terminal.interactive_session_tracker impo
 from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import (
     DECISION_COMING_STATUS, _AWAITING_DECISION_PLACEHOLDER, _BUSY_PLACEHOLDER, _READY_PLACEHOLDER)
 from quest_ai_runner.the_consciousness.terminal.textual_ui_prompt import PromptTextArea
+from quest_ai_runner.the_consciousness.terminal.session_contract import TurnSession
 from esoi import without_line
 from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
     HangingText, _build_shallow_context_bullets, context_block_lines, indented_line, metric_groups, person_line, plural, working_notes_in)
@@ -29,14 +30,14 @@ class TurnMixin:
         if self._ev is None:
             from hubofhubs.api import (
                 EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_PARTIAL, EVENT_EXEC, EVENT_INTENT, EVENT_RESULT,
-                EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING)
+                EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING, EVENT_SESSION)
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN,
                 read=EVENT_READ, replan=EVENT_REPLAN, partial=EVENT_PARTIAL,
                 exec=EVENT_EXEC, intent=EVENT_INTENT, result=EVENT_RESULT,
                 decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
-                understanding=EVENT_UNDERSTANDING,
+                understanding=EVENT_UNDERSTANDING, session=EVENT_SESSION,
             )
         return self._ev
 
@@ -70,6 +71,7 @@ class TurnMixin:
         # The jobs' clocks count from the start of the turn, the one clock the person sees.
         self._deep = _DeepRunTracker(started_at=time.time())
         self._deep_seen = set()
+        self._turn_session = TurnSession()
         self._deep_event_count = 0
         self._deep_flushed = set()
         self.metrics_shown.clear()
@@ -330,6 +332,11 @@ class TurnMixin:
                 self._deep.set_run_status(run_id, "done" if outcome == "success" else "error")
                 self._flush_deep_run(run_id)
 
+        elif t == ev["session"]:
+            # The run's own account in the hub's session contract (helpers, blocked steps, the solution it serves): written as it happens, the tree again at the end.
+            for line in self._turn_session.take(event):
+                log.write(indented_line(f"  {line}", "dim"))
+
         elif t == ev["milestone"]:
             # A completed deep subtask carries its full output; stash it on the run so the
             # scrollback record can show what the task actually produced (the result), not just
@@ -579,6 +586,8 @@ class TurnMixin:
                 hints.append("Alt+D details")
             if context_bullets:
                 hints.append("Alt+C sources")
+            for line in self._turn_session.closing_lines():
+                log.write(indented_line(f"  {line}", "dim"))
             self.draw_blocks(work_summary)
             work_summary = []
             self._write_footer(final, elapsed, hints)
