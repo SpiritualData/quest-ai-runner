@@ -195,6 +195,9 @@ class PassesMixin:
                 "last_pass_at": autopilot_cfg.get("last_pass_at"),
                 "run_requested_at": autopilot_cfg.get("run_requested_at"),
                 "has_instructions": bool(instructions),
+                # The quest's single-purpose autopilots and their last passes (see ``poller_routines``).
+                "routines": autopilot_cfg.get("routines") or [],
+                "routine_runs": autopilot_cfg.get("routine_runs") or {},
                 "env_id": autopilot_cfg.get("env_id"),
                 # The roster, so the schedule can skip days the day rule would gate anyway (see
                 # ``_quest_pass_days``). Not read anywhere else in the snapshot today.

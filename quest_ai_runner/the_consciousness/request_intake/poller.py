@@ -35,6 +35,7 @@ if TYPE_CHECKING:  # typing only
 
 from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import make_judge
 from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, _parse_dt
+from quest_ai_runner.the_intelligence.proactivity.poller_routines import RoutinesMixin
 from quest_ai_runner.the_body.intake_sources.context_updates import build_update_engine
 
 
@@ -89,7 +90,7 @@ __all__ = ["Poller", "StateStore"]
 
 
 
-class Poller(PassesMixin, SyncMixin):
+class Poller(PassesMixin, RoutinesMixin, SyncMixin):
     def __init__(self, config: RunnerConfig, *, state_path: Optional[str] = None,
                  client: Optional[QuestClient] = None,
                  resource_guard: Optional[ResourceGuard] = None,
@@ -229,6 +230,8 @@ class Poller(PassesMixin, SyncMixin):
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
         # so it runs before the resource/token gates that hold back task PICKUP.
         self._ensure_autopilot_pass()
+        # Named single-purpose autopilots (routines) that are due: one work task each, nothing else (poller_routines).
+        self.run_due_routines()
         # Monthly bootstrap report (opt-in): send a report if the corpus is ready and a month
         # has passed since the last report, or if this is the first report. Like folder sync,
         # this is light bookkeeping not gated by resource/token limits.
