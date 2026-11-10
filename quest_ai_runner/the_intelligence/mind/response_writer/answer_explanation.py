@@ -58,6 +58,9 @@ from esoi import SOURCE_MEASURED, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, SOURCE
 
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, register
 
+#: What a card IS, as the ``used.cards`` entries of the payload name it (``orchestrator_events.card_kind`` reads it from the card's structure).
+CARD_KINDS = ("quest", "goal", "note", "guide", "conversation", "other")
+
 log = logging.getLogger(__name__)
 
 # The payload version a consumer can branch on if the shape ever grows. Version 2 added the optional
@@ -481,7 +484,19 @@ def render_used(trace: TurnTrace) -> Dict[str, Any]:
             continue
         title = str(c.get("title") or "").strip()
         if title:
-            cards.append({"title": title, "adapter": str(c.get("adapter") or "")})
+            # ``title`` and ``adapter`` are the original keys. ``id``, ``kind`` (``CARD_KINDS``: what the card is, read from its structure), ``quest_id`` (when it
+            # belongs to a quest) and ``description`` (its own line, never the title again) let the screen group a person's own records apart from guides.
+            card: Dict[str, Any] = {"title": title, "adapter": str(c.get("adapter") or "")}
+            if str(c.get("id") or "").strip():
+                card["id"] = str(c["id"]).strip()[:120]
+            if c.get("kind") in CARD_KINDS:      # a card with no classification adds no key (the version 2 shape holds)
+                card["kind"] = c["kind"]
+            if str(c.get("quest_id") or "").strip():
+                card["quest_id"] = str(c["quest_id"]).strip()[:80]
+            description = str(c.get("description") or "").strip()
+            if description and description != title:
+                card["description"] = description[:200]
+            cards.append(card)
     sources: List[Dict[str, Any]] = []
     for s in (trace.sources or [])[:MAX_ITEMS_PER_KIND]:
         if isinstance(s, str):

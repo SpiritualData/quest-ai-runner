@@ -6,6 +6,9 @@ quest's open goals that are a keyed next step or are linked to a solution of the
 with its due day and its ``Current value:`` line when it holds one; (3) for a question about the asker's own work, the asker's open goals on the quest, soonest due first
 (overdue ones lead). Whether a turn is status-shaped is the request analyser's structured report (``asks_status``), never words. Nothing here estimates a value; a part that
 cannot be read is left out, and a snapshot with no part at all is None (the turn then goes the ordinary way).
+
+A question about the asker's quests TOGETHER ("which goal should I work on first this week", the analyser's ``across_quests`` report) has no one quest to read: ``portfolio`` reads
+the open goals of every quest the asker can reach, in one dated snapshot, so the reply is written from the goals themselves and never asks the person to paste them.
 """
 from __future__ import annotations
 
@@ -21,6 +24,9 @@ OWN_MAX = 8
 PAGE = 100
 PAGES = 10
 HEAD = "STATUS SNAPSHOT READ JUST NOW (every figure carries its own date; nothing older is part of it)"
+PORTFOLIO_HEAD = "STATUS SNAPSHOT READ JUST NOW OF THE ASKER'S QUESTS TOGETHER (each quest with its open goals, soonest due first; nothing older is part of it)"
+PORTFOLIO_QUESTS = 8
+PORTFOLIO_GOALS = 6
 
 
 def reachable_quests(registry: Any) -> List[Dict[str, str]]:
@@ -144,4 +150,31 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
         return {"kind": "query", "locator": LOCATOR, "text": HEAD + ":\n\n" + "\n\n".join(parts)}
     except Exception as error:      # noqa: BLE001  a snapshot is an addition; its failure never stops the turn
         log.info("status snapshot not built: %s: %s", type(error).__name__, error)
+        return None
+
+
+def portfolio(registry: Any, quests: List[Mapping[str, str]]) -> Optional[Dict[str, Any]]:
+    """The asker's quests together as one gathered read (locator ``status_snapshot``): per quest (at most ``PORTFOLIO_QUESTS``) its outcome and its open goals, soonest due
+    first (at most ``PORTFOLIO_GOALS``), each with its due day, owner and value line. ``quests`` is ``reachable_quests``. None when no quest has an open goal to show.
+    Never raises."""
+    if registry is None or not quests:
+        return None
+    try:
+        blocks: List[str] = []
+        for quest in quests[:PORTFOLIO_QUESTS]:
+            quest_id = str(quest.get("quest_id") or "")
+            if not quest_id:
+                continue
+            rows = [g for g in goal_rows(registry, quest_id, open_only=True) if not g.get("completed") and not g.get("abandoned")]
+            rows.sort(key=lambda g: (g.get("due") is None, str(g.get("due") or "")))
+            title = str(quest.get("title") or "").strip() or "Untitled quest"
+            if rows:
+                blocks.append(f"Quest: {title}\n" + "\n".join(goal_line(g) for g in rows[:PORTFOLIO_GOALS]) + (f"\n(and {len(rows) - PORTFOLIO_GOALS} more open goals)" if len(rows) > PORTFOLIO_GOALS else ""))
+            else:
+                blocks.append(f"Quest: {title}\nNo open goals.")
+        if not any("No open goals." not in b for b in blocks):
+            return None
+        return {"kind": "query", "locator": LOCATOR, "text": PORTFOLIO_HEAD + ":\n\n" + "\n\n".join(blocks)}
+    except Exception as error:      # noqa: BLE001  a snapshot is an addition; its failure never stops the turn
+        log.info("portfolio snapshot not built: %s: %s", type(error).__name__, error)
         return None

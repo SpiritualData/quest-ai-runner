@@ -306,5 +306,21 @@ class RunFacts:
 
 
 def end_report_data(result: Any) -> Dict[str, Any]:
-    """The end facts of a finished turn (an ``OrchestratorResult``), for its terminal report; ``{}`` when it has none."""
-    return end_facts(getattr(result, "deep_results", None) or [])
+    """The end facts of a finished turn (an ``OrchestratorResult``), for its terminal report; ``{}`` when it has none.
+
+    A turn with no deep run that ran out of attempts (``turn_outcome``: stopped, ``attempt_cap``) has its own end facts: ``end_reason`` ``attempt_cap`` and ``left``,
+    the answer verdict's account of what the goal still needs, so the screen says what is left and not only that the tries ran out."""
+    facts = end_facts(getattr(result, "deep_results", None) or [])
+    if facts or getattr(result, "deep_results", None):
+        return facts
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
+    outcome = turn_outcome(result)
+    if outcome.get("outcome") != "stopped" or outcome.get("stop_reason") != "attempt_cap":
+        return {}
+    verdict = getattr(result, "goal_verdict", None)
+    verdict = verdict if isinstance(verdict, dict) else {}
+    out: Dict[str, Any] = {"end_reason": "attempt_cap"}
+    left = " ".join(str(verdict.get("next_action") or verdict.get("reason") or "").split())[:LEFT_CHARS]
+    if left:
+        out["left"] = left
+    return out

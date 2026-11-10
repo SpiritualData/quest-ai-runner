@@ -97,6 +97,58 @@ def _safe_event_title(cm: Dict[str, Any]) -> str:
     return raw
 
 
+SCOPE_QUEST_PREFIX = "quest:"       # ``recent_context.quest_scope_key``: the scope tag of a card about one quest
+DESCRIPTION_CHARS = 200
+
+
+def _card_item_types(cm: Dict[str, Any]) -> List[str]:
+    """The types of the card's content items, from the assembled items or the card's own ``content_items``."""
+    found: List[str] = []
+    for it in list(cm.get("items") or []) + list(cm.get("content_items") or []):
+        if isinstance(it, dict) and str(it.get("type") or ""):
+            found.append(str(it.get("type")))
+    return found
+
+
+def card_quest_id(cm: Dict[str, Any]) -> str:
+    """The quest a card belongs to: its own ``quest_id``, else the quest an item points at (``locator.quest_id``), else its ``quest:<id>`` scope tag; "" when none."""
+    own = str(cm.get("quest_id") or "").strip()
+    if own:
+        return own
+    for it in list(cm.get("items") or []) + list(cm.get("content_items") or []):
+        locator = it.get("locator") if isinstance(it, dict) and isinstance(it.get("locator"), dict) else {}
+        if str(locator.get("quest_id") or "").strip():
+            return str(locator["quest_id"]).strip()
+    tags = [str(t) for t in (cm.get("scope_tags") or []) if str(t).startswith(SCOPE_QUEST_PREFIX)]
+    return tags[0][len(SCOPE_QUEST_PREFIX):] if len(tags) == 1 else ""
+
+
+def card_kind(cm: Dict[str, Any]) -> str:
+    """What a card IS, one of ``CARD_KINDS``, from its structure (its own fields and the types of its content items), never from its text.
+
+    A card managed from a quest, or with a quest item, is ``quest``; a ``conversation`` item makes ``conversation``; a ``goal`` or ``note`` item
+    makes that kind; a card that names files (documentation) or is typed ``guide`` is a ``guide``; anything else is ``other``."""
+    types = _card_item_types(cm)
+    if str(cm.get("managed_by") or "") == "quest" or "quest" in types:
+        return "quest"
+    for kind in ("goal", "note", "conversation"):
+        if kind in types:
+            return kind
+    if str(cm.get("card_type") or "") == "guide" or cm.get("files") or cm.get("item_file_paths"):
+        return "guide"
+    return "other"
+
+
+def _card_description(cm: Dict[str, Any], title: str, kind: str) -> str:
+    """The card's own description, one short line that is not its title. Empty for a conversation card (its description quotes the person's words)."""
+    if kind == "conversation" or str(cm.get("adapter") or "").strip().lower() in ("turn", "recent"):
+        return ""
+    text = re.sub(r"\s+", " ", str(cm.get("description") or "")).strip()
+    if not text or text.lower().startswith(title.lower().rstrip(".")) and len(text) <= len(title) + 3:
+        return ""
+    return text[:DESCRIPTION_CHARS - 3].rstrip() + "..." if len(text) > DESCRIPTION_CHARS else text
+
+
 def _project_sources_for_event(sources: List[Any]) -> List[Any]:
     """Project retrieval ``sources`` into a shape safe to stream. Never raises.
 
@@ -153,6 +205,13 @@ def _project_card_metadata_for_event(card_meta: List[Dict[str, Any]]) -> List[Di
                 "files": cm.get("files"),
                 "adapter": cm.get("adapter", ""),
             }
+            proj["kind"] = card_kind(cm)
+            quest_id = card_quest_id(cm)
+            if quest_id:
+                proj["quest_id"] = quest_id
+            description = _card_description(cm, proj["title"], proj["kind"])
+            if description:
+                proj["description"] = description
             name = re.sub(r"\s+", " ", str(cm.get("name") or "")).strip()
             if name and str(cm.get("adapter") or "").strip().lower() != "turn":
                 proj["name"] = name[:80]     # the card's own short name; ``title`` can be a slice of the card's text

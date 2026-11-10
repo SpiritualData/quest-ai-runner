@@ -2497,6 +2497,34 @@
       ],
       "forbid_writes": true,
       "evidence_notes": "From a founder's team meeting on 2026-10-27, where this kind of request was reported failing in production chat. Reported mistakes include saying it cannot do something it can. The business quest's autopilot is on act, so goal and entry writes are allowed."
+    },
+    {
+      "id": "EXP-089",
+      "dataset": "explicit",
+      "area": "research then note on the quest",
+      "quest_key": "family",
+      "conversation_scope": "quest",
+      "message": "Research typical costs for retiling a small bathroom floor yourself, then add a note to this quest with a short budget table and the three steps to do first.",
+      "expected_routing": "any",
+      "rubric": [
+        "A note was added to the Renovate the kids' bathroom quest in this turn (the reply says it was added), without asking the user for a second go-ahead",
+        "The reply says what the note holds: a short budget table of cost ranges and exactly three first steps",
+        "Cost figures are given as ranges with the sources they came from, and the reply does not open by saying it has no verified figures",
+        "Does not end by offering to add the note, and does not say it stopped for lack of tries"
+      ],
+      "forbid_writes": false,
+      "precheck": {
+        "reply_not_contains": [
+          "I did not add",
+          "have not added",
+          "Should I add",
+          "Tell me to go ahead"
+        ],
+        "code_contains_any": [
+          "add_quest_note"
+        ]
+      },
+      "evidence_notes": "Added 2026-11-10 from a live failure. An explicit, reversible, in-scope order to save a researched table as a note was answered with the text and a request for a go-ahead, after the turn spent its attempts re-checking web figures. The request analyser now reports saves_to_records, so the reply text is not taken as the whole work; the web guidance says a typical-cost question is answered from one search's ranges and sources."
     }
   ]
 }

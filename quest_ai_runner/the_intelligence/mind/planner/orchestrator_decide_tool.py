@@ -193,8 +193,8 @@ DECIDE_TOOL: Dict[str, Any] = {
                 "type": ["string", "null"],
                 "enum": ["quest_data", "code_or_files", "draft_in_chat", "other", None],
                 "description": "On every decision for a request to DO something (and always when action='deep' or deferred_deep is set): WHAT the change "
-                               "lands on. 'draft_in_chat' = the deliverable is text written in the reply (a caption, post, email, outline, plan): "
-                               "answered inline, never a deep run. 'quest_data' = the person's own Quest records and "
+                               "lands on. 'draft_in_chat' = the deliverable is text written in the reply (a caption, post, email, outline, plan) and nothing is ordered saved: "
+                               "answered inline, never a deep run. A message that also orders the text added or saved in their records (a note, goal or entry) is 'quest_data'. 'quest_data' = the person's own Quest records and "
                                "fields (the quest's outcome or vision statement, measurable "
                                "outcomes, acceptance criteria, current state, preferences, "
                                "goals, habits, collection entries): these change through "

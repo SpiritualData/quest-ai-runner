@@ -59,8 +59,10 @@ def test_the_snapshot_holds_the_live_key_measure_the_priorities_in_ladder_order_
 def test_the_analyser_reports_the_status_shape_and_the_spoken_delivery_as_fields_not_filters():
     _, constraints = parse_goal_condition_reply('A script.\n{"asks_status": true, "read_aloud": true, "actor": "me"}')
     flags, rest = take_status_flags(constraints)
-    assert flags == {"asks_status": True, "read_aloud": True, "writes_text": False} and rest == {"actor": "me"}
-    assert take_status_flags(None)[0] == {"asks_status": False, "read_aloud": False, "writes_text": False}
+    assert flags == {"asks_status": True, "across_quests": False, "saves_to_records": False, "read_aloud": True, "writes_text": False} and rest == {"actor": "me"}
+    assert take_status_flags(None)[0] == {"asks_status": False, "across_quests": False, "saves_to_records": False, "read_aloud": False, "writes_text": False}
+    _, constraints = parse_goal_condition_reply('Which goal comes first.\n{"asks_status": true, "across_quests": true}')
+    assert take_status_flags(constraints)[0]["across_quests"] is True
     _, constraints = parse_goal_condition_reply('An Instagram post about the product.\n{"writes_text": true}')
     flags, rest = take_status_flags(constraints)
     assert flags["writes_text"] is True and rest is None
@@ -229,3 +231,42 @@ def test_a_request_the_analyser_reads_as_status_but_the_reach_judge_reads_as_a_c
                         config=OrchestratorConfig(overseer=True, planner_reach_judge=True, read_reach_summary="the quest's own records"))
     res = orch.run("can we get the first item moving?", mode=Mode.LIVE, sink=RecordingSink(), quest_id="q1", context_meta={"user_id": "u1"})
     assert not any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered) and provider.planner_calls >= 1
+
+
+def test_the_portfolio_snapshot_reads_the_open_goals_of_every_quest_soonest_due_first_and_none_when_nothing_is_open():
+    registry = Registry()
+    quests = status_snapshot.reachable_quests(registry)
+    snap = status_snapshot.portfolio(registry, quests)
+    text = snap["text"]
+    assert snap["locator"] == "status_snapshot" and "OF THE ASKER'S QUESTS TOGETHER" in text
+    assert "Quest: Reach the target" in text and "Quest: Another aim" in text
+    assert text.index("Unrelated task") < text.index("Second milestone next step")      # due 2026-10-01 leads the later due days
+    assert status_snapshot.portfolio(registry, []) is None and status_snapshot.portfolio(None, quests) is None
+    GOALS_BACKUP = list(GOALS)
+    GOALS.clear()
+    try:
+        assert status_snapshot.portfolio(registry, quests) is None      # no open goal anywhere: nothing to show
+    finally:
+        GOALS.extend(GOALS_BACKUP)
+
+
+def test_a_question_across_the_askers_quests_reads_their_goals_whether_or_not_a_quest_is_open_and_never_asks_which_quest():
+    message = "look at my quests and tell me which one goal i should work on first this week"
+    for quest_id in (None, "q1"):
+        abstain = Placement([])
+        provider, res = run_status('Which goal comes first.\n{"asks_status": true, "across_quests": true}', message, quest_id=quest_id, placement=abstain)
+        assert not abstain.asked and provider.planner_calls == 0 and res.kind == "answer"
+        snapshot = next(o["text"] for o in res.gathered if "STATUS SNAPSHOT" in o.get("text", ""))
+        assert "Quest: Reach the target" in snapshot and "Quest: Another aim" in snapshot
+        assert provider.writer_prompts and "STATUS FROM A SNAPSHOT" in provider.writer_prompts[0] and "asker's quests together" in provider.writer_prompts[0]
+
+
+def test_an_across_quests_question_whose_goals_cannot_be_read_goes_to_the_planner_not_to_a_question_about_which_quest():
+    GOALS_BACKUP = list(GOALS)
+    GOALS.clear()
+    try:
+        abstain = Placement([])
+        provider, res = run_status('Which goal comes first.\n{"asks_status": true, "across_quests": true}', "which goal should i work on first?", quest_id=None, placement=abstain)
+        assert not abstain.asked and provider.planner_calls >= 1
+    finally:
+        GOALS.extend(GOALS_BACKUP)

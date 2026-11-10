@@ -764,6 +764,10 @@ class AssemblyMixin:
                 "files": display_files,
                 "adapter": "keyword",
                 "items": item_blocks,
+                # What the card says about itself, passed through for the explanation panel (``card_kind`` reads them; a card that has none adds none).
+                "description": str(card.get("description") or ""),
+                "managed_by": str(card.get("managed_by") or ""),
+                "quest_id": str(card.get("quest_id") or ""),
                 # OPTIONAL card taxonomy fields, passed through verbatim when the card carries them
                 # (a card is a plain dict; a consumer is free to type and version its own cards).
                 # ``card_type`` lets a consumer tell TOPIC cards apart from its other card kinds

@@ -560,3 +560,28 @@ def test_the_flag_off_leaves_a_turn_with_metrics_exactly_as_it_was(world):
     result = orch.run("please do the thing", mode=Mode.LIVE, sink=sink, context_meta={"task_id": TASK})
     assert EVENT_EXPLANATION not in sink.types() and result.explanation is None and provider.explain_prompts == []
     assert result.metric_results == [LEDGER_ENTRY], "the result and the events still carry them"
+
+
+def test_each_used_card_names_what_it_is_the_quest_it_belongs_to_and_a_description_of_its_own_beside_the_old_keys():
+    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event
+    metas = [
+        {"id": "card:quest-q1", "title": "Renovate the bathroom", "adapter": "keyword", "managed_by": "quest", "quest_id": "q1",
+         "description": "Tile the floor before the visit. Two goals are overdue.", "items": [{"id": "quest-state", "type": "quest", "locator": {"quest_id": "q1"}}]},
+        {"id": "recent-q2", "title": "Candle shop launch", "adapter": "recent",
+         "items": [{"id": "x", "type": "collection"}, {"id": "quest-state", "type": "quest", "locator": {"quest_id": "q2"}}]},
+        {"id": "conv-c1", "title": "Add a goal to my fitness quest", "adapter": "keyword", "scope_tags": ["quest:q3"],
+         "description": "User: add a goal\nAI: done", "items": [{"id": "c", "type": "conversation", "locator": {"conv_id": "c1"}}]},
+        {"id": "first-quest-walkthrough", "title": "Introduces what Quest is", "adapter": "keyword", "files": ["getting-started/index.md"],
+         "description": "Walks a new person through their first quest."},
+        {"id": "topic:general", "title": "General chat", "adapter": "keyword"},
+    ]
+    trace = trace_from_result(__import__("types").SimpleNamespace(kind="answer", text="a"), user_message="m", goal_condition="g", cards=_project_card_metadata_for_event(metas))
+    by_id = {c["id"]: c for c in render_used(trace)["cards"]}
+    assert {i: c["kind"] for i, c in by_id.items()} == {"card:quest-q1": "quest", "recent-q2": "quest", "conv-c1": "conversation", "first-quest-walkthrough": "guide", "topic:general": "other"}
+    assert by_id["card:quest-q1"]["quest_id"] == "q1" and by_id["recent-q2"]["quest_id"] == "q2" and by_id["conv-c1"]["quest_id"] == "q3"
+    assert "quest_id" not in by_id["first-quest-walkthrough"]
+    assert by_id["card:quest-q1"]["description"].startswith("Tile the floor")
+    assert by_id["first-quest-walkthrough"]["description"].startswith("Walks a new person")
+    assert "description" not in by_id["conv-c1"]      # a conversation card's description quotes the person's own words
+    assert "description" not in by_id["topic:general"]
+    assert all(c["title"] and c["adapter"] for c in by_id.values())      # the old keys stay

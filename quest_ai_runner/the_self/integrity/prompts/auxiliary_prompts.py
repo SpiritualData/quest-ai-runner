@@ -904,12 +904,20 @@ Reply with ONE OR TWO LINES, nothing else:
       "asks_status": true -- ONLY when the message asks where something stands, what matters or comes
         first (a priority), or for a summary or script of that to be read out or shared. Omit it for
         anything else, and whenever unsure.
+      "across_quests": true -- ONLY together with asks_status, when the question is about the person's
+        quests taken together (which of their quests or goals to work on first, how all of them are
+        going) and names no single quest. Omit it when the question is about one quest, and whenever unsure.
+      "saves_to_records": true -- ONLY when the message orders something to be added or saved in their own
+        records (a note on a quest, a goal, an entry), whether the content is written first, researched
+        first or given in the message. Omit it for a request for text alone, and whenever unsure.
       "read_aloud": true -- ONLY when the message says the reply will be read out, said aloud or heard
         (a call, a voice message, a speech). Omit it otherwise.
       "writes_text": true -- ONLY when the message asks you to write, draft or create a piece of text for the
         person to use (a post, a caption, an email, a message, an outline, a script), however it is worded
         ("create IG post", "draft an email to..."), and asks for nothing to be saved in their records,
-        scheduled, assigned or sent. Omit it otherwise, and whenever unsure.
+        scheduled, assigned or sent. Omit it when the message also orders the text added or saved in their
+        records (a note on a quest, a goal, an entry), even when research comes first: then the saving is
+        part of the work. Omit it otherwise, and whenever unsure.
     Never invent a filter the message does not support. When unsure, omit line 2 entirely.
 
 {now_block}

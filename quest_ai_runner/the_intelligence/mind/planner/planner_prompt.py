@@ -108,7 +108,7 @@ CONTEXT, nor when they fully specified the thing or told you to go ahead on your
 they only say they do not know where to start (their records name the next step: choose "answer" and leave
 `asks_first` false). Which of their own quests, goals or milestones comes first is not a fact only they hold: their records mark
 what is active and at risk, so answer with the one the records point to, its figure and its date, say it is your pick when they
-have ranked nothing, and never ask which quest they mean.
+have ranked nothing, and never ask which quest they mean. When CONTEXT lists the quests but not their open goals, "read" those goals first (list_operations, then the goals of each quest); never answer that you cannot see their quests and never ask them to paste the list.
 LOOK BEFORE YOU ASK FOR MATERIAL. Never ask the person to paste, find or name something you have not looked for. When they
 name a person, a meeting, a document or a time ("the transcript from yesterday"), read every source in reach for it first (a find by
 name or by date, a grep, a listing of the folder that holds such files). Then the reply gives the best next step from what you DID
@@ -452,7 +452,9 @@ ANSWER_ACTION = """\
     either: read the file that holds the fact, then answer. An answer that says you will open or
     check something is a failure; the read is the action.
     Use "answer" to INFORM (explain, summarize, advise) AND to WRITE text the reply itself can carry (a caption, a post, an email, an outline, a
-    plan: deep_target "draft_in_chat"). If the user asked you to CHANGE
+    plan: deep_target "draft_in_chat"). When the message ALSO orders that text to be added or saved in their records (a note on the quest, a goal, an entry),
+    the reply is not the whole work: deep_target is "quest_data", and after the reads you make the write with the tool that records it (the table and steps in
+    the note's text), then answer saying what was added. Never ask whether to add what they already told you to add. If the user asked you to CHANGE
     something (create/add/update/edit/delete/mark/set/rename their data or artifacts, OR fix/
     implement/build/refactor CODE OR FILES), that is an ACTION -- do NOT just describe the change in
     an answer; choose "deep" so the change is actually proposed/made. Describing a mutation in prose,
@@ -511,7 +513,7 @@ DEEP_ACTION = """\
     saying which were already there and which were created. The FINAL reply puts, next to each alternative, its hypothesis and the metric they are
     compared by (the metric's own unit, such as replies per message).
     DELIVERABLE IN THE REPLY. When it is several versions of one thing for a quest (two posts, three headlines), each has a one-line hypothesis and the metric they are compared by, and the quest keeps them (code records each as a goal and adds what was already tracked). Never put a price, plan name or date in the copy unless the context holds it as a fact for this purpose. A request to write something (a caption, a post, an email, an outline) is answered with the text itself in the reply:
-    set deep_target to "draft_in_chat" and choose "answer". Set deep_target on every decision for a request to do something.
+    set deep_target to "draft_in_chat" and choose "answer", unless the message also orders it saved in their records (a note, a goal, an entry): then deep_target is "quest_data" and the write is made with its tool. Set deep_target on every decision for a request to do something.
     DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
     change lands on. "quest_data" = the person's own quest records and fields -- the quest's
     outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),
@@ -793,7 +795,8 @@ DEEP_FOR_TOOL_WORK_NOTE = (
     "(for example list the workflows, read the spec records, list the goals); then make the write keyed by exact title or record id, "
     "and report whether it was created, updated or already there. "
     "An order to WRITE something (a post, a caption, an email, an outline) is not a change to the records: the text itself is the work, so answer with it "
-    "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it.")
+    "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it. "
+    "When the order also says to add or save that text in their records (a note on the quest), the write is the work: make it with its tool, with the text in the call.")
 
 ACT_WITHOUT_TOOL_NOTE = (
     "ORDER NOT CARRIED OUT: your user_intent is act, you chose to answer, and nothing has been changed this turn, while a tool in the TOOLS block can "
@@ -802,7 +805,8 @@ ACT_WITHOUT_TOOL_NOTE = (
     "title or record id, and report whether it was created, updated or already there. If no tool can do it, or the order is not the person's to give "
     "here, answer and say why. "
     "An order to WRITE something (a post, a caption, an email, an outline) is not a change to the records: the text itself is the work, so answer with it "
-    "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it.")
+    "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it. "
+    "When the order also says to add or save that text in their records (a note on the quest), the write is the work: make it with its tool, with the text in the call.")
 
 DEEP_FOR_CODE_CHECK_NOTE = (
     "CHECK THE DEEP TARGET: you chose a deep run on code or files. Before it starts, check whether the request is really a cue about a quest's "
@@ -846,7 +850,8 @@ STATUS_SNAPSHOT_DIRECTIVE = """\
 A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only: open with the key measure's value and the date it was read, then the one or two
 priorities that matter most (or the asker's own, when the question is about their own work) with their due days. Name the date of every figure. Leave out anything
 older than the snapshot (earlier campaigns, old notes, earlier replies) unless the question asked for it, add nothing the snapshot does not hold, and keep to the
-length for this kind of reply. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
+length for this kind of reply. When the snapshot is of the asker's quests together, there is no key measure to open with: name the one goal asked for (or the few asked for) with
+its quest, due day and the reason from the snapshot's goals, in the length for this kind of reply. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
 next step and by when. End on the last fact: no offer, no question and no list beyond what was asked. Never use an em dash.
 """
 

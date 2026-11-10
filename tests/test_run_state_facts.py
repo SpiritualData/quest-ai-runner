@@ -401,3 +401,14 @@ def test_a_resume_with_no_handle_is_not_claimed_and_an_ordinary_task_is_untouche
     assert orch.kwargs["resume_session_id"] is None and "RESUME" not in orch.brief
     orch, _ = execute({"text": "grow the list", "resume_session_id": "sess-7", "result_data": {"resume_handle": "sess-9"}})
     assert orch.kwargs["resume_session_id"] == "sess-7" and "RESUME" not in orch.brief
+
+
+def test_a_turn_with_no_deep_run_that_ran_out_of_attempts_reports_the_end_reason_and_what_is_left():
+    from types import SimpleNamespace
+    from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_report_data
+    verdict = {"met": False, "reason": "The note was not added to the quest.", "next_action": ""}
+    stopped = SimpleNamespace(deep_results=[], goal_verdict=verdict)
+    assert end_report_data(stopped) == {"end_reason": "attempt_cap", "left": "The note was not added to the quest."}
+    unconfirmed = SimpleNamespace(deep_results=[], goal_verdict={"met": False, "blocker": "evidence_only", "reason": "x"})
+    assert end_report_data(unconfirmed) == {}      # a complete reply with a part not confirmed is not a stop
+    assert end_report_data(SimpleNamespace(deep_results=[], goal_verdict={"met": True})) == {}

@@ -565,15 +565,15 @@ class RunLoopMixin:
                         gathered.append(planner_note_observation(handoff_gate.steps_note(missing), "handoff_steps_missing"))
                         emit.status("Completing the hand-off…")
                         continue
-            if getattr(rs.plan, "deep_target", None) == "draft_in_chat":
+            if getattr(rs.plan, "deep_target", None) == "draft_in_chat" and not getattr(rs, "saves_to_records", False):      # a text that is also ordered saved is not the whole work
                 rs.draft_in_chat = True
-            if (getattr(rs, "writes_text", False) and message_is_user_turn and rs.cue_resolved is None
+            if (getattr(rs, "writes_text", False) and not getattr(rs, "saves_to_records", False) and message_is_user_turn and rs.cue_resolved is None
                     and (rs.plan.action in ("deep", "confirm") or (rs.plan.action == "tool" and mutating_call_count(self, rs.plan.tool_calls or []) > 0))):
                 # The analyser reported a request for a piece of text and nothing else: a write, task or deep run does not stand in for the text. Reads stay.
                 log.info("Draft request: the planner chose %s for a request to write text; answering with the text", rs.plan.action)
                 rs.plan.action, rs.plan.tool_calls, rs.plan.deferred_deep, rs.plan.deep_brief = "answer", [], None, ""
                 rs.plan.deep_target = "draft_in_chat"
-            elif getattr(rs, "writes_text", False) and rs.plan.action == "answer" and rs.cue_resolved is None:
+            elif getattr(rs, "writes_text", False) and not getattr(rs, "saves_to_records", False) and rs.plan.action == "answer" and rs.cue_resolved is None:
                 rs.plan.deep_target = "draft_in_chat"      # the answer is the piece: the reply standard for a deliverable, not a two-sentence report
             if (getattr(rs, "draft_in_chat", False) and step >= 2 and rs.plan.action in ("read", "tool")
                     and not any(getattr(self.tools.get(str((c or {}).get("name") or "")), "mutates", False) for c in (rs.plan.tool_calls or []) if self.tools is not None)):

@@ -184,6 +184,7 @@ class RunBeginMixin:
         rs.turn_delivery: Optional[str] = None
         rs.turn_needs_records: Optional[bool] = None
         rs.status_snapshot = False             # a code-composed snapshot is in the gathered reads and the plan is forced to answer from it
+        rs.saves_to_records = False      # the request analyser's report: the message orders something added or saved in the person's records, so the reply text is not the whole work
         rs.writes_text = False      # the request analyser's report: the message asks for a piece of text to use and nothing else (set after understanding)
         rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
         rs.records_free = False
@@ -552,6 +553,7 @@ class RunBeginMixin:
             # The resolved request goes to the same analyser a self-contained message gets, for its writes_text report only: a request for a piece of text that
             # took this branch (a short message) was otherwise answered with questions instead of the piece.
             analysed = take_status_flags(self._derive_goal_condition(rs.goal_condition or rs.user_message, now=now)[1])[0]
+            rs.saves_to_records = bool(analysed.get("saves_to_records"))
             if analysed.get("writes_text") and rs.message_is_user_turn and not attachments:
                 rs.draft_in_chat = True
                 rs.writes_text = True
@@ -594,12 +596,28 @@ class RunBeginMixin:
             rs.turn_needs_records, rs.retrieval_constraints = take_needs_records(rs.retrieval_constraints)
             rs.turn_information_only, rs.retrieval_constraints = take_information_only(rs.retrieval_constraints)
             status_flags, rs.retrieval_constraints = take_status_flags(rs.retrieval_constraints)
+            rs.saves_to_records = bool(status_flags.get("saves_to_records"))
             if status_flags.get("writes_text") and rs.message_is_user_turn and not attachments:
                 # The analyser's structured report: the person asked for a piece of text to use and nothing else. The deliverable is the reply (``draft_in_chat``):
                 # no tool write, task or deep run stands in for it (``orchestrator_run_loop``), and the writer is told to write it in full.
                 rs.draft_in_chat = True
                 rs.writes_text = True
             if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
+                    and status_flags["asks_status"] and status_flags["across_quests"] and not self.reach_asks_change(rs.user_message)):
+                # A question about the asker's quests TOGETHER (the analyser's structured ``across_quests`` report, with the status shape): no one quest is the subject, whether or
+                # not the chat is pinned to one, so it is neither placed on a quest nor answered by asking which one. The open goals of every quest they can reach are read now
+                # by code into one dated snapshot and the reply is written from it. A snapshot that cannot be read leaves the turn to the planner, which reads the goals itself.
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+                emit.status("Reading your quests and goals…")
+                portfolio = status_snapshot.portfolio(self.tools, status_snapshot.reachable_quests(self.tools))
+                log.info("Status turn across the asker's quests: snapshot %s", "read" if portfolio is not None else "not read")
+                if portfolio is not None:
+                    rs.gathered.append(portfolio)
+                    rs.status_snapshot = True
+                    rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
+                                                   rationale="A question across the asker's quests: answered from the snapshot of their goals read for this turn.")
+            if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
+                    and not status_flags["across_quests"]
                     and (status_flags["asks_status"] or self.reach_asks_status(rs.user_message)) and not self.reach_asks_change(rs.user_message)):
                 # Two structured reports decide it: a status shape from either the analyser or the reach verdict, and no change asked for in the reach verdict
                 # ("can we get X moving?" reads as status to the analyser and as a change to the reach judge: it is work, not a status answer).
@@ -786,7 +804,7 @@ class RunBeginMixin:
         rs.cue_resolved = None
         rs.cue_gap = ""
         rs.cue_step_attempted = False
-        rs.draft_in_chat = bool(getattr(rs, "writes_text", False))      # set when a plan (or the analyser) reports a deliverable written in the reply
+        rs.draft_in_chat = bool(getattr(rs, "writes_text", False)) and not rs.saves_to_records      # set when a plan (or the analyser) reports a deliverable written in the reply
         if rs.message_is_user_turn and rs.quest_id and self.tools is not None and rs._forced_plan is None and not rs.turn_information_only:      # a question only asks to be told: no cue to find
             try:
                 rs.cue_resolved = milestone_cue.resolve(self.tools, rs.quest_id, rs.user_message, decide=self.cheap_decision)

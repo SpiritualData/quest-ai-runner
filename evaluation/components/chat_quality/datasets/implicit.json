@@ -1202,5 +1202,31 @@
       ]
     },
     "evidence_notes": "Added 2026-10-06 (Opus review, third pass). The two multi-turn implicit cases that existed (IMP-045, IMP-046) both test holding a SEEDED fact under user pressure in the very next turn. This tests the other failure, which is the one QAR has actually shipped bugs on: a fact the USER supplied has to survive an unrelated turn in between. Turn 2 is a deliberate topic switch whose only job is to push turn 1 out of the immediate window; an assistant that answers turn 3 purely from the quest note offers a session this week and fails item 2, and one that answers only from the conversation offers any day in a fortnight and fails item 3. Both halves are needed, which is the point. The reply_regex is deliberately loose (tue|thu) so 'Tue' or 'Thursday' both match."
+  },
+  {
+    "id": "IMP-049",
+    "dataset": "implicit",
+    "area": "which goal first across quests",
+    "quest_key": "business",
+    "conversation_scope": "none",
+    "message": "Look at my quests and tell me which one goal I should work on first this week, and why.",
+    "expected_routing": "inline",
+    "rubric": [
+      "Names exactly ONE goal as the one to work on first, and it is a goal that really exists on one of the user's quests (its title as the records hold it), not an invented one",
+      "Gives a reason taken from the records: the goal's due date, that it is overdue, or what else depends on it",
+      "Does not say it cannot see, has not looked up or does not have the user's quests or goals, and does not ask the user to paste, list or send them",
+      "Does not ask which quest the user means and does not answer with only a question"
+    ],
+    "forbid_writes": true,
+    "forbidden_side_effects": "Must not create or change a goal, note, task or quest field.",
+    "precheck": {
+      "reply_not_contains": [
+        "paste",
+        "can't see your quests",
+        "cannot see your quests",
+        "haven't looked up"
+      ]
+    },
+    "evidence_notes": "Added 2026-11-10 from a live failure. The question spans the user's quests, so no one quest is its subject: the turn has to read the open goals of every quest the user can reach, then name one goal with a reason. Failure seen: the turn treated it as a status question needing a placed quest, asked nothing, read nothing and told the person to paste their list after an opening line that promised to look."
   }
 ]
