@@ -86,6 +86,16 @@ def test_an_explicit_choice_wins(programs, picks):
     assert resolve_deep_runner(cfg(deep_runner=None)) is None
 
 
+def test_the_hubs_own_loop_runs_only_when_named(programs):
+    from hubofhubs.api import choose_agent_arm
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner
+    runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "hub_loop"}))
+    assert type(runner) is HubLoopRunner and HubLoopRunner.on_trial
+    assert runner.goal_settings().escalation_marker                 # QAR's settings, not the hub's empty defaults
+    for difficulty in ("", "hard"):                                  # the hub's real standings never hand a consumer a harness on trial
+        assert choose_agent_arm(["anthropic"], difficulty=difficulty).harness != "solution_loop_runner"
+
+
 def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, picks, monkeypatch):
     table, _ = picks
     assert type(resolve_deep_runner(cfg(deep_providers=["openai"]))) is SubprocessGoalRunner   # nothing eligible: the default

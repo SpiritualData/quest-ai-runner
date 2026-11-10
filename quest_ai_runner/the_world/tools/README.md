@@ -92,6 +92,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | MCP operation writer | `write-through-mcp:mcp` | [quest_ai_runner/the_world/tools/connected_system_operations/mcp_write_adapter.py](connected_system_operations/mcp_write_adapter.py) |  |
 | Agent-protocol deep runner | `delegated-agent-sessions:acp` | [quest_ai_runner/the_world/tools/delegated_agent_sessions/acp_deep_runner.py](delegated_agent_sessions/acp_deep_runner.py) |  |
 | Persistent stream-json runner | `delegated-agent-sessions:stream_json` | [quest_ai_runner/the_world/tools/delegated_agent_sessions/goal_runner_stream.py](delegated_agent_sessions/goal_runner_stream.py) |  |
+| Hub's own tool loop | `delegated-agent-sessions:hub_loop` | [quest_ai_runner/the_world/tools/delegated_agent_sessions/hub_loop_runner.py](delegated_agent_sessions/hub_loop_runner.py) |  |
 | Contained backed-up writer | `file-editing:files` | [quest_ai_runner/the_world/tools/file_editing/files_writer.py](file_editing/files_writer.py) |  |
 
 

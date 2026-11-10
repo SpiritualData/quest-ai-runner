@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Deep runner `hub_loop`: the hub's own tool loop with this runner's settings, on trial. It is never chosen automatically; a lane runs it only when its configuration names it (`selections["delegated-agent-sessions"] = "hub_loop"`).
 - Creating specification runs on the balanced tier (`SPEC_TIER`): a new solution with its problem, ideal and milestone, and the ways a solution can be carried out. Classifying among recorded solutions and scoring stay on the cheap tier.
 - The file trail of deep runs is kept and read by solution first (the solution a milestone work record names, and the folder's recorded solutions a goal concerns), then by quest for work that names none.
 
