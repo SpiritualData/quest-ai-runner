@@ -29,13 +29,15 @@ from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_z
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import MAX_INSTRUCTIONS_CHARS
 from quest_ai_runner.the_intelligence.proactivity.autopilot_work import WorkMixin
 from quest_ai_runner.the_intelligence.proactivity.quest_schedule import due
+from quest_ai_runner.the_self.integrity.prompts.prompt_specs import US_SPELLING_RULE
 
 log = logging.getLogger("quest-ai-runner.autopilot")
 
 OPTED_IN_MODES = ("suggest", "act", "reactive")
 DEFAULT_GRACE_MINUTES = 360
 # The one place the writing rule for every routine's work text is stated.
-NO_EM_DASH_RULE = "Write no em dashes anywhere (notes, records, decision requests): use a colon, a comma, parentheses or a new sentence."
+NO_EM_DASH_RULE = ("Write no em dashes anywhere (notes, records, decision requests): use a colon, a comma, parentheses or a new sentence. "
+                   + US_SPELLING_RULE)
 
 
 @dataclass(frozen=True)

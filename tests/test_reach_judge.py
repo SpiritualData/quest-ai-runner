@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import AssembledContext
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE
+from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE
 from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import provider_call_accepts_tier
 from quest_ai_runner.the_intelligence.mind.planner.reach_judge import (
@@ -296,7 +296,7 @@ def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
     prompt_default = judge_prompt("check the latest score", "a short summary")
     # Unchanged apart from the no-em-dash rule every registered prompt now carries.
     assert prompt_default == (_PRE_CHANGE_JUDGE_PROMPT_NO_WEB + ASKS_CHANGE_PARAGRAPH + NEEDS_RECORDS_PARAGRAPH
-                              + ASKS_OWN_UPDATES_PARAGRAPH + ASKS_STATUS_PARAGRAPH + "\n" + NO_EM_DASH_RULE)
+                              + ASKS_OWN_UPDATES_PARAGRAPH + ASKS_STATUS_PARAGRAPH + "\n" + NO_EM_DASH_RULE + "\n\n" + US_SPELLING_RULE)
     prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
                                          web_configured=False)
     assert prompt_explicit_false == prompt_default

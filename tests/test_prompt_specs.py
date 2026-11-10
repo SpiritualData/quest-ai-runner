@@ -13,7 +13,7 @@ from esoi import intents
 
 import quest_ai_runner
 from quest_ai_runner.the_self.integrity.prompts import prompt_specs
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, PromptSpec, render_prompt
+from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE, PromptSpec, render_prompt
 
 REPO = Path(__file__).resolve().parent.parent
 PACKAGE = REPO / "quest_ai_runner"
@@ -139,7 +139,8 @@ def test_render_carries_the_no_em_dash_rule_once_and_checks_inputs():
     spec = PromptSpec(id="t.demo", solution="s", metric="m", tier="fast", cache_layer="none",
                       template="Say hi to {name}.", inputs=("name",))
     text = spec.render(name="Ann")
-    assert text.endswith(NO_EM_DASH_RULE) and text.count(NO_EM_DASH_RULE) == 1
+    assert text.endswith(NO_EM_DASH_RULE + "\n\n" + US_SPELLING_RULE) and text.count(NO_EM_DASH_RULE) == 1
+    assert text.count(US_SPELLING_RULE) == 1
     assert spec.render(name="Ann") == text
     with pytest.raises(ValueError):
         spec.render()

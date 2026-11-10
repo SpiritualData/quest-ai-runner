@@ -25,7 +25,7 @@ implicit in its call site:
 registered spec id (or sit in the shrinking baseline of sites not yet migrated), and every spec
 must name a real solution and one of its metrics.
 
-The mechanics (``PromptSpec``, ``PromptRegistry``, the no-em-dash rule) are the hub's, ``hubofhubs.models.prompt_spec``. What stays
+The mechanics (``PromptSpec``, ``PromptRegistry``, the no-em-dash and American-spelling rules) are the hub's, ``hubofhubs.models.prompt_spec``. What stays
 here is QAR's binding: its tier names (``model_registry.TIERS``) and its usage log (``usage.tag_spec``), injected into the hub's
 spec class, and the one registry every QAR prompt joins. No model call is made here and nothing here knows an org.
 """
@@ -42,6 +42,8 @@ CACHE_LAYERS = hub.CACHE_LAYERS
 CALLER_TIER = hub.CALLER_TIER
 NO_EM_DASH_RULE = hub.NO_EM_DASH_RULE
 with_no_em_dash_rule = hub.with_no_em_dash_rule
+US_SPELLING_RULE = hub.US_SPELLING_RULE
+with_us_spelling_rule = hub.with_us_spelling_rule
 
 # The hub's spec class bound to QAR's tier names and usage log: each render tags the model call that follows.
 PromptSpec = hub.bind_spec_class(TIERS, tag_spec)

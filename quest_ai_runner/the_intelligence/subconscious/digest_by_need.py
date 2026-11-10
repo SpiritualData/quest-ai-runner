@@ -36,7 +36,7 @@ from hubofhubs.api import card_selection
 
 from quest_ai_runner.the_intelligence.subconscious.digest_prompts import records_block
 from quest_ai_runner.the_self.integrity.prompts.prompt_layers import PromptLayers
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, render_prompt
+from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE, render_prompt
 from quest_ai_runner.the_intelligence.subconscious.digest_sources import (
     STATUS_ANALYSED, STATUS_CACHED, STATUS_DIRECT, STATUS_FAILED, STATUS_NOTHING, STATUS_SKIPPED, UNREAD_STATUSES, DigestCache, DigestResult, GroupResult,
     MemoryDigestCache, SourceGroup, Unit)
@@ -121,7 +121,7 @@ class Digester:
 
     def read_window(self, need: str, background: str, window: Window) -> None:
         head = render_prompt("digest-records-for-a-need.digest-head", need=need, background=background or "(none given)", finding_chars=self.caps["finding_chars"],
-                             max_findings=self.caps["max_findings"], no_em_dash=NO_EM_DASH_RULE)
+                             max_findings=self.caps["max_findings"], no_em_dash=f"{NO_EM_DASH_RULE} {US_SPELLING_RULE}")
         tail = render_prompt("digest-records-for-a-need.digest-group", group_title=window.group.title, records=records_block([(u.source_id, u.text) for u in window.units]))
         prompt = PromptLayers(head=head, tail=tail)
         try:

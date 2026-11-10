@@ -10,6 +10,8 @@ import re
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from quest_ai_runner.the_self.integrity.prompts.prompt_specs import US_SPELLING_RULE
+
 
 log = logging.getLogger("quest-ai-runner.milestone-progress")
 
@@ -50,7 +52,7 @@ DEPTH_CALLS = 16       # the depth loop's call budget for one unit (work and che
 RECORD_CHARS = 1500
 
 
-NO_EM_DASH = "Do not use em dashes."
+NO_EM_DASH = f"Do not use em dashes. {US_SPELLING_RULE}"
 
 
 TO_BE_DECIDED = "to be decided"
