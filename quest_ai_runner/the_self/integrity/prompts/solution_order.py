@@ -8,8 +8,3 @@ SOLUTION_ORDER_RULE = (
     "depend on comes before them. Place a new solution by that priority, never by appending it. Elaborate a solution "
     "only through a sub-intent (an implementation of it), never by linking solutions to a parent solution."
 )
-
-APPLICATION_QUESTIONS_RULE = (
-    "Keep Application Questions simple (they ask for the choice and do not restate ideals or metrics) and complete "
-    "together: once every question of an intent is answered with confidence, no further choice may remain."
-)
