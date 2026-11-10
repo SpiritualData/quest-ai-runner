@@ -69,3 +69,14 @@ def test_commands_get_the_lane_environment_the_requester_and_the_run_and_no_nest
     env = loop.child_environment(loop.goal_settings(), "user_7", "run_9")
     assert env["QUEST_API_KEY"] == "key-from-the-lane" and env["QAR_REQUESTER_USER_ID"] == "user_7" and env["PYTHONUNBUFFERED"] == "1"
     assert "ANTHROPIC_API_KEY" not in env and "CLAUDECODE" not in env and "run_9" in env.values()
+
+
+def test_a_follow_up_with_the_same_run_id_or_an_explicit_session_resumes_through_the_binding(tmp_path):
+    first = Script("RUN: echo one\nSTATE: learned: the code is 4417\n", "RUN: echo two\n")
+    runner(tmp_path, first, []).run_goal(goal="Work", run_id="task-1", max_turns=2)
+    second = Script("REPORT: ok\n")
+    deep = runner(tmp_path, second, []).run_goal(goal="Work, with what was missing", run_id="task-1", max_turns=2)
+    assert deep.met and "the code is 4417" in second.prompts[0] and deep.end_reason == "met"
+    third = Script("REPORT: ok\n")
+    runner(tmp_path, third, []).run_goal(goal="Work", run_id="task-2", resume_session_id="task-1")
+    assert "the code is 4417" in third.prompts[0]
