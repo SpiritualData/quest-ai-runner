@@ -36,6 +36,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Hand Off A Goal (solution with no page of its own, its implementations are in this intent's records): Gives a person the verdicts on who a new goal belongs to and whether an AI representative can take it over at a cost and delay that its metric accepts.
 - Guide By Feedback (solution with no page of its own, its implementations are in this intent's records): Help the assistant stop repeating a mistake a person has already corrected, so they only have to say it once.
 - Prioritization (solution with no page of its own, its implementations are in this intent's records)
+- Terminal Experience (solution with no page of its own, its implementations are in this intent's records)
 - [Feedback Learning](feedback_learning/README.md) (solution with implementations)
 
 ## Solutions at a glance
@@ -49,6 +50,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Hand Off A Goal | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
 | Prioritization | `prioritization` | no entry declared | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
+| Terminal Experience | `terminal-session` | no entry declared | none selected | The terminal meets the requirements of working with the AI while it works |
 | Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ## Solutions from a library
@@ -59,6 +61,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - [Representatives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`hand-off-a-goal`): The AI personas that act for a person or a team. Specializes the library `hub`.
 - [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`guide-by-feedback`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Specializes the library `hub`.
 - [Prioritization](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`prioritization`): The one solution that orders, for a person, the three things that compete for their attention: the work the AI is about to start unasked (tasks, standing-work triggers), the asks the AI puts to the person (questions, decisions and approvals waiting for them), and the person's own goals, which in the hub are the milestones of the solutions of their intents. Adopted from the library `hub`.
+- [Terminal Experience](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/ai_session_experience/README.md) (`terminal-session`): Lets a person work with the AI from a plain terminal: converse with the hub line by line, or watch any harness live, with each step and helper in place, Escape to stop and keep the session, resume, a correction shown as sent and taken up, a risky step waiting for y or n, the structure of the work as lines, and the closing report. Adopted from the library `hub`.
 - [Feedback Learning](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_consciousness/README.md) (`feedback-learning`): Applies a person's feedback to the specs and metrics, not to the instructions of every task, so a correction given once is followed afterwards. Adopted from the library `hub`.
 
 ## Problems and ideals
@@ -121,6 +124,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Hand Off A Goal | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
 | Prioritization | `prioritization` | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
+| Terminal Experience | `terminal-session` | none selected | The terminal meets the requirements of working with the AI while it works |
 | Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ### Implementations

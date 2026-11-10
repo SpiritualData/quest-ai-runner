@@ -37,5 +37,5 @@ waits for approval inside the run (X9) and a question answered while the run goe
 6. **AI task modal.** Stop there is an undo and pause or resume lives only on the live card. Route its progress kinds through the same events and show Stop,
    Resume and Steer from the one control set, with changed files and cost in the finished view. Gain: X4, X5, X10.
 
-The hub's reference terminal (`python -m hubofhubs.the_consciousness.terminal.live --demo loop`) is the proof that a screen drawn only from the contract
+The hub's reference terminal (`python -m hubofhubs.the_consciousness.ai_session_experience.terminal_experience.live --demo loop`) is the proof that a screen drawn only from the contract
 works for the hub's own loop and for a stream session alike; this repository keeps its Textual screen and its settings.

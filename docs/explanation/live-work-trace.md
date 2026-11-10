@@ -1,6 +1,6 @@
 # Live work trace: showing the AI's work to the person, as it happens
 
-Status: the contract (hub `hubofhubs.the_consciousness.terminal.trace`), the QAR emit (`quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py`), the backend forward and persist
+Status: the contract (hub `hubofhubs.the_consciousness.ai_session_experience.terminal_experience.trace`), the QAR emit (`quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py`), the backend forward and persist
 and the frontend Trail are built. Real turns on the Claude Code subscription (web, the person's own records, scholarly papers, a
 shared thread) were run on 2026-11-01 and the arms are measured by `metric-work-trace-experience` (solution `show-the-ais-work`; see
 "First real runs" at the end). Background-task cards and other locales are not built. Working name for the feature in the app: "Trail".
@@ -94,7 +94,7 @@ field cannot leak by accident. It also trims labels to 80 chars and strips newli
 Where it is emitted (the seam, not each arm):
 
 - New constant `EVENT_WORK_TRACE = "work_trace"` in `hubofhubs/the_world/tools/events.py`, LIVE only (like
-  `exec`, it is not in `SURFACING_EVENTS`), plus a small `hubofhubs/the_consciousness/terminal/trace.py` holding the
+  `exec`, it is not in `SURFACING_EVENTS`), plus a small `hubofhubs/the_consciousness/ai_session_experience/terminal_experience/trace.py` holding the
   dataclass, the allowlist projector and a validator. This keeps the contract public and reusable.
 - QAR emits at the tool-registry seam, where every hub call already passes (and where the tool
   ledger records results). Derive events from the structural result of the call, not from model
@@ -115,7 +115,7 @@ Where it is emitted (the seam, not each arm):
 
 Contract changes: none to the field names. Additions that are not fields: the wire frame, the opt-in and the persisted shape.
 
-- Hub: `hubofhubs.the_consciousness.terminal.trace` (`WorkTraceEvent`, `project`, `validate`, `WorkTrace`), `EVENT_WORK_TRACE`, and the JSON schema
+- Hub: `hubofhubs.the_consciousness.ai_session_experience.terminal_experience.trace` (`WorkTraceEvent`, `project`, `validate`, `WorkTrace`), `EVENT_WORK_TRACE`, and the JSON schema
   `docs/reference/work-trace-event.schema.json` in the hub. `kind` and `solution_id` are validated as well-formed slugs, not
   against a closed list, so an unknown one still reaches the screen as a generic row. A `counts.failed` count is allowed.
 - QAR opt-in: `context_meta["work_trace"] = {"audience": "owner" | "shared"}` (optional `trace_id`). Without it nothing is
@@ -242,7 +242,7 @@ Phase 0 (not part of this build): frontend slice using frames that already exist
   Check the `frontend` tmux window for errors. Ship only if it replaces `ContextCardsDisplay` cleanly.
 
 Phase 1: contract in the hub (public repo `ai-hub-of-hubs-structure`).
-- Files: `hubofhubs/the_consciousness/terminal/trace.py`, `hubofhubs/the_world/tools/events.py` (new constant), a JSON schema
+- Files: `hubofhubs/the_consciousness/ai_session_experience/terminal_experience/trace.py`, `hubofhubs/the_world/tools/events.py` (new constant), a JSON schema
   under `docs/reference/`, tests with fake solutions: projector drops every field not on the
   allowlist, caps items, strips URLs to domains, rejects bad `state`.
 

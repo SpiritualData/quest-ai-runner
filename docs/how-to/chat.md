@@ -278,7 +278,7 @@ Click and drag selects text without holding Shift; Ctrl+C copies the selection (
 ## See the AI's work, its updates, its questions and a stopped reply
 
 The chat shows what the AI did for a reply and when it needs you. What is shown, and the words, come from the hub's terminal
-renderers (`hubofhubs.the_consciousness.terminal`, see `docs/how-to/render-a-run-in-a-terminal.md` in the hub), the same rules and sentences the Quest app uses.
+renderers (`hubofhubs.the_consciousness.ai_session_experience.terminal_experience`, see `docs/how-to/render-a-run-in-a-terminal.md` in the hub), the same rules and sentences the Quest app uses.
 
 - **While it works**, one dim row above the status line names the newest page it opened ("Opened blog.rust-lang.org"). It shows nothing
   until a page is really open.

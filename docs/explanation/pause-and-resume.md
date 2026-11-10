@@ -35,7 +35,7 @@ This remembers WHAT WAS DISCUSSED; it holds no plan, partial output or tool resu
 
 **Stream reconnect, events, caches.** Backend `stream_registry.py` (`InFlightStreamRegistry`, keyed by conversation, user,
 message hash, short TTL) re-attaches a retry to a running stream: a dropped socket, not a return an hour later. Trail events
-come from `core/work_trace.py` (`TurnTrace`), are projected by `hubofhubs/the_consciousness/terminal/trace.py` (`project`: bounded text, URLs to
+come from `core/work_trace.py` (`TurnTrace`), are projected by `hubofhubs/the_consciousness/ai_session_experience/terminal_experience/trace.py` (`project`: bounded text, URLs to
 domains, `viewer_may_see_titles`) and persisted by the backend; interims and asks are built behind a flag. The terminal's
 `_DeepRunTracker` (`interactive_session_tracker.py`) is an in-memory view model only. Caches: hub `WebCache` (LRU 512
 entries, per-entry TTL, disk tier: entry-count bounded, no byte budget, no user namespace), `CachedDbAdapter`, the hub
