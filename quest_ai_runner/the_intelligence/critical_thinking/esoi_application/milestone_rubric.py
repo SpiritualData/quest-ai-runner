@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from quest_ai_runner.the_self.integrity.prompts.solution_order import SOLUTION_ORDER_RULE
+from hubofhubs.api import prompt_spec as hub_prompt_spec
 from .milestone_facts import GROUNDING_CHARS, RECORD_CHARS, clip_line, log, parse_json, squash, without_ids
 
 
@@ -387,7 +387,7 @@ def ensure_solution(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: C
     its approach and milestone, and its problem and ideal as records of their own linked by id, all through ``spec_edit.apply(record_add)``. A missing or
     placeholder field is not written, never made up by code. ``{"id", "row", "created"}``, or None when no kind was named or the solution could not be made."""
     records = str(getattr(cue, "records_text", "") or "")[:RECORD_CHARS]
-    data = parse_json(decide(KIND_PROMPT.format(order_rule=SOLUTION_ORDER_RULE, item=item.get("name"), milestone=cue.name, records=f"The milestone's own records:\n{records}\n" if records else "")))
+    data = parse_json(decide(KIND_PROMPT.format(order_rule=hub_prompt_spec.SOLUTION_ORDER_RULE, item=item.get("name"), milestone=cue.name, records=f"The milestone's own records:\n{records}\n" if records else "")))
     kind = field_text(data.get("name") or data.get("kind")).strip(" .")
     if not kind:
         return None
@@ -415,9 +415,12 @@ def ensure_solution(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: C
         if value:
             fields[column] = value
     fields.update(links)
+    before_name = field_text(data.get("before"))
+    before_id = next((str(rid) for rid, row in (getattr(cue, "tables", None) or {}).get("solutions", {}).items() if before_name and field_text(row.get("name")).casefold() == before_name.casefold()), "")
+    if before_id:
+        fields["before"] = before_id        # Quest places the new solution before this one (by id); a name it does not hold is left out
     answer = spec_edit.apply({"edit": {"kind": "record_add", "table": "solutions", "key": name, "fields": fields}})
     sid = str(answer.get("target") or "")
     if not answer.get("applied") or not sid:
         return None
-    # Where it belongs by priority: the record is added at the end (Quest's record_add takes no position), so the place is kept for the caller to state.
-    return {"id": sid, "row": fields, "created": bool(answer.get("created", True)), "before": field_text(data.get("before"))}
+    return {"id": sid, "row": fields, "created": bool(answer.get("created", True)), "before": before_name}

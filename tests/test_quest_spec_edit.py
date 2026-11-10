@@ -27,8 +27,9 @@ class FakeQuest:
         self.calls.append("get")
         return {"subjectType": subject_type, "subjectId": subject_id, "records": [dict(r) for r in self.records.values()]}
 
-    def create_spec_record(self, subject_type, subject_id, record_type, fields):
+    def create_spec_record(self, subject_type, subject_id, record_type, fields, *, before=None):
         self.calls.append("create")
+        self.before = before
         if not self.autopilot:
             return {"refused": True, "status": 403, "code": "FORBIDDEN", "message": "Autopilot is off for this quest", "lockedFields": []}
         record_id = "esr_new%d" % len(self.records)
@@ -77,6 +78,14 @@ def test_an_addition_creates_once_and_a_repeat_creates_nothing():
     assert [r for r in quest.records.values() if r["type"] == "implementation"].__len__() == 1 and quest.calls.count("create") == 1
 
 
+def test_a_new_solution_names_the_solution_it_comes_before_and_is_last_otherwise():
+    quest = FakeQuest()
+    arm(quest).apply(change(kind="record_add", table="solutions", key="Launch page", fields={"purpose": "Show it.", "before": "esr_s1"}))
+    assert quest.before == "esr_s1" and "before" not in quest.records["esr_new3"]["fields"]
+    arm(quest).apply(change(kind="record_add", table="solutions", key="Last one", fields={"purpose": "Close."}))
+    assert quest.before is None
+
+
 def test_a_milestone_is_added_once_and_keeps_the_ones_already_met():
     quest = FakeQuest()
     add = change(kind="milestone_add", target="esr_s1", key="Ten signups.", fields={"metric": "esr_m1"})
@@ -106,3 +115,20 @@ def test_permission_denied_is_reported_plainly_and_nothing_is_created():
 def test_a_missing_record_and_an_empty_key_are_refused_by_the_hub_edit():
     assert arm().apply(change(kind="spec_edit", target="esr_none", field="purpose", value="x"))["applied"] is False
     assert arm().apply(change(kind="record_add", table="metrics", key="", fields={"name": "x"}))["applied"] is False
+
+
+def test_the_client_sends_before_in_the_body_only_when_given():
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_intents import IntentsMixin
+    sent = []
+
+    class Client(IntentsMixin):
+        def __init__(self):
+            pass
+
+        def intent_write(self, method, path, body, **kwargs):
+            sent.append((method, path, body))
+            return {}
+    Client().create_spec_record("quest", "q1", "solution", {"name": "A"}, before="esr_s1")
+    Client().create_spec_record("quest", "q1", "solution", {"name": "B"})
+    assert sent[0][2] == {"type": "solution", "fields": {"name": "A"}, "before": "esr_s1"} and sent[0][1].endswith("/specs/quest/q1/records")
+    assert "before" not in sent[1][2]

@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import quest_ai_runner
 from hubofhubs.api import ordered_ids
 
-from quest_ai_runner.the_self.integrity.prompts.solution_order import SOLUTION_ORDER_RULE
+from hubofhubs.api import prompt_spec as hub_prompt_spec
 
 log = logging.getLogger("quest_ai_runner.autopilot")
 
@@ -115,7 +115,7 @@ def render(spec: Dict[str, Any], picked: Optional[Tuple[Dict[str, Any], Optional
                      + (" The runner already asked the server to refresh it." if refreshed else "")
                      + " Filling them is part of this run, but no tool creates a Solution or Metric on its own (the person "
                        "confirms them): write the proposed Solution (approach, next milestone, and a measurable Metric "
-                       "with number, source and date) in a quest note, and never over a field the person edited. " + SOLUTION_ORDER_RULE)
+                       "with number, source and date) in a quest note, and never over a field the person edited. " + hub_prompt_spec.SOLUTION_ORDER_RULE)
     if picked is None:
         lines.append("There is no Solution to iterate yet. Propose one with its Metric in a quest note (see the gaps), do "
                      "the quest's next goal work, and call record_metric_result with not_applicable and that reason.")

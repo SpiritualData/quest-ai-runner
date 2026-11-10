@@ -92,10 +92,10 @@ class IntentsMixin:
         return {"quest_id": quest_id, "records": refresh_metric_values(self, quest_id)}
 
     def create_spec_record(self, subject_type: str, subject_id: str, record_type: str, fields: Dict[str, Any],
-                           *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+                           *, before: Optional[str] = None, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """POST /api/intents/specs/{subjectType}/{subjectId}/records: one new record (problem, ideal, solution, implementation or metric) of
-        the specification. The server answers 403 when the quest's autopilot is off, and a record the AI writes stays the AI's."""
-        return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/records", {"type": record_type, "fields": fields},
+        the specification. ``before`` (a solution only) is the id of the existing solution the new one comes before in priority order; absent, it is last. The server answers 403 when the quest's autopilot is off, and a record the AI writes stays the AI's."""
+        return self.intent_write("POST", f"/api/intents/specs/{subject_type}/{subject_id}/records", {"type": record_type, "fields": fields, **({"before": before} if before else {})},
                                   human_statement=human_statement)
 
     def edit_spec_record(self, record_id: str, fields: Dict[str, Any], expected_revision: int,

@@ -62,3 +62,14 @@ def test_the_solution_prompt_carries_the_order_rule_and_the_place_by_priority_is
     assert "priority order for the intent" in prompts[0] and "never by appending" in prompts[0] and "sub-intent" in prompts[0]
     assert "—" not in prompts[0] and "before" in prompts[0]
     assert found["before"] == "Launch page"
+
+
+def test_the_named_solution_is_sent_to_quest_by_its_id_and_an_unknown_name_is_left_out():
+    edits = Edits()
+    cue_ = cue()
+    cue_.tables = {"solutions": {"esr_9": {"name": "Launch page"}}}
+    milestone_rubric.ensure_solution(cue_, {"name": "tutorial scripts"}, edits, lambda p: json.dumps({**FULL, "before": "launch PAGE"}))
+    assert edits.tables["solutions"]["Tutorial scripts"]["before"] == "esr_9"
+    edits = Edits()
+    milestone_rubric.ensure_solution(cue_, {"name": "tutorial scripts"}, edits, lambda p: json.dumps({**FULL, "before": "No such one"}))
+    assert "before" not in edits.tables["solutions"]["Tutorial scripts"]

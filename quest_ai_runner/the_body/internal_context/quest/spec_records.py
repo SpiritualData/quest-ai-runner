@@ -108,9 +108,11 @@ class QuestSpecRecords:
         for record_id, row in tables.get(table, {}).items():
             if same(row.get(column), key) and (table != "implementations" or not fields.get("solution_id") or row.get("solution_id") == fields["solution_id"]):
                 return {"status": "unchanged", "target": record_id}
+        before = str(fields.pop("before", "") or "").strip() if table == "solutions" else ""     # the solution it comes before, by record id: not a column
         written = {name: as_value(name, value) for name, value in fields.items()}
         written.setdefault(column, key)
-        answer = self.client.create_spec_record(self.subject_type, subject, RECORD_TYPES[table], written)
+        answer = (self.client.create_spec_record(self.subject_type, subject, RECORD_TYPES[table], written, before=before) if before
+                  else self.client.create_spec_record(self.subject_type, subject, RECORD_TYPES[table], written))
         return outcome(answer) or {"status": "applied", "target": answer.get("recordId") or key}
 
     def milestone(self, target: str, sentence: str, fields: Dict[str, Any]) -> Mapping[str, Any]:
