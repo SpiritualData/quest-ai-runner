@@ -343,10 +343,10 @@ def test_an_experiment_proposal_is_created_when_none_is_open_and_other_kinds_are
 
 
 def focus_row(**over):
-    base = dict(research_question_id="rq_focus", question="Is writing first helping?", focus="Write before any email",
-                phase="running", reevaluation_due=False, days_to_reevaluation=9, reevaluate_on="2026-11-19",
-                attention_user_ids=["user_2"], held_fixed=["Write 6 to 8 am", "Same chapter order"], inside=["Morning writing"],
-                left_out=["Changing the outline"], reevaluation_notes=[{"note_id": "n1", "text": "Try evenings", "at": "2026-11-10"}],
+    base = dict(research_question_id="rq_focus", question="Is writing first helping?", research_question="Write before any email",
+                phase="running", reevaluation_due=False, days_to_reevaluation=9, reevaluate_time="2026-11-19",
+                owner_user_ids=["user_2"], held_fixed=["Write 6 to 8 am", "Same chapter order"], in_scope=["Morning writing"],
+                outside_scope=["Changing the outline"], reevaluation_notes=[{"note_id": "n1", "text": "Try evenings", "at": "2026-11-10"}],
                 reevaluations=[])
     return running_row(**{**base, **over})
 
@@ -355,16 +355,16 @@ def test_trial_period_shows_focus_attention_held_fixed_and_the_date_in_the_promp
     rows = [DEFAULT_ROW, focus_row()]
     brief = experiments_brief_section(rows, quest_id=QUEST_ID)
     assert "Write before any email" in brief and "reevaluate on 2026-11-19" in brief
-    assert "held fixed until then (do not reopen): Write 6 to 8 am; Same chapter order" in brief and "left out for now: Changing the outline" in brief
-    assert "thoughts set aside for the reevaluation: Try evenings" in brief and "attention: user_2" in brief
+    assert "held fixed until then (do not reopen): Write 6 to 8 am; Same chapter order" in brief and "out of scope: Changing the outline" in brief
+    assert "thoughts set aside for the reevaluation: Try evenings" in brief and "owner: user_2" in brief
     assert "NOT re-decided until its reevaluation date" in brief and "REEVALUATION DUE:" not in brief
     block = render_experiments_block(rows)
     assert "**Held fixed until then (do not reopen):** Write 6 to 8 am; Same chapter order" in block and "**Status:** running (a trial period)" in block
 
 
 def test_a_due_reevaluation_comes_first_and_is_asked_for_not_recorded():
-    due = focus_row(research_question_id="rq_due", focus="Cold showers")
-    due.update(reevaluation_due=True, phase="reevaluating", reevaluate_on="2026-11-09")
+    due = focus_row(research_question_id="rq_due", research_question="Cold showers")
+    due.update(reevaluation_due=True, phase="reevaluating", reevaluate_time="2026-11-09")
     two = [focus_row(), due]
     text = experiments_brief_section(two, quest_id=QUEST_ID)
     assert "REEVALUATION DUE: 1 experiment(s)" in text and "experiment_reevaluation" in text and "Do not record the reevaluation yourself" in text
@@ -374,7 +374,7 @@ def test_a_due_reevaluation_comes_first_and_is_asked_for_not_recorded():
 
 def test_an_older_row_with_no_focus_fields_reads_as_before():
     old = running_row()
-    assert "focus:" not in render_experiments_brief([old]) and "[RUNNING, help carry it out]" in render_experiments_brief([old])
+    assert "research question:" not in render_experiments_brief([old]) and "[RUNNING, help carry it out]" in render_experiments_brief([old])
 
 
 def test_update_tool_refuses_to_reopen_what_a_running_experiment_holds_fixed_and_sets_the_thought_aside():

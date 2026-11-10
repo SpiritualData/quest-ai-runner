@@ -770,16 +770,16 @@
   {
    "id": "EXPT-027",
    "dataset": "explicit",
-   "area": "experiment focus",
+   "area": "experiment research question",
    "quest_key": "fitness",
    "expected_routing": "inline",
    "rubric": [
-    "Creates the experiment with the focus in the person's own framing (writing the training log each morning, how it changes their thinking about training)",
+    "Creates the experiment with the research question in the person's own framing (writing the training log each morning, how it changes their thinking about training)",
     "Holds the training schedule fixed in the experiment and sets a reevaluation about three weeks out, as the person said",
     "Does not add a number, metric, target or hypothesis the person never gave to this qualitative experiment",
     "Reports what it created honestly, matching what it did"
    ],
-   "evidence_notes": "A qualitative experiment: a focus and what is held fixed, with no forced metric.",
+   "evidence_notes": "A qualitative experiment: a research question and what is held fixed, with no forced metric.",
    "message": "Start an experiment on this quest: for the next three weeks I want to try writing my training log every morning before I look at anything else. I am not measuring anything, I just want to see how it changes how I think about training. Keep my training schedule fixed until then, and I will look back on it in three weeks.",
    "mutates": true,
    "precheck": {
@@ -796,7 +796,7 @@
   {
    "id": "EXPT-028",
    "dataset": "explicit",
-   "area": "experiment focus",
+   "area": "experiment research question",
    "quest_key": "fitness",
    "expected_routing": "inline",
    "rubric": [
@@ -822,7 +822,7 @@
   {
    "id": "EXPT-029",
    "dataset": "explicit",
-   "area": "experiment focus",
+   "area": "experiment research question",
    "quest_key": "fitness",
    "expected_routing": "inline",
    "rubric": [
@@ -847,11 +847,11 @@
   {
    "id": "EXPT-030",
    "dataset": "explicit",
-   "area": "experiment focus",
+   "area": "experiment research question",
    "quest_key": "fitness",
    "expected_routing": "inline",
    "rubric": [
-    "Lists both experiments as running at once, each with its own focus",
+    "Lists both experiments as running at once, each with its own research question",
     "Names what each one holds fixed or leaves out, without mixing the two up",
     "Does not claim either experiment has ended or has a number, metric or result it was never given"
    ],

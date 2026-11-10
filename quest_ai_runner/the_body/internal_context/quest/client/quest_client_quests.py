@@ -427,8 +427,8 @@ class QuestsMixin:
         ``fields`` are the endpoint's optional keys: ``context``, ``hypotheses`` (``[{statement, sub_question_id?}]``),
         ``purpose``, ``sub_questions`` (``[{question, answer_method?}]``), ``assumptions`` (list of str),
         ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date``,
-        ``conditions``, and the focused-attention keys ``focus``, ``attention_user_ids``, ``reevaluate_on``, ``reevaluate_when``,
-        ``held_fixed``, ``inside``, ``left_out`` and ``phase``. Raises like ``create_habit``.
+        ``conditions``, and the focused-attention keys ``research_question``, ``owner_user_ids``, ``reevaluate_time``, ``reevaluate_condition``,
+        ``held_fixed``, ``in_scope``, ``outside_scope`` and ``phase``. Raises like ``create_habit``.
         """
         body: Dict[str, Any] = {"question": question}
         body.update({k: v for k, v in fields.items() if v is not None})
@@ -451,7 +451,7 @@ class QuestsMixin:
         """POST /api/quests/{quest_id}/research-questions/{id}/reevaluate: record what the trial period taught and the decision.
 
         ``record``: ``learned`` (required), ``changed``, ``decision`` (``continue`` | ``change`` | ``end``), ``next_experiment``,
-        ``next_reevaluate_on`` (YYYY-MM-DD) and, for ``change``, ``changes`` (the focus keys to replace). Raises like ``create_habit``.
+        ``next_reevaluate_time`` (a date, YYYY-MM-DD, or a date and minute) and, for ``change``, ``changes`` (the field names to replace). Raises like ``create_habit``.
         """
         return self._write("POST", f"/api/quests/{quest_id}/research-questions/{research_question_id}/reevaluate", body=record,
                            label="Recording the reevaluation")

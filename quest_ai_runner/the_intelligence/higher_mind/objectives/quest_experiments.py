@@ -118,20 +118,21 @@ def is_due(exp: Dict[str, Any]) -> bool:
 
 
 def focus_lines(exp: Dict[str, Any], limit: int = 0) -> List[str]:
-    """What makes the experiment a trial period of focused attention, as short lines: the focus, whose attention, when it is reevaluated, what is held
-    fixed until then, what is inside and left out, thoughts set aside, and the last reevaluation. Empty for an experiment with none of it."""
+    """What makes the experiment a trial period of focused attention, as short lines: the research question, its owners, when it is reevaluated, what is held
+    fixed until then, what is in scope and out of scope, thoughts set aside, and the last reevaluation. Empty for an experiment with none of it."""
     out: List[str] = []
-    if clean_text(exp.get("focus")):
-        out.append(f"focus: {one_line(exp['focus'], limit)}")
-    if exp.get("attention_user_ids"):
-        out.append("attention: " + ", ".join(str(u) for u in exp["attention_user_ids"]))
+    if clean_text(exp.get("research_question")):
+        out.append(f"research question: {one_line(exp['research_question'], limit)}")
+    if exp.get("owner_user_ids"):
+        label = "owner" if len(exp["owner_user_ids"]) == 1 else "owners"
+        out.append(f"{label}: " + ", ".join(str(u) for u in exp["owner_user_ids"]))
     if is_due(exp):
-        out.append("REEVALUATION DUE" + (f" (set for {exp['reevaluate_on']})" if exp.get("reevaluate_on") else ""))
-    elif exp.get("reevaluate_on"):
-        out.append(f"reevaluate on {exp['reevaluate_on']}")
-    elif clean_text(exp.get("reevaluate_when")):
-        out.append(f"reevaluate when: {one_line(exp['reevaluate_when'], limit)}")
-    for label, key in (("held fixed until then (do not reopen)", "held_fixed"), ("inside", "inside"), ("left out for now", "left_out")):
+        out.append("REEVALUATION DUE" + (f" (set for {exp['reevaluate_time']})" if exp.get("reevaluate_time") else ""))
+    elif exp.get("reevaluate_time"):
+        out.append(f"reevaluate on {exp['reevaluate_time']}")
+    elif clean_text(exp.get("reevaluate_condition")):
+        out.append(f"reevaluate when: {one_line(exp['reevaluate_condition'], limit)}")
+    for label, key in (("held fixed until then (do not reopen)", "held_fixed"), ("in scope", "in_scope"), ("out of scope", "outside_scope")):
         items = [one_line(x, limit) for x in exp.get(key) or [] if clean_text(x)]
         if items:
             out.append(f"{label}: " + "; ".join(items))
@@ -364,7 +365,7 @@ def brief_entry(exp: Dict[str, Any], detail: bool) -> str:
     goals, colls = exp.get("linked_goal_ids") or [], exp.get("linked_collection_ids") or []
     if goals or colls:
         bits.append(f"collecting data through {len(goals)} goal(s) and {len(colls)} habit(s)/collection(s)")
-    elif phase_of(exp) != PHASE_ENDED and not is_default(exp) and not exp.get("focus"):
+    elif phase_of(exp) != PHASE_ENDED and not is_default(exp) and not exp.get("research_question"):
         bits.append("nothing is linked to collect its data yet")
     analyses = [a for a in (exp.get("analyses") or []) if isinstance(a, dict)]
     if analyses:
@@ -421,10 +422,10 @@ CARRY_FORWARD_TEXT = (
     "person decide.")
 
 FOCUSED_ATTENTION_TEXT = (
-    "A running experiment is a trial period of focused attention: its focus is where attention goes now (read it first, and keep your work "
+    "A running experiment is a trial period of focused attention: its research question is where attention goes now (read it first, and keep your work "
     "inside it), and what it holds fixed is NOT re-decided until its reevaluation date. Never reopen a held-fixed choice before then: say which "
     "experiment holds it and until when, and write the thought down as a note to weigh at the reevaluation instead. Never force a number onto a "
-    "qualitative focus.")
+    "qualitative research question.")
 
 REEVALUATION_DUE_TEXT = (
     "REEVALUATION DUE: {count} experiment(s) below have reached their reevaluation date. Raise ONE decision-request per due experiment (kind "

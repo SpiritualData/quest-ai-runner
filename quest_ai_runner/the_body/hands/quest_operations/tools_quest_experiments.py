@@ -26,19 +26,20 @@ from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 
 EXPERIMENT_STATUSES = ("open", "experimenting", "concluded")
 EXPERIMENT_PHASES = ("planned", "running", "reevaluating", "ended")
-#: The focused-attention keys of an experiment (a trial period): what is tried, whose attention, when it is reevaluated, what is held fixed, inside and left out.
-FOCUS_KEYS = ("focus", "attention_user_ids", "reevaluate_on", "reevaluate_when", "held_fixed", "inside", "left_out", "phase")
-_FOCUS_PARAMS = {
-    "focus": {"type": "string", "description": ("What is being tried, in one line and the person's framing: a question or a way of thinking. "
-                                                "Qualitative is fine; never invent a number or metric.")},
-    "attention_user_ids": {"type": "array", "items": {"type": "string"},
-                           "description": "Whose attention it directs (owner or team member user ids). Only if they named someone; empty means their own. On an edit the FULL list."},
-    "reevaluate_on": {"type": "string", "description": "YYYY-MM-DD when the trial period ends and it is reevaluated; '' clears."},
-    "reevaluate_when": {"type": "string", "description": "A condition in words, if they gave one instead of a date."},
+#: The focused-attention keys of an experiment (a trial period): its research question, its owners, when it is reevaluated, what is held fixed, in scope and out of scope.
+FOCUS_KEYS = ("research_question", "owner_user_ids", "reevaluate_time", "reevaluate_condition", "held_fixed", "in_scope", "outside_scope", "phase")
+FOCUS_PARAMS = {
+    "research_question": {"type": "string", "description": ("The research question this trial period explores, in one line and the person's own framing: "
+                                                            "a question or a way of thinking. Qualitative is fine; never invent a number or metric.")},
+    "owner_user_ids": {"type": "array", "items": {"type": "string"},
+                       "description": "Who owns it (owner or team member user ids). Only if they named someone; empty means their own. On an edit the FULL list."},
+    "reevaluate_time": {"type": "string", "description": ("When the trial period ends and it is reevaluated: a date (YYYY-MM-DD), or a date and minute "
+                                                          "(YYYY-MM-DD HH:MM); '' clears.")},
+    "reevaluate_condition": {"type": "string", "description": "A condition in words, if they gave one instead of a date."},
     "held_fixed": {"type": "array", "items": {"type": "string"},
                    "description": "What is set in stone until the reevaluation, as they said it. On an edit the FULL list."},
-    "inside": {"type": "array", "items": {"type": "string"}, "description": "What is inside this exploration. On an edit the FULL list."},
-    "left_out": {"type": "array", "items": {"type": "string"}, "description": "What is left out for now. On an edit the FULL list."},
+    "in_scope": {"type": "array", "items": {"type": "string"}, "description": "What is in scope for this exploration. On an edit the FULL list."},
+    "outside_scope": {"type": "array", "items": {"type": "string"}, "description": "What is out of scope for now. On an edit the FULL list."},
     "phase": {"type": "string", "enum": list(EXPERIMENT_PHASES)},
 }
 
@@ -157,14 +158,14 @@ def _experiment_line(row: Mapping[str, Any]) -> str:
             f"status {row.get('status')}"]
     if row.get("phase"):
         bits.append(f"phase {row['phase']}" + (" (reevaluation DUE)" if row.get("reevaluation_due") else ""))
-    if row.get("focus"):
-        bits.append(f"focus: {str(row['focus'])[:160]}")
-    if row.get("reevaluate_on"):
-        bits.append(f"reevaluate on {row['reevaluate_on']}")
+    if row.get("research_question"):
+        bits.append(f"research question: {str(row['research_question'])[:160]}")
+    if row.get("reevaluate_time"):
+        bits.append(f"reevaluate on {row['reevaluate_time']}")
     if row.get("held_fixed"):
         bits.append("held fixed until then: " + " | ".join(str(x)[:100] for x in row["held_fixed"]))
-    if row.get("left_out"):
-        bits.append("left out: " + " | ".join(str(x)[:100] for x in row["left_out"]))
+    if row.get("outside_scope"):
+        bits.append("out of scope: " + " | ".join(str(x)[:100] for x in row["outside_scope"]))
     if row.get("kind") == "default":
         bits.append("the quest's own question")
     if _hypotheses_of(row):
@@ -316,7 +317,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                                           "description": "Habit / collection ids that collect its data."},
                 "start_date": {"type": "string", "description": "YYYY-MM-DD, if given."},
                 "end_date": {"type": "string", "description": "YYYY-MM-DD, if given."},
-                **_FOCUS_PARAMS,
+                **FOCUS_PARAMS,
                 "user_asked_for_this_field": _EXPERIMENT_ASKED_PARAM,
             },
         },
@@ -373,13 +374,13 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                 f"person started. Use find_quest_experiments to find the experiment they mean. "
                 f"Pass confirm_default=true only when they are explicitly talking about the "
                 f"quest's own question."))
-        held = [k for k in ("held_fixed", "inside", "left_out", "reevaluate_on", "reevaluate_when", "focus", "attention_user_ids")
+        held = [k for k in ("held_fixed", "in_scope", "outside_scope", "reevaluate_time", "reevaluate_condition", "research_question", "owner_user_ids")
                 if k in changes and changes[k] != before.get(k)]
         if (held and before.get("phase") == "running" and before.get("held_fixed") and not note and not reevaluation
                 and not args.get("person_chose_to_reopen")):
             return ToolResult(ok=False, text=(
                 f"Not changed: experiment {rid} is running and holds {held} fixed until its reevaluation"
-                f"{' on ' + str(before['reevaluate_on']) if before.get('reevaluate_on') else ''}. Tell the person, and offer to set the "
+                f"{' on ' + str(before['reevaluate_time']) if before.get('reevaluate_time') else ''}. Tell the person, and offer to set the "
                 f"thought aside for the reevaluation (note_for_reevaluation). Pass person_chose_to_reopen=true only when they said they "
                 f"want to change it now anyway."))
         try:
@@ -444,11 +445,11 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                                           "description": "The FULL new list of linked habit / collection ids."},
                 "start_date": {"type": "string", "description": "YYYY-MM-DD, or '' to clear."},
                 "end_date": {"type": "string", "description": "YYYY-MM-DD, or '' to clear."},
-                **_FOCUS_PARAMS,
+                **FOCUS_PARAMS,
                 "note_for_reevaluation": {"type": "string", "description": ("A thought to set aside and weigh at the reevaluation instead of acting on it now. "
                                                                            "Use it when the person raises something a running experiment holds fixed.")},
                 "reevaluation": {"type": "object", "description": ("Record the reevaluation after the person said what they learned: {learned (required), changed, "
-                                                                   "decision: continue|change|end, next_experiment, next_reevaluate_on, changes (the focus keys to "
+                                                                   "decision: continue|change|end, next_experiment, next_reevaluate_time, changes (the field names to "
                                                                    "replace, for decision change)}.")},
                 "person_chose_to_reopen": {"type": "boolean", "description": "True only when the person said, in their own words, to change what a running experiment holds fixed now."},
                 "user_asked_for_this_field": _EXPERIMENT_ASKED_PARAM,
