@@ -910,6 +910,7 @@
   },
   "modules": {
    "brave": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
+   "claude_login": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
    "gemini": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
    "provider": "quest_ai_runner.the_world.tools.web_search.web_search_backends",
    "provider_web_search": "quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter",

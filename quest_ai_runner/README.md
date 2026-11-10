@@ -148,6 +148,7 @@ flowchart LR
 - Down: [quest_ai_runner/the_world/tools/connected_system_operations](the_world/tools/connected_system_operations/README.md)
 - Down: [quest_ai_runner/the_world/tools/delegated_agent_sessions](the_world/tools/delegated_agent_sessions/README.md)
 - Down: [quest_ai_runner/the_world/tools/file_editing](the_world/tools/file_editing/README.md)
+- Down: [quest_ai_runner/the_world/tools/web_search](the_world/tools/web_search/README.md)
 - Down: [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest](the_intelligence/higher_mind/objectives/place_on_a_quest/README.md)
 - Repository: [top README](../README.md)
 

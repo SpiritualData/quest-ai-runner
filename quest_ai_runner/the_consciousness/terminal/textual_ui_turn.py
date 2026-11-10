@@ -19,7 +19,7 @@ from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
     HangingText, _build_shallow_context_bullets, context_block_lines, indented_line, metric_groups, person_line, plural, working_notes_in)
 from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import (
     MAX_AUTO_PASSES, OUTCOME_FINISHED, OUTCOME_LIMIT, allows_second_pass, closing_text, launch_failure_lines, limit_lines, limit_reset, model_text,
-    provider_error_lines, speaker_label, turn_outcome, turn_work)
+    provider_error_lines, result_items, speaker_label, turn_outcome, turn_work)
 
 
 class TurnMixin:
@@ -797,6 +797,8 @@ class TurnMixin:
             else:
                 parts.append((text, style))
                 parts.append((took, "dim"))
+        for item in result_items(deep_results):
+            parts.append((item, "dim"))
 
         if verbose:
             steps = getattr(final, "steps", 0)

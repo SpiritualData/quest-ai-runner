@@ -86,6 +86,7 @@ Steps for a task you already know you want to do.
 Why it is built this way, and the design record behind each part.
 
 - **[Live work trace ("Trail")](explanation/live-work-trace.md)**: the typed, reader-safe account of the work a turn did, its contract, privacy rule and build state
+- **[The terminal and the hub's session contract](explanation/terminal-and-the-session-contract.md)**: what the terminal has against the hub's events and controls, and the steps that make the terminal, Quest AI chat and the task modal consume one contract
 - **[Incremental replies and asks](explanation/incremental-replies-and-asks.md)**: say what is done, why more is coming and ask when blocked: the contract, the structural policy and the build state (shipped off)
 - **[Hub of hubs](explanation/hub-of-hubs.md)**: why QAR builds on open-source hubs, how to add a tool server, agent,
   model vendor or search backend by configuration with no code, and the status of each area.

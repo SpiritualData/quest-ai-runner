@@ -96,7 +96,7 @@ def test_the_hubs_own_loop_runs_only_when_named(programs):
         assert choose_agent_arm(["anthropic"], difficulty=difficulty).harness != "solution_loop_runner"
 
 
-def test_the_hubs_own_loop_is_handed_the_web_only_when_a_search_backend_is_configured(monkeypatch):
+def test_the_hubs_own_loop_is_handed_the_web_through_the_lanes_search_backend(monkeypatch):
     from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
     from quest_ai_runner.the_world.tools.web_search import web_research
 
@@ -106,11 +106,28 @@ def test_the_hubs_own_loop_is_handed_the_web_only_when_a_search_backend_is_confi
 
         def fetch(self, url, focus=None):
             return type("O", (), {"error": "blocked", "text": None, "hits": []})()
-    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env: None)
+    # adapted: the builder is also called with ``provider=`` for the login fallback, so the stand-ins accept it (nothing at all stays empty)
+    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env, provider=None: None)
     assert hub_loop_runner.web_tools({}) == {}
-    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env: Research())
+    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env, provider=None: Research())
     tools = hub_loop_runner.web_tools({})
     assert tools["web_search"].run(" tide pools ") == "results for tide pools" and tools["read_page"].run("https://example.org why") == "error: blocked"
+
+
+def test_with_no_search_backend_the_loop_searches_through_the_claude_code_login(monkeypatch):
+    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
+    asked = []
+
+    def web_search(self, query, *, model="", max_results=5, instruction=None):
+        asked.append(query)
+        return {"answer": "", "results": [{"title": "Python", "url": "https://www.python.org/downloads/", "snippet": "Download", "date": ""}]}
+    monkeypatch.setattr(ClaudeCliProvider, "web_search", web_search)
+    tools = hub_loop_runner.web_tools({})                      # no search key in this environment
+    assert set(tools) == {"web_search", "read_page"}
+    assert "https://www.python.org/downloads/" in tools["web_search"].run("latest python") and asked == ["latest python"]
+    assert hub_loop_runner.web_tools({"WEB_SEARCH_ENABLED": "false"}) == {}      # the existing switch turns the fallback off too
+    assert hub_loop_runner.web_tools({"QAR_WEB_SEARCH_BACKEND": "claude_login", "WEB_SEARCH_ENABLED": "off"}) == {}
 
 
 def test_the_hubs_own_loop_is_handed_the_lanes_skills(tmp_path):

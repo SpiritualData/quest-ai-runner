@@ -18,6 +18,7 @@ from hubofhubs.api import SearchBackend  # noqa: F401
 from hubofhubs.api import backends as hub_backends
 from hubofhubs.api import FallbackSearchBackend, dotted, fill, gemini_api_key_from_env, load_file_specs
 from hubofhubs.api import GeminiGroundingBackend as HubGeminiBackend
+from hubofhubs.api import ClaudeLoginBackend as HubClaudeLoginBackend
 
 from quest_ai_runner.the_self.assembler.resolve import SCOPE, resolve
 
@@ -55,6 +56,12 @@ class SearxngBackend(hub_backends.SearxngBackend):
 @implementation("web-search", "provider")
 class ProviderNativeBackend(hub_backends.ProviderNativeBackend):
     """The hub's provider-native backend under QAR's ``search-the-web`` solution."""
+
+
+@implementation("web-search", "claude_login")
+class ClaudeLoginBackend(HubClaudeLoginBackend):
+    """The hub's keyless search through the Claude Code login, under QAR's ``search-the-web`` solution; chosen only by name
+    (``QAR_WEB_SEARCH_BACKEND=claude_login``) or by the hub loop when the lane has no search backend."""
 
 
 @implementation("web-search", "gemini")

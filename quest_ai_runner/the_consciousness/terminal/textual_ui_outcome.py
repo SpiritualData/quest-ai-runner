@@ -73,6 +73,28 @@ def turn_outcome(final: Any) -> Optional[str]:
     return OUTCOME_STOPPED
 
 
+MAX_FILES_NAMED = 3
+
+
+def result_items(results: Any) -> List[str]:
+    """The closing-line items a person weighs a finished run by, from what the runs themselves reported: the cost (only when a run reported one, never
+    shown as zero) and the files changed (the first few named). Nothing is claimed that no run reported."""
+    cost = sum(float(getattr(r, "cost_usd", 0.0) or 0.0) for r in results or [])
+    changed: List[str] = []
+    for r in results or []:
+        for note in getattr(r, "observations", None) or []:
+            name = str(note)[len("changed "):] if str(note).startswith("changed ") else ""
+            if name and name not in changed:
+                changed.append(name)
+    items: List[str] = []
+    if cost > 0:
+        items.append(f"${cost:.2f}" if cost >= 0.01 else f"${cost:.4f}")
+    if changed:
+        named = ", ".join(changed[:MAX_FILES_NAMED]) + (f" and {len(changed) - MAX_FILES_NAMED} more" if len(changed) > MAX_FILES_NAMED else "")
+        items.append(f"{len(changed)} file{'' if len(changed) == 1 else 's'} changed: {named}")
+    return items
+
+
 def allows_second_pass(final: Any) -> bool:
     """False when something other than "nothing ran" is why the work did not run.
 

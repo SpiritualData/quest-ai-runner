@@ -69,7 +69,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Quest answers that name the person's goal and circumstance and fit features to them (`metric-quest-answer-tied-to-goal-and-circumstance`): leader `reference_script`, 13 of 13 cases
 - Day-with-Jarvis turns right end to end (`metric-jarvis-ness`): leader `reference_script`, 13 of 13 cases
 - Asks filed and deletes held before anything outward or irreversible happens (`metric-jarvis-floor-consent`): leader `reference_script`, 13 of 13 cases
-- and 7 more: all 17 are in [metrics](#metrics) of the full record below
+- and 8 more: all 18 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -159,6 +159,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - The terminal shows the AI's work with the hub's rules and words, and keeps no copy (`metric-terminal-uses-hub-renderers`): `python3 -m pytest tests/test_terminal_trail.py tests/test_terminal_uses_hub_renderers.py`
 - Supported first beats within the time and cost the turn allows (`metric-narrate-a-turn`): `esoi run narrate_a_turn --impl model_beat`
 - Requests routed to what they ask for (`metric-route-a-request`): `esoi run route_a_request --impl planner_derived --sample 3 --max-calls 3; esoi run route_a_request --impl single_classifier --sample 3 --max-calls 3; esoi run route_a_request --impl majority_floor`
+- The terminal meets the requirements of working with the AI while it works (`metric-terminal-requirements`): `python3 -m pytest -s tests/test_terminal_requirements.py`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

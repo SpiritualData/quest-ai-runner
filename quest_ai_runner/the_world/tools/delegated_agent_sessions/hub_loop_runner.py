@@ -34,15 +34,29 @@ class HubLoopRunner(HubSolutionLoopRunner):
         return goal_settings()
 
 
+def claude_login_research(env: Mapping[str, str]) -> Any:
+    """A web research adapter that searches through the Claude Code login (QAR's Claude CLI provider), for a lane with no search backend; None
+    when web search is disabled (``WEB_SEARCH_ENABLED``) or the adapter cannot be built."""
+    try:
+        from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+        from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
+        from quest_ai_runner.the_world.tools.web_search.web_search_backends import QAR_KEYS
+        return build_web_research_from_env({**env, QAR_KEYS.backend: "claude_login"}, provider=ClaudeCliProvider())
+    except Exception:  # noqa: BLE001 -- a lane that cannot build it still runs deep work
+        return None
+
+
 def web_tools(env: Mapping[str, str]) -> Dict[str, Tool]:
-    """The live web as tools for the loop, when this deployment has a search backend configured (else none): ``web_search`` takes a query,
-    ``read_page`` takes a URL, optionally followed by a space and what to look for in the page. Both go through QAR's web research adapter, so its
-    cache and daily limit of paid calls apply."""
+    """The live web as tools for the loop: ``web_search`` takes a query, ``read_page`` takes a URL, optionally followed by a space and what to
+    look for in the page. Both go through QAR's web research adapter, so its cache and daily limit of paid calls apply. The adapter uses the
+    lane's search backend when one is configured, else the Claude Code login (one agent process per search); none when web search is disabled."""
     try:
         from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
         research = build_web_research_from_env(env)
     except Exception:  # noqa: BLE001 -- a deployment without web search still runs deep work
         research = None
+    if research is None:
+        research = claude_login_research(env)
     if research is None:
         return {}
 
