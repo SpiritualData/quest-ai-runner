@@ -73,6 +73,8 @@ def _deep_block_reason(d: Any) -> Optional[str]:
         return "a tool the work needs is failing"
     if getattr(d, "stalled", ""):
         return "two attempts in a row ended at the same point"
+    if getattr(d, "ceiling_stop", ""):
+        return "the run stopped at its own spend or time limit"
     if getattr(d, "usage_limited", False):
         return "the usage limit is reached"
     if getattr(d, "launch_failed", False):

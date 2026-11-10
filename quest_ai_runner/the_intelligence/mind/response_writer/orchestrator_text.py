@@ -152,6 +152,31 @@ def normalize_future_context(res: DeepResult) -> DeepResult:
     return res
 
 
+CEILING_END_REASONS = ("wrapped_up_at_soft_limit", "stopped_at_hard_limit")   # what a runner says when its spend or time ceiling shaped the run
+
+
+def mark_ceiling_stop(res: DeepResult) -> DeepResult:
+    """The seam for a run a spend or time ceiling shaped (the runner's ``end_reason``): it is UNFINISHED, whatever its own ``met`` says.
+
+    A session asked to wrap up at the soft limit reports what is done and left and returns as if it had finished; a run stopped at the hard limit comes back
+    ``cancelled``, which the goal loop reads as a person's stop. Neither is a done task and neither is a person's cancel, so here the result is made unmet,
+    not cancelled, and flagged ``ceiling_stop`` (the end reason), so the goal loop neither verifies it as done nor retries it past its ceiling, and the report is
+    "incomplete" with what was done and how to continue. A run that raised a decision is left alone (the person's answer comes first). Never raises."""
+    try:
+        end = str(getattr(res, "end_reason", "") or "")
+        if not end.startswith(CEILING_END_REASONS) or getattr(res, "decision_id", None) or getattr(res, "paused", False):
+            return res
+        res.ceiling_stop = end
+        res.met = False
+        res.cancelled = False
+        if end.startswith("wrapped_up") and not res.error:
+            res.error = ("The run reached its spend or time limit and wrapped up at a safe stopping point; it is not finished. What is done and what is left "
+                         "is in its report; a reply continues the same session.")
+    except Exception:  # noqa: BLE001 -- marking must never break a deep run
+        pass
+    return res
+
+
 def deep_future_context(result: Any) -> str:
     """The FUTURE-CONTEXT bullets of one deep result, from the structured field with a fallback to
     parsing the output.

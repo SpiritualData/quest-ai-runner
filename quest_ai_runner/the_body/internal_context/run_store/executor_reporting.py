@@ -313,6 +313,17 @@ class ReportingMixin:
             self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
             self.dispatch_incomplete(task_id, msg, session_id=session_id, **with_metrics)
             return ExecutionOutcome(task_id, "incomplete", msg)
+        # A spend or time ceiling shaped the run (``mark_ceiling_stop``): it wrapped up at a safe point or was stopped, so it is incomplete, never done and never a
+        # bare failure, with what it did and the session a reply continues.
+        capped = [d for d in deep if getattr(d, "ceiling_stop", "") and not d.met]
+        if capped:
+            work = "\n\n".join(_strip_future_context(d.output).strip() for d in deep if (d.output or "").strip()).strip()
+            why = " ".join(d.error.strip() for d in capped if d.error) or "The run reached its spend or time limit."
+            msg = (work + "\n\n" if work else "") + why
+            self._report_progress(task_id, "done", text="Stopped at its limit: the work so far is kept.", output=msg)
+            self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id, **with_metrics)
+            return ExecutionOutcome(task_id, "incomplete", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
         if not deep:                 # deep requested but no runner wired -> needs human/runner

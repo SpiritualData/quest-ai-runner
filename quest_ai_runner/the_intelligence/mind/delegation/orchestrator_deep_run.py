@@ -36,7 +36,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     _run_goal_accepts_working_dir, run_goal_accepts_cancel_check, run_goal_accepts_control, run_goal_accepts_gathered_observations,
     run_goal_accepts_is_subgoal, run_goal_accepts_requester_user_id)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import (
-    future_context_channel, normalize_future_context, _strip_future_context, ellipsize, sentence)
+    future_context_channel, mark_ceiling_stop, normalize_future_context, _strip_future_context, ellipsize, sentence)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import TurnCardCache, _Emitter
 from quest_ai_runner.the_intelligence.mind.delegation.requester import requester_from_meta
 from hubofhubs.api import (
@@ -703,7 +703,7 @@ class DeepRunMixin:
                     # FUTURE-CONTEXT bullets are moved out of ``output`` into ``future_context``, so
                     # the payload handed to the goal verifier, the emit paths, and the consumer can
                     # never carry the section, and the card updater has exactly one place to read.
-                    done = active_runner.run_goal(**kwargs)
+                    done = mark_ceiling_stop(active_runner.run_goal(**kwargs))   # a run a ceiling shaped is unfinished, and is not a person's stop
                     # What this run read and changed is kept for the next run on this goal (never fails the run).
                     record_run_trail(run_working_dir, run_goal_key, getattr(done, "session_id", None))
                     if getattr(done, "cancelled", False):
@@ -900,6 +900,13 @@ class DeepRunMixin:
                 # iteration (a runaway loop). Trust the hand-off's own ``met`` and stop; the real
                 # outcome is verified when it reflects back.
                 if getattr(res, "deferred", False):
+                    break
+                # A SPEND OR TIME CEILING SHAPED THE RUN (``mark_ceiling_stop``): the session wrapped up or was stopped at its limit, so it is not done and
+                # not verified as done, and another attempt would only spend past the ceiling. It is reported as incomplete, with what was done and
+                # the session to continue.
+                if getattr(res, "ceiling_stop", ""):
+                    if emit is not None:
+                        emit.status("The run reached its spend or time limit; stopping here with what is done so far.")
                     break
                 # CLAUDE CODE IS AT ITS USAGE LIMIT (``DeepResult.usage_limited``): terminal for this
                 # turn, whatever rungs remain, since every rung is a Claude model and would be

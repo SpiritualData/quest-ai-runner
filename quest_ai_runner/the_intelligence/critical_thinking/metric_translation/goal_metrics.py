@@ -51,7 +51,7 @@ NUDGE_BRIEF = (
 # they stay near 50 characters (the terminal cuts a longer one with an ellipsis).
 NUDGE_STATUS = "Asking the worker to record the metric result."
 # A run that did none of the work leaves nothing to measure or to find missing.
-UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "deferred")
+UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "deferred", "ceiling_stop")
 # What the brief asks of the worker after the NEXT PRIORITY block.
 CLOSING = ("Record the metric's value before and after your change with record_metric_result, as far as its cascading "
            "conditionals call for (a stage not run stays empty, with the reason); if no metric applies to "

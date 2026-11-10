@@ -97,7 +97,7 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
         extra = {}
         if "model_translator" in inspect.signature(runner_cls.__init__).parameters:
             extra["model_translator"] = cli_model   # core cannot import the adapter, so config injects it
-        runner = runner_cls(config, **extra)
+        runner = runner_cls(config, **extra, **deep_runner_options(cfg, runner_cls, extra))
         _log.info("deep runner: using the default %s (%s) (%s, cwd=%s)", runner_cls.__name__, name, found, working_dir)
         return runner
     except Exception:  # noqa: BLE001 — a failed default must never stop the runner from starting
@@ -105,6 +105,32 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
             _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
                          "execution work will be unavailable for this process", exc_info=True)
         return None
+
+
+LIVE_RUNNER_PARTS = frozenset({"config", "settings", "model_translator", "provider", "tier", "root", "select", "should_continue", "complete", "registry", "tools"})   # not plain data, or set by the lane itself
+
+
+def deep_runner_options(cfg: RunnerConfig, runner_cls: Any, taken: Any = ()) -> dict:
+    """The ``cfg.deep_runner_options`` for ``runner_cls``: plain data by the runner's own constructor parameter names (read through its whole class chain, since a
+    binding forwards ``**arguments`` to the hub's class). A name the runner does not take, a part the lane sets itself, or a name already set for it raises
+    ``ValueError`` naming what the runner does take; nothing is silently dropped."""
+    import inspect
+    options = dict(getattr(cfg, "deep_runner_options", None) or {})
+    if not options:
+        return {}
+    names = set()
+    for klass in getattr(runner_cls, "__mro__", (runner_cls,)):
+        init = klass.__dict__.get("__init__")
+        if init is not None:
+            names |= {n for n, p in inspect.signature(init).parameters.items() if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY) and n != "self"}
+    offered = sorted(names - LIVE_RUNNER_PARTS)
+    bad = sorted(n for n in options if n not in offered)
+    if bad:
+        raise ValueError(f"deep_runner_options names {bad} that {runner_cls.__name__} does not take; it takes {offered}")
+    clash = sorted(n for n in options if n in set(taken))
+    if clash:
+        raise ValueError(f"deep_runner_options names {clash}, which the lane sets for {runner_cls.__name__} itself")
+    return options
 
 
 SELECT_ENV_NAMES = ("ESOI_SELECT_QUEST_AI_RUNNER_DELEGATED_AGENT_SESSIONS", "ESOI_SELECT_DELEGATED_AGENT_SESSIONS")
@@ -203,7 +229,7 @@ def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
                                        settings=goal_settings).items() if k in accepted}
         if cls is not hub_cls:
             extra.pop("settings", None)   # QAR's binding reads its own settings
-        runner = cls(config, **extra)
+        runner = cls(config, **extra, **deep_runner_options(cfg, cls, extra))
         apply_hub_hard_tier(cfg, declared, choose_agent_arm, warn=warn)
         log_level = _log.info if choice.basis == "measured" else _log.warning
         log_level("deep runner: the hub's pick for providers %s is %s (%s; %s)%s", declared, choice.arm, choice.basis, choice.reason,

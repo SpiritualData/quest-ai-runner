@@ -89,7 +89,7 @@ _FILE_SCALAR_FIELDS = {
     "context_updates_judge_relevance", "context_updates_relevance_tier",
     "context_updates_judge_admission", "context_updates_admission_tier",
     "context_updates_relay_log_path",
-    "rep_context_prefs", "context_preamble_doctrine", "vector_store", "selections", "deep_providers", "mcp_drive",
+    "rep_context_prefs", "context_preamble_doctrine", "vector_store", "selections", "deep_providers", "deep_runner_options", "mcp_drive",
     "context_sources_map", "context_sources_file", "drive_comments_auth", "inbound_mail_auth",
     "notion", "google_chat", "metric_sources",
     "feedback_ledger", "feedback_ledger_path",
@@ -285,6 +285,10 @@ class RunnerConfig:
     # one. Empty means ``["anthropic"]``: the Claude Code login every deployment has assumed. Settable as ``deep_providers = [...]``
     # in a config file.
     deep_providers: List[str] = field(default_factory=list)
+    # Plain-data settings handed to whichever deep runner is built (the hub's pick or a named one), by the runner's own constructor parameter names, e.g.
+    # ``{ceiling_usd = 5, ceiling_seconds = 7200, permission = "acceptEdits", sandbox = true}`` as a ``[deep_runner_options]`` table in a config file. A name the
+    # runner does not take is refused (the runner is then not built and the lane says why), never dropped, so a typo cannot leave a ceiling off.
+    deep_runner_options: Dict[str, Any] = field(default_factory=dict)
     # OPTIONAL USE-CASE-SPECIFIC INSTRUCTIONS provider (the GuidanceProvider role). When set, the
     # host app supplies a retrievable corpus of guidance cards (opaque text to the runner). The
     # orchestrator pre-selects the cards most relevant to each message into an "APPLICABLE

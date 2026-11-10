@@ -10,7 +10,7 @@ This module also re-exports every name of ``goal_runner_contract`` and ``goal_ru
 """
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from esoi import implementation
 
@@ -45,12 +45,14 @@ class SubprocessGoalRunner(HubSubprocessGoalRunner):
 
     config_class = SubprocessConfig   # the dataclass this runner is built from (core.resolve.resolve_config)
 
-    def __init__(self, config: SubprocessConfig, *,
+    def __init__(self, config: Optional[SubprocessConfig] = None, *, root: str = "",
                  model_translator: Optional[Callable[[Optional[str]], Optional[str]]] = None,
-                 provider: str = "anthropic", tier: str = ""):
+                 settings: Any = None, provider: str = "anthropic", tier: str = "", instructions: str = ""):
         # ``provider`` and ``tier`` name the hub arm this runner is (see ``hubofhubs.api.choose_agent_arm``); the tier's model is
-        # used only when a call names no model, so the deep-model ladder still picks the model of every run it starts.
-        super().__init__(config, model_translator=model_translator, provider=provider, tier=tier)
+        # used only when a call names no model, so the deep-model ladder still picks the model of every run it starts. ``root``, ``settings`` and
+        # ``instructions`` are the hub arms' own constructor parameters, passed on whole: a hub class above this one in a binding (the stream and the
+        # native arms) hands them to the next ``__init__`` by name, so dropping any of them here made those bindings fail to build.
+        super().__init__(config, root=root, model_translator=model_translator, settings=settings, provider=provider, tier=tier, instructions=instructions)
         self._model_translator = model_translator
 
     def goal_settings(self) -> GoalSettings:
