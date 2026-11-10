@@ -15,7 +15,7 @@ import datetime
 import json
 import logging
 import re
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 log = logging.getLogger("quest-ai-runner.milestone-completion")
 
@@ -95,6 +95,28 @@ def kept_goal_text(registry: Any, record: Mapping[str, Any]) -> str:
     return str((goal or {}).get("text") or (goal or {}).get("description") or "")
 
 
+def sources_of(reference: str) -> str:
+    """What a finished deliverable's facts may rest on: ``reference`` (the brief, then the worker's output) up to the worker's last
+    ``DELIVERABLE:`` line, so the sources it read and quoted count and the deliverable itself does not."""
+    text = str(reference or "")
+    at = text.rfind(DELIVERABLE_LINE)
+    return text[:at] if at >= 0 else text
+
+
+def supported_part(part: str, sources: str, decide: Callable[[str], str]) -> Tuple[str, List[str]]:
+    """``(part, removed)``: ``part`` with every fact sentence no source holds taken out (``milestone_depth.supported_sentences``, the first
+    sentence of each line kept as an item's own name). The part as it was, with nothing removed, when there are no sources or the check cannot run."""
+    if not sources.strip():
+        return part, []
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_depth import supported_sentences
+    try:
+        now, removed = supported_sentences(part, sources, decide, keep_line_starts=True)
+    except Exception as error:  # noqa: BLE001  a check that cannot run leaves the text as written and says so
+        log.warning("milestone completion: the source check of a finished part could not run: %s: %s", type(error).__name__, error)
+        return part, []
+    return now.strip(), list(removed)
+
+
 def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any, decide: Callable[[str], str], reference: str = "",
                           today: Optional[datetime.date] = None) -> Dict[str, Any]:
     """Measure and keep a finished background deliverable. Returns ``{"status", "before", "after", "total", "line"}``: ``measured`` with the increment
@@ -122,6 +144,7 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
         parts = parts + [part]          # the worker did not keep it on the goal itself: code keeps it as the next part
     before = float(record.get("before") or 0)
     method = "evidence" if record.get("method") == "evidence" else "rubric"
+    unsupported: List[str] = []
     if method == "evidence":
         # Evidence counts the questions answered with a named source (structure, not the worker's say-so); the answers are the kept part.
         questions = list((mp.questions_of(part) or {}).get("questions") or [])
@@ -131,6 +154,21 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
         after = float(sum(1 for q in questions if q.get("answer") and q.get("source")))
         total = len(questions)
     else:
+        # What the in-turn writer's text passes before it is kept, a finished background deliverable passes too: a sentence that states a fact
+        # must rest on words of a source (the brief, and what the worker read and quoted before its DELIVERABLE line), or it is taken out. The
+        # deliverable is never its own source. Parts already kept were checked when they were kept.
+        sources = sources_of(reference)
+        already = mp.squash(kept_text)
+        held: List[str] = []
+        for p in parts:
+            if kept_text and mp.squash(p) in already:
+                held.append(p)
+                continue
+            now, removed = supported_part(p, sources, decide)
+            unsupported += removed
+            if now:
+                held.append(now)
+        parts = held
         scorer = mp.Scorer(decide, requirements, reference)
         met = [p for p in parts if requirements and all(scorer(r, p) for r in requirements)]
         after = float(len(met))
@@ -144,7 +182,7 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
     result = registry.invoke(mp.KEEP_TOOL, {"quest_id": record["quest_id"], "title": record["title"], "body": progress.body(),
                                             "solution_id": record.get("milestone_id"), "increment": increment},
                              ToolContext(quest_id=str(record["quest_id"])))
-    common = {"before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
+    common = {"unsupported": unsupported, "before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
               "measure_line": progress.increment_line(),
               "goal_found": bool(kept_text), "milestone_metric": metric_again(registry, record)}
     if not getattr(result, "ok", False):

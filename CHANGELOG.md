@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Milestone work: a finished background deliverable passes the same source check as the in-turn writer before it is measured and kept (`milestone_completion.supported_part`). A sentence that states a fact must rest on the brief or on what the worker read and quoted before its `DELIVERABLE:` line; the deliverable is never its own source. Removed sentences are returned as `unsupported`.
+
 ## [0.6.0] - 2026-11-08
 
 Requires esoi v0.6.0 and hubofhubs v0.6.0.

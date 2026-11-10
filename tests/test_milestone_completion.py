@@ -91,3 +91,20 @@ def test_a_whole_set_without_separators_is_scored_one_unit_per_heading():
     got = mc.measure_on_completion(RECORD, "DELIVERABLE:\n" + body, Registry(), scorer)
     assert (got["before"], got["after"]) == (0, 2) and got["body"].count("--- Part") == 3
     assert mc.units_by_heading("One plain script.\nCall to action: go.") == ["One plain script.\nCall to action: go."]
+
+
+def test_a_finished_deliverable_keeps_only_the_facts_its_sources_hold():
+    registry = Registry()
+    reference = "The brief. The product guide says a goal is tracked weekly.\n\nSOURCES:\nProduct guide: a goal is tracked weekly.\n\nDELIVERABLE:\nIt was rated best app of 2029."
+    output = "DELIVERABLE:\nOpening line for tutorial 1. A goal is tracked weekly. It was rated best app of 2029. Call to action: try it today."
+
+    def decide(prompt):
+        if "The text:" in prompt:
+            return scorer(prompt)
+        rows = ([("plain", ""), ("fact", "a goal is tracked weekly"), ("fact", "rated best app"), ("plain", "")] if "1. Opening" in prompt else
+                [("plain", ""), ("fact", "rated best app"), ("fact", "a goal is tracked weekly"), ("plain", "")])
+        return json.dumps({"sentences": [{"n": n, "kind": k, "quote": q} for n, (k, q) in enumerate(rows, 1)]})
+    got = mc.measure_on_completion(RECORD, output, registry, decide, reference=reference, today=datetime.date(2030, 3, 9))
+    assert got["unsupported"] == ["It was rated best app of 2029."]         # the deliverable's own words after DELIVERABLE: are no source
+    assert "rated best app" not in got["body"] and "A goal is tracked weekly." in got["body"]
+    assert got["status"] == "measured" and got["after"] == 1                # scored on the words that are kept
