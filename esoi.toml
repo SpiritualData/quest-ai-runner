@@ -177,7 +177,7 @@ repo = "../ai-hub-of-hubs-structure"
 url = "https://github.com/SpiritualData/ai-hub-of-hubs-structure/"
 
 [records]
-template_version = 4
+template_version = 5
 # Each solution's records live once, in the folder that holds its code (docs/reference/records-beside-code.md in the esoi repository).
 # The top intent stays in esoi/; each area of QAR is a sub-intent folder of quest_ai_runner/, named by its intent id.
 beside_code = ["quest_ai_runner", "quest_ai_runner/*", "quest_ai_runner/*/*", "quest_ai_runner/*/*/*", "quest_ai_runner/*/*/*/*", "evaluation/components/*", "evaluation/components/*/impls"]
