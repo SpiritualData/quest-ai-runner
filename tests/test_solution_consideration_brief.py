@@ -38,7 +38,8 @@ def test_the_brief_carries_each_touched_solutions_prompt_and_its_finding(monkeyp
 def test_a_goal_no_solution_concerns_is_gated_and_makes_no_model_call(monkeypatch):
     monkeypatch.setenv("QAR_SPEC_ROOT", str(HUB))
     provider = Scripted()
-    assert solution_consideration.brief_block("thanks, that is all for today", str(HUB), provider) == "" and provider.calls == 0
+    block = solution_consideration.brief_block("thanks, that is all for today", str(HUB), provider)
+    assert provider.calls == 0 and "No recorded solution fits this goal closely" in block and "define a new solution" in block
 
 
 def test_the_cap_is_one_pass_per_selected_solution_and_one_parent_pass(monkeypatch):

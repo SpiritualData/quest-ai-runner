@@ -300,6 +300,49 @@ def list_folder_files(folder: str, limit: int = MAX_FILES_LISTED) -> List[str]:
     return shown
 
 
+FOLDER_MAP_MAX_LINES = 60
+FOLDER_MAP_MAX_CHARS = 2500
+FOLDER_MAP_CHILDREN_PER_DIR = 6
+
+
+def folder_map(folder: str, max_lines: int = FOLDER_MAP_MAX_LINES, max_chars: int = FOLDER_MAP_MAX_CHARS) -> List[str]:
+    """Where things are in a working folder, one line each: its top-level entries (``list_folder_files``, vendored and hidden ones
+    left out) and, under each folder, its first few entries. Names only, no file contents, never a model. At most ``max_lines`` lines
+    and ``max_chars`` characters; empty when the folder cannot be read."""
+    top = [n for n in list_folder_files(folder, limit=max_lines) if not n.startswith("... and ")
+           and n.rstrip("/") not in SKIP_DIRS]
+    files = [n for n in top if not n.endswith("/")]
+    dirs = [n for n in top if n.endswith("/")]
+    lines: List[str] = files + []
+    for d in dirs:
+        lines.append(d)
+        try:
+            inside = sorted(n for n in os.listdir(os.path.join(folder, d)) if not n.startswith(".") and n not in SKIP_DIRS)
+        except OSError:
+            continue
+        for n in inside[:FOLDER_MAP_CHILDREN_PER_DIR]:
+            lines.append("  " + d + n + ("/" if os.path.isdir(os.path.join(folder, d, n)) else ""))
+        if len(inside) > FOLDER_MAP_CHILDREN_PER_DIR:
+            lines.append(f"  ... and {len(inside) - FOLDER_MAP_CHILDREN_PER_DIR} more in {d}")
+    kept: List[str] = []
+    used = 0
+    for line in lines[:max_lines]:
+        if used + len(line) + 1 > max_chars:
+            break
+        kept.append(line)
+        used += len(line) + 1
+    return kept
+
+
+def folder_summary(folder: str) -> str:
+    """One line on what the folder is, from its sync file (the goal's title and the first line of its state); "" when it has none."""
+    entry = read_quest_folder(folder)
+    if entry is None:
+        return ""
+    state = next((ln.strip() for ln in (entry.current_state or "").splitlines() if ln.strip()), "")
+    return " - ".join(p for p in (entry.title, state[:160]) if p)
+
+
 def clip(text: str, limit: int, where: str) -> str:
     text = (text or "").strip()
     if len(text) <= limit:

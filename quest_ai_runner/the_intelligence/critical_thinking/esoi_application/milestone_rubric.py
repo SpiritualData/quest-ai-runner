@@ -313,10 +313,14 @@ HOME_PICK = ("Which of these solutions is the one whose own work makes this deli
 
 
 KIND_PROMPT = """A team's work item: {item} (for the milestone: {milestone}).
-
-Name the KIND of deliverable it is, generically, so other work of the same kind is filed with it: a plural noun phrase of 2 to 4 words (for example "video
-scripts", "option comparisons", "funnel evidence answers"). Reply with JSON only: {{"kind": "<the name>", "purpose": "<one sentence: what this kind of deliverable
-is for>"}}. Do not use em dashes."""
+{records}
+Name the KIND of deliverable it is, generically, so other work of the same kind is filed with it, and frame the solution that makes this kind of thing. Use only the
+work item, the milestone and the records above; state nothing they do not support, and leave a field out (empty string) rather than guess it. Reply with JSON only:
+{{"name": "<the kind: a plural noun phrase of 2 to 4 words, for example video scripts>", "purpose": "<one sentence: what this kind of deliverable is for>",
+"approach": "<one sentence starting with a verb, naming no actor: how this kind of deliverable is made>",
+"problem": {{"what": "<the problem this kind of deliverable solves>", "who": "<who has it>", "why": "<why it matters>"}},
+"ideal": {{"name": "<the state when the problem is solved, as a short name>", "principle": "<the principle that state follows>"}},
+"milestone": "<a done-when stated as a value of the solution's metric, for example Six scripts meet every requirement>"}}. Do not use em dashes."""
 
 
 NONE_FITS = "none"
@@ -352,13 +356,61 @@ def deliverable_home(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: 
             pick = NONE_FITS
         if pick in solutions:
             return {"id": pick, "row": dict(solutions[pick]), "created": False}
-    data = parse_json(decide(KIND_PROMPT.format(item=item.get("name"), milestone=cue.name)))
-    kind = " ".join(str(data.get("kind") or "").split()).strip(" .")
+    return ensure_solution(cue, item, spec_edit, decide)
+
+
+NO_VALUE = frozenset({"", "none", "n/a", "na", "tbd", "todo", "unknown", "null", "...", "?"})
+NON_VERB_START = frozenset({"the", "a", "an", "we", "it", "this", "that", "our", "i", "you", "they", "he", "she", "team", "ai"})
+
+
+def field_text(value: Any) -> str:
+    """A model's field as one clean line, or "" when it is empty or placeholder text (an unfilled <...> slot, none, n/a, tbd)."""
+    text = " ".join(str(value or "").replace("\u2014", ",").split())
+    if text.casefold().strip(" .") in NO_VALUE or (text.startswith("<") and text.endswith(">")):
+        return ""
+    return text
+
+
+def approach_text(value: Any) -> str:
+    """The approach sentence when it starts with a verb as far as code can tell (it does not open with an article or a pronoun), else ""."""
+    text = field_text(value)
+    return "" if not text or text.split()[0].casefold() in NON_VERB_START else text
+
+
+def ensure_solution(cue: Any, item: Mapping[str, Any], spec_edit: Any, decide: Callable[[str], str]) -> Optional[Dict[str, Any]]:
+    """Creates the solution for this kind of deliverable, complete as far as the model's one structured call (fast tier) gave valid fields: the solution with
+    its approach and milestone, and its problem and ideal as records of their own linked by id, all through ``spec_edit.apply(record_add)``. A missing or
+    placeholder field is not written, never made up by code. ``{"id", "row", "created"}``, or None when no kind was named or the solution could not be made."""
+    records = str(getattr(cue, "records_text", "") or "")[:RECORD_CHARS]
+    data = parse_json(decide(KIND_PROMPT.format(item=item.get("name"), milestone=cue.name, records=f"The milestone's own records:\n{records}\n" if records else "")))
+    kind = field_text(data.get("name") or data.get("kind")).strip(" .")
     if not kind:
         return None
-    purpose = " ".join(str(data.get("purpose") or "").split()) or f"Makes {kind}."
-    fields = {"name": kind[:1].upper() + kind[1:], "purpose": purpose}
-    answer = spec_edit.apply({"edit": {"kind": "record_add", "table": "solutions", "key": fields["name"], "fields": fields}})
+    problem = data.get("problem") if isinstance(data.get("problem"), Mapping) else {}
+    ideal = data.get("ideal") if isinstance(data.get("ideal"), Mapping) else {}
+
+    def add(table: str, key: str, fields: Mapping[str, str]) -> Dict[str, Any]:
+        answer = spec_edit.apply({"edit": {"kind": "record_add", "table": table, "key": key, "fields": dict(fields)}})
+        return dict(answer) if answer.get("applied") and answer.get("target") else {}
+    links: Dict[str, List[str]] = {}
+    what = field_text(problem.get("what"))
+    if what:
+        made = add("problems", what, {k: v for k, v in {"problem": what, "who_has_it": field_text(problem.get("who")), "why_it_matters": field_text(problem.get("why"))}.items() if v})
+        if made:
+            links["problem_ids"] = [str(made["target"])]
+    ideal_name, principle = field_text(ideal.get("name")), field_text(ideal.get("principle"))
+    if ideal_name:
+        fields = {"name": ideal_name, **({"principle": principle} if principle else {}), **({"problem_ids": links["problem_ids"]} if links.get("problem_ids") else {})}
+        made = add("ideals", ideal_name, fields)
+        if made:
+            links["ideal_ids"] = [str(made["target"])]
+    name = kind[:1].upper() + kind[1:]
+    fields = {"name": name}
+    for column, value in (("purpose", field_text(data.get("purpose"))), ("approach", approach_text(data.get("approach"))), ("milestones", field_text(data.get("milestone")))):
+        if value:
+            fields[column] = value
+    fields.update(links)
+    answer = spec_edit.apply({"edit": {"kind": "record_add", "table": "solutions", "key": name, "fields": fields}})
     sid = str(answer.get("target") or "")
     if not answer.get("applied") or not sid:
         return None

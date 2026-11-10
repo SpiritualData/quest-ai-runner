@@ -6,7 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- A solution created for a deliverable kind carries its approach and a milestone, with its problem and ideal as linked records (one fast tier call, as before). A deep goal whose records fit no solution gets a block naming the nearest ones and telling the worker to extend one or define a new one first.
+- Milestone work on a solution with no implementation on record chooses an approach among distinct ways by the rubric (the hub's `choose_approach`) and keeps the chosen way and the ways not taken as that solution's implementation records.
+- Deep prompts carry a "Where things are" block: the files earlier runs on the goal read and changed, and a map of the working folder. Each deep run's files are recorded when it finishes (`QAR_TRAIL_DIR`). Offline `exploration_baseline.py` counts looks before the first change in saved sessions.
+
 - Milestone work: a finished background deliverable passes the same source check as the in-turn writer before it is measured and kept (`milestone_completion.supported_part`). A sentence that states a fact must rest on the brief or on what the worker read and quoted before its `DELIVERABLE:` line; the deliverable is never its own source. Removed sentences are returned as `unsupported`.
+- Milestone work: a finished deliverable records which rubric requirement each part failed (`Not yet meeting the rubric:` with `- Part N: <requirement>` lines in the kept goal's overview, read back by `milestone_completion.unmet_of`), and the next brief lists them with the instruction to rewrite those parts first (same `--- Part N ---` number) before adding new ones. A rewritten part replaces the kept one only when the separate check finds it meets strictly more requirements (hub `keep_better`), after the source check; each (requirement, part) is still scored once.
+- Milestone brief: `deliverable_brief` gains a labelled solution frame under the solution line (approach, next unmet milestone, what the metric cannot see, disadvantages of the implementation in use, last measured value) built by the hub's `solution_frame`.
 
 ## [0.6.0] - 2026-11-08
 

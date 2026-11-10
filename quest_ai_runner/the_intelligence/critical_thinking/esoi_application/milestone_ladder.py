@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .milestone_depth import STATUS_WORDS, marked_claims
 from .milestone_depth import ANSWER_PROMPT, COMBINE_PROMPT, EVIDENCE_PROMPT, EVIDENCE_QUESTIONS, PART_PROMPT, WRITE_PROMPT, checked_line, deliverable_brief, held_source, kept_step, solution_prompt, stems5, supported_sentences, without_rubric_echo
+from .milestone_completion import unmet_of, unmet_section
 from .milestone_facts import DELIVERABLES, DEPTH_CALLS, GROUNDING_CHARS, KEEP_TOOL, NO_EM_DASH, OUTWARD, RECORD_CHARS, TO_BE_DECIDED, ToolSpecEdit, clip_line, kept_follow_on, kept_parts, log, parse_json, quest_metric_fields, questions_of, render_questions, squash, whole_row, with_reading_fields, without_ids
 from .milestone_reply import Progress
 from .milestone_rubric import DECISION_REQUIREMENT, Scorer, deliverable_home, done_digest, done_test_class, kept_artifacts, kept_rubric, pinned_items, researched_rubric, rubric_entry, with_entry
@@ -73,6 +74,31 @@ def first_person_step(items: Sequence[Mapping[str, Any]], doable: Callable[[Mapp
     return " ".join(str(theirs[0].get("step") or theirs[0]["name"]).split()) if theirs else ""
 
 
+def next_unmet_milestone(row: Mapping[str, Any]) -> str:
+    """The first milestone of the solution's ladder not yet reached: from the structured entries (``milestoneEntries``, each with ``sentence`` and ``met_at``)
+    when the record carries them, else the record's ``milestones`` text ("" when it holds neither)."""
+    entries = [e for e in (row.get("milestoneEntries") or row.get("milestone_entries") or []) if isinstance(e, Mapping) and str(e.get("sentence") or "").strip()]
+    if entries:
+        waiting = next((e for e in entries if not (e.get("met_at") or e.get("metAt"))), None)
+        return " ".join(str(waiting["sentence"]).split()) if waiting else ""
+    return " ".join(str(row.get("milestones") or "").split())
+
+
+def implementation_in_use(tables: Mapping[str, Any], sid: str, row: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The implementation record the solution's ``selected`` cell names (a name, an implementation id or its suffix, or a file path with ``::name``); {} when
+    the solution selects none or no record of its own matches."""
+    selected = str(row.get("selected") or "").strip().lower()
+    module, _, named = selected.partition("::")
+    wanted = {w.strip() for w in (selected, module, named) if w.strip()}
+    for iid, impl in dict(tables.get("implementations") or {}).items():
+        if str(impl.get("solution_id") or "") != sid:
+            continue
+        names = {str(impl.get("name") or "").strip().lower(), str(iid).strip().lower(), str(iid).partition(":")[2].strip().lower(), str(impl.get("filepath") or "").strip().lower()}
+        if wanted & (names - {""}):
+            return impl
+    return {}
+
+
 #: The kind of work a milestone deliverable is for the harness cascade: the runner that executes it starts on the tier the hub measured best for it.
 WORK_KIND = "hard"
 
@@ -112,6 +138,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
     kept_goal = next((g for g in cue.candidates if str(g.get("spec_solution_id") or "") == cue.rid and is_owned(g)), None)
     kept_text = str((kept_goal or {}).get("text") or (kept_goal or {}).get("description") or "")
     digest = done_digest(cue.done_when)
+    kept_unmet = unmet_of(kept_text)        # the requirement each kept part failed at the last measure, written there by milestone_completion
     # The pinned item stays until its rubric is met (the goal holds every unit it planned) or the done test changes.
     if rubric is not None and ((rubric.done and rubric.done != digest) or (rubric.total and len(kept_parts(kept_text)) >= rubric.total)):
         rubric = None
@@ -262,6 +289,44 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         sid = str(out_home.get("id") or "")
         return f"{(out_home.get('row') or {}).get('name') or sid} (record {sid})" if sid else f"{cue.name} (record {cue.rid})"
 
+    def carried(overview: str) -> str:
+        """``overview`` with the not-yet-met section the goal already carries, so a turn that rewrites the overview does not lose which part failed what."""
+        return overview + unmet_section([{"part": n, "requirements": rs} for n, rs in sorted(kept_unmet.items())])
+
+    def frame_text() -> str:
+        """The hub's labelled frame of the solution the worker works inside, from the quest's records: its approach, the next milestone not yet met, what its
+        metric cannot see, the disadvantages of the implementation in use and the last measured value. The generated solution text carries the same
+        records in its own order and cut to its budget; the frame puts these few lines first and labelled. The unmet parts are not repeated here: the brief's
+        repair section lists them."""
+        from hubofhubs.api import solution_frame
+        sid = str(out_home.get("id") or "")
+        solution = dict(out_home.get("row") or {}) if sid else {}
+        metric = metrics.get(cue.metric_ids[0]) if cue.metric_ids else {}
+        impl = implementation_in_use(tables, sid or cue.rid, solution or dict(row))
+        return solution_frame({"approach": solution.get("approach") or row.get("approach"), "next_milestone": next_unmet_milestone(row),
+                               "metric_disadvantages": (metric or {}).get("disadvantages"), "implementation_disadvantages": impl.get("disadvantages"),
+                               "last_value": clip_line(cue.current_text() if cue.reading else cue.value, 200)})
+
+    def approach_text(requirements: Sequence[str]) -> str:
+        """The way this run takes, chosen among distinct ways by the rubric when the solution has no implementation on record yet: the chosen way and
+        the ways not taken are kept as the solution's implementation records (the chosen one selected), so the next run extends the way in use and
+        never chooses again. A solution that already has an implementation costs no call here. Never fails the work: no approach is an empty line."""
+        sid = str(out_home.get("id") or "")
+        if not sid or not requirements or any(str(i.get("solution_id") or "") == sid for i in dict(tables.get("implementations") or {}).values()):
+            return ""
+        try:
+            from .approach_choice import approach_block
+            text, records = approach_block(frame_text() + "\n" + solution_records()[:RECORD_CHARS], requirements, decide, solution_id=sid)
+            for record in records:
+                fields = {k: v for k, v in record.items() if k not in ("name", "selected") and v}
+                spec_edit.apply({"edit": {"kind": "record_add", "table": "implementations", "key": record["name"], "fields": fields}})
+                if record.get("selected"):
+                    spec_edit.apply({"edit": {"kind": "spec_edit", "target": sid, "field": "selected", "value": record["name"]}})
+            return text
+        except Exception:
+            log.warning("approach choice failed; the work goes on without it", exc_info=True)
+            return ""
+
     def solution_records() -> str:
         """The deliverable's solution as the hub generates its prompt from its own network of records (records, metric, knowledge), then the milestone's
         records: the writer and the deep agent work from the solution, not from an ad hoc description."""
@@ -378,11 +443,12 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
                       "before": (before.get("value") if isinstance(before, Mapping) else before) or 0, "total": total,
                       "measure_name": f"Units of {item.get('name')} meeting their requirements", "metric_id": increment.get("measure_id"), "kind": WORK_KIND}
             goal, brief = deliverable_brief(item, requirements, have, title, solution_records(), shown(), record=record, skill=skill,
-                                            solution=work_solution(), milestone=f"{cue.name} (record {cue.rid})")
+                                            solution=work_solution(), milestone=f"{cue.name} (record {cue.rid})", frame="\n".join(t for t in (frame_text(), approach_text(requirements)) if t),
+                                            unmet=kept_unmet)
             got = dict(deep(goal, brief) or {})
             out.handed_off = {"goal": goal, "queued": bool(got.get("deferred")), "error": str(got.get("error") or "")}
             if got.get("deferred") or not str(got.get("output") or "").strip():
-                out.parts, out.overview = have, f"{item.get('name')}."
+                out.parts, out.overview = have, carried(f"{item.get('name')}.")
                 return {"artifact": None, "evidence_ref": title}
             out.handed_off = None
             part, data, depth = cleaned(str(got.get("output") or "")), {}, None
@@ -405,7 +471,7 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
         in_part = sum(1 for t in topics if len(t & stems5(part)) * 2 >= len(t))
         if topics and in_part * 2 >= len(topics):
             proposed = ""
-        out.overview = head + (("\nProposed units (an AI proposal from the sources, to be agreed):\n" + proposed) if proposed else "")
+        out.overview = carried(head + (("\nProposed units (an AI proposal from the sources, to be agreed):\n" + proposed) if proposed else ""))
         out.parts = have + ([part] if part else [])
         return {"artifact": {"parts": out.parts} if part else None, "evidence_ref": title}
 

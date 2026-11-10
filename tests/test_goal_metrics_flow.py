@@ -430,7 +430,7 @@ def test_the_deep_run_arms_and_the_quest_specification_arm_are_declared_and_the_
     assert default_name("run-applies-esoi") == "slice-and-writeback"
     assert default_name("esoi-application") == "quest_spec_records"
     assert names("run-applies-esoi") == ["generic-doctrine", "slice-and-writeback", "slice-only"]
-    assert names("esoi-application") == ["quest_spec_records"]
+    assert names("esoi-application") == ["metric_source", "quest_spec_records"]
     assert resolve("run-applies-esoi") is SliceAndWriteback
     assert resolve("run-applies-esoi", "slice-only") is SliceOnly
     assert resolve("run-applies-esoi", "generic-doctrine") is DoctrineOnly

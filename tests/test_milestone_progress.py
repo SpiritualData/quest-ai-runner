@@ -550,3 +550,36 @@ def test_a_reader_sees_names_never_bare_record_ids_and_the_ack_states_the_metric
     assert milestone_progress.without_ids("Ana files the confirmation under goal 7a3f6c39.") == "Ana files the confirmation."
     made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: {"output": "queued", "deferred": True})
     assert "Milestone metric (Tutorials published) now: " in made.reply_text()
+
+
+def test_the_next_brief_names_the_unmet_parts_and_frames_the_worker_by_the_solution():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    kept_text = ("Kept by Quest AI: Overview:\nTutorials." + milestone_completion.unmet_section([{"part": 2, "requirements": ["Ends with a call to action"]}])
+                 + "\n\n--- Part 1 ---\nOpening line one. Call to action: go.\n\n--- Part 2 ---\nOpening line two.")
+    tables = json.loads(json.dumps(TABLES))
+    tables["solutions"]["sol-1"].update(approach="Write one script per first-week task.", selected="Script writer")
+    tables["metrics"]["met-1"]["disadvantages"] = "Counts scripts, not how many people watch them."
+    tables["implementations"] = {"sol-1:script-writer": {"solution_id": "sol-1", "name": "Script writer", "disadvantages": "Slow on long scripts."},
+                                 "sol-1:other": {"solution_id": "sol-1", "name": "Other", "disadvantages": "Not the one in use."}}
+    registry = Registry()
+    registry.tables = tables
+    briefs = []
+    row = tables["solutions"]["sol-1"]
+    resolved = milestone_cue.Resolved(rid="sol-1", name=row["name"], row=row, metric_ids=["met-1"], owners=[], week=milestone_cue.Week("2030-03-04", "2030_W10", "2030-03-10"),
+                                      facts="", quest_id="q-1", done_when=row["milestones"], value="Current value: 0 of 6", purpose=row["purpose"],
+                                      candidates=[{"title": "M1 Tutorials published deliverables", "text": kept_text, "spec_solution_id": "sol-1"}],
+                                      records_text=milestone_cue.records_read(tables, "sol-1", row), tables=tables)
+    made = milestone_progress.make_progress(resolved, registry, decide, deep=lambda goal, brief: briefs.append(brief) or {"output": "queued", "deferred": True})
+    brief = briefs[0]
+    frame = brief.split("It serves the milestone", 1)[1].split("Its metric:", 1)[0]
+    assert "Approach: Write one script per first-week task." in frame and "Next unmet milestone: Six tutorials are published" in frame
+    assert "What the metric cannot see: Counts scripts, not how many people watch them." in frame
+    assert "Disadvantages of the implementation in use: Slow on long scripts." in frame and "Not the one in use" not in brief.split("Its metric:", 1)[0] and len(frame) < 1300
+    assert "- Part 2: Ends with a call to action" in brief and brief.index("rewrite each one whole") < brief.index("add the new") and "- Part 2: Opening line two." in brief
+    assert "Not yet meeting the rubric:" in made.overview and "- Part 2: Ends with a call to action" in made.body()      # a queued turn does not drop it
+
+
+def test_a_brief_without_unmet_parts_or_frame_is_the_plain_brief():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_depth import deliverable_brief
+    _, brief = deliverable_brief({"name": "scripts"}, ["Has an opening"], ["Script one."], "T", "records", "reads")
+    assert "rewrite each one whole" not in brief and "It serves the milestone named in the records below.\nIts metric:" in brief and "- Script one." in brief

@@ -364,7 +364,7 @@ def solution_prompt(cue: Any, sid: str, task: str = "") -> str:
 
 DEEP_BRIEF = """{opening}
 
-The solution: {solution}. It serves the milestone {milestone}.
+The solution: {solution}. It serves the milestone {milestone}.{frame}
 Its metric: units of {item} that meet every item of its rubric, counted by a separate check (never by you): {rubric}
 Now: {before}. Already kept (continue after these; do not repeat them):
 {have}
@@ -377,7 +377,7 @@ is spent, and measure before and after.
 Keep it: the goal titled exactly "{title}" in this quest, its description starting with the line "Kept by Quest AI:" and then the deliverable, updated in
 place (never a second goal). Write each unit the rubric is checked on (one script, one entry, one option) as its own part, each starting with a line
 "--- Part N ---" (N from 1), after a short overview. A fact (what the product does, a figure, a link, a name) only as a source says it; a proposal labelled
-as one; no placeholder and no blank slot.
+as one; no placeholder and no blank slot.{repair}
 
 {records}
 
@@ -397,18 +397,32 @@ product's documents, the web), written as lines "Q1. <question>" then "A1. <answ
 fact no source gives. Research each open question before leaving it open."""
 
 
+REPAIR_BRIEF = """
+
+Parts already kept that do not yet meet the rubric (the separate check found these requirements unmet):
+{unmet}
+Do these first: rewrite each one whole, under its own line "--- Part N ---" with the same N as above (the rewrite replaces that part). Then add the new
+parts, numbered after the last kept one. Put the rewritten parts in your DELIVERABLE and leave the kept parts on the goal as they are: code keeps a rewritten
+part only when the separate check finds it meets more of the rubric than the part it replaces, and otherwise the earlier part stays."""
+
+
 def deliverable_brief(item: Mapping[str, Any], requirements: Sequence[str], have: Sequence[str], title: str, records: str, grounding: str,
-                      record: Optional[Mapping[str, Any]] = None, form: str = "", skill: str = "", solution: str = "", milestone: str = "") -> Tuple[str, str]:
+                      record: Optional[Mapping[str, Any]] = None, form: str = "", skill: str = "", solution: str = "", milestone: str = "",
+                      frame: str = "", unmet: Optional[Mapping[int, Sequence[str]]] = None) -> Tuple[str, str]:
     """``(goal, brief)`` for the deep harness: the work item as the goal, and the brief from the deliverable's solution records, its rubric, what is kept
     and where it is kept. ``record`` (the quest, milestone, goal title, rubric and before) becomes the code-written work record line the task executor
-    reads when the work finishes, to measure and keep it (``milestone_completion``)."""
+    reads when the work finishes, to measure and keep it (``milestone_completion``). ``frame`` (the hub's ``solution_frame``: approach, next unmet milestone,
+    disadvantages, last value) goes directly under the solution line. ``unmet`` is ``{part number: [requirement it failed]}`` read from the kept goal: the
+    brief then says to repair those parts first (same part number, whole part rewritten) and only then add new parts, and numbers the kept parts."""
     goal = f"Make {item.get('name')} to its rubric and keep it on the goal '{title}'"
     before = (record or {}).get("before")
     total = (record or {}).get("total")
     brief = DEEP_BRIEF.format(opening=SKILL_OPENING.format(skill=skill) if skill else PLAIN_OPENING, solution=solution or str(item.get("name")),
                               milestone=milestone or "named in the records below", item=item.get("name"), rubric="; ".join(requirements) or "(none recorded)",
                               before=f"{before or 0}" + (f" of {total}" if total else ""),
-                              have="\n".join(f"- {clip_line(p)}" for p in have) or "(nothing yet)", title=title, records=records,
+                              frame=("\n" + frame.strip()) if frame and frame.strip() else "",
+                              repair=REPAIR_BRIEF.format(unmet="\n".join(f"- Part {n}: {r}" for n, rs in sorted(dict(unmet).items()) for r in rs)) if unmet else "",
+                              have="\n".join((f"- Part {n}: " if unmet else "- ") + clip_line(p) for n, p in enumerate(have, 1)) or "(nothing yet)", title=title, records=records,
                               grounding=str(grounding or "")[:GROUNDING_CHARS], no_em_dash=NO_EM_DASH,
                               record=work_record_line(dict(record, skill=skill) if skill else record) if record else "")
     if form == "evidence":

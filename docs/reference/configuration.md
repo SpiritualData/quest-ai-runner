@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-243 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+244 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -220,6 +220,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_TOOL_QUEST_ID` |  | `the_consciousness/terminal/__main__.py`, `the_world/tools/tools.py` | `docs/how-to/tools.md` |
 | `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `the_consciousness/terminal/__main__.py`, `the_intelligence/mind/delegation/goal_runner_contract.py`, `the_world/tools/tools.py` | `docs/explanation/hub-of-hubs.md`, `docs/explanation/metric-results.md`, `docs/how-to/tools.md` |
 | `QAR_TOOL_TASK_ID` |  | `the_consciousness/terminal/__main__.py`, `the_world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_TRAIL_DIR` |  | `the_intelligence/mind/delegation/exploration_trail.py` | - |
 | `QAR_USER_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_VECTOR_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_consciousness/request_intake/lane.py` | `docs/explanation/vector-context.md` |
 | `QAR_VECTOR_MAX_SEED_ITEMS` | Cards one vector seed pass may embed (0 lifts the bound). | `the_intelligence/subconscious/context_retriever/vector_context_assembler.py` | - |

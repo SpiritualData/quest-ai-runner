@@ -108,3 +108,70 @@ def test_a_finished_deliverable_keeps_only_the_facts_its_sources_hold():
     assert got["unsupported"] == ["It was rated best app of 2029."]         # the deliverable's own words after DELIVERABLE: are no source
     assert "rated best app" not in got["body"] and "A goal is tracked weekly." in got["body"]
     assert got["status"] == "measured" and got["after"] == 1                # scored on the words that are kept
+
+
+GOOD = "Opening line {n}. Call to action: try it."
+NO_END = "Opening line {n}. Nothing to do at the end."
+NO_OPEN = "Just the ending {n}. Call to action: go."
+
+
+def kept_with_unmet():
+    """A kept goal as a first measure leaves it: part 1 meets the rubric, part 2 lacks its call to action."""
+    first = mc.measure_on_completion(RECORD, "DELIVERABLE:\n--- Part 1 ---\n" + GOOD.format(n=1) + "\n\n--- Part 2 ---\n" + NO_END.format(n=2), Registry(), scorer)
+    return first, "Kept by Quest AI: " + first["body"]
+
+
+def test_the_requirement_each_part_failed_is_recorded_in_the_kept_body_and_read_back():
+    first, kept = kept_with_unmet()
+    assert first["after"] == 1 and first["unmet"] == [{"part": 2, "requirements": ["Ends with a call to action"]}]
+    assert "Not yet meeting the rubric:\n- Part 2: Ends with a call to action" in first["body"]
+    assert first["body"].index("Not yet meeting") < first["body"].index("--- Part 1 ---")          # in the overview, so it is never counted as a part
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_progress as mp
+    assert len(mp.kept_parts(kept)) == 2 and NO_END.format(n=2) in mp.kept_parts(kept)[1] and "Not yet" not in "".join(mp.kept_parts(kept))
+    assert mc.unmet_of(kept) == {2: ["Ends with a call to action"]} and mc.unmet_of("Overview:\nNothing failed.") == {}
+    assert mc.unmet_section([]) == "" and mc.unmet_of("x" + mc.unmet_section(first["unmet"])) == {2: ["Ends with a call to action"]}
+
+
+def test_a_repair_of_a_kept_part_replaces_it_only_when_the_check_finds_it_meets_more():
+    first, kept = kept_with_unmet()
+    registry = Registry(kept=kept)
+    got = mc.measure_on_completion(RECORD, "DELIVERABLE:\n--- Part 2 ---\n" + GOOD.format(n=2), registry, scorer)
+    assert got["repairs"] == [{"part": 2, "kept_new": True, "why": "it meets more of the rubric"}]
+    assert (got["before"], got["after"]) == (0, 2) and got["unmet"] == [] and "Not yet meeting" not in got["body"]
+    assert GOOD.format(n=2) in got["body"] and NO_END.format(n=2) not in got["body"] and GOOD.format(n=1) in got["body"] and got["body"].count("--- Part") == 2
+
+
+def test_a_worse_or_equal_repair_is_discarded_and_the_failures_stay_recorded():
+    first, kept = kept_with_unmet()
+    worse = mc.measure_on_completion(RECORD, "DELIVERABLE:\n--- Part 1 ---\n" + NO_OPEN.format(n=1), Registry(kept=kept), scorer)
+    assert [(r["part"], r["kept_new"]) for r in worse["repairs"]] == [(1, False)] and GOOD.format(n=1) in worse["body"] and NO_OPEN.format(n=1) not in worse["body"]
+    assert worse["after"] == 1 and worse["unmet"] == first["unmet"]
+    equal = mc.measure_on_completion(RECORD, "DELIVERABLE:\n--- Part 2 ---\nOpening line again. Still nothing at the end.", Registry(kept=kept), scorer)
+    assert equal["repairs"][0]["kept_new"] is False and NO_END.format(n=2) in equal["body"]
+
+
+def test_a_repair_and_a_new_part_in_one_deliverable_are_both_handled():
+    first, kept = kept_with_unmet()
+    output = "DELIVERABLE:\n--- Part 2 ---\n" + GOOD.format(n=2) + "\n\n--- Part 3 ---\n" + GOOD.format(n=3)
+    got = mc.measure_on_completion(RECORD, output, Registry(kept=kept), scorer)
+    assert got["after"] == 3 and got["body"].count("--- Part") == 3 and GOOD.format(n=3) in got["body"] and got["unmet"] == []
+
+
+def test_a_repair_goes_through_the_source_check_before_it_can_replace_a_part():
+    first, kept = kept_with_unmet()
+    reference = "The brief.\n\nSOURCES:\nNothing relevant.\n\nDELIVERABLE:\nx"
+
+    def decide(prompt):
+        if "The text:" in prompt:
+            return scorer(prompt)
+        return json.dumps({"sentences": [{"n": n, "kind": "fact", "quote": "no source says this"} for n in range(1, 8)]})
+    got = mc.measure_on_completion(RECORD, "DELIVERABLE:\n--- Part 2 ---\n" + GOOD.format(n=2), Registry(kept=kept), decide, reference=reference)
+    assert got["unsupported"] and got["repairs"][0]["kept_new"] is False and NO_END.format(n=2) in got["body"]
+
+
+def test_with_no_requirements_the_old_behaviour_holds_and_nothing_is_recorded_as_unmet():
+    record = dict(RECORD, requirements=[])
+    kept = "Kept by Quest AI: Overview:\nTutorials.\n\n--- Part 1 ---\nOld script one."
+    got = mc.measure_on_completion(record, "DELIVERABLE:\n--- Part 1 ---\nNew script one.\n\n--- Part 2 ---\nNew script two.", Registry(kept=kept), scorer)
+    assert got["after"] == 0 and got["unmet"] == [] and got["repairs"] == [] and "Not yet meeting" not in got["body"]
+    assert "New script one." in got["body"] and "Old script one." not in got["body"] and got["body"].count("--- Part") == 2       # a whole body replaces, as before

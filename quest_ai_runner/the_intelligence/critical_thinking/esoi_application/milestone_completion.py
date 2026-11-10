@@ -83,6 +83,44 @@ def units_by_heading(text: str) -> List[str]:
     return [blocks[0]] + units if len(units) > 1 else [str(text or "").strip()]
 
 
+UNMET_HEAD = "Not yet meeting the rubric:"
+PART_HEAD = re.compile(r"^--- Part (\d+) ---[ \t]*$", re.MULTILINE)
+UNMET_LINE = re.compile(r"^- Part (\d+): (.+?)\s*$")
+
+
+def unmet_section(unmet: Any) -> str:
+    """The short section the kept goal carries so the NEXT run knows which requirement each part failed: ``Not yet meeting the rubric:`` then one
+    ``- Part N: <requirement>`` line per failed requirement ("" when none failed). ``unmet`` is the list ``measure_on_completion`` returns
+    (``{"part": N, "requirements": [...]}``). It sits in the overview, before Part 1, so ``kept_parts`` (which reads after the first part separator) never
+    counts it as a part and a part's text comparison (``squash``) never meets it."""
+    lines = [f"- Part {u['part']}: {' '.join(str(r).split())}" for u in unmet or [] for r in u.get("requirements") or [] if str(r).strip()]
+    return ("\n\n" + UNMET_HEAD + "\n" + "\n".join(lines)) if lines else ""
+
+
+def unmet_of(kept_text: Any) -> Dict[int, List[str]]:
+    """``{part number: [requirement it failed, ...]}`` from the section ``unmet_section`` wrote on a kept goal ({} when it holds none)."""
+    text = str(kept_text or "")
+    if UNMET_HEAD not in text:
+        return {}
+    out: Dict[int, List[str]] = {}
+    for line in text.split(UNMET_HEAD, 1)[1].lstrip("\n").splitlines():
+        found = UNMET_LINE.match(line.strip())
+        if not found:
+            break
+        out.setdefault(int(found.group(1)), []).append(found.group(2))
+    return out
+
+
+def numbered_parts(text: str) -> List[Tuple[int, str]]:
+    """``[(N, text)]`` for each block of ``text`` that starts with a line ``--- Part N ---`` (the follow-on section excluded), in order. A block whose N is a
+    kept part's number is a repair of that part; a larger N is a new part."""
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_progress as mp
+    body = mp.FOLLOW_SPLIT.split(str(text or ""), maxsplit=1)[0]
+    marks = list(PART_HEAD.finditer(body))
+    found = [(int(m.group(1)), body[m.end(): marks[i + 1].start() if i + 1 < len(marks) else len(body)].strip()) for i, m in enumerate(marks)]
+    return [(n, t) for n, t in found if t]
+
+
 def kept_goal_text(registry: Any, record: Mapping[str, Any]) -> str:
     """The description of the milestone's keyed goal as it stands now ("" when it cannot be read or holds nothing)."""
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
@@ -121,7 +159,12 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
                           today: Optional[datetime.date] = None) -> Dict[str, Any]:
     """Measure and keep a finished background deliverable. Returns ``{"status", "before", "after", "total", "line"}``: ``measured`` with the increment
     line a reader sees, or ``no_deliverable`` / ``not_kept`` with why. ``reference`` is what the worker was given (its brief), which the scorer may check a
-    requirement about the sources against."""
+    requirement about the sources against.
+
+    Which requirement each part failed is returned as ``unmet`` and kept in the goal's overview (``unmet_section``), so the next run is briefed with it. A
+    deliverable block that starts with ``--- Part N ---`` for a part already kept is a repair of it: after the source check it replaces that part only when
+    the scorer finds it meets strictly more requirements (``keep_better``); the result's ``repairs`` says what happened to each."""
+    from hubofhubs.api import keep_better, unmet_by_unit
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_progress as mp
     from quest_ai_runner.the_world.tools.tools import ToolContext
     part = deliverable_of(output)
@@ -130,10 +173,21 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
     requirements = [str(r) for r in record.get("requirements") or [] if str(r).strip()]
     kept_text = kept_goal_text(registry, record)
     body_now = kept_text.split(mp.OVERVIEW_HEAD, 1)[-1] if mp.OVERVIEW_HEAD in kept_text else kept_text
-    overview = body_now.split("\n--- Part", 1)[0].strip() if "--- Part" in body_now else ""
+    overview = body_now.split("\n--- Part", 1)[0].split(UNMET_HEAD, 1)[0].strip() if "--- Part" in body_now else ""
     part = part.split(KEPT_MARKER, 1)[-1].strip() if part.startswith(KEPT_MARKER) else part
     parts = mp.kept_parts(kept_text)
-    if mp.kept_parts(part):
+    existing = list(parts)
+    requirements_given = bool(requirements)
+    numbered = numbered_parts(part) if requirements_given and existing else []
+    repairs: Dict[int, str] = {}
+    if numbered:
+        # Parts numbered as kept parts are repairs of them (they replace only when the check finds them better); a larger number is a new part.
+        repairs = {n: t for n, t in numbered if 1 <= n <= len(existing)}
+        fresh = [t for n, t in numbered if n > len(existing) and mp.squash(t) not in mp.squash(kept_text)]
+        head = part[:PART_HEAD.search(part).start()].strip().split(mp.OVERVIEW_HEAD, 1)[-1].split(UNMET_HEAD, 1)[0].strip()
+        overview = overview or head
+        parts = existing + fresh
+    elif mp.kept_parts(part):
         parts = mp.kept_parts(part)     # the deliverable is a whole kept body (its parts under their separators): it is the goal's text now
     elif len(units_by_heading(part)) > 1:
         overview_now, units = units_by_heading(part)[0], units_by_heading(part)[1:]
@@ -145,6 +199,8 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
     before = float(record.get("before") or 0)
     method = "evidence" if record.get("method") == "evidence" else "rubric"
     unsupported: List[str] = []
+    unmet: List[Dict[str, Any]] = []
+    repaired: List[Dict[str, Any]] = []
     if method == "evidence":
         # Evidence counts the questions answered with a named source (structure, not the worker's say-so); the answers are the kept part.
         questions = list((mp.questions_of(part) or {}).get("questions") or [])
@@ -159,6 +215,7 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
         # deliverable is never its own source. Parts already kept were checked when they were kept.
         sources = sources_of(reference)
         already = mp.squash(kept_text)
+        scorer = mp.Scorer(decide, requirements, reference)      # one verdict set per distinct text, cached: each (requirement, part) is scored once
         held: List[str] = []
         for p in parts:
             if kept_text and mp.squash(p) in already:
@@ -168,13 +225,24 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
             unsupported += removed
             if now:
                 held.append(now)
+        for n, text in sorted(repairs.items()):
+            old = held[n - 1]
+            if mp.squash(text) == mp.squash(old):
+                continue
+            now, removed = supported_part(text, sources, decide)       # the source check applies to the new text first
+            unsupported += removed
+            if not now:
+                repaired.append({"part": n, "kept_new": False, "why": "nothing of the rewrite rested on a source"})
+                continue
+            held[n - 1], took = keep_better(old, now, requirements, scorer)
+            repaired.append({"part": n, "kept_new": took, "why": "it meets more of the rubric" if took else "it does not meet more of the rubric than the part it would replace"})
         parts = held
-        scorer = mp.Scorer(decide, requirements, reference)
-        met = [p for p in parts if requirements and all(scorer(r, p) for r in requirements)]
-        after = float(len(met))
+        failed = unmet_by_unit(parts, requirements, scorer) if requirements else []
+        unmet = [{"part": n, "requirements": u} for n, u in enumerate(failed, 1) if u]
+        after = float(sum(1 for u in failed if not u))
         total = record.get("total") if isinstance(record.get("total"), int) else None
     day = (today or datetime.date.today()).isoformat()
-    progress = mp.Progress(title=str(record["title"]), item=str(record.get("item") or ""), overview=overview or f"{record.get('item')}.", parts=parts,
+    progress = mp.Progress(title=str(record["title"]), item=str(record.get("item") or ""), overview=(overview or f"{record.get('item')}.") + unmet_section(unmet), parts=parts,
                            measure_name=str(record.get("measure_name") or f"Units of {record.get('item')} meeting their requirements"),
                            before=before, after=after, total=total, as_of=day, method=method)
     increment = {"kind": "evidence" if method == "evidence" else "deliverable", "measure_id": record.get("metric_id"), "measure_name": progress.measure_name,
@@ -182,7 +250,7 @@ def measure_on_completion(record: Mapping[str, Any], output: Any, registry: Any,
     result = registry.invoke(mp.KEEP_TOOL, {"quest_id": record["quest_id"], "title": record["title"], "body": progress.body(),
                                             "solution_id": record.get("milestone_id"), "increment": increment},
                              ToolContext(quest_id=str(record["quest_id"])))
-    common = {"unsupported": unsupported, "before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
+    common = {"unsupported": unsupported, "unmet": unmet, "repairs": repaired, "before": before, "after": after, "total": total, "body": progress.body(), "increment": increment, "title": str(record["title"]),
               "measure_line": progress.increment_line(),
               "goal_found": bool(kept_text), "milestone_metric": metric_again(registry, record)}
     if not getattr(result, "ok", False):

@@ -19,6 +19,7 @@ from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_sele
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics, run_hint, working_dir_of
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
+from quest_ai_runner.the_intelligence.mind.delegation.exploration_trail import goal_key_of, record_run_trail, where_things_are
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
 from hubofhubs.api import ExecutionFact, ExecutionRecord, classify_exec_phase
@@ -511,6 +512,12 @@ class DeepRunMixin:
             brief = brief + solution_consideration.brief_block(
                 f"{user_message}\n{goal}", working_dir_of(terminal_runner, working_dir_override), getattr(self, "provider", None),
                 status=emit.status if emit is not None else None)
+            # WHERE THINGS ARE: the files earlier runs on this goal used and a map of the working folder, so the worker opens them
+            # instead of searching (no model call; "" without a working folder). It rides in the context preamble, where the prompt
+            # budget cuts it before the request, and in the brief for a runner that takes no preamble.
+            run_working_dir = working_dir_of(terminal_runner, working_dir_override)
+            run_goal_key = goal_key_of(ctx_meta)
+            where_block = where_things_are(run_working_dir, run_goal_key)
             announce_model_selection(terminal_runner)
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
@@ -654,10 +661,14 @@ class DeepRunMixin:
                         # context targeted at IT, not just the shared run-level view.
                         if per_goal_context:
                             preamble_parts.append(per_goal_context)
+                        if where_block:
+                            preamble_parts.append(where_block)
                         if extra_context:
                             preamble_parts.extend(extra_context)
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
+                    if where_block and not caps["preamble"]:
+                        kwargs["brief"] = current_brief + "\n\n" + where_block
                     if caps["working_dir"] and working_dir_override:
                         kwargs["working_dir"] = working_dir_override
                     # Tell an opted-in runner this is ONE of several concurrent subgoals of the
@@ -688,6 +699,8 @@ class DeepRunMixin:
                     # the payload handed to the goal verifier, the emit paths, and the consumer can
                     # never carry the section, and the card updater has exactly one place to read.
                     done = active_runner.run_goal(**kwargs)
+                    # What this run read and changed is kept for the next run on this goal (never fails the run).
+                    record_run_trail(run_working_dir, run_goal_key, getattr(done, "session_id", None))
                     if getattr(done, "cancelled", False):
                         # The worker was stopped on request. Remember it here, because the caller's
                         # own cancel_check is throttled and may not read True yet: the loop below

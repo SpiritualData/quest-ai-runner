@@ -157,10 +157,30 @@ def chosen_for(request: str, root: Any, min_score: float = 0.0) -> List[Mapping[
     return [{**f, "dependents": {}} for f in selected(found, float(min_score or DEFAULT_MIN_SCORE))]
 
 
+NEAREST_BELOW_GATE = 2      # the solutions named when none passes the gate
+
+
+def define_block(request: str, root: Any) -> str:
+    """The short block for a deep goal whose folder holds records but no solution passing the gate: the nearest solutions below it (the same
+    ranking, no model call) and the instruction to extend one or define a new solution in the folder's own records before the work."""
+    from hubofhubs.api import RecordsIndex, network_of
+    found = RecordsIndex().relevant(request, root if hasattr(root, "classify") else str(root), depth=1)["solutions"][:NEAREST_BELOW_GATE]
+    network = network_of(root if hasattr(root, "classify") else str(root))
+    lines = []
+    for f in found:
+        purpose = " ".join(str(network.row(str(f["solution_id"])).get("purpose") or "").split())
+        lines.append(f"- {f.get('name') or f['solution_id']} ({f['solution_id']})" + (f": {purpose}" if purpose else ""))
+    return ("\n\n## No recorded solution fits this goal closely\n"
+            + ("The nearest solutions in this folder's records, each below the relevance gate:\n" + "\n".join(lines) + "\n" if lines else "")
+            + "Before doing the work, either extend the nearest solution (add to its records what this goal needs) or define a new solution in this "
+              "folder's own records: its problem, the solution with its approach and one milestone, its ideal and its metric. Then do the work under that solution.\n")
+
+
 def brief_block(request: str, working_dir: Optional[str], provider: Any, status: Optional[Callable[[str], None]] = None,
                 seconds: float = TIMEOUT_SECONDS, min_score: float = 0.0) -> str:
-    """The block for a deep goal's brief: "" when the folder holds no ESOI records, there is no provider, no solution passes the gate
-    (the request concerns none enough: nothing is added), or it ran out of time. Capped: one pass per selected solution and at most one
+    """The block for a deep goal's brief: "" when the folder holds no ESOI records, there is no provider, or it ran out of time. When records exist
+    but no solution passes the gate, a short block (``define_block``) names the nearest ones and tells the worker to extend one or define a new
+    solution before the work. Capped: one pass per selected solution and at most one
     parent pass, no dependent passes. A failure is said (a warning once per process), never silent."""
     try:
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import slice_root
@@ -172,7 +192,7 @@ def brief_block(request: str, working_dir: Optional[str], provider: Any, status:
         chosen = chosen_for(request, root, min_score or core_settings().solution_consideration_min_score)
         if not chosen:
             log.info("Solution consideration: gated, the goal concerns no solution above the threshold")
-            return ""
+            return define_block(request, root)
         if status is not None:
             status("Reading what each part of the design this touches already knows.")
         got = bounded(lambda: consider(request, root, ask, chosen, limits={"depth": 1, "calls": len(chosen) + 1}), seconds)
