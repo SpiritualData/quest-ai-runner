@@ -186,6 +186,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
+   "digest_by_need": "quest_ai_runner.the_intelligence.subconscious.digest_by_need",
    "per_lane_assembly": "quest_ai_runner.the_intelligence.subconscious.area_context_retriever"
   }
  },

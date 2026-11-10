@@ -83,6 +83,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Context handed to the planner (`metric-choose-the-context`): leader `per_lane_assembly`, 2 of 2 cases
 - Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): leader `recency_window`, 4 of 9 cases
 - Quest Intelligence on Quest cases (`metric-quest-intelligence`)
+- Cited findings from a large body of records, bounded and cached (`metric-digest-by-need`): no result recorded
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): leader `quest_decision_sink`, 15 of 15 cases
 
 ## Where to go next
@@ -161,6 +162,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Context handed to the planner (`metric-choose-the-context`): `esoi run context_choice --impl per_lane_assembly`
 - Goal-relevant admission at a precision floor with nothing out of scope (`metric-admit-to-the-mind`): `esoi run admit_to_the_mind --impl recency_window`
 - Quest Intelligence on Quest cases (`metric-quest-intelligence`): `none`
+- Cited findings from a large body of records, bounded and cached (`metric-digest-by-need`): `esoi run digest_by_need --impl digest_by_need`
 - Escalation delivery and detail completeness (`metric-escalate-to-a-human`): `esoi run escalate_to_a_human --impl quest_decision_sink`
 
 

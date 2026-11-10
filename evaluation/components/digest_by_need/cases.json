@@ -1,0 +1,12 @@
+[
+ {"id": "DN-01", "area": "sixty_entries_three_matter", "need": "What has this person already tried or noticed that bears on running a marathon without pain?", "marker": "KEY",
+  "groups": [{"id": "collection:log", "title": "Training log", "count": 60, "matter": {"7": "KEY knee pain after every 10k run", "23": "KEY I sleep better after a rest day", "41": "KEY Tuesday intervals felt great"}}],
+  "expect_cited": ["collection:log:7", "collection:log:23", "collection:log:41"], "expect_status": {"collection:log": "analysed"}},
+ {"id": "DN-02", "area": "another_need_another_digest", "need": "What does this person already measure or record that could show whether the plan works?", "marker": "LOG",
+  "groups": [{"id": "collection:log", "title": "Training log", "count": 60, "matter": {"3": "LOG distance 3 km", "13": "LOG distance 13 km"}}],
+  "expect_cited": ["collection:log:3", "collection:log:13"], "expect_status": {"collection:log": "analysed"}},
+ {"id": "DN-03", "area": "one_group_fails", "need": "What has this person already tried or noticed that bears on running a marathon without pain?", "marker": "KEY", "fail_on": "BROKEN-GROUP",
+  "groups": [{"id": "collection:log", "title": "Training log", "count": 60, "matter": {"7": "KEY knee pain after every 10k run"}},
+             {"id": "collection:broken", "title": "Broken group", "count": 12, "matter": {"0": "BROKEN-GROUP record 0", "1": "BROKEN-GROUP record 1", "2": "BROKEN-GROUP record 2", "3": "BROKEN-GROUP record 3", "4": "BROKEN-GROUP record 4", "5": "BROKEN-GROUP record 5", "6": "BROKEN-GROUP record 6", "7": "BROKEN-GROUP record 7", "8": "BROKEN-GROUP record 8", "9": "BROKEN-GROUP record 9", "10": "BROKEN-GROUP record 10", "11": "BROKEN-GROUP record 11"}}],
+  "expect_cited": ["collection:log:7"], "expect_rerun_calls": 1, "expect_status": {"collection:log": "analysed", "collection:broken": "failed"}}
+]

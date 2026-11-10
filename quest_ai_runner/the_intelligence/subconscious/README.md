@@ -24,7 +24,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 |---|---|---|---|---|
 | Intuition | `the-intuition` | `quest_ai_runner.run("the-intuition", 'quest-id')` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
 | Cards From Files | `cards-from-files` | `quest_ai_runner.run("cards-from-files", {'root': '.', 'files': [], 'existing': {}})` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
-| Choose The Context | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
+| Choose The Context | `choose-the-context` | `quest_ai_runner.run("choose-the-context", 'What should I work on first this week?')` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner, Cited findings from a large body of records, bounded and cached |
 
 ## Solutions from a library
 
@@ -60,7 +60,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 |---|---|---|---|
 | Intuition | `the-intuition` | Atomic file prediction store (`file`) | Prediction store contract pass rate |
 | Cards From Files | `cards-from-files` | QAR topic bootstrap (`qar_topic_bootstrap`) | Cards per source-file group after repeated passes, for the guards that prevent growth, Copies kept out with real material kept in, by review availability, Retrieval hits and category precision per unit of cost |
-| Choose The Context | `choose-the-context` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner |
+| Choose The Context | `choose-the-context` | Per-lane assembly of the context members (today) (`per_lane_assembly`) | Context handed to the planner, Cited findings from a large body of records, bounded and cached |
 
 ### Implementations
 
@@ -74,6 +74,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Index everything (broken baseline) | `cards-from-files:index_everything` | [evaluation/components/choose_what_to_index/broken/index_everything.py](../../../evaluation/components/choose_what_to_index/broken/index_everything.py) |  |
 | Path and title rules, no model call (floor, proposed) | `cards-from-files:path_rules` | [evaluation/components/label_context_cards/impls/path_rules.py](../../../evaluation/components/label_context_cards/impls/path_rules.py) |  |
 | Per-lane assembly of the context members (today) | `choose-the-context:per_lane_assembly` | [quest_ai_runner/the_intelligence/subconscious/area_context_retriever.py](area_context_retriever.py) | [context_retriever](context_retriever/README.md) |
+| Digest by need (sub-analyses over source groups) | `choose-the-context:digest_by_need` | [quest_ai_runner/the_intelligence/subconscious/digest_by_need.py](digest_by_need.py) |  |
+| Whole collection in one prompt (broken baseline) | `choose-the-context:whole_collection` | [evaluation/components/digest_by_need/broken/whole_collection.py](../../../evaluation/components/digest_by_need/broken/whole_collection.py) |  |
 | Fast-tier model writes metadata and categories (today) | `cards-from-files:fast_model_labels` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/card_metadata_generator.py](cards_from_files/card_metadata_generator.py) |  |
 | QAR topic bootstrap | `cards-from-files:qar_topic_bootstrap` | [quest_ai_runner/the_intelligence/subconscious/cards_from_files/qar_topic_bootstrap.py](cards_from_files/qar_topic_bootstrap.py) |  |
 | Atomic file prediction store | `the-intuition:file` | [quest_ai_runner/the_intelligence/subconscious/intuition/anticipation_store.py](intuition/anticipation_store.py) |  |
