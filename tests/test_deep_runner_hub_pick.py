@@ -96,6 +96,23 @@ def test_the_hubs_own_loop_runs_only_when_named(programs):
         assert choose_agent_arm(["anthropic"], difficulty=difficulty).harness != "solution_loop_runner"
 
 
+def test_the_hubs_own_loop_is_handed_the_web_only_when_a_search_backend_is_configured(monkeypatch):
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
+    from quest_ai_runner.the_world.tools.web_search import web_research
+
+    class Research:
+        def search(self, query):
+            return type("O", (), {"error": None, "text": f"results for {query}", "hits": []})()
+
+        def fetch(self, url, focus=None):
+            return type("O", (), {"error": "blocked", "text": None, "hits": []})()
+    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env: None)
+    assert hub_loop_runner.web_tools({}) == {}
+    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env: Research())
+    tools = hub_loop_runner.web_tools({})
+    assert tools["web_search"].run(" tide pools ") == "results for tide pools" and tools["read_page"].run("https://example.org why") == "error: blocked"
+
+
 def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, picks, monkeypatch):
     table, _ = picks
     assert type(resolve_deep_runner(cfg(deep_providers=["openai"]))) is SubprocessGoalRunner   # nothing eligible: the default
