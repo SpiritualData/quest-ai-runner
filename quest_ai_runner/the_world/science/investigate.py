@@ -88,6 +88,8 @@ def evidence_line(kinds: Sequence[str], read_in_full: bool = False) -> str:
 
 def finding_evidence(finding: Mapping[str, Any], verified: Any = None) -> str:
     """The evidence line of one host-written finding (``source_kind``, ``also`` as a count or ``also_kinds``) with the verification of its own source."""
+    if finding.get("evidence"):
+        return str(finding["evidence"])                       # the host presented it already (Quest's finding presenter): one wording, said as given
     kind = str(finding.get("source_kind") or "")
     also = finding.get("also_kinds")
     if not isinstance(also, list):
