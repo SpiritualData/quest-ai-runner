@@ -156,6 +156,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Eligibility gate mixin | `quest-autopilot:autopilot_gates` | [quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py](proactivity/autopilot_gates.py) |  |
 | Single-purpose routines | `quest-autopilot:autopilot_routines` | [quest_ai_runner/the_intelligence/proactivity/autopilot_routines.py](proactivity/autopilot_routines.py) |  |
 | Structure watch binding | `quest-autopilot:structure_watch_binding` | [quest_ai_runner/the_intelligence/proactivity/autopilot_structure_watch.py](proactivity/autopilot_structure_watch.py) |  |
+| Quest AI latest look (no autopilot) | `quest-autopilot:quest_ai_latest` | [quest_ai_runner/the_intelligence/proactivity/quest_ai_latest.py](proactivity/quest_ai_latest.py) |  |
 
 ### Metrics
 

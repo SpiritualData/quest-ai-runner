@@ -128,7 +128,12 @@ from quest_ai_runner.the_world.tools.web_search.web_research import build_web_re
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS, PROPOSAL_TEXT_PREFIX)
 
+# Proactivity (quest-ai-latest): whether Quest AI should take a new look at a quest now and what to look into first
+from quest_ai_runner.the_intelligence.proactivity.quest_ai_latest import KIND_ORDER as QUEST_AI_LATEST_KIND_ORDER, next_look as quest_ai_latest_next_look
+
 __all__ = [
+    "QUEST_AI_LATEST_KIND_ORDER",
+    "quest_ai_latest_next_look",
     "ACCEPTED",
     "AUTOPILOT_PASS_KIND",
     "AUTOPILOT_WORK_KIND",
