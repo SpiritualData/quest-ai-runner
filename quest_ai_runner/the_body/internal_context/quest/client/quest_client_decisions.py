@@ -168,6 +168,54 @@ class DecisionsMixin:
         return self._write("POST", f"/api/teams/{tid}/decisions", body=body, label="Raising the ask",
                            idempotency_key=idempotency_key or new_idempotency_key())
 
+    BLOCK_TYPES = ("needs_human_step", "needs_access", "needs_decision", "needs_information")
+    BLOCK_REASON_MAX = 300
+
+    def block_team_for(self, quest_id: str, goal_id: str) -> Dict[str, str]:
+        """The team a block on ``goal_id`` is reported under, and the goal's owner: ``{team_id, owner_id}``.
+
+        A quest can belong to several teams (``team_id`` plus ``team_ids`` on its state). The block reads its owner's standing
+        profile on the team it is reported under, and an owner has a profile only on a team they belong to, so the first of the
+        quest's teams the goal's owner is a member of wins (the quest's primary team first). The owner is the goal's assignee,
+        else nobody known here (the server then uses the goal's creator); the primary team is used when no team can be matched.
+        Raises ``QuestNotConfigured`` when the quest has no team at all.
+        """
+        state = self._request("GET", f"/api/quests/{quest_id}/state") or {}
+        teams = [str(t) for t in [state.get("team_id"), *(state.get("team_ids") or [])] if t]
+        teams = list(dict.fromkeys(teams))
+        if not teams:
+            raise QuestNotConfigured(f"quest {quest_id} has no team, so a block cannot be reported on it")
+        goal = self.get_goal(goal_id, quest_id=quest_id, team_id=teams[0])
+        if not goal:
+            raise QuestNotConfigured(f"goal {goal_id} was not found on quest {quest_id}")
+        owner = str(goal.get("assigned_to_user_id") or "")
+        if owner and len(teams) > 1:
+            for team in teams:
+                members = self._request("GET", f"/api/teams/{team}/members") or []
+                members = members.get("members", []) if isinstance(members, dict) else members
+                if any(str(m.get("user_id") or "") == owner for m in members if isinstance(m, dict)):
+                    return {"team_id": team, "owner_id": owner}
+        return {"team_id": teams[0], "owner_id": owner}
+
+    def report_block(self, quest_id: str, goal_id: str, block_type: str, reason: str) -> Dict[str, Any]:
+        """POST /api/teams/{team}/process/blocks: report a block on a goal so its owner gets an ask with a three-day clock
+        and the escalation hand-off applies (the quest team's personal process). Returns ``{block, created, team_id}``;
+        ``created`` is False when the same block was already open. Raises ``QuestNotConfigured`` (no team, unknown goal or
+        bad type) or a ``QuestWriteError`` (Quest refused it); the caller falls back to a plain ask."""
+        if block_type not in self.BLOCK_TYPES:
+            raise QuestNotConfigured(f"block type must be one of: {', '.join(self.BLOCK_TYPES)}")
+        text = " ".join(str(reason or "").split())
+        if len(text) > self.BLOCK_REASON_MAX:
+            text = text[:self.BLOCK_REASON_MAX - 3].rstrip() + "..."
+        if not text:
+            raise QuestNotConfigured("a block needs a one-line reason")
+        placed = self.block_team_for(quest_id, goal_id)
+        written = self._write("POST", f"/api/teams/{placed['team_id']}/process/blocks", label="Reporting the block",
+                              body={"goal_id": goal_id, "type": block_type, "reason": text},
+                              idempotency_key=new_idempotency_key())
+        data = written.data if isinstance(written.data, dict) else {}
+        return {"block": data.get("block") or {}, "created": bool(data.get("created")), "team_id": placed["team_id"]}
+
     def list_open_decisions_for_user(self, user_id: str) -> List[Dict[str, Any]]:
         try:
             return self._request("GET", "/api/teams/decisions/for-user",

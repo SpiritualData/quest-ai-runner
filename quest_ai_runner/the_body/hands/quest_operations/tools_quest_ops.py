@@ -23,6 +23,7 @@ call. ``core`` imports no runner code; the Quest client arrives through the fact
 """
 from __future__ import annotations
 
+import logging
 import re
 import threading
 import datetime as dt
@@ -33,6 +34,8 @@ from quest_ai_runner.the_world.tools.tools import (
     STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, data_of, quest_client_from_env, quest_credentials_present, result_of_write,
     write_failed)
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus, write_status_of
+
+log = logging.getLogger(__name__)
 
 #: Ask states that are finished or waiting on a person, not on an AI run. ``list_asks`` hides these
 #: unless ``include_closed`` is set, so "what is open" is one call with no filter to remember.
@@ -102,6 +105,33 @@ ASK_ALREADY_ANSWERED_GUIDANCE = (
     "own judgment or report what you could not do.")
 
 
+def blocked_ask(client, args: Mapping[str, Any], quest_id: Optional[str], summary: str) -> Optional[ToolResult]:
+    """The ask raised as a BLOCK on a goal (the quest team's three-day hand-off), or None to raise a plain ask instead.
+
+    Only when the worker named the goal it is stuck on and a block type, on a quest that has a team and a known goal. Any
+    failure of the block (no team, unknown goal, a Quest without the personal process, a refusal) returns None so the person is
+    still asked the ordinary way; a block that already stands is reported as already open, never filed twice."""
+    goal_id = str(args.get("blocked_goal_id") or "").strip()
+    block_type = str(args.get("block_type") or "").strip().lower()
+    if not (goal_id and block_type and quest_id):
+        return None
+    try:
+        placed = client.report_block(quest_id, goal_id, block_type, str(args.get("block_reason") or "").strip() or summary)
+    except Exception as error:  # noqa: BLE001 -- a block that cannot be filed falls back to the plain ask
+        log.info("create_decision: block on goal %s not filed (%s); raising a plain ask", goal_id, error)
+        return None
+    block = placed.get("block") or {}
+    ident = str(block.get("decision_id") or "")
+    if not ident:
+        return None
+    if not placed.get("created"):
+        return ToolResult(ok=True, status=ToolStatus.NOOP, data=block, text=(
+            f"Already open as ask {ident} (a block on this goal): not raised again. Point to it in your result instead of a second ask."))
+    return ToolResult(ok=True, status=ToolStatus.APPLIED, data=block, text=(
+        f"Raised ask {ident} as a block on goal {goal_id} for its owner on quest {quest_id}. It is handed to their escalation contact "
+        f"after three days without an answer."))
+
+
 def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
@@ -143,6 +173,11 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
             kwargs["dedupe_key"] = ask_dedupe_key(turn_id, conv_id)
             if conv_id:
                 kwargs["conv_id"] = conv_id
+        blocked = blocked_ask(client, args, quest_id, summary)
+        if blocked is not None:
+            record_turn_ask(ctx.value("turn_asks"), decision_id=str((blocked.data or {}).get("decision_id") or ""),
+                            assignee_user_id=str((blocked.data or {}).get("step_owner_id") or ""), summary=summary)
+            return blocked
         try:
             row = client.create_decision(summary, **kwargs)
         except Exception as e:  # QuestWriteError: refused (for example the person already answered this), failed, unknown
@@ -180,7 +215,9 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                      "with an Approve/Decline answer."),
         when_to_use=("You need anything from a person. One call per ask. Make it doable without "
                      "thinking: the link to open, the command to paste, the message to send and to "
-                     "whom, and the options when it is a choice."),
+                     "whom, and the options when it is a choice. When you are stuck on one specific goal because "
+                     "of a person (a step only they can do, access, a decision or a fact), also pass that goal's "
+                     "id as blocked_goal_id and the block_type, so it is handed on if they stay silent."),
         when_not_to_use=("A change to a quest field (its own tool files the ask). Something already "
                          "open: it is recognised and not raised twice. A report of finished work. A "
                          "question about one of the person's asks in What You Asked (that is "
@@ -201,6 +238,19 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                              "description": "Optional. Another person in this conversation who is the one to answer "
                                             "(name or id). Left out, or not matched to someone here, the ask goes to "
                                             "the person who gave the input."},
+                "blocked_goal_id": {"type": "string",
+                                    "description": "Optional. Use when you are stuck on ONE specific goal because of a person: the "
+                                                   "goal's id. The ask then goes to that goal's owner as a block, with a "
+                                                   "three-day clock after which it is handed to their escalation contact, and "
+                                                   "the goal's milestone owner is told. Needs block_type."},
+                "block_type": {"type": "string",
+                               "enum": ["needs_human_step", "needs_access", "needs_decision", "needs_information"],
+                               "description": "With blocked_goal_id: what the person must supply. needs_human_step (only a person can do "
+                                              "it), needs_access (a login, permission or tool), needs_decision (a choice), "
+                                              "needs_information (a fact only they know)."},
+                "block_reason": {"type": "string",
+                                 "description": "With blocked_goal_id: one plain line (at most 300 characters) on what is blocked and "
+                                                "what is needed. Left out, the start of summary is used."},
             },
         },
         mutates=True, workflow_step=False, origin="standard",

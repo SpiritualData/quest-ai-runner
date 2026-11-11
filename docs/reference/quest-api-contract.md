@@ -207,6 +207,19 @@ Returns a `decision_id`. The executor stamps it onto the task via the `needs_you
   /api/teams/{team_id}/quests/{quest_id}` -> `owner_user_ids[0]`). If none of those resolve, the
   sink raises rather than POSTing an unaddressed decision that would sit in nobody's queue.
 
+### Report a block on a goal (optional)
+
+```
+POST /api/teams/{team_id}/process/blocks     {"goal_id", "type", "reason"}
+```
+
+`type` is one of `needs_human_step`, `needs_access`, `needs_decision`, `needs_information`; `reason` is at most 300 characters.
+Quest raises one ask for the goal's owner (kind `blocked:<type>`, due in three days, handed to the owner's escalation contact
+if unanswered) and returns `{block, created}`. The `create_decision` tool uses it when the worker passes `blocked_goal_id` and
+`block_type` (`QuestClient.report_block`): the team is the first of the quest's teams (`team_id`, then `team_ids` of
+`GET /api/quests/{id}/state`) that the goal's owner belongs to. A quest with no team, an unknown goal, or a Quest without this
+route falls back to the plain ask above.
+
 ### Read a quest's decisions (context + dedup)
 ```
 GET /api/teams/decisions/for-quest?quest_id=...
