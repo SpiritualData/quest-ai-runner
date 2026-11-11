@@ -180,7 +180,8 @@ class DecisionsMixin:
         else nobody known here (the server then uses the goal's creator); the primary team is used when no team can be matched.
         Raises ``QuestNotConfigured`` when the quest has no team at all.
         """
-        state = self._request("GET", f"/api/quests/{quest_id}/state") or {}
+        answer = self._request("GET", f"/api/quests/{quest_id}/state") or {}
+        state = answer.get("state") if isinstance(answer.get("state"), dict) else answer   # the quest's own fields are under "state"
         teams = [str(t) for t in [state.get("team_id"), *(state.get("team_ids") or [])] if t]
         teams = list(dict.fromkeys(teams))
         if not teams:

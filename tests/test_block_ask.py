@@ -40,7 +40,7 @@ def routed(monkeypatch, routes):
 def base_routes(state, block_answer, goals=GOALS):
     return [
         ("GET", "/api/teams/decisions/for-quest", 200, []),
-        ("GET", "/api/quests/q1/state", 200, state),
+        ("GET", "/api/quests/q1/state", 200, {"quest_id": "q1", "state": state}),   # the quest's fields sit under "state"
         ("GET", "/goals/", 404, {}),   # the reference backend has no single-goal route
         ("GET", "/quests/q1/goals", 200, goals),
         ("GET", "/api/teams/team_a/members", 200, {"members": [{"user_id": OTHER}]}),
