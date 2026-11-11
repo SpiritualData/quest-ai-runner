@@ -179,3 +179,12 @@ def test_the_one_shot_runner_passes_the_configured_launch(monkeypatch):
     assert cmd[cmd.index("--tools") + 1] == "Read,Edit"
     assert "--strict-mcp-config" in cmd and cmd[cmd.index("--max-budget-usd") + 1] == "1"
     assert cmd[cmd.index("--max-turns") + 1] == "6"
+
+
+def test_chrome_flag_is_added_only_when_asked():
+    from quest_ai_runner.the_body.configuration.config_core_settings import deep_launch_from_env
+    from quest_ai_runner.the_body.configuration.deep_launch import lean_flags
+    assert "--chrome" not in lean_flags(deep_launch_from_env({}))
+    assert "--chrome" in lean_flags(deep_launch_from_env({"QAR_DEEP_CHROME": "1"}))
+    assert "--chrome" not in lean_flags(deep_launch_from_env({"QAR_DEEP_CHROME": "0"}))
+    assert "--chrome" in lean_flags(deep_launch_from_env({"QAR_DEEP_LAUNCH_PROFILE": "lean_guarded", "QAR_DEEP_CHROME": "true"}))

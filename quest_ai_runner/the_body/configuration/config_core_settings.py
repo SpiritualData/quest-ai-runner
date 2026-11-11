@@ -51,7 +51,8 @@ def deep_launch_from_env(env: Mapping[str, str]) -> DeepLaunchSettings:
     ``QAR_DEEP_TOOLS``: comma-separated built-in tool names (``--tools``); ``none`` is no tools at all.
     ``QAR_DEEP_SETTING_SOURCES``: comma-separated ``user``, ``project``, ``local`` (``--setting-sources``); ``none`` loads none.
     ``QAR_DEEP_STRICT_MCP`` and ``QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS``: ``1`` adds ``--strict-mcp-config`` and
-    ``--exclude-dynamic-system-prompt-sections``. ``QAR_DEEP_MAX_BUDGET_USD``: a positive number (``--max-budget-usd``).
+    ``--exclude-dynamic-system-prompt-sections``. ``QAR_DEEP_CHROME``: ``1`` adds ``--chrome`` (the worker can drive the signed-in
+    browser of the account it runs under). ``QAR_DEEP_MAX_BUDGET_USD``: a positive number (``--max-budget-usd``).
     ``QAR_DEEP_LAUNCH_PROFILE``: a named bundle of these (``core.deep_launch.PROFILES``, today ``lean_guarded``); a name that is
     not known is logged and ignored, and any ``QAR_DEEP_*`` name above that is set overrides the profile's field.
     The turn cap is the existing ``QAR_DEEP_MAX_TURNS`` (``OrchestratorConfig.deep_max_turns``), not a second variable.
@@ -71,11 +72,13 @@ def deep_launch_from_env(env: Mapping[str, str]) -> DeepLaunchSettings:
     strict_raw = (env.get("QAR_DEEP_STRICT_MCP") or "").strip().lower()
     dynamic_raw = (env.get("QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS") or "").strip().lower()
     budget = _optional_positive(env.get("QAR_DEEP_MAX_BUDGET_USD"), "QAR_DEEP_MAX_BUDGET_USD")
+    chrome_raw = (env.get("QAR_DEEP_CHROME") or "").strip().lower()
     return dataclasses.replace(
         base, tools=tools, setting_sources=sources,
         strict_mcp=(strict_raw in _TRUE) if strict_raw else base.strict_mcp,
         exclude_dynamic_sections=(dynamic_raw in _TRUE) if dynamic_raw else base.exclude_dynamic_sections,
-        max_budget_usd=budget if budget is not None else base.max_budget_usd)
+        max_budget_usd=budget if budget is not None else base.max_budget_usd,
+        chrome=(chrome_raw in _TRUE) if chrome_raw else base.chrome)
 
 
 def core_settings_from_env(env: Optional[Mapping[str, str]] = None) -> CoreSettings:
