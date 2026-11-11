@@ -16,9 +16,9 @@ DISTRIBUTION = {"anthropic": "anthropic", "google": "google-genai", "openai": "o
                 "filelock": "filelock", "pypdf": "pypdf", "trafilatura": "trafilatura", "esoi": "esoi",
                 "qdrant_client": "qdrant-client", "fastembed": "fastembed", "voyageai": "voyageai", "bm25s": "bm25s",
                 "Stemmer": "pystemmer", "numpy": "numpy", "sklearn": "scikit-learn", "acp": "agent-client-protocol",
-                "graphify": "graphifyy", "networkx": "networkx"}
+                "graphify": "graphifyy", "networkx": "networkx", "rich": "rich", "textual": "textual"}
 # Pulled by the hub's own extras named in QAR's core dependency line (locks, web) and by esoi's line.
-THROUGH_CORE = {"filelock", "httpx", "esoi"}
+THROUGH_CORE = {"filelock", "httpx", "esoi", "rich", "textual"}   # rich and textual are QAR core dependencies (the terminal)
 
 
 def imported_third_party(package_dir: Path) -> set:
@@ -55,8 +55,8 @@ def test_every_library_the_hub_imports_is_declared_for_the_all_extra():
 
 # The exact strings quest-backend/requirements.txt and conceptai install. One direct URL per package across every consumer:
 # a different ref for the same package cannot be resolved together. Change these and the other files in one release.
-SHARED_ESOI = "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.6.0#subdirectory=implementations/python"
-SHARED_HUB = "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.6.0"
+SHARED_ESOI = "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.7.0#subdirectory=implementations/python"
+SHARED_HUB = "hubofhubs[locks,science,web] @ git+https://github.com/SpiritualData/ai-hub-of-hubs-structure.git@v0.7.0"
 
 
 def test_the_two_direct_url_dependencies_are_the_strings_every_consumer_installs():
