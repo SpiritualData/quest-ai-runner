@@ -76,7 +76,7 @@ _FILE_SCALAR_FIELDS = {
     "channel_allowed_senders", "channel_ack_after_seconds", "channel_progress_min_seconds",
     "channel_turn_timeout_seconds", "channel_state_path",
     "corpus_root", "context_preamble",
-    "poll_interval_seconds", "dispatch_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks",
+    "poll_interval_seconds", "dispatch_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks", "max_concurrent_autopilot_tasks",
     "default_assignee_user_id", "decision_assignees", "decision_default_deadline_hours",
     "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
     "rep_sync_direction",
@@ -369,6 +369,13 @@ class RunnerConfig:
     dispatch_interval_seconds: float = 10.0
     poll_lookahead_minutes: float = 30.0
     max_concurrent_tasks: int = 2
+    # At most this many AUTOPILOT WORK runs at once (the batches an autopilot pass creates, one per
+    # character on duty), inside ``max_concurrent_tasks``. 0 = no separate limit. Set to 1 where the
+    # autopilots share something only one can use at a time (one signed-in browser, one branch a
+    # release reads): a queued autopilot run then waits for the running one and starts oldest
+    # first, so a day's order is the quests' run times, then each quest's roster order. Work a
+    # person asked for is never held by this.
+    max_concurrent_autopilot_tasks: int = 0
     default_assignee_user_id: Optional[str] = None   # decision routing default
     # NAMED decision assignees: {role -> user id}, e.g. {"owner": "user_...", "operator":
     # "user_..."}. Lets a caller write ``create_decision(..., assignee="operator")`` instead of

@@ -105,3 +105,66 @@ def test_unclaimable_old_tasks_do_not_starve_newer_ones():
         again = poller._dispatch_due(pool)
 
     assert again == ["ctx-3"]
+
+
+def _work(i, kind="autopilot_work", **extra):
+    return {"id": f"work-{i}", "status": "queued", "team_id": "team1", "task_kind": kind,
+            "created_at": f"2026-11-11T0{i}:00:00Z", **extra}
+
+
+def test_one_autopilot_run_at_a_time_and_the_next_starts_when_it_ends():
+    client = MockQuestClient([_work(1), _work(2), _work(3, kind="")])
+    poller, _ = _poller_with_assembler(client, max_concurrent_tasks=3, max_concurrent_autopilot_tasks=1)
+    gates = {f"work-{i}": threading.Event() for i in (1, 2, 3)}
+
+    def finish(task):                                  # a finished run is no longer queued
+        gates[str(task["id"])].wait(5)
+        client._due = [t for t in client._due if t["id"] != task["id"]]
+        return str(task["id"])
+    poller._handle_one = finish
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        first = poller._dispatch_due(pool)
+        again = poller._dispatch_due(pool)            # the first autopilot run still holds the slot
+        gates["work-1"].set()
+        for _ in range(200):
+            if not poller._inflight_autopilot:
+                break
+            threading.Event().wait(0.01)
+        after = poller._dispatch_due(pool)
+        for gate in gates.values():
+            gate.set()
+
+    assert first == ["work-1", "work-3"]              # oldest autopilot run, and the person's task is not held
+    assert again == []
+    assert after == ["work-2"]
+
+
+def test_autopilot_runs_are_not_limited_unless_configured():
+    client = MockQuestClient([_work(1), _work(2)])
+    poller, _ = _poller_with_assembler(client, max_concurrent_tasks=2)
+    gate = threading.Event()
+    poller._handle_one = lambda t: (gate.wait(5), str(t["id"]))[1]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = poller._dispatch_due(pool)
+        gate.set()
+
+    assert len(first) == 2
+
+
+def test_waiting_autopilot_runs_start_in_the_order_they_were_queued_today():
+    # A standing thread: created long ago, queued (updated) today after a newer thread.
+    client = MockQuestClient([
+        _work(1, updated_at="2026-11-11T22:30:05Z"),                                   # old thread, second on today's roster
+        {**_work(2), "created_at": "2026-11-11T22:30:01Z", "updated_at": "2026-11-11T22:30:01Z"},   # first on today's roster
+    ])
+    poller, _ = _poller_with_assembler(client, max_concurrent_tasks=2, max_concurrent_autopilot_tasks=1)
+    gate = threading.Event()
+    poller._handle_one = lambda t: (gate.wait(5), str(t["id"]))[1]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = poller._dispatch_due(pool)
+        gate.set()
+
+    assert first == ["work-2"]

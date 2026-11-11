@@ -35,6 +35,7 @@ if TYPE_CHECKING:  # typing only
 
 from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import make_judge
 from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, _parse_dt
+from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import AUTOPILOT_WORK_KIND
 from quest_ai_runner.the_intelligence.proactivity.autopilot_structure_watch import build_structure_watch
 from quest_ai_runner.the_intelligence.proactivity.poller_routines import RoutinesMixin
 from quest_ai_runner.the_body.intake_sources.context_updates import build_update_engine
@@ -198,6 +199,8 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         # a race WITHIN this one process.
         self._inflight_lock = threading.Lock()
         self._inflight: set = set()
+        # Ids of the autopilot work runs in flight, for ``max_concurrent_autopilot_tasks``.
+        self._inflight_autopilot: set = set()
         # task_id -> monotonic time before which dispatch skips it: a task whose claim failed
         # (another account owns it, so the PATCH 404s) must not keep taking a worker slot.
         self._claim_cooldown: Dict[str, float] = {}
@@ -296,7 +299,7 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
         # Priority, not a separate lane, and the hub's Prioritization decides it (``dispatch_order``).
-        fresh = dispatch_order(fresh)
+        fresh = self._autopilot_queue_order(dispatch_order(fresh))
         if pool is not None:
             return self._submit_to_pool(pool, fresh)
         if not fresh:
@@ -337,8 +340,11 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
             with self._inflight_lock:
                 if len(self._inflight) >= max(1, self.cfg.max_concurrent_tasks):
                     break
+            if not self._autopilot_slot_free(task):
+                continue      # an autopilot run waits its turn; work a person asked for goes on
             if not self._claim_slot(task_id):
                 continue
+            self._take_autopilot_slot(task)
             pool.submit(self._run_claimed, task)
             submitted.append(task_id)
         if submitted:
@@ -356,6 +362,47 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         finally:
             self._release_slot(task_id)
             self.state.release_in_flight(task_id)
+
+    def _autopilot_queue_order(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """With an autopilot limit set, the waiting autopilot runs in the order they were QUEUED
+        (``updated_at``), keeping the places ``dispatch_order`` gave autopilot work. A character's
+        autopilot work is one standing task re-queued every day, so its ``created_at`` is the age of
+        the thread, not today's place in line; the pass queues a quest's roster in order, which is
+        the order a day should run in."""
+        if int(getattr(self.cfg, "max_concurrent_autopilot_tasks", 0) or 0) <= 0:
+            return tasks
+        places = [i for i, t in enumerate(tasks) if self._is_autopilot_work(t)]
+        if len(places) < 2:
+            return tasks
+        queued = sorted((tasks[i] for i in places), key=lambda t: str(t.get("updated_at") or t.get("created_at") or ""))
+        ordered = list(tasks)
+        for place, task in zip(places, queued):
+            ordered[place] = task
+        return ordered
+
+    def _is_autopilot_work(self, task: Dict[str, Any]) -> bool:
+        return str(task.get("task_kind") or "") == AUTOPILOT_WORK_KIND
+
+    def _autopilot_slot_free(self, task: Dict[str, Any]) -> bool:
+        """False when ``task`` is autopilot work and ``max_concurrent_autopilot_tasks`` of them
+        already run. It stays queued and unseen, so a later tick starts it, oldest first."""
+        limit = int(getattr(self.cfg, "max_concurrent_autopilot_tasks", 0) or 0)
+        if limit <= 0 or not self._is_autopilot_work(task):
+            return True
+        with self._inflight_lock:
+            running = len(self._inflight_autopilot)
+        if running < limit:
+            return True
+        waiting = str(task.get("id") or task.get("task_id") or "")
+        if waiting != getattr(self, "_last_autopilot_wait_log", None):     # once per task, not per tick
+            self._last_autopilot_wait_log = waiting
+            log.info("autopilot run %s waits: %d autopilot run(s) in flight, the limit is %d", waiting, running, limit)
+        return False
+
+    def _take_autopilot_slot(self, task: Dict[str, Any]) -> None:
+        if self._is_autopilot_work(task):
+            with self._inflight_lock:
+                self._inflight_autopilot.add(str(task.get("id") or task.get("task_id") or ""))
 
     def _dispatch_loop(self, stop_event: threading.Event) -> None:
         """Background thread: pick up due tasks every ``dispatch_interval_seconds`` (seconds, not
@@ -572,6 +619,7 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
             return
         with self._inflight_lock:
             self._inflight.discard(task_id)
+            self._inflight_autopilot.discard(task_id)
 
     def _handle_one_guarded(self, task: Dict[str, Any]) -> Optional[str]:
         """Wrap ``_handle_one`` with the in-process claim guard (see ``_claim_slot``).

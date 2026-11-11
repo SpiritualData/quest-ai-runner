@@ -314,7 +314,11 @@ moves all of them at once.
 - **State store.** `QAR_STATE_PATH` holds the signature dedup store for exactly-once handling.
   Persist it across restarts (e.g. a `ReadWritePaths` dir under systemd). It is gitignored.
 - **Concurrency.** `max_concurrent_tasks` (in `RunnerConfig`) bounds how many tasks run at once via
-  a thread pool.
+  a thread pool. `max_concurrent_autopilot_tasks` (default 0, no separate limit) bounds the
+  autopilot work runs inside that: set it to 1 when the autopilots share one signed-in browser or
+  one branch, and a queued autopilot run waits for the running one, starting in the order the day's
+  passes queued them (each quest's run time, then its roster order). Work a person asked for is
+  never held by it.
 - **Isolation.** Task discovery is scoped to the executor user the `qsk_` key authenticates as. Keep
   each lane on its own key/owner so queues stay disjoint.
 - **The deep-runner is powerful.** It launches a coding agent in `working_dir`; scope that directory
