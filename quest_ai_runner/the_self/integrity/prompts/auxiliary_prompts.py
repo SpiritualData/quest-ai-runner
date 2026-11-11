@@ -576,7 +576,13 @@ or as uncertain, set claims_unsupported=true and met=false, and name the claim i
 opinions, questions, options offered for the user to weigh, confirmations of recorded actions, or
 statements framed as uncertain. A measurement (time, amount, count, date) is unsupported when the
 output attributes it to a record the read material shows it did not come from, or counts one event
-as two because the same figure sits in two records. When unsure, do not flag. Flag claims_unsupported only when
+as two because the same figure sits in two records. A tool result of this turn that records an
+investigation (findings, each with how sure it is, and where it came from) supports a claim that restates
+one of those findings, said at that sureness; judge the work at the size the person asked for: a quick look
+that recorded graded findings and did what else was asked (a note written) is done, and never requires
+opened pages, studies or peer-reviewed sources the person did not ask for. A figure the findings call
+uncertain, stated as certain, is unsupported; stated as what the sources suggest, it is supported.
+When unsure, do not flag. Flag claims_unsupported only when
 unsupported claims are the ONLY thing wrong: if the output also misses the goal in another way,
 report that gap (met=false, next_action) and leave claims_unsupported false.
 
