@@ -153,6 +153,20 @@ class ExchangeState(threading.local):
         self.probing = False
 
 
+
+#: Path segments that mean a caller passed no id: Python's None, JavaScript's null/undefined, or nothing at all.
+EMPTY_ID_SEGMENTS = ("None", "null", "undefined", "")
+
+
+def missing_id_segment(path: str) -> Optional[str]:
+    """The segment of an /api/ path that stands for a missing id, or None when every segment is filled. A trailing slash
+    is not a missing id."""
+    segments = path.split("?", 1)[0].strip("/").split("/")
+    for segment in segments[1:]:
+        if segment in EMPTY_ID_SEGMENTS:
+            return segment
+    return None
+
 class TransportMixin:
     """HTTP exchange, retry, typed writes and the capability probe for ``QuestClient``."""
 
@@ -305,6 +319,13 @@ class TransportMixin:
 
     def _request(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
                  body: Optional[Dict[str, Any]] = None, timeout_override: Optional[float] = None) -> Any:
+        missing = missing_id_segment(path)
+        if missing is not None:     # "" (an empty segment) is a missing id too
+            # A caller passed no id (Python formats None as "None"): refuse here, naming the path, rather than ask Quest for
+            # a resource called "None" (prod logged GET /api/quests/None/state 54 times, 2026-11-11).
+            log.warning("Quest API %s %s not sent: the path has no id (%r); the caller passed an empty id", method, path, missing,
+                        stack_info=True)     # the stack names the caller to fix
+            raise QuestApiError(f"Quest API {method} {path}: the path has no id ({missing!r}); the caller passed an empty id", status=400)
         self._require()
         state = self.exchange_state
         key = state.write_key

@@ -42,3 +42,19 @@ def test_wait_for_interactive_swallows_socket_timeout(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", raising_urlopen)
     # The documented contract: an empty/timed-out/errored wait returns None, never raises.
     assert make_client().wait_for_interactive(timeout=0.1) is None
+
+
+def test_a_path_with_no_id_is_refused_before_sending(monkeypatch):
+    sent = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: sent.append(req))
+    for path in ("/api/quests/None/state", "/api/quests//state", "/api/quests/undefined/goals", "/api/quests/null"):
+        with pytest.raises(QuestApiError, match="has no id"):
+            make_client()._request("GET", path)
+    assert sent == []
+
+
+def test_a_filled_path_and_a_trailing_slash_are_not_refused():
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_transport import missing_id_segment
+    assert missing_id_segment("/api/quests/quest_1/state") is None
+    assert missing_id_segment("/api/assistant-tasks/") is None
+    assert missing_id_segment("/api/quests/quest_1/state?x=None") is None
