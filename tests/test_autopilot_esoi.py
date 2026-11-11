@@ -121,3 +121,31 @@ def test_a_character_that_names_no_solution_iterates_none_and_an_unknown_id_fall
     unknown = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_zzzzzzzz")
     assert "Iterate this Solution: Area A" in unknown and "not Solutions of this quest" in unknown
     assert esoi.named_solutions("no line here") is None and esoi.readiness_for(None, "x") is None
+
+
+def impl(rid, solution_id, filepath):
+    return {"type": "implementation", "recordId": rid, "fields": {"name": f"impl {rid}", "solution_id": solution_id, "filepath": filepath}}
+
+
+def test_the_specification_links_a_character_to_its_solutions_and_wins_over_the_line():
+    records = _two_areas() + [impl("i1", "esr_bbbbbbbb", "autopilot:rep_11111111, rep_22222222"), impl("i2", "esr_cccccccc", "autopilot:rep_22222222"),
+                              impl("i3", "esr_aaaaaaaa", "docs/rep_11111111.md")]          # not an autopilot path: no link
+    assert esoi.linked_solutions(records, "rep_11111111") == ["esr_bbbbbbbb"]
+    assert esoi.linked_solutions(records, "rep_22222222") == ["esr_bbbbbbbb", "esr_cccccccc"]
+    assert esoi.linked_solutions(records, "rep_33333333") == [] and esoi.linked_solutions(records, None) == []
+    assert esoi.linked_solutions(_two_areas() + [impl("i4", ["esr_cccccccc"], "Autopilot:rep_11111111")], "rep_11111111") == ["esr_cccccccc"]   # a list cell
+    read = ({"records": records}, False)
+    mine = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_bbbbbbbb", "rep_11111111")
+    assert "Iterate this Solution: Area B (esr_bbbbbbbb)" in mine and "specification links to you" in mine and "different set" not in mine
+    differs = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_aaaaaaaa", "rep_22222222")
+    assert "Iterate this Solution: Area B" in differs and "names a different set (esr_aaaaaaaa)" in differs
+    no_line = esoi.readiness_for(read, "Work the quest.", "rep_22222222")
+    assert "Iterate this Solution: Area B" in no_line and "different set" not in no_line
+
+
+def test_a_character_the_specification_links_to_nothing_falls_back_to_its_instructions():
+    read = ({"records": _two_areas() + [impl("i1", "esr_bbbbbbbb", "autopilot:rep_11111111")]}, False)
+    reviewer = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: none (weekly review)", "rep_99999999")
+    assert "iterates none" in reviewer
+    by_line = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_cccccccc", "rep_99999999")
+    assert "Iterate this Solution: Area C" in by_line and "your instructions name" in by_line

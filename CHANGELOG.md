@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- An autopilot character's Solutions are read from the specification, not only from its prompt: a Solution is linked to a character by an Implementation record whose `filepath` is `autopilot:<rep ids>` (`autopilot_esoi.linked_solutions`), and `readiness_for(read, instructions, rep_id)` picks among those. A character the specification links to nothing falls back to its `SOLUTIONS YOU ITERATE` line; when the line and the specification disagree the specification wins and the brief says so.
 - An autopilot run iterates a Solution of its own character: a character's standing instructions on a quest may start with the line `SOLUTIONS YOU ITERATE: <record ids>`, and the ESOI readiness block is then chosen among those Solutions only (`autopilot_esoi.readiness_for`, least recently measured first), so a quest with one Solution per area and one character per area no longer hands every character the same Solution. A line that names no id (a reviewer) gives a block saying the run iterates none; ids that are not Solutions of the quest fall back to the quest-wide pick and say so. Without the line the pick is quest-wide, as before. The specification is still read once per quest per pass (`read_readiness`).
 
 ## [0.7.1] - 2026-11-10

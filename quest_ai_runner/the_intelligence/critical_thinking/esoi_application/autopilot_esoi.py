@@ -12,9 +12,12 @@ run. This module does the logistics so the model only does the judgment:
     measured longest ago, so every Solution is visited in turn), with its next milestone and Metric record.
 
 A quest worked by several characters has one Solution per area and one character per area, so the choice is made per
-character: a character's standing instructions name the Solutions it iterates on a line ``SOLUTIONS YOU ITERATE: <record
-ids>`` (``named_solutions``), and ``readiness_for`` picks among those only. Without that line the pick is quest-wide, as
-before. The specification is read once per quest per pass (``read_readiness``) and rendered once per character.
+character, and which Solutions are a character's is a fact of the specification, not of a prompt: the Solution carries an
+Implementation record whose ``filepath`` is ``autopilot:<rep ids>`` (``linked_solutions``), because the autopilot run is
+one of the ways the Solution is carried out. ``readiness_for`` picks among those only. A character the specification
+links to nothing falls back to the line ``SOLUTIONS YOU ITERATE: <record ids>`` in its standing instructions
+(``named_solutions``), and without that line the pick is quest-wide, as before. The specification is read once per quest
+per pass (``read_readiness``) and rendered once per character.
 
 Best-effort throughout: a client without these calls, a quest without a specification and a failed read all give
 ``None`` and the pass composes the brief it composed before.
@@ -79,6 +82,25 @@ def named_solutions(instructions: Optional[str]) -> Optional[List[str]]:
     if found is None:
         return None
     return list(dict.fromkeys(_RECORD_ID.findall(found.group(1))))
+
+
+AUTOPILOT_PATH = "autopilot:"
+
+
+def linked_solutions(records: List[Dict[str, Any]], rep_id: Optional[str]) -> List[str]:
+    """The record ids of the Solutions the specification links to the character ``rep_id``, in the specification's order: a
+    Solution is linked when one of its Implementation records has a ``filepath`` of ``autopilot:<rep ids>`` naming that
+    character. ``[]`` when it links none (or no character is given), so the caller falls back to the instructions."""
+    rep = str(rep_id or "").strip()
+    if not rep:
+        return []
+    linked = set()
+    for record in records:
+        fields = record.get("fields") or {}
+        path = str(fields.get("filepath") or "").strip()
+        if record.get("type") == "implementation" and path.lower().startswith(AUTOPILOT_PATH) and rep in _RECORD_ID.findall(path):
+            linked.update(_ids(fields.get("solution_id")))
+    return [sol["recordId"] for sol in solutions_of(records) if sol.get("recordId") in linked]
 
 
 def pick_solution(records: List[Dict[str, Any]], only: Optional[List[str]] = None) -> Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]]:
@@ -211,15 +233,26 @@ def read_readiness(client: Any, quest_id: str) -> Optional[Tuple[Dict[str, Any],
         return None
 
 
-def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Optional[str] = None) -> Optional[str]:
+def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Optional[str] = None,
+                  rep_id: Optional[str] = None) -> Optional[str]:
     """The readiness block for ONE character's run, from the specification ``read_readiness`` read: the pick is made among
-    the Solutions that character's ``instructions`` name, else quest-wide. Never raises."""
+    the Solutions the specification links to the character ``rep_id`` (``linked_solutions``), else among the ones that
+    character's ``instructions`` name, else quest-wide. Never raises."""
     if read is None:
         return None
     spec, refreshed = read
     try:
         records = spec.get("records") or []
         named = named_solutions(instructions)
+        linked = linked_solutions(records, rep_id)
+        if linked:
+            scope = ("Chosen among the Solutions this quest's specification links to you (" + ", ".join(linked) + ", each by an "
+                     "Implementation record whose filepath is autopilot:<your rep id>): these are yours on this quest, and the "
+                     "other Solutions belong to other runs.")
+            if named is not None and set(named) != set(linked):
+                scope += (" Your instructions' SOLUTIONS YOU ITERATE line names a different set (" + (", ".join(named) or "none")
+                          + "); the specification is the source of truth, so say so in your result and the line gets corrected.")
+            return render(spec, pick_solution(records, only=linked), refreshed, scope=scope)
         if named is None:
             return render(spec, pick_solution(records), refreshed)
         if not named:
@@ -237,7 +270,7 @@ def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Opt
         return None
 
 
-def esoi_readiness(client: Any, quest_id: str, instructions: Optional[str] = None) -> Optional[str]:
-    """The readiness block for ``quest_id`` (for the character whose ``instructions`` are given), or None when it cannot be
-    built. Never raises."""
-    return readiness_for(read_readiness(client, quest_id), instructions)
+def esoi_readiness(client: Any, quest_id: str, instructions: Optional[str] = None, rep_id: Optional[str] = None) -> Optional[str]:
+    """The readiness block for ``quest_id`` (for the character ``rep_id`` whose ``instructions`` are given), or None when it
+    cannot be built. Never raises."""
+    return readiness_for(read_readiness(client, quest_id), instructions, rep_id)

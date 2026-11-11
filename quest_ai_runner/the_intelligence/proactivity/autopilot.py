@@ -391,7 +391,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # or a failed read gives no section, never a guess.
         intent_frame_text = self.read_intent_frame(quest_id)
         # Read once per quest per pass, and only for a real run: a dry run must not refresh a specification. The Solution
-        # is then chosen per character (``readiness_for``), among the ones that character's instructions name.
+        # is then chosen per character (``readiness_for``), among the ones the specification links to that character.
         esoi_read = None if dry_run else read_readiness(self._client, quest_id)
         # One batch per pass may be the one that proposes; a second character's batch is told a
         # proposal is already being handled instead of raising a duplicate.
@@ -463,6 +463,9 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                 # on duty -- a day-restricted entry carrying the brief plus a catch-all, say -- so
                 # reading the whole roster is what makes which entry irrelevant.
                 persona_instructions = persona_instructions_for(autopilot_cfg, persona)
+                # The roster's own rep id, kept before the marker is resolved below: it is what the specification's
+                # autopilot Implementation records name, so it is what finds this character's Solutions.
+                roster_rep_id = persona
                 # The roster key is not always a character. A quest rostered to the built-in
                 # default assistant carries DEFAULT_ASSISTANT_REP_ID, which is read for its days
                 # and its instructions above (both of which are the person's own words) and then
@@ -519,7 +522,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                   asked=asked_text,
                                                   intent_frame=intent_frame_text,
                                                   esoi_readiness=readiness_for(
-                                                      esoi_read, persona_instructions))
+                                                      esoi_read, persona_instructions, roster_rep_id))
                 if task_id:
                     experiment_proposal_offered = True
                     result.created.append({
