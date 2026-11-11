@@ -911,11 +911,18 @@ Reply with ONE OR TWO LINES, nothing else:
         a status, a count, a priority) and asks for nothing to be created, changed, written, drafted,
         scheduled or sent. Omit it for any request to do or produce something, and whenever unsure.
       "asks_status": true -- ONLY when the message asks where something stands, what matters or comes
-        first (a priority), or for a summary or script of that to be read out or shared. Omit it for
-        anything else, and whenever unsure.
-      "across_quests": true -- ONLY together with asks_status, when the question is about the person's
-        quests taken together (which of their quests or goals to work on first, how all of them are
-        going) and names no single quest. Omit it when the question is about one quest, and whenever unsure.
+        first or next (a priority), or for a summary or script of that to be read out or shared ("how is
+        this quest going?", "where are we?", "what should I do next?"). Omit it for anything else, and
+        whenever unsure.
+      "across_quests": true -- ONLY together with asks_status, when the message itself asks about several
+        or all of the person's quests together ("which of my quests should I work on first", "how are all
+        my goals going"). A question that names no quest at all ("what should I do next?", "how is it
+        going?") is NOT across quests: it is about the quest the conversation is on. Omit it when the
+        question is about one quest, and whenever unsure.
+      "plans_period": true -- ONLY when the message asks for the person's own work over a coming period (a day,
+        a week, the next few days) to be laid out as a plan in the reply ("plan my week", "what should my
+        week look like for this quest"), and asks for nothing to be saved, scheduled, assigned or sent. Omit it
+        when the plan is to be added to their records or calendar, and whenever unsure.
       "saves_to_records": true -- ONLY when the message orders something to be added or saved in their own
         records (a note on a quest, a goal, an entry), whether the content is written first, researched
         first or given in the message. Omit it for a request for text alone, and whenever unsure.

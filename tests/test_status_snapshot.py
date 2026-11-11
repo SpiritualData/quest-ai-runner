@@ -50,7 +50,7 @@ def test_the_snapshot_holds_the_live_key_measure_the_priorities_in_ladder_order_
     assert snap["locator"] == "status_snapshot" and "Paid subscribers: 0 (as of 2026-11-07, from Revenue analytics)" in text
     first, second = text.index("First milestone next step"), text.index("Second milestone next step")
     assert first < second and "Current value: 4 (as of 2026-11-06, from Source)" in text and "due 2026-11-08" in text
-    assert "Unrelated task" not in text.split("Active priorities")[1].split("The asker's own")[0]
+    assert "Unrelated task" not in text.split("Active priorities")[1].split("Goals at a glance")[0]
     assert "The asker's own open goals" in text and "Unrelated task (due 2026-10-01)" in text.split("The asker's own")[1]
     assert "The asker's own" not in status_snapshot.build(registry, "q1", "u1", own=False)["text"]
     assert status_snapshot.build(None, "q1") is None
@@ -59,8 +59,8 @@ def test_the_snapshot_holds_the_live_key_measure_the_priorities_in_ladder_order_
 def test_the_analyser_reports_the_status_shape_and_the_spoken_delivery_as_fields_not_filters():
     _, constraints = parse_goal_condition_reply('A script.\n{"asks_status": true, "read_aloud": true, "actor": "me"}')
     flags, rest = take_status_flags(constraints)
-    assert flags == {"asks_status": True, "across_quests": False, "saves_to_records": False, "read_aloud": True, "writes_text": False} and rest == {"actor": "me"}
-    assert take_status_flags(None)[0] == {"asks_status": False, "across_quests": False, "saves_to_records": False, "read_aloud": False, "writes_text": False}
+    assert flags == {"asks_status": True, "across_quests": False, "saves_to_records": False, "read_aloud": True, "writes_text": False, "plans_period": False} and rest == {"actor": "me"}
+    assert take_status_flags(None)[0] == {"asks_status": False, "across_quests": False, "saves_to_records": False, "read_aloud": False, "writes_text": False, "plans_period": False}
     _, constraints = parse_goal_condition_reply('Which goal comes first.\n{"asks_status": true, "across_quests": true}')
     assert take_status_flags(constraints)[0]["across_quests"] is True
     _, constraints = parse_goal_condition_reply('An Instagram post about the product.\n{"writes_text": true}')
@@ -112,7 +112,7 @@ def test_a_status_question_a_status_script_and_a_my_priority_question_each_get_t
         assert any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
         assert provider.writer_prompts and "STATUS FROM A SNAPSHOT" in provider.writer_prompts[0]
         assert ("READ ALOUD" in provider.writer_prompts[0]) == ("read_aloud" in flags)
-        assert ("Unrelated task" in provider.writer_prompts[0]) == ('"actor": "me"' in flags)
+        assert ("The asker's own open goals" in provider.writer_prompts[0]) == ('"actor": "me"' in flags)
 
 
 class Placement:
@@ -270,3 +270,57 @@ def test_an_across_quests_question_whose_goals_cannot_be_read_goes_to_the_planne
         assert not abstain.asked and provider.planner_calls >= 1
     finally:
         GOALS.extend(GOALS_BACKUP)
+
+
+# --- Goals at a glance (2026-11-11): a new quest with no goals, and goals that are not linked to the plan -----------------------------------------------------------------
+
+class EmptyRegistry(Registry):
+    """A quest whose goal list reads fine and is empty, with no specification and no key measure."""
+
+    def invoke(self, name, args, ctx):
+        self.calls.append((name, dict(args)))
+        if name == "list_quest_goals":
+            return SimpleNamespace(ok=True, data=[], text="No goals on quest q1 match (0 goals in all, before filters).")
+        return SimpleNamespace(ok=False, data=None, text="not here")
+
+
+class FailingGoalsRegistry(EmptyRegistry):
+    def invoke(self, name, args, ctx):
+        self.calls.append((name, dict(args)))
+        return SimpleNamespace(ok=False, data=None, text="The goals of quest q1 could not be read just now.")
+
+
+def test_a_quest_with_no_goals_gets_a_snapshot_that_says_so_and_a_goal_read_that_failed_gets_none():
+    snap = status_snapshot.build(EmptyRegistry(), "q1")
+    assert snap is not None and "this quest has no goals yet" in snap["text"] and "never as a read that failed" in snap["text"]
+    assert status_snapshot.build(FailingGoalsRegistry(), "q1") is None
+
+
+def test_the_goals_at_a_glance_count_done_open_and_overdue_and_list_overdue_before_upcoming():
+    from datetime import date
+    rows = [{"id": "a", "title": "Book the plumber", "due": "2026-11-01", "completed": False},
+            {"id": "b", "title": "Buy tiles", "due": "2026-11-13", "completed": False},
+            {"id": "c", "title": "Demolition", "due": "2026-10-20", "completed": True},
+            {"id": "d", "title": "Pick a colour", "due": None, "completed": False}]
+    text = status_snapshot.overview(rows, date(2026, 11, 11))
+    assert "4 goals: 1 done, 3 open, 1 overdue, 1 due from today through 2026-11-18" in text
+    assert text.index("Book the plumber") < text.index("Buy tiles") and "Demolition" not in text and "Pick a colour" not in text
+    assert "Pick a colour" in status_snapshot.overview(rows, date(2026, 11, 11), plan=True)
+
+
+def test_a_plan_my_week_turn_is_answered_from_the_planning_snapshot_with_the_plan_standard_and_no_planner_loop():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN, STANDARDS
+    provider, res = run_status('Lay out the week.\n{"plans_period": true}', "Plan my week for this quest")
+    assert res.kind == "answer" and provider.planner_calls == 0
+    assert any("PLANNING SNAPSHOT" in o.get("text", "") for o in res.gathered)
+    assert provider.writer_prompts and "A PLAN FROM A PLANNING SNAPSHOT" in provider.writer_prompts[0] and "STATUS FROM A SNAPSHOT" not in provider.writer_prompts[0]
+    assert STANDARDS[SHAPE_PLAN].max_list_lines is None      # a capped plan is cut mid-list: days go missing
+
+
+def test_a_plan_snapshot_holds_the_days_of_the_period_so_day_labels_pass_the_date_check_and_a_date_outside_it_does_not():
+    from datetime import date
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN, STANDARDS, measure
+    rows = [{"id": "a", "title": "Book the plumber", "due": "2026-11-01", "completed": False}, {"id": "b", "title": "Buy tiles", "due": "2026-11-15", "completed": False}]
+    draft = "- **Thu 12 Nov:** Book the plumber.\n- **Sun 15 Nov:** Buy tiles.\n- **Fri 20 Nov:** Paint."
+    assert measure(draft, STANDARDS[SHAPE_PLAN], status_snapshot.overview(rows, date(2026, 11, 11), plan=True)).unsupported == ["20 Nov"]
+    assert "12 Nov" in measure(draft, STANDARDS[SHAPE_PLAN], status_snapshot.overview(rows, date(2026, 11, 11))).unsupported

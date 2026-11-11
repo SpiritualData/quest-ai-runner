@@ -405,6 +405,72 @@ class RunBeginMixin:
 
                 rs.pending_inputs = _drain_conversation
 
+    def answer_from_snapshot(self, rs: SimpleNamespace, status_flags: Dict[str, bool], *, conv_id: Any, ctx_meta: Dict[str, Any], emit: Any,
+                             attachments: Any) -> None:
+        """Route a status-shaped or plan-shaped turn (the analyser's structured reports) to an answer written from a snapshot code reads, by setting
+        ``rs._forced_plan``. Called from both understanding branches (a self-contained message, and one whose referent was resolved first), so a status
+        question is answered the same way however it is worded. Leaves the turn alone when no snapshot applies or none could be read."""
+        cfg = rs.cfg
+        if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
+                and status_flags["asks_status"] and status_flags["across_quests"] and not self.reach_asks_change(rs.user_message)):
+            # A question about the asker's quests TOGETHER (the analyser's structured ``across_quests`` report, with the status shape): no one quest is the subject, whether or
+            # not the chat is pinned to one, so it is neither placed on a quest nor answered by asking which one. The open goals of every quest they can reach are read now
+            # by code into one dated snapshot and the reply is written from it. A snapshot that cannot be read leaves the turn to the planner, which reads the goals itself.
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+            emit.status("Reading your quests and goals…")
+            portfolio = status_snapshot.portfolio(self.tools, status_snapshot.reachable_quests(self.tools))
+            log.info("Status turn across the asker's quests: snapshot %s", "read" if portfolio is not None else "not read")
+            if portfolio is not None:
+                rs.gathered.append(portfolio)
+                rs.status_snapshot = True
+                rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
+                                               rationale="A question across the asker's quests: answered from the snapshot of their goals read for this turn.")
+        if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
+                and not status_flags["across_quests"]
+                and (status_flags.get("plans_period")
+                     or ((status_flags["asks_status"] or self.reach_asks_status(rs.user_message)) and not self.reach_asks_change(rs.user_message)))):
+            # A request to lay out a coming period ("plan my week", the analyser's ``plans_period``: a plan in the reply, nothing saved) is read the same way, with the
+            # quest's open goals for that period, and answered with the plan standard (``SHAPE_PLAN``). It is not gated on the reach verdict's ``asks_change``: a plan
+            # reads as work to that judge, and before this a week plan went to the planner, re-read the same goals until the time cap and escalated to a deep run
+            # (measured 2026-11-11 on four test quests: three ran out the six-minute cap, one was answered as a refused change).
+            # Two structured reports decide it: a status shape from either the analyser or the reach verdict, and no change asked for in the reach verdict
+            # ("can we get X moving?" reads as status to the analyser and as a change to the reach judge: it is work, not a status answer).
+            # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop. A chat with no quest
+            # open first places the question on one of the asker's quests (the quest placement); when none fits, the turn asks one short question.
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+            snapshot_quest = rs.quest_id
+            if not snapshot_quest:
+                quests = status_snapshot.reachable_quests(self.tools)
+                log.info("Status turn: no quest open; %d reachable quest(s); find_quest offered=%s", len(quests), bool(self.tools.get("find_quest")))
+                from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
+                # The conversation's last exchange goes to the placement: a follow-up that names nothing continues the quest of the message before it.
+                previous = quoted_phrase.previous_reply(self.conversation_store, conv_id, rs.user_message) if self.conversation_store is not None and conv_id else ""
+                snapshot_quest = self.judge_quest_for_turn(rs.user_message, previous, quests, None) if quests else None
+                if quests and not snapshot_quest:
+                    rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
+                                                   rationale="A status question that fits none of the asker's quests: one short question.")
+            log.info("Status turn: quest %s (%s), placement asked=%s", snapshot_quest or "none", "pinned" if rs.quest_id else "placed" if snapshot_quest else "unplaced",
+                     not rs.quest_id)
+            if snapshot_quest and rs._forced_plan is None:
+                emit.status("Reading where the quest stands…")
+                own = (rs.retrieval_constraints or {}).get("actor") == "me"
+                snapshot = status_snapshot.build(self.tools, snapshot_quest, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
+                                                 question=rs.user_message, decide=self.cheap_decision, plan=bool(status_flags.get("plans_period")))
+            else:
+                snapshot = None
+            if snapshot is not None and status_flags.get("plans_period"):
+                from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN
+                rs.gathered.append(snapshot)
+                rs.status_snapshot = True
+                rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape=SHAPE_PLAN,
+                                               delivery="spoken" if status_flags["read_aloud"] else None,
+                                               rationale="A plan for the coming period: laid out from the quest's open goals read for this turn; nothing is saved.")
+            elif snapshot is not None:
+                rs.gathered.append(snapshot)
+                rs.status_snapshot = True
+                rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
+                                               rationale="A status question: answered from the status snapshot read for this turn.")
+
     def _caller_deep_goal(self, goal: str, now: Optional[str], emit: Any) -> str:
         """The goal a caller-chosen deep run is checked against: ``goal`` itself when it is short, else a done-standard
         condensed from it by the one cheap goal-condition call a chat turn makes (``_derive_goal_condition``).
@@ -570,6 +636,10 @@ class RunBeginMixin:
             # took this branch (a short message) was otherwise answered with questions instead of the piece.
             analysed = take_status_flags(self._derive_goal_condition(rs.goal_condition or rs.user_message, now=now)[1])[0]
             rs.saves_to_records = bool(analysed.get("saves_to_records"))
+            # A status or plan question that points at its subject ("how is THIS quest going?") takes this branch too. It is answered from the same snapshot as
+            # a self-contained one: before 2026-11-11 only the other branch checked, so the dashboard's own "How is this quest going?" went to the planner
+            # and was answered "I could not see its goals" on a quest with none.
+            self.answer_from_snapshot(rs, analysed, conv_id=conv_id, ctx_meta=_ctx_meta, emit=emit, attachments=attachments)
             if analysed.get("writes_text") and rs.message_is_user_turn and not attachments:
                 rs.draft_in_chat = True
                 rs.writes_text = True
@@ -618,53 +688,7 @@ class RunBeginMixin:
                 # no tool write, task or deep run stands in for it (``orchestrator_run_loop``), and the writer is told to write it in full.
                 rs.draft_in_chat = True
                 rs.writes_text = True
-            if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
-                    and status_flags["asks_status"] and status_flags["across_quests"] and not self.reach_asks_change(rs.user_message)):
-                # A question about the asker's quests TOGETHER (the analyser's structured ``across_quests`` report, with the status shape): no one quest is the subject, whether or
-                # not the chat is pinned to one, so it is neither placed on a quest nor answered by asking which one. The open goals of every quest they can reach are read now
-                # by code into one dated snapshot and the reply is written from it. A snapshot that cannot be read leaves the turn to the planner, which reads the goals itself.
-                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
-                emit.status("Reading your quests and goals…")
-                portfolio = status_snapshot.portfolio(self.tools, status_snapshot.reachable_quests(self.tools))
-                log.info("Status turn across the asker's quests: snapshot %s", "read" if portfolio is not None else "not read")
-                if portfolio is not None:
-                    rs.gathered.append(portfolio)
-                    rs.status_snapshot = True
-                    rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
-                                                   rationale="A question across the asker's quests: answered from the snapshot of their goals read for this turn.")
-            if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
-                    and not status_flags["across_quests"]
-                    and (status_flags["asks_status"] or self.reach_asks_status(rs.user_message)) and not self.reach_asks_change(rs.user_message)):
-                # Two structured reports decide it: a status shape from either the analyser or the reach verdict, and no change asked for in the reach verdict
-                # ("can we get X moving?" reads as status to the analyser and as a change to the reach judge: it is work, not a status answer).
-                # A status-shaped turn (the analyser's structured report) is answered from one dated snapshot of the quest read by code: no planner loop. A chat with no quest
-                # open first places the question on one of the asker's quests (the quest placement); when none fits, the turn asks one short question.
-                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
-                snapshot_quest = rs.quest_id
-                if not snapshot_quest:
-                    quests = status_snapshot.reachable_quests(self.tools)
-                    log.info("Status turn: no quest open; %d reachable quest(s); find_quest offered=%s", len(quests), bool(self.tools.get("find_quest")))
-                    from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
-                    # The conversation's last exchange goes to the placement: a follow-up that names nothing continues the quest of the message before it.
-                    previous = quoted_phrase.previous_reply(self.conversation_store, conv_id, rs.user_message) if self.conversation_store is not None and conv_id else ""
-                    snapshot_quest = self.judge_quest_for_turn(rs.user_message, previous, quests, None) if quests else None
-                    if quests and not snapshot_quest:
-                        rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
-                                                       rationale="A status question that fits none of the asker's quests: one short question.")
-                log.info("Status turn: quest %s (%s), placement asked=%s", snapshot_quest or "none", "pinned" if rs.quest_id else "placed" if snapshot_quest else "unplaced",
-                         not rs.quest_id)
-                if snapshot_quest and rs._forced_plan is None:
-                    emit.status("Reading where the quest stands…")
-                    own = (rs.retrieval_constraints or {}).get("actor") == "me"
-                    snapshot = status_snapshot.build(self.tools, snapshot_quest, str(_ctx_meta.get("asker_user_id") or _ctx_meta.get("user_id") or ""), own=own,
-                                                     question=rs.user_message, decide=self.cheap_decision)
-                else:
-                    snapshot = None
-                if snapshot is not None:
-                    rs.gathered.append(snapshot)
-                    rs.status_snapshot = True
-                    rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
-                                                   rationale="A status question: answered from the status snapshot read for this turn.")
+            self.answer_from_snapshot(rs, status_flags, conv_id=conv_id, ctx_meta=_ctx_meta, emit=emit, attachments=attachments)
             if is_small_talk(rs.user_message):
                 rs.turn_needs_records = False      # a greeting needs none of the person's records
             if (rs.turn_needs_records is False and not rs.quest_id and not self._meta_quest_ids(_ctx_meta) and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None

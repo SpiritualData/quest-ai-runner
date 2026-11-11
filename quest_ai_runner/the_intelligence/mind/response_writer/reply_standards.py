@@ -39,6 +39,7 @@ SHAPE_SUPPORT = "support"
 SHAPE_DEFAULT = "default"
 SHAPE_SPOKEN = "spoken"            # selected from the planner's ``delivery`` field, not offered as a ``reply_shape``
 SHAPE_INFORMATION = "information"  # selected from the planner's ``user_intent`` (ask) on a default shape
+SHAPE_PLAN = "plan"                # selected only by code (a ``plans_period`` turn answered from the planning snapshot), never offered to the planner
 SHAPE_SETTLED = "settled"          # selected from the planner's ``user_intent`` (act) when it answers on a default shape without a deliverable written in the reply
 REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
 
@@ -106,6 +107,14 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "An order that was carried out or found already in place: the first sentence says what is now so (done, or already there, with where it is "
              "and when it next happens), at most two sentences in all. No offer, no question, no list, nothing that was not asked.",
              max_questions=1, max_list_lines=0, max_sentences=2, voice_check=True),
+    Standard(SHAPE_PLAN,
+             "A plan for a coming period laid out from the person's own open goals: overdue goals first, then one short line per day naming the goal "
+             "it serves (or a few lines, when the goals are few), every goal named exactly as the records hold it and on or before its due day. When "
+             "the quest has no open goals, say so in the first sentence and propose at most three first goals that move its outcome, marked as proposals. "
+             "Say nothing was saved, and end with at most one question (whether to add it to their goals).",
+             # No list-line cap: a cut list line leaves a plan with days missing and broken fragments (measured 2026-11-11 with a cap of 14 on a
+             # quest with eight overdue goals). The planning snapshot already bounds what the plan can hold.
+             max_questions=1, voice_check=True),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}

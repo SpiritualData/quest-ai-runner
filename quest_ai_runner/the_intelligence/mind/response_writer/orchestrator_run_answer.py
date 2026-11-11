@@ -28,7 +28,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
     deliverable_texts,
-    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, lost_pointers, measure, pointed_items, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, lost_pointers, measure, pointed_items, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_PLAN, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
@@ -37,7 +37,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import
 from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve as resolve_facts
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
-    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, DRAFT_ANSWER_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
+    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, DRAFT_ANSWER_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, PLAN_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
     READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
 
@@ -196,7 +196,9 @@ class RunAnswerMixin:
                 and rs.cue_resolved is None):
             reply_directive = DRAFT_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # the piece they asked for, written in full
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "status_snapshot", False):
-            reply_directive = STATUS_SNAPSHOT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # a status is written from the snapshot code read
+            # A plan for a coming period has its own directive: the status one asks for two sentences and no list, which is the wrong reply to "plan my week".
+            snapshot_directive = PLAN_SNAPSHOT_DIRECTIVE if getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN else STATUS_SNAPSHOT_DIRECTIVE
+            reply_directive = snapshot_directive + ("\n\n" + reply_directive if reply_directive else "")      # a status (or a plan) is written from the snapshot code read
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
             reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active

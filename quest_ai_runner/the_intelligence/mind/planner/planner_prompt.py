@@ -869,7 +869,21 @@ length for this kind of reply. When the snapshot is of the asker's quests togeth
 its quest, due day and the reason from the snapshot's goals, in the length for this kind of reply. Name ONE goal and keep to it: the reason and any next step
 belong to that same goal, and a goal you mention as overdue or related is never offered as a second answer. Write every date the way a person reads it ("1 November",
 "this Friday"), never as 2026-11-01. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
-next step and by when. End on the last fact: no offer, no question and no list beyond what was asked. Never use an em dash.
+next step and by when. When the snapshot holds no key measure value, open with the goals at a glance instead (how many are done, open and overdue, and the
+most overdue one by name). When it says the quest has no goals yet, say that plainly in the first sentence, as a fact about a quest that is just starting, never as
+something you could not read, and name the one step that starts it (its first goal). End on the last fact: no offer, no question and no list beyond what was
+asked. Never use an em dash.
+"""
+
+PLAN_SNAPSHOT_DIRECTIVE = """\
+--- THIS REPLY IS A PLAN FROM A PLANNING SNAPSHOT (set by the system) ---
+A PLANNING SNAPSHOT of the quest's open goals was read for this turn, and the person asked for their coming period to be laid out. Write the plan from the snapshot
+only: one opening sentence on where things stand (how many goals are overdue and due in the period), then the overdue goals first, then one short line per day
+from today naming the goal or goals that day serves, each goal named exactly as the snapshot holds it and placed on or before its due day. Spread the work so no
+day carries more than two goals. Name no goal, date, habit or routine the snapshot does not hold: older conversations are not part of this plan. When the snapshot
+says the quest has no goals yet (or no open goal), say so in the first sentence, then write out up to three proposed first goals, one line each, that move
+the quest's outcome, each marked as a proposal (never only offer to propose them). Say that nothing was saved, and end with one question: whether to add the plan to their goals. Write dates the way a person reads them ("Thursday
+13 November"). Never use an em dash.
 """
 
 DRAFT_ANSWER_DIRECTIVE = """\

@@ -1165,25 +1165,57 @@ def create_quest_workflow_spec(env: Mapping[str, str], client_factory=None) -> T
         context_args={"quest_id": "quest_id"}, timeout_seconds=60.0, reads_first=("list_quest_workflows",))
 
 
+def quest_label(row: Mapping[str, Any]) -> str:
+    """How a quest is named in a listing: its name, then its outcome, so no quest is ever shown as a bare id."""
+    name, outcome = str(row.get("name") or "").strip(), str(row.get("outcome") or "").strip()
+    if name and outcome and outcome.lower() != name.lower():
+        return f"{trim(name, 60)} ({trim(outcome, 100)})"
+    return trim(name or outcome, 100) or "(no name or outcome recorded yet)"
+
+
+def reachable_quest_rows(client: Any) -> List[Dict[str, Any]]:
+    """Every quest the account can reach, once each: the quests it owns (``list_my_quests``) and the quests of every team it is on (``list_quests``).
+    Each row carries ``quest_id``, ``name``, ``outcome`` and ``completed``. Before 2026-11-11 only the team quests were walked, so a person's own quests were
+    missing from every listing (a chat with no quest open found one of four quests, and that one by id alone)."""
+    rows: List[Dict[str, Any]] = []
+    seen: set = set()
+    for item in (getattr(client, "list_my_quests", lambda: [])() or []):
+        if not isinstance(item, Mapping):
+            continue
+        state = item.get("state") if isinstance(item.get("state"), Mapping) else item
+        quest_id = item.get("quest_id") or state.get("quest_id")
+        if not quest_id or quest_id in seen:
+            continue
+        seen.add(quest_id)
+        rows.append({"quest_id": quest_id, "name": state.get("name"), "outcome": state.get("vision_statement") or state.get("outcome"),
+                     "completed": bool(state.get("completed")), "archived": bool(state.get("archived"))})
+    for team in client.list_teams():
+        team_id = team.get("team_id") or team.get("id")
+        if not team_id:
+            continue
+        for row in client.list_quests(team_id=team_id):
+            quest_id = row.get("quest_id") or row.get("id")
+            if quest_id and quest_id not in seen:
+                seen.add(quest_id)
+                rows.append(dict(row))
+    return [r for r in rows if not r.get("archived")]
+
+
 def find_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     factory = client_factory or (lambda: quest_client_from_env(env))
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
         client = factory()
         wanted = words_of(args.get("name"))
-        rows: List[Dict[str, Any]] = []
-        for team in client.list_teams():
-            team_id = team.get("team_id") or team.get("id")
-            if team_id:
-                rows.extend(client.list_quests(team_id=team_id))
-        matches = [r for r in rows if not wanted or wanted <= words_of(r.get("outcome"))]
+        rows = reachable_quest_rows(client)
+        matches = [r for r in rows if not wanted or wanted <= words_of(f"{r.get('name') or ''} {r.get('outcome') or ''}")]
         if not matches:
             return ToolResult(ok=False, data=[], text=(
                 f"No quest you can reach matches {str(args.get('name') or '')!r} ({len(rows)} quests checked). "
                 f"Try fewer words, or tell the person you cannot see that quest."))
         shown = matches[:15]
         lines = [f"- {r.get('quest_id') or r.get('id')}{' (completed)' if r.get('completed') else ''}: "
-                 f"{trim(r.get('outcome'), 100)}" for r in shown]
+                 f"{quest_label(r)}" for r in shown]
         more = f"\n{len(matches) - len(shown)} more: add words to narrow it." if len(matches) > len(shown) else ""
         return ToolResult(ok=True, data=shown, text="Quests you can reach (pass the id as quest_id):\n"
                                                       + "\n".join(lines) + more)
