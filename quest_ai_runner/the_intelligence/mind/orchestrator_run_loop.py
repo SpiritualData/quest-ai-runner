@@ -852,6 +852,21 @@ class RunLoopMixin:
                                         evidence=lambda: self.turn_evidence(rs), order_gate=lambda: self.change_was_ordered(rs), trace=rs.trace)
                     rs.tool_calls_ran = True
 
+            # A RESEARCH NOTE THE PLANNER DID NOT WRITE: the order (the analyser's structured ``saves_to_records``) is research and a record, the investigation ran and holds findings, no
+            # change has been made, and the planner answers anyway. The note is composed from the record, so code saves it through the note tool; the receipt is what the reply says.
+            if (rs.plan and message_is_user_turn and rs.plan.action == "answer" and rs.turn_user_intent == "act" and getattr(rs, "saves_to_records", False)
+                    and not getattr(rs, "research_note_by_code", False) and self.tools is not None and self.tools.get("add_quest_note") is not None
+                    and not any(str(g.get("locator")) == "tool:add_quest_note" for g in gathered) and not tool_guards.mutating_tool_ran(gathered, self.tools)
+                    and tool_guards.research_note_text(gathered)):
+                rs.research_note_by_code = True
+                log.info("The investigation holds findings and the order saves them: the note is saved by code from the record.")
+                emit.status("Saving the note\u2026")
+                self.run_tool_calls([{"name": "add_quest_note", "args": {"quest_id": quest_id, "text": tool_guards.research_note_text(gathered)}}], gathered=gathered,
+                                    exec_record=exec_record, tool_ok_signatures=tool_ok_signatures, emit=emit, steps=rs.steps,
+                                    ctx=ToolContext(quest_id=quest_id, user_id=_ctx_meta.get("user_id"), task_id=_ctx_meta.get("task_id"), meta={**_ctx_meta, "turn_asks": rs.turn_asks}),
+                                    evidence=lambda: self.turn_evidence(rs), order_gate=lambda: self.change_was_ordered(rs), trace=rs.trace)
+                rs.tool_calls_ran = True
+
             # The same hand-back for an order answered with a description: the planner's own user_intent says "act", it chose "answer", nothing
             # was changed and a tool could change something (``tool_guards.act_answered_without_a_write``). At most twice, and only while no tool
             # that changes something has run (a read between the two is progress, not the work). Without it the answer's overseer escalated this to a deep run.

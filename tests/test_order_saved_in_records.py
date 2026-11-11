@@ -85,3 +85,19 @@ def test_a_plain_question_with_no_save_ordered_stays_a_question():
     orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=config, tools=add_note_tool())
     orch.run("What does research say about how many minutes of daily singing improve mood?", quest_id="q1")
     assert RAN == []
+
+
+def test_a_research_note_the_planner_never_wrote_is_saved_by_code_from_the_investigation_record():
+    from quest_ai_runner.the_world.science.investigate import research_note
+    record = {"question": "How long?", "best_grade": "C", "synthesis": {"known": [], "unknown": []},
+              "items": [{"item_id": "i1", "claim": "Ten minutes a day is the usual advice.", "grade": "C", "source": "https://example.org/a", "verified": "opened"}],
+              "findings": [{"item_id": "i1", "claim": "Ten minutes a day is the usual advice.", "grade": "C", "source": "https://example.org/a", "also": 0}]}
+    saved = []
+    investigate = ToolSpec(name="investigate_for_quest", description="d", mutates=True, handler=lambda a, c: ToolResult(ok=True, data={**record, "note_text": research_note(record)}, text="Looked into: How long?"))
+    note = ToolSpec(name="add_quest_note", description="d", mutates=True, handler=lambda a, c: (saved.append(a["text"]), ToolResult(ok=True, text="Added a note to quest q1."))[1])
+    research = {"action": "tool", "user_intent": "act", "rationale": "research", "tool_calls": [{"name": "investigate_for_quest", "args": {"question": "q"}}], "pending_read": []}
+    provider = AnalyserProvider('Research, then a note.\n{"saves_to_records": true}', [research, DONE])
+    config = OrchestratorConfig()
+    config.overseer = False
+    Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=config, tools=ToolRegistry([investigate, note])).run(EXACT, quest_id="q1")
+    assert saved and saved[0].startswith("Research note: How long?") and "Ten minutes a day is the usual advice." in saved[0]
