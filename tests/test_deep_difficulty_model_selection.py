@@ -29,6 +29,11 @@ from .test_per_goal_context_iteration import ScriptedProvider
 NOT_MET = {"met": False, "what_fell_short": "incomplete", "next_steps": "finish it"}
 
 
+def unmet(gap: str) -> Dict[str, Any]:
+    """A not-met verdict that names its own gap, so two in a row are not the same miss."""
+    return {"met": False, "reason": gap, "what_fell_short": gap, "next_steps": "close " + gap}
+
+
 def deep_plan(difficulty: Optional[str], reason: str = "because") -> Dict[str, Any]:
     plan = {"action": "deep", "goal": "Do the work",
             "deep_subtasks": [{"goal": "Do the work", "brief": "do it"}],
@@ -142,7 +147,17 @@ def test_simple_work_starts_on_haiku_and_escalates_to_sonnet_and_stops_there():
     # The default ladder tops out at the balanced tier (sonnet); opus is never a default rung.
     assert run_models("simple", [{"met": True}]) == ["sonnet"]   # deep work starts on balanced whatever the rating
     assert run_models("simple", [{"met": True}], deep_difficulty_models={"simple": "haiku", "normal": "sonnet", "hard": "sonnet"}) == ["haiku"]
-    assert run_models("simple", [NOT_MET, NOT_MET, {"met": True}], deep_difficulty_models={"simple": "haiku", "normal": "sonnet", "hard": "sonnet"})[:2] == ["haiku", "sonnet"]   # (third attempt no longer runs on this path: not yet explained, see report)
+    # Three attempts: the fast rung, then the balanced ceiling twice. The two misses name different gaps: two attempts in a row that fall short for the
+    # same reason with nothing new done end the loop (the no-progress stop), which is why identical NOT_MET verdicts only ever reach two attempts.
+    assert run_models("simple", [unmet("first gap"), unmet("second gap"), {"met": True}],
+                      deep_difficulty_models={"simple": "haiku", "normal": "sonnet", "hard": "sonnet"}) == ["haiku", "sonnet", "sonnet"]
+
+
+def test_two_identical_misses_in_a_row_stop_on_any_start_model_not_one_attempt_early():
+    # The same reason and the same output with nothing changed would only repeat: the loop stops after the second attempt whatever the starting rung.
+    assert run_models("simple", [NOT_MET, NOT_MET, {"met": True}], deep_difficulty_models={"simple": "haiku", "normal": "sonnet", "hard": "sonnet"}) == ["haiku", "sonnet"]
+    assert run_models("normal", [NOT_MET, NOT_MET, {"met": True}]) == ["sonnet", "sonnet"]
+    assert run_models("hard", [NOT_MET, NOT_MET, NOT_MET, {"met": True}]) == ["sonnet", "sonnet"]
 
 
 def test_normal_work_starts_on_sonnet_and_stays_at_the_ceiling():
