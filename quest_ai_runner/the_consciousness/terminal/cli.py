@@ -298,7 +298,7 @@ Env it reads:
   SEARXNG_URL (optional)                        — base URL of a self-hosted SearXNG instance for
                                                    the searxng backend.
   QAR_WEB_SEARCH_MODEL (optional)               — model id for the Gemini-grounding backend
-                                                   (default gemini-2.5-flash-lite); needs a Gemini
+                                                   (default: the hub's tier tables, role web_search); needs a Gemini
                                                    key via GEMINI_API_KEY / GOOGLE_API_KEY /
                                                    GOOGLE_AI_API_KEY. This is also what gives a
                                                    claude_cli lane (no Anthropic web_search tool)

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Web search no longer names a Gemini model: the fallback page fetch (`build_gemini_url_fallback`) takes `QAR_WEB_SEARCH_MODEL` when set, else the hub's tier-table choice for the `web_search` role, and moves on to the next model when one is refused (it was pinned to a Gemini 2.5 id, which the Gemini client library's new stable API path refuses; the hub's Gemini clients now set the beta path). Needs the hub commit that adds `gemini_search_models`.
+- An investigation whose search source failed is a failure, not "nothing found": `investigate.source_failure(hub_record)` reads the hub review's `source_failed` and `search_failures`, and `investigate_for_quest` returns a failed result naming the reason and records nothing (the agent is told to say the search failed and can be retried).
+
 ## [0.7.0] - 2026-11-10
 
 Pins esoi and the hub at `v0.7.0`, the same tags as every consumer. The hub pin now has `US_SPELLING_RULE`, the role tier table and `RunStore`.

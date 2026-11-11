@@ -142,7 +142,7 @@ A failed search or fetch is never cached.
 | `QAR_WEB_SEARCH_TTL_SECONDS` | 86400 (1 day) | Search-result cache TTL. |
 | `QAR_WEB_PAGE_TTL_SECONDS` | 604800 (7 days) | Fetched-page cache TTL. |
 | `QAR_WEB_CACHE_DIR` | unset (memory-only) | On-disk cache directory. |
-| `QAR_WEB_SEARCH_MODEL` | `gemini-2.5-flash-lite` | Gemini grounding model (and the fallback-fetch model). |
+| `QAR_WEB_SEARCH_MODEL` | chosen from the hub's tier tables (role `web_search`) | Gemini grounding model (and the fallback-fetch model). |
 | `QAR_WEB_SEARCH_PROVIDER_MODEL` | unset | Model id for the `provider`-native backend option. |
 | `QAR_WEB_SEARCH_DAILY_LIMIT` | unset (no limit) | Max REAL, paid calls per UTC day (searches plus fallback fetches); see below. |
 

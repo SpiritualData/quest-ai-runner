@@ -186,6 +186,14 @@ def review(question: str, decision: str, size: str, research_question_id: str = 
                        today=today or date.today().isoformat(), use_model=size != "quick", links=[f"solution:{s}" for s in solution_ids], reuse=False)
 
 
+def source_failure(hub_record: Mapping[str, Any]) -> str:
+    """Why a review found nothing because its search source failed (the provider's own words, shortened), or an empty string when the search worked.
+    A review that found nothing for a failed source is an error to report and retry, never "nothing was found"."""
+    if not hub_record.get("source_failed"):
+        return ""
+    return "; ".join(hub_record.get("search_failures") or []) or "a search source failed"
+
+
 def lines_of(cell: Any) -> List[str]:
     return [x.strip() for x in str(cell or "").split(";") if x.strip()]
 

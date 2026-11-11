@@ -106,6 +106,9 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
                                                            solution_ids=placed.solution_ids)
         except Exception as e:  # the hub's seat may be pending a key: say so, record nothing
             return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"The investigation could not be carried out, so nothing was recorded: {e}")
+        failure = investigate.source_failure(hub_record)
+        if failure:    # the search itself failed (a provider error), so nothing was judged: say so and record nothing, never "nothing was found"
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"The investigation could not be carried out because the search failed ({failure}), so nothing was recorded. Say that the search failed and can be retried; do not say nothing was found.")
         body = investigate.quest_record(hub_record, solution_ids=placed.solution_ids, research_question_id=research_question_id,
                                         goal_id=str(args.get("goal_id") or ""), asked_by=asked_by, origin=origin, extends=extends)
         try:

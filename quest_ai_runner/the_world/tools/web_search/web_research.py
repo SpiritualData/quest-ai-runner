@@ -38,12 +38,21 @@ def build_gemini_url_fallback(env: Mapping[str, str]) -> Optional[Callable[[str]
     key = gemini_api_key_from_env(env)
     if not key:
         return None
-    model = env.get("QAR_WEB_SEARCH_MODEL") or "gemini-2.5-flash-lite"
+    named = env.get("QAR_WEB_SEARCH_MODEL") or ""
 
     def fallback(url: str) -> str:
         from hubofhubs.api import GeminiProvider
+        from hubofhubs.api import backends as hub_backends
 
-        return GeminiProvider(api_key=key).fetch_url(url, model=model).get("text", "")
+        # No model is named here: the hub's tier tables choose (``gemini_search_models``), and a refused model moves on to the next one.
+        models = [named] if named else hub_backends.gemini_search_models()
+        provider, last = GeminiProvider(api_key=key), None
+        for model in models:
+            try:
+                return provider.fetch_url(url, model=model).get("text", "")
+            except Exception as error:  # noqa: BLE001 - the next model may be accepted; the last error is raised
+                last = error
+        raise last or RuntimeError("no Gemini model could be chosen from the tier tables")
 
     return fallback
 

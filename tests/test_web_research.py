@@ -761,3 +761,23 @@ def test_multiprocessing_two_real_processes_land_exactly_fifty_records(tmp_path)
         assert p.exitcode == 0
 
     assert data_count(tmp_path) == 50
+
+
+def test_the_url_fallback_names_no_model_and_moves_on_when_one_is_refused(monkeypatch):
+    import hubofhubs.api as hub_api
+    tried = []
+
+    class FakeProvider:
+        def __init__(self, api_key):
+            pass
+
+        def fetch_url(self, url, *, model):
+            tried.append(model)
+            if len(tried) == 1:
+                raise RuntimeError("400 refused")
+            return {"text": "page text"}
+
+    monkeypatch.setattr(hub_api, "GeminiProvider", FakeProvider)
+    adapter = build_web_research_from_env({"SERPER_API_KEY": "sk-1", "GOOGLE_API_KEY": "g-key"})
+    assert adapter._url_fetch_fallback("https://example.org/") == "page text"
+    assert len(tried) == 2 and tried[0] != tried[1] and all(m.startswith("gemini") for m in tried)

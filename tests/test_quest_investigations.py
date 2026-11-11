@@ -93,6 +93,21 @@ def test_a_result_that_informs_a_decision_is_looked_into_under_the_narrowest_str
     assert "How sure" not in result.text and "changed nothing yet" in result.text and chr(0x2014) not in result.text
 
 
+def test_a_search_that_failed_is_a_failure_and_records_nothing():
+    client = FakeClient()
+    failed = {**HUB_RECORD, "source_failed": True, "search_failures": ["web search: 400 INVALID_ARGUMENT refused"]}
+    handler = investigate_for_quest_spec({}, client_factory=lambda: client, ask=answers(), carry_out=lambda *a, **k: failed).handler
+    result = run(handler)
+    assert not result.ok and result.status is ToolStatus.FAILED and not client.recorded
+    assert "400 INVALID_ARGUMENT" in result.text and "do not say nothing was found" in result.text
+
+
+def test_source_failure_reads_the_hub_flag_and_names_the_reason():
+    assert investigate.source_failure({}) == "" and investigate.source_failure({"source_failed": False, "search_failures": ["x"]}) == ""
+    assert investigate.source_failure({"source_failed": True, "search_failures": ["web search: a", "web search: b"]}) == "web search: a; web search: b"
+    assert investigate.source_failure({"source_failed": True}) == "a search source failed"
+
+
 def test_with_no_narrower_strategy_it_falls_back_to_the_whole_quest():
     client = FakeClient()
     run(tool(client, answers(place={"solution_ids": ["sol_not_in_the_list"], "within_scope": True})))
