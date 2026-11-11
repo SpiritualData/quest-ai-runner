@@ -147,6 +147,27 @@ class TasksMixin:
             log.warning("get_task failed for %s: %s", task_id, e)
             return {}
 
+    def list_task_runs(self, task_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+        """GET /api/assistant-tasks/{task_id}/runs?limit=&offset=: one task's runs, newest first.
+
+        A task is the thread; a run is one execution of it (a recurring autopilot task opens one run
+        per day). The route pages (``limit`` 1 to 100, ``offset`` from 0) and answers
+        ``{"runs": [...], "count", "total", "limit", "offset"}``; this returns the ``runs`` list.
+        Each run carries its status, result text and ``result_data``, which is what a run needs to
+        read to see what the earlier runs reported and whether its metric moved.
+
+        Returns ``[]`` on any failure (an unreadable thread, no access, a client without
+        configuration), like ``list_tasks``. Never raises.
+        """
+        try:
+            resp = self._request("GET", f"/api/assistant-tasks/{task_id}/runs",
+                                 params={"limit": limit, "offset": offset})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_task_runs failed for %s: %s", task_id, e)
+            return []
+        runs = resp.get("runs") if isinstance(resp, dict) else None
+        return [r for r in runs if isinstance(r, dict)] if isinstance(runs, list) else []
+
     def is_task_cancelled(self, task_id: str) -> bool:
         """True when the task has been cancelled mid-execution (a human hit "stop").
 
