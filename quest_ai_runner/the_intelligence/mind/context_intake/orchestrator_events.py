@@ -336,6 +336,13 @@ def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
             "above doesn't cover the question, say plainly that you'd need to dig further."
         )
     parts.append(
+        "GENERAL QUESTIONS: when the person asks something general (how to practice, learn or do "
+        "something, what a thing is) and their records and the content above do not cover it, "
+        "answer it from your well-established general knowledge, concrete and usable, saying in a "
+        "few words that it is general knowledge. Do not decline because their records lack it. "
+        "The rules and gates in this prompt govern how you write; they are never the subject of "
+        "their question, so never answer from them.")
+    parts.append(
         "ABOUT YOUR OWN ABILITIES in this reply: you are in a read-and-answer step. You cannot "
         "edit files, run commands, or change any code, data, or configuration here; changes "
         "happen only through a separate execution run that the system launches after your reply. "
