@@ -652,7 +652,8 @@ class RunBeginMixin:
             if is_small_talk(rs.user_message):
                 rs.turn_needs_records = False      # a greeting needs none of the person's records
             if (rs.turn_needs_records is False and not rs.quest_id and not self._meta_quest_ids(_ctx_meta) and getattr(cfg, "cheap_information_turns", True) and rs._forced_plan is None
-                    and not attachments and rs.message_is_user_turn):
+                    and not attachments and rs.message_is_user_turn and not _ctx_meta.get("pre_reads")):
+                # (A turn whose caller already read material for it, ``pre_reads``, is never records-free: the reply rests on that material.)
                 # A definition, a how-to or a greeting needs nothing of the person's: no context is assembled, no planner step runs,
                 # and the reply is written from the question alone (``records_free``).
                 rs.records_free = True

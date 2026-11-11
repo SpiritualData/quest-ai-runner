@@ -29,7 +29,7 @@ from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_
 from quest_ai_runner.the_intelligence.mind.delegation.resume_request import LEDGER as RESUME_LEDGER
 from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_report_data
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
-    context_not_reassembled_observation, lane_gap_observation, planner_full_view_start, receipt_observation, planner_note_observation, read_spec_key, repeated_read_observation, split_context_reassembly, split_mixed_reads,
+    context_not_reassembled_observation, lane_gap_observation, pre_read_observation, planner_full_view_start, receipt_observation, planner_note_observation, read_spec_key, repeated_read_observation, split_context_reassembly, split_mixed_reads,
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
@@ -386,6 +386,11 @@ class RunLoopMixin:
             gathered.append(lane_gap_observation(rs.cue_gap))
         if rs.cue_resolved is not None:
             gathered.append(planner_note_observation(rs.cue_resolved.facts, "cue_facts"))
+        # What the caller already read for this turn (``pre_reads``: [{"locator", "text"}]) is gathered before the first plan, so the planner sees it
+        # and the reply rests on it; the caller's code did the reading, not the planner's choice.
+        for pre in (_ctx_meta or {}).get("pre_reads") or []:
+            if isinstance(pre, dict) and str(pre.get("text") or "").strip():
+                gathered.append(pre_read_observation(str(pre.get("locator") or "pre_read"), str(pre["text"])))
         for step in range(cfg.max_steps):
             # An information turn re-plans once: after the first plan and one re-plan, the wrap-up answers from what was read (the same exit
             # as a spent read budget). ``cheap_information_turns`` False is the other arm and keeps the full step budget.

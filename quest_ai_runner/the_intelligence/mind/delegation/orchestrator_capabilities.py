@@ -411,6 +411,12 @@ def lane_gap_observation(text: str) -> Dict[str, Any]:
     return Observation(kind="query", locator="lane_gap", text="LANE GAP (do not claim this was done or known): " + text).to_dict()
 
 
+def pre_read_observation(locator: str, text: str) -> Dict[str, Any]:
+    """A gathered entry for something the CALLER already read for this turn (``context_meta["pre_reads"]``, e.g. the user guide sections a
+    "How do I?" question matched). It grounds the answer like any read of the turn, so the reply is written from it and a claim it backs is supported."""
+    return Observation(kind="read", locator=locator, text=text).to_dict()
+
+
 def receipt_observation(tool: str, text: str, status: str) -> Dict[str, Any]:
     """The receipt of a write that code carried out, shaped like a tool's own receipt (locator ``tool:<name>``) so the reply and the write guards read it the same way."""
     receipt = Observation(kind="query", locator=f"tool:{tool}", text=text).to_dict()

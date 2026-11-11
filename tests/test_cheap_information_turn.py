@@ -137,3 +137,12 @@ def test_the_in_loop_overseer_is_skipped_on_a_read_only_information_turn_and_run
         o.run("what does the readme say about metrics", mode=Mode.LIVE, sink=RecordingSink())
         seen[cheap] = provider.consults
     assert seen[True] == 0 and seen[False] >= 1
+
+
+def test_material_the_caller_read_for_the_turn_is_gathered_and_reaches_the_reply():
+    """``context_meta["pre_reads"]``: what code read before the model planned grounds the reply like a read of the turn."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "have it", "user_intent": "ask"}])
+    o = orch(provider, config=OrchestratorConfig(verify_claims=False, answer_goal_max_iterations=1))
+    o.run("how do I do the thing", mode=Mode.LIVE, sink=RecordingSink(),
+          context_meta={"pre_reads": [{"locator": "guide/x.md#thing", "text": "Guide page: https://docs.example/guide/x\nTap Do It."}]})
+    assert "Tap Do It." in "\n".join(m["content"] for m in provider.last_answer_messages)
