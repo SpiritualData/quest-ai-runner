@@ -51,7 +51,7 @@ _register_with_hub()
 if TYPE_CHECKING:  # pragma: no cover — typing only
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 __all__ = ["config", "resources",
            "load_config", "load_client", "assembler", "run", "__version__"]
 
