@@ -109,7 +109,8 @@ def pick_solution(records: List[Dict[str, Any]], only: Optional[List[str]] = Non
 
     The order is the hub's Prioritization (Quest's ordering arm), asked with what each Solution carries: a Solution with a milestone comes before one without
     (a milestone is the next priority to work, and a bare strategy line is not one); within that, a Solution with no Metric record comes first (measuring it is
-    the work), then one whose Metric reads 'not yet measured', then the Metric measured longest ago. Ties keep the specification's own order."""
+    the work), then one whose Metric reads 'not yet measured', then the Metric measured longest ago. Ties keep the specification's own order. A Solution's
+    Metric is its ``authoritative_metric_id`` when it names one, else the least recently measured of the Metrics linked to it."""
     metrics = {r["recordId"]: r for r in records if r.get("type") == "metric" and r.get("recordId")}
     candidates, found = [], []
     chosen_from = [sol for sol in solutions_of(records) if only is None or sol.get("recordId") in only]
@@ -118,7 +119,10 @@ def pick_solution(records: List[Dict[str, Any]], only: Optional[List[str]] = Non
         linked = [metrics[i] for i in _ids(fields.get("metric_ids")) if i in metrics]
         linked += [m for m in metrics.values() if sol.get("recordId") in _ids((m.get("fields") or {}).get("solution_ids"))
                    and m not in linked]
-        metric = min(linked, key=_measured_at) if linked else None
+        # The Solution's authoritative Metric is the one a run iterates (a consolidated Solution also carries the Metrics of
+        # its milestones, and the stalest of those is not what the Solution is judged by); without one, the stalest linked.
+        authoritative = metrics.get(str(fields.get("authoritative_metric_id") or ""))
+        metric = authoritative or (min(linked, key=_measured_at) if linked else None)
         stamp = _measured_at(metric) if metric else ""
         has_milestone = bool(str(fields.get("milestones") or "").strip())
         why = ("it has no Metric yet, so defining and measuring one is the work" if metric is None

@@ -149,3 +149,13 @@ def test_a_character_the_specification_links_to_nothing_falls_back_to_its_instru
     assert "iterates none" in reviewer
     by_line = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_cccccccc", "rep_99999999")
     assert "Iterate this Solution: Area C" in by_line and "your instructions name" in by_line
+
+
+def test_the_authoritative_metric_is_the_one_a_solution_is_iterated_by():
+    consolidated = sol("s1", "Consolidated", ["m_old", "m_auth"])
+    consolidated["fields"]["authoritative_metric_id"] = "m_auth"
+    records = [consolidated, met("m_old", "3", "2026-09-01T00:00:00+00:00"), met("m_auth", "8", "2026-11-01T00:00:00+00:00")]
+    picked = esoi.pick_solution(records)
+    assert picked[1]["recordId"] == "m_auth" and "2026-11-01" in picked[2]          # not the stalest milestone metric
+    consolidated["fields"]["authoritative_metric_id"] = "m_gone"                     # names a record that is not there: as before
+    assert esoi.pick_solution(records)[1]["recordId"] == "m_old"
