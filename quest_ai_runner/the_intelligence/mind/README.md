@@ -27,7 +27,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
-| Context Intake | `context-intake` | `quest_ai_runner.run("context-intake", 'What should I work on first this week?')` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
+| Context Intake | `context-intake` | `quest_ai_runner.run("context-intake", 'What should I work on first this week?')` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count, Dashboard suggestion answers that are right and useful |
 | Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
 | Quest Work Shown | `quest-work-shown` | `quest_ai_runner.run("quest-work-shown")` | The Trail (live line, one summary line, expandable groups) (`trail`) | Faithful explanations per unit of cost and time, What is shown of the AI's work is true, the same for everyone, and earns its place, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
 | Replay Known Operations | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
@@ -69,7 +69,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Quest answers that name the person's goal and circumstance and fit features to them (`metric-quest-answer-tied-to-goal-and-circumstance`): leader `reference_script`, 13 of 13 cases
 - Day-with-Jarvis turns right end to end (`metric-jarvis-ness`): leader `reference_script`, 13 of 13 cases
 - Asks filed and deletes held before anything outward or irreversible happens (`metric-jarvis-floor-consent`): leader `reference_script`, 13 of 13 cases
-- and 8 more: all 18 are in [metrics](#metrics) of the full record below
+- and 9 more: all 19 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -94,7 +94,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
-| Context Intake | `context-intake` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count |
+| Context Intake | `context-intake` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count, Dashboard suggestion answers that are right and useful |
 | Planner | `planner` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
 | Quest Work Shown | `quest-work-shown` | The Trail (live line, one summary line, expandable groups) (`trail`) | Faithful explanations per unit of cost and time, What is shown of the AI's work is true, the same for everyone, and earns its place, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
 | Replay Known Operations | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
@@ -141,6 +141,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | One cheap model call per turn writes the beat (today) | `quest-work-shown:model_beat` | [quest_ai_runner/the_intelligence/mind/response_writer/orchestrator_turn.py](response_writer/orchestrator_turn.py) |  |
 | The Trail (live line, one summary line, expandable groups) | `quest-work-shown:trail` | [quest_ai_runner/the_intelligence/mind/response_writer/work_trace.py](response_writer/work_trace.py) |  |
 | The structural gate of core/interim_policy.py | `reply-in-steps:gated` | [quest_ai_runner/the_intelligence/mind/response_writer/interim_policy.py](response_writer/interim_policy.py) |  |
+| First message in plain words, read from goal and milestone records only | `reply-in-steps:plain-status-from-records` | [quest_ai_runner/the_intelligence/mind/response_writer/act_status.py](response_writer/act_status.py) |  |
 
 ### Metrics
 
@@ -162,6 +163,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Supported first beats within the time and cost the turn allows (`metric-narrate-a-turn`): `esoi run narrate_a_turn --impl model_beat`
 - Requests routed to what they ask for (`metric-route-a-request`): `esoi run route_a_request --impl planner_derived --sample 3 --max-calls 3; esoi run route_a_request --impl single_classifier --sample 3 --max-calls 3; esoi run route_a_request --impl majority_floor`
 - The terminal meets the requirements of working with the AI while it works (`metric-terminal-requirements`): `python3 -m pytest -s tests/test_terminal_requirements.py`
+- Dashboard suggestion answers that are right and useful (`metric-dashboard-suggestion-answers`): `python -m pytest -q tests/test_status_snapshot.py`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

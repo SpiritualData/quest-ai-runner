@@ -185,6 +185,9 @@ class RunBeginMixin:
         rs.turn_needs_records: Optional[bool] = None
         rs.status_snapshot = False             # a code-composed snapshot is in the gathered reads and the plan is forced to answer from it
         rs.status_lead = ""                    # a status reply's code-written first sentence (status_snapshot.lead_sentence), put on after the repairs
+        rs.status_follow = ""                  # the code-written next goal after the lead's, closing a status reply whose writer added nothing
+        rs.status_stems = None                 # the word stems of the quest's records, which a status sentence must share to hold a fact
+        rs.status_layout = ""                  # a plan's code-written day layout
         rs.saves_to_records = False      # the request analyser's report: the message orders something added or saved in the person's records, so the reply text is not the whole work
         rs.writes_text = False      # the request analyser's report: the message asks for a piece of text to use and nothing else (set after understanding)
         rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
@@ -467,7 +470,7 @@ class RunBeginMixin:
                 row = next((q for q in quests if str(q.get("quest_id")) == str(snapshot_quest)), {})
                 snapshot = status_snapshot.build(self.tools, snapshot_quest, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
                                                  question=rs.user_message, decide=self.cheap_decision, plan=plan, quest_title=str(row.get("title") or ""),
-                                                 quest_name=str(row.get("name") or ""))
+                                                 quest_name=str(row.get("name") or ""), quest_outcome=str(row.get("outcome") or ""))
             if snapshot is not None and rs.trace is not None:
                 rs.trace.records_read(snapshot.get("records"))     # what the snapshot read, shown under the reply when the reply draws on it
             if snapshot is not None and status_flags.get("plans_period"):
@@ -475,6 +478,7 @@ class RunBeginMixin:
                 rs.gathered.append(snapshot)
                 rs.status_snapshot = True
                 rs.status_lead = "" if status_flags["read_aloud"] else str(snapshot.get("lead") or "")     # the plan's counts, code-written, put on after the repairs
+                rs.status_layout = str(snapshot.get("layout") or "")      # the code's day layout, the plan's day lines when the writer gave none
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape=SHAPE_PLAN,
                                                delivery="spoken" if status_flags["read_aloud"] else None,
                                                rationale="A plan for the coming period: laid out from the quest's open goals read for this turn; nothing is saved.")
@@ -482,6 +486,8 @@ class RunBeginMixin:
                 rs.gathered.append(snapshot)
                 rs.status_snapshot = True
                 rs.status_lead = "" if status_flags["read_aloud"] else str(snapshot.get("lead") or "")     # the code-written first sentence, put on after the repairs
+                rs.status_follow = "" if status_flags["read_aloud"] else str(snapshot.get("follow") or "")
+                rs.status_stems = list(snapshot.get("stems") or [])
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
                                                rationale="A status question: answered from the status snapshot read for this turn.")
 

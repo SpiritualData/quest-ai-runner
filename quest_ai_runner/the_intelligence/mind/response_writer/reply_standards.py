@@ -693,7 +693,11 @@ def repair(draft: str, standard: Standard, measurements: Measurements, evidence:
                 clauses = CLAUSE_SPLIT.split(u.text)
                 good = [c for c in clauses if not unsupported_values(c, evidence_index)]
                 if good and len(good) < len(clauses):
-                    u.text = " ".join(good).strip().rstrip(",;:") + "."
+                    # Rejoined as a sentence: no full stop doubled ("...actually play..") and no lowercase "and" left at its start (measured live
+                    # 2026-11-11 after a clause holding a proposed goal's quoted name was cut).
+                    kept = re.sub(r"^(?:and|but|so|then)\s+", "", " ".join(good).strip().rstrip(",;:"), flags=re.I)
+                    kept = kept[:1].upper() + kept[1:]
+                    u.text = kept if re.search(r"[.!?][\"\u201d)]?$", kept) else kept + "."
                 else:
                     u.kept = False
                     continue

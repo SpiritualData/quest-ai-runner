@@ -531,6 +531,9 @@ class RunAnswerMixin:
             draft = rs.text.replace(status_lead, "", 1).strip()
             if getattr(rs.plan, "reply_shape", None) != PLAN_SHAPE:
                 draft = without_restated_lead(draft, status_lead)
+            # What the writer wrote and what the restatement cut left of it: a status reply that came out as the lead alone (measured live 2026-11-11)
+            # could not be traced to the writer or the cut without this.
+            log.info("Status reply: writer draft %r; after the restatement cut %r", rs.text[:1200], draft[:1200])
             rs.text = draft or rs.text
         if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
             try:
@@ -755,6 +758,7 @@ class RunAnswerMixin:
             from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import human_dates
             rs.text = human_dates(rs.text)       # the snapshot's ISO due days, copied into the reply, are written as a person reads them
         if lead and rs.plan.action == "answer":
+            log.info("Status reply after the repairs, before the lead goes on: %r", (rs.text or "")[:1200])
             # Code-written: the goals at a glance, counted by the status snapshot. Put on after the length repairs, which cut it from every busy quest's status
             # (measured 2026-11-11: "0 of 25 done, 7 overdue" dropped to keep three sentences, and the reply check then refused to add a figure back).
             # A writer that copied it anyway put it last once (measured 2026-11-11), so it is moved to the front, never stated twice. A draft that already
@@ -764,6 +768,14 @@ class RunAnswerMixin:
             from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import without_plan_preamble, without_restated_lead
             # A draft that was all restatement leaves the lead alone: falling back to the draft put the copy back (measured live 2026-11-11).
             rest = without_plan_preamble(rest) if is_plan else without_restated_lead(rest, lead)
+            if is_plan:
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import plan_with_days
+                rest = plan_with_days(rest, str(getattr(rs, "status_layout", "") or ""))      # a plan with no day line gets the code's layout
+            if not is_plan:
+                # No closing question; a writer that added nothing past the lead (measured live 2026-11-11 on two of four
+                # accounts, and a steered rewrite gave the lead back again) is followed by the next goal, written by code.
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import status_rest
+                rest = status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None))
             # A plan's day lines (or any list or heading) start on their own paragraph: joined with a space, the opening ran into "**Wednesday 11 November**".
             apart = is_plan or bool(re.match(r"\s*(?:[-*•|#]|\d+[.)]|\*\*)", rest))
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()

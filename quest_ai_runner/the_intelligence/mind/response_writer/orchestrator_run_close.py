@@ -5,6 +5,7 @@ run-local namespace ``rs`` that ``RunMixin.run`` builds and hands from one phase
 """
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
@@ -773,7 +774,22 @@ class RunCloseMixin:
             log.info("Reply still claims an action without a receipt; replaced by the receipts-only reply.")
             rs.text = receipts_reply(exec_record)
             rs._claim_corrected = True
-        rs.text = checked_reply(self, rs, rs.text)       # Decision Check: independent views hold the reply to the reads and executed actions (off unless cfg.reply_check)
+        lead = str(getattr(rs, "status_lead", "") or "").strip()
+        if lead and getattr(rs, "status_snapshot", False) and (rs.text or "").startswith(lead):
+            # A status or plan answer: the code-written opening comes from the records and is kept as it is; only the writer's part is checked, and
+            # what follows it (the next goal, or the day layout) is decided on what the check left. Measured live 2026-11-11 (run 22): checked whole,
+            # a plan lost its opening ("removed: the rewrite added a figure"), and a status lost its one writer sentence with nothing put in its place.
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import plan_with_days, status_rest
+            from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN as PLAN_SHAPE
+            rest = rs.text[len(lead):].strip()
+            rest = checked_reply(self, rs, rest) if rest else rest
+            is_plan = getattr(getattr(rs, "plan", None), "reply_shape", None) == PLAN_SHAPE
+            rest = (plan_with_days(rest, str(getattr(rs, "status_layout", "") or "")) if is_plan
+                    else status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None)))
+            apart = is_plan or bool(re.match(r"\s*(?:[-*\u2022|#]|\d+[.)]|\*\*)", rest or ""))
+            rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
+        else:
+            rs.text = checked_reply(self, rs, rs.text)       # Decision Check: independent views hold the reply to the reads and executed actions (off unless cfg.reply_check)
         _exit_reason = "unverified"
         if rs._deferred_handoff_confirmed:
             # The work was confirmed queued out-of-band (deferred contract): neither verified nor
