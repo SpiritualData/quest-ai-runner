@@ -743,3 +743,19 @@ def test_snapshot_records_name_the_outcome_and_the_plan_strategies():
         ("q1", "Run my first half marathon", "quest"), ("q1#outcome", "I finish a half marathon in under 2:15", "outcome"),
         ("esr_1", "Build a weekly running base", "strategy"), ("esr_3", "Taper before race day", "strategy"), ("g1", "Book the race entry", "goal")]
     assert [r["kind"] for r in status_snapshot.snapshot_records("q1", "Q", rows)] == ["quest", "goal"]      # no outcome, no tables: as before
+
+
+def test_a_writer_sentence_that_only_repeats_the_openings_quest_name_gives_way_to_the_next_goal():
+    # measured live 2026-11-11 at 13:56: the quest name the opening had quoted passed as a fact, and the next goal never came
+    lead = ('As of 11 November, 1 of the 4 goals in "Run my first half marathon" is done. The longest overdue is "Book the race entry", due 8 November, '
+            'so start there.')
+    stems = status_snapshot.record_words(["Run my first half marathon", "Book the race entry", "Buy proper running shoes"])
+    follow = 'After that, "Buy proper running shoes" is due 15 November.'
+    assert status_snapshot.status_rest('Your quest "Run my first half marathon" is just getting started.', follow, stems, lead) == follow
+    # a made-up reason attached to the goal the opening named holds nothing from the records either
+    assert status_snapshot.status_rest('"Book the race entry" matters because it sets everything else in motion.', follow, stems, lead) == follow
+    # a sentence that adds a record of its own stays
+    kept = 'Then buy proper running shoes before the long runs.'
+    assert status_snapshot.status_rest(kept, follow, stems, lead) == kept
+    # without the lead, the old judgement holds (the quoted name counts)
+    assert status_snapshot.status_rest('Your quest "Run my first half marathon" is just getting started.', follow, stems) != follow

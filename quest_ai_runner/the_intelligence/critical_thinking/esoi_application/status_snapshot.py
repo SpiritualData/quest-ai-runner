@@ -326,19 +326,35 @@ def record_words(names: List[str]) -> List[str]:
     return sorted({w[:FACT_PREFIX] for n in names for w in LEAD_WORD.findall(str(n or "").lower()) if len(w) >= 5})
 
 
-def holds_a_fact(sentence: str, stems: List[str]) -> bool:
+QUOTED_NAME = re.compile(r"[\"\u201c]([^\"\u201c\u201d]{3,})[\"\u201d]")
+
+
+def without_said_names(sentence: str, lead: str = "") -> str:
+    """The sentence without the names the lead already quotes (quoted or bare), so what is left is what the sentence adds. Measured live 2026-11-11
+    at 13:56: "Your quest "Run my first half marathon" is just getting started." passed as a fact on the quest name the lead had quoted, and took the
+    place of the next goal. Compares with the lead's own text, never a list of words."""
+    out = sentence or ""
+    for name in sorted({m.strip() for m in QUOTED_NAME.findall(lead or "")}, key=len, reverse=True):
+        out = re.sub(r"[\"\u201c]?" + re.escape(name) + r"[\"\u201d]?", " ", out, flags=re.IGNORECASE)
+    return out
+
+
+def holds_a_fact(sentence: str, stems: List[str], lead: str = "") -> bool:
     """True when a sentence states something from the records: a number, a quoted or bolded name, or a word of the quest's own records (``record_words``).
     Measured live 2026-11-11 (run 19): "The opening line covers the goal counts and the overdue goal, so here is what stands between the quest and its
-    outcome." holds none, and said nothing about the quest. Compares against the quest's records, never a list of words."""
+    outcome." holds none, and said nothing about the quest. With ``lead``, a name the lead already quotes is no new fact (``without_said_names``), so a
+    sentence that only adds a judgement or a made-up reason to it holds none. Compares against the quest's records, never a list of words."""
+    sentence = without_said_names(sentence, lead) if lead else sentence
     if re.search(r"\d|[\"\u201c]|\*\*", sentence):
         return True
     return any(w[:FACT_PREFIX] in stems for w in LEAD_WORD.findall(sentence.lower()) if len(w) >= FACT_PREFIX)
 
 
-def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None) -> str:
+def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None, lead: str = "") -> str:
     """What goes after a status reply's lead: the writer's text without a closing question, a sentence that holds no fact (``holds_a_fact``, when the
     record ``stems`` are given) or a leftover fragment ("Your quest" left where the writer had copied the lead, run 19), or, when that leaves no sentence
-    of four or more words, ``follow`` (follow_sentence) so the reply still says what comes next."""
+    of four or more words, ``follow`` (follow_sentence) so the reply still says what comes next. ``lead`` is the code-written opening: a sentence
+    holds a fact only beyond the names it already quotes."""
     paragraphs = []
     for para in re.split(r"\n\s*\n", text or ""):
         p = para.strip()
@@ -347,7 +363,7 @@ def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None) 
         if not re.search(r"[.!?:][\"\u201d*)]*$", p) and len(p.split()) < 4 and not re.match(r"\s*(?:[-*\u2022]|\d+[.)])", p):
             continue        # a fragment: no end, a few words
         if stems is not None and not re.match(r"\s*(?:[-*\u2022]|\d+[.)]|\|)", p):
-            p = " ".join(x for x in LEAD_SENTENCE_SPLIT.split(p) if holds_a_fact(x, stems))
+            p = " ".join(x for x in LEAD_SENTENCE_SPLIT.split(p) if holds_a_fact(x, stems, lead))
         if p:
             paragraphs.append(p)
     out = without_closing_question("\n\n".join(paragraphs))

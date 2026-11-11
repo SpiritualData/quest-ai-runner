@@ -785,7 +785,7 @@ class RunCloseMixin:
             rest = checked_reply(self, rs, rest) if rest else rest
             is_plan = getattr(getattr(rs, "plan", None), "reply_shape", None) == PLAN_SHAPE
             rest = (plan_with_days(rest, str(getattr(rs, "status_layout", "") or "")) if is_plan
-                    else status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None)))
+                    else status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None), lead))
             apart = is_plan or bool(re.match(r"\s*(?:[-*\u2022|#]|\d+[.)]|\*\*)", rest or ""))
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
         else:

@@ -775,7 +775,7 @@ class RunAnswerMixin:
                 # No closing question; a writer that added nothing past the lead (measured live 2026-11-11 on two of four
                 # accounts, and a steered rewrite gave the lead back again) is followed by the next goal, written by code.
                 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import status_rest
-                rest = status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None))
+                rest = status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None), lead)
             # A plan's day lines (or any list or heading) start on their own paragraph: joined with a space, the opening ran into "**Wednesday 11 November**".
             apart = is_plan or bool(re.match(r"\s*(?:[-*•|#]|\d+[.)]|\*\*)", rest))
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
