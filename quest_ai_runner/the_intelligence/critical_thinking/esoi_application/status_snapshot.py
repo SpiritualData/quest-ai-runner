@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Mapping, Optional
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue, status_reading
 
 log = logging.getLogger("quest-ai-runner.status-snapshot")
+# A turn's one-sentence call reports on the orchestrator's log, the one the server shows (this module's own is not routed there)
+turn_log = logging.getLogger("quest-ai-runner.orchestrator")
 LOCATOR = "status_snapshot"
 PRIORITY_MAX = 5
 OWN_MAX = 8
@@ -50,7 +52,7 @@ def reachable_quests(registry: Any) -> List[Dict[str, str]]:
     rows = (result.data or []) if result.ok else []
     from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import quest_label
     return [{"quest_id": str(r.get("quest_id") or r.get("id")), "title": quest_label(r), "name": str(r.get("name") or "").strip(),
-             "outcome": " ".join(str(r.get("outcome") or "").split()), "state": ""}
+             "outcome": " ".join(str(r.get("outcome") or "").split()), "state": "", "started": str(r.get("created_at") or r.get("start_date") or "")}
             for r in rows if isinstance(r, Mapping) and (r.get("quest_id") or r.get("id"))]
 
 
@@ -220,13 +222,15 @@ def day_layout(open_rows: List[Mapping[str, Any]], today: date, window_days: int
     return "\n".join(out)
 
 
-def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = "", aim: str = "") -> str:
+def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = "", aim: str = "", next_step: bool = False, started: str = "") -> str:
     """The status reply's first sentence, written by code from the goal counts ("As of 11 November, none of the quest's 25 goals is done yet, and 7 are
     overdue."), so the overall picture is always stated and stated right. "" for a quest with no goals (the reply says that itself). ``quest_name`` names
     the quest in it ("1 of the 4 goals in \"Run my first half marathon\" is done"): measured 2026-11-11, a reply that opened "the quest's 2 goals" never
     named the quest at all on two of four test accounts, and one called its outcome "The quest 'I sell 20 pieces online'"."""
     if not rows:
-        return no_goals_lead(quest_name, outcome=aim_outcome(aim))
+        return no_goals_lead(quest_name, outcome=aim_outcome(aim), next_step=next_step, started=started, today=today)
+    if next_step:
+        return next_step_lead(rows, today, quest_name, aim_outcome(aim))
     done = sum(1 for g in rows if g.get("completed"))
     open_rows = [g for g in rows if not g.get("completed") and not g.get("abandoned")]
     late = sum(1 for g in open_rows if g.get("due") and str(g.get("due"))[:10] < today.isoformat())
@@ -254,7 +258,8 @@ def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = 
         due = date.fromisoformat(str(g.get("due"))[:10])
         # "so start there": the lead says what to do first itself, so an answer whose writer's sentences were all repeats (or were cut by a later check)
         # still says it, and a writer's "Then ..." follows something (measured live 2026-11-11: a reply that was the lead alone, and one opening "Then").
-        start = f"The longest overdue is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}, so start there."
+        late_by = days_overdue(g, today)
+        start = f"The longest overdue is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}, " + ("1 day" if late_by == 1 else f"{late_by} days") + " ago."
     else:
         upcoming = sorted((g for g in open_rows if g.get("due") and str(g.get("due"))[:10] >= today.isoformat()), key=lambda g: str(g.get("due")))
         if upcoming and tail:
@@ -262,7 +267,7 @@ def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = 
             # 15 November" and never said which goal (measured live 2026-11-11, "Launch my pottery shop").
             g = upcoming[0]
             due = date.fromisoformat(str(g.get("due"))[:10])
-            start = f"The soonest due is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}, so start there."
+            start = f"The soonest due is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}."
     # ``aim`` (aim_sentence: the outcome in the person's words and a strategy with no goal) goes between the counts and the goal to start with
     return " ".join(x for x in (head + (tail or "."), aim, start) if x)
 
@@ -271,7 +276,7 @@ AIM_HEAD = "The quest works toward"
 AIM_OUTCOME = re.compile(AIM_HEAD + r" \"([^\"]+)\"")
 
 
-def aim_sentence(outcome: str, tables: Mapping[str, Any], rows: Optional[List[Mapping[str, Any]]]) -> str:
+def aim_sentence(outcome: str, tables: Mapping[str, Any], rows: Optional[List[Mapping[str, Any]]], today: Optional[date] = None) -> str:
     """The status reply's sentence on what the quest works toward, written by code: its outcome in the person's own words and, when the plan has a
     strategy no goal is linked to, that strategy by name ('The quest works toward "I finish a half marathon in under 2:15 by 14 March", and the plan's
     strategy "Build a weekly running base" has no goal linked to it yet.'). Measured live 2026-11-11 (runs 14 to 17): asked to say progress toward the
@@ -282,7 +287,72 @@ def aim_sentence(outcome: str, tables: Mapping[str, Any], rows: Optional[List[Ma
     idle = next((" ".join(str(row.get("name")).split()) for rid, row in (tables.get("solutions") or {}).items()
                  if isinstance(row, Mapping) and str(row.get("name") or "").strip()
                  and not any(str(g.get("spec_solution_id") or "") == str(rid) for g in rows or [])), "")
-    return f"{AIM_HEAD} \"{text}\"" + (f", and the plan's strategy \"{idle}\" has no goal linked to it yet" if idle else "") + "."
+    left = time_left(text, today) if today else ""
+    return (f"{AIM_HEAD} \"{text}\"" + (f", {left}" if left else "")
+            + (f", and the plan's strategy \"{idle}\" has no goal linked to it yet" if idle else "") + ".")
+
+
+MONTH_NAMES = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+_MONTH = "(" + "|".join(MONTH_NAMES) + ")"
+OUTCOME_DAY = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)? " + _MONTH + r"\b(?:,? (\d{4}))?|\b" + _MONTH + r" (\d{1,2})(?:st|nd|rd|th)?\b(?:,? (\d{4}))?", re.I)
+
+
+def outcome_day(outcome: str, today: date) -> Optional[date]:
+    """The day an outcome names in its own words ("by 14 March", "on March 14, 2027"), or None when it names no day of a month ("by June" names none).
+    A day with no year is the next one on or after ``today``."""
+    m = OUTCOME_DAY.search(outcome or "")
+    if not m:
+        return None
+    day, month, year = (m.group(1), m.group(2), m.group(3)) if m.group(1) else (m.group(5), m.group(4), m.group(6))
+    try:
+        d = date(int(year) if year else today.year, MONTH_NAMES.index(month.lower()) + 1, int(day))
+    except ValueError:
+        return None
+    if not year and d < today:
+        d = d.replace(year=today.year + 1)
+    return d
+
+
+def time_left(outcome: str, today: date) -> str:
+    """How far off the day the outcome names is, counted by code ("17 weeks from today"), so a status says how much time the quest has without the writer
+    counting: measured live 2026-11-11, "How is this quest going?" on an outcome dated 14 March never said how near it was. "" when it names no day or
+    the day is past."""
+    d = outcome_day(outcome, today)
+    if d is None or d < today:
+        return ""
+    days = (d - today).days
+    if days == 0:
+        return "which is today"
+    if days < 14:
+        return "1 day from today" if days == 1 else f"{days} days from today"
+    return f"{days // 7} weeks from today"
+
+
+def next_step_lead(rows: List[Mapping[str, Any]], today: date, quest_name: str = "", outcome: str = "") -> str:
+    """The first sentence of a reply to "What should I do next?", written by code: the ONE goal to do next and why it is first, from its dates alone
+    ('In "Run my first half marathon", do "Book the race entry" next: it was due 8 November, 3 days ago, the longest overdue of its open goals.').
+    Measured live 2026-11-11: "What should I do next?" and "How is this quest going?" got the same reply, word for word, on two of four accounts,
+    because both opened with the goal counts. A next-step reply names no counts and no outcome: those answer how the quest is going."""
+    name = " ".join(str(quest_name or "").split()).replace('"', "'")
+    where = f"In \"{name}\", " if name else ""
+    open_rows = [g for g in rows if not g.get("completed") and not g.get("abandoned") and g.get("title")]
+    if not open_rows:
+        toward = " ".join(str(outcome or "").split()).replace('"', "'").rstrip(".")
+        return ((f"Every goal in \"{name}\" is done" if name else "Every goal of the quest is done")
+                + (f", so the next step is to set the goal that brings \"{toward}\" closer." if toward else ", so the next step is to set its next goal."))
+    overdue = sorted((g for g in open_rows if days_overdue(g, today)), key=lambda g: str(g.get("due")))
+    coming = sorted((g for g in open_rows if g.get("due") and not days_overdue(g, today)), key=lambda g: str(g.get("due")))
+    g = next_goal(rows, today) or open_rows[0]
+    title = " ".join(str(g.get("title")).split()).replace('"', "'")
+    head = (where[0].upper() + where[1:] if where else "") + (f"do \"{title}\" next" if where else f"Do \"{title}\" next")
+    if overdue:
+        late = days_overdue(g, today)
+        why = f"it was due {said_date(g.get('due'))}, " + ("1 day" if late == 1 else f"{late} days") + " ago" + (", the longest overdue of its open goals" if len(overdue) > 1 else "")
+    elif coming:
+        why = f"it is due {said_date(g.get('due'))}" + (", the soonest of its open goals" if len(open_rows) > 1 else "")
+    else:
+        why = "none of its open goals has a due day yet"
+    return f"{head}: {why}."
 
 
 def aim_outcome(aim: str) -> str:
@@ -369,7 +439,7 @@ def is_spliced(sentence: str, stems: List[str]) -> bool:
     return any(m.group(1).lower()[:FACT_PREFIX] not in stems for m in SPLICED.finditer(QUOTED.sub(" ", sentence or "")))
 
 
-def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None, lead: str = "") -> str:
+def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None, lead: str = "", always_follow: bool = False) -> str:
     """What goes after a status reply's lead: the writer's text without a closing question, a sentence that holds no fact (``holds_a_fact``, when the
     record ``stems`` are given) or a leftover fragment ("Your quest" left where the writer had copied the lead, run 19), or, when that leaves no sentence
     of four or more words, ``follow`` (follow_sentence) so the reply still says what comes next. ``lead`` is the code-written opening: a sentence
@@ -398,6 +468,10 @@ def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None, 
     out = without_closing_question("\n\n".join(paragraphs))
     if not any(len(x.split()) >= 4 for x in LEAD_SENTENCE_SPLIT.split(out)):
         return follow
+    named = LEAD_TITLE.search(follow or "")
+    if always_follow and named and named.group(1).lower() not in out.lower():
+        # "What should I do next?" closes on the goal after the one to do now, so the reply says the order, not only the first step.
+        out = f"{out} {follow}".strip()
     return out
 
 
@@ -417,7 +491,193 @@ def as_follow(sentence: str, follow: str, lead: str = "") -> str:
     return follow if len(set(LEAD_WORD.findall(bare.lower())) - known) <= REPEAT_SPARE_WORDS else sentence
 
 
-def no_goals_lead(quest_name: str = "", plan: bool = False, outcome: str = "") -> str:
+ASK_KIND_PROMPT = ("A person asked this about their quest:\n\n{question}\n\nDoes it ask what they should do next, first or now (NEXT), or how the quest is "
+                   "going, where it stands or how far it has come (STATUS)? Answer with one word on the last line: NEXT or STATUS.")
+
+
+def asks_next_step(question: str, decide: Any, reported: bool = False) -> bool:
+    """Whether a status-shaped question asks what to do next (its own opening and directive) or how the quest is going, from one forced-choice cheap call.
+    Measured live 2026-11-11: the request analyser's optional ``asks_next_step`` key, one of a dozen, was set for "How is this quest going?" and the
+    status got the next-step reply. ``reported`` (that key) decides only when the call cannot be made or gives neither word."""
+    if decide is None or not str(question or "").strip():
+        return reported
+    try:
+        lines = [line.strip().upper() for line in str(decide(ASK_KIND_PROMPT.format(question=str(question).strip()[:600])) or "").splitlines() if line.strip()]
+    except Exception as error:      # noqa: BLE001  the analyser's report stands
+        log.info("next-step check not made: %s: %s", type(error).__name__, error)
+        return reported
+    last = re.sub(r"[^A-Z]", "", lines[-1]) if lines else ""
+    return True if last == "NEXT" else False if last == "STATUS" else reported
+
+
+def next_goal(rows: Optional[List[Mapping[str, Any]]], today: date) -> Optional[Mapping[str, Any]]:
+    """The one open goal to do next: the longest overdue, else the soonest due, else the first open goal. None when no goal is open."""
+    open_rows = [g for g in rows or [] if not g.get("completed") and not g.get("abandoned") and g.get("title")]
+    overdue = sorted((g for g in open_rows if days_overdue(g, today)), key=lambda g: str(g.get("due")))
+    coming = sorted((g for g in open_rows if g.get("due") and not days_overdue(g, today)), key=lambda g: str(g.get("due")))
+    return (overdue or coming or open_rows or [None])[0]
+
+
+# The one sentence a status or next-step reply exists for, written by one narrow model call and checked by code. Measured live 2026-11-11: told in
+# a long directive to give the first action or the progress toward the outcome, the reply writer restated the counts on every account, its sentences
+# were cut as repeats, and "What should I do next?" ended as the code's opening and the goal after it, with no action at all.
+INSIGHT_MAX_WORDS = 40
+INSIGHT_TRIES = 3       # a sentence that fails a check is asked for once more (the model's wording varies turn to turn)
+NO_DASHES = "Never use an em dash or an en dash."
+NEXT_ACTION_PROMPT = (
+    "A person's quest is named \"{quest}\"{toward}. The goal they will do now is \"{goal}\"{due}.\n\n"
+    "Write ONE sentence of at most 30 words telling them the first concrete action to take on that goal today: a specific step that does part of "
+    "the goal itself, small enough to start within the hour, drawn from the goal's own words and the outcome's (never a step about the goal, such as "
+    "bookmarking, planning or scheduling it). Start with a verb. Name no date, deadline or day: they were just told them. Refer to the goal by a few of its words, "
+    "never its full name in quotation marks. Name no other goal. Use no number, date or price that is not in the text above, no percentage, and never "
+    "say that one thing depends on, blocks or unblocks another. No question and no offer. " + NO_DASHES + " Write only the sentence.")
+PROGRESS_PROMPT = (
+    "A person's quest is named \"{quest}\" and works toward \"{outcome}\"{left}.\nDone goals: {done}.\nOpen goals: {open}.\n\n"
+    "Write ONE sentence of at most 35 words saying how far the done goals take the quest toward that outcome and the biggest piece still missing, in "
+    "plain words a coach would say. When nothing is done, say what the first real progress toward the outcome will be. Refer to goals by a few of their "
+    "words, never their full names in quotation marks. They were already told the goal counts, the time left and which goal is overdue or due "
+    "soonest: say none of those again, and no due dates. Use no number, date or price that is not in the text above, no percentage, and "
+    "never say that one thing depends on, blocks or unblocks another. No question and no offer. " + NO_DASHES + " Write only the sentence.")
+FIRST_GOAL_PROMPT = (
+    "A person just started a quest named \"{quest}\"{toward}, and it has no goals yet.\n\n"
+    "Propose its first goal: concrete, small enough to finish this week, drawn from the outcome's own words. Write exactly two lines and nothing else.\n"
+    "Line 1: the goal, at most 10 words, starting with a verb.\n"
+    "Line 2: one sentence of at most 25 words on how finishing it moves the quest toward its outcome.\n"
+    "Use no number, date or price that is not in the text above, and never the words depends, blocks or unblocks. No question and no offer. " + NO_DASHES)
+
+
+def checked_sentence(text: str, allowed: str, max_words: int = INSIGHT_MAX_WORDS, min_words: int = 5) -> str:
+    """One model-written sentence as a reply may carry it, or "" when it fails a check: no question, percentage, dependency claim or the word
+    "snapshot"; between ``min_words`` and ``max_words`` words; every number in it is in ``allowed`` (the records the prompt gave). Dashes become commas."""
+    s = " ".join(str(text or "").split()).strip().strip('"\u201c\u201d').strip()
+    s = re.sub(r"\s*[\u2014\u2013]\s*", ", ", s)
+    why = ("empty" if not s else "a question, percentage, dependency claim or offer"
+           if "?" in s or "%" in s or re.search(r"\bpercent|\bdepend|\bblock|\bunblock|\bsnapshot\b|\bI can\b|\blet me\b", s, re.I)
+           else f"{len(s.split())} words" if not (min_words <= len(s.split()) <= max_words)
+           else "a figure in no record" if not set(LEAD_NUMBER.findall(s)) <= set(LEAD_NUMBER.findall(allowed or "")) else "")
+    if why:
+        turn_log.info("Status insight sentence dropped (%s): %r", why, s[:300])
+        return ""
+    s = s[0].upper() + s[1:]
+    return s if re.search(r"[.!][\"\u201d)]*$", s) else s + "."
+
+
+def said_lines(text: str) -> List[str]:
+    """A model reply's non-empty lines, list marks and "Line 1:" labels taken off."""
+    out = []
+    for line in str(text or "").splitlines():
+        line = re.sub(r"^\s*(?:[-*\u2022]|\d+[.)]|line \d+\s*:)\s*", "", line, flags=re.I).strip().strip("*").strip()
+        if line:
+            out.append(line)
+    return out
+
+
+def insight(decide: Any, quest_name: str, outcome: str, rows: Optional[List[Mapping[str, Any]]], today: date, next_step: bool = False) -> str:
+    """The sentence a status or next-step reply exists for, from one narrow model call, checked by ``checked_sentence``: for "What should I do next?" the
+    first concrete action on the goal the opening names; for "How is this quest going?" how far the done goals take the quest toward its outcome; for a
+    quest with no goals, a proposed first goal in bold and how it moves the outcome. "" when there is no call to make, it fails, or its text fails a check
+    (the reply then closes on the goal after, as before)."""
+    if decide is None or rows is None:
+        return ""
+    name = " ".join(str(quest_name or "").split()).replace('"', "'")
+    aim = " ".join(str(outcome or "").split()).replace('"', "'").rstrip(".")
+    toward = f" and works toward \"{aim}\"" if aim else ""
+    # the numbers a sentence may hold: those of the records the prompt gave (never the prompt's own word limits)
+    facts = " ".join([name, aim] + [f"{g.get('title')} {said_date(g.get('due')) if g.get('due') else ''}" for g in rows or []])
+    try:
+        if not rows:
+            if not name:
+                return ""
+            prompt = FIRST_GOAL_PROMPT.format(quest=name, toward=toward)
+            for _ in range(INSIGHT_TRIES):
+                lines = said_lines(decide(prompt))
+                goal = checked_sentence(lines[-2], facts, max_words=12, min_words=2).rstrip(".") if len(lines) >= 2 else ""
+                why = checked_sentence(lines[-1], facts, max_words=30) if goal else ""
+                if goal and why:
+                    return f"A first goal to set: **{goal}.** {why}"
+            return ""
+        if next_step:
+            g = next_goal(rows, today)
+            if g is None:
+                return ""
+            title = " ".join(str(g.get("title")).split()).replace('"', "'")
+            due = f", due {said_date(g.get('due'))}" if g.get("due") else ""
+            prompt = NEXT_ACTION_PROMPT.format(quest=name or "this quest", toward=toward, goal=title, due=due)
+            for _ in range(INSIGHT_TRIES):
+                got = said_lines(decide(prompt))
+                # numbers only from the goal's own name ("12 km", "ten pieces"): measured live 2026-11-11, "select an event that falls before
+                # 14 March" (the race IS on 14 March) was removed by the reply check and the reply was left with no action
+                said = checked_sentence(without_goal_name(got[-1], title), title) if got else ""
+                if said:
+                    return said
+            return ""
+        if not aim:
+            return ""
+        done = [" ".join(str(g.get("title")).split()) for g in rows if g.get("completed") and g.get("title")][:6]
+        open_rows = [g for g in rows if not g.get("completed") and not g.get("abandoned") and g.get("title")]
+        open_rows.sort(key=lambda g: (g.get("due") is None, str(g.get("due") or "")))
+        left = time_left(aim, today)
+        prompt = PROGRESS_PROMPT.format(quest=name or "this quest", outcome=aim, left=f" ({left})" if left else "",
+                                        done="; ".join(done) or "none yet",
+                                        open="; ".join(" ".join(str(g.get("title")).split()) + (f" (due {said_date(g.get('due'))})" if g.get("due") else "")
+                                                       for g in open_rows[:8]) or "none")
+        for _ in range(INSIGHT_TRIES):
+            got = said_lines(decide(prompt))
+            said = checked_sentence(without_count_clause(got[-1], rows), facts + " " + left) if got else ""
+            if said:
+                return said
+        return ""
+    except Exception as error:      # noqa: BLE001  the sentence is an addition; the reply stands without it
+        turn_log.info("Status insight not written: %s: %s", type(error).__name__, error)
+        return ""
+
+
+def without_count_clause(sentence: str, rows: List[Mapping[str, Any]]) -> str:
+    """The progress sentence without a clause that only says the goal counts the opening gave ("None of the 2 goals in ... is done yet, and 1 is
+    overdue, so the first real progress will be ...", measured live 2026-11-11 on two of four accounts): the clauses before ", so" or "; " that talk of
+    goals being done or overdue with no number but the counts are cut, and what is left starts the sentence."""
+    total = len(rows or [])
+    done = sum(1 for g in rows or [] if g.get("completed"))
+    late = sum(1 for g in rows or [] if not g.get("completed") and days_overdue(g, date.today()))
+    held = {str(total), str(done), str(late), str(total - done)}
+    if done == 0:
+        held.add("0")
+    parts = re.split(r"(,\s+so\s+|;\s+)", str(sentence or ""), maxsplit=1)
+    if len(parts) == 3 and restates_goal_counts(parts[0], held):
+        rest = parts[2].strip()
+        return rest[0].upper() + rest[1:] if rest else sentence
+    return sentence
+
+
+def without_goal_name(sentence: str, title: str) -> str:
+    """The action sentence without the goal's full quoted name, which the opening already said: what follows a colon after it ('Start the overdue "Book the
+    race entry" goal today: open the race's registration page ...', measured live 2026-11-11), else the name with its quotation marks taken off."""
+    s = str(sentence or "")
+    quoted = re.search(r"[\"\u201c]" + re.escape(title) + r"[\"\u201d]", s, re.I)
+    if not quoted:
+        return s
+    after = s[quoted.end():]
+    if ":" in after:
+        rest = after.split(":", 1)[1].strip()
+        if len(rest.split()) >= 5:
+            return rest[0].upper() + rest[1:]
+    return s[:quoted.start()] + title[0].lower() + title[1:] + s[quoted.end():]
+
+
+def with_insight(insight_text: str, follow: str) -> str:
+    """What follows a status or next-step opening when ``insight`` wrote its sentence: that sentence, then the goal after (``follow``) unless the
+    sentence already names it. The reply writer's own text is not used then: it restated the opening on every account measured (2026-11-11)."""
+    named = LEAD_TITLE.search(follow or "")
+    if follow and named and named.group(1).lower() in (insight_text or "").lower():
+        return insight_text
+    return " ".join(x for x in (insight_text, follow) if x).strip()
+
+
+NO_GOALS_STEP = "A good first step is to add one small goal for this week that starts it."
+
+
+def no_goals_lead(quest_name: str = "", plan: bool = False, outcome: str = "", next_step: bool = False, started: str = "",
+                  today: Optional[date] = None) -> str:
     """The first sentence for a quest with no goals at all, written by code so it always names the quest: measured live 2026-11-11, "What should I do
     next?" on such a quest opened "This quest has no goals yet" and never said which quest. A plan's says that the lines under it are proposals, so no
     line has to carry the word (a writer asked to mark each one wrote "Here are three proposed first goals, each one for this period:" and
@@ -435,7 +695,24 @@ def no_goals_lead(quest_name: str = "", plan: bool = False, outcome: str = "") -
     # step was cut. The proposal is the writer's (a first goal in bold), asked for by the status directive.
     # The first step is said by code too (run 24: the writer's own step was cut on two of three prompts, leaving only "has no goals yet"): a small goal
     # for this week is always a valid first move, and it names no fact the records do not hold.
-    return f"\"{name}\" has no goals yet." + (f" It works toward \"{toward}\"." if toward else "") + " A good first step is to add one small goal for this week that starts it."
+    aim = f" It works toward \"{toward}\"." if toward else ""
+    if next_step:
+        return f"\"{name}\" has no goals yet, so the next step is to set its first one, small enough to finish this week." + aim
+    # "How is this quest going?" says how long it has run with nothing to measure yet (the quest's own start day), then the outcome.
+    day = started_day(started, today) if today else ""
+    return (f"\"{name}\" was started {day} and has no goals yet, so there is no progress to measure." if day
+            else f"\"{name}\" has no goals yet, so there is no progress to measure.") + aim + " " + NO_GOALS_STEP
+
+
+def started_day(started: str, today: date) -> str:
+    """The day a quest was started as a person says it ("today", "on 2 November"), from its record's ISO timestamp; "" when it holds none."""
+    try:
+        d = date.fromisoformat(str(started or "")[:10])
+    except ValueError:
+        return ""
+    if d > today:
+        return ""
+    return "today" if d == today else "yesterday" if (today - d).days == 1 else f"on {d.day} {d.strftime('%B')}"
 
 
 LEAD_SENTENCE_SPLIT = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"\u201d]))\s+(?=[A-Z\"\u201c])")
@@ -450,7 +727,7 @@ LEAD_WORD = re.compile(r"[a-z0-9']+")
 # A sentence is a reworded copy of the lead's count sentence when at least this share of its words are the lead's (and all its numbers are)
 LEAD_COPY_SHARE = 0.8
 LEAD_DUE = re.compile(r"due (\d{1,2}) ([A-Z][a-z]+)")
-LEAD_OVERDUE = re.compile(r"The (?:longest overdue|soonest due) is \"([^\"]+)\"")
+LEAD_OVERDUE = re.compile(r"(?:The (?:longest overdue|soonest due) is|[Dd]o) \"([^\"]+)\"")
 SPELLED_VALUES = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
 SPELLED_COUNT = re.compile(r"\b(" + "|".join(SPELLED_VALUES) + r")\b", re.I)
 ISO_DATE = re.compile(r"\b\d{4}-(\d{2})-(\d{2})\b")
@@ -958,7 +1235,7 @@ def snapshot_records(quest_id: str, quest_name: str, rows: Optional[List[Mapping
 
 def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False, question: str = "", decide: Any = None,
           window_days: int = OVERVIEW_WINDOW_DAYS, plan: bool = False, today: Optional[date] = None, quest_title: str = "",
-          quest_name: str = "", quest_outcome: str = "") -> Optional[Dict[str, Any]]:
+          quest_name: str = "", quest_outcome: str = "", next_step: bool = False, started: str = "") -> Optional[Dict[str, Any]]:
     """The snapshot as one gathered read (locator ``status_snapshot``), or None when no part could be read. With ``question`` and ``decide``, a question about one
     milestone also gets that milestone's records (what blocks it, who owns it, its next step and date). ``plan`` (a request to lay out a coming period, ``window_days``
     long) adds the open goals with no date to the goals at a glance. ``quest_title`` (its name and outcome, ``quest_label``) heads the snapshot, so the reply
@@ -993,12 +1270,12 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
         aim = outcome_part(quest_outcome, tables, everything)
         if aim:
             parts.append(aim)
-        said_aim = aim_sentence(quest_outcome, tables, everything) if not plan else ""
+        said_aim = aim_sentence(quest_outcome, tables, everything, today) if not plan else ""
         if everything is not None:
             parts.append(overview(list(everything), today, window_days, plan=plan))
             open_rows = [g for g in everything if not g.get("completed") and not g.get("abandoned")]
             lead = ((plan_lead(open_rows, today, window_days, quest_name=quest_name) if everything else no_goals_lead(quest_name, plan=True)) if plan
-                    else lead_sentence(list(everything), today, quest_name=quest_name, aim=said_aim))
+                    else lead_sentence(list(everything), today, quest_name=quest_name, aim=said_aim, next_step=next_step, started=started))
         if own and asker_user_id:
             mine = [g for g in goal_rows(registry, quest_id, open_only=True, assignee_user_id=asker_user_id) if not g.get("completed") and not g.get("abandoned")][:OWN_MAX]
             if mine:
@@ -1015,7 +1292,13 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
         opening = (f"THE PERSON HAS ALREADY BEEN TOLD, word for word: \"{lead}\" Continue straight on from it. Never repeat it or any of its counts, "
                    "the outcome it quotes, the strategy it names, the goal it names, or that the quest has no goals, and never mention that "
                    "anything was said before.\n\n" if lead else "")
-        return {"kind": "query", "locator": LOCATOR, "text": (PLAN_HEAD if plan else HEAD) + ":\n\n" + named + opening + "\n\n".join(parts), "lead": lead,
+        said = insight(decide, quest_name, quest_outcome, list(everything) if everything is not None else None, today, next_step=next_step) if not plan else ""
+        if said and not everything:
+            lead = lead.replace(" " + NO_GOALS_STEP, "")      # the proposed first goal says it, concretely
+        asked = ("THE PERSON ASKED WHAT TO DO NEXT: the goal to do now is the one they were told. Say how to start it today, not how the quest is going.\n\n"
+                 if next_step and not plan else "")
+        return {"kind": "query", "locator": LOCATOR, "text": (PLAN_HEAD if plan else HEAD) + ":\n\n" + named + opening + asked + "\n\n".join(parts), "lead": lead,
+                "next_step": bool(next_step and not plan), "insight": said,
                 "follow": "" if plan else follow_sentence(everything, today), "records": snapshot_records(quest_id, quest_name, everything, quest_outcome, tables),
                 "stems": record_words([quest_name, quest_outcome] + [g.get("title") for g in everything or []]),
                 "layout": day_layout([g for g in everything or [] if not g.get("completed") and not g.get("abandoned")], today, window_days) if plan else ""}

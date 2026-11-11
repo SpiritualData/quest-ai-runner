@@ -782,10 +782,19 @@ class RunCloseMixin:
             from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import plan_with_days, status_rest
             from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN as PLAN_SHAPE
             rest = rs.text[len(lead):].strip()
-            rest = checked_reply(self, rs, rest) if rest else rest
+            # The one sentence from status_snapshot.insight is already held to the records by code (no figure outside them, no dependency claim, no
+            # question or offer); the reply check removed correct ones with "the rewrite added a figure" when they held none (measured live 2026-11-11:
+            # "the first real progress will be finishing the second draft"). Only a writer's text goes through it.
+            said = str(getattr(rs, "status_insight", "") or "")
+            if said and rest.startswith(said):
+                log.info("Status reply: the code-checked sentence and the goal after skip the reply check")
+            else:
+                rest = checked_reply(self, rs, rest) if rest else rest
             is_plan = getattr(getattr(rs, "plan", None), "reply_shape", None) == PLAN_SHAPE
             rest = (plan_with_days(rest, str(getattr(rs, "status_layout", "") or "")) if is_plan
-                    else status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None), lead))
+                    else (rest or str(getattr(rs, "status_follow", "") or "")) if said
+                    else status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None), lead,
+                                     always_follow=bool(getattr(rs, "status_next_step", False))))
             apart = is_plan or bool(re.match(r"\s*(?:[-*\u2022|#]|\d+[.)]|\*\*)", rest or ""))
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
         else:

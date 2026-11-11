@@ -1202,7 +1202,8 @@ def reachable_quest_rows(client: Any) -> List[Dict[str, Any]]:
             continue
         seen.add(quest_id)
         rows.append({"quest_id": quest_id, "name": state.get("name"), "outcome": state.get("vision_statement") or state.get("outcome"),
-                     "completed": bool(state.get("completed")), "archived": bool(state.get("archived"))})
+                     "completed": bool(state.get("completed")), "archived": bool(state.get("archived")),
+                     "created_at": state.get("created_at") or item.get("created_at") or state.get("start_date")})
     for team in client.list_teams():
         team_id = team.get("team_id") or team.get("id")
         if not team_id:

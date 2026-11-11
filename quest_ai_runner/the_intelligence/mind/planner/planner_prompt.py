@@ -863,8 +863,8 @@ I, my, me or our from a record, say whose it is by name ("waiting for Sam's prev
 STATUS_SNAPSHOT_DIRECTIVE = """\
 --- THIS REPLY IS A STATUS FROM A SNAPSHOT (set by the system) ---
 A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only, in at most three plain sentences and no list. When the snapshot
-gives what THE PERSON HAS ALREADY BEEN TOLD (the goal counts, what is done, the outcome in their words, a strategy with no goal linked, and the goal to
-start with and its due day), your text continues straight on from it: never write it again, never restate any of its counts, the outcome, the strategy,
+gives what THE PERSON HAS ALREADY BEEN TOLD (the goal counts, what is done, the outcome in their words and how far off its day is, a strategy with no
+goal linked, and the longest overdue or soonest due goal and its due day), your text continues straight on from it: never write it again, never restate any of its counts, the outcome, the strategy,
 its goal or that goal's due day, and never mention it or say that anything was said, named or covered before ("as noted above", "the opening line"
 were written on 2026-11-11 and read as talk about the reply). Your sentences say what it does not:
 1. PROGRESS TOWARD THE OUTCOME (for a question about how the quest is going): what the done goals give toward the outcome and what still stands
@@ -872,10 +872,9 @@ were written on 2026-11-11 and read as talk about the reply). Your sentences say
    date. Never a percentage or a figure the snapshot does not hold. A reason drawn from the outcome's own words is fine ("the manuscript has to be
    finished before it can go to agents"); never say one goal blocks, unblocks, needs or depends on another, or opens up "the rest of the quest": the
    snapshot holds no links between goals. When the snapshot holds a key measure, give its value with the date it was read here.
-2. THE STEP AFTER THE ONE TO START WITH: the next goal that matters, named exactly as the snapshot does WITH its due day (never a due day without the
-   goal's name, and never "the first goal" or "it" for a goal they were not told about by name), or for "what should I do next?" a concrete first
-   action inside the goal they were told to start with, said without its name ("a first pass through chapter one this week"), using only what the
-   snapshot holds.
+2. WHAT COMES NEXT TOWARD IT: the open goal after the one they were told about that matters most for the outcome, named exactly as the snapshot
+   does WITH its due day (never a due day without the goal's name, and never "the first goal" or "it" for a goal they were not told about by name).
+   A status says where the quest stands; it does not tell the person what to do today.
 Every goal is named at most once, counting what they were already told. Name the quest by the name the snapshot gives, never by an id or
 by its outcome. Never say anything about goals or habits being assigned or not assigned to the asker unless the question is about their own work: the
 quest's goals are theirs to act on whoever they are assigned to. Leave out anything older than the snapshot (earlier campaigns, old notes, earlier
@@ -895,6 +894,24 @@ Write every date the way a person reads it ("1 November", "this Friday"), never 
 written in the first person in quotation marks. Every sentence holds a fact from the snapshot (a goal, a date, the outcome, a strategy): no sentence that
 only comments ("the picture is early but clear" was written on 2026-11-11 and said nothing). End on the last fact: no offer, no question. Never use an
 em dash.
+"""
+
+NEXT_STEP_SNAPSHOT_DIRECTIVE = """\
+--- THIS REPLY SAYS WHAT TO DO NEXT, FROM A SNAPSHOT (set by the system) ---
+The person asked what to do next. A STATUS SNAPSHOT was read for this turn, and THE PERSON HAS ALREADY BEEN TOLD which goal to do now and why it comes
+first (its due day). Your text continues straight on from that, in one or two plain sentences and no list, and never repeats the goal's name, its
+due day or how late it is:
+1. THE FIRST CONCRETE ACTION inside that goal, small enough to start today, drawn from the goal's own words and the outcome's ("for "Book the race
+   entry": find the race's entry page and pay the fee today, so your place on 14 March is held"; for "Finish the second draft": "set aside an
+   hour today for the chapters still in first draft"). Refer to the goal as "it" or by a few of its words, never by its full quoted name.
+2. Optionally, one reason from the outcome's own words why this matters now. Never say one goal blocks, unblocks, needs or depends on another,
+   and never a percentage, a count of goals, or a figure the snapshot does not hold.
+When they were told the quest has no goals yet, write ONE proposed first goal in bold (**like this**, never in quotation marks), concrete and small
+enough to do this week, drawn from the outcome's own words (for an outcome "I play a simple piece on the cello": **Choose the simple piece you want
+to learn first.**), then one sentence on how it moves the outcome. Never ask the person for details first: choose the step yourself.
+Do not say how the quest is going, do not give goal counts, and do not name other goals: the system adds the goal that comes after. Name the quest
+only by the name the snapshot gives, never by an id. Write dates as a person reads them ("8 November"). Never write the word "snapshot". End on the
+action or its reason: no offer, no question. Never use an em dash.
 """
 
 PLAN_SNAPSHOT_DIRECTIVE = """\

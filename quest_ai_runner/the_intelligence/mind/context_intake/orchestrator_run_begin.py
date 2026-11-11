@@ -188,6 +188,8 @@ class RunBeginMixin:
         rs.status_follow = ""                  # the code-written next goal after the lead's, closing a status reply whose writer added nothing
         rs.status_stems = None                 # the word stems of the quest's records, which a status sentence must share to hold a fact
         rs.status_layout = ""                  # a plan's code-written day layout
+        rs.status_insight = ""                 # status_snapshot.insight: the first action, the progress read, or a first goal, checked by code
+        rs.status_next_step = False            # the analyser's ``asks_next_step``: a next-step reply, not a status (its own lead and directive)
         rs.saves_to_records = False      # the request analyser's report: the message orders something added or saved in the person's records, so the reply text is not the whole work
         rs.writes_text = False      # the request analyser's report: the message asks for a piece of text to use and nothing else (set after understanding)
         rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
@@ -470,7 +472,9 @@ class RunBeginMixin:
                 row = next((q for q in quests if str(q.get("quest_id")) == str(snapshot_quest)), {})
                 snapshot = status_snapshot.build(self.tools, snapshot_quest, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
                                                  question=rs.user_message, decide=self.cheap_decision, plan=plan, quest_title=str(row.get("title") or ""),
-                                                 quest_name=str(row.get("name") or ""), quest_outcome=str(row.get("outcome") or ""))
+                                                 quest_name=str(row.get("name") or ""), quest_outcome=str(row.get("outcome") or ""),
+                                                 next_step=(not plan) and status_snapshot.asks_next_step(rs.user_message, self.cheap_decision, bool(status_flags.get("asks_next_step"))),
+                                                 started=str(row.get("started") or ""))
             if snapshot is not None and rs.trace is not None:
                 rs.trace.records_read(snapshot.get("records"))     # what the snapshot read, shown under the reply when the reply draws on it
             if snapshot is not None and status_flags.get("plans_period"):
@@ -488,6 +492,8 @@ class RunBeginMixin:
                 rs.status_lead = "" if status_flags["read_aloud"] else str(snapshot.get("lead") or "")     # the code-written first sentence, put on after the repairs
                 rs.status_follow = "" if status_flags["read_aloud"] else str(snapshot.get("follow") or "")
                 rs.status_stems = list(snapshot.get("stems") or [])
+                rs.status_insight = "" if status_flags["read_aloud"] else str(snapshot.get("insight") or "")      # the checked sentence the reply exists for
+                rs.status_next_step = bool(snapshot.get("next_step"))      # "what should I do next?": the writer says how to start, the reply closes on the goal after
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
                                                rationale="A status question: answered from the status snapshot read for this turn.")
 

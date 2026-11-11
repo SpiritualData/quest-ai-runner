@@ -60,8 +60,8 @@ def test_the_snapshot_holds_the_live_key_measure_the_priorities_in_ladder_order_
 def test_the_analyser_reports_the_status_shape_and_the_spoken_delivery_as_fields_not_filters():
     _, constraints = parse_goal_condition_reply('A script.\n{"asks_status": true, "read_aloud": true, "actor": "me"}')
     flags, rest = take_status_flags(constraints)
-    assert flags == {"asks_status": True, "across_quests": False, "saves_to_records": False, "read_aloud": True, "writes_text": False, "plans_period": False} and rest == {"actor": "me"}
-    assert take_status_flags(None)[0] == {"asks_status": False, "across_quests": False, "saves_to_records": False, "read_aloud": False, "writes_text": False, "plans_period": False}
+    assert flags == {"asks_status": True, "asks_next_step": False, "across_quests": False, "saves_to_records": False, "read_aloud": True, "writes_text": False, "plans_period": False} and rest == {"actor": "me"}
+    assert take_status_flags(None)[0] == {"asks_status": False, "asks_next_step": False, "across_quests": False, "saves_to_records": False, "read_aloud": False, "writes_text": False, "plans_period": False}
     _, constraints = parse_goal_condition_reply('Which goal comes first.\n{"asks_status": true, "across_quests": true}')
     assert take_status_flags(constraints)[0]["across_quests"] is True
     _, constraints = parse_goal_condition_reply('An Instagram post about the product.\n{"writes_text": true}')
@@ -72,7 +72,7 @@ def test_the_analyser_reports_the_status_shape_and_the_spoken_delivery_as_fields
 class StatusProvider(StubProvider):
     def __init__(self, analyser):
         super().__init__(decisions=[{"action": "read", "reads": [{"rel_path": "n.md"}], "rationale": "must not run"}])
-        self.analyser, self.planner_calls, self.writer_prompts = analyser, 0, []
+        self.analyser, self.planner_calls, self.writer_prompts, self.insight_prompts = analyser, 0, [], []
 
     def plan(self, prompt, *, model, tool_schema):
         self.planner_calls += 1 if "You are the PLANNER" in prompt else 0      # a judge call also goes through plan()
@@ -82,6 +82,11 @@ class StatusProvider(StubProvider):
         text = "\n".join(str(m.get("content")) for m in messages) + (system or "")
         if "request analyser" in text:
             return self.analyser
+        if "Answer with one word on the last line: NEXT or STATUS." in text:
+            return "STATUS"
+        if "Write only the sentence." in text or "Write exactly two lines" in text:
+            self.insight_prompts.append(text)      # status_snapshot.insight's narrow call, not the reply writer
+            return "Open the quest and finish the first open goal today."
         self.writer_prompts.append(text)
         return "There are 0 paid subscribers as of 7 November."
 
@@ -367,12 +372,12 @@ def test_the_status_lead_sentence_states_the_goal_counts_and_the_longest_overdue
     today = date(2026, 11, 11)
     rows = [{"title": "A", "due": "2026-11-01"}, {"title": "B", "due": "2026-11-20"}, {"title": "C", "completed": True}]
     assert status_snapshot.lead_sentence(rows, today) == ('As of 11 November, 1 of the quest\'s 3 goals is done ("C"), and 1 is overdue. The longest overdue is "A", '
-                                                          'due 1 November, so start there.')
+                                                          'due 1 November, 10 days ago.')
     # nothing overdue: the goal due soonest is named by code, with its due day (a status once said "The first goal is due 15 November", unnamed)
     assert status_snapshot.lead_sentence(rows[1:], today) == ("As of 11 November, 1 of the quest's 2 goals is done (\"C\"), and none is overdue. "
-                                                              "The soonest due is \"B\", due 20 November, so start there.")
+                                                              "The soonest due is \"B\", due 20 November.")
     assert status_snapshot.lead_sentence([], today) == ""
-    assert status_snapshot.lead_sentence([], today, quest_name="Learn the cello") == "\"Learn the cello\" has no goals yet. A good first step is to add one small goal for this week that starts it."
+    assert status_snapshot.lead_sentence([], today, quest_name="Learn the cello") == "\"Learn the cello\" has no goals yet, so there is no progress to measure. A good first step is to add one small goal for this week that starts it."
     # a soonest-due goal is not late: no days-late figure is read out of its lead
     assert status_snapshot.lead_days_late(status_snapshot.lead_sentence(rows[1:], today)) == set()
     snap = status_snapshot.build(Registry(), "q1")
@@ -413,7 +418,7 @@ def test_a_goal_carried_over_to_a_later_week_is_one_goal_in_the_counts_the_lead_
     assert [g["id"] for g in one] == ["a2", "b", "c1", "c2"] and one[0]["carried_from"] == "2026-11-08" and "carried_from" not in one[1]
     today = date(2026, 11, 11)
     assert status_snapshot.lead_sentence(one, today)== ("As of 11 November, 1 of the quest's 4 goals is done (\"Buy tiles\"), none is overdue, and 3 are due by 18 November. "
-                                                       "The soonest due is \"Run one tempo session per week\", due 15 November, so start there.")
+                                                       "The soonest due is \"Run one tempo session per week\", due 15 November.")
     text = status_snapshot.overview(one, today, plan=True)
     assert "due 8 November" not in text and "due 2026-11-08" not in text.replace("carried over from 2026-11-08", "") and "carried over from 2026-11-08" in text
     assert text.count("Run one tempo session per week (due 15 November") == 2      # once in the due list, once on its one day in the layout
@@ -434,7 +439,7 @@ def test_the_code_written_lead_names_the_quest_and_a_reworded_copy_of_its_counts
     rows = [{"title": "Photograph the first ten pieces", "due": "2026-11-15"}, {"title": "Set up the shop page", "due": "2026-11-30"}]
     lead = status_snapshot.lead_sentence(rows, today, quest_name="Launch my pottery shop")
     assert lead == ('As of 11 November, none of the 2 goals in "Launch my pottery shop" is done yet, none is overdue, and 1 is due by 18 November. '
-                    'The soonest due is "Photograph the first ten pieces", due 15 November, so start there.')
+                    'The soonest due is "Photograph the first ten pieces", due 15 November.')
     assert status_snapshot.plan_lead(rows, today, quest_name="Launch my pottery shop") == (
         'As of 11 November, no open goal in "Launch my pottery shop" is overdue, and 1 is due by 18 November.')
     text = ('None of your 2 goals is done yet, and none is overdue. Your next step is "Photograph the first ten pieces," due Sunday, 15 November.')
@@ -570,7 +575,7 @@ def test_a_quest_with_no_goals_gets_a_code_written_opening_that_names_it_and_the
     # Measured live 2026-11-11: "What should I do next?" on a quest with only a name opened "This quest has no goals yet" and never named it.
     from datetime import date
     lead = status_snapshot.lead_sentence([], date(2026, 11, 11), quest_name="Learn to play the cello")
-    assert lead == '"Learn to play the cello" has no goals yet. A good first step is to add one small goal for this week that starts it.'
+    assert lead == '"Learn to play the cello" has no goals yet, so there is no progress to measure. A good first step is to add one small goal for this week that starts it.'
     draft = "This quest has no goals yet, so there is no next step on the list. The first one to set is a goal for your first practice session."
     assert status_snapshot.without_restated_lead(draft, lead) == "The first one to set is a goal for your first practice session."
     plan = status_snapshot.no_goals_lead("Learn to play the cello", plan=True)
@@ -662,7 +667,7 @@ def test_the_status_opening_quotes_the_outcome_and_an_idle_strategy_and_a_bare_r
     # a quest with no goals: the opening quotes the outcome it works toward
     assert status_snapshot.lead_sentence([], today, quest_name="Learn to play the cello",
                                          aim=status_snapshot.aim_sentence("I play a simple piece on the cello", {}, [])) == (
-        '"Learn to play the cello" has no goals yet. It works toward "I play a simple piece on the cello". A good first step is to add one small goal for this week that starts it.')
+        '"Learn to play the cello" has no goals yet, so there is no progress to measure. It works toward "I play a simple piece on the cello". A good first step is to add one small goal for this week that starts it.')
 
 
 def test_a_status_read_lists_every_open_goal_so_the_next_goal_and_its_date_are_in_evidence():
@@ -729,7 +734,7 @@ def test_a_quest_with_no_goals_opens_without_a_promise_and_a_step_beside_the_cla
     from datetime import date
     lead = status_snapshot.lead_sentence([], date(2026, 11, 11), quest_name="Learn to play the cello",
                                          aim=status_snapshot.aim_sentence("I play a simple piece on the cello", {}, []))
-    assert lead == '"Learn to play the cello" has no goals yet. It works toward "I play a simple piece on the cello". A good first step is to add one small goal for this week that starts it.'
+    assert lead == '"Learn to play the cello" has no goals yet, so there is no progress to measure. It works toward "I play a simple piece on the cello". A good first step is to add one small goal for this week that starts it.'
     draft = ('Your first step is to pick the simple piece you want to learn first, since "Learn to play the cello" has no goals yet. '
              'Its outcome is "I play a simple piece on the cello", and nothing has been recorded toward it so far.')
     assert status_snapshot.without_restated_lead(draft, lead) == "Your first step is to pick the simple piece you want to learn first."
@@ -832,3 +837,121 @@ def test_a_plan_lead_with_an_overdue_goal_and_nothing_else_due_reads_plainly():
     rows = [{"title": "Finish the second draft", "due": "2026-11-08"}, {"title": "Choose the illustrator", "due": "2026-12-31"}]
     assert status_snapshot.plan_lead(rows, today, quest_name="Write a children's book") == (
         "As of 11 November, 1 open goal in \"Write a children's book\" is overdue, and nothing else is due by 18 November.")
+
+
+def test_what_to_do_next_gets_its_own_opening_not_the_status_counts():
+    # Measured live 2026-11-11: "What should I do next?" and "How is this quest going?" got the same reply word for word on two of four accounts,
+    # because both opened with the goal counts. A next-step reply names the one goal to do and why it is first; a status says where the quest stands.
+    from datetime import date
+    today = date(2026, 11, 11)
+    rows = [{"id": "1", "title": "Run 5 km without stopping", "completed": True},
+            {"id": "2", "title": "Long run of 12 km on Saturday", "due": "2026-11-15"},
+            {"id": "3", "title": "Book the race entry", "due": "2026-11-08"},
+            {"id": "4", "title": "Buy proper running shoes", "due": "2026-11-15"}]
+    aim = status_snapshot.aim_sentence("I finish a half marathon in under 2:15 by 14 March", {}, rows, today)
+    status = status_snapshot.lead_sentence(rows, today, quest_name="Run my first half marathon", aim=aim)
+    nxt = status_snapshot.lead_sentence(rows, today, quest_name="Run my first half marathon", aim=aim, next_step=True)
+    assert status != nxt and "so start there" not in status and "17 weeks from today" in status
+    assert nxt == 'In "Run my first half marathon", do "Book the race entry" next: it was due 8 November, 3 days ago.'
+    assert "As of" not in nxt and "works toward" not in nxt
+    # nothing overdue: the soonest due goal, and why it is first
+    pottery = [{"title": "Photograph the first ten pieces", "due": "2026-11-15"}, {"title": "Set up the shop page", "due": "2026-11-30"}]
+    assert status_snapshot.lead_sentence(pottery, today, quest_name="Launch my pottery shop", next_step=True) == (
+        'In "Launch my pottery shop", do "Photograph the first ten pieces" next: it is due 15 November, the soonest of its open goals.')
+    # every goal done: the next step is the next goal toward the outcome
+    done = [{"title": "A", "completed": True}]
+    assert status_snapshot.lead_sentence(done, today, quest_name="Q", aim=status_snapshot.aim_sentence("I win", {}, done), next_step=True) == (
+        'Every goal in "Q" is done, so the next step is to set the goal that brings "I win" closer.')
+    # the writer's action stays, its bare repeat of the goal goes, and the reply closes on the goal after
+    follow = status_snapshot.follow_sentence(rows, today)
+    stems = status_snapshot.record_words(["Run my first half marathon"] + [r["title"] for r in rows])
+    out = status_snapshot.status_rest("Book the race entry first. Open the race website and pay the entry fee today.", follow, stems, nxt, always_follow=True)
+    assert out == 'Open the race website and pay the entry fee today. After that, "Long run of 12 km on Saturday" is due 15 November.'
+
+
+def test_a_quest_with_no_goals_says_how_long_it_has_run_for_a_status_and_sets_a_first_goal_for_a_next_step():
+    from datetime import date
+    today = date(2026, 11, 11)
+    aim = status_snapshot.aim_sentence("I play a simple piece on the cello", {}, [], today)
+    assert status_snapshot.lead_sentence([], today, quest_name="Learn to play the cello", aim=aim, started="2026-11-02T09:00:00") == (
+        '"Learn to play the cello" was started on 2 November and has no goals yet, so there is no progress to measure. It works toward '
+        '"I play a simple piece on the cello". A good first step is to add one small goal for this week that starts it.')
+    assert status_snapshot.lead_sentence([], today, quest_name="Learn to play the cello", aim=aim, next_step=True) == (
+        '"Learn to play the cello" has no goals yet, so the next step is to set its first one, small enough to finish this week. It works toward '
+        '"I play a simple piece on the cello".')
+
+
+def test_an_outcome_day_is_read_from_its_own_words_and_said_as_time_left():
+    from datetime import date
+    today = date(2026, 11, 11)
+    assert status_snapshot.time_left("I finish a half marathon by 14 March", today) == "17 weeks from today"
+    assert status_snapshot.time_left("Launch on November 20th, 2026", today) == "9 days from today"
+    assert status_snapshot.time_left("I send it to agents by June", today) == ""
+    assert status_snapshot.time_left("Done by 1 January 2020", today) == ""
+
+
+def test_the_one_sentence_a_reply_exists_for_is_written_by_a_narrow_call_and_checked_by_code():
+    # Measured live 2026-11-11: told in a long directive to give the first action or the progress toward the outcome, the reply writer restated the
+    # counts on every account and "What should I do next?" ended with no action. One narrow call writes that sentence; code checks it.
+    from datetime import date
+    today = date(2026, 11, 11)
+    rows = [{"title": "Run 5 km without stopping", "completed": True}, {"title": "Book the race entry", "due": "2026-11-08"},
+            {"title": "Long run of 12 km on Saturday", "due": "2026-11-15"}]
+    asked = []
+
+    def says(text):
+        def decide(prompt):
+            asked.append(prompt)
+            return text
+        return decide
+    outcome = "I finish a half marathon in under 2:15 by 14 March"
+    action = status_snapshot.insight(says("Some thought first.\nFind the race's entry page and pay the fee today."), "Run my first half marathon", outcome, rows, today, next_step=True)
+    assert action == "Find the race's entry page and pay the fee today." and '"Book the race entry", due 8 November' in asked[-1]
+    # a figure in no record, a percentage, a dependency claim, a question or an offer: the sentence is dropped, never repaired
+    for bad in ("Run 21 km this week.", "You are 40 percent of the way there.", "Booking it unblocks the long runs ahead.", "Shall I book it for you today?",
+                "I can help you find the entry page today."):
+        assert status_snapshot.insight(says(bad), "Run my first half marathon", outcome, rows, today, next_step=True) == "", bad
+    # a status: how far the done goals go, with the time left in the prompt
+    status_snapshot.insight(says("Running 5 km without stopping is the base, and the long runs are what is still missing."), "Run my first half marathon", outcome, rows, today)
+    assert "17 weeks from today" in asked[-1] and "Done goals: Run 5 km without stopping" in asked[-1]
+    # no goals: a proposed first goal in bold and how it moves the outcome
+    first = status_snapshot.insight(says("Line 1: Choose the simple piece you want to learn\nLine 2: Picking it gives every practice session a clear target."),
+                                    "Learn to play the cello", "I play a simple piece on the cello", [], today)
+    assert first == "A first goal to set: **Choose the simple piece you want to learn.** Picking it gives every practice session a clear target."
+    # unread goals or no call: nothing is written
+    assert status_snapshot.insight(None, "Q", outcome, rows, today) == "" and status_snapshot.insight(says("x"), "Q", outcome, None, today) == ""
+    # the goal after closes the reply, unless the sentence named it
+    follow = status_snapshot.follow_sentence(rows, today)
+    assert status_snapshot.with_insight("Pay the fee today.", follow) == 'Pay the fee today. After that, "Long run of 12 km on Saturday" is due 15 November.'
+    assert status_snapshot.with_insight('Then do the "Long run of 12 km on Saturday".', follow) == 'Then do the "Long run of 12 km on Saturday".'
+
+
+def test_next_step_or_status_is_one_forced_choice_and_the_analyser_report_is_the_fallback():
+    # Measured live 2026-11-11: "How is this quest going?" was answered with the next-step reply because the analyser set its optional key.
+    assert status_snapshot.asks_next_step("How is this quest going?", lambda p: "It asks how far the quest has come.\nSTATUS", reported=True) is False
+    assert status_snapshot.asks_next_step("What should I do next?", lambda p: "NEXT", reported=False) is True
+    assert status_snapshot.asks_next_step("What should I do next?", lambda p: "**Next**", reported=False) is True
+    assert status_snapshot.asks_next_step("x", lambda p: "maybe", reported=True) is True
+    assert status_snapshot.asks_next_step("x", None, reported=False) is False
+
+    def fails(prompt):
+        raise RuntimeError("down")
+    assert status_snapshot.asks_next_step("What next?", fails, reported=True) is True
+
+
+def test_the_action_sentence_does_not_quote_the_goal_the_opening_named():
+    t = "Book the race entry"
+    assert status_snapshot.without_goal_name('Start the overdue "Book the race entry" goal today: open the race\'s registration page and fill in the form.', t) == (
+        "Open the race's registration page and fill in the form.")
+    assert status_snapshot.without_goal_name('Do "Book the race entry" by paying the fee online today.', t) == "Do book the race entry by paying the fee online today."
+    assert status_snapshot.without_goal_name("Pay the entry fee online today.", t) == "Pay the entry fee online today."
+
+
+def test_a_progress_sentence_that_opens_on_the_counts_again_keeps_only_what_is_new():
+    rows = [{"title": "Finish the second draft", "due": "2026-11-08"}, {"title": "Choose the illustrator", "due": "2026-12-31"}]
+    said = ('None of the 2 goals in "Write a children\'s book" is done yet, and 1 is overdue, so the first real progress will be completing the second '
+            'draft, which leaves the illustrator choice still to come.')
+    assert status_snapshot.without_count_clause(said, rows) == (
+        "The first real progress will be completing the second draft, which leaves the illustrator choice still to come.")
+    kept = "Running 5 km without stopping is a base, so the long runs are what is missing."
+    assert status_snapshot.without_count_clause(kept, rows) == kept

@@ -914,6 +914,9 @@ Reply with ONE OR TWO LINES, nothing else:
         first or next (a priority), or for a summary or script of that to be read out or shared ("how is
         this quest going?", "where are we?", "what should I do next?"). Omit it for anything else, and
         whenever unsure.
+      "asks_next_step": true -- ONLY together with asks_status, when the message asks what to do next, first or
+        now ("what should I do next?", "what's my next step?", "where do I start?"). Omit it when the message asks how
+        something is going or where it stands ("how is this quest going?"), and whenever unsure.
       "across_quests": true -- ONLY together with asks_status, when the message itself asks about several
         or all of the person's quests together ("which of my quests should I work on first", "how are all
         my goals going"). A question that names no quest at all ("what should I do next?", "how is it

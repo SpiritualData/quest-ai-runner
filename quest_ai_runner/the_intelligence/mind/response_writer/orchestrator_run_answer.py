@@ -38,7 +38,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import
 from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve as resolve_facts
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
-    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, DRAFT_ANSWER_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, PLAN_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
+    HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, DRAFT_ANSWER_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, NEXT_STEP_SNAPSHOT_DIRECTIVE, PLAN_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
     READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
 
@@ -198,7 +198,8 @@ class RunAnswerMixin:
             reply_directive = DRAFT_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # the piece they asked for, written in full
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "status_snapshot", False):
             # A plan for a coming period has its own directive: the status one asks for two sentences and no list, which is the wrong reply to "plan my week".
-            snapshot_directive = PLAN_SNAPSHOT_DIRECTIVE if getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN else STATUS_SNAPSHOT_DIRECTIVE
+            snapshot_directive = (PLAN_SNAPSHOT_DIRECTIVE if getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN
+                                  else NEXT_STEP_SNAPSHOT_DIRECTIVE if getattr(rs, "status_next_step", False) else STATUS_SNAPSHOT_DIRECTIVE)
             reply_directive = snapshot_directive + ("\n\n" + reply_directive if reply_directive else "")      # a status (or a plan) is written from the snapshot code read
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
             reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
@@ -774,8 +775,10 @@ class RunAnswerMixin:
             if not is_plan:
                 # No closing question; a writer that added nothing past the lead (measured live 2026-11-11 on two of four
                 # accounts, and a steered rewrite gave the lead back again) is followed by the next goal, written by code.
-                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import status_rest
-                rest = status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None), lead)
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import status_rest, with_insight
+                said = str(getattr(rs, "status_insight", "") or "")
+                rest = with_insight(said, str(getattr(rs, "status_follow", "") or "")) if said else status_rest(rest, str(getattr(rs, "status_follow", "") or ""), getattr(rs, "status_stems", None), lead,
+                                   always_follow=bool(getattr(rs, "status_next_step", False)))
             # A plan's day lines (or any list or heading) start on their own paragraph: joined with a space, the opening ran into "**Wednesday 11 November**".
             apart = is_plan or bool(re.match(r"\s*(?:[-*•|#]|\d+[.)]|\*\*)", rest))
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
