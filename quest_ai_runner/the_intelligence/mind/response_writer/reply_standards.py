@@ -110,7 +110,8 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
     Standard(SHAPE_PLAN,
              "A plan for a coming period laid out from the person's own open goals: overdue goals first, then one short line per day naming the goal "
              "it serves (or a few lines, when the goals are few), every goal named exactly as the records hold it and on or before its due day. When "
-             "the quest has no open goals, say so in the first sentence and propose at most three first goals that move its outcome, marked as proposals. "
+             "the quest has no open goals, propose at most three first goals that move its outcome as day lines, and say in the first sentence that they "
+             "are proposals for a quest with no open goals (a code-written opening that says it counts). "
              "Say nothing was saved, and end with at most one question (whether to add it to their goals).",
              # No list-line cap: a cut list line leaves a plan with days missing and broken fragments (measured 2026-11-11 with a cap of 14 on a
              # quest with eight overdue goals). The planning snapshot already bounds what the plan can hold.

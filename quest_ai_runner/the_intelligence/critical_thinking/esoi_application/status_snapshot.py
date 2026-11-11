@@ -103,8 +103,9 @@ def overview(rows: List[Mapping[str, Any]], today: date, window_days: int = OVER
         # no day of the period in the snapshot, the dates it gave its proposals were cut as stated by nothing, leaving broken list lines.
         days = [today + timedelta(days=n) for n in range(max(0, window_days) + 1)]
         return (f"{head} this quest has no goals yet. The goal list was read just now and is empty: say so plainly as a fact about the quest, never as a read "
-                "that failed, and never ask to read it again. Then write out, in this reply, up to three proposed first goals that move the quest's outcome "
-                "(one line each, each marked as a proposal and given a day of this period, the first for today or tomorrow): never only offer to propose them.\n"
+                "that failed, and never ask to read it again. Then write out, in this reply, up to three proposed first goals that move the quest's outcome, "
+                "as day lines of this period like \"- Thursday 12 November: Choose a first piece to learn\", the first for today or tomorrow: never only offer "
+                "to propose them. When the reply's first sentence is written by code, it already says these are proposals: no line says it again.\n"
                 "The days of this period: " + ", ".join(f"{d.strftime('%A')} {d.isoformat()}" for d in days) + ".")
     if not rows:
         return (f"{head} this quest has no goals yet. The goal list was read just now and is empty: say so plainly as a fact about the quest, never as a read "
@@ -200,7 +201,7 @@ def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = 
     the quest in it ("1 of the 4 goals in \"Run my first half marathon\" is done"): measured 2026-11-11, a reply that opened "the quest's 2 goals" never
     named the quest at all on two of four test accounts, and one called its outcome "The quest 'I sell 20 pieces online'"."""
     if not rows:
-        return ""
+        return no_goals_lead(quest_name)
     done = sum(1 for g in rows if g.get("completed"))
     open_rows = [g for g in rows if not g.get("completed") and not g.get("abandoned")]
     late = sum(1 for g in open_rows if g.get("due") and str(g.get("due"))[:10] < today.isoformat())
@@ -229,6 +230,17 @@ def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = 
         # still says it, and a writer's "Then ..." follows something (measured live 2026-11-11: a reply that was the lead alone, and one opening "Then").
         tail = tail[:-1] + f". The longest overdue is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}, so start there."
     return head + (tail or ".")
+
+
+def no_goals_lead(quest_name: str = "", plan: bool = False) -> str:
+    """The first sentence for a quest with no goals at all, written by code so it always names the quest: measured live 2026-11-11, "What should I do
+    next?" on such a quest opened "This quest has no goals yet" and never said which quest. A plan's says that the lines under it are proposals, so no
+    line has to carry the word (a writer asked to mark each one wrote "Here are three proposed first goals, each one for this period:" and
+    "1. Proposal, Wednesday 11 November: ..."). "" without a name: the writer says it then."""
+    name = " ".join(str(quest_name or "").split()).replace('"', "'")
+    if not name:
+        return ""
+    return f"\"{name}\" has no goals yet" + (", so here are proposed first goals for this week." if plan else ".")
 
 
 LEAD_SENTENCE_SPLIT = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"\u201d]))\s+(?=[A-Z\"\u201c])")
@@ -308,8 +320,12 @@ def without_restated_lead(text: str, lead: str) -> str:
     titles = [t.strip(" ,.").lower() for t in LEAD_OVERDUE.findall(lead or "") if t.strip().lower() not in quest]
     lead_words = set(LEAD_WORD.findall((lead or "").lower()))
     lead_own_words = set(LEAD_WORD.findall(QUOTED.sub(" ", lead or "").lower()))       # the lead's own words, not those of the names it quotes
-    if not held or not text:
+    if not text:
         return text
+    if not held:
+        return without_restated_claim(text, lead_own_words)
+    lead_due = LEAD_DUE.search(lead or "") if titles else None
+    seen = False        # a writer sentence was kept already (see the due-day cut below)
     lines = []
     front: List[str] = []       # sentences that say "that one": they refer to the lead's goal, so they go straight after the lead (see below)
     for line in text.split("\n"):
@@ -345,6 +361,13 @@ def without_restated_lead(text: str, lead: str) -> str:
             if numbers and numbers <= held and len(words) >= 5 and len(words & lead_words) >= LEAD_COPY_SHARE * len(words):
                 # "None of your 2 goals is done, and none is overdue." after "none of the 2 goals in ... is done yet, and none is overdue." (2026-11-11)
                 continue
+            if lead_due and not seen:
+                # Only the writer's first sentence: it follows the lead, so its "it" is the lead's goal. A later one may be about another goal due
+                # the same day ("The most urgent item is booking the plumber. It was due 1 November ..." is a new fact).
+                sentence = without_restated_due(sentence, f"{lead_due.group(1)} {lead_due.group(2)}", held | late_days, lead_own_words)
+                if not sentence:
+                    continue
+            seen = True
             if names_goal:
                 front.append(as_that_one(sentence, titles))
                 continue
@@ -355,6 +378,52 @@ def without_restated_lead(text: str, lead: str) -> str:
         # Placed where they were, "that one" read as whatever goal came just before: measured live 2026-11-11, it followed "Done so far: Run 5 km".
         out = " ".join(front) + ("\n\n" + out if out else "")
     return out
+
+
+# A clause that says the lead's due day again holds at most this many words (numbers aside) that are not the lead's own (see without_restated_due)
+CLAUSE_SPARE_WORDS = 4
+CLAUSE_SPLIT = re.compile(r",\s+(?=(?:and|but|so)\s)|;\s+")
+
+
+def without_restated_due(sentence: str, due: str, held: set, lead_words: set) -> str:
+    """``sentence`` without a clause that only says the lead's overdue goal's due day again (and how late it is): every number in it is one of the lead's
+    (``held``, the days-late figure included), it holds ``due`` ("8 November"), and it adds at most ``CLAUSE_SPARE_WORDS`` words of its own. Measured live
+    2026-11-11 after "The longest overdue is \"Book the race entry\", due 8 November, so start there.": "It was due 8 November and is now 3 days overdue,
+    and the race is 14 March, so ..." said the date twice running; the race clause stays. "" when every clause was a repeat."""
+    if due.lower() not in sentence.lower():
+        return sentence
+    parts = CLAUSE_SPLIT.split(sentence)
+    kept = []
+    for part in parts:
+        bare = ISO_DATE.sub(lambda m: f" {int(m.group(2))} ", QUOTED.sub(" ", part))
+        numbers = set(LEAD_NUMBER.findall(bare))
+        spare = {w for w in LEAD_WORD.findall(bare.lower()) if not w.isdigit()} - lead_words
+        if due.lower() in part.lower() and numbers <= held and len(spare) <= CLAUSE_SPARE_WORDS:
+            continue
+        kept.append(part)
+    if len(kept) == len(parts):
+        return sentence
+    if not kept:
+        return ""
+    out = ", ".join(k.strip() for k in kept)
+    out = re.sub(r"^(?:and|but|so)\s+", "", out.strip(), flags=re.I)
+    out = out[:1].upper() + out[1:]
+    return out if re.search(r"[.!?][\"\u201d]?$", out) else out.rstrip(",;") + "."
+
+
+def without_restated_claim(text: str, lead_words: set) -> str:
+    """``text`` without the writer's sentences that hold every word of a figure-free lead (the quest has no goals): '"Learn to play the cello" has no
+    goals yet.' then "This quest has no goals yet, so there is no next step on the list." (measured live 2026-11-11). The lead's own words, not those of
+    the quest's quoted name, and only a lead of three or more of them. List lines are left alone."""
+    if len(lead_words) < 3:
+        return text
+    lines = []
+    for line in text.split("\n"):
+        if re.match(r"\s*(?:[-*\u2022]|\d+[.)]|\*\*|\|)", line):
+            lines.append(line)
+            continue
+        lines.append(" ".join(s for s in LEAD_SENTENCE_SPLIT.split(line) if not lead_words <= set(LEAD_WORD.findall(QUOTED.sub(" ", s).lower()))))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 def as_that_one(sentence: str, titles: List[str]) -> str:
@@ -376,7 +445,7 @@ def as_that_one(sentence: str, titles: List[str]) -> str:
     return out
 
 
-PLAN_DAY_LINE = re.compile(r"^\s*(?:[-*•]\s*)?(?:\*\*)?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b")
+PLAN_DAY_LINE = re.compile(r"^\s*(?:[-*•]\s*|\d+[.)]\s*)?(?:\*\*)?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b")
 
 
 def human_dates(text: str) -> str:
@@ -596,7 +665,8 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
         if everything is not None:
             parts.append(overview(list(everything), today, window_days, plan=plan))
             open_rows = [g for g in everything if not g.get("completed") and not g.get("abandoned")]
-            lead = plan_lead(open_rows, today, window_days, quest_name=quest_name) if plan else lead_sentence(list(everything), today, quest_name=quest_name)
+            lead = ((plan_lead(open_rows, today, window_days, quest_name=quest_name) if everything else no_goals_lead(quest_name, plan=True)) if plan
+                    else lead_sentence(list(everything), today, quest_name=quest_name))
         if own and asker_user_id:
             mine = [g for g in goal_rows(registry, quest_id, open_only=True, assignee_user_id=asker_user_id) if not g.get("completed") and not g.get("abandoned")][:OWN_MAX]
             if mine:
@@ -609,7 +679,7 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
         named = (f"The quest is named \"{name}\" (name and outcome: {quest_title.strip() or name}). Call it \"{name}\", never by its outcome or its "
                  "id.\n\n" if name else f"The quest: {quest_title.strip()} (call it by this name; never write its id).\n\n" if quest_title.strip() else "")
         opening = (f"The reply's first sentence is written by code and goes before your text, word for word: \"{lead}\" Do not write it, and do not restate "
-                   "its counts or the goal it names.\n\n" if lead else "")
+                   "its counts, the goal it names, or that the quest has no goals.\n\n" if lead else "")
         return {"kind": "query", "locator": LOCATOR, "text": (PLAN_HEAD if plan else HEAD) + ":\n\n" + named + opening + "\n\n".join(parts), "lead": lead,
                 "records": snapshot_records(quest_id, quest_name, everything)}
     except Exception as error:      # noqa: BLE001  a snapshot is an addition; its failure never stops the turn

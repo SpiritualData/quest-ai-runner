@@ -871,7 +871,8 @@ A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only
    one, name one of them in a few words; then say how the quest is
    moving toward its outcome (the outcome is in the quest line the snapshot opens with; say how far the goals have come, never a percentage or figure the
    snapshot does not hold). Then what is most at risk: the most overdue goal by name, with its due day (when none is overdue, the goal due soonest). When the
-   code-written first sentence already names the longest-overdue goal, do not name it again and do not say how many days late it is; say only why it matters. Give a reason only from what the snapshot states (its due day, how late it is, the outcome's own date); never say that one goal blocks, needs or depends on another, or that the outcome depends on a goal, unless the snapshot says so: the snapshot holds
+   code-written first sentence already names the longest-overdue goal, do not name it again and do not say how many days late it is; say only why it matters. Give a reason only from what the snapshot states (its due day, how late it is, the outcome's own date); never say that one goal blocks, unblocks, needs or depends on another, or that it opens up "the rest of the quest", unless the snapshot says so (a
+   reason drawn from the outcome's own words is fine: "the manuscript has to be finished before it can go to agents"): the snapshot holds
    no links between goals (measured 2026-11-11, twice: "the other open goal depends on the draft being finished" was made up).
 3. The one next step that matters most (an active priority, or the asker's own goal when the question is about their own work), by name with its due day.
    When that step is the goal the code-written first sentence already names (that sentence also says to start there), do not say it again: give only
@@ -884,8 +885,9 @@ When the snapshot is of the asker's quests together (no quest is open in this ch
 When the question asks about one particular thing that none of these quests or goals holds, say so in one sentence, naming the quests it looked at, and
 put no goal in its place.
 When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the next step and by when.
-When the snapshot says the quest has no goals yet, say that plainly in the first sentence, as a fact about a quest that is just starting, never as something
-you could not read, and name the one step that starts it (its first goal, written out). Write every date the way a person reads it ("1 November", "this
+When the snapshot says the quest has no goals yet, it is a fact about a quest that is just starting, never something you could not read. When the
+code-written first sentence says so, do not say it again: go straight to the one step that starts the quest (its first goal, written out, as a
+proposal). Without a code-written first sentence, say it plainly in your first sentence, naming the quest, then that step. Write every date the way a person reads it ("1 November", "this
 Friday"), never as 2026-11-01. Never write the word "snapshot", and say nothing about a measure, percentage or figure the snapshot does not hold.
 Name a quest whose name is written in the first person in quotation marks. Every sentence holds a fact from the snapshot (a goal, a date, the
 outcome): no sentence that only comments ("the picture is early but clear" was written on 2026-11-11 and said nothing). End on the last fact: no
@@ -901,9 +903,10 @@ snapshot holds a day layout worked out by code, those are the day lines: keep ev
 there, and add at most a few words of why to a line; drop no goal and add no day. Without a layout, every open goal the snapshot lists as overdue or due in
 the period gets a day from the days it lists, on or before its due day, at most two a day, and free days take the open goals with no date. Name no goal, date, habit,
 supplier, routine or rule the snapshot does not hold: older conversations and notes are not part of this plan. When the snapshot is of the asker's quests
-together (no quest is open in this chat), name each goal's quest beside it. When the snapshot says the quest has no goals yet (or no open goal), say so in
-the first sentence, then write out up to three proposed first goals, one line each, that move the quest's outcome, each marked as a proposal (never only
-offer to propose them), and never say how many you propose (the lines are the count). A proposed goal holds no number the snapshot does not hold (no minutes, counts, distances or amounts): write "a short daily
+together (no quest is open in this chat), name each goal's quest beside it. When the snapshot says the quest has no goals yet (or no open goal), write out up to
+three proposed first goals that move the quest's outcome as day lines of the period, like the plan's own ("- Thursday 12 November: Choose a first piece"),
+never only offer to propose them, and never say how many you propose (the lines are the count). When the code-written first sentence already says the quest
+has no goals and that these are proposals, write nothing before the day lines; without it, say both in your first sentence, naming the quest. A proposed goal holds no number the snapshot does not hold (no minutes, counts, distances or amounts): write "a short daily
 practice", not "15 minutes a day", since a figure that is in nothing read is cut from the reply and takes its whole line with it. Never write a quest or goal id. Say that nothing was saved, and end with one question: whether to add the plan to their goals.
 Write dates the way a person reads them ("Thursday 13 November"). Never write the word "snapshot". Name a quest whose name is written in the first
 person in quotation marks. Never use an em dash.

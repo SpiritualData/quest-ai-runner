@@ -556,3 +556,33 @@ def test_counts_spelled_out_are_counts():
             '"Long run of 12 km on Saturday", both due 15 November.')
     assert status_snapshot.without_restated_lead(text, RICH_LEAD) == (
         'The other two due soon are "Buy proper running shoes" and "Long run of 12 km on Saturday", both due 15 November.')
+
+
+def test_a_quest_with_no_goals_gets_a_code_written_opening_that_names_it_and_the_writer_does_not_say_it_again():
+    # Measured live 2026-11-11: "What should I do next?" on a quest with only a name opened "This quest has no goals yet" and never named it.
+    from datetime import date
+    lead = status_snapshot.lead_sentence([], date(2026, 11, 11), quest_name="Learn to play the cello")
+    assert lead == '"Learn to play the cello" has no goals yet.'
+    draft = "This quest has no goals yet, so there is no next step on the list. The first one to set is a goal for your first practice session."
+    assert status_snapshot.without_restated_lead(draft, lead) == "The first one to set is a goal for your first practice session."
+    plan = status_snapshot.no_goals_lead("Learn to play the cello", plan=True)
+    assert plan.startswith('"Learn to play the cello" has no goals yet') and "proposed" in plan
+    snap = status_snapshot.build(EmptyRegistry(), "q1", plan=True, quest_name="Learn to play the cello")
+    assert snap["lead"] == plan and "Learn to play the cello" in snap["text"]
+
+
+def test_a_plan_preamble_before_numbered_day_lines_is_dropped():
+    # Measured live 2026-11-11: "Here are three proposed first goals, each one for this period:" sat above "1. Proposal, Wednesday 11 November: ...".
+    text = "This quest has no goals yet. Here are three proposed first goals:\n\n1. Wednesday 11 November: Play one piece\n2. Thursday 12 November: Bowing"
+    assert status_snapshot.without_plan_preamble(text).startswith("1. Wednesday 11 November")
+
+
+def test_a_clause_saying_the_lead_goal_due_day_again_is_dropped_and_the_new_fact_stays():
+    # Measured live 2026-11-11 after a lead ending 'The longest overdue is "Book the race entry", due 8 November, so start there.'
+    lead = ('As of 11 November, 1 of the 4 goals in "Run my first half marathon" is done ("Run 5 km without stopping"), 1 is overdue, and 2 are due by '
+            '18 November. The longest overdue is "Book the race entry", due 8 November, so start there.')
+    draft = "It was due 8 November and is now 3 days overdue, and the race is 14 March, so an open entry is the one thing that could cost you the start."
+    assert status_snapshot.without_restated_lead(draft, lead) == "The race is 14 March, so an open entry is the one thing that could cost you the start."
+    assert status_snapshot.without_restated_lead("It was due 8 November.", lead) == ""
+    # a clause with its own content keeps the date
+    assert status_snapshot.without_restated_lead("Book it today, since it was due 8 November.", lead) == "Book it today, since it was due 8 November."
