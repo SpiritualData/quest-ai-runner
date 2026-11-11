@@ -231,8 +231,16 @@ def research_note(recorded: Mapping[str, Any]) -> str:
     if items:
         # The findings themselves (each source's own words, best grade first), never the review's generic synthesis lines ("supported by a graded source: ...").
         order = {"A": 0, "B": 1, "C": 2, "D": 3}
-        for item in sorted(items, key=lambda i: order.get(str(i.get("grade")), 4))[:NOTE_FINDINGS]:
-            lines.append(f"- {clip_words(item.get('claim'), NOTE_CLAIM_CHARS)} ({sure_words(item.get('grade'))}; {domain_of(item.get('source'))})")
+        seen = set()
+        for item in sorted(items, key=lambda i: order.get(str(i.get("grade")), 4)):
+            claim = clip_words(item.get("claim"), NOTE_CLAIM_CHARS)
+            key = re.sub(r"[^a-z0-9]+", " ", claim.lower())[:50]
+            if key in seen:
+                continue          # the same finding from several sites is one finding
+            seen.add(key)
+            lines.append(f"- {claim} ({sure_words(item.get('grade'))}; {domain_of(item.get('source'))})")
+            if len(seen) >= NOTE_FINDINGS:
+                break
     else:
         lines += [f"- {clip_words(k, NOTE_CLAIM_CHARS)}" for k in known[:NOTE_FINDINGS]]
     unknown = [re.sub(r"^not established:\s*", "", str(u).strip(), flags=re.IGNORECASE) for u in ((recorded.get("synthesis") or {}).get("unknown") or [])
@@ -244,3 +252,17 @@ def research_note(recorded: Mapping[str, Any]) -> str:
     if snippets:
         lines.append(f"Limits: {opened} of {len(items)} findings come from pages that were opened; the rest are from search snippets only.")
     return "\n".join(lines)
+
+
+def research_reply(note: str) -> str:
+    """The reply for a research turn whose note was saved, written by code from that note so the two cannot disagree: what was looked into, how sure it is, the first findings and
+    what is not established. "" when the note is not one ``research_note`` composed."""
+    lines = [ln for ln in str(note or "").splitlines() if ln.strip()]
+    if not lines or not lines[0].startswith("Research note: "):
+        return ""
+    question = lines[0][len("Research note: "):].rstrip("?").strip()
+    sure = next((ln for ln in lines if ln.startswith("How sure: ")), "")
+    findings = [ln for ln in lines if ln.startswith("- ")][:3]
+    unknown = next((ln for ln in lines if ln.startswith("Not established: ")), "")
+    parts = [f"I looked into this and saved a note on the quest: {question}.", sure, "What the note holds first:\n" + "\n".join(findings) if findings else "", unknown]
+    return "\n\n".join(p for p in parts if p)

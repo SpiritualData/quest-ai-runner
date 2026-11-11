@@ -20,6 +20,8 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool impo
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_information_turn, user_ordered_work
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _strip_future_context, receipts_reply, unconfirmed_no_change_text
+from quest_ai_runner.the_world.science.investigate import research_reply
+from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import (
     adopt_turn_ask, ensure_found_constraint_head, file_blocked_ask, records_text)
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import turn_holds_records
@@ -446,6 +448,17 @@ class RunCloseMixin:
                         if emit is not None:
                             emit.status("Answer verified against the goal.")
                         break
+                    # A RESEARCH NOTE SAVED THIS TURN: the note is composed by code from the investigation record, so the reply that goes with it is too (one pass), and the verdict is
+                    # asked again of text that cannot disagree with the note.
+                    if (verdict is not None and not getattr(rs, "research_reply_used", False) and exec_record is not None
+                            and any(getattr(f, "succeeded", False) and str(getattr(f, "goal", "")).startswith("tool add_quest_note") for f in exec_record.facts)):
+                        _composed = research_reply(tool_guards.research_note_text(gathered))
+                        if _composed:
+                            rs.research_reply_used = True
+                            log.info("Research turn: the reply is composed from the saved note; verifying it again.")
+                            rs.text = _composed
+                            _attempt += 1
+                            continue
                     if verdict is None:
                         # Verifier call failed (LLM error, parse failure, etc.) - do not silently
                         # accept. Retry on the next attempt; if this was the last attempt, the turn

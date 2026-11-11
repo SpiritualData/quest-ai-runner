@@ -87,3 +87,14 @@ def test_the_review_s_generic_synthesis_lines_never_become_the_findings():
     note = research_note(record)
     assert "Supported by a graded source" not in note and "licence" not in note and "Not established: a validated minimum" in note
     assert "Ten to twenty minutes a day" in note
+
+
+def test_the_same_finding_from_several_sites_is_one_finding_and_the_reply_is_composed_from_the_note():
+    from quest_ai_runner.the_world.science.investigate import research_note, research_reply
+    items = [{"claim": "Five minutes a day is enough to start", "grade": "C", "source": f"https://s{n}.example/a", "verified": "snippet"} for n in range(3)]
+    note = research_note({**RECORD, "items": items + RECORD["items"]})
+    assert note.count("Five minutes a day is enough to start") == 1
+    reply = research_reply(note)
+    assert reply.startswith("I looked into this and saved a note on the quest: How long does daily qigong need") and "How sure: not very sure." in reply
+    assert "Not established: a validated minimum number of minutes" in reply and "—" not in reply
+    assert research_reply("a hand-written note") == ""
