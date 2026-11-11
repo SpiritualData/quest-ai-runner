@@ -396,7 +396,7 @@ def test_default_config_planner_prompt_has_no_mode_signal_material():
 
 def test_default_config_tool_schema_has_no_mode_signal_field():
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
-    _orch(provider, StubRetrieval()).run("hello")
+    _orch(provider, StubRetrieval()).run("hello", quest_id="q1")
     props = provider.plan_tool_schemas[0]["input_schema"]["properties"]
     assert "mode_signal" not in props
 
@@ -404,7 +404,7 @@ def test_default_config_tool_schema_has_no_mode_signal_field():
 def test_enabled_config_planner_prompt_and_schema_carry_mode_signal():
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     _orch(provider, StubRetrieval(),
-          config=OrchestratorConfig(mode_signals_enabled=True)).run("hello")
+          config=OrchestratorConfig(mode_signals_enabled=True)).run("hello", quest_id="q1")      # a turn with no quest is a general question: answered with no planner step (4157b818)
     assert "MODE SIGNAL" in provider.plan_prompts[0]
     props = provider.plan_tool_schemas[0]["input_schema"]["properties"]
     assert "mode_signal" in props
@@ -788,16 +788,18 @@ def test_understanding_clarify_in_a_live_chat_is_asked_in_the_reply_and_files_no
 # stable public names it keys on; do not rename them without updating the consumers.
 # ---------------------------------------------------------------------------
 
-def test_brainstorm_latch_is_introspectable_from_the_public_core_namespace():
-    import quest_ai_runner.core as core
+def test_brainstorm_latch_is_introspectable_from_the_packages_own_modules():
+    """The old ``quest_ai_runner.core`` namespace is gone (the package mirrors the hub): each name lives in the module of its role."""
+    import quest_ai_runner.the_intelligence.mind.orchestrator as core
+    from hubofhubs.api import EVENT_MODE_SIGNAL
+    from quest_ai_runner.the_intelligence.mind.planner import planner_prompt
+    from quest_ai_runner.the_self.integrity.prompts import auxiliary_prompts
 
     assert hasattr(core.Orchestrator, "judge_brainstorm_release")
     fields = core.OrchestratorConfig.__dataclass_fields__
     for name in ("execution_mode", "mode_signals_enabled", "mode_release_tier"):
         assert name in fields, name
     assert "mode_signal" in core.OrchestratorResult.__dataclass_fields__
-    assert core.MODE_RELEASE_TOOL["name"] == "brainstorm_release_verdict"
-    assert core.EVENT_MODE_SIGNAL == "mode_signal"
-    for name in ("MODE_RELEASE_TOOL", "MODE_RELEASE_PROMPT", "BRAINSTORM_NO_ACTION_ACK_NOTE",
-                 "EVENT_MODE_SIGNAL"):
-        assert name in core.__all__, name
+    assert auxiliary_prompts.MODE_RELEASE_TOOL["name"] == "brainstorm_release_verdict"
+    assert EVENT_MODE_SIGNAL == "mode_signal"
+    assert auxiliary_prompts.MODE_RELEASE_PROMPT and planner_prompt.BRAINSTORM_NO_ACTION_ACK_NOTE

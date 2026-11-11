@@ -57,7 +57,7 @@ def test_the_research_note_is_composed_from_the_record_and_is_short_and_readable
     note = research_note(RECORD)
     assert note.startswith("Research note: How long does daily qigong need to be to notice a change in focus?")
     assert "How sure: not very sure." in note and "(not very sure; nccih.nih.gov)" in note and "Not established: a validated minimum number of minutes" in note
-    assert "1 of 2 findings come from pages that were opened" in note and "—" not in note and len(note) < 800
+    assert "1 of 2 findings was read in full; the other comes from search results" in note and "—" not in note and len(note) < 800
     assert placeholder_reason(note) is None
     assert research_note({"question": "q", "items": [], "synthesis": {}}) == ""
 

@@ -258,7 +258,8 @@ def research_note(recorded: Mapping[str, Any]) -> str:
         lines.append(f"Not established: {clip_words('; '.join(unknown), 220)}")
     snippets = [r for r in picked if r.get("verified") in (None, "snippet", "not-opened")]
     if snippets:
-        lines.append(f"Limits: {len(picked) - len(snippets)} of {len(picked)} findings come from pages that were opened; the rest are from search snippets only.")
+        full = len(picked) - len(snippets)
+        lines.append(f"Limits: {full} of {len(picked)} findings {'was' if full == 1 else 'were'} read in full; the {'others come' if len(snippets) > 1 else 'other comes'} from search results.")
     return "\n".join(lines).replace("\u2014", ",").replace("\u2013", ",")
 
 
