@@ -57,10 +57,10 @@ def declaring_modules() -> tuple:
 
 @functools.lru_cache(maxsize=1)
 def child() -> Assembler:
-    """QAR's Assembler, a child of the hub's. A checkout reads QAR's records; an installed copy reads its packaged snapshot."""
-    root = PACKAGE_DIR.parent
-    records = root if (root / "esoi.toml").is_file() and (root / "esoi").is_dir() else None
-    return Assembler(SCOPE, PACKAGE_DIR, records=records, parent=hubofhubs.assembler(), modules=declaring_modules())
+    """QAR's Assembler, a child of the hub's. It reads the packaged snapshot (``esoi_selection.json``) everywhere, a checkout included:
+    reading the records instead makes the first call in a process evaluate every solution's leaderboard and lock evidence (seconds to
+    tens of seconds of CPU on the caller's thread). Evaluation belongs to the ``esoi`` commands and tests that regenerate the snapshot."""
+    return Assembler(SCOPE, PACKAGE_DIR, records=None, parent=hubofhubs.assembler(), modules=declaring_modules())
 
 
 def register_with_hub() -> None:

@@ -729,7 +729,8 @@
    "verdict": "WIN"
   },
   "modules": {
-   "gated": "quest_ai_runner.the_intelligence.mind.response_writer.interim_policy"
+   "gated": "quest_ai_runner.the_intelligence.mind.response_writer.interim_policy",
+   "plain-status-from-records": "quest_ai_runner.the_intelligence.mind.response_writer.act_status"
   }
  },
  "response-quality": {
