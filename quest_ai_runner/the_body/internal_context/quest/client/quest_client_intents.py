@@ -129,13 +129,25 @@ class IntentsMixin:
 
     def update_intent(self, intent_id: str, expected_revision: int, *, name: Optional[str] = None,
                       vision_statement: Optional[str] = None, opportunity: Optional[str] = None,
+                      solution_coherence: Optional[str] = None, solution_diagram: Optional[str] = None,
                       human_statement: Optional[str] = None) -> Dict[str, Any]:
-        """PATCH /api/intents/{intentId}: rename, change the vision or the opportunity (a person's own held as an ask for the AI)."""
+        """PATCH /api/intents/{intentId}. A rename or a new vision from the AI is held as an ask (202 ``{"pending": True, "decisionId": ...}``).
+        The intent's own specification text is written directly: ``opportunity`` (Opportunities), ``solution_coherence`` and ``solution_diagram``
+        (Mermaid flowchart source, else 400); an empty string clears one. A field the person wrote answers 409 FIELD_LOCKED unless
+        ``human_statement`` (the person's verbatim words asking for this change) is given."""
         body: Dict[str, Any] = {"expectedRevision": int(expected_revision)}
-        for key, value in (("name", name), ("visionStatement", vision_statement), ("opportunity", opportunity)):
+        for key, value in (("name", name), ("visionStatement", vision_statement), ("opportunity", opportunity),
+                           ("solutionCoherence", solution_coherence), ("solutionDiagram", solution_diagram)):
             if value is not None:
                 body[key] = value
         return self.intent_write("PATCH", f"/api/intents/{intent_id}", body, human_statement=human_statement)
+
+    def reorder_solutions(self, subject_type: str, subject_id: str, record_ids: List[str],
+                          *, human_statement: Optional[str] = None) -> Dict[str, Any]:
+        """PUT /api/intents/specs/{subjectType}/{subjectId}/solutions/order: exactly the subject's accepted solutions (``intent`` or ``quest``),
+        once each, in the new priority order (else 400). The server answers 403 when the quest's autopilot is off. Returns ``{"recordIds": [...]}``."""
+        return self.intent_write("PUT", f"/api/intents/specs/{subject_type}/{subject_id}/solutions/order", {"recordIds": list(record_ids)},
+                                 human_statement=human_statement)
 
     def delete_intent(self, intent_id: str, *, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """DELETE /api/intents/{intentId}."""

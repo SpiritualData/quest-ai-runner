@@ -291,6 +291,22 @@ def test_human_statement_reaches_place_and_sub_intent_bodies():
     assert client.sent[1][3]["humanStatement"] == "split it"
 
 
+def test_update_intent_sends_the_intents_own_spec_text_and_reorder_solutions_the_order():
+    client = Recorder(reply={})
+    client.update_intent("int_a", 3, opportunity="Others reuse it", solution_coherence="Food feeds training.", solution_diagram="flowchart TD\n  A --> B")
+    client.update_intent("int_a", 4, name="Vitality", solution_coherence="", human_statement="clear the coherence")
+    client.reorder_solutions("quest", "q1", ("esr_b", "esr_a"))
+    client.reorder_solutions("intent", "int_a", ["esr_c"], human_statement="put this first")
+    assert [(m, p) for m, p, _, _ in client.sent] == [
+        ("PATCH", "/api/intents/int_a"), ("PATCH", "/api/intents/int_a"),
+        ("PUT", "/api/intents/specs/quest/q1/solutions/order"), ("PUT", "/api/intents/specs/intent/int_a/solutions/order")]
+    assert client.sent[0][3] == {"expectedRevision": 3, "opportunity": "Others reuse it", "solutionCoherence": "Food feeds training.",
+                                 "solutionDiagram": "flowchart TD\n  A --> B"}
+    assert client.sent[1][3] == {"expectedRevision": 4, "name": "Vitality", "solutionCoherence": "", "humanStatement": "clear the coherence"}   # empty clears: it is sent
+    assert client.sent[2][3] == {"recordIds": ["esr_b", "esr_a"]}
+    assert client.sent[3][3] == {"recordIds": ["esr_c"], "humanStatement": "put this first"}
+
+
 def test_edit_spec_record_tool_passes_human_statement_only_when_given_and_describes_it():
     seen = []
 
