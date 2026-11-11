@@ -195,4 +195,6 @@ def summary_text(recorded: Mapping[str, Any], reused: bool = False) -> str:
     queries = len(recorded.get("queries") or [])
     return (f"{lead}: {recorded.get('question')}. " + ("" if reused else f"It ran {queries} search(es) and kept {len(recorded.get('items') or [])} finding(s). ")
             + f"How sure: {sure_words(recorded.get('best_grade'))}. Found: {known}." + (f" Not established: {unknown}." if unknown else "")
-            + (f" Limits: {limits}." if limits else "") + " It has changed nothing yet; any change to the person's quest is proposed and goes through their confirmation.")
+            + (f" Limits: {limits}." if limits else "") + " It has changed nothing yet; any change to the person's quest is proposed and goes through their confirmation."
+            + " If the person also asked for a note, write it from these findings with its own tool call: each finding, how sure it is and where it came from, with the minutes or "
+              "amounts the findings give; the note is not written until that call has run, and the reply says what the note holds.")

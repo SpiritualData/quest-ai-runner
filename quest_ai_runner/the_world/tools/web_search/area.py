@@ -30,4 +30,17 @@ class WebWithSupportCheck:
         return self.web.search(queries, max_results=max_results, fresh=fresh)
 
     def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False, full: bool = False, part: Optional[int] = None) -> Any:
-        return self.web.fetch(url, focus=focus, fresh=fresh, full=full, part=part)
+        return self.page_reader().fetch(url, focus=focus, fresh=fresh, full=full, part=part)
+
+    def page_reader(self) -> Any:
+        """The member that reads one page: the web member itself when it can (the snippet-first research adapter), else the one-call research adapter built from the
+        environment. A search-only backend (provider grounding) has no page read, which left every page a review tried to open as "could not be opened"."""
+        if hasattr(self.web, "fetch"):
+            return self.web
+        if getattr(self, "reader", None) is None:
+            import os
+            from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
+            self.reader = build_web_research_from_env(os.environ)
+        if self.reader is None:
+            raise RuntimeError("no web research is configured to read a page")
+        return self.reader

@@ -582,6 +582,9 @@ one of those findings, said at that sureness; judge the work at the size the per
 that recorded graded findings and did what else was asked (a note written) is done, and never requires
 opened pages, studies or peer-reviewed sources the person did not ask for. A figure the findings call
 uncertain, stated as certain, is unsupported; stated as what the sources suggest, it is supported.
+When the person asked for what was found to be written into a record (a note on the quest), that record is
+the deliverable: the reply does not have to repeat the findings or a figure, it has to say what was written and
+how sure it is; judge the record's content from this turn's receipts, and a short reply is not a gap.
 When unsure, do not flag. Flag claims_unsupported only when
 unsupported claims are the ONLY thing wrong: if the output also misses the goal in another way,
 report that gap (met=false, next_action) and leave claims_unsupported false.

@@ -188,3 +188,20 @@ def test_a_quick_investigation_without_a_synthesis_reports_its_graded_findings()
     text = investigate.summary_text({"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
                                      "items": [{"claim": "Five minutes a day is the usual start", "grade": "C", "source": "https://example.org/a"}]})
     assert "Five minutes a day is the usual start (not very sure; https://example.org/a)" in text and "nothing was settled" not in text
+
+
+def test_a_search_only_web_member_still_reads_a_page_through_the_research_adapter(monkeypatch):
+    from quest_ai_runner.the_world.tools.web_search import area, web_research
+
+    class SearchOnly:
+        def describe(self):
+            return "search"
+
+    class Reader:
+        def fetch(self, url, **k):
+            return f"page {url}"
+
+    monkeypatch.setattr(web_research, "build_web_research_from_env", lambda env: Reader())
+    seat = area.WebWithSupportCheck(SearchOnly())
+    assert seat.fetch("https://example.org/a", focus="x") == "page https://example.org/a"
+    assert area.WebWithSupportCheck(Reader()).fetch("https://example.org/b") == "page https://example.org/b"
