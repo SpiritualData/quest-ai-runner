@@ -823,6 +823,12 @@ class QuestsMixin:
         when a field it wrote did not stick, rather than letting the cadence gate silently never
         advance).
 
+        ``instructions`` and each persona's ``instructions`` are standing instructions for work that
+        repeats with nobody present, so write them to the hub's standing work standard (a metric the
+        run's own acts move, the act done by the run itself, the people as they are, and the rest of its
+        eight points). Print it with
+        ``python -c "from hubofhubs.api import STANDING_WORK_STANDARD as S; print(S)"``.
+
         Returns a ``WriteResult`` holding the endpoint's response (``{"quest_id": ..., "autopilot": {...}}``) or
         raises ``QuestWriteError``. The bookkeeping caller catches it: a bookkeeping write failing must not break
         the pass that produced the work.

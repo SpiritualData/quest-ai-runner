@@ -1516,6 +1516,14 @@ def test_compose_batch_text_improves_one_solution_even_under_a_written_brief():
     assert "IMPROVE ONE SOLUTION" in compose_batch_text("Ship it")
 
 
+def test_every_batch_brief_carries_the_standing_work_standard_once():
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import STANDING_WORK_STANDARD
+    assert STANDING_WORK_STANDARD.startswith("STANDING WORK STANDARD.")
+    text = compose_batch_text("Ship it")
+    assert text.count("STANDING WORK STANDARD.") == 1
+    assert text.index("IMPROVE ONE SOLUTION") < text.index("STANDING WORK STANDARD.")
+
+
 # --- REAL-CONTRACT fidelity: the shapes verified against quest-backend's july branch -------------
 
 def test_autopilot_mode_is_read_from_the_quest_state_not_the_team_listing():

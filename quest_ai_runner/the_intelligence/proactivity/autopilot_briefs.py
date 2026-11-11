@@ -244,6 +244,17 @@ _CONFIRMATION_RULE = (
 # every quest with its own brief silently lost it. Joshua, 2026-10-19: "make it so every autopilot
 # run iterates to improve at least 1 solution (via implementations) according to the ESOI
 # structure ... And gaps in specification are filled by AI as needed to fulfill this requirement."
+# What every run of standing work holds to, so a run changes something outside itself instead of
+# re-measuring and re-reporting. The text is the hub's (Proactivity, ``standing_work_standard``), never a
+# copy here. A hub release older than the one that added it (the pin in pyproject.toml is still v0.7.1)
+# has no such name, and the brief then goes without the block instead of failing: drop this guard once
+# the pin is at the release that carries it.
+try:
+    from hubofhubs.api import STANDING_WORK_STANDARD
+except ImportError:  # pragma: no cover -- only on a hub release that predates the standard
+    STANDING_WORK_STANDARD = ""
+
+
 _SOLUTION_IMPROVEMENT_RULE = (
     "IMPROVE ONE SOLUTION. Unless this run's input was only a question, improve at least one "
     "solution of the quest's ESOI specification (get_spec) in this run: pick one of its "
@@ -597,6 +608,8 @@ def compose_batch_text(quest_outcome: str,
         # Required, not optional: it is the choice the rule below asks for, already made by code.
         require(esoi_readiness.strip())
     require(_SOLUTION_IMPROVEMENT_RULE)
+    if STANDING_WORK_STANDARD:
+        require(STANDING_WORK_STANDARD)
     require(_CONFIRMATION_RULE)
     fit = prompt_budget.fit_sections(sections, AUTOPILOT_BRIEF_TOKEN_BUDGET)
     if fit.cuts:
