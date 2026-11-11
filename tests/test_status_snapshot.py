@@ -824,3 +824,11 @@ def test_a_spliced_fragment_is_cut_and_a_first_goal_proposal_stays():
     proposal = "Start by choosing one simple piece and playing its first line slowly this week."
     assert status_snapshot.status_rest(proposal, "", stems, lead) == proposal
     assert not status_snapshot.is_spliced("After that, on Saturday 14 November, play it through once.", stems)
+
+
+def test_a_plan_lead_with_an_overdue_goal_and_nothing_else_due_reads_plainly():
+    from datetime import date
+    today = date(2026, 11, 11)
+    rows = [{"title": "Finish the second draft", "due": "2026-11-08"}, {"title": "Choose the illustrator", "due": "2026-12-31"}]
+    assert status_snapshot.plan_lead(rows, today, quest_name="Write a children's book") == (
+        "As of 11 November, 1 open goal in \"Write a children's book\" is overdue, and nothing else is due by 18 November.")

@@ -809,7 +809,8 @@ def plan_lead(open_rows: List[Mapping[str, Any]], today: date, window_days: int 
     where = f" across your {across} quests" if across > 1 else (f" in \"{name}\"" if name else "")       # ``quest_name``: the plan names its quest (see lead_sentence)
     first = (f"no open goal{where} is overdue" if late == 0 else f"1 open goal{where} is overdue" if late == 1 else f"{late} open goals{where} are overdue")
     more = "more " if late else ""
-    second = (f"none {'more ' if late else ''}is due by {last.day} {last.strftime('%B')}" if due == 0 else
+    # "nothing else", not "none more" (read live 2026-11-11: "1 open goal ... is overdue, and none more is due by 18 November")
+    second = (f"{'nothing else' if late else 'none'} is due by {last.day} {last.strftime('%B')}" if due == 0 else
               f"1 {more}is due by {last.day} {last.strftime('%B')}" if due == 1 else f"{due} {more}are due by {last.day} {last.strftime('%B')}")
     return f"As of {today.day} {today.strftime('%B')}, {first}, and {second}."
 
