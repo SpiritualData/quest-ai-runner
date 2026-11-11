@@ -115,6 +115,9 @@ from quest_ai_runner.the_world.tools.tools_status import ToolStatus
 from quest_ai_runner.the_body.hands.quest_operations.tools_milestone_flow import milestone_flow_tools
 # The workflow tools over a host's own Quest client (list first; create reports an existing workflow as already there)
 from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import add_quest_note_spec, create_quest_workflow_spec, find_quest_spec, list_quest_workflows_spec
+# The investigation tools over a host's own Quest client (look into a question through the hub's Learning solution and record it on the quest)
+from quest_ai_runner.the_body.hands.quest_operations.tools_quest_investigations import (
+    find_earlier_investigations_spec, investigate_for_quest_spec, mark_investigation_item_spec)
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import MetricSourceError, checked_reading
 from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateLinkWebResearch
@@ -228,6 +231,9 @@ __all__ = [
     "add_quest_note_spec",
     "create_quest_workflow_spec",
     "find_quest_spec",
+    "investigate_for_quest_spec",
+    "find_earlier_investigations_spec",
+    "mark_investigation_item_spec",
     "list_quest_workflows_spec",
     "VectorContextAssembler",
     "apply_quest_data_ladder_guard",

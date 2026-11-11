@@ -90,7 +90,7 @@ def test_a_repeated_act_request_reports_what_is_already_there_without_a_second_w
 def test_no_recorded_value_is_said_not_filled_in():
     reading = act_status.readings_in([{"text": "- g2 [open] due x (month) for Sam: Plan | Done when: 5 calls"}])[0]
     assert reading.value == act_status.NOT_RECORDED and not reading.recorded
-    assert "Current value: not recorded yet." in act_status.status_texts(reading, [], "", evidence="")["text"]
+    assert "Where it stands now: not recorded yet." in act_status.status_texts(reading, [], "", evidence="")["text"]
 
 
 def test_the_decision_is_structural():
@@ -121,7 +121,7 @@ def test_every_request_measured_carries_the_metric_records_own_readings_into_bot
     orch.run("make progress on the app release", sink=StreamSink(events.append), quest_id="q1")
     first = [e for e in events if e["type"] == EVENT_INTERIM][0]
     result = [e for e in events if e["type"] == EVENT_RESULT][-1]
-    assert "Current value: 12." in first["text"] and "was 12, now 15." in result["text"]
+    assert "Where it stands now: 12." in first["text"] and "was 12, now 15." in result["text"]
     assert [m["after"] for m in result["data"].get("metrics") or [] if "after" in m] in ([15.0], [])      # the rows ride on the result
 
 
@@ -277,3 +277,12 @@ def test_a_repeated_call_with_no_data_of_its_own_does_not_add_a_second_already_s
     repeat = {"locator": "tool:create_quest_workflow", "tool_status": "noop", "text": "ALREADY SUCCEEDED earlier this turn"}
     phrases = already_in_place([full, repeat])
     assert len(phrases) == 1 and "Weekly check-in" in phrases[0]
+
+
+def test_a_done_when_inside_a_task_brief_or_a_recalled_message_is_not_a_record():
+    brief = ("Started working on your scheduled task: USER'S REQUEST (the top-level goal):\nCan you help me plan a schedule?\n\n"
+             "TASK [564abb87]: Carry out the user's request: Can you help me plan a schedule?\n\nDone when: Carry out the user's request: Can you help me plan a schedule?")
+    assert act_status.readings_in([{"text": brief}, brief]) == []
+    reading = act_status.readings_in([{"text": GOAL.format(value="12")}])[0]
+    text = act_status.status_texts(reading, [], "", evidence="")["text"]
+    assert "Done when" not in text and "Current value" not in text

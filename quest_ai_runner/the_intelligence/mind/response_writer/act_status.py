@@ -7,7 +7,8 @@ sends and appends is in ``orchestrator_turn_messages.py``.
 
 Nothing here reads the wording of model output (hard rule #3). Whether to send comes from the planner's structured ``user_intent``
 and the planned action (a deep escalation, or a tool step with a call that changes something). The figures come from the text of
-records the turn read (goal lines, notes): ``Done when:`` and ``Current value:`` lines of stored data, not of anything a model wrote
+records the turn read (goal and milestone lines only, never a task brief or a recalled message): ``Done when:`` and ``Current value:`` are the
+stored fields' own labels and are never shown to a person; the message says them in plain words. Nothing here is from anything a model wrote
 this turn. A value that is not there is said as "not recorded yet", never filled in.
 """
 from __future__ import annotations
@@ -77,6 +78,8 @@ def readings_in(entries: Iterable[Any]) -> List[MetricReading]:
             if not value and not done:
                 continue
             goal = GOAL_LINE.match(line) or MILESTONE_LINE.match(line)
+            if goal is None:
+                continue         # only a record line is a record: a "Done when" inside a task brief or a recalled chat message is another request's text
             figure = (value.group(1).strip().rstrip(".") if value else "")
             out.append(MetricReading(
                 record_id=(goal.groupdict().get("id") or "") if goal else "", milestone=(goal.group("title").strip() if goal else ""),
@@ -211,10 +214,10 @@ def status_texts(reading: Optional[MetricReading], facts: Sequence[str], doing: 
     parts: List[str] = []
     if reading is not None:
         if reading.milestone:
-            parts.append(f"Milestone: {reading.milestone}.")
+            parts.append(f"The milestone is {reading.milestone}.")
         if reading.done_when and not voice:
-            parts.append(f"Done when: {reading.done_when}.")
-        parts.append(f"Current value: {status_value(reading.value)}.")
+            parts.append(f"It is done when {reading.done_when}.")
+        parts.append(f"Where it stands now: {status_value(reading.value)}.")
     if not voice:
         kept = [grounded_line(f, evidence) for f in list(facts)[:MAX_FACTS]]
         parts.extend(f.rstrip(".") + "." for f in kept if f)

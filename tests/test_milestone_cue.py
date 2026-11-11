@@ -413,7 +413,7 @@ def test_the_first_message_names_no_record_id_and_none_of_the_planners_fact_blob
     orch.run(CUE, sink=StreamSink(events.append), quest_id="q1")
     first = next(e for e in events if e["type"] == EVENT_INTERIM)["text"]
     assert "esr_" not in first and "Owners named" not in first and "Metric record" not in first
-    assert "P3 Mobile app live on the Apple Store" in first and "App Store" in first and "Current value" in first and "Now:" in first
+    assert "P3 Mobile app live on the Apple Store" in first and "App Store" in first and "Where it stands now" in first and "Now:" in first
 
 
 class StaleListingClient(GoalClient):
@@ -836,7 +836,7 @@ def test_the_first_message_for_a_resolved_milestone_is_read_from_its_record_fiel
                          draft_in_chat=False)
     assert send_status_first(orch, emit, rs, [garbled], user_turn=True, forced=True)
     text = sent[0].text
-    assert "Milestone: P3 Mobile app live on the Apple Store" in text and "Current value: No." in text and "esr_" not in text and "rep_" not in text and "OUTSIDE" not in text
+    assert "The milestone is P3 Mobile app live on the Apple Store" in text and "Where it stands now: No." in text and "esr_" not in text and "rep_" not in text and "OUTSIDE" not in text
     assert "Now: Making the next piece of work" in text
 
 
