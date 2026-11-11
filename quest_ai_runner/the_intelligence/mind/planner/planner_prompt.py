@@ -92,7 +92,7 @@ next step, so an order you will read up on first is still "act". "act" = do, pro
 change something now (a polite "can you", or a bare report of a defect in something you can
 change, counts; so do "can we", "could we", "lets" and "we should" followed by something to get done, and a cue to get something moving, even
 as a question mark); "ask" = a question, or asking to be told, shown or given something you can say in
-the reply; "inform" = news, context, or what the user will do THEMSELVES; "hold_off" = about your
+the reply (looking something up alone is "ask"; a message that asks you to look into or research something AND to add, write or save the result as a note or any record is an order, so "act"); "inform" = news, context, or what the user will do THEMSELVES; "hold_off" = about your
 own work itself: do not open a task, answer here, not yet, stop or cancel runs.
 ANSWER WHAT YOU ALREADY HOLD. Before any rule above sends you to read, search or hand off: when
 the CONTEXT and what you have gathered already settle the request (the figure, the date, the stored

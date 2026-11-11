@@ -128,3 +128,16 @@ def test_a_research_turn_with_its_note_saved_and_a_reply_composed_from_it_ends_v
     assert saved and saved[0].startswith("Research note: How long?")
     assert result.text.startswith("I looked into this and saved a note on the quest: How long.")
     assert result.exit_reason == "verified"
+
+
+def test_a_note_says_the_hosts_written_findings_and_never_a_snippet():
+    from quest_ai_runner.the_world.science.investigate import research_note, summary_text
+    record = {"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
+              "items": [{"item_id": "i1", "claim": "Ten minutes a day can boost mood The key is consistency, with research indicating...", "grade": "C", "source": "https://a.example/x", "verified": "opened"},
+                        {"item_id": "i2", "claim": "no timeline given", "grade": "D", "source": "https://b.example/y", "verified": "snippet"}],
+              "findings": [{"item_id": "i1", "claim": "A daily walk of ten minutes lifts mood within a few weeks.", "grade": "B", "source_kind": "research", "source": "https://a.example/x", "also": 2}]}
+    note = research_note(record)
+    assert "- A daily walk of ten minutes lifts mood within a few weeks. (fairly sure; a.example, and 2 more sources say the same)" in note
+    assert "..." not in note and "no timeline given" not in note and "Limits" not in note
+    assert "A daily walk of ten minutes" in summary_text(record)
+    assert research_note({**record, "findings": []}) == ""

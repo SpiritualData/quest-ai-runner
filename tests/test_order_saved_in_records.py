@@ -60,3 +60,28 @@ def test_a_text_that_is_also_ordered_saved_is_not_left_as_the_reply_and_the_note
 def test_a_text_with_nothing_ordered_saved_stays_the_reply_and_writes_nothing():
     provider = run('A post.\n{"writes_text": true}', [DRAFT, WRITE, DONE])
     assert RAN == [] and not any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts)
+
+
+ASK_READ = {"action": "answer", "user_intent": "ask", "rationale": "answer from what I know", "pending_read": []}
+EXACT = "Look into what research says about how many minutes of daily singing it takes to notice a better mood, then add a short note to this quest with what you found."
+
+
+def test_look_into_x_then_add_a_note_is_an_order_even_when_the_planner_read_it_as_a_question():
+    RAN.clear()
+    provider = AnalyserProvider('Research, then a note.\n{"saves_to_records": true}', [ASK_READ, WRITE, DONE])
+    config = OrchestratorConfig()
+    config.overseer = False
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=config, tools=add_note_tool())
+    orch.run(EXACT, quest_id="q1")
+    assert RAN, "the note was written"
+    assert any("ORDER NOT CARRIED OUT" in p for p in provider.plan_prompts)
+
+
+def test_a_plain_question_with_no_save_ordered_stays_a_question():
+    RAN.clear()
+    provider = AnalyserProvider("What research says about singing.\n{}", [ASK_READ, WRITE, DONE])
+    config = OrchestratorConfig()
+    config.overseer = False
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=config, tools=add_note_tool())
+    orch.run("What does research say about how many minutes of daily singing improve mood?", quest_id="q1")
+    assert RAN == []

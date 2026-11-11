@@ -185,7 +185,9 @@ def quest_record(hub_record: Mapping[str, Any], *, solution_ids: Sequence[str], 
 def summary_text(recorded: Mapping[str, Any], reused: bool = False) -> str:
     """What was looked into, how sure it is and what it changed, in plain words, for the reply."""
     known = "; ".join((recorded.get("synthesis") or {}).get("known") or [])
-    if not known:
+    if isinstance(recorded.get("findings"), list):
+        known = "; ".join(f"{f.get('claim')} ({sure_words(f.get('grade'))}; {domain_of(f.get('source'))})" for f in recorded["findings"][:NOTE_FINDINGS] if f.get("claim")) or "nothing worth keeping was found"
+    elif not known:
         # A quick review carries no written synthesis: the graded findings themselves are what was found, each with how sure it is and where it came from.
         found_items = [f"{i.get('claim')} ({sure_words(i.get('grade'))}; {i.get('source')})" for i in (recorded.get("items") or [])[:6] if i.get("claim")]
         known = "; ".join(found_items) or "nothing was settled"
@@ -220,38 +222,44 @@ def clip_words(text: Any, limit: int) -> str:
 
 
 def research_note(recorded: Mapping[str, Any]) -> str:
-    """The note a research ask leaves on the quest, composed by code from the investigation record: its question, how sure it is, the graded findings each with where it came
-    from, what is not established and what was read as a snippet only. Short and readable; the planner does not write it. "" when the record holds no finding."""
-    items = [i for i in (recorded.get("items") or []) if i.get("claim")]
-    known = [str(k) for k in ((recorded.get("synthesis") or {}).get("known") or []) if str(k).strip()]
-    if not items and not known:
-        return ""
-    lines = [f"Research note: {clip_words(recorded.get('question'), 200)}", f"How sure: {sure_words(recorded.get('best_grade'))}."]
-    lines.append("Findings:")
-    if items:
-        # The findings themselves (each source's own words, best grade first), never the review's generic synthesis lines ("supported by a graded source: ...").
-        order = {"A": 0, "B": 1, "C": 2, "D": 3}
-        seen = set()
-        for item in sorted(items, key=lambda i: order.get(str(i.get("grade")), 4)):
-            claim = clip_words(item.get("claim"), NOTE_CLAIM_CHARS)
-            key = re.sub(r"[^a-z0-9]+", " ", claim.lower())[:50]
-            if key in seen:
-                continue          # the same finding from several sites is one finding
-            seen.add(key)
-            lines.append(f"- {claim} ({sure_words(item.get('grade'))}; {domain_of(item.get('source'))})")
-            if len(seen) >= NOTE_FINDINGS:
-                break
+    """The note a research ask leaves on the quest, composed by code from the investigation record: its question, how sure it is, the findings each with where it came from,
+    what is not established and what was read as a snippet only. When the host wrote findings (``findings``: complete sentences a person reads cold, graded by the kind of
+    source, duplicates merged) the note says those and nothing else; without them it falls back to the review's items, never a cut-off snippet. "" when there is no finding.
+    Short and readable; the planner does not write it."""
+    item_list = list(recorded.get("items") or [])
+    items = {i.get("item_id"): i for i in item_list if i.get("item_id")}
+    order = {"A": 0, "B": 1, "C": 2, "D": 3}
+    if isinstance(recorded.get("findings"), list):
+        rows = [{"claim": f.get("claim"), "grade": f.get("grade"), "source": f.get("source") or (items.get(f.get("item_id")) or {}).get("source"), "also": f.get("also") or 0,
+                 "verified": (items.get(f.get("item_id")) or {}).get("verified")}
+                for f in recorded["findings"] if f.get("claim")]
     else:
-        lines += [f"- {clip_words(k, NOTE_CLAIM_CHARS)}" for k in known[:NOTE_FINDINGS]]
+        rows = [{"claim": i.get("claim"), "grade": i.get("grade"), "source": i.get("source"), "also": 0, "verified": i.get("verified")} for i in item_list
+                if i.get("claim") and "..." not in str(i["claim"]) and "\u2026" not in str(i["claim"])]
+    seen, picked = set(), []
+    for row in sorted(rows, key=lambda r: order.get(str(r.get("grade")), 4)):
+        key = re.sub(r"[^a-z0-9]+", " ", str(row["claim"]).lower())[:50]
+        if key in seen:
+            continue
+        seen.add(key)
+        picked.append(row)
+        if len(picked) >= NOTE_FINDINGS:
+            break
+    if not picked:
+        return ""
+    best = min((r.get("grade") or "D" for r in picked), key=lambda g: order.get(str(g), 4))
+    lines = [f"Research note: {clip_words(recorded.get('question'), 200)}", f"How sure: {sure_words(best)}.", "Findings:"]
+    for row in picked:
+        more = f", and {row['also']} more source{'s' if row['also'] > 1 else ''} say the same" if row["also"] else ""
+        lines.append(f"- {' '.join(str(row['claim']).split())} ({sure_words(row.get('grade'))}; {domain_of(row.get('source'))}{more})")
     unknown = [re.sub(r"^not established:\s*", "", str(u).strip(), flags=re.IGNORECASE) for u in ((recorded.get("synthesis") or {}).get("unknown") or [])
                if str(u).strip() and not re.match(r"\s*(?:not established:\s*)?licen[cs]e\b", str(u), re.IGNORECASE)]
     if unknown:
         lines.append(f"Not established: {clip_words('; '.join(unknown), 220)}")
-    snippets = [i for i in items if i.get("verified") in ("snippet", "not-opened")]
-    opened = len(items) - len(snippets)
+    snippets = [r for r in picked if r.get("verified") in (None, "snippet", "not-opened")]
     if snippets:
-        lines.append(f"Limits: {opened} of {len(items)} findings come from pages that were opened; the rest are from search snippets only.")
-    return "\n".join(lines)
+        lines.append(f"Limits: {len(picked) - len(snippets)} of {len(picked)} findings come from pages that were opened; the rest are from search snippets only.")
+    return "\n".join(lines).replace("\u2014", ",").replace("\u2013", ",")
 
 
 def research_reply(note: str) -> str:

@@ -538,6 +538,12 @@ class RunLoopMixin:
                 rs.plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             if getattr(rs.plan, "user_intent", None):
                 rs.turn_user_intent = rs.plan.user_intent
+            if rs.turn_user_intent == "ask" and getattr(rs, "saves_to_records", False) and message_is_user_turn:
+                # The request analyser's own structured report says the message orders something saved in the person's records (look into X, then add a note): that is an order
+                # whatever the planner called it, so the note is written, not left as an answer about the research.
+                log.info("The analyser reports the message orders a save in the records; the planner's ask is read as an order.")
+                rs.turn_user_intent = "act"
+                rs.plan.user_intent = "act"
             if rs.plan and message_is_user_turn and must_hand_off(self.reach_verdict(rs.user_message)):
                 # The reach check settled: an order, outside what is readable, covered by an attached environment. It is an order whatever the planner called it, and a plan that only
                 # answers is sent back once to hand the work over.
