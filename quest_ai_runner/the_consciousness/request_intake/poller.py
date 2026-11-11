@@ -183,6 +183,8 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
             # invisible to every lane -- see AutopilotPass._lane_user_id.
             lane_user_id=config.lane_user_id,
             judge=make_judge(getattr(config, "model_provider", None)),
+            # So a pass stopped by its daily budget raises a visible ask for the quest's owner.
+            escalation=config.escalation,
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude

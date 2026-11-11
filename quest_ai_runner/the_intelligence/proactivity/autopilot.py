@@ -77,6 +77,7 @@ exactly the failure mode the qar playbook bans.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -95,6 +96,7 @@ from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import (
 from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, next_steps_from_pass
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_for
 from quest_ai_runner.the_intelligence.proactivity.autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
+from quest_ai_runner.the_intelligence.proactivity.autopilot_budget_ask import budget_stop_escalation
 from quest_ai_runner.the_intelligence.proactivity.autopilot_gates import GatesMixin
 from quest_ai_runner.the_intelligence.proactivity.autopilot_work import WorkMixin
 from quest_ai_runner.the_intelligence.proactivity.quest_asks_brief import asks_brief_section, fetch_open_decisions
@@ -104,6 +106,8 @@ from quest_ai_runner.the_intelligence.proactivity.autopilot_context import PassC
 
 
 
+
+log = logging.getLogger("quest-ai-runner.autopilot")
 
 class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
     """Runs ONE autopilot pass against a Quest client. See the module docstring for the algorithm.
@@ -150,8 +154,13 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                  lane_user_id: Optional[str] = None,
                  judge: Optional[Callable[[str], str]] = None,
                  now: Optional[Callable[[], datetime]] = None,
-                 structure_watch: Optional[Callable[[str, bool], Any]] = None):
+                 structure_watch: Optional[Callable[[str, bool], Any]] = None,
+                 escalation: Optional[Any] = None):
         self._client = client
+        # The runner's escalation sink (``RunnerConfig.escalation``). Used for ONE thing here: the
+        # visible ask raised when the daily budget stops a pass part-way (autopilot_budget_ask.py).
+        # None keeps the old behaviour of a log line and a note only.
+        self._escalation = escalation
         # The account this lane authenticates as (RunnerConfig.lane_user_id), stamped as the
         # assignee of every task this pass creates. WHY (incident 2026-09-20): a created task with
         # no assignee gets the QUEST'S OWNER as its executor, and task discovery is owner-scoped,
@@ -208,6 +217,21 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # The id of the pass task currently being run, set in ``run`` and stamped onto everything
         # this pass creates (see _create_autopilot_task). None until a pass starts.
         self._pass_task_id: Optional[str] = None
+
+    def _raise_budget_ask(self, quest_id: str, quest_label: str, batches: List[Any],
+                          position: int, budget_used: int) -> None:
+        """Tell the quest's owner, through the escalation sink, that the budget skipped runs.
+        Never raises: a failed ask must not fail the pass."""
+        if self._escalation is None:
+            return
+        try:
+            skipped = [self._persona_label(self._batch_persona(p)) or "the default assistant"
+                       for p, _tasks in batches[position:]]
+            self._escalation.escalate(budget_stop_escalation(
+                quest_id=quest_id, quest_label=quest_label, skipped=skipped, needed=len(batches),
+                budget=self._daily_budget, used=budget_used, today=self._now()))
+        except Exception:  # noqa: BLE001 -- visibility is best effort
+            log.warning("autopilot: could not raise the budget ask for quest %s", quest_id, exc_info=True)
 
     # --- the pass --------------------------------------------------------------------------
 
@@ -451,11 +475,13 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # there for why the path is kept rather than deleted.
         batches = self._batches_for_pass(autopilot_cfg, adopted)
         if batches:
-            for persona, tasks in batches:
+            for position, (persona, tasks) in enumerate(batches):
                 if budget_used >= self._daily_budget:
                     self._skip(result, quest_id, quest_label,
                                f"today's budget of {self._daily_budget} autopilot task(s) ran out "
                                f"part-way through this quest")
+                    if not dry_run:
+                        self._raise_budget_ask(quest_id, quest_label, batches, position, budget_used)
                     break
                 # Resolved per BATCH, from the whole roster rather than today's on-duty entries.
                 # Every character routed a batch is on duty today (the day rule guarantees it),

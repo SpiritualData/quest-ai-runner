@@ -2217,3 +2217,63 @@ def test_two_passes_for_the_same_quest_never_both_work_it():
     assert sum(len(r.created_task_ids) for r in results) >= 1
     assert sum(1 for r in results if r.created_task_ids) == 1
     assert any("cadence" in s["reason"] for r in results for s in r.skipped)
+
+
+# --- the budget stop is visible ---------------------------------------------------------------
+
+class RecordingSink:
+    """An escalation sink stand-in that keeps one open ask per dedupe key, like the real one."""
+
+    def __init__(self):
+        self.escalations = []
+        self.open_keys = set()
+
+    def escalate(self, escalation):
+        if escalation.dedupe_key in self.open_keys:
+            return "existing"
+        self.open_keys.add(escalation.dedupe_key)
+        self.escalations.append(escalation)
+        return "dec_1"
+
+
+def _three_persona_client():
+    q1 = _quest("q1", personas=[{"rep_id": "rep_a"}, {"rep_id": "rep_b"}, {"rep_id": "rep_c"}])
+    return FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+
+
+def test_a_budget_stop_raises_one_visible_ask_naming_what_was_skipped():
+    sink = RecordingSink()
+    AutopilotPass(_three_persona_client(), team_id="team1", daily_budget=2, now=_now,
+                  escalation=sink).run({"text": "pass"})
+    assert len(sink.escalations) == 1
+    ask = sink.escalations[0]
+    assert ask.quest_id == "q1" and ask.assignee is None  # the sink resolves the quest's owner
+    assert "rep_c" in ask.summary and "rep_a" not in ask.summary
+    assert "1 of 3" in ask.summary and "budget is 2" in ask.summary
+    assert "autopilot_daily_budget" in ask.summary and "at least 3" in ask.summary
+    assert "—" not in ask.summary and "—" not in (ask.why_only_you or "")
+
+
+def test_a_second_pass_the_same_day_raises_no_duplicate_ask():
+    sink = RecordingSink()
+    for _ in range(2):
+        AutopilotPass(_three_persona_client(), team_id="team1", daily_budget=2, now=_now,
+                      escalation=sink).run({"text": "pass"})
+    assert len(sink.escalations) == 1
+
+
+def test_no_budget_stop_raises_no_ask():
+    sink = RecordingSink()
+    AutopilotPass(_three_persona_client(), team_id="team1", daily_budget=5, now=_now,
+                  escalation=sink).run({"text": "pass"})
+    assert sink.escalations == []
+
+
+def test_a_failing_sink_does_not_fail_the_pass():
+    class Broken:
+        def escalate(self, escalation):
+            raise RuntimeError("down")
+    result = AutopilotPass(_three_persona_client(), team_id="team1", daily_budget=2, now=_now,
+                           escalation=Broken()).run({"text": "pass"})
+    assert len(result.created_task_ids) == 2

@@ -335,7 +335,8 @@ class QuestDecisionSink(EscalationSinkBase):
             return ""
         try:
             for decision in self._client.list_open_decisions_for_quest(escalation.quest_id) or []:
-                if self._same_ask(escalation.summary, decision.get("summary")):
+                if self._same_ask(escalation.summary, decision.get("summary")) or (
+                        escalation.dedupe_key and decision.get("dedupe_key") == escalation.dedupe_key):
                     return str(decision.get("decision_id") or decision.get("id") or "")
         except Exception:  # noqa: BLE001 — a dedupe lookup must never block an escalation
             return ""

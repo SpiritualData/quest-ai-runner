@@ -208,3 +208,13 @@ def test_nobody_but_the_runners_own_account_is_refused():
         assignee_of(QuestDecisionSink(client), assignee="user_ai", blocked_goal_id="g1", run_for_user_ids=["user_ai"])
     assert QuestDecisionSink(client).escalate(Escalation(summary="Need the login", quest_id="quest_1", assignee="user_ai")) == ""
     assert not [c for c in calls if c["path"].endswith("/decisions")]
+
+
+def test_an_open_ask_with_the_same_dedupe_key_is_reused_even_when_the_text_differs():
+    client, calls = fake_client(quest={"owner_user_ids": ["owner_1"]},
+                                existing_open=[{"decision_id": "dec_old", "summary": "old wording", "status": "open",
+                                                "dedupe_key": "k:1"}])
+    sink = QuestDecisionSink(client)
+    got = sink.escalate(Escalation(summary="new wording", quest_id="quest_1", dedupe_key="k:1"))
+    assert got == "dec_old"
+    assert not any(c["method"] == "POST" for c in calls)
