@@ -67,11 +67,11 @@ def test_verify_goal_falls_back_to_planner_tier_when_best_fails():
     # The strong-tier call raising must NOT lose the goal/claims gate: the judge retries once at
     # planner_tier and that verdict is used.
     registry = ModelRegistry(StubProvider(decisions=[]))
-    best = registry.resolve_tier("best")
+    best = registry.resolve_tier("fast")   # a model distinct from the planner's balanced one (a lane's "best" would be lifted to quality: best is a person's alone)
     provider = _PlanRecordingProvider(
         decisions=[{"met": False, "reason": "still missing the summary"}],
         raise_for_models=[best])
-    orch = _orch(provider, config=OrchestratorConfig(verify_tier="best"))
+    orch = _orch(provider, config=OrchestratorConfig(verify_tier="fast", planner_tier="balanced"))
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is False
     assert error is None
@@ -85,12 +85,12 @@ def test_verify_goal_falls_back_on_unusable_verdict_too():
         {"unexpected": "shape"},                 # best-tier reply: unusable
         {"met": True, "reason": "fine"},         # planner-tier retry: usable
     ])
-    orch = _orch(provider, config=OrchestratorConfig(verify_tier="best"))
+    orch = _orch(provider, config=OrchestratorConfig(verify_tier="fast", planner_tier="balanced"))
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
     assert error is None
     registry = ModelRegistry(provider)
-    assert provider.plan_models == [registry.resolve_tier("best"),
+    assert provider.plan_models == [registry.resolve_tier("fast"),
                                     registry.resolve_tier("balanced")]
 
 
@@ -124,7 +124,7 @@ def test_verify_goal_error_text_carries_the_real_exception_message():
     # When the verifier call itself raises, the returned error must carry the actual exception
     # message (not just the class name), so callers can surface WHY verification failed.
     registry = ModelRegistry(StubProvider(decisions=[]))
-    best = registry.resolve_tier("best")
+    best = registry.resolve_tier("fast")   # a model distinct from the planner's balanced one (a lane's "best" would be lifted to quality: best is a person's alone)
     balanced = registry.resolve_tier("balanced")
     provider = _PlanRecordingProvider(decisions=[], raise_for_models=[best, balanced])
     orch = _orch(provider)

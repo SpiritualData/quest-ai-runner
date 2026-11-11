@@ -268,7 +268,7 @@ class PersonaResolverConfig:
     # Step 4: what to do with an id the registry does not know.
     auto_register: bool = False
     cache_dir: Optional[str] = None
-    judge_tier: str = "fast"
+    judge_tier: str = ""
 
 
 # --- slug + skill-file helpers (auto-registration) ------------------------------
@@ -447,7 +447,7 @@ def _judge_model(provider: Any, tier: str) -> str:
     """Resolve the judge's model by TIER (never a hardcoded id). Falls back to the tier name."""
     try:
         from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-        return ModelRegistry(provider).resolve_tier(tier or "fast")
+        return ModelRegistry(provider).resolve_role("select-a-rep.judge", tier)
     except Exception:  # noqa: BLE001 — an unresolvable registry must not stop the judge
         return tier or "fast"
 

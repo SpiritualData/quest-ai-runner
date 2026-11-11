@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, List
 
 from esoi import implementation
 
+from hubofhubs.api import role_tiers
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import ORDER
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 from quest_ai_runner.the_self.assembler.hub import make_provider
 from quest_ai_runner.the_body.configuration.config_support import _AUTO_DEEP_RUNNER, _log
@@ -173,6 +175,11 @@ def apply_hub_hard_tier(cfg: RunnerConfig, declared: List[str], choose: Any, *, 
             DEFAULT_AUTO_DEEP_LADDER, default_rung_key)
         hard = choose(declared, difficulty="hard")
         if hard is None or getattr(hard, "kind", "") != "hard" or hard.provider != "anthropic" or not hard.tier:
+            return
+        if ORDER.get(role_tiers.normalise(hard.tier), 0) > ORDER["balanced"]:
+            # Deep work starts on balanced (the tier table's main_session role) and best is a person's or the structure watch's alone: a measured
+            # preference for a higher tier is a recommendation to the person, who can set it on the task, not a default start.
+            _log.info("deep runner: the hub measured the %s tier best for hard work; hard work still starts on balanced unless the person or task sets a tier", hard.tier)
             return
         model = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None).resolve_tier(hard.tier)
         ladder = [m for m in (cfg.orchestrator.deep_model_ladder or []) if m] or list(DEFAULT_AUTO_DEEP_LADDER)
@@ -448,7 +455,7 @@ def _resolve_anticipation_refiner(cfg: RunnerConfig):
         registry = ModelRegistry(provider, fallback=cfg.model_fallback or None)
 
         def refiner(candidates, recent_texts):
-            model = registry.resolve_tier("balanced")
+            model = registry.resolve_role("select-context.anticipation")
             prompt = build_refresh_prompt(candidates, recent_texts)
             raw = provider.answer(
                 [{"role": "user", "content": prompt}], model=model,

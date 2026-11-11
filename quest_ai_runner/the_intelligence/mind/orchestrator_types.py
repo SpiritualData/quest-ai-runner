@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import DEFAULT_DIFFICULTY_MODELS
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEFAULT_PLANNER_PROMPT_PROFILE
 from hubofhubs.api import DeepResult
@@ -103,7 +104,9 @@ class OrchestratorConfig:
     # for the input) and, if unmet, regenerates with steering — up to this many attempts. Only
     # engages when a GuidanceProvider is wired (there is a quality bar to check). 1 = no verify-retry.
     answer_goal_max_iterations: int = 2
-    planner_tier: str = "balanced"  # routing tier: balanced catches misclassifications haiku misses
+    # Every ``*_tier`` default below is its call's tier from the hub's role table (``tier_for_call``); a lane's explicit setting (QAR_PLANNER_TIER and the
+    # like) is passed as ``requested`` to ``resolve_role`` and applied under the guards, so no default here names a tier.
+    planner_tier: str = tier_for_call("route-a-message.planner")
     # Per-step planner-view leaning (see DEFAULT_PLANNER_* above). The full ``gathered`` is always
     # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
     planner_recent_full: int = DEFAULT_PLANNER_RECENT_FULL
@@ -154,7 +157,7 @@ class OrchestratorConfig:
     # request) is NOT behind this switch: it only replaces text that looked like an ask but created nothing.
     interim_replies: bool = False
     # The tier a milestone progress turn writes its deliverable on (QAR_MILESTONE_WRITER_TIER overrides it); the structured judgments stay on the cheap tier.
-    milestone_writer_tier: str = "fast"
+    milestone_writer_tier: str = tier_for_call("milestone-progress.deliverable")
     # A milestone deliverable is made through the harness the ESOI cascade selected for work (the deep agent): inline when the deployment runs deep work
     # inline, as a background task when it queues it (the turn acknowledges). Off, or with no deep runner wired, the in-turn writer and depth loop make it.
     milestone_work_on_deep_harness: bool = True
@@ -174,7 +177,7 @@ class OrchestratorConfig:
     # them relative to it, and the folder itself as "the working folder" (the hub's machine path helper). Empty = nothing hidden.
     private_path_roots: List[str] = field(default_factory=list)
     planner_cascade: bool = False
-    planner_cascade_tier: str = "balanced"
+    planner_cascade_tier: str = tier_for_call("route-a-message.cascade-review")
     # WHICH DECISIONS get reviewed. A comma list of confidence levels ("low", "low,medium") and
     # of actions written "action:read". The default is the ACTION signal, not confidence, because
     # self-reported confidence was measured and did not work: a cheap planner answered "high" on
@@ -203,7 +206,7 @@ class OrchestratorConfig:
     # write review). Needs a deep runner and a store; inert otherwise.
     recipe_deep: bool = True
     planner_reach_judge: bool = False
-    planner_reach_judge_tier: str = "balanced"
+    planner_reach_judge_tier: str = tier_for_call("claim-reach.reach-judge")
     # The judge starts at the top of run(), concurrently with request understanding and context
     # assembly, and the first plan only COLLECTS it. This is how long that collect may wait before
     # planning proceeds without a verdict (exactly as with the judge off). It bounds a stuck judge;
@@ -260,7 +263,7 @@ class OrchestratorConfig:
     # REPLY CHECK (the hub's Decision Check, ``decision_check/reply_views.py``): before the reply is sent, independent cheap-tier views hold it to what the turn read and
     # to the actions it executed, and only a span an independent call confirms is rewritten or removed. Off until its measured result says it pays.
     reply_check: bool = False
-    reply_check_tier: str = "fast"
+    reply_check_tier: str = tier_for_call("reply-check.view")
     reply_check_max_calls: int = 40            # a runaway guard only: confirmations of every flagged span run on top of it, every call on the fast tier
     reply_check_mistakes_path: str = ""      # where the reply check's confirmed-but-removed spans are kept as mistake records for the learning loop; "" keeps none
     # LAST-RESORT DEEP RUN: when the turn's goal verdict is definitively NOT met and no deep run
@@ -294,7 +297,7 @@ class OrchestratorConfig:
     # the tier delta on ONE small call whose inputs are already hard-capped (~12.5k chars). Spend
     # the strong model on judgment, keep the cheap tiers for gathering. Empty string falls back to
     # ``planner_tier`` (the previous behavior).
-    verify_tier: str = "balanced"
+    verify_tier: str = tier_for_call("verify-goal.verdict")
     # INTENT-DIRECTIVE JUDGE: the FALLBACK for a turn whose planner gave no usable ``user_intent``
     # verdict (the planner's structured verdict decides every other turn for free, on the call it
     # already makes). ONE structured LLM call judges the message instead of guessing. This is a
@@ -302,7 +305,7 @@ class OrchestratorConfig:
     # cheaper "balanced" tier. The call is hard-timeout-guarded (``intent_judge_timeout_seconds()``)
     # and falls back to "not a directive" on any failure/timeout/parse miss, so it can never block
     # the turn.
-    intent_judge_tier: str = "balanced"
+    intent_judge_tier: str = tier_for_call("judge-a-decision.intent-directive")
     # Before a tool call that CHANGES something runs on a person's question-shaped message, the intent judge is asked once whether
     # it orders a change; "no" refuses the call back to the planner (a "how do I add a habit?" is answered, not done).
     # None or a failed judgment lets the call through. Off with False.
@@ -315,7 +318,7 @@ class OrchestratorConfig:
     # on hold. "balanced" buys the judgment that distinguishes an instruction ABOUT THE WORK (held)
     # from a release OF THE MODE (exit), on ONE small call that only ever runs while the latch is
     # held. Fail-safe: any failure/timeout/parse miss HOLDS (see judge_brainstorm_release).
-    mode_release_tier: str = "balanced"
+    mode_release_tier: str = tier_for_call("judge-a-decision.mode-release")
     # EXECUTION MODE for this run, supplied by the CONSUMER per run (the orchestrator is stateless
     # about it; the consumer owns the latch and persists it wherever its conversation state lives).
     #   * "normal" (default): today's behavior, byte-for-byte.
@@ -406,7 +409,7 @@ class OrchestratorConfig:
     # (zero overseer calls, no events, no threads). The overseer NEVER raises: any failure degrades
     # to "proceed" (do nothing).
     overseer: bool = True
-    overseer_tier: str = "quality"       # the tier the overseer model resolves to
+    overseer_tier: str = tier_for_call("watch-a-run.overseer")       # the tier the overseer model resolves to (the hub resolves it by this name)
     overseer_every_steps: int = 1        # consult once every N plan steps (>= overseer_min_step)
     overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)
     overseer_min_step: int = 1           # earliest plan step (1-based) the overseer may run
@@ -525,7 +528,7 @@ class OrchestratorConfig:
     explain_answer: bool = False
     # The tier the explanation call resolves to. This is a summary of a turn that already happened,
     # not a gate on its outcome (that is verify_tier), so it gets the cheap tier.
-    explain_tier: str = "fast"
+    explain_tier: str = tier_for_call("explain-an-answer.how-i-got-this")
     # LINK GUARD (see hubofhubs.critique.link_guard): every terminal reply is scanned and no link the guard
     # could not verify reaches the reader. A model writes plausible, wrong URLs; a reader who taps
     # one and lands nowhere stops trusting the real links too. ON by default because sending a

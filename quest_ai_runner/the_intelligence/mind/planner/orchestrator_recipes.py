@@ -40,7 +40,7 @@ class RecipesMixin:
 
     def _recipe_fill_args(self, prompt: str) -> Dict[str, Any]:
         """The ONE small model call a non-exact recipe replay makes (fast tier, structured)."""
-        model = self.registry.resolve_tier("fast")
+        model = self.registry.resolve_role("replay-known-operations.fill-args")
         provider = self.get_provider_for_model(model)
         kwargs: Dict[str, Any] = {"model": model, "tool_schema": RECIPE_ARGS_TOOL}
         if provider_call_accepts_tier(provider.plan):

@@ -149,7 +149,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                  update_engine: Optional[UpdateEngine] = None,
                  lane_user_id: Optional[str] = None,
                  judge: Optional[Callable[[str], str]] = None,
-                 now: Optional[Callable[[], datetime]] = None):
+                 now: Optional[Callable[[], datetime]] = None,
+                 structure_watch: Optional[Callable[[str, bool], Any]] = None):
         self._client = client
         # The account this lane authenticates as (RunnerConfig.lane_user_id), stamped as the
         # assignee of every task this pass creates. WHY (incident 2026-09-20): a created task with
@@ -164,6 +165,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # prompt -> raw text; used to pick a new goal's assignee and to judge AI handoff. None keeps
         # the deterministic behaviour (and skips the handoff pass).
         self._judge = judge
+        # ``watch(quest_id, dry_run)``: the hub's structure watch over the quest, once per run (see ``autopilot_structure_watch.watch_quest``); None leaves it off.
+        self._structure_watch = structure_watch
         self._team_id = team_id or ""
         # Which team a given quest's work belongs on, for a lane that serves several teams
         # (RunnerConfig.team_ids). ``None`` -- the default, and what every existing consumer gets
@@ -246,6 +249,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             if not quest_id:
                 continue
             label = _quest_label(quest, quest_id)
+            if self._structure_watch is not None:
+                self._structure_watch(quest_id, dry_run)      # proposals only, through decision requests; never an edit
             team = self._team_for(quest_id)
             if team not in budget_by_team:
                 budget_by_team[team] = (

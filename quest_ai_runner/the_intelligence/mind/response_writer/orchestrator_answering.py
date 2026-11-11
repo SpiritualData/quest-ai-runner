@@ -6,7 +6,7 @@ The hub holds the flow (grounded answer, sub-question fan-out, post-work synthes
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from hubofhubs.api import AnswerKit, AnsweringMixin as HubAnsweringMixin
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import (
@@ -57,7 +57,16 @@ class AnsweringMixin(HubAnsweringMixin):
 
     answer_kit = QAR_ANSWER_KIT
 
-    _answer_model = HubAnsweringMixin.answer_model
+    def _answer_model(self, plan: Any, default_tier: str = "", hint: Optional[str] = None) -> str:
+        """The model a reply is written on: the ``answer.response`` role of the tier table (at least balanced). Only a person's explicit tier (``hint``: a chat
+        setting or a task's tier) can raise it; the planner's own ``model_tier`` and the caller's ``default_tier`` no longer pick a tier."""
+        return self.registry.resolve_role("answer.response", hint)
+
+    def _deep_model(self, plan: Any, hint: Optional[str] = None) -> str:
+        """The model a deep run starts from: the ``deep-run.session`` role (balanced by default). A person's or task's explicit tier (``hint``) wins; the
+        planner's own ``model_tier`` never picks the tier of the work."""
+        return self.registry.resolve_role("deep-run.session", hint)
+
     _grounded_answer = HubAnsweringMixin.grounded_answer
     _synthesize_after_deep = HubAnsweringMixin.synthesize_after_deep
     _synthesize_after_queued = HubAnsweringMixin.synthesize_after_queued
@@ -68,10 +77,10 @@ class AnsweringMixin(HubAnsweringMixin):
         a chat; no style is the engineering shape. The style is a structured fact of the request's origin, never read from words."""
         if report_style != REPORT_STYLE_PERSON:
             return super().synthesize_task_report(request, deep_output, **kwargs)
-        transcript, rep_preamble, tier = kwargs.get("transcript", ""), kwargs.get("rep_preamble"), kwargs.get("tier", "balanced")
+        transcript, rep_preamble, tier = kwargs.get("transcript", ""), kwargs.get("rep_preamble"), kwargs.get("tier")
         try:
             return self.synthesize_after_deep(
-                request, prior_answer="", deep_output=deep_output, transcript=transcript, model=self.registry.resolve_tier(tier),
+                request, prior_answer="", deep_output=deep_output, transcript=transcript, model=self.registry.resolve_role("answer.task-report", tier),
                 rep_preamble=rep_preamble, prompt_template=SYNTHESIZE_PERSON_REPORT_PROMPT)
         except Exception:  # noqa: BLE001  a report rewrite must never break task reporting
             self.answer_kit.log.warning("person report synthesis failed; using raw output", exc_info=True)

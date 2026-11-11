@@ -71,7 +71,7 @@ DESCRIBE_PROMPT = (
 )
 
 DESCRIBE_IMAGE_SPEC = register(PromptSpec(
-    id="describe-an-attachment.image", solution="quest-requests",
+    id="describe-an-attachment.image", solution="describe-an-attachment",
     metric="metric-describe-an-attachment", tier="caller", cache_layer="none",
     template=DESCRIBE_PROMPT,
 ))
@@ -501,8 +501,8 @@ class VisionDescription:
     read as text. The model is the one the ``tier`` resolves to on that seat."""
     REQUIRES = ()     # the model it is handed
 
-    def __init__(self, model: ModelCalling, tier: str = "balanced") -> None:
+    def __init__(self, model: ModelCalling, tier: str = "") -> None:
         self.model, self.tier = model, tier
 
     def prepare(self, attachments: Optional[List[Dict[str, Any]]]) -> PreparedAttachments:
-        return prepare_attachments(attachments, model=ModelRegistry(self.model).resolve_tier(self.tier), provider=self.model)
+        return prepare_attachments(attachments, model=ModelRegistry(self.model).resolve_role("describe-an-attachment.image", self.tier), provider=self.model)

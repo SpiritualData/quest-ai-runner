@@ -968,7 +968,7 @@ def test_submit_oversee_retries_degraded_consult_at_planner_tier():
     TierRoutedOverseerProvider.__init__(
         provider, fail_model=best,
         fallback_raw={"signal": "redirect", "hint": "focus on refunds", "reason": "drift"})
-    orch = _orch(provider, StubRetrieval(), config=OrchestratorConfig(overseer=True))
+    orch = _orch(provider, StubRetrieval(), config=OrchestratorConfig(overseer=True, overseer_tier="quality", planner_tier="balanced"))
     with ThreadPoolExecutor(max_workers=1) as ex:
         pending = orch._submit_oversee(ex, user_message="u", step=1, plan=None, gathered=[],
                                        started=time.monotonic(), gate=False)
@@ -988,7 +988,7 @@ def test_submit_oversee_no_duplicate_retry_when_tiers_resolve_to_same_model():
     TierRoutedOverseerProvider.__init__(
         provider, fail_model=balanced, fallback_raw={"signal": "proceed"})
     orch = _orch(provider, StubRetrieval(),
-                 config=OrchestratorConfig(overseer=True, overseer_tier="balanced"))
+                 config=OrchestratorConfig(overseer=True, overseer_tier="balanced", planner_tier="balanced"))
     with ThreadPoolExecutor(max_workers=1) as ex:
         pending = orch._submit_oversee(ex, user_message="u", step=1, plan=None, gathered=[],
                                        started=time.monotonic(), gate=False)

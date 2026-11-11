@@ -8,3 +8,5 @@ the_intelligence/mind/planner/orchestrator_planning.py::PlanningMixin.cascade_re
 the_intelligence/mind/planner/orchestrator_planning.py::PlanningMixin.judge_reach
 the_intelligence/mind/planner/orchestrator_recipes.py::RecipesMixin._recipe_fill_args
 the_consciousness/terminal/interactive_session_persona.py::_resolve_persona_from_corpus
+the_intelligence/critical_thinking/decision_check/reply_views.py::model_ask
+the_intelligence/mind/planner/orchestrator_understanding.py::UnderstandingMixin.cheap_decision

@@ -106,7 +106,7 @@ so there is one set of switches and not two:
 | `QAR_DEEP_REVIEW_INTERVAL_SECONDS` | seconds between LLM liveness reviews of a running deep run (default 300, 0 = off); it stops a run only if stalled, out of tokens or blocked |
 | `QAR_DEEP_MODELS` | the goal loop's escalation ladder (lives on `OrchestratorConfig`) |
 | `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` turns off the automatic starting model (on by default, see below) |
-| `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `haiku`, `sonnet`, `sonnet`) |
+| `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `sonnet` for all three: deep work starts on balanced) |
 | `QAR_DEEP_MAX_TURNS` | hard per-attempt turn cap (`OrchestratorConfig.deep_max_turns`, default 30) |
 | `QAR_DEEP_TOOLS`, `QAR_DEEP_SETTING_SOURCES`, `QAR_DEEP_STRICT_MCP`, `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS`, `QAR_DEEP_MAX_BUDGET_USD` | the lean launch of the deep worker (`--tools`, `--setting-sources`, `--strict-mcp-config`, `--exclude-dynamic-system-prompt-sections`, `--max-budget-usd`), the same flags the chat provider already uses; each is a parameter of `SubprocessConfig.launch` (`core/deep_launch.py`) and unset adds no flag, so the default launch is unchanged. The turn cap is `QAR_DEEP_MAX_TURNS` |
 | `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief), preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
@@ -142,7 +142,7 @@ planner rates the deep work on the call it already makes (`deep_difficulty`: `si
 trivial mechanical work such as a lookup, reformatting or a short status read; `normal` otherwise
 and whenever it is unsure; `hard` for multi-file code, architecture, ambiguous research, or
 outward-facing and irreversible work). The run STARTS on that difficulty's model
-(`OrchestratorConfig.deep_difficulty_models`, defaults `haiku` / `sonnet` / `sonnet`) and the goal
+(`OrchestratorConfig.deep_difficulty_models`, defaults `sonnet` for every difficulty) and the goal
 loop still escalates up the ladder on a not-met goal: the configured ladder when set, otherwise
 `haiku,sonnet,opus`. The strongest model is deliberately an escalation rung, not a starting point,
 so hard work is not paid for twice by default; set `QAR_DEEP_MODEL_HARD=opus` if you want it. A
@@ -481,3 +481,24 @@ immediately. That thread is **owned**, not fire-and-forget: it walks the corpus 
 - Declarative persona routing → [Personas](personas.md)
 - Plug in a non-file source or a different model → [Implementing adapters](adapters.md)
 - Run it as a service → [Deployment](deployment.md)
+
+
+## Which tier each model call runs on
+
+Every model call names a role of the hub's role table (`hubofhubs.api.role_tiers`, `role_tiers.csv`), and the table gives the tier; `CALL_ROLES`
+in `the_world/model_plumbing/model_tier_chooser/call_roles.py` says which role each Quest AI Runner call is, and
+`ModelRegistry.resolve_role(call, requested)` returns the model. No call site names a tier and no code names a model.
+
+The rule for the table: **a role sits above fast only by the owner's policy or by a measured result.** Each row carries its evidence mark,
+`measured: <case or result row>` or `owner's policy, unmeasured`. The unmeasured rows above fast are the list of what to measure next, and a
+measured result can move a row up or down. Guards in code: classification is never above fast; a response a person reads is never below
+balanced (only a person's explicit tier raises it); deep work starts on balanced unless the person or task sets a tier; `best` is reached only by
+a person's or task's explicit tier or by the `structure-watch` role.
+
+Defaults per tier come from the hub's tier chooser (its metric over public evaluations, cost and speed). A deployment keeps a model out of those
+defaults with `QAR_EXCLUDED_MODELS` (comma-separated fragments of model ids, for example `opus`): a tier whose model matches steps down to the
+next lower tier's model, while a `QAR_MODEL_<TIER>` pin or a model a person names on a task is still honored. Nothing is excluded unless set.
+
+To see where the money goes: `quest-ai-runner spend-by-role --log <call log> --days 7` (the call log is `QAR_CALL_LOG_PATH`) prints calls, tokens,
+cost and share of the total per role and tier, with the evidence mark of every role above fast. It is read only and uses the per-call log the runner
+already keeps; a call made with no registered prompt spec shows as `(untagged)`.

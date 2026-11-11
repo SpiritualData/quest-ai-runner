@@ -55,6 +55,14 @@ def failover_models(providers: Mapping[str, Any], primary: Any, pins: Mapping[st
     return found
 
 
+def excluded_models_from_environment(env: Optional[Mapping[str, str]] = None) -> tuple:
+    """The model-name fragments a deployment never wants a tier to resolve to, from ``QAR_EXCLUDED_MODELS`` (comma separated, matched
+    case-insensitively anywhere in a model id). A tier whose model is excluded steps down to the next lower tier's model; a pin
+    (``QAR_MODEL_<TIER>``) or a model a person names on a task is still honored. Unset means nothing is excluded."""
+    raw = (env if env is not None else os.environ).get("QAR_EXCLUDED_MODELS") or ""
+    return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
 def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
     """The prepaid-credit rows the hub's tier selector counts, from ``QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD`` (the monthly allowance, in
     USD) and ``QAR_ANTHROPIC_CREDIT_VALUE`` (0 to 1: what a credit is worth if not used here; unset means face value, 1). Unset

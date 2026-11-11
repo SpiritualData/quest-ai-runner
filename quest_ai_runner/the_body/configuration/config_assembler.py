@@ -200,7 +200,7 @@ def _resolve_context_assembler_base(
         keyword = FileContextStore(
             cards_dir, repo_root=root, auto_bootstrap=False,
             provider=cfg.model_provider,
-            model=_registry.resolve_tier("balanced"),
+            model=_registry.resolve_role("index-by-meaning.queries"),
             # Source-agnostic card content: built-in file/note resolvers, plus the data-backed types
             # (collection/conversation/chat_thread/query) from resolvable retrieval adapters and any
             # consumer-injected ``cfg.reference_resolvers``.
@@ -235,7 +235,7 @@ def _resolve_context_assembler_base(
         turn_store = TurnContextStore(
             turns_dir=turns_dir,
             provider=cfg.model_provider,
-            model=_registry.resolve_tier("balanced"),
+            model=_registry.resolve_role("index-by-meaning.queries"),
             origin=keyword.origin_id(),
         )
 
@@ -403,7 +403,7 @@ def _resolve_context_assembler_base(
         # Resolve a balanced-tier model for the bootstrap LLM calls.
         from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
         registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
-        bootstrap_model = registry.resolve_tier("balanced")
+        bootstrap_model = registry.resolve_role("label-context-cards.bootstrap")
         _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
                              provider=cfg.model_provider, model=bootstrap_model, notify=notify,
                              card_repository=_card_repository)
@@ -424,7 +424,7 @@ def _resolve_context_assembler_base(
             # cards (AUTO-UPDATE). Never raises: errors in seed_source() are swallowed
             # by VectorContextAssembler._maybe_seed().
             # Resolve the query model tier to a full model ID (not a bare tier name like "haiku")
-            query_model = registry.resolve_tier("fast")
+            query_model = registry.resolve_role("select-context.bm25-queries")
             # MOUNT MODE: the card arm may only see points of the stores this lane actually reads
             # (its own plus its readable mounts). The vector server answers anyone who can reach
             # it, so this payload filter is the fence; see adapters/card_store_fence.py.
@@ -454,7 +454,7 @@ def _resolve_context_assembler_base(
             # drops/reranks cards across arms and prunes their content items (content stays verbatim).
             # Uses the balanced tier (filtering/judgment work). Falls back to the mechanical merge
             # when no provider is wired or anything fails.
-            consolidate_model = registry.resolve_tier("balanced")
+            consolidate_model = registry.resolve_role("select-context.consolidate")
             file_assembler = HybridContextAssembler(
                 keyword=keyword,
                 vector=vector,

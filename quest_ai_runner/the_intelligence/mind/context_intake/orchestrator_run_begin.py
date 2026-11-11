@@ -296,7 +296,7 @@ class RunBeginMixin:
         # is overridable by the consumer via cfg.narration_system_prompt.
         narrator = Narrator(
             provider=self.provider,
-            model=self.registry.resolve_tier("fast"),   # the quick ack is written at the fast tier (a tier, never a model name)
+            model=self.registry.resolve_role("narrate-a-turn.first-beat"),   # the first line a person reads: at least balanced, from the tier table
             emit=emit,
             persona=rep_preamble or "",
             transcript_tail=transcript,
@@ -1207,7 +1207,7 @@ class RunBeginMixin:
         rs.native_blocks: List[Dict[str, Any]] = []
         if attachments:
             from quest_ai_runner.the_intelligence.mind.context_intake.attachments import prepare_attachments
-            answer_model = self.registry.resolve_tier(rs.model_hint or "sonnet")
+            answer_model = self.registry.resolve_role("answer.response", rs.model_hint)
             prepared = prepare_attachments(
                 attachments,
                 model=answer_model,

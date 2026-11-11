@@ -698,7 +698,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         try:
             registry = self._orch.registry
             hint = str(task.get("model") or "")
-            model = registry.resolve_tier(hint if registry.is_tier_name(hint) else "balanced")
+            model = registry.resolve_role("draft-a-metric.value", hint if registry.is_tier_name(hint) else None)
             context_view = self._build_context_view(task.get("goal_id"), task.get("quest_id"), None, rep_id=task.get("assignee_rep_id"),
                                                     related_goal_id=task.get("related_goal_id"), with_updates=True)
             drafted = MetricDraft(self._client, self._orch.provider, model).run(task, task_id, quest_id, context_view)

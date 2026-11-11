@@ -464,6 +464,7 @@
    "verdict": "UNMEASURED"
   },
   "modules": {
+   "call_roles": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles",
    "deep_model_selection": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection",
    "model_registry": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry",
    "usage_limit": "quest_ai_runner.the_world.model_plumbing.model_tier_chooser.usage_limit"
@@ -548,6 +549,7 @@
   },
   "modules": {
    "autopilot_gates": "quest_ai_runner.the_intelligence.proactivity.autopilot_gates",
+   "autopilot_routines": "quest_ai_runner.the_intelligence.proactivity.autopilot_routines",
    "live_pass": "quest_ai_runner.the_intelligence.critical_thinking.area"
   }
  },

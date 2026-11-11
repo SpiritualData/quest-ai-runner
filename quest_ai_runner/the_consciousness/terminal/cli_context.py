@@ -53,7 +53,7 @@ def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
             provider = cfg.model_provider
             if provider is not None:
                 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-                filter_model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
+                filter_model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_role("select-context.rank-files")
         except Exception as e:  # noqa: BLE001 -- fall back to keyword-only card selection
             log.warning("card selection: could not set up LLM relevance filter, "
                         "falling back to keyword/IDF only: %s", e)
@@ -362,8 +362,8 @@ def _cmd_bootstrap(args, log) -> int:
     # classification, so a deployment may reasonably run it on "fast").
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
-    tier = os.getenv("QAR_BOOTSTRAP_TIER", "balanced").strip() or "balanced"
-    model = os.getenv(f"QAR_MODEL_{tier.upper()}") or registry.resolve_tier(tier)
+    tier = (os.getenv("QAR_BOOTSTRAP_TIER") or "").strip()
+    model = os.getenv(f"QAR_MODEL_{tier.upper()}" if tier else "QAR_MODEL_FAST") or registry.resolve_role("label-context-cards.bootstrap", tier)
 
     start_time = time.time()
     n = store.bootstrap(root=corpus, provider=provider, model=model)

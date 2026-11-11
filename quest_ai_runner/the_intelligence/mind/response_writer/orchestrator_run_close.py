@@ -106,7 +106,7 @@ class RunCloseMixin:
                     deep_difficulty=getattr(rs.plan, "deep_difficulty", None),
                     deep_difficulty_reason=getattr(rs.plan, "deep_difficulty_reason", None),
                 )
-                deep_model = self._answer_model(deferred_plan, "balanced", hint=rs.model_hint)
+                deep_model = self._deep_model(deferred_plan, hint=rs.model_hint)
                 # Queued deployments pin deferred work to the registered queue runner (reserved
                 # key), so the classifier can never re-route it to an inline runner.
                 _deferred_runner = (self.deep_runners.get(DEFERRED_RUNNER_KEY)
@@ -521,7 +521,7 @@ class RunCloseMixin:
                                 deep_difficulty=getattr(rs.plan, "deep_difficulty", None),
                                 deep_difficulty_reason=getattr(rs.plan, "deep_difficulty_reason", None),
                             )
-                            _rem_model = self._answer_model(_rem_plan, "balanced", hint=rs.model_hint)
+                            _rem_model = self._deep_model(_rem_plan, hint=rs.model_hint)
                             _rem_res = self._run_deep(_rem_plan, rs.user_message, _rem_model,
                                                       emit=emit, rep_preamble=rep_preamble,
                                                       exec_record=exec_record, gathered=gathered,
@@ -635,7 +635,7 @@ class RunCloseMixin:
                             deep_difficulty=getattr(rs.plan, "deep_difficulty", None),
                             deep_difficulty_reason=getattr(rs.plan, "deep_difficulty_reason", None),
                         )
-                        _esc_model = self._answer_model(_esc_plan, "balanced", hint=rs.model_hint)
+                        _esc_model = self._deep_model(_esc_plan, hint=rs.model_hint)
                         esc_facts_before = len(getattr(exec_record, "facts", None) or [])
                         _esc_res = self._run_deep(
                             _esc_plan, rs.user_message, _esc_model,

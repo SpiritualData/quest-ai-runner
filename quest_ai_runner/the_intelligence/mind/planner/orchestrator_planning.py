@@ -204,7 +204,7 @@ class PlanningMixin:
         if reach_text:
             prompt = prompt + "\n\n" + reach_text
         model = ((getattr(self.cfg, "planner_model", "") or "").strip()
-                 or self.registry.resolve_tier(self.cfg.planner_tier))
+                 or self.registry.resolve_role("route-a-message.planner", self.cfg.planner_tier))
         provider = self.get_provider_for_model(model)
         # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback above): the
         # persona rides in the stable L1 head, the context view is the stable L2 layer, and the
@@ -242,7 +242,7 @@ class PlanningMixin:
             # retry on the planner tier, instead of every step silently taking the fail-safe.
             log.warning("Pinned planner model %r returned no decision; retrying on tier %r",
                         model, self.cfg.planner_tier)
-            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            model = self.registry.resolve_role("route-a-message.planner", self.cfg.planner_tier)
             provider = self.get_provider_for_model(model)
             plan_kwargs["model"] = model
             if not provider_call_accepts_layers(provider.plan):
@@ -430,7 +430,7 @@ class PlanningMixin:
         summary = (getattr(self.cfg, "read_reach_summary", "") or "").strip()
         verdict = None
         try:
-            model = self.registry.resolve_tier(self.cfg.planner_reach_judge_tier)
+            model = self.registry.resolve_role("claim-reach.reach-judge", self.cfg.planner_reach_judge_tier)
             provider = self.get_provider_for_model(model)
             kwargs: Dict[str, Any] = {"model": model, "tool_schema": REACH_JUDGE_TOOL}
             if provider_call_accepts_tier(provider.plan):
@@ -468,7 +468,7 @@ class PlanningMixin:
         digest = build_review_digest(
             user_message, decision, PLANNER_DECISION_RUBRIC, context_view, gathered,
             max_chars=self.cfg.planner_cascade_digest_chars, web_configured=self.web is not None)
-        model = self.registry.resolve_tier(self.cfg.planner_cascade_tier)
+        model = self.registry.resolve_role("route-a-message.cascade-review", self.cfg.planner_cascade_tier)
         review_provider = self.get_provider_for_model(model)
         review_kwargs: Dict[str, Any] = {"model": model, "tool_schema": REVIEW_TOOL}
         if provider_call_accepts_tier(review_provider.plan):

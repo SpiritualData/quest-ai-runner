@@ -154,75 +154,84 @@ class Router(Keyed):
 LIVE = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 
 
-def measurement(tier, provider, model, cases=20, passed=19, tokens_in=1_000_000, tokens_out=200_000):
-    return dict(provider=provider, model=model, cases=cases, passed=passed, tokens_in=tokens_in, tokens_out=tokens_out)
-
-
-@pytest.fixture
-def measured(monkeypatch):
-    """Plant tier measurements (the registry ships none); returns the dict to fill, ``{hub tier: [arm]}``."""
+def plant(monkeypatch, **choices):
+    """Plant the hub's answer: ``choose`` returns each given tier as ``(provider, model)`` with stage ``public`` (a ``held:`` prefix marks a held
+    default), limited to the providers asked for, as the hub does. Returns the list of keyword arguments the hub was called with."""
     from hubofhubs.api import tiers as hub_tiers
-    rows = {}
-    monkeypatch.setattr(hub_tiers, "measured_arms", lambda folder=None: {t: list(a) for t, a in rows.items()})
-    return rows
+    seen = []
+
+    def choose(**kwargs):
+        seen.append(kwargs)
+        out = {}
+        for tier, (provider, model) in choices.items():
+            stage = "held" if provider.startswith("held:") else "public"
+            provider = provider.replace("held:", "")
+            if provider in (kwargs.get("available") or ()):
+                out[tier] = dict(arm=(provider, model), stage=stage)
+        return out
+    monkeypatch.setattr(hub_tiers, "choose", choose)
+    return seen
 
 
-def test_with_no_measurement_the_live_list_decides_and_fast_and_balanced_stay_distinct():
-    """The registry ships no measurement, so the selector changes nothing: fast stays the newest haiku and balanced the newest
-    sonnet, so stepping down a tier when a quota runs out still lands on a different model."""
+def test_with_the_hubs_public_choice_the_live_list_is_replaced_and_fast_and_balanced_stay_distinct():
+    """The hub's public choice for the providers this lane can call is the default of each tier; fast and balanced stay different models, so
+    stepping down a tier when a quota runs out still lands on a different model."""
+    from hubofhubs.api import tiers as hub_tiers
     anthropic = Keyed("k", LIVE)
-    top = ModelRegistry(Router(LIVE, anthropic=anthropic, gemini=Keyed("k"))).top_models()
-    assert top == bucket_top(LIVE)
-    assert top["fast"] != top["balanced"] and top["fast"] == "claude-haiku-5-5" and top["balanced"] == "claude-sonnet-5-5"
-    assert ModelRegistry(Router(LIVE, anthropic=anthropic)).selected() == {}
+    registry = ModelRegistry(Router(LIVE, anthropic=anthropic, gemini=Keyed("k")))
+    picks = hub_tiers.choose(available={"anthropic", "gemini"})
+    top = registry.top_models()
+    for tier in ("fast", "balanced", "quality", "best"):
+        assert top[tier] == picks[tier]["arm"][1] and picks[tier]["stage"] == "public"
+    assert top["fast"] != top["balanced"]
 
 
-def test_no_key_and_no_measurement_still_resolves_every_tier():
+def test_no_key_still_resolves_every_tier():
     assert ModelRegistry(Router([], anthropic=Keyed(None))).top_models() == dict(DEFAULT_FALLBACK_TOP)
 
 
-def test_a_pin_wins_over_the_live_list_and_over_a_measured_winner(measured):
-    measured["cheap"] = [measurement("cheap", "anthropic", "claude-haiku-5-5")]
+def test_a_pin_wins_over_the_live_list_and_over_the_hubs_choice(monkeypatch):
+    plant(monkeypatch, fast=("anthropic", "claude-haiku-5-5"))
     pinned = ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE)), fallback={"fast": "gemini-3.1-flash-lite", "balanced": "gemini-3.6-flash"})
     assert pinned.resolve_tier("fast") == "gemini-3.1-flash-lite" and pinned.resolve_tier("balanced") == "gemini-3.6-flash"
     assert pinned.lower_tier("best") == "quality"
 
 
-def test_a_measured_winner_replaces_the_live_list_for_its_tiers_only(measured):
-    measured["cheap"] = [measurement("cheap", "gemini", "gemini-3.1-flash-lite"), measurement("cheap", "anthropic", "claude-haiku-5-5", passed=10)]
-    measured["mid"] = [measurement("mid", "anthropic", "claude-sonnet-5-5")]
-    registry = ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), gemini=Keyed("k")))
-    top = registry.top_models()
-    assert top["fast"] == "gemini-3.1-flash-lite"
-    assert top["balanced"] == "claude-sonnet-5-5" and top["fast"] != top["balanced"]      # the cheap winner is not reused for balanced
-    assert top["quality"] == "claude-sonnet-5-5"
+def test_the_hubs_public_choice_replaces_the_live_list_for_its_tiers_only(monkeypatch):
+    plant(monkeypatch, fast=("gemini", "gemini-3.1-flash-lite"), balanced=("anthropic", "claude-sonnet-5-5"))
+    top = ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), gemini=Keyed("k"))).top_models()
+    assert top["fast"] == "gemini-3.1-flash-lite" and top["balanced"] == "claude-sonnet-5-5"
+    assert top["quality"] == bucket_top(LIVE)["quality"]                       # no hub choice for quality: the live list decides
 
 
-def test_a_measurement_below_the_bars_is_not_applied(measured):
-    measured["cheap"] = [measurement("cheap", "gemini", "gemini-3.1-flash-lite", cases=3, passed=3)]          # too few cases
-    assert ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), gemini=Keyed("k"))).selected() == {}
-    measured["cheap"] = [measurement("cheap", "gemini", "gemini-3.1-flash-lite", cases=20, passed=10)]         # passes too few
-    assert ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), gemini=Keyed("k"))).selected() == {}
+def test_balanced_is_dropped_when_it_equals_fast_so_a_step_down_changes_model(monkeypatch):
+    plant(monkeypatch, fast=("anthropic", "claude-haiku-5-5"), balanced=("anthropic", "claude-haiku-5-5"))
+    registry = ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE)))
+    assert registry.selected() == {"fast": "claude-haiku-5-5"} and registry.top_models()["balanced"] == "claude-sonnet-5-5"
 
 
-def test_deepseek_is_picked_only_when_it_is_measured_and_priced(measured, monkeypatch):
+def test_a_held_default_from_the_hub_is_not_applied(monkeypatch):
+    plant(monkeypatch, fast=("held:anthropic", "claude-haiku-5-5"))
+    assert ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE))).selected() == {}
+
+
+def test_a_key_alone_does_not_switch_provider_unless_the_hubs_public_choice_names_it_and_it_is_priced():
     from hubofhubs.api import tiers as hub_tiers
     registry = lambda: ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), deepseek=Keyed("k")))
-    assert registry().selected() == {} and registry().top_models()["fast"] == "claude-haiku-5-5"      # a key alone changes nothing
-    real = hub_tiers.registry.read
-    monkeypatch.setattr(hub_tiers.registry, "read", lambda name, folder=None: real(name, folder) + (
-        [dict(provider="deepseek", model="deepseek-chat", input_per_mtok="0.01", output_per_mtok="0.02", source_url="https://example.org",
-              checked_on="2026-10-30")] if name == "tier_prices.csv" else []))
-    assert registry().selected() == {}                                                                  # priced but not measured
-    measured["cheap"] = [measurement("cheap", "deepseek", "deepseek-chat")]
-    assert registry().selected() == {}                              # the hub's floor: the held arm is unmeasured, so nothing switches
-    measured["cheap"].append(measurement("cheap", "anthropic", "claude-haiku-5-5", passed=15))
-    assert registry().top_models()["fast"] == "deepseek-chat"
+    picks = hub_tiers.choose(available={"anthropic", "deepseek"})
+    names = {t: picks[t]["arm"] for t in ("fast", "balanced", "quality", "best")}
+    chosen = registry().selected()
+    assert set(chosen.values()) <= {model for _, model in names.values()}         # only what the hub's own choice names
+    assert ("deepseek-flash" in chosen.values()) == any(a[0] == "deepseek" for a in names.values())      # deepseek appears only where the hub names it
+    prices = hub_tiers.registry.read("tier_prices.csv")
+    for arm in names.values():
+        assert hub_tiers.rates(prices, *arm) is not None                           # an arm the hub names is priced
 
 
-def test_a_provider_with_no_key_is_never_offered(measured):
-    measured["cheap"] = [measurement("cheap", "gemini", "gemini-3.1-flash-lite")]
+def test_a_provider_with_no_key_is_never_offered(monkeypatch):
+    seen = plant(monkeypatch, fast=("gemini", "gemini-3.1-flash-lite"))
     assert ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE), gemini=Keyed(None))).selected() == {}
+    assert seen and seen[0]["available"] == {"anthropic"}
 
 
 def test_resolve_tier_never_raises_when_the_selector_does(monkeypatch):
@@ -235,11 +244,7 @@ def test_resolve_tier_never_raises_when_the_selector_does(monkeypatch):
     assert registry.resolve_tier("fast") == "claude-haiku-5-5" and registry.selected() == {}
 
 
-def test_the_credit_source_reaches_the_selector(measured, monkeypatch):
-    from hubofhubs.api import tiers as hub_tiers
-    seen = []
-    real = hub_tiers.choose
-    monkeypatch.setattr(hub_tiers, "choose", lambda **kw: seen.append(kw.get("credits")) or real(**kw))
-    own = [dict(provider="anthropic", balance="", allowance="50", credit_value="")]
-    ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE)), credits=own).selected()
-    assert seen == [own]
+def test_the_selector_is_asked_only_with_the_providers_the_lane_can_call(monkeypatch):
+    seen = plant(monkeypatch)
+    ModelRegistry(Router(LIVE, anthropic=Keyed("k", LIVE))).selected()
+    assert seen == [{"available": {"anthropic"}}]

@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, register, render_prompt
 
 register(PromptSpec(
-    id="label-context-cards.categorize-files", solution="label-context-cards",
+    id="label-context-cards.categorize-files", solution="cards-from-files",
     metric="metric-label-context-cards", tier="fast", cache_layer="none",
     inputs=("card_summaries", "file_list"), writes_text=False,
     template="""You have a list of files that were modified during code execution.
@@ -334,7 +334,7 @@ def categorize_files_with_llm(
         return {}
 
     # Resolve fast tier model from registry (not hardcoded)
-    fast_model = registry.resolve_tier("fast")
+    fast_model = registry.resolve_role("label-context-cards.categorize-files")
 
     # Build the card summaries for the LLM
     card_summaries = []

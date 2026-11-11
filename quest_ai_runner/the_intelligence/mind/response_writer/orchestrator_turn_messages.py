@@ -58,7 +58,7 @@ def write_progress(orch: Any, goal: str, receipts: Sequence[str], coverage: Any)
     try:
         prompt = render_prompt("reply-in-steps.interim-progress", goal=goal[:1000], receipts=record,
                                coverage=(line + "\n\n") if line else "")
-        model = orch.registry.resolve_tier(getattr(orch.cfg, "explain_tier", None) or "fast")
+        model = orch.registry.resolve_role("reply-in-steps.interim-progress")
         raw = plan_with_step(orch.get_provider_for_model(model), prompt, model=model, tool_schema=INTERIM_PROGRESS_TOOL,
                              step=STEP_SUMMARIZE)
         if isinstance(raw, str):

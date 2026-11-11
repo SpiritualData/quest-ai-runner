@@ -629,7 +629,7 @@ class RunLoopMixin:
                             # background task the turn acknowledges), else the deep runner the classifier picks, inline.
                             plan = PlanDecision(action="deep", goal=goal, deep_brief=brief, deep_target="other", deep_difficulty="complex",
                                                 rationale="the milestone's deliverable, made from its own solution's records")
-                            res = self._run_deep(plan, rs.user_message, self._answer_model(plan, "balanced", hint=rs.model_hint), emit=emit,
+                            res = self._run_deep(plan, rs.user_message, self._deep_model(plan, hint=rs.model_hint), emit=emit,
                                                  exec_record=exec_record, gathered=gathered, ctx_meta=rs._ctx_meta, runner_override=queue_runner,
                                                  user_ordered=True, run_control=rs.run_control, card_context=rs.card_context)
                             first = next(iter(getattr(res, "deep_results", None) or []), None)

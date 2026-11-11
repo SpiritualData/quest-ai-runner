@@ -130,7 +130,8 @@ class RoutinePass(WorkMixin):
 
     def __init__(self, client: Any, *, team_resolver: Optional[Callable[[str], str]] = None, team_id: str = "",
                  lane_user_id: Optional[str] = None, purposes: Optional[Mapping[str, RoutinePurpose]] = None,
-                 now: Optional[Callable[[], datetime]] = None):
+                 now: Optional[Callable[[], datetime]] = None, structure_watch: Optional[Callable[[str, bool], Any]] = None):
+        self._structure_watch = structure_watch      # the hub's structure watch over the quest, once per routine run (see ``autopilot_structure_watch``)
         self._client = client
         self._team_resolver = team_resolver
         self._team_id = team_id or ""
@@ -186,6 +187,8 @@ class RoutinePass(WorkMixin):
             if dry_run:
                 return RoutineOutcome(quest_id, name, "dry-run", f"refused: nothing is due for {purpose.name}")
             return self.refuse(quest_id, name, f"nothing is due for {purpose.name}", key, now)
+        if self._structure_watch is not None:
+            self._structure_watch(quest_id, dry_run)
         text = compose_routine_text(str(quest.get("outcome") or ""), routine, purpose, items, dry_run=dry_run)
         if dry_run:
             return RoutineOutcome(quest_id, name, "dry-run", f"would create one {purpose.name} task for {len(items)} due item(s)", items=items, text=text)

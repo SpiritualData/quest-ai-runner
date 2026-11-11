@@ -136,14 +136,14 @@ ASSIGNED_GOAL_JUDGE_SYSTEM = (
 
 GOAL_JUDGE_SPEC = register(PromptSpec(
     id="assist-a-terminal-session.goal-judge", solution="system-integrity",
-    metric="metric-assist-a-terminal-session", tier="balanced", cache_layer="head",
+    metric="metric-assist-a-terminal-session", tier="fast", cache_layer="head",
     template=ASSIGNED_GOAL_JUDGE_SYSTEM,
     output_schema={"ai_doable": "boolean", "confidence": "number 0 to 1", "reason": "one sentence"},
 ))
 
 ASK_CLASSIFY_SPEC = register(PromptSpec(
     id="assist-a-terminal-session.ask-classify", solution="system-integrity",
-    metric="metric-assist-a-terminal-session", tier="balanced", cache_layer="head",
+    metric="metric-assist-a-terminal-session", tier="fast", cache_layer="head",
     template=ASK_CLASSIFY_SYSTEM,
 ))
 
@@ -158,7 +158,7 @@ def _quest_model():
         provider = cfg.model_provider
         if provider is None:
             return None, None
-        return provider, ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
+        return provider, ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_role("assist-a-terminal-session.ask-classify")
     except Exception as e:  # noqa: BLE001 -- reconcile must still run without the model
         log.warning("model unavailable for reconcile judgements: %s", e)
         return None, None
@@ -189,7 +189,7 @@ class FastModelHelpers:
         self.model = model
 
     def judge_goal(self, goal: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        return judge_goal(self.model, ModelRegistry(self.model).resolve_tier("balanced"), goal)
+        return judge_goal(self.model, ModelRegistry(self.model).resolve_role("assist-a-terminal-session.goal-judge"), goal)
 
 
 def _goal_judge(quest_id: str, client):
@@ -616,7 +616,9 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # QAR_OVERSEER_TIER: the judge's model tier (default "quality": judgment is where the stronger
     # model pays; the digest keeps its token cost tiny regardless).
     if (os.getenv("QAR_OVERSEER_TIER") or "").strip():
-        cfg.orchestrator.overseer_tier = os.environ["QAR_OVERSEER_TIER"].strip().lower()
+        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
+        # The hub resolves this tier by name, so the guard is applied here: a lane's setting can move it but never to best.
+        cfg.orchestrator.overseer_tier = tier_for_call("watch-a-run.overseer", os.environ["QAR_OVERSEER_TIER"])
     if os.getenv("QAR_OVERSEER_MAX_SIGNALS"):
         try:
             cfg.orchestrator.overseer_max_signals = int(os.environ["QAR_OVERSEER_MAX_SIGNALS"])

@@ -12,6 +12,7 @@ from typing import Optional
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import EVENT_INTENT, EVENT_STATUS, EVENT_TOKENS, Mode
 from hubofhubs.api import ProgressEvent, evidence_text
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
 from quest_ai_runner.the_world.tools import tool_guards
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_state_block
@@ -81,13 +82,8 @@ class RunAnswerMixin:
             return text
 
     def regeneration_model(self, rs: SimpleNamespace) -> str:
-        """The model a corrected reply is written with: one tier up when the reply was written on the fast tier, else unchanged (a pinned model id stays pinned)."""
-        try:
-            tier = (rs.model_hint or rs.plan.model_tier or "").strip().lower()
-            if self.registry.is_tier_name(tier) and self.registry.resolve_tier(tier) == self.registry.resolve_tier("fast"):
-                return self.registry.resolve_tier("balanced")
-        except Exception:  # noqa: BLE001 -- choosing a model must never break the turn
-            pass
+        """The model a corrected reply is written with: the reply role's model again (a reply is never below balanced, so there is no tier to move up from;
+        a pinned model id stays pinned)."""
         return rs.model
 
     def _run_route_action(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
@@ -313,7 +309,7 @@ class RunAnswerMixin:
             # A planner_only note (a repeated read) is not something gathered.
             if (gathered_content(gathered) or rs.brainstorm_active) and not must_execute:
                 emit.status("Wrapping up with a best-effort answer…")
-                rs.model = self._answer_model(rs.plan, "balanced", hint=rs.model_hint)
+                rs.model = self._answer_model(rs.plan, hint=rs.model_hint)
                 # The wrap-up reply ENDS the turn, and the answerer is not otherwise told so: a
                 # 2026-08-24 dissertation run closed with "What I'm doing now: spec all nine
                 # gaps..." and was reported done having specced none, because a budget-capped
@@ -376,7 +372,7 @@ class RunAnswerMixin:
                 goal_text = rs.plan.goal or f"Complete: {rs.user_message[:100]}"
                 emit.emit(ProgressEvent(type=EVENT_INTENT, text=f"Executing: {goal_text}"))
                 emit.status("Running now…")
-            rs.res = self._run_deep(rs.plan, rs.user_message, self._answer_model(rs.plan, "balanced", hint=rs.model_hint),
+            rs.res = self._run_deep(rs.plan, rs.user_message, self._deep_model(rs.plan, hint=rs.model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=rs.quality_standards,
                                  pending_inputs=rs.pending_inputs, model_hint=rs.model_hint,
@@ -412,9 +408,9 @@ class RunAnswerMixin:
             return finish(rs.res)
 
         # answer
-        rs.model = self._answer_model(rs.plan, "sonnet", hint=rs.model_hint)
+        rs.model = self._answer_model(rs.plan, hint=rs.model_hint)
         # Tell the task feed which tier wrote this reply and the model it resolved to.
-        reply_tier = rs.model_hint or rs.plan.model_tier or "sonnet"
+        reply_tier = tier_for_call("answer.response", rs.model_hint)
         emit.emit(ProgressEvent(
             type=EVENT_STATUS,
             text=f"Replying with the {reply_tier} tier ({rs.model}).",
@@ -597,7 +593,7 @@ class RunAnswerMixin:
                         deep_difficulty=getattr(rs.plan, "deep_difficulty", None),
                         deep_difficulty_reason=getattr(rs.plan, "deep_difficulty_reason", None),
                     )
-                    _ov_model = self._answer_model(_ov_plan, "balanced", hint=rs.model_hint)
+                    _ov_model = self._deep_model(_ov_plan, hint=rs.model_hint)
                     ov_facts_before = len(getattr(exec_record, "facts", None) or [])
                     _ov_res = self._run_deep(
                         _ov_plan, rs.user_message, _ov_model,

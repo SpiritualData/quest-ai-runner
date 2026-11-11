@@ -81,8 +81,8 @@ def wire_web_research(cfg: Any) -> None:
             if provider is not None and callable(supports):
                 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry as _WReg
                 _wreg = _WReg(provider, fallback=cfg.model_fallback or None)
-                web_tier = (os.getenv("WEB_SEARCH_TIER") or "balanced").strip() or "balanced"
-                web_model = _wreg.resolve_tier(web_tier)
+                web_tier = (os.getenv("WEB_SEARCH_TIER") or "").strip()
+                web_model = _wreg.resolve_role("web-search.research", web_tier)
                 if web_model and supports(web_model):
                     from quest_ai_runner.the_world.tools.web_search.provider_web_search_adapter import ProviderWebSearchAdapter
                     from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import (
@@ -174,7 +174,7 @@ def default_guidance(cfg: Any) -> Any:
         guidance = UniversalGuidanceProvider(
             dynamic_guidance_loader=dynamic_loader,
             provider=cfg.model_provider,
-            model=_g_registry.resolve_tier("balanced"),
+            model=_g_registry.resolve_role("select-context.guidance"),
             manager_factory=GuidanceCardManager,
         )
 

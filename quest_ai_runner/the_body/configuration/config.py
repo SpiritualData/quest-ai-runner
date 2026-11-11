@@ -576,7 +576,7 @@ class RunnerConfig:
     # is not provisioned yet starts clean instead of failing.
     mcp_drive: Optional[Dict[str, Any]] = None
     # Model tier for that judgment. "balanced" per this repo's tier guidance for filtering.
-    context_updates_relevance_tier: str = "balanced"
+    context_updates_relevance_tier: str = ""
     # Whether the engine puts an ADMISSION-judged source's items (today: inbound_mail) through
     # "is this a real person writing to us, not bulk or automated mail" before a run or the
     # account's own asks record ever sees them (see runner/context_updates.llm_admission_judge).
@@ -588,7 +588,7 @@ class RunnerConfig:
     # Model tier for the admission judgment. "fast", not "balanced": the header check already
     # removed what identifies itself as bulk mail for free, so this judge sees an already-narrowed
     # remainder and does not need the heavier tier a subject-matter judgment does.
-    context_updates_admission_tier: str = "fast"
+    context_updates_admission_tier: str = ""
     # Where the "already relayed onto Quest" record lives (see
     # runner/context_updates.RelayedItems). Left None, it sits beside state_path, same default the
     # watermarks and the feedback ledger already use.

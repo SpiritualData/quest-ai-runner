@@ -119,7 +119,7 @@ class CardsMixin:
                 if isinstance(c, dict) and c.get("id")
             }
 
-            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            model = self.registry.resolve_role("feed-context-sources.card-update", self.cfg.planner_tier)
             prompt = render_prompt("feed-context-sources.card-update", 
                 request=(request or "")[:2000],
                 executed=(executed or "")[:6000],

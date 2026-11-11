@@ -206,7 +206,7 @@ def test_executor_allowed_pin_is_kept():
     out = ex.execute({"id": "wm2", "text": "say hi", "deep_run_model": "haiku"})
     assert out.status == "done"
     registry = ModelRegistry(provider)
-    assert provider.answer_models == [registry.resolve_tier("fast"), registry.resolve_tier("haiku")]
+    assert provider.answer_models == [registry.resolve_tier("fast"), registry.resolve_tier("balanced")]   # a reply is never below balanced
 
 
 def test_executor_read_failure_restricts_nothing():

@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from esoi import implementation
 from hubofhubs.api import tiers as hub_tiers
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import LEGACY_TIER_ROLES, legacy_word_tier, tier_for_call
 from hubofhubs.api import newest_in_family, split_tokens
 from hubofhubs.api import ModelProvider
 
@@ -68,12 +69,13 @@ TIER_DOWNGRADE_ORDER = {
 }
 
 
-# Each tier QAR asks for, and the hub tier (cheap, mid, strong) whose selected arm serves it. Opus (strong) is never a default: it is
-# reachable only by an explicit pin.
-HUB_TIER_OF = {"fast": "cheap", "balanced": "cheap", "quality": "mid", "best": "mid"}
+# Each tier QAR asks for, and the hub tier that serves it: the hub's own four names (fast, balanced, quality, best), so a tier's default is the
+# chooser's public choice (the cheapest and fastest arm that clears the tier's minimum scores on public evaluations) and no model family is
+# excluded by rule here. A deployment keeps a model out of its defaults with QAR_EXCLUDED_MODELS or pins a tier with QAR_MODEL_<TIER>.
+HUB_TIER_OF = {"fast": "fast", "balanced": "balanced", "quality": "quality", "best": "best"}
 
-# The bars a measured arm must clear before it replaces what the live list gives: enough shared cases, and a pass rate that
-# would not make the answers worse. Below them nothing changes.
+# The bars QAR gives the hub's ``select`` and ``pick`` over measured arms (enough shared cases, and a pass rate that would not make the answers
+# worse). They no longer decide a tier's model: ``choose`` uses public evaluations only.
 TIER_MIN_CASES = 10
 TIER_MIN_PASS_RATE = 0.9
 
@@ -92,19 +94,54 @@ def set_credit_source(source) -> None:
     credit_source = source or no_credits
 
 
-def measured_pick(got: dict, min_pass_rate: float) -> bool:
-    """Whether the selector's pick for a tier came from a measurement that clears the bars (and not from a held default or the
-    cheapest price, which are preferences)."""
-    arm = tuple(got.get("arm") or ())
-    return bool(arm) and any((s["provider"], s["model"]) == arm and s.get("eligible") and s["pass_rate"] >= min_pass_rate
-                             for s in got.get("scored", []))
+def no_exclusions() -> tuple:
+    return ()
 
 
-def measured_picks(available: set, credits) -> Dict[str, str]:
-    """QAR tier -> model id for each tier whose hub pick is MEASURED; a tier with no measurement is absent, so the live list or the
-    pin decides it. Balanced is dropped when it would equal fast, so stepping down a tier on a quota error still changes model."""
-    picks = hub_tiers.choose(available=available, credits=credits, min_cases=TIER_MIN_CASES, min_pass_rate=TIER_MIN_PASS_RATE)
-    out = {t: picks[h]["arm"][1] for t, h in HUB_TIER_OF.items() if h in picks and measured_pick(picks[h], TIER_MIN_PASS_RATE)}
+# Model-name fragments a deployment never wants a tier to resolve to (``QAR_EXCLUDED_MODELS``, wired like the credit source). No model
+# family is excluded by rule here: the default of each tier is the hub chooser's measured pick, and a deployment that wants a model
+# kept out of its defaults says so in its own configuration. A pin or a model a person names is never filtered.
+excluded_source = no_exclusions
+
+
+def set_excluded_source(source) -> None:
+    global excluded_source
+    excluded_source = source or no_exclusions
+
+
+def drop_excluded(top: Dict[str, str], patterns) -> Dict[str, str]:
+    """``top`` with each tier whose model matches an excluded fragment stepped down to the nearest lower tier's model that does not
+    (a tier with nothing below it that is acceptable keeps its model: resolution never fails)."""
+    pats = [p for p in (patterns or ()) if p]
+    if not pats:
+        return dict(top)
+
+    def bad(model: Optional[str]) -> bool:
+        return any(p in str(model or "").lower() for p in pats)
+
+    out = dict(top)
+    order = ["best", "quality", "balanced", "fast"]
+    for index, tier in enumerate(order):
+        if tier in out and bad(out[tier]):
+            for lower in order[index + 1:]:
+                if lower in out and not bad(out[lower]):
+                    out[tier] = out[lower]
+                    break
+    return out
+
+
+def public_pick(got: Mapping[str, Any]) -> bool:
+    """Whether the hub's choice for a tier came from the public metric (an arm priced, current and clearing the tier's minimums), and not from a
+    held default or the cheapest price, which are preferences."""
+    return bool(got) and bool(got.get("arm")) and got.get("stage") == "public"
+
+
+def hub_picks(available: set) -> Dict[str, str]:
+    """QAR tier -> model id of the hub's public choice, only among the providers the lane can call; a tier with no public choice is absent, so the
+    live list or the pin decides it. A key alone never switches provider: the hub names an arm only when it is priced. Balanced is dropped when it
+    would equal fast, so stepping down a tier on a quota error still changes model."""
+    picks = hub_tiers.choose(available=available)
+    out = {t: picks[h]["arm"][1] for t, h in HUB_TIER_OF.items() if h in picks and public_pick(picks[h])}
     if out.get("balanced") and out.get("balanced") == out.get("fast"):
         del out["balanced"]
     return out
@@ -198,8 +235,8 @@ DEFAULT_FALLBACK_TOP = {
     "quality": "gemini-3.5-flash",
     "best": "claude-sonnet",  # family name, never a release: each provider resolves it to the newest
     # Sonnet (the CLI maps it to the `sonnet` alias, AnthropicProvider.resolve_model to the newest
-    # live id), so a new Sonnet release needs no edit here. Opus is never a default: it is reachable
-    # only by an explicit pin, never by tier resolution.
+    # live id), so a new Sonnet release needs no edit here. This is only the unmeasured last resort: the
+    # chooser's measured pick and a lane's pins or QAR_EXCLUDED_MODELS decide the rest.
 }
 
 
@@ -325,19 +362,17 @@ class ModelRegistry:
         self._selected_for: Optional[tuple] = None
 
     def selected(self) -> Dict[str, str]:
-        """tier -> model id the hub's tier selector (``hubofhubs.tiers.choose``) picked BY MEASUREMENT among the configured
-        providers. A tier with no measurement that clears the bars is absent: the live list or the pin decides it, as before. Never
-        raises: a failing selector leaves the live list in charge."""
+        """tier -> model id of the hub's public choice (``hubofhubs.tiers.choose``) among the configured providers. A tier with no public
+        choice is absent: the live list or the pin decides it. Never raises: a failing selector leaves the live list in charge."""
         try:
             names = configured_providers(getattr(self._provider, "providers", None) or self._providers)
-            credits = list(self._credits if self._credits is not None else credit_source())
-            key = (frozenset(names), repr(credits))
+            key = frozenset(names)
         except Exception:  # noqa: BLE001 -- resolve_tier never raises
             log.warning("tier selection skipped: could not read the providers or credits", exc_info=True)
             return {}
         if key != self._selected_for:
             try:
-                self._selected = measured_picks(names, credits) if names else {}
+                self._selected = hub_picks(names) if names else {}
             except Exception:  # noqa: BLE001 -- a bad registry file must not stop a lane from resolving a model
                 log.warning("tier selection skipped: the hub's selector failed", exc_info=True)
                 self._selected = {}
@@ -379,8 +414,9 @@ class ModelRegistry:
         if self._cache["source_id"] != cache_key or self._cache["top"] is None:
             self._cache["source_id"] = cache_key
             self._cache["top"] = bucket_top(all_models) if all_models else dict(DEFAULT_FALLBACK_TOP)
-        # A measured pick from the hub's selector replaces the live-list bucketing for its tier; an explicit pin still wins.
-        return {**self._cache["top"], **self.selected(), **self._user_overrides}
+        # The hub's public choice replaces the live-list bucketing for its tier; an explicit pin still wins.
+        chosen = drop_excluded({**self._cache["top"], **self.selected()}, excluded_source())
+        return {**chosen, **self._user_overrides}
 
     @staticmethod
     def is_tier_name(name: Optional[str]) -> bool:
@@ -393,7 +429,13 @@ class ModelRegistry:
         warning there). ``None``/blank is not a tier name: it is "unspecified".
         """
         n = (name or "").strip().lower()
-        return bool(n) and (n in TIERS or n in LEGACY_TIER_ALIASES)
+        return bool(n) and (n in TIERS or n in LEGACY_TIER_ALIASES or n in LEGACY_TIER_ROLES)
+
+    def resolve_role(self, call: str, requested: Optional[str] = None) -> str:
+        """The model for the model call ``call``: its role's tier from the hub's table (``call_roles.tier_for_call``), with an explicit tier
+        from the person, the task or the lane applied under the guards (classification never above fast, a response never below balanced,
+        best only where a person asked or for the daily structure call). A call with no role raises ``KeyError``."""
+        return self.resolve_tier(tier_for_call(call, requested))
 
     def resolve_tier(self, tier: Optional[str]) -> str:
         """Resolve a tier name to the current top model id. Unknown/None -> "balanced". Never raises.
@@ -410,6 +452,8 @@ class ModelRegistry:
         # Check if it's an old provider-specific tier name and map it to the semantic one
         if t in LEGACY_TIER_ALIASES:
             t = LEGACY_TIER_ALIASES[t]
+        elif t in LEGACY_TIER_ROLES:   # a domain word (science) reads as the tier of its role in the hub's table
+            t = legacy_word_tier(t) or t
         # If still not in TIERS, default to balanced, and say so ONCE per distinct name, so the
         # substitution is discoverable without spamming a line on every call that repeats it.
         if t not in TIERS:
@@ -428,17 +472,18 @@ class ModelRegistry:
 
 @implementation("model-tier-chooser", "model_registry")
 class RegistryTiers:
-    """The hub's tier selector asked with QAR's bars. ``choose`` returns ``{hub tier: {arm, reason, scored}}`` for the providers
-    given; ``measured_picks`` is the same answer reduced to QAR's tiers, which ``ModelRegistry.selected`` applies to the live list."""
+    """The hub's tier selector. ``choose`` returns ``{hub tier: {arm, effort, reason, scored, stage}}`` for the providers given (public
+    evaluations only); ``hub_picks`` is the same answer reduced to QAR's tiers, which ``ModelRegistry.selected`` applies to the live list;
+    ``select`` ranks measured arms with QAR's bars."""
     REQUIRES = ()     # the hub's selector reads its registry files and nothing else
 
     def choose(self, folder: Any = None, available: Optional[Sequence[str]] = None,
                credits: Optional[Sequence[Mapping[str, str]]] = None, **bars: Any) -> Mapping[str, Any]:
-        return hub_tiers.choose(folder, available, credits, **{"min_cases": TIER_MIN_CASES, "min_pass_rate": TIER_MIN_PASS_RATE, **bars})
+        return hub_tiers.choose(folder, available, credits, **bars)
 
     def select(self, tiers: Mapping[str, Sequence[Mapping[str, Any]]], prices: Sequence[Mapping[str, str]],
                credits: Sequence[Mapping[str, str]] = (), defaults: Any = None, **bars: Any) -> Mapping[str, Any]:
         return hub_tiers.select(tiers, prices, credits, defaults, **{"min_cases": TIER_MIN_CASES, "min_pass_rate": TIER_MIN_PASS_RATE, **bars})
 
-    def measured_picks(self, available: Sequence[str], credits: Optional[Sequence[Mapping[str, str]]] = None) -> Dict[str, str]:
-        return measured_picks(set(available), credits or [])
+    def hub_picks(self, available: Sequence[str]) -> Dict[str, str]:
+        return hub_picks(set(available))

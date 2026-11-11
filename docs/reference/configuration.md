@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-244 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+246 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -40,7 +40,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_BOOTSTRAP_MAX_FILES` | Stop the bootstrap walk after this many files (unset = no limit). | `the_body/configuration/card_store_settings.py` | - |
 | `QAR_BOOTSTRAP_TIER` | Model tier used for bootstrap topic extraction (default balanced). | `the_consciousness/terminal/cli_context.py` | - |
 | `QAR_BOOTSTRAP_WORKERS` | Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only. | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_CALL_LOG_PATH` | Path of the JSON-lines call log where the runner persists every model call it makes, tagged with its prompt spec id (default: next to the usage file); production.py reads it to report average and maximum seconds, tokens and dollars per call. Read in quest_ai_runner/the_world/model_plumbing/spend/usage.py. | `the_world/model_plumbing/spend/usage.py` | - |
+| `QAR_CALL_LOG_PATH` | Path of the JSON-lines call log where the runner persists every model call it makes, tagged with its prompt spec id (default: next to the usage file); production.py reads it to report average and maximum seconds, tokens and dollars per call. Read in quest_ai_runner/the_world/model_plumbing/spend/usage.py. | `the_consciousness/terminal/cli_spend.py`, `the_world/model_plumbing/spend/usage.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_CANDIDATE_CASES_DIR` | A private folder outside any repository (default unset: nothing is recorded). When set, a turn that ended with an unmet goal, an empty reply or work pushed back to the person appends one JSON line to <dir>/poorly_answered_inputs/<case id>.jsonl, in the format of the evaluation output log, as a candidate case for a person to prioritise. | `the_consciousness/feedback_learning/candidate_cases.py` | - |
 | `QAR_CARDS_BACKEND` |  | `the_body/configuration/config_assembler.py` | `docs/how-to/context-card-stores.md` |
 | `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `the_body/configuration/config_context_index.py` | - |
@@ -105,6 +105,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
 | `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
 | `QAR_ENV_ID` |  | `the_body/configuration/cli_config.py`, `the_body/internal_context/card_store/quest_api_card_repository.py` | `.env.example`, `docs/how-to/context-card-stores.md` |
+| `QAR_EXCLUDED_MODELS` |  | `the_world/model_plumbing/vendor_model_caller/providers.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_EXPLAIN_ANSWER` |  | `the_body/configuration/cli_config.py` | `docs/explanation/answer-explanation.md` |
 | `QAR_EXPLAIN_TIER` |  | `the_body/configuration/cli_config.py` | `docs/explanation/answer-explanation.md` |
 | `QAR_FALLBACK_MODELS` | Ordered, comma separated model ids the router asks next, on any vendor, when a model has no credit, is over quota, times out or is down. Unset: one model per other configured vendor. | `the_world/model_plumbing/vendor_model_caller/providers.py` | - |
@@ -146,6 +147,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_MILESTONE_WRITER_TIER` | Model tier a milestone progress turn writes its deliverable on (default fast, overriding OrchestratorConfig.milestone_writer_tier); a measured arm, while the structured judgments stay on the cheap tier. | `the_intelligence/critical_thinking/esoi_application/milestone_facts.py` | - |
 | `QAR_MIN_FREE_MEMORY_MB` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MODEL_BACKEND` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` +1 | `.env.example`, `docs/how-to/adapters.md` |
+| `QAR_MODEL_FAST` |  | `the_consciousness/terminal/cli_context.py` | `docs/how-to/adapters.md` |
 | `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_NOTE_FLOOR_FRESH_MINUTES` | A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes. | `the_body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_NOTE_FLOOR_RELEVANCE_GATED` | 0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated. | `the_body/configuration/config_core_settings.py` | `.env.example` |

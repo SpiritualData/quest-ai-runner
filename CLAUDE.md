@@ -200,7 +200,7 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 
 **Always use `resolve_tier()` for the model: never hardcode a model name, and never call `list_models()[0]`** (that returns the first model from the Anthropic API which may not be routable by the current provider config).
 
-**Tier guidance:** use `"balanced"` for filtering/judgment tasks (Gemini Flash class), `"fast"` for cheap lookups. `"best"` for high-stakes reasoning. The `model_fallback` config maps these to real model IDs.
+**Tier guidance:** a call names its role (`resolve_role(call_id)`); the hub's role table gives the tier (`docs/how-to/writing-a-consumer.md`, "Which tier each model call runs on"). Classification is fast, a response a person reads is at least balanced, `"best"` only where a person set it or for `structure-watch`. The `model_fallback` config maps tiers to real model IDs.
 
 **JSON parsing:** LLM responses often include markdown fences. Never call `json.loads(raw)` directly: strip fences first with a helper like `_extract_json()` in `core/card_filter.py`.
 

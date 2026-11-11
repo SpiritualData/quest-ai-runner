@@ -202,7 +202,7 @@ class DeepModelsMixin:
         ladder: List[str] = [fallback] if fallback else []
         seen = {rung_key(m) for m in ladder}
         fallback_rank = claude_rank(fallback)
-        for tier in ("quality", "best"):
+        for tier in ("quality",):   # best is never an escalation rung: it is a person's explicit pin or the structure watch's alone
             try:
                 resolved = self.registry.resolve_tier(tier)
             except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
@@ -247,6 +247,8 @@ class DeepModelsMixin:
         so the caller keeps stepping the ladder instead. Never raises."""
         if not (tier or "").strip():
             return None
+        if tier.strip().lower() == "best":
+            tier = "quality"   # a verifier's escalation never reaches best: only a person's explicit pin does
         from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import _is_claude_model  # worker-runnable check
         try:
             resolved = self.registry.resolve_tier(tier)

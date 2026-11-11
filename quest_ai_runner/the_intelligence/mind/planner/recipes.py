@@ -529,6 +529,6 @@ def build_recipe_store_from_env(env: Optional[Dict[str, str]] = None) -> Optiona
 
 
 RECIPE_ARGS_SPEC = declare(
-    "replay-known-operations.fill-args", solution="planner",
+    "replay-known-operations.fill-args", solution="replay-known-operations",
     metric="metric-replay-known-operations", tier="fast", cache_layer="none",
     template=RECIPE_ARGS_PROMPT, output_schema=None)

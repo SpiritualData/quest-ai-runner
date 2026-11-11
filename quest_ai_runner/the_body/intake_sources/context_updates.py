@@ -547,7 +547,7 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
         # judge use the routed provider instead of a raw one that 404s on half the model ids.
         relevance_judge=(llm_relevance_judge(
             lambda: getattr(cfg, "model_provider", None),
-            tier=str(getattr(cfg, "context_updates_relevance_tier", "balanced") or "balanced"))
+            tier=str(getattr(cfg, "context_updates_relevance_tier", "") or ""))
             if (cfg is not None and getattr(cfg, "context_updates_judge_relevance", True))
             else None),
         # Same callable-not-provider reasoning as relevance_judge, and the same "on unless a
@@ -556,7 +556,7 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
         # the account's own asks record with no further filtering at all.
         admission_judge=(llm_admission_judge(
             lambda: getattr(cfg, "model_provider", None),
-            tier=str(getattr(cfg, "context_updates_admission_tier", "fast") or "fast"))
+            tier=str(getattr(cfg, "context_updates_admission_tier", "") or ""))
             if (cfg is not None and getattr(cfg, "context_updates_judge_admission", True))
             else None),
         first_look_days=int(getattr(cfg, "context_updates_first_look_days", FIRST_LOOK_DAYS) or

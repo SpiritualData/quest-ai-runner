@@ -258,6 +258,9 @@ def add_sync_quest_folder_command(sub) -> None:
                         help="do not write the quest's specification to ESOI_SPEC.md on a pull")
 
 
+from quest_ai_runner.the_consciousness.terminal.cli_spend import add_spend_command  # noqa: E402
+
+
 def add_doctor_command(sub) -> None:
     """The `doctor` subcommand."""
     doctor_p = sub.add_parser("doctor", help="check the hub assembly's environment (unmet requirements with their fix) and, "
@@ -347,6 +350,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cards_command(sub)
     add_sync_quest_folder_command(sub)
     add_doctor_command(sub)
+    add_spend_command(sub)
     add_poll_command(sub)
     add_lane_command(sub)
     add_channel_command(sub)

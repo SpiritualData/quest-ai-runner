@@ -36,6 +36,7 @@ from typing import Any
 from hubofhubs.api import prompt_spec as hub
 
 from quest_ai_runner.the_world.model_plumbing.spend.usage import tag_spec
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import CALL_ROLES, tier_for_call
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import TIERS
 
 CACHE_LAYERS = hub.CACHE_LAYERS
@@ -45,8 +46,24 @@ with_no_em_dash_rule = hub.with_no_em_dash_rule
 US_SPELLING_RULE = hub.US_SPELLING_RULE
 with_us_spelling_rule = hub.with_us_spelling_rule
 
-# The hub's spec class bound to QAR's tier names and usage log: each render tags the model call that follows.
-PromptSpec = hub.bind_spec_class(TIERS, tag_spec)
+HubBoundSpec = hub.bind_spec_class(TIERS, tag_spec)
+
+
+class PromptSpec(HubBoundSpec):
+    """The hub's spec class bound to QAR's tier names and usage log (each render tags the model call that follows), with the tier policy applied at
+    declaration: a spec's id is its call id in ``call_roles.CALL_ROLES``, and the tier table gives its tier. ``tier="caller"`` means the table decides
+    (the spec then holds that tier); a named tier must equal the table's, so a prompt can never declare a tier the policy does not give it."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.id not in CALL_ROLES:   # a spec outside the library's own calls (a consumer's, a test's); ``tests/test_call_roles.py`` requires a role for every library spec
+            return
+        wanted = tier_for_call(self.id)
+        if self.tier == CALLER_TIER:
+            object.__setattr__(self, "tier", wanted)
+        elif self.tier != wanted:
+            raise ValueError(f"prompt spec {self.id!r} declares tier {self.tier!r} but the tier table gives its role {wanted!r}; "
+                             f"change the table (the hub's role_tiers.csv) or the call's role in call_roles.CALL_ROLES, not the spec")
 
 REGISTRY = hub.PromptRegistry(PromptSpec)
 SPECS_BY_ID = REGISTRY.specs

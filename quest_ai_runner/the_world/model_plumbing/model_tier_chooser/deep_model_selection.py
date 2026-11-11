@@ -30,12 +30,14 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 DIFFICULTIES: Tuple[str, ...] = ("simple", "normal", "hard")
 
 # Claude Code aliases, weak -> strong, up to the balanced tier (sonnet). Aliases (not dated ids) so
-# the keyless CLI path runs them. Opus is never a default; a deployment that wants it on the ladder
+# the keyless CLI path runs them. A deployment that wants a stronger rung on the ladder
 # sets QAR_DEEP_MODELS explicitly.
 DEFAULT_AUTO_DEEP_LADDER: Tuple[str, ...] = ("haiku", "sonnet")
 
+# Deep work starts on the balanced tier whatever the planner rated (the tier table's ``main_session`` role: "balanced is the default for deep
+# work"); the cheaper rung is reached only by an operator's explicit QAR_DEEP_MODEL_SIMPLE or a person's or task's own pin.
 DEFAULT_DIFFICULTY_MODELS: Dict[str, str] = {
-    "simple": "haiku",
+    "simple": "sonnet",
     "normal": "sonnet",
     "hard": "sonnet",
 }

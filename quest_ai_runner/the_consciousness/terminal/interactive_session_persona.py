@@ -139,7 +139,7 @@ def _resolve_persona_from_corpus(
         return None
     try:
         from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-        model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("fast")
+        model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_role("select-a-rep.judge")
     except Exception:  # noqa: BLE001 — resolution is best-effort, never blocks startup
         return None
 

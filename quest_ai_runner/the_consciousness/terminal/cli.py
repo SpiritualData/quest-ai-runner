@@ -445,6 +445,7 @@ from quest_ai_runner.the_consciousness.terminal.cli_quest import (
 from quest_ai_runner.the_consciousness.terminal.cli_cards import run_cards_command
 from quest_ai_runner.the_consciousness.terminal.cli_poll import _cmd_channel, _cmd_poll
 from quest_ai_runner.the_consciousness.terminal.cli_doctor import _cmd_doctor
+from quest_ai_runner.the_consciousness.terminal.cli_spend import _cmd_spend_by_role
 from quest_ai_runner.the_consciousness.terminal.cli_lane import run_lane_command
 from quest_ai_runner.the_world.tools.file_reading.cli_serve_files import _cmd_serve_files
 from quest_ai_runner.the_consciousness.terminal.cli_parser import _build_parser
@@ -488,6 +489,7 @@ def main(argv=None) -> int:
         "channel": _cmd_channel,
         "serve-files": _cmd_serve_files,
         "doctor": _cmd_doctor,
+        "spend-by-role": _cmd_spend_by_role,
         "lane": run_lane_command,
     }
     # No subcommand (the legacy flat flags) and `poll` both run the poller.

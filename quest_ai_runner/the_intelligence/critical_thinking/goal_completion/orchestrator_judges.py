@@ -285,9 +285,9 @@ class JudgesMixin:
         # best tier resolves to a model the wired provider cannot serve must not silently lose the
         # goal/claims gate it had before.
         models: List[str] = []
-        for tier in (self.cfg.verify_tier or self.cfg.planner_tier, self.cfg.planner_tier):
+        for call, tier in (("verify-goal.verdict", self.cfg.verify_tier), ("route-a-message.planner", self.cfg.planner_tier)):
             try:
-                resolved = self.registry.resolve_tier(tier)
+                resolved = self.registry.resolve_role(call, tier)
             except Exception:  # noqa: BLE001 — an unresolvable tier just drops out of the ladder
                 continue
             if resolved and resolved not in models:
@@ -479,7 +479,7 @@ class JudgesMixin:
         )
         written: Optional[Dict[str, Any]] = None
         try:
-            model = self.registry.resolve_tier(self.cfg.explain_tier or "fast")
+            model = self.registry.resolve_role("explain-an-answer.how-i-got-this", self.cfg.explain_tier)
         except Exception:  # noqa: BLE001 -- an unresolvable tier just means no prose half
             model = None
         if model:
@@ -509,7 +509,7 @@ class JudgesMixin:
         if not (reply or "").strip() or not (account or "").strip():
             return None
         try:
-            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+            model = self.registry.resolve_role("judge-a-decision.landed-work-denial", self.cfg.intent_judge_tier)
         except Exception as e:  # noqa: BLE001
             log.warning("Landed-work denial judge: could not resolve tier %r (%s)",
                         self.cfg.intent_judge_tier, e)
@@ -554,7 +554,7 @@ class JudgesMixin:
         if not (reply or "").strip() or not (records or "").strip():
             return None
         try:
-            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+            model = self.registry.resolve_role("judge-a-decision.found-constraint", self.cfg.intent_judge_tier)
             if not model:
                 return None
             prompt = render_prompt("judge-a-decision.found-constraint",
@@ -596,7 +596,7 @@ class JudgesMixin:
         """
         fallback_reason = "no directive assumed (LLM judgment unavailable)"
         try:
-            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+            model = self.registry.resolve_role("judge-a-decision.intent-directive", self.cfg.intent_judge_tier)
         except Exception as e:  # noqa: BLE001 — an unresolvable tier just means no judgment
             log.warning("Intent-directive judge: could not resolve tier %r (%s); assuming no directive.",
                        self.cfg.intent_judge_tier, e)
@@ -695,7 +695,7 @@ class JudgesMixin:
             placed = self.quest_placement.place(user_message, previous_message, home_quest_id)
             return next((qid for qid in placed.get("picked") or [] if qid in known), None)
         try:
-            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+            model = self.registry.resolve_role("judge-a-decision.quest-ranking", self.cfg.intent_judge_tier)
         except Exception as e:  # noqa: BLE001
             log.warning("Quest selection: could not resolve tier %r (%s); using the home quest.",
                         self.cfg.intent_judge_tier, e)
@@ -758,7 +758,7 @@ class JudgesMixin:
         if not message:
             return False, "empty message; holding the brainstorm latch"
         try:
-            model = self.registry.resolve_tier(self.cfg.mode_release_tier)
+            model = self.registry.resolve_role("judge-a-decision.mode-release", self.cfg.mode_release_tier)
         except Exception as e:  # noqa: BLE001 — an unresolvable tier must not release the latch
             log.warning("Brainstorm-release judge: could not resolve tier %r (%s); HOLDING the latch.",
                        self.cfg.mode_release_tier, e)

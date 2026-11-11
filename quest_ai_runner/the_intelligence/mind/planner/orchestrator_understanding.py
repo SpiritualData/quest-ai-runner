@@ -37,7 +37,7 @@ class UnderstandingMixin:
         if len(s) <= _CONCISE_DECISION_LIMIT:
             return s
         try:
-            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            model = self.registry.resolve_role("ground-in-intent.condense-decision", self.cfg.planner_tier)
             out = answer_with_reasoning(
                 self.provider,
                 [{"role": "user", "content": render_prompt("ground-in-intent.condense-decision", text=s[:6000])}],
@@ -157,7 +157,7 @@ class UnderstandingMixin:
 
         At most THREE LLM calls. Never raises (the caller also guards)."""
         store = self.conversation_store
-        model = self.registry.resolve_tier(self.cfg.planner_tier)
+        model = self.registry.resolve_role("ground-in-intent.resolve-request", self.cfg.planner_tier)
 
         def _resolve(ctx_text: str) -> str:
             prompt = render_prompt("ground-in-intent.resolve-request", 
@@ -219,7 +219,7 @@ class UnderstandingMixin:
         deliverable. Raises when the call fails: the caller surfaces that."""
         def write(prompt: str) -> str:
             return answer_with_reasoning(
-                self.provider, [{"role": "user", "content": prompt}], model=self.registry.resolve_tier(tier), step=STEP_UNDERSTAND,
+                self.provider, [{"role": "user", "content": prompt}], model=self.registry.resolve_role("milestone-progress.deliverable", tier), step=STEP_UNDERSTAND,
                 system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
         return write
 
@@ -227,7 +227,7 @@ class UnderstandingMixin:
         """One cheap-tier model call that answers a narrow question about text the caller supplies (who owns a milestone, which goal is the same work), in the words asked for.
         Raises when the call fails: the caller surfaces that, it does not guess."""
         return answer_with_reasoning(
-            self.provider, [{"role": "user", "content": prompt}], model=self.registry.resolve_tier("fast"), step=STEP_UNDERSTAND,
+            self.provider, [{"role": "user", "content": prompt}], model=self.registry.resolve_role("milestone-progress.judgment"), step=STEP_UNDERSTAND,
             system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
 
     def _derive_goal_condition(
@@ -268,8 +268,8 @@ class UnderstandingMixin:
         from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import decision_excerpt
         gist = decision_excerpt(user_message)
         try:
-            model = self.registry.resolve_tier("fast")
-            prompt = render_prompt("ground-in-intent.derive-goal-condition", 
+            model = self.registry.resolve_role("ground-in-intent.derive-goal-condition")
+            prompt = render_prompt("ground-in-intent.derive-goal-condition",
                 user_message=gist, now_block=_format_now_block(now))
             out = answer_with_reasoning(
                 self.provider, [{"role": "user", "content": prompt}], model=model,

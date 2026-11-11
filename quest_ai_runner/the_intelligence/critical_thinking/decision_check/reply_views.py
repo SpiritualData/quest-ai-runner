@@ -113,7 +113,7 @@ def grounded_text(text: str, evidence: str, ask: Callable[[str], str], max_calls
 
 def model_ask(orch: Any, tier: str) -> Optional[Callable[[str], str]]:
     """The one-argument model call of the cheap tier through the orchestrator's own provider, or None when the tier cannot be resolved."""
-    model = orch.registry.resolve_tier(tier)
+    model = orch.registry.resolve_role("reply-check.view", tier)
     if not model:
         return None
     provider = orch.get_provider_for_model(model)

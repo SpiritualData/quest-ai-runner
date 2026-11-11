@@ -17,7 +17,7 @@ from hubofhubs.api import ModelProvider
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, register, render_prompt
 
 register(PromptSpec(
-    id="label-context-cards.metadata", solution="label-context-cards",
+    id="label-context-cards.metadata", solution="cards-from-files",
     metric="metric-label-context-cards", tier="fast", cache_layer="none", inputs=("sources",),
     output_schema={"title": "string", "description": "string", "keywords": "list of strings"},
     template="""Given these knowledge sources that belong together in one card, generate metadata:

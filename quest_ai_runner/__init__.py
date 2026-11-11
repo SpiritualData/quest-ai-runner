@@ -32,6 +32,9 @@ _work_trace.set_word_rarity(lambda word: _word_idf(word) >= _MAX_IDF)
 from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import credits_from_environment as _credits_from_environment  # noqa: E402
 
 model_registry.set_credit_source(_credits_from_environment)
+from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import excluded_models_from_environment as _excluded_models_from_environment  # noqa: E402
+
+model_registry.set_excluded_source(_excluded_models_from_environment)
 # core reads no environment variable (S13): its tunables arrive as ``core.runtime_settings`` values,
 # resolved by the config layer from the live environment unless a RunnerConfig pins its own.
 from quest_ai_runner.the_body.configuration.config_core_settings import install_environment_backed_core as _install_core_env  # noqa: E402

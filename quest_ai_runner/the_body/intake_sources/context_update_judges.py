@@ -103,7 +103,7 @@ def llm_relevance_judge(provider_fn: Callable[[], Any], tier: str = "balanced"
             from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import _extract_json
             from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
             try:
-                model = ModelRegistry(provider).resolve_tier(tier or "balanced")
+                model = ModelRegistry(provider).resolve_role("feed-context-sources.relevance", tier)
             except Exception:  # noqa: BLE001 -- an unresolvable registry must not stop the judge
                 model = tier or "balanced"
             listed = "\n".join(
@@ -209,7 +209,7 @@ def llm_admission_judge(provider_fn: Callable[[], Any], tier: str = "fast"
             from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import _extract_json
             from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
             try:
-                model = ModelRegistry(provider).resolve_tier(tier or "fast")
+                model = ModelRegistry(provider).resolve_role("feed-context-sources.admission", tier)
             except Exception:  # noqa: BLE001 -- an unresolvable registry must not stop the judge
                 model = tier or "fast"
             listed = "\n".join(
@@ -241,7 +241,7 @@ def llm_admission_judge(provider_fn: Callable[[], Any], tier: str = "fast"
 
 RELEVANCE_SPEC = declare(
     "feed-context-sources.relevance", solution="feed-context-sources",
-    metric="metric-feed-context-sources", tier="balanced", cache_layer="none",
+    metric="metric-feed-context-sources", tier="fast", cache_layer="none",
     template=_RELEVANCE_PROMPT)
 ADMISSION_SPEC = declare(
     "feed-context-sources.admission", solution="feed-context-sources",

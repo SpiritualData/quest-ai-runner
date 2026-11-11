@@ -92,7 +92,7 @@ class PreflightMixin:
                            limits: str) -> Optional[Dict[str, Any]]:
         """The model's plan-sufficiency verdict as a dict, or None when it could not be had."""
         try:
-            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            model = self.registry.resolve_role("preflight.plan-sufficiency", self.cfg.planner_tier)
             provider = self.get_provider_for_model(model)
             prompt = render_prompt(
                 "preflight.plan-sufficiency", goal=(goal or "")[:1000],

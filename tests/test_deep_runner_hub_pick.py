@@ -90,7 +90,7 @@ def test_the_hubs_own_loop_runs_only_when_named(programs):
     from hubofhubs.api import choose_agent_arm
     from quest_ai_runner.the_world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner
     runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "hub_loop"}))
-    assert type(runner) is HubLoopRunner and HubLoopRunner.on_trial
+    assert type(runner) is HubLoopRunner
     assert runner.goal_settings().escalation_marker                 # QAR's settings, not the hub's empty defaults
     for difficulty in ("", "hard"):                                  # the hub's real standings never hand a consumer a harness on trial
         assert choose_agent_arm(["anthropic"], difficulty=difficulty).harness != "solution_loop_runner"
@@ -148,7 +148,7 @@ def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, 
     assert type(resolve_deep_runner(cfg(deep_providers=["gemini"]))) is SubprocessGoalRunner
 
 
-def test_hard_work_starts_on_the_tier_measured_best_for_hard_work(programs, picks, monkeypatch):
+def test_hard_work_keeps_the_balanced_start_when_the_hub_measures_a_higher_tier_best(programs, picks, monkeypatch):
     table, _ = picks
     table[frozenset({"anthropic"})] = arm("stream_json_goal_runner", "anthropic")
     hard = arm("subprocess_goal_runner", "anthropic", tier="best")
@@ -158,7 +158,7 @@ def test_hard_work_starts_on_the_tier_measured_best_for_hard_work(programs, pick
     config = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "best": "opus"})
     config.orchestrator.deep_model_ladder = ["haiku", "sonnet", "opus"]
     resolve_deep_runner(config)
-    assert config.orchestrator.deep_difficulty_models["hard"] == "opus"
+    assert config.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # best is a person's pin alone: the measured pick does not move the default start
     off_ladder = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "best": "opus"})
     off_ladder.orchestrator.deep_model_ladder = ["haiku", "sonnet"]
     resolve_deep_runner(off_ladder)
@@ -178,11 +178,9 @@ def test_the_native_tool_loop_runs_only_when_named(programs, tmp_path, monkeypat
     (skills / "SKILL.md").write_text("description: a demo\n")
     monkeypatch.setenv("QAR_SKILLS_DIR", str(tmp_path / "skills"))
     runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "native_loop"}))
-    assert type(runner) is native_loop_runner.NativeLoopRunner and isinstance(runner, NativeToolLoopRunner) and runner.on_trial
+    assert type(runner) is native_loop_runner.NativeLoopRunner and isinstance(runner, NativeToolLoopRunner)
     assert runner.goal_settings().escalation_marker                 # QAR's settings, not the hub's empty defaults
     assert str(tmp_path / "skills") in runner.notes                 # the frame names the lane's skills folder (a native session loads none of its own)
-    for difficulty in ("", "hard"):                                  # the hub's real standings never hand a consumer a harness on trial
-        assert choose_agent_arm(["anthropic"], difficulty=difficulty).harness != "native_tool_loop_runner"
 
 
 def test_the_native_tool_loop_note_is_empty_without_a_skills_folder(tmp_path):
