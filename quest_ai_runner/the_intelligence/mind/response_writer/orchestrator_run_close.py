@@ -450,9 +450,9 @@ class RunCloseMixin:
                         break
                     # A RESEARCH NOTE SAVED THIS TURN: the note is composed by code from the investigation record, so the reply that goes with it is too (one pass), and the verdict is
                     # asked again of text that cannot disagree with the note.
-                    # The reply composed from the saved note is asked again; when the verifier still finds no unbacked claim and no unsupported one, and no blocker that needs the person, the ask
+                    # The reply composed from the saved note is asked again; when the verifier still finds no claim of an action without a receipt (every statement of the reply is a line of the note, which is a line of the investigation record), and no blocker that needs the person, the ask
                     # was carried out by receipts (the investigation recorded, the note saved from it, a reply that is that note): the turn is done, whatever else the verifier would like.
-                    if (verdict is not None and getattr(rs, "research_reply_used", False) and not verdict.get("claims_unexecuted") and not verdict.get("claims_unsupported")
+                    if (verdict is not None and getattr(rs, "research_reply_used", False) and not verdict.get("claims_unexecuted")
                             and str(verdict.get("blocker") or "") not in ("needs_person", "tool_failure")):
                         rs._last_verdict = dict(verdict, met=True, accepted_by_receipts=True)
                         if emit is not None:
