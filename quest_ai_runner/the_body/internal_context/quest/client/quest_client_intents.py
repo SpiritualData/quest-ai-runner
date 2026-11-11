@@ -186,8 +186,9 @@ class IntentsMixin:
     def create_sub_intent(self, record_id: str, name: str, opportunity: str, *, vision_statement: str = "",
                           reveal: Optional[str] = None, human_statement: Optional[str] = None) -> Dict[str, Any]:
         """POST /api/intents/records/{recordId}/sub-intents: make an implementation record of an intent its
-        own intent. From an AI caller the server never creates it: it answers 202 ``{"pending": True,
-        "decisionId": ...}`` (an ask the person approves in "Asks for you"), which is returned unchanged."""
+        own intent. The server creates it at once for an AI caller too (201, author ai, ``summary`` says what was
+        created; the person archives it to undo). An older server answers 202 ``{"pending": True, "decisionId": ...}``
+        (an ask), which is returned unchanged."""
         body: Dict[str, Any] = {"name": name, "visionStatement": vision_statement, "opportunity": opportunity}
         if reveal:
             body["reveal"] = reveal

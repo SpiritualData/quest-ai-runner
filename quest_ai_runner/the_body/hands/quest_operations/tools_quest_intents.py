@@ -4,7 +4,7 @@ Role: six registry tools (see ``tools_quest_ops`` for how the registry shows an 
 ``list_intents`` and ``get_spec`` read; ``refresh_spec`` asks the server to write or update a
 specification (one hash-gated call, so a run whose inputs did not change writes nothing);
 ``edit_spec_record`` changes one record the AI wrote; ``place_quest`` puts a quest under an intent (a top intent or a sub-intent);
-``create_sub_intent`` asks for a new sub-intent under an implementation record of an intent.
+``create_sub_intent`` creates a new sub-intent under an implementation record of an intent (applied at once; the person can archive it).
 
 The server owns every rule: it refuses a field the person edited (FIELD_LOCKED) and holds a rename,
 a vision change or a move of a quest the person placed as an ask for them (HTTP 202). The tools only
@@ -476,20 +476,21 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         child = result.get("intent") or {}
         return ToolResult(ok=True, data=result, text=(
             f"Sub-intent {child.get('intentId')} '{trim(child.get('name') or name, 80)}' created "
-            f"(link {result.get('status')})."))
+            f"(link {result.get('status')}). {result.get('summary') or ''}").strip())
 
     return ToolSpec(
         name="create_sub_intent",
         handler=handler,
-        description=("Ask for an implementation record of an intent to become its own sub-intent, with a "
-                     "name, a vision statement and the opportunity line saying why it earns its own "
-                     "intent. The server holds it as an ask for the person, so it is never created until "
-                     "they say yes."),
+        description=("Make an implementation record of an intent its own sub-intent, with a name, a vision "
+                     "statement and the opportunity line saying why it earns its own intent. It is created "
+                     "at once (both sides of the link stated, authored by the AI) and the result names it, so "
+                     "tell the person what you created; they can archive it to undo. Older servers may still "
+                     "hold it as an ask, which the result says."),
         when_to_use=("The person asks you to split something out, or an implementation of an intent has "
                      "opportunities of its own that the parent does not serve (ESOI: When to split into "
                      "sub-intents)."),
         when_not_to_use=("An implementation that only carries out the parent, with no opportunity of its "
-                         "own. A top intent (never create those). Repeating it while an ask is waiting."),
+                         "own. A top intent (never create those: it is refused), a rename or a vision change (those stay asks). Repeating it while an ask is waiting."),
         parameters={"type": "object", "required": ["record_id", "name", "opportunity"], "properties": {
             "record_id": {"type": "string",
                           "description": "The parent's implementation record (esr_...) from get_spec."},

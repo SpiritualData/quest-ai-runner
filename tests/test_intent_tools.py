@@ -220,6 +220,11 @@ def test_create_sub_intent_reports_a_direct_creation():
     assert result.ok and "int_sub" in result.text
 
 
+def test_create_sub_intent_description_says_it_is_created_at_once():
+    description = intents.create_sub_intent_spec(CREDS).description
+    assert "at once" in description and "Ask for" not in description
+
+
 def test_create_sub_intent_needs_the_opportunity_and_a_short_one():
     backend = StubIntentsBackend()
     assert not invoke(intents.create_sub_intent_spec, backend, {"record_id": "esr_9", "name": "Running"}).ok
