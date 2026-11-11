@@ -113,8 +113,18 @@ def test_the_lane_builds_the_watch_by_default_and_a_switch_or_no_provider_leaves
     assert binding.build_structure_watch(c, p, "", enabled=False) is None and binding.build_structure_watch(c, None, "") is None
 
 
+class KeyedProvider(Provider):
+    """The same counting provider holding a key, so the hub's public choice names a best-tier model for it. Since ca18b36c a lane whose providers hold
+    no key and no login fails the watch with the reason (pinned below), so a watch that is meant to make its call needs a provider the hub can choose for."""
+    api_key = "test-key"
+
+    @property
+    def providers(self):
+        return {"anthropic": self}
+
+
 def test_the_built_watch_asks_by_role_tier_reads_the_calls_usage_and_makes_no_call_in_a_dry_run():
-    c, p = Client(), Provider()
+    c, p = Client(), KeyedProvider()
     watch = binding.build_structure_watch(c, p, "", now=lambda: datetime(2026, 11, 10, 9, tzinfo=timezone.utc))
     assert watch("q1", True) is None and p.models == []
     out = watch("q1", False)

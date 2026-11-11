@@ -392,20 +392,22 @@ def test_a_figure_an_earlier_reply_stored_does_not_vouch_for_itself():
     assert bad.unsupported == ["1,660 USD"] and "2,340 - 2,000 = 340" in bad.hint()
 
 
-def test_a_corrected_reply_is_written_one_tier_up_from_the_fast_tier_and_a_pinned_model_stays():
+def test_a_corrected_reply_is_written_on_the_reply_roles_model_which_is_never_below_balanced_and_a_pinned_model_stays():
+    """Since the role table (31ca9cc7) a reply a person reads is never below balanced, so a correction keeps the reply's own model: nothing to move up from.
+    The old "one tier up from fast" rule had no fast reply left to apply to."""
     from types import SimpleNamespace
     from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
+    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_answering import AnsweringMixin
     registry = ModelRegistry(StubProvider([]))
     host = SimpleNamespace(registry=registry)
+    answer = lambda hint: AnsweringMixin._answer_model(host, SimpleNamespace(model_tier="fast"), hint=hint)
+    assert answer(None) == registry.resolve_tier("balanced")            # the planner's fast tier no longer picks the reply's tier
+    assert answer("fast") == registry.resolve_tier("balanced")          # nor does a person's fast setting lower it
     up = lambda rs: RunAnswerMixin.regeneration_model(host, rs)
-    fast = SimpleNamespace(model="fast-model", model_hint=None, plan=SimpleNamespace(model_tier="fast"))
-    assert up(fast) == registry.resolve_tier("balanced")
-    hinted = SimpleNamespace(model="fast-model", model_hint="fast", plan=SimpleNamespace(model_tier=None))
-    assert up(hinted) == registry.resolve_tier("balanced")
+    reply = SimpleNamespace(model=answer("fast"), model_hint="fast", plan=SimpleNamespace(model_tier="fast"))
+    assert up(reply) == registry.resolve_tier("balanced")
     pinned = SimpleNamespace(model="claude-x-pinned", model_hint="claude-x-pinned", plan=SimpleNamespace(model_tier=None))
     assert up(pinned) == "claude-x-pinned"
-    balanced = SimpleNamespace(model="b", model_hint=None, plan=SimpleNamespace(model_tier="balanced"))
-    assert up(balanced) == "b"
 
 
 def test_the_handoff_directive_tells_the_writer_to_answer_what_the_records_settle_now():
