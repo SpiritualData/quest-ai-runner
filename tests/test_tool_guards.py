@@ -372,3 +372,41 @@ def test_the_operation_names_are_the_adapters_operations():
     from quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
     lines = QuestRetrievalAdapter.list_operations(object.__new__(QuestRetrievalAdapter)).text.splitlines()
     assert {l.split(":")[0] for l in lines if l[:1].islower() and ": " in l} == set(tool_guards.RETRIEVAL_OPERATION_NAMES)
+
+
+# --- research for a quest belongs to the investigation tool ----------------------------------------------------------------------
+
+def research_registry():
+    spec = ToolSpec(name="investigate_for_quest", handler=lambda a, c: ToolResult(ok=True, text="x"), description="d", when_to_use="w", parameters={"type": "object"}, mutates=True)
+    return ToolRegistry([spec])
+
+
+def test_a_web_read_for_an_order_about_a_quest_is_handed_back_to_the_research_tool_once_and_only_when_it_is_listed():
+    plan = SimpleNamespace(action="read", reads=[{"web": "research on practice length"}])
+    reg = research_registry()
+    assert tool_guards.research_by_tool_owed(plan, "act", reg, [], "quest_1")
+    assert not tool_guards.research_by_tool_owed(plan, "ask", reg, [], "quest_1")                      # a question is answered
+    assert not tool_guards.research_by_tool_owed(plan, "act", reg, [], None)                           # no quest pinned
+    assert not tool_guards.research_by_tool_owed(plan, "act", ToolRegistry([]), [], "quest_1")         # no research tool listed
+    assert not tool_guards.research_by_tool_owed(SimpleNamespace(action="read", reads=[{"entries": "q"}]), "act", reg, [], "quest_1")
+    assert not tool_guards.research_by_tool_owed(plan, "act", reg, [{"rel_path": "web_search:x"}], "quest_1")
+
+
+def test_an_investigation_that_ran_counts_as_the_turns_web_research_and_a_refused_one_does_not():
+    assert tool_guards.web_was_read([{"locator": "tool:investigate_for_quest", "tool_status": "ok"}])
+    assert not tool_guards.web_was_read([{"locator": "tool:investigate_for_quest", "tool_status": "refused"}])
+    assert not tool_guards.web_was_read([{"locator": "tool:add_quest_note", "tool_status": "ok"}])
+
+
+def test_a_planner_that_keeps_choosing_a_web_read_has_the_investigation_called_for_it_in_code():
+    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
+    calls = []
+    spec = ToolSpec(name="investigate_for_quest", handler=lambda a, c: (calls.append(dict(a)), ToolResult(ok=True, text="Looked into it."))[1], description="d", when_to_use="w",
+                    parameters={"type": "object", "properties": {"quest_id": {"type": "string"}, "question": {"type": "string"}, "informs": {"type": "string"}}}, mutates=True)
+    web = {"action": "read", "reads": [{"web": "research on practice length"}], "rationale": "search", "user_intent": "act"}
+    provider = StubProvider(decisions=[web, web, {"action": "answer", "rationale": "done", "user_intent": "act"}])
+    from .test_web_reads import FakeWeb
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=ToolRegistry([spec]),
+                        config=OrchestratorConfig(overseer=False), web=FakeWeb())
+    orch.run("Look into what research says about practice length, then add a note", quest_id="q1")
+    assert len(calls) == 1 and calls[0]["informs"] == "person_asked_for_research" and calls[0]["quest_id"] == "q1"

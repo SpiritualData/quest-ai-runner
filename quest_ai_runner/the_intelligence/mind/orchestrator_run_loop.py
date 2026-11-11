@@ -33,7 +33,7 @@ from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities 
     split_repeated_reads)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import PENDING_READ_MAX_RUNS, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _clarify_question_text
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import ACT_WITHOUT_TOOL_NOTE, DEEP_FOR_CODE_CHECK_NOTE, DEEP_FOR_TOOL_WORK_NOTE, RECORDS_NOT_READ_NOTE
+from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import ACT_WITHOUT_TOOL_NOTE, DEEP_FOR_CODE_CHECK_NOTE, DEEP_FOR_TOOL_WORK_NOTE, RECORDS_NOT_READ_NOTE, RESEARCH_WITH_TOOL_NOTE
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _is_orchestrator_command
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
@@ -799,6 +799,24 @@ class RunLoopMixin:
                 rs.plan.action = "answer"
                 rs.plan.deferred_deep = None
                 rs.plan.deep_brief = ""
+
+            # --- RESEARCH-TOOL GATE: research for a quest is the investigation tool's work, not a web read of the planner's own ---------
+            # The planner's structured plan is an order (``user_intent`` act) about a quest whose first step is a web read, while a research tool is listed. The tool
+            # searches, opens the pages and records the investigation on the quest; a snippet search folded into a note records nothing. Handed back ONCE.
+            # A planner that still chooses its own web read after the hand-back has the call made for it, in code: the question is the turn's own resolved goal.
+            if (rs.plan and message_is_user_turn and not getattr(rs, "research_tool_forced", False) and step + 1 < cfg.max_steps and not budget_exhausted()
+                    and tool_guards.research_by_tool_owed(rs.plan, rs.turn_user_intent, self.tools, gathered, quest_id)):
+                if not getattr(rs, "research_tool_handback", False):
+                    rs.research_tool_handback = True
+                    log.info("Research-tool gate: the planner chose a web read of its own for research on a quest; planning again with the investigation tool.")
+                    gathered.append(planner_note_observation(RESEARCH_WITH_TOOL_NOTE, "research_with_tool"))
+                    emit.status("Planning this as an investigation\u2026")
+                    continue
+                rs.research_tool_forced = True
+                log.info("Research-tool gate: the planner chose a web read again; the investigation tool is called for it.")
+                rs.plan.action, rs.plan.reads = "tool", []
+                rs.plan.tool_calls = [{"name": tool_guards.RESEARCH_TOOLS[0], "args": {
+                    "quest_id": quest_id, "question": str(getattr(rs, "goal_condition", "") or rs.user_message)[:400], "informs": "person_asked_for_research"}}]
 
             # --- TOOL-SIZED WORK GATE: a deep run is for files, code, long research or many steps ------------------------------------
             # A change to the person's own Quest records that a registered tool performs is a tool plan: read what exists, then the

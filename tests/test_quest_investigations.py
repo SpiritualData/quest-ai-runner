@@ -127,7 +127,7 @@ def test_an_experiments_scope_and_held_choices_are_not_reopened():
 def test_a_fresh_earlier_investigation_is_used_and_cited_instead_of_searching():
     client, calls = FakeClient(earlier=[earlier_row("fresh")]), []
     result = run(tool(client, answers(reuse={"answered_by": "inv_old"}), calls))
-    assert result.status is ToolStatus.NOOP and not calls and not client.recorded
+    assert result.status is not ToolStatus.NOOP and not calls and not client.recorded
     assert "inv_old" in result.text and "nothing new was searched" in result.text
     assert client.asked_for == ([FUEL], "")
     again = run(tool(client, answers(reuse={"answered_by": "inv_old"}), calls), look_again=True)
@@ -181,3 +181,10 @@ def test_marking_a_finding_records_what_it_changed_or_why_not():
                    ToolContext(quest_id=WHOLE))
     assert done.ok and client.marked[0][2] is True and "Added oats" in done.text
     assert handler({"quest_id": WHOLE, "investigation_id": "inv_1", "item_id": "i1"}, ToolContext(quest_id=WHOLE)).status is ToolStatus.REFUSED
+
+
+def test_a_quick_investigation_without_a_synthesis_reports_its_graded_findings():
+    from quest_ai_runner.the_world.science import investigate
+    text = investigate.summary_text({"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
+                                     "items": [{"claim": "Five minutes a day is the usual start", "grade": "C", "source": "https://example.org/a"}]})
+    assert "Five minutes a day is the usual start (not very sure; https://example.org/a)" in text and "nothing was settled" not in text

@@ -798,6 +798,12 @@ DEEP_FOR_TOOL_WORK_NOTE = (
     "in full now, deep_target \"draft_in_chat\", choosing any open option (the angle, the account, the call to action) yourself instead of asking, and write no goal for it. "
     "When the order also says to add or save that text in their records (a note on the quest), the write is the work: make it with its tool, with the text in the call.")
 
+RESEARCH_WITH_TOOL_NOTE = (
+    "RESEARCH BELONGS TO THE INVESTIGATION TOOL: the person asked you to look into what research or evidence says, for their quest, and you chose a web read of your own. "
+    "A tool in the TOOLS block investigates a question for the quest (it searches, opens the pages, grades each finding and records the investigation on the quest). Call it "
+    "now as your step, with the question in one sentence, informs set to person_asked_for_research, and no web read; write anything the person also asked for (a note) "
+    "from its result afterwards. If this is only a plain public fact and not research, keep your web read.")
+
 ACT_WITHOUT_TOOL_NOTE = (
     "ORDER NOT CARRIED OUT: your user_intent is act, you chose to answer, and nothing has been changed this turn, while a tool in the TOOLS block can "
     "make a change in the person's Quest records. An answer that only restates a plan or asks which step to take is not the work. Plan a tool step now: "

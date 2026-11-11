@@ -92,7 +92,8 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
         answer = investigate.answering(question, decision, earlier, ask)
         extends = ""
         if answer is not None and answer.get("reuse") == investigate.FRESH and not args.get("look_again"):
-            return ToolResult(ok=True, status=ToolStatus.NOOP, data=answer,
+            # The read ran and found the answer: applied, never "already set" (the order's own write, a note, is still to do).
+            return ToolResult(ok=True, data=answer,
                               text=investigate.summary_text({**answer, "synthesis": {"known": answer.get("known"), "unknown": answer.get("unknown")}}, reused=True)
                               + f" Cite it as the earlier investigation {answer.get('investigation_id')} from {answer.get('done_on')}; nothing new was searched.")
         if answer is not None:
@@ -120,12 +121,14 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
     return ToolSpec(
         name="investigate_for_quest",
         handler=handler,
-        description=("Look into a question outside the person's own material as a small review (searches with dates, findings each graded for how sure it is, "
-                     "what is known and not) and record it on the quest under the narrowest strategy it bears on. A current earlier investigation that already "
+        description=("Look into what the evidence or research says about a question for a quest. It does the searching itself, in place of a web search read of your "
+                     "own: a small review (searches with dates, pages opened, findings each graded for how sure it is, what is known and not), recorded on the quest "
+                     "under the narrowest strategy it bears on and shown in the quest's investigations list. A current earlier investigation that already "
                      "answers the question is used and cited instead of searching again; an out of date or thin one is extended. Say in the reply what was "
                      "looked into, how sure the result is, and what it changed or proposes."),
-        when_to_use=("The result informs a decision on the quest, bears on a running experiment's research question, or the person asked for research. "
-                     "Size quick unless they asked for more."),
+        when_to_use=("The person asks to look into, research, or find what research or evidence says about something for their quest, even when they also ask "
+                     "for a note or a plan from it (run this first, then write the note from its findings); or the result informs a decision on the quest or "
+                     "bears on a running experiment's research question. Size quick unless they asked for more. Call it instead of a web search read."),
         when_not_to_use=("A quick factual lookup answered in conversation (use web search, set informs to none, nothing is recorded). Anything the quest's own "
                          "records already answer. A question outside a running experiment's scope or one that reopens what it holds fixed."),
         parameters=INVESTIGATE_ARGS,

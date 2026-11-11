@@ -276,12 +276,29 @@ def merge_near_duplicates(calls: Sequence[Mapping[str, Any]], is_write: Any, pin
 WEB_QUERY_CHARS = 200
 
 
+#: Tools that search and open web pages themselves: a run of one (not refused or failed) is the turn's web research.
+RESEARCH_TOOLS = ("investigate_for_quest",)
+
+
 def web_was_read(gathered: Iterable[Mapping[str, Any]]) -> bool:
-    """Whether this turn already ran a web search or fetched a web page (a failed one counts: it was tried)."""
+    """Whether this turn already ran a web search or fetched a web page (a failed one counts: it was tried), or ran an investigation, which does its own searching."""
     for entry in gathered:
         if str(entry.get("rel_path") or "").startswith("web_search:") or str(entry.get("locator") or "").startswith("web extract"):
             return True
+        locator = str(entry.get("locator") or "")
+        if locator.startswith("tool:") and locator[5:] in RESEARCH_TOOLS and entry.get("tool_status") not in ("refused", "failed"):
+            return True
     return False
+
+
+def research_by_tool_owed(plan: Any, user_intent: Optional[str], registry: Any, gathered: Iterable[Mapping[str, Any]], quest_id: Optional[str]) -> bool:
+    """True when the planner, on an order about a quest, chose its own web read while a research tool is listed and no web read or investigation has run this turn. Facts about
+    the plan and the tool set only: the code hands the choice back once, with a note, so research is carried out and recorded by the tool, not left as a snippet search."""
+    if registry is None or not quest_id or user_intent != "act" or getattr(plan, "action", None) != "read" or web_was_read(gathered):
+        return False
+    if not any(registry.get(name) is not None for name in RESEARCH_TOOLS):
+        return False
+    return any(isinstance(r, Mapping) and r.get("web") is not None for r in (getattr(plan, "reads", None) or []))
 
 
 def web_read_owed(verdict: Optional[Mapping[str, Any]], web_configured: bool, gathered: Iterable[Mapping[str, Any]],

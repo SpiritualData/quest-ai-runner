@@ -184,7 +184,11 @@ def quest_record(hub_record: Mapping[str, Any], *, solution_ids: Sequence[str], 
 
 def summary_text(recorded: Mapping[str, Any], reused: bool = False) -> str:
     """What was looked into, how sure it is and what it changed, in plain words, for the reply."""
-    known = "; ".join((recorded.get("synthesis") or {}).get("known") or []) or "nothing was settled"
+    known = "; ".join((recorded.get("synthesis") or {}).get("known") or [])
+    if not known:
+        # A quick review carries no written synthesis: the graded findings themselves are what was found, each with how sure it is and where it came from.
+        found_items = [f"{i.get('claim')} ({sure_words(i.get('grade'))}; {i.get('source')})" for i in (recorded.get("items") or [])[:6] if i.get("claim")]
+        known = "; ".join(found_items) or "nothing was settled"
     unknown = "; ".join((recorded.get("synthesis") or {}).get("unknown") or [])
     limits = "; ".join(recorded.get("limitations") or [])
     lead = "An earlier investigation already answers this" if reused else "Looked into"
