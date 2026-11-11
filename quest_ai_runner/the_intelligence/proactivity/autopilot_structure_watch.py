@@ -32,11 +32,27 @@ def structure_of(quest_id: str, outcome: str, goals: Sequence[Mapping[str, Any]]
 def raise_proposals(client: Any, quest_id: str, items: Sequence[Mapping[str, Any]]) -> int:
     """File each item as a decision request on the quest (the existing confirmation path); returns how many were filed. Never edits a record."""
     filed = 0
+    owner = quest_owner(client, quest_id) if items else ""
+    if items and not owner:
+        log.info("structure watch on %s: %d item(s) not filed, the quest names no owner who is a person to ask", quest_id, len(items))
+        return 0
     for item in items:
         summary = f"Structure needs attention ({item['severity']}): {item['what']} Why now: {item['why_now']} Risk: {item['risk']} Proposed: {item.get('step_text') or item['step']}"
-        client.create_decision(summary[:900], quest_id=quest_id, default_on_silence="hold", dedupe_key=f"structure-watch:{quest_id}:{item['subject']}:{item['step']}")
+        client.create_decision(summary[:900], quest_id=quest_id, assignee_user_id=owner, default_on_silence="hold",
+                               dedupe_key=f"structure-watch:{quest_id}:{item['subject']}:{item['step']}")
         filed += 1
     return filed
+
+
+def quest_owner(client: Any, quest_id: str) -> str:
+    """The quest's first owner who is not this runner's own account, "" when none can be read. Quest refuses an ask with nobody to answer it, and an ask to the runner's own
+    account reaches no person, so a proposal goes to the person who owns the quest or is not filed."""
+    try:
+        owners = [str(o) for o in ((client.get_quest(quest_id) or {}).get("owner_user_ids") or []) if o]
+        own = str(client.own_user_id() or "") if hasattr(client, "own_user_id") else ""
+    except Exception:      # noqa: BLE001 an unreadable quest means no owner is known
+        return ""
+    return next((o for o in owners if o != own), "")
 
 
 def watch_quest(client: Any, quest_id: str, *, now: str, store: Any, ask: Optional[Callable[..., Any]], runs: Sequence[Mapping[str, Any]] = (), outcome: str = "",

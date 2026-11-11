@@ -22,6 +22,14 @@ class Client:
     def list_investigations(self, quest_id):
         return []
 
+    owners = ["ai1", "u1"]
+
+    def get_quest(self, quest_id):
+        return {"quest_id": quest_id, "owner_user_ids": self.owners}
+
+    def own_user_id(self):
+        return "ai1"
+
     def create_decision(self, summary, **kw):
         self.decisions.append((summary, kw))
 
@@ -52,6 +60,17 @@ def test_an_item_is_a_decision_request_and_no_record_is_edited():
     out = binding.watch_quest(c, "q1", now=NOW, store=RunStore(""), ask=ask)
     assert out["called"] and out["filed"] == 1 and len(c.decisions) == 1 and c.edits == []
     assert c.decisions[0][1]["default_on_silence"] == "hold" and c.decisions[0][1]["quest_id"] == "q1" and ask.calls[0][1] in ("best", "strong")
+
+
+def test_an_item_is_asked_of_the_quests_owner_never_the_runners_own_account_and_not_filed_when_no_person_owns_it():
+    from hubofhubs.the_body.internal_context.run_store.runs import RunStore
+    c = Client()
+    binding.watch_quest(c, "q1", now=NOW, store=RunStore(""), ask=ask_for("experiments:e1"))
+    assert c.decisions[0][1]["assignee_user_id"] == "u1"
+    alone = Client()
+    alone.owners = ["ai1"]
+    out = binding.watch_quest(alone, "q1", now=NOW, store=RunStore(""), ask=ask_for("experiments:e1"))
+    assert out["filed"] == 0 and alone.decisions == []
 
 
 def test_no_call_when_nothing_changed_since_the_last_run_and_none_in_a_dry_run():
