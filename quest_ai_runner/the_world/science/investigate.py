@@ -82,7 +82,7 @@ def evidence_line(kinds: Sequence[str], read_in_full: bool = False) -> str:
     for kind, n in counts.items():
         one, many = KIND_WORDS.get(kind, ("source", "sources"))
         parts.append("a company page" if (kind, n) == ("vendor", 1) and len(counts) == 1 else f"{n} {one if n == 1 else many}")
-    text = " and ".join(parts) + (" agree" if sum(counts.values()) > 1 else "")
+    text = (", ".join(parts[:-1]) + " and " + parts[-1] if len(parts) > 1 else parts[0]) + (" agree" if sum(counts.values()) > 1 else "")
     return text + (", read in full" if read_in_full else "")
 
 

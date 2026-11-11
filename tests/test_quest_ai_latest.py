@@ -66,3 +66,8 @@ def test_the_evidence_line_names_what_a_finding_rests_on_and_never_a_verdict():
     assert evidence_line(["research", "guide", "guide"], True) == "1 study and 2 guides agree, read in full"
     assert evidence_line([]) == ""
     assert not any(word in evidence_line(["personal"]) for word in ("sure", "weak", "confident"))
+
+
+def test_three_kinds_read_as_a_list():
+    from quest_ai_runner.api import evidence_line
+    assert evidence_line(["reputable", "guide", "vendor"]) == "1 established publication, 1 guide and 1 company page agree"
