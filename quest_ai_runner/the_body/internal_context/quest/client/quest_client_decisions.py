@@ -209,13 +209,23 @@ class DecisionsMixin:
                     return {"team_id": team, "owner_id": owner}
         return {"team_id": teams[0], "owner_id": owner}
 
+    BLOCK_QUESTION_MAX = 4000
+
     def report_block(self, quest_id: str, goal_id: str, block_type: str, reason: str, *, expected_owner: str = "",
-                     forbidden_owner: str = "") -> Dict[str, Any]:
+                     placed: Optional[Dict[str, str]] = None, question: Optional[str] = None, conv_id: Optional[str] = None,
+                     notify_user_id: Optional[str] = None, dedupe_key: Optional[str] = None,
+                     deadline: Optional[datetime] = None) -> Dict[str, Any]:
         """POST /api/teams/{team}/process/blocks: report a block on a goal so its owner gets an ask with a three-day clock
         and the escalation hand-off applies (the quest team's personal process). Returns ``{block, created, team_id}``;
         ``created`` is False when the same block was already open. Raises ``QuestNotConfigured`` (no team, unknown goal or
         bad type, or an owner other than ``expected_owner`` when one is given: the block would go to someone the ask is not for) or a
-        ``QuestWriteError`` (Quest refused it); the caller falls back to a plain ask."""
+        ``QuestWriteError`` (Quest refused it); the caller falls back to a plain ask.
+
+        ``placed`` is a ``block_team_for`` answer the caller already holds (it is 2 to 4 requests, so an ask that resolved its
+        assignee from it does not read it again). The rest carry an ask filed as a block onto the decision the block raises, as a
+        plain ask would carry them: ``question`` the full question (``reason`` stays the block's one line, cut to
+        ``BLOCK_REASON_MAX``), ``conv_id``, ``notify_user_id``, ``dedupe_key`` and ``deadline`` (Quest takes it only when it is
+        sooner than the three-day rule). A Quest that predates these fields ignores them."""
         if block_type not in self.BLOCK_TYPES:
             raise QuestNotConfigured(f"block type must be one of: {', '.join(self.BLOCK_TYPES)}")
         text = " ".join(str(reason or "").split())
@@ -223,14 +233,20 @@ class DecisionsMixin:
             text = text[:self.BLOCK_REASON_MAX - 3].rstrip() + "..."
         if not text:
             raise QuestNotConfigured("a block needs a one-line reason")
-        placed = self.block_team_for(quest_id, goal_id)
+        placed = placed if placed and placed.get("team_id") else self.block_team_for(quest_id, goal_id)
         if expected_owner and placed["owner_id"] != str(expected_owner):
             raise QuestNotConfigured(f"goal {goal_id} is owned by someone else than the person this ask is for")
-        if forbidden_owner and placed["owner_id"] in ("", str(forbidden_owner)):
-            raise QuestNotConfigured(f"goal {goal_id} has no person other than the AI account to raise the block with")
+        body: Dict[str, Any] = {"goal_id": goal_id, "type": block_type, "reason": text}
+        full = str(question or "").strip()
+        if full and full != text:
+            body["question"] = full if len(full) <= self.BLOCK_QUESTION_MAX else full[:self.BLOCK_QUESTION_MAX - 100].rstrip() + "\n\n[...truncated]"
+        for field_name, value in (("conv_id", conv_id), ("notify_user_id", notify_user_id), ("dedupe_key", dedupe_key)):
+            if value:
+                body[field_name] = str(value)
+        if deadline is not None:
+            body["deadline"] = deadline.isoformat() if hasattr(deadline, "isoformat") else str(deadline)
         written = self._write("POST", f"/api/teams/{placed['team_id']}/process/blocks", label="Reporting the block",
-                              body={"goal_id": goal_id, "type": block_type, "reason": text},
-                              idempotency_key=new_idempotency_key())
+                              body=body, idempotency_key=new_idempotency_key())
         data = written.data if isinstance(written.data, dict) else {}
         return {"block": data.get("block") or {}, "created": bool(data.get("created")), "team_id": placed["team_id"]}
 

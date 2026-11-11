@@ -230,16 +230,26 @@ class QuestDecisionSink(EscalationSinkBase):
         except Exception:  # noqa: BLE001 -- best effort: an unreadable own id only means no candidate is skipped as "own"
             return ""
 
-    def goal_owner_assignee(self, escalation: Escalation) -> str:
-        """The owner of the goal the ask is blocked on, or "" (no goal, no team, an unknown goal, an unowned goal)."""
+    def block_placement(self, escalation: Escalation, memo: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+        """``block_team_for`` for the goal the ask is blocked on (``{team_id, owner_id}``), or {} (no goal, no team, an unknown goal).
+        ``memo`` holds the answer for one escalation, so resolving the assignee and filing the block read it once (2 to 4 requests)."""
         if not (escalation.blocked_goal_id and escalation.quest_id and hasattr(self._client, "block_team_for")):
-            return ""
+            return {}
+        if memo is not None and "placement" in memo:
+            return memo["placement"]
         try:
-            return str(self._client.block_team_for(escalation.quest_id, escalation.blocked_goal_id).get("owner_id") or "")
+            placement = dict(self._client.block_team_for(escalation.quest_id, escalation.blocked_goal_id) or {})
         except Exception:  # noqa: BLE001 -- a lookup that fails only means the next candidate is tried
-            return ""
+            placement = {}
+        if memo is not None:
+            memo["placement"] = placement
+        return placement
 
-    def resolve_assignee(self, escalation: Escalation) -> str:
+    def goal_owner_assignee(self, escalation: Escalation, memo: Optional[Dict[str, Any]] = None) -> str:
+        """The owner of the goal the ask is blocked on, or "" (no goal, no team, an unknown goal, an unowned goal)."""
+        return str(self.block_placement(escalation, memo).get("owner_id") or "")
+
+    def resolve_assignee(self, escalation: Escalation, memo: Optional[Dict[str, Any]] = None) -> str:
         """WHO this decision goes to, never this runner's own account (it cannot answer): the explicit escalation assignee,
         else the owner of the goal the ask is blocked on, else the person the run works for (the task's requester, its owner),
         else the configured default, else the quest's own owner.
@@ -250,7 +260,7 @@ class QuestDecisionSink(EscalationSinkBase):
         (at least a raised, logged failure is visible in the run's own error trail).
         """
         own = self.own_account()
-        candidates = (lambda: escalation.assignee, lambda: self.goal_owner_assignee(escalation),
+        candidates = (lambda: escalation.assignee, lambda: self.goal_owner_assignee(escalation, memo),
                       *[(lambda u=u: u) for u in (escalation.run_for_user_ids or [])],
                       lambda: self._default_assignee, lambda: self.quest_owner_assignee(escalation.quest_id))
         for candidate in candidates:
@@ -361,22 +371,23 @@ class QuestDecisionSink(EscalationSinkBase):
                      exc_info=True)
             return None
 
-    def file_block(self, escalation: Escalation, assignee_user_id: str) -> str:
+    def file_block(self, escalation: Escalation, assignee_user_id: str, memo: Optional[Dict[str, Any]] = None) -> str:
         """The decision id of the ask filed as a BLOCK on ``escalation.blocked_goal_id``, or "" to file the plain ask.
 
         Only when the escalation names a goal on a quest and a block type, and the goal's owner is the person the ask is for (a block
-        goes to the goal's owner, so an ask meant for someone else stays a plain ask). A quest with no team, an unknown goal, a Quest
-        without the personal process, or a refusal all give "": the person is still asked, the ordinary way."""
+        goes to the goal's owner, so an ask meant for someone else stays a plain ask). ``assignee_user_id`` comes from
+        ``resolve_assignee``, which never answers this runner's own account, so a goal the AI account owns never matches and stays a
+        plain ask for a person. The block's decision carries what the plain ask would (the full question, the conversation, who is
+        told the answer, the dedupe key, the deadline). A quest with no team, an unknown goal, a Quest without the personal process,
+        or a refusal all give "": the person is still asked, the ordinary way."""
         if not (escalation.blocked_goal_id and escalation.block_type and escalation.quest_id and hasattr(self._client, "report_block")):
             return ""
         try:
-            # An ask whose "asker" is this runner's own account (an autopilot or task run nobody is typing into) cannot be answered by
-            # that account: the block then goes to the goal's owner, who must be a person. Otherwise the owner must be who the ask is for.
-            own = self._client.own_user_id() if hasattr(self._client, "own_user_id") else ""
-            for_ai = bool(own) and assignee_user_id == own
-            placed = self._client.report_block(escalation.quest_id, escalation.blocked_goal_id, escalation.block_type,
-                                               escalation.summary, expected_owner="" if for_ai else assignee_user_id,
-                                               forbidden_owner=own if for_ai else "")
+            placed = self._client.report_block(
+                escalation.quest_id, escalation.blocked_goal_id, escalation.block_type, escalation.summary,
+                expected_owner=assignee_user_id, placed=self.block_placement(escalation, memo) or None,
+                question=escalation.summary, conv_id=escalation.conv_id, notify_user_id=escalation.notify_user_id,
+                dedupe_key=escalation.dedupe_key, deadline=self.resolve_deadline(escalation))
         except Exception as e:  # noqa: BLE001 -- a block that cannot be filed must never lose the ask
             log.info("escalate: block on goal %s not filed (%s); filing the plain ask", escalation.blocked_goal_id, e)
             return ""
@@ -388,8 +399,9 @@ class QuestDecisionSink(EscalationSinkBase):
             log.info("escalate: reusing open decision %s rather than filing a duplicate", existing)
             return existing
         try:
-            assignee_user_id = self.resolve_assignee(escalation)
-            blocked = self.file_block(escalation, assignee_user_id)
+            memo: Dict[str, Any] = {}      # the goal's team and owner, read once for the assignee and the block
+            assignee_user_id = self.resolve_assignee(escalation, memo)
+            blocked = self.file_block(escalation, assignee_user_id, memo)
             if blocked:
                 return blocked
             res = self._client.create_decision(

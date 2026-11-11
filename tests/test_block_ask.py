@@ -253,3 +253,24 @@ def test_the_create_decision_tool_takes_the_runs_goal_when_only_a_block_type_is_
     result = create_decision_spec({}, client_factory=lambda: client).handler(
         {"summary": "Need the login", "quest_id": "q1", "block_type": "needs_access"}, ctx)
     assert result.status is ToolStatus.APPLIED and [r[1] for r in seen if r[0] == "POST"] == ["/api/teams/team_b/process/blocks"]
+
+
+def test_a_sink_ask_filed_as_a_block_carries_the_full_question_conversation_recipient_key_and_deadline_and_reads_the_goal_once(monkeypatch):
+    """The block route used to get only a 300-character reason, and the goal's team and owner were read twice per ask (once to pick
+    the assignee, once to file): the person got a cut question with no link back to the conversation waiting on it."""
+    from datetime import datetime, timedelta, timezone
+    from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestDecisionSink
+    seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
+    question = "Which store account should the run use?\nA) The main login\nB) A new one\n" + "Context. " * 60
+    due = datetime(2030, 1, 2, 9, tzinfo=timezone.utc)
+    esc = Escalation(summary=question, quest_id="q1", blocked_goal_id="g1", block_type="needs_decision", deadline=due,
+                     conv_id="qaconv_1", notify_user_id=OTHER, dedupe_key="turn-gap-1")
+    client = QuestClient("https://quest.example", "key", team_id="team_a")
+    assert QuestDecisionSink(client).escalate(esc) == "d_block"
+    body = [r for r in seen if r[0] == "POST" and "process/blocks" in r[1]][0][2]
+    assert len(body["reason"]) <= 300 and body["question"] == question.strip()
+    assert body["conv_id"] == "qaconv_1" and body["notify_user_id"] == OTHER and body["dedupe_key"] == "turn-gap-1"
+    assert body["deadline"] == due.isoformat()
+    assert len([r for r in seen if r[0] == "GET" and r[1].startswith("/api/quests/q1/state")]) == 1
+    assert len([r for r in seen if r[0] == "GET" and "/members" in r[1]]) <= 2
