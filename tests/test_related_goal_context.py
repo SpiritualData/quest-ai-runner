@@ -83,3 +83,25 @@ def test_related_goal_id_without_a_resolvable_quest_id_fetches_nothing():
 
     assert client.calls == []
     assert "Draft the outline" not in view
+
+
+def test_a_quest_scoped_task_on_one_goal_carries_the_quest_in_its_run_meta():
+    """The ask path needs the quest to place a block on the goal: a quest-scoped task holds the QUEST's id in goal_id, so a run on one
+    goal (related_goal_id) carries it as quest_id too. A prod run answered "for quest None" and filed nothing before this."""
+    from unittest.mock import MagicMock
+    seen = {}
+
+    class Orch:
+        def run(self, brief, **kw):
+            seen.update(kw.get("context_meta") or {})
+            raise RuntimeError("stop after the meta is captured")
+
+    client = MagicMock()
+    client.get_work_model_config = None
+    executor = TaskExecutor(client, Orch())
+    try:
+        executor.execute({"id": "t1", "text": "do it", "goal_id": "quest_1", "related_goal_id": "goal_9", "created_by": "u_ai", "user_id": "u_owner"})
+    except Exception:  # noqa: BLE001 -- the stub stops the run on purpose
+        pass
+    assert seen.get("quest_id") == "quest_1" and seen.get("related_goal_id") == "goal_9"
+    assert seen.get("requester_user_id") == "u_ai" and seen.get("task_owner_user_id") == "u_owner"
