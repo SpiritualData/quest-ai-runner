@@ -13,7 +13,8 @@ Rules (pure, never raises on bad input):
     effective default, and the choice carries a note saying why, so the run log shows it;
   * no requested model: an explicitly configured default is pinned; with nothing configured the run is
     left unpinned, so the existing QAR behaviour is unchanged for environments that never set one;
-  * only Anthropic models run here (the Claude Code deep worker), so other providers are skipped;
+  * only Anthropic models run here (the Claude Code deep worker), so other providers are skipped; a
+    specific Claude version ("claude-opus-4-8") counts as runnable, through its family;
   * if the environment allows no Anthropic model at all, the run is refused (``WorkModelUnavailable``)
     rather than silently run on a model the org excluded.
 
@@ -80,9 +81,16 @@ def anthropic_options(effective: Optional[Dict[str, Any]]) -> List[str]:
         if not isinstance(entry, dict) or entry.get("provider") != ANTHROPIC:
             continue
         model = str(entry.get("model") or "").strip().lower()
-        if model in RUNNABLE_MODELS and model not in names:
+        if (model in RUNNABLE_MODELS or family_of(model)) and model not in names:
             names.append(model)
     return names
+
+
+def family_of(model: Optional[str]) -> Optional[str]:
+    """The runnable Claude family a specific version belongs to ("claude-opus-4-8" -> "opus"), else
+    None. Environments may allow a specific version, and the deep worker runs it as named."""
+    low = (model or "").strip().lower()
+    return next((f for f in RUNNABLE_MODELS if low.startswith(f"claude-{f}")), None)
 
 
 def effective_default(effective: Optional[Dict[str, Any]], options: List[str]) -> Optional[str]:
@@ -119,6 +127,10 @@ def apply_work_model(requested: Optional[str], effective: Optional[Dict[str, Any
             return WorkModelChoice(model=default, source="default")
         return WorkModelChoice(model=None, source="unpinned")
     if want in options:
+        return WorkModelChoice(model=want, source="requested")
+    # A specific VERSION of an allowed family ("claude-opus-4-8" when opus is allowed) is used as
+    # asked: environments hold more than one version, and the family word cannot name which.
+    if family_of(want) in options:
         return WorkModelChoice(model=want, source="requested")
     return WorkModelChoice(
         model=default,

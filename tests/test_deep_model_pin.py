@@ -138,3 +138,54 @@ def test_a_model_the_deep_worker_cannot_run_is_never_passed_through():
     got = runner.calls[0]["model"]
     assert got != "gemini-3.5-flash", "Claude Code cannot run it, so it must not be pinned"
     assert got == ModelRegistry(provider).resolve_tier("gemini-3.5-flash")
+
+
+# --- a model the person names in their own message --------------------------------------------
+
+def _typed(request, **extra):
+    return {**PLAN, "deep_model_request": request, **extra}
+
+
+def test_a_model_named_in_the_message_runs_the_work():
+    provider = ScriptedProvider(plans=[_typed("opus")], verdicts=[{"met": True}])
+    runner = RecordingRunner()
+
+    _orch(provider, runner).run("do this on opus")
+
+    assert [c["model"] for c in runner.calls] == ["opus"]
+
+
+def test_the_typed_request_outranks_the_standing_pin():
+    provider = ScriptedProvider(plans=[_typed("opus")], verdicts=[{"met": True}])
+    runner = RecordingRunner()
+
+    _orch(provider, runner).run("do this on opus", model_hint="haiku")
+
+    assert [c["model"] for c in runner.calls] == ["opus"]
+
+
+def test_no_typed_request_leaves_the_standing_pin_alone():
+    provider = ScriptedProvider(plans=[_typed(None)], verdicts=[{"met": True}])
+    runner = RecordingRunner()
+
+    _orch(provider, runner).run("build X", model_hint="haiku")
+
+    assert [c["model"] for c in runner.calls] == ["haiku"]
+
+
+def test_a_typed_request_for_a_model_the_worker_cannot_run_is_ignored():
+    provider = ScriptedProvider(plans=[_typed("gpt-5")], verdicts=[{"met": True}])
+    runner = RecordingRunner()
+
+    _orch(provider, runner).run("use gpt-5", model_hint="sonnet")
+
+    baseline = RecordingRunner()
+    _orch(ScriptedProvider(plans=[_typed(None)], verdicts=[{"met": True}]), baseline).run(
+        "use gpt-5", model_hint="sonnet")
+    assert [c["model"] for c in runner.calls] == [c["model"] for c in baseline.calls]
+
+
+def test_the_planner_decision_carries_the_request():
+    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+    plan = normalize_decision(_typed("  Opus  "), OrchestratorConfig())
+    assert plan.deep_model_request == "Opus"

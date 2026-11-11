@@ -203,9 +203,11 @@ def test_decide_tool_for_compact_strips_on_every_variant():
     for queued in (False, True):
         for threaded in (False, True):
             tool = decide_tool_for(False, queued, threaded, tools=False, compact=True)
-            # Only the hand-off field keeps its description (COMPACT_SCHEMA_KEPT_DESCRIPTIONS).
-            assert descriptions_in(tool) == 1, (queued, threaded)
+            # Only the hand-off field and the person's requested model keep their descriptions
+            # (COMPACT_SCHEMA_KEPT_DESCRIPTIONS): the compact body has no rule for either.
+            assert descriptions_in(tool) == 2, (queued, threaded)
             assert tool["input_schema"]["properties"]["deferred_deep"].get("description")
+            assert tool["input_schema"]["properties"]["deep_model_request"].get("description")
             assert descriptions_in(
                 decide_tool_for(False, queued, threaded, tools=False, compact=False)) > 0
 
@@ -230,7 +232,7 @@ def test_a_compact_run_sends_the_compact_prompt_and_the_compact_schema():
     assert "THE ACTIONS:" in prompt
     assert "SPECIFICITY (answer about the SPECIFIC subject" not in prompt
     assert PLANNER_DECISION_RUBRIC in prompt
-    assert descriptions_in(provider.schemas[0]) == 1
+    assert descriptions_in(provider.schemas[0]) == 2  # deferred_deep and deep_model_request (COMPACT_SCHEMA_KEPT_DESCRIPTIONS)
 
 
 def test_a_compact_run_is_smaller_than_a_default_run_on_the_same_message():

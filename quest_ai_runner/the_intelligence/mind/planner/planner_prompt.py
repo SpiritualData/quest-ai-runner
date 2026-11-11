@@ -580,6 +580,15 @@ DEEP DIFFICULTY (`deep_difficulty`): whenever you choose "deep" or fill `deferre
   Put one short clause saying why in `deep_difficulty_reason`.
 """
 
+DEEP_MODEL_REQUEST = """\
+REQUESTED MODEL (`deep_model_request`): when the person's own message names a model or tier for
+  the work ("use opus for this", "run it on haiku", "best tier"), put it there verbatim; it then
+  runs the work instead of the automatic choice. Null when they named none: never fill it with
+  your own preference. A model named only to REVIEW the work ("have an Opus agent review it at
+  the end") is not a request to run the work on it: leave the field null for that, and keep the
+  review in `deep_brief` as a closing step, in their words, so the worker does it.
+"""
+
 PARALLEL_SUBQUESTIONS = """\
 PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `subquestions` to
   2-{max_subq} short self-contained sub-questions (answered CONCURRENTLY, then synthesized).
@@ -958,6 +967,7 @@ PLANNER_RULES = (
     Rule("confirm-action", CONFIRM_ACTION, CHANGE),
     Rule("model-tier-field", MODEL_TIER_FIELD),
     Rule("deep-difficulty", DEEP_DIFFICULTY, CHANGE),
+    Rule("deep-model-request", DEEP_MODEL_REQUEST, CHANGE),
     Rule("model-tier-ladder", "{model_tier_block}"),
     Rule("cached-hint", "\n--- " + CACHED_HINT_GATE.split("\n")[0] + "\n"
          + "\n".join(CACHED_HINT_GATE.split("\n")[1:]) + "\n\n", {"has_material": True}),

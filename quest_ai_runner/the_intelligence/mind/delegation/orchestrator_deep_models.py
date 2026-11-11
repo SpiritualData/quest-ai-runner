@@ -4,6 +4,7 @@ A mixin of ``Orchestrator`` (see ``orchestrator.py``): methods only, state lives
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import (
@@ -69,6 +70,22 @@ class DeepModelsMixin:
                  "ladder=%s, reason: %s", selection.get("difficulty") or "not assessed",
                  selection["start_model"], selection["ladder"], selection["reason"])
         return list(start_ladder), selection
+
+    def typed_model_request(self, requested: Optional[str]) -> Optional[str]:
+        """The model the person named in their message, when the deep worker can run it, else None.
+
+        A tier word (fast/balanced/quality/best) or a Claude family or id passes; a name this
+        worker cannot run (another provider's model) never reaches ``claude --model``, so the run
+        keeps its standing choice and the caller says so."""
+        from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
+        # The planner copies the person's words, so "the best tier" or "opus model" arrive as
+        # written; the name inside them is what counts (live 2026-11-10: "best tier" pinned nothing).
+        want = re.sub(r"\s+(tier|model)$", "", re.sub(r"^(the|a)\s+", "", (requested or "").strip().lower()))
+        if not want:
+            return None
+        if ModelRegistry.is_tier_name(want) or cli_safe_model(want):
+            return want
+        return None
 
     def resolve_deep_ladder(self, model_hint: Optional[str], quality_standards: Optional[str],
                             fallback: Optional[str], *,

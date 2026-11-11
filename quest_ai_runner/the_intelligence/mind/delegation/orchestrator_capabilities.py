@@ -186,6 +186,22 @@ def run_goal_accepts_is_subgoal(deep_runner: Any) -> bool:
     return False
 
 
+def run_goal_accepts_requested_model(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` declares a ``requested_model`` keyword.
+
+    A runner that hands the work to another lane (a queued task) cannot tell a model the PERSON
+    named in their message from the automatic starting model it is also given as ``model``. This
+    keyword carries only the former, so the queued task can be pinned to exactly what was asked
+    and to nothing else. Explicit name only (a ``**kwargs`` runner is not sent it), and a runner
+    without it is called exactly as before.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return "requested_model" in sig.parameters
+
+
 def run_goal_accepts_requester_user_id(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts a ``requester_user_id`` keyword (or **kwargs).
 

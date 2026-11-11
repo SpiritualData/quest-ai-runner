@@ -35,7 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_constants import (
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     _run_goal_accepts_context_preamble, _run_goal_accepts_emit, _run_goal_accepts_resume_session_id, _run_goal_accepts_run_id,
     _run_goal_accepts_working_dir, run_goal_accepts_cancel_check, run_goal_accepts_control, run_goal_accepts_gathered_observations,
-    run_goal_accepts_is_subgoal, run_goal_accepts_requester_user_id)
+    run_goal_accepts_is_subgoal, run_goal_accepts_requested_model, run_goal_accepts_requester_user_id)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import (
     future_context_channel, mark_ceiling_stop, normalize_future_context, _strip_future_context, ellipsize, sentence)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import TurnCardCache, _Emitter
@@ -294,6 +294,14 @@ class DeepRunMixin:
         # difficulty rating picks the starting rung and the goal loop escalates from there. The
         # automatic choice is announced once as a status event carrying a structured
         # ``deep_model_selection`` payload, which the task lane records on the task's progress feed.
+        # The person's own request in THIS message outranks the standing default (the pinned work
+        # model of the conversation or task): it is the newer, more specific ask.
+        typed_request = self.typed_model_request(getattr(plan, "deep_model_request", None))
+        if typed_request:
+            log.info("Deep-worker model requested in the message: %r (outranks the standing pin %r)",
+                     typed_request, model_hint)
+            model_hint = typed_request
+            model = self.registry.resolve_tier(typed_request)
         planned_deep_models, deep_selection = self.deep_model_plan(
             model_hint, quality_standards, model,
             difficulty=getattr(plan, "deep_difficulty", None),
@@ -569,7 +577,7 @@ class DeepRunMixin:
                 if runner is None:
                     return {"emit": False, "run_id": False, "preamble": False, "gathered": False,
                             "working_dir": False, "resume": False, "is_subgoal": False,
-                            "requester": False, "cancel": False, "control": False}
+                            "requester": False, "cancel": False, "control": False, "requested_model": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -581,6 +589,7 @@ class DeepRunMixin:
                         "resume": _run_goal_accepts_resume_session_id(runner),
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
                         "requester": run_goal_accepts_requester_user_id(runner),
+                        "requested_model": run_goal_accepts_requested_model(runner),
                         "cancel": run_goal_accepts_cancel_check(runner),
                         "control": run_goal_accepts_control(runner),
                     }
@@ -691,6 +700,10 @@ class DeepRunMixin:
                     # (``QAR_REQUESTER_USER_ID``, see ``core/requester.py``).
                     if caps["requester"] and requester_user_id:
                         kwargs["requester_user_id"] = requester_user_id
+                    # A model the person NAMED in this message, for a runner that queues the work for
+                    # another lane: the queued task is pinned to it (never to the automatic start).
+                    if caps["requested_model"] and typed_request:
+                        kwargs["requested_model"] = typed_request
                     # THE CANCEL SIGNAL, so a cancel stops the running worker process itself (an
                     # interrupt, then a terminate after a grace period) instead of being read only
                     # once the attempt has finished. Only for a runner that accepts it.

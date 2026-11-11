@@ -243,3 +243,27 @@ def test_executor_refuses_run_when_no_claude_model_is_allowed():
     assert out.status == "failed"
     assert "no Claude model" in out.result
     assert provider.answer_models == []
+
+
+def test_a_specific_version_of_an_allowed_family_is_used_as_asked():
+    from quest_ai_runner.the_intelligence.mind.delegation.work_model import apply_work_model, default_effective
+    choice = apply_work_model("claude-opus-4-8", default_effective(), configured=False)
+    assert (choice.model, choice.source) == ("claude-opus-4-8", "requested")
+
+
+def test_a_version_of_a_family_the_environment_excludes_falls_back():
+    from quest_ai_runner.the_intelligence.mind.delegation.work_model import apply_work_model, default_effective
+    eff = default_effective()
+    eff["allowed_models"] = [m for m in eff["allowed_models"] if m["model"] != "opus"]
+    choice = apply_work_model("claude-opus-4-8", eff, configured=True)
+    assert choice.model == "sonnet" and choice.note
+
+
+def test_an_environment_that_allows_a_specific_version_keeps_it():
+    from quest_ai_runner.the_intelligence.mind.delegation.work_model import apply_work_model, anthropic_options
+    eff = {"default_model": {"provider": "anthropic", "model": "claude-sonnet-5-5"},
+           "allowed_models": [{"provider": "anthropic", "model": "claude-sonnet-5-5"},
+                              {"provider": "openai", "model": "gpt-5.2"}]}
+    assert anthropic_options(eff) == ["claude-sonnet-5-5"]
+    assert apply_work_model(None, eff, configured=True).model == "claude-sonnet-5-5"
+    assert apply_work_model("claude-sonnet-5-5", eff, configured=True).source == "requested"

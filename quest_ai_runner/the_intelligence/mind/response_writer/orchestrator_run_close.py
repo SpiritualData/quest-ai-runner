@@ -107,6 +107,9 @@ class RunCloseMixin:
                     rationale=rs.should_defer_deep.get("rationale") or "follow-up work from answer phase",
                     deep_difficulty=getattr(rs.plan, "deep_difficulty", None),
                     deep_difficulty_reason=getattr(rs.plan, "deep_difficulty_reason", None),
+                    # The model the person named in this message rides the hand-off too, so work
+                    # deferred from an answer turn runs on it exactly like work planned as "deep".
+                    deep_model_request=getattr(rs.plan, "deep_model_request", None),
                 )
                 deep_model = self._deep_model(deferred_plan, hint=rs.model_hint)
                 # Queued deployments pin deferred work to the registered queue runner (reserved

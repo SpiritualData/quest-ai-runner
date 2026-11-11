@@ -271,6 +271,9 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         deep_difficulty_reason=(str(raw.get("deep_difficulty_reason")).strip()[:300]
                                 if isinstance(raw.get("deep_difficulty_reason"), str)
                                 and raw.get("deep_difficulty_reason").strip() else None),
+        deep_model_request=(str(raw.get("deep_model_request")).strip()[:80]
+                            if isinstance(raw.get("deep_model_request"), str)
+                            and raw.get("deep_model_request").strip() else None),
         deep_target=deep_target,
         subquestions=subs,
         deep_subtasks=deep_subs,

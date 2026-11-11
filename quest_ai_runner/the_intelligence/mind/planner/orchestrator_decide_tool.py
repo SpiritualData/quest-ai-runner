@@ -189,6 +189,15 @@ DECIDE_TOOL: Dict[str, Any] = {
                 "type": ["string", "null"],
                 "description": "One short clause explaining deep_difficulty.",
             },
+            "deep_model_request": {
+                "type": ["string", "null"],
+                "description": "The model or tier the PERSON asked to DO this work on, in their own "
+                               "message ('use opus for this', 'run it on haiku', 'best tier', "
+                               "'claude-opus-4-8'), verbatim. Null when they named none; never your "
+                               "own preference. A model named only to REVIEW or check the work is "
+                               "NOT this field: 'fix it and have an Opus agent review it' is null "
+                               "here, with the review kept as a closing step in `deep_brief`.",
+            },
             "deep_target": {
                 "type": ["string", "null"],
                 "enum": ["quest_data", "code_or_files", "draft_in_chat", "other", None],
@@ -557,7 +566,10 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
 #: (gemini-2.5-flash-lite, reach judge on): with every description stripped, 14 of 38 hand-off
 #: decisions wrote "I will hand this to the environment" as the answer and left `deferred_deep`
 #: empty, so nothing ran. The field that carries the hand-off keeps saying what it is for.
-COMPACT_SCHEMA_KEPT_DESCRIPTIONS = ("deferred_deep",)
+#: ``deep_model_request`` keeps its description for a like reason: the compact prompt body has no
+#: REQUESTED MODEL rule, so a bare field name is the only thing that would tell the planner when a
+#: person's "use opus for this" belongs there (and that a requested end review does not).
+COMPACT_SCHEMA_KEPT_DESCRIPTIONS = ("deferred_deep", "deep_model_request")
 
 
 def compact_decide_schema(tool: Dict[str, Any]) -> Dict[str, Any]:
