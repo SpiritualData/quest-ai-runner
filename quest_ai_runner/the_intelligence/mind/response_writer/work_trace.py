@@ -403,6 +403,23 @@ class TurnTrace:
                     self.taken.setdefault(item["ref"], item)
             self.keep_texts(cards, self.taken)
 
+    @safe
+    def records_read(self, records: Any) -> None:
+        """Records code read for the turn without a card (a status snapshot's quest and goals, ``{"ref", "label", "kind"}``): candidates like a
+        fetched card, shown only when the finished reply draws on one (``settle_records``). A label that is not a record's name is dropped."""
+        with self.lock:
+            for record in records or []:
+                if not isinstance(record, Mapping):
+                    continue
+                ref, label = canonical_id(record.get("ref")), re.sub(r"\s+", " ", str(record.get("label") or "")).strip()
+                if not ref or not is_record_title(label, ref):
+                    continue
+                item = {"ref": ref, "label": label}
+                if record.get("kind") in RECORD_KINDS:
+                    item["kind"] = str(record["kind"])
+                self.taken.setdefault(ref, item)
+                self.card_texts.setdefault(ref, {"title": label, "text": ""})
+
     def keep_texts(self, cards: Any, known: Mapping[str, Any]) -> None:
         for card in cards or []:
             if not isinstance(card, Mapping) or canonical_id(card.get("id")) not in known:

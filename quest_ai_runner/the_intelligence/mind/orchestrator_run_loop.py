@@ -213,6 +213,11 @@ class RunLoopMixin:
             if res.kind in ("answer", "deep", "confirm"):
                 res.text = remove_em_dashes(res.text)
                 res.question = remove_em_dashes(res.question)
+            if res.kind == "answer" and getattr(rs, "status_snapshot", False) and res.text:
+                # A status or plan answer reads goals by ISO due day; written here, on the words the reader gets, because the figure pass above may
+                # rewrite a sentence after the answer's own repairs ("3 days overdue (due 2026-11-08)" reached a reply that way, measured live 2026-11-11).
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import human_dates
+                res.text = human_dates(res.text)
                 for _d in res.deep_results:
                     if isinstance(getattr(_d, "output", None), str):
                         _d.output = remove_em_dashes(_d.output)

@@ -115,7 +115,7 @@ def overview(rows: List[Mapping[str, Any]], today: date, window_days: int = OVER
     overdue = sorted((g for g in open_rows if g.get("due") and str(g.get("due")) < today.isoformat()), key=lambda g: str(g.get("due")))
     soon = sorted((g for g in open_rows if g.get("due") and today.isoformat() <= str(g.get("due")) <= last.isoformat()), key=lambda g: str(g.get("due")))
     undated = [g for g in open_rows if not g.get("due")]
-    lines = [f"{head} {len(rows)} goals: {len(done)} done, {len(open_rows)} open, {len(overdue)} overdue, {len(soon)} due from today through {last.isoformat()}."]
+    lines = [f"{head} {len(rows)} goals: {len(done)} done, {len(open_rows)} open, {len(overdue)} overdue, {len(soon)} due by {last.day} {last.strftime('%B')}."]       # a person's date: an ISO date here was copied into replies (2026-11-11)
     if done and not plan:
         # Measured 2026-11-11 ("How is this quest going?" on a quest with one goal done): the status never named what was already achieved, so it read as
         # only a list of what is late. The done goals are named so progress can be said, not just the backlog.
@@ -144,6 +144,19 @@ def overview(rows: List[Mapping[str, Any]], today: date, window_days: int = OVER
 PLAN_PER_DAY = 2
 
 
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def named_day(g: Mapping[str, Any], days: List[date], limit: date) -> Optional[date]:
+    """The day of the period a goal's own name sets ("Long run of 12 km on Saturday" is Saturday's), when that day falls in the period on or before
+    ``limit``; else None. Measured 2026-11-11: the earliest-day rule put a Saturday long run on Thursday."""
+    words = set(re.findall(r"[a-z]+", str(g.get("title") or "").lower()))
+    said = [w for w in WEEKDAYS if w in words]
+    if len(said) != 1:
+        return None
+    return next((d for d in days if d <= limit and d.strftime("%A").lower() == said[0]), None)
+
+
 def day_layout(open_rows: List[Mapping[str, Any]], today: date, window_days: int = OVERVIEW_WINDOW_DAYS) -> str:
     """The plan's days as code places them: the overdue goals first (oldest first), then the goals due in the period (soonest first), each on the earliest
     day with room (``PLAN_PER_DAY``) that is not after its due day, and when there is no such day, on its due day anyway; then the open goals with no date
@@ -158,7 +171,8 @@ def day_layout(open_rows: List[Mapping[str, Any]], today: date, window_days: int
     unplaced: List[Mapping[str, Any]] = []
     for g in overdue + due:
         limit = date.fromisoformat(str(g.get("due"))[:10]) if str(g.get("due"))[:10] >= today.isoformat() else last
-        room = next((d for d in days if d <= limit and len(placed[d]) < PLAN_PER_DAY), None)
+        named = named_day(g, days, limit)
+        room = named or next((d for d in days if d <= limit and len(placed[d]) < PLAN_PER_DAY), None)
         if room is None and g in due:
             room = limit
         if room is None:
@@ -196,13 +210,24 @@ def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = 
     of = f"the {total} in \"{name}\"" if name else f"the quest's {total}"
     head = (f"As of {when}, none of {of} is done yet" if done == 0 else
             f"As of {when}, all of {of} are done" if done == len(rows) else f"As of {when}, {done} of {of} " + ("is" if done == 1 else "are") + " done")
-    tail = "" if done == len(rows) else (", and none is overdue." if late == 0 else ", and 1 is overdue." if late == 1 else f", and {late} are overdue.")
+    finished = [" ".join(str(g.get("title") or "").split()).replace('"', "'") for g in rows if g.get("completed") and g.get("title")]
+    if finished and done < len(rows):
+        # What is done is named, so a status says progress, not only the backlog (measured live 2026-11-11: told to name one, the writer did not).
+        head += f" (\"{finished[0]}\")" if done == 1 else f", including \"{finished[-1]}\""
+    last = today + timedelta(days=OVERVIEW_WINDOW_DAYS)
+    soon = sum(1 for g in open_rows if g.get("due") and today.isoformat() <= str(g.get("due"))[:10] <= last.isoformat())
+    # The goals due in the coming week are counted here too: measured live 2026-11-11, a writer restated every count of the lead only to add "2 due this week".
+    late_part = "none is overdue" if late == 0 else "1 is overdue" if late == 1 else f"{late} are overdue"
+    soon_part = f"{soon} " + ("is" if soon == 1 else "are") + f" due by {last.day} {last.strftime('%B')}"
+    tail = "" if done == len(rows) else (f", {late_part}, and {soon_part}." if soon else f", and {late_part}.")
     oldest = sorted((g for g in open_rows if days_overdue(g, today)), key=lambda g: str(g.get("due")))
     if oldest:
         # The longest-overdue goal is named by code too: left to the writer, a status named a later goal as "the most overdue" (measured 2026-11-11).
         g = oldest[0]
         due = date.fromisoformat(str(g.get("due"))[:10])
-        tail = tail[:-1] + f". The longest overdue is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}."
+        # "so start there": the lead says what to do first itself, so an answer whose writer's sentences were all repeats (or were cut by a later check)
+        # still says it, and a writer's "Then ..." follows something (measured live 2026-11-11: a reply that was the lead alone, and one opening "Then").
+        tail = tail[:-1] + f". The longest overdue is \"{g.get('title')}\", due {due.day} {due.strftime('%B')}, so start there."
     return head + (tail or ".")
 
 
@@ -218,6 +243,16 @@ LEAD_WORD = re.compile(r"[a-z0-9']+")
 # A sentence is a reworded copy of the lead's count sentence when at least this share of its words are the lead's (and all its numbers are)
 LEAD_COPY_SHARE = 0.8
 LEAD_DUE = re.compile(r"due (\d{1,2}) ([A-Z][a-z]+)")
+LEAD_OVERDUE = re.compile(r"The longest overdue is \"([^\"]+)\"")
+SPELLED_VALUES = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+SPELLED_COUNT = re.compile(r"\b(" + "|".join(SPELLED_VALUES) + r")\b", re.I)
+ISO_DATE = re.compile(r"\b\d{4}-(\d{2})-(\d{2})\b")
+QUOTED = re.compile(r"[\"\u201c][^\"\u201c\u201d]+[\"\u201d]")
+# A sentence that names the lead's goal and holds at most this many words that are not the lead's says nothing but "do it first" (see
+# without_restated_lead). A count, never a list of words: this repository does not read the model's wording against a list.
+REPEAT_SPARE_WORDS = 3
+# A sentence about goals holding this many of the lead's figures restates its counts (see without_restated_lead)
+LEAD_COUNT_FIGURES = 3
 
 
 def lead_days_late(lead: str) -> set:
@@ -258,7 +293,7 @@ def without_restated_lead(text: str, lead: str) -> str:
     """``text`` without the writer's sentences that only say again what the code-written ``lead`` says: every number in the sentence is one of the lead's,
     and it has two or more of them or names the goal the lead names. List lines are left alone. Measured 2026-11-11: told the first sentence was code-written,
     a writer still wrote "Your quest is at 1 of 43 goals done, with 8 overdue" after it. Pure comparison of numbers and the quoted title; no wording read."""
-    held = set(LEAD_NUMBER.findall(lead or ""))
+    held = set(LEAD_NUMBER.findall(QUOTED.sub(" ", lead or "")))      # a number inside a quoted name ("Run 5 km") is not one of the lead's figures
     counts = LEAD_COUNTS.search(lead or "")
     if counts:
         # the lead's open count is said by it too (total minus done): "3 are open" after "1 of the 4 goals is done" says nothing new (measured 2026-11-11)
@@ -269,20 +304,40 @@ def without_restated_lead(text: str, lead: str) -> str:
     if re.search(r"\bnone\b", lead or "", re.I):
         held = held | {"0"}
     quest = {q.strip().lower() for q in LEAD_QUEST.findall(lead or "")}
-    titles = [t.strip(" ,.").lower() for t in LEAD_TITLE.findall(lead or "") if t.strip().lower() not in quest]
+    # the goal the lead names as longest overdue (a done goal it names is not the one "that one" may stand for)
+    titles = [t.strip(" ,.").lower() for t in LEAD_OVERDUE.findall(lead or "") if t.strip().lower() not in quest]
     lead_words = set(LEAD_WORD.findall((lead or "").lower()))
+    lead_own_words = set(LEAD_WORD.findall(QUOTED.sub(" ", lead or "").lower()))       # the lead's own words, not those of the names it quotes
     if not held or not text:
         return text
     lines = []
+    front: List[str] = []       # sentences that say "that one": they refer to the lead's goal, so they go straight after the lead (see below)
     for line in text.split("\n"):
         if re.match(r"\s*(?:[-*\u2022]|\d+[.)]|\*\*|\|)", line):
             lines.append(line)
             continue
         kept = []
         for sentence in LEAD_SENTENCE_SPLIT.split(line):
-            numbers = set(LEAD_NUMBER.findall(sentence))
+            # Numbers are read outside quoted names: "Run 5 km without stopping" is a goal's name, not a count (measured 2026-11-11: its 5 kept a sentence
+            # that said the lead's counts twice over, "has 4 goals: 1 done, 3 open, and 1 overdue: 1 of its 4 goals is done ...").
+            bare = ISO_DATE.sub(lambda m: f" {int(m.group(2))} ", QUOTED.sub(" ", sentence))      # "through 2026-11-18" says the lead's 18
+            # A count spelled out is a count ("Three are still open, one of them overdue, and two are due by 18 November", measured live 2026-11-11);
+            # "one" is left alone, it is mostly "that one" or "the one due soonest".
+            bare = SPELLED_COUNT.sub(lambda m: f" {SPELLED_VALUES[m.group(1).lower()]} ", bare)
+            for t in titles:
+                bare = re.sub(re.escape(t), " ", bare, flags=re.I)
+            numbers = set(LEAD_NUMBER.findall(bare))
             names_goal = any(t and t in sentence.lower() for t in titles)
+            spare = len(set(LEAD_WORD.findall(bare.lower())) - lead_own_words)
+            if names_goal and numbers <= (held | late_days) and spare <= REPEAT_SPARE_WORDS:
+                # The lead's goal named again and nothing more ("Book the race entry first."; "Your next step is \"Book the race entry\"."; "Finish the
+                # second draft."): measured live 2026-11-11 on next-step replies. The lead names it and already says to start there.
+                continue
             if numbers and numbers <= (held | late_days if names_goal else held) and (len(numbers) >= 2 or names_goal):
+                continue
+            if len(numbers & held) >= LEAD_COUNT_FIGURES and re.search(r"\bgoals?\b", bare, re.I):
+                # Three or more of the lead's figures about the goals: the counts said again, whatever else is tacked on (measured live 2026-11-11:
+                # "the quest has 4 goals: ... 4 goals, 1 done, 3 open, 1 overdue, and 2 due by 18 November, aimed at ... by 14 March").
                 continue
             if restates_goal_counts(sentence, held):
                 continue
@@ -290,9 +345,92 @@ def without_restated_lead(text: str, lead: str) -> str:
             if numbers and numbers <= held and len(words) >= 5 and len(words & lead_words) >= LEAD_COPY_SHARE * len(words):
                 # "None of your 2 goals is done, and none is overdue." after "none of the 2 goals in ... is done yet, and none is overdue." (2026-11-11)
                 continue
+            if names_goal:
+                front.append(as_that_one(sentence, titles))
+                continue
             kept.append(sentence)
         lines.append(" ".join(kept))
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    out = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    if front:
+        # Placed where they were, "that one" read as whatever goal came just before: measured live 2026-11-11, it followed "Done so far: Run 5 km".
+        out = " ".join(front) + ("\n\n" + out if out else "")
+    return out
+
+
+def as_that_one(sentence: str, titles: List[str]) -> str:
+    """``sentence`` with the lead's goal name (quoted or not) said as "that one", since the lead has just named it: "Book the race entry first, since
+    entries close" becomes "Do that one first, since entries close". A comma or full stop the writer put inside the quotes is kept. Measured 2026-11-11:
+    a next-step reply opened on the goal the lead had just named, so the same name was read in two sentences running."""
+    out = sentence
+    for t in titles:
+        if not t:
+            continue
+        pattern = re.compile(r"[\"“]?" + re.escape(t) + r"([,.]?)[\"”]?", re.I)
+
+        def say(m: "re.Match[str]", text: str = out) -> str:
+            start = not text[:m.start()].strip()
+            if start and re.match(r"\s*first\b", text[m.end():], re.I):
+                return "Do that one" + m.group(1)
+            return ("That one" if start else "that one") + m.group(1)
+        out = pattern.sub(say, out)
+    return out
+
+
+PLAN_DAY_LINE = re.compile(r"^\s*(?:[-*•]\s*)?(?:\*\*)?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b")
+
+
+def human_dates(text: str) -> str:
+    """``text`` with every ISO date written the way a person reads it ("2026-11-08" becomes "8 November"). The snapshot lists goals by ISO due day and a
+    writer copied it into replies ("3 days overdue (due 2026-11-08)", measured live 2026-11-11). A date that is not a real day is left as it is."""
+    def say(m: "re.Match[str]") -> str:
+        try:
+            d = date.fromisoformat(m.group(0))
+        except ValueError:
+            return m.group(0)
+        return f"{d.day} {d.strftime('%B')}"
+    return re.sub(r"\b\d{4}-\d{2}-\d{2}\b", say, text)
+
+
+def without_plan_preamble(text: str) -> str:
+    """A plan reply's ``text`` (the code-written lead not in it) without the lines before its first day line. The lead already says where things stand,
+    and the plan standard asks for the day lines next; measured 2026-11-11, a writer put "Your week is short: 2 goals, 0 done and 2 still open, with 1 due
+    from today through 2026-11-18. The one due soonest is ..." between them, so the counts and the goal were said twice. Line shape only (a day line opens
+    on a weekday name); a text with no day line is returned as it is."""
+    lines = text.split("\n")
+    first = next((i for i, line in enumerate(lines) if PLAN_DAY_LINE.match(line)), None)
+    if not first:
+        return text
+    return "\n".join(lines[first:]).strip()
+
+
+NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+LIST_LINE = re.compile(r"\s*(?:[-*•]|\d+[.)])\s+\S")
+COUNT_WORD = re.compile(r"\b(" + "|".join(NUMBER_WORDS[2:]) + r"|\d+)\b(?=\s+[A-Za-z])", re.I)
+
+
+def list_count_said_right(text: str) -> str:
+    """``text`` with a count in a line that introduces a list (it ends with ":") made to match the list under it: "Here are three proposed first goals:"
+    over one item loses "three", over two says "two". Measured live 2026-11-11: two of three proposed goals held figures, the figure cut removed them, and
+    the reply still promised three. Counts list lines against a number; it reads no meaning out of the words."""
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if not line.rstrip().endswith(":") or LIST_LINE.match(line):
+            continue
+        n = 0
+        for nxt in lines[i + 1:]:
+            if LIST_LINE.match(nxt):
+                n += 1
+            elif nxt.strip():
+                break
+        said = COUNT_WORD.search(line)
+        if not n or not said:
+            continue
+        value = int(said.group(1)) if said.group(1).isdigit() else NUMBER_WORDS.index(said.group(1).lower())
+        if value == n:
+            continue
+        word = (NUMBER_WORDS[n] if n < len(NUMBER_WORDS) else str(n)) if n > 1 else ""
+        lines[i] = re.sub(r"\s{2,}", " ", line[:said.start()] + word + line[said.end():])
+    return "\n".join(lines)
 
 
 def plan_lead(open_rows: List[Mapping[str, Any]], today: date, window_days: int = OVERVIEW_WINDOW_DAYS, across: int = 0, quest_name: str = "") -> str:
@@ -410,6 +548,17 @@ def milestone_part(registry: Any, quest_id: str, tables: Mapping[str, Any], rid:
     return text + ("\nIts open next steps:\n" + "\n".join(goal_line(g) for g in steps) if steps else "\nIt has no open next-step goal.")
 
 
+def snapshot_records(quest_id: str, quest_name: str, rows: Optional[List[Mapping[str, Any]]]) -> List[Dict[str, str]]:
+    """The records the snapshot read, as the work trail names them (``{"ref", "label", "kind"}``): the quest by its name, then each goal by its title.
+    The trail shows only those the finished reply draws on. Measured live 2026-11-11: a status answer read every goal of the quest in code and its
+    reply showed no "See context I used" at all, so the person could not see what it was based on."""
+    out = [{"ref": str(quest_id), "label": " ".join(str(quest_name or "").split()), "kind": "quest"}] if quest_name else []
+    for g in rows or []:
+        if g.get("id") and g.get("title"):
+            out.append({"ref": str(g.get("id")), "label": " ".join(str(g.get("title")).split()), "kind": "goal"})
+    return out
+
+
 def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False, question: str = "", decide: Any = None,
           window_days: int = OVERVIEW_WINDOW_DAYS, plan: bool = False, today: Optional[date] = None, quest_title: str = "",
           quest_name: str = "") -> Optional[Dict[str, Any]]:
@@ -454,10 +603,15 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
                 parts.append("The asker's own open goals on this quest, soonest due first (overdue ones lead):\n" + "\n".join(goal_line(g, today) for g in mine))
         if not parts:
             return None
-        named = (f"The quest: {quest_title.strip()} (call it by this name; never write its id).\n\n" if quest_title.strip() else "")
+        # The name apart from the outcome: given "Learn to play the cello (I play a simple piece on the cello)" as "this name", a reply called the quest
+        # by its outcome (measured live 2026-11-11).
+        name = " ".join(str(quest_name or "").split())
+        named = (f"The quest is named \"{name}\" (name and outcome: {quest_title.strip() or name}). Call it \"{name}\", never by its outcome or its "
+                 "id.\n\n" if name else f"The quest: {quest_title.strip()} (call it by this name; never write its id).\n\n" if quest_title.strip() else "")
         opening = (f"The reply's first sentence is written by code and goes before your text, word for word: \"{lead}\" Do not write it, and do not restate "
                    "its counts or the goal it names.\n\n" if lead else "")
-        return {"kind": "query", "locator": LOCATOR, "text": (PLAN_HEAD if plan else HEAD) + ":\n\n" + named + opening + "\n\n".join(parts), "lead": lead}
+        return {"kind": "query", "locator": LOCATOR, "text": (PLAN_HEAD if plan else HEAD) + ":\n\n" + named + opening + "\n\n".join(parts), "lead": lead,
+                "records": snapshot_records(quest_id, quest_name, everything)}
     except Exception as error:      # noqa: BLE001  a snapshot is an addition; its failure never stops the turn
         log.info("status snapshot not built: %s: %s", type(error).__name__, error)
         return None

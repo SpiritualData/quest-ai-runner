@@ -575,3 +575,16 @@ def test_the_answering_step_changes_no_counts_or_items_of_the_other_steps():
     after = {k: v for k, v in sink.latest().items() if k != "answer"}
     for step in ("web",):
         assert before[step]["counts"] == after[step]["counts"]
+
+
+def test_records_a_status_snapshot_read_show_when_the_reply_names_them_and_only_then():
+    # measured live 2026-11-11: a status answer read every goal in code and showed no "See context I used" at all
+    sink, trace = make()
+    trace.records_read([{"ref": "quest_1", "label": "Run my first half marathon", "kind": "quest"},
+                        {"ref": "g1", "label": "Book the race entry", "kind": "goal"},
+                        {"ref": "g2", "label": "Buy proper running shoes", "kind": "goal"},
+                        {"ref": "g3", "label": "Long run of 12 km on Saturday.", "kind": "goal"}])     # not a record name: dropped
+    trace.finish('As of 11 November, 1 of the 4 goals in "Run my first half marathon" is done. The longest overdue is "Book the race entry".')
+    step = next(s for s in sink.latest().values() if s["kind"] == "records")
+    assert [(i["ref"], i["label"], i.get("kind")) for i in step["items"]] == [
+        ("quest_1", "Run my first half marathon", "quest"), ("g1", "Book the race entry", "goal")]

@@ -747,15 +747,23 @@ class RunAnswerMixin:
         if getattr(rs, "no_attachment", False) and rs.plan.action == "answer" and not rs.text.startswith(NO_ATTACHMENT_LINE):
             rs.text = f"{NO_ATTACHMENT_LINE} {rs.text}".strip()     # code-written: the fact is the turn's own (no attachment object), not the model's wording
         lead = str(getattr(rs, "status_lead", "") or "").strip()
-        if lead and rs.plan.action == "answer" and not rs.text.startswith(lead):
+        if getattr(rs, "status_snapshot", False) and rs.plan.action == "answer" and rs.text and getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN:
+            # A plan's "here are three proposed goals:" says the count of the list under it, after the cuts that may have shortened that list.
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import list_count_said_right
+            rs.text = list_count_said_right(rs.text)
+        if getattr(rs, "status_snapshot", False) and rs.plan.action == "answer" and rs.text:
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import human_dates
+            rs.text = human_dates(rs.text)       # the snapshot's ISO due days, copied into the reply, are written as a person reads them
+        if lead and rs.plan.action == "answer":
             # Code-written: the goals at a glance, counted by the status snapshot. Put on after the length repairs, which cut it from every busy quest's status
             # (measured 2026-11-11: "0 of 25 done, 7 overdue" dropped to keep three sentences, and the reply check then refused to add a figure back).
-            # A writer that copied it anyway put it last once (measured 2026-11-11), so it is moved to the front, never stated twice.
+            # A writer that copied it anyway put it last once (measured 2026-11-11), so it is moved to the front, never stated twice. A draft that already
+            # opens with it is cleaned the same way: the restatement filter below ran only when the lead was missing.
             rest = rs.text.replace(lead, "", 1).strip() if lead in rs.text else rs.text
             is_plan = getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN
-            if not is_plan:
-                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import without_restated_lead
-                rest = without_restated_lead(rest, lead) or rest
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import without_plan_preamble, without_restated_lead
+            # A draft that was all restatement leaves the lead alone: falling back to the draft put the copy back (measured live 2026-11-11).
+            rest = without_plan_preamble(rest) if is_plan else without_restated_lead(rest, lead)
             # A plan's day lines (or any list or heading) start on their own paragraph: joined with a space, the opening ran into "**Wednesday 11 November**".
             apart = is_plan or bool(re.match(r"\s*(?:[-*•|#]|\d+[.)]|\*\*)", rest))
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
