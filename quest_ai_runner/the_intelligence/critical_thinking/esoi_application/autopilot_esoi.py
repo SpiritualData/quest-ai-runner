@@ -11,6 +11,11 @@ run. This module does the logistics so the model only does the judgment:
   * names ONE Solution to iterate, chosen by ``pick_solution`` (a gap first, else the Solution whose Metric was
     measured longest ago, so every Solution is visited in turn), with its next milestone and Metric record.
 
+A quest worked by several characters has one Solution per area and one character per area, so the choice is made per
+character: a character's standing instructions name the Solutions it iterates on a line ``SOLUTIONS YOU ITERATE: <record
+ids>`` (``named_solutions``), and ``readiness_for`` picks among those only. Without that line the pick is quest-wide, as
+before. The specification is read once per quest per pass (``read_readiness``) and rendered once per character.
+
 Best-effort throughout: a client without these calls, a quest without a specification and a failed read all give
 ``None`` and the pass composes the brief it composed before.
 """
@@ -18,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -61,15 +67,31 @@ def solutions_of(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             and not r.get("derived")]
 
 
-def pick_solution(records: List[Dict[str, Any]]) -> Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]]:
-    """``(solution, metric or None, why)`` for the Solution this run iterates, or None when there is no Solution.
+SOLUTIONS_LINE = re.compile(r"^[ \t>*#-]*SOLUTIONS YOU ITERATE:(.*)$", re.IGNORECASE | re.MULTILINE)
+_RECORD_ID = re.compile(r"\b[A-Za-z]+_[0-9A-Za-z]{6,}\b")
+
+
+def named_solutions(instructions: Optional[str]) -> Optional[List[str]]:
+    """The record ids on a character's ``SOLUTIONS YOU ITERATE:`` line, in the order written: None when the instructions
+    carry no such line (the character names nothing, so the pick is quest-wide), ``[]`` when the line names no id (the
+    character iterates no Solution, a reviewer for example)."""
+    found = SOLUTIONS_LINE.search(str(instructions or ""))
+    if found is None:
+        return None
+    return list(dict.fromkeys(_RECORD_ID.findall(found.group(1))))
+
+
+def pick_solution(records: List[Dict[str, Any]], only: Optional[List[str]] = None) -> Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]]:
+    """``(solution, metric or None, why)`` for the Solution this run iterates, or None when there is no Solution. ``only``
+    narrows the choice to those record ids (the Solutions a character's instructions name).
 
     The order is the hub's Prioritization (Quest's ordering arm), asked with what each Solution carries: a Solution with a milestone comes before one without
     (a milestone is the next priority to work, and a bare strategy line is not one); within that, a Solution with no Metric record comes first (measuring it is
     the work), then one whose Metric reads 'not yet measured', then the Metric measured longest ago. Ties keep the specification's own order."""
     metrics = {r["recordId"]: r for r in records if r.get("type") == "metric" and r.get("recordId")}
     candidates, found = [], []
-    for index, sol in enumerate(solutions_of(records)):
+    chosen_from = [sol for sol in solutions_of(records) if only is None or sol.get("recordId") in only]
+    for index, sol in enumerate(chosen_from):
         fields = sol.get("fields") or {}
         linked = [metrics[i] for i in _ids(fields.get("metric_ids")) if i in metrics]
         linked += [m for m in metrics.values() if sol.get("recordId") in _ids((m.get("fields") or {}).get("solution_ids"))
@@ -104,11 +126,18 @@ def _gaps(records: List[Dict[str, Any]]) -> List[str]:
     return gaps
 
 
+NO_SOLUTION_NAMED = ("ESOI READINESS: your instructions name no Solution to iterate (their SOLUTIONS YOU ITERATE line lists none), so "
+                     "this run iterates none. Do the job your instructions give, and call record_metric_result with not_applicable "
+                     "and that reason unless you measured a Metric yourself.")
+
+
 def render(spec: Dict[str, Any], picked: Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]],
-           refreshed: bool) -> str:
+           refreshed: bool, scope: str = "") -> str:
     records = spec.get("records") or []
     lines = ["ESOI READINESS (worked out by the runner from get_spec; the choice below is made, so do not spend the run "
              "choosing)."]
+    if scope:
+        lines.append(scope)
     gaps = _gaps(records)
     if gaps:
         lines.append(f"Gaps in the specification: {', '.join(gaps)}."
@@ -157,8 +186,9 @@ def refreshed_metric_values(client: Any, quest_id: str, spec: Optional[Dict[str,
         return spec
 
 
-def esoi_readiness(client: Any, quest_id: str) -> Optional[str]:
-    """The readiness block for ``quest_id``, or None when it cannot be built. Never raises."""
+def read_readiness(client: Any, quest_id: str) -> Optional[Tuple[Dict[str, Any], bool]]:
+    """``(specification, refreshed)`` for ``quest_id``, read (and refreshed when thin) ONCE per quest per pass, or None when it
+    cannot be read. Never raises."""
     getter = getattr(client, "get_spec", None)
     if not callable(getter):
         return None
@@ -175,9 +205,39 @@ def esoi_readiness(client: Any, quest_id: str) -> Optional[str]:
                     spec = getter("quest", quest_id) or spec
                 except Exception as e:  # noqa: BLE001 -- the refresh is a help, not a gate
                     log.info("autopilot: spec refresh failed for quest %s: %s", quest_id, e)
-        if not spec:
-            return None
-        return render(spec, pick_solution(spec.get("records") or []), refreshed)
+        return (spec, refreshed) if spec else None
     except Exception as e:  # noqa: BLE001 -- an extra for the brief, never a reason to lose the pass
         log.warning("autopilot: ESOI readiness unavailable for quest %s: %s", quest_id, e)
         return None
+
+
+def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Optional[str] = None) -> Optional[str]:
+    """The readiness block for ONE character's run, from the specification ``read_readiness`` read: the pick is made among
+    the Solutions that character's ``instructions`` name, else quest-wide. Never raises."""
+    if read is None:
+        return None
+    spec, refreshed = read
+    try:
+        records = spec.get("records") or []
+        named = named_solutions(instructions)
+        if named is None:
+            return render(spec, pick_solution(records), refreshed)
+        if not named:
+            return NO_SOLUTION_NAMED
+        known = [i for i in named if any(sol.get("recordId") == i for sol in solutions_of(records))]
+        if not known:
+            return render(spec, pick_solution(records), refreshed,
+                          scope="Your instructions name Solutions to iterate (" + ", ".join(named) + ") that are not Solutions of this quest's "
+                                "specification, so the choice below is quest-wide. Say so in your result, so the line is corrected.")
+        return render(spec, pick_solution(records, only=known), refreshed,
+                      scope="Chosen among the Solutions your instructions name (" + ", ".join(known) + "): these are yours on this quest, "
+                            "and the other Solutions belong to other runs.")
+    except Exception as e:  # noqa: BLE001 -- an extra for the brief, never a reason to lose the run
+        log.warning("autopilot: ESOI readiness could not be rendered: %s", e)
+        return None
+
+
+def esoi_readiness(client: Any, quest_id: str, instructions: Optional[str] = None) -> Optional[str]:
+    """The readiness block for ``quest_id`` (for the character whose ``instructions`` are given), or None when it cannot be
+    built. Never raises."""
+    return readiness_for(read_readiness(client, quest_id), instructions)

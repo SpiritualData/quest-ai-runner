@@ -97,3 +97,27 @@ def test_a_proposed_solution_is_asked_for_by_priority_and_through_sub_intents():
     text = esoi.render({"records": []}, None, False)
     assert "priority order for the intent" in text and "never by appending" in text and "sub-intent" in text
     assert "—" not in text
+
+
+def _two_areas():
+    return [sol("esr_aaaaaaaa", "Area A", ["m1"]), sol("esr_bbbbbbbb", "Area B", ["m2"]), sol("esr_cccccccc", "Area C", ["m3"]),
+            met("m1", "5", "2026-10-01T00:00:00+00:00"), met("m2", "7", "2026-10-20T00:00:00+00:00"),
+            met("m3", "9", "2026-10-25T00:00:00+00:00")]
+
+
+def test_a_character_iterates_only_the_solutions_its_instructions_name():
+    read = ({"records": _two_areas()}, False)
+    quest_wide = esoi.readiness_for(read, "Work the quest.")
+    assert "Iterate this Solution: Area A" in quest_wide                      # no line: the oldest measured of all, as before
+    mine = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_bbbbbbbb, esr_cccccccc\nYou are the lead of B and C.")
+    assert "Iterate this Solution: Area B (esr_bbbbbbbb)" in mine and "Area A" not in mine
+    assert "Chosen among the Solutions your instructions name" in mine
+
+
+def test_a_character_that_names_no_solution_iterates_none_and_an_unknown_id_falls_back():
+    read = ({"records": _two_areas()}, False)
+    none = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: none (weekly review of all solutions)\nReview.")
+    assert "iterates none" in none and "Iterate this Solution" not in none
+    unknown = esoi.readiness_for(read, "SOLUTIONS YOU ITERATE: esr_zzzzzzzz")
+    assert "Iterate this Solution: Area A" in unknown and "not Solutions of this quest" in unknown
+    assert esoi.named_solutions("no line here") is None and esoi.readiness_for(None, "x") is None

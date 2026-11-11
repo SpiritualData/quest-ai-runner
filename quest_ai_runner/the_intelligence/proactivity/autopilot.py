@@ -93,7 +93,7 @@ from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import (
     PERSONA_HELD, default_persona_instructions_for, default_quest_instructions_for, persona_entries_on_duty, persona_instructions_for,
     resolve_persona, split_held_for_another_day)
 from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, next_steps_from_pass
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.autopilot_esoi import esoi_readiness
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_for
 from quest_ai_runner.the_intelligence.proactivity.autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
 from quest_ai_runner.the_intelligence.proactivity.autopilot_gates import GatesMixin
 from quest_ai_runner.the_intelligence.proactivity.autopilot_work import WorkMixin
@@ -390,8 +390,9 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # unsorted quest or a person with no intents, so those cost nothing). A client that cannot ask
         # or a failed read gives no section, never a guess.
         intent_frame_text = self.read_intent_frame(quest_id)
-        # Computed once per quest per pass, and only for a real run: a dry run must not refresh a specification.
-        esoi_text = None if dry_run else esoi_readiness(self._client, quest_id)
+        # Read once per quest per pass, and only for a real run: a dry run must not refresh a specification. The Solution
+        # is then chosen per character (``readiness_for``), among the ones that character's instructions name.
+        esoi_read = None if dry_run else read_readiness(self._client, quest_id)
         # One batch per pass may be the one that proposes; a second character's batch is told a
         # proposal is already being handled instead of raising a duplicate.
         experiment_proposal_offered = False
@@ -517,7 +518,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                   experiments=experiments_text,
                                                   asked=asked_text,
                                                   intent_frame=intent_frame_text,
-                                                  esoi_readiness=esoi_text)
+                                                  esoi_readiness=readiness_for(
+                                                      esoi_read, persona_instructions))
                 if task_id:
                     experiment_proposal_offered = True
                     result.created.append({
