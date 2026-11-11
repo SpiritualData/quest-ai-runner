@@ -202,11 +202,48 @@ def test_an_ask_for_the_runners_own_account_goes_to_the_goals_owner_as_a_block(m
     assert [r[1] for r in seen if r[0] == "POST"] == ["/api/teams/team_b/process/blocks"]
 
 
-def test_an_ai_owned_goal_with_the_ai_as_asker_stays_a_plain_ask(monkeypatch):
+def test_an_ai_owned_goal_with_the_ai_as_asker_stays_a_plain_ask_for_a_person(monkeypatch):
+    """No block (the goal's owner is the AI), and the plain ask goes to the person the run works for, never the AI account."""
+    goals = {"period_groups": [{"goals": [{"id": "g1", "assigned_to_user_id": "user_ai"}]}]}
+    seen = routed(monkeypatch, [("GET", "/api/teams/whoami", 200, {"user_id": "user_ai"}), *base_routes(STATE, (200, BLOCK), goals=goals)])
+    filed, res = stuck_turn({"related_goal_id": "g1", "asker_user_id": "user_ai", "requester_user_id": "user_ai",
+                             "task_owner_user_id": OTHER, "participants": []})
+    assert res.decision_id == "plain1" and not [r for r in seen if "process/blocks" in r[1]]
+    plain = [r for r in seen if r[0] == "POST" and r[1].endswith("/decisions")][0]
+    assert plain[2]["assigned_to_user_id"] == OTHER
+
+
+def test_an_ask_with_nobody_but_the_ai_account_to_take_it_is_refused_not_given_to_the_ai(monkeypatch):
     goals = {"period_groups": [{"goals": [{"id": "g1", "assigned_to_user_id": "user_ai"}]}]}
     seen = routed(monkeypatch, [("GET", "/api/teams/whoami", 200, {"user_id": "user_ai"}), *base_routes(STATE, (200, BLOCK), goals=goals)])
     filed, res = stuck_turn({"related_goal_id": "g1", "asker_user_id": "user_ai", "participants": []})
-    assert res.decision_id == "plain1" and not [r for r in seen if "process/blocks" in r[1]]
+    assert res.decision_id is None and not [r for r in seen if r[0] == "POST"]
+
+
+def test_a_task_run_with_a_goal_owner_as_neither_asker_nor_requester_files_the_block_for_the_owner(monkeypatch):
+    """No asker at all (the run's meta carries only the quest and the goal): the goal's owner is who the ask is for."""
+    routes = [("GET", "/api/teams/whoami", 200, {"user_id": "user_ai"}), *base_routes(STATE, (200, BLOCK))]
+    seen = routed(monkeypatch, routes)
+    filed, res = stuck_turn({"related_goal_id": "g1", "asker_user_id": "", "participants": []})
+    assert filed is True and res.decision_id == "d_block"
+    assert [r[1] for r in seen if r[0] == "POST"] == ["/api/teams/team_b/process/blocks"]
+
+
+def test_the_create_decision_tool_from_a_task_run_resolves_an_assignee_and_never_the_ai_account(monkeypatch):
+    """A test run's plain ask was refused ("Assigned to user id is required"): the AI account asked and nobody resolved."""
+    seen = routed(monkeypatch, [("GET", "/api/teams/whoami", 200, {"user_id": "user_ai"}), *base_routes(STATE, (200, BLOCK))])
+    client = QuestClient("https://quest.example", "key", team_id="team_a")
+    spec = create_decision_spec({}, client_factory=lambda: client)
+    meta = {"asker_user_id": "user_ai", "requester_user_id": "user_ai", "task_owner_user_id": OTHER}
+    result = spec.handler({"summary": "Need the login", "quest_id": "q1"}, ToolContext(user_id="user_ai", meta=meta))
+    assert result.status is ToolStatus.APPLIED
+    plain = [r for r in seen if r[0] == "POST" and r[1].endswith("/decisions")][0]
+    assert plain[2]["assigned_to_user_id"] == OTHER
+    seen.clear()
+    spec.handler({"summary": "Need the other thing", "quest_id": "q1", "blocked_goal_id": "g1"},
+                 ToolContext(user_id="user_ai", meta={"asker_user_id": "user_ai"}))
+    plain = [r for r in seen if r[0] == "POST" and r[1].endswith("/decisions")]
+    assert not plain or plain[0][2]["assigned_to_user_id"] == OWNER   # the goal's owner, else nobody: never user_ai
 
 
 def test_the_create_decision_tool_takes_the_runs_goal_when_only_a_block_type_is_given(monkeypatch):

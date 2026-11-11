@@ -367,7 +367,7 @@ class RunCloseMixin:
         # ledger) becomes the turn's one ask: shown as the ending, assignee checked against the participants, reply text from the
         # ask record, so the reply never claims a request that no record backs (a real team turn said "I've sent X a request" while
         # the ask was filed to someone else and never shown, 2026-11-01).
-        if getattr(self.cfg, "interim_replies", False) and not rs._decision_parked and getattr(rs, "turn_asks", None):
+        if getattr(self, "escalation", None) is not None and not rs._decision_parked and getattr(rs, "turn_asks", None):
             adopted = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
             if adopt_turn_ask(self, emit, _ctx_meta, adopted, rs.turn_asks):
                 rs.text = adopted.output
@@ -434,7 +434,7 @@ class RunCloseMixin:
                     # the verifier's own structured judgement, ``asks_person`` with the one ``question``, files the ask even when the goal
                     # is met, instead of leaving the question in plain text where nothing tracks it. The answer text stays as written.
                     if (verdict is not None and verdict.get("asks_person") and str(verdict.get("question") or "").strip()
-                            and getattr(self.cfg, "interim_replies", False) and not rs._decision_parked):
+                            and getattr(self, "escalation", None) is not None and not rs._decision_parked):
                         asked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
                         if file_blocked_ask(self, emit, _ctx_meta, asked, dict(verdict, blocker="needs_person"),
                                             question=str(verdict.get("question") or "").strip()):
@@ -501,10 +501,10 @@ class RunCloseMixin:
                     # A BLOCK ONLY A PERSON CAN LIFT (incremental replies, section 6.3): the verifier's own enum
                     # says needs_person and it gave the question. Regenerating the same answer cannot unblock it,
                     # so ONE deduplicated ask is filed (to the asker, or the participant the verifier named and the
-                    # code resolved) and the turn ends with it. Switched on with ``interim_replies``.
+                    # code resolved) and the turn ends with it. Filed on every lane that has an escalation sink; ``interim_replies`` controls streaming only.
                     # A block only a person can lift is asked about only when nothing else is left to try: while the read-only deep search is
                     # untried, the last net below pursues it first, and files this ask itself if the search cannot meet the goal.
-                    if getattr(self.cfg, "interim_replies", False) and not self.search_untried(rs, exec_record, _ctx_meta) and blocks_on_person(
+                    if getattr(self, "escalation", None) is not None and not self.search_untried(rs, exec_record, _ctx_meta) and blocks_on_person(
                             str(verdict.get("blocker") or ""), str(verdict.get("question") or "").strip()):
                         blocked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False,
                                                   coverage=None)
@@ -755,7 +755,7 @@ class RunCloseMixin:
                     rs.text = (rs.text or "").rstrip() + "\n\n" + pursuit["message"]       # the hub adds none now; a line stays a structured outcome of the pursuit, not a default
                 last_verdict = rs._last_verdict
                 open_question = str(last_verdict.get("question") or "").strip()
-                if (pursuit["status"] == "unmet_reported" and getattr(self.cfg, "interim_replies", False)
+                if (pursuit["status"] == "unmet_reported" and getattr(self, "escalation", None) is not None
                         and blocks_on_person(str(last_verdict.get("blocker") or ""), open_question)):
                     # What the search could not find is now the one thing only the person can give: ask for exactly that.
                     blocked_ask = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)

@@ -49,6 +49,9 @@ class Escalation:
     # goal (a three-day clock and a hand-off) when ``assignee`` is the goal's owner; any other sink, or any failure, files the plain ask.
     blocked_goal_id: Optional[str] = None
     block_type: Optional[str] = None
+    # WHO THE RUN WORKS FOR, in order of preference (the task's requester, its owner): the people an ask is routed to when it names no
+    # assignee of its own, or names this runner's own account, which cannot answer. A sink that has no such notion ignores it.
+    run_for_user_ids: Optional[List[str]] = None
 
 
 # A short relative form the planner can emit instead of computing a real timestamp itself:

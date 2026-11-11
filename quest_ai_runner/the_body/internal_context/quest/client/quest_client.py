@@ -223,23 +223,44 @@ class QuestDecisionSink(EscalationSinkBase):
         owners = (quest or {}).get("owner_user_ids") or []
         return str(owners[0]) if owners else ""
 
+    def own_account(self) -> str:
+        """This runner's own account id, "" when it cannot be read (a stand-in client, a failed lookup)."""
+        try:
+            return str(self._client.own_user_id() or "") if hasattr(self._client, "own_user_id") else ""
+        except Exception:  # noqa: BLE001 -- best effort: an unreadable own id only means no candidate is skipped as "own"
+            return ""
+
+    def goal_owner_assignee(self, escalation: Escalation) -> str:
+        """The owner of the goal the ask is blocked on, or "" (no goal, no team, an unknown goal, an unowned goal)."""
+        if not (escalation.blocked_goal_id and escalation.quest_id and hasattr(self._client, "block_team_for")):
+            return ""
+        try:
+            return str(self._client.block_team_for(escalation.quest_id, escalation.blocked_goal_id).get("owner_id") or "")
+        except Exception:  # noqa: BLE001 -- a lookup that fails only means the next candidate is tried
+            return ""
+
     def resolve_assignee(self, escalation: Escalation) -> str:
-        """WHO this decision goes to: explicit escalation assignee, else the configured default,
-        else the quest's own owner.
+        """WHO this decision goes to, never this runner's own account (it cannot answer): the explicit escalation assignee,
+        else the owner of the goal the ask is blocked on, else the person the run works for (the task's requester, its owner),
+        else the configured default, else the quest's own owner.
 
         Raises ``QuestNotConfigured`` instead of returning "" so ``escalate`` below never files a
         decision with an empty ``assigned_to_user_id`` -- that used to succeed silently and sit in
         nobody's queue forever, which is a worse failure than the escalation not landing at all
         (at least a raised, logged failure is visible in the run's own error trail).
         """
-        assignee = (escalation.assignee or self._default_assignee
-                   or self.quest_owner_assignee(escalation.quest_id))
-        if assignee:
-            return assignee
+        own = self.own_account()
+        candidates = (lambda: escalation.assignee, lambda: self.goal_owner_assignee(escalation),
+                      *[(lambda u=u: u) for u in (escalation.run_for_user_ids or [])],
+                      lambda: self._default_assignee, lambda: self.quest_owner_assignee(escalation.quest_id))
+        for candidate in candidates:
+            assignee = str(candidate() or "")
+            if assignee and assignee != own:
+                return assignee
         raise QuestNotConfigured(
             f"cannot raise a decision ({escalation.summary!r}) for quest "
-            f"{escalation.quest_id!r}: no explicit assignee, no configured default "
-            "(QAR_DECISION_ASSIGNEE), and the quest's owner could not be resolved. Refusing to "
+            f"{escalation.quest_id!r}: no explicit assignee, no goal owner, no person the run works for, no configured default "
+            "(QAR_DECISION_ASSIGNEE), and the quest's owner could not be resolved (or is this runner's own account). Refusing to "
             "file an unaddressed decision.")
 
     def resolve_deadline(self, escalation: Escalation) -> Optional[datetime]:

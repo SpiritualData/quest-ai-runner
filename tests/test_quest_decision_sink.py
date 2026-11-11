@@ -150,3 +150,61 @@ def test_open_decision_ids_for_quest_empty_on_failure():
     client._request = raising  # type: ignore[assignment]
     sink = QuestDecisionSink(client)
     assert sink.open_decision_ids_for_quest("quest_1") == frozenset()
+
+
+# --- an ask for a person, never this runner's own account ---------------------------------------------------------------------
+
+def ai_client(*, goal_owner: str = "", quest_owners: Optional[List[str]] = None):
+    """A client whose own account is ``user_ai``; ``goal_owner`` owns goal ``g1``; the quest's owners are ``quest_owners``."""
+    client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
+    calls: List[Dict[str, Any]] = []
+
+    def fake_request(method, path, *, params=None, body=None):
+        calls.append({"method": method, "path": path, "body": body})
+        if path == "/api/teams/whoami":
+            return {"user_id": "user_ai"}
+        if path == "/api/teams/decisions/for-quest":
+            return []
+        if path == "/api/quests/quest_1/state":
+            return {"state": {"team_id": "team_1"}}
+        if path == "/api/teams/team_1/quests/quest_1":
+            return {"quest_id": "quest_1", "owner_user_ids": quest_owners or []}
+        if path == "/api/teams/team_1/decisions":
+            return {"decision_id": "dec_new"}
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    client._request = fake_request  # type: ignore[assignment]
+    client.get_goal = lambda goal_id, **kw: {"id": goal_id, "assigned_to_user_id": goal_owner}  # type: ignore[assignment]
+    return client, calls
+
+
+def assignee_of(sink, **fields) -> str:
+    return sink.resolve_assignee(Escalation(summary="Need the login", quest_id="quest_1", **fields))
+
+
+def test_an_ask_naming_the_runners_own_account_goes_to_the_goals_owner():
+    client, _ = ai_client(goal_owner="user_goal")
+    assert assignee_of(QuestDecisionSink(client), assignee="user_ai", blocked_goal_id="g1",
+                       run_for_user_ids=["user_requester"]) == "user_goal"
+
+
+def test_with_no_goal_owner_it_goes_to_the_person_the_run_works_for_then_the_quest_owner():
+    client, _ = ai_client(goal_owner="", quest_owners=["user_quest"])
+    sink = QuestDecisionSink(client, default_assignee_user_id="user_default")
+    assert assignee_of(sink, assignee="user_ai", blocked_goal_id="g1", run_for_user_ids=["user_ai", "user_task_owner"]) == "user_task_owner"
+    assert assignee_of(QuestDecisionSink(client), assignee="user_ai", run_for_user_ids=["user_ai"]) == "user_quest"
+
+
+def test_an_explicit_person_still_wins_over_the_goal_owner():
+    client, _ = ai_client(goal_owner="user_goal")
+    assert assignee_of(QuestDecisionSink(client), assignee="user_typing", blocked_goal_id="g1") == "user_typing"
+
+
+def test_nobody_but_the_runners_own_account_is_refused():
+    import pytest
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestNotConfigured
+    client, calls = ai_client(goal_owner="user_ai", quest_owners=["user_ai"])
+    with pytest.raises(QuestNotConfigured):
+        assignee_of(QuestDecisionSink(client), assignee="user_ai", blocked_goal_id="g1", run_for_user_ids=["user_ai"])
+    assert QuestDecisionSink(client).escalate(Escalation(summary="Need the login", quest_id="quest_1", assignee="user_ai")) == ""
+    assert not [c for c in calls if c["path"].endswith("/decisions")]

@@ -167,6 +167,20 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                 kwargs["assignee_user_id"] = member
         if "assignee_user_id" not in kwargs and asker:
             kwargs["assignee_user_id"] = asker
+        # The ask is for a person, never this runner's own account: a task or autopilot run has the AI account as its asker (or none),
+        # so the sink's resolver picks the goal's owner, else the person the run works for, else the quest's owner.
+        from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
+        from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestDecisionSink
+        sink = QuestDecisionSink(client)
+        if not kwargs.get("assignee_user_id") or kwargs["assignee_user_id"] == sink.own_account():
+            run_goal = str(args.get("blocked_goal_id") or ctx.value("related_goal_id") or "")
+            run_for = [str(ctx.value(k) or "") for k in ("requester_user_id", "task_owner_user_id")]
+            kwargs.pop("assignee_user_id", None)
+            try:
+                kwargs["assignee_user_id"] = sink.resolve_assignee(Escalation(
+                    summary=summary, quest_id=quest_id, blocked_goal_id=run_goal or None, run_for_user_ids=[u for u in run_for if u]))
+            except Exception:  # noqa: BLE001 -- QuestNotConfigured: nobody to ask; Quest then answers the unaddressed ask itself, and that refusal is reported below
+                pass
         # One ask per turn, however the worker words it: the same key the runner files its own ask under (core/ask_policy.py).
         turn_id, conv_id = str(ctx.value("turn_id") or ""), str(ctx.value("conv_id") or "")
         if turn_id or conv_id:

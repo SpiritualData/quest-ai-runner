@@ -362,11 +362,11 @@ ANSWERED = {"detail": "The person already declined this question on Tuesday. Use
 
 
 def raise_ask(monkeypatch, steps, **settings):
-    """The create_decision tool over the real client and a scripted transport (the first step answers the open-asks read)."""
+    """The create_decision tool over the real client and a scripted transport (the first steps answer the open-asks read and the runner's own-account lookup)."""
     from .fake_quest_transport import make_client
-    client, transport = make_client([(200, [])] + steps, monkeypatch, **settings)
+    client, transport = make_client([(200, []), (200, {"user_id": "u_ai"})] + steps, monkeypatch, **settings)
     spec = create_decision_spec({}, client_factory=lambda: client)
-    return spec.handler({"summary": "Approve the plan?", "quest_id": "q1"}, ToolContext()), transport
+    return spec.handler({"summary": "Approve the plan?", "quest_id": "q1"}, ToolContext(user_id="u_person")), transport
 
 
 def test_an_ask_the_person_already_answered_is_refused_and_says_not_to_ask_again_in_other_words(monkeypatch):

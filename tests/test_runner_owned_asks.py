@@ -129,18 +129,16 @@ def test_the_reply_is_written_from_the_fact_that_no_ask_exists_or_that_one_does(
 # ---- (2) a final that needs the person files the ask
 
 def test_a_met_final_that_asks_the_person_for_something_files_one_ask_and_keeps_the_answer():
+    """The ask is filed with streaming on or off: ``interim_replies`` controls streaming only (the sd-shared lane has it off)."""
     verdict = {"met": True, "asks_person": True, "question": "Do we accept the logo condition?"}
     for switched_on in (True, False):
         provider = RecordingProvider([dict(LOOKUP)], verdicts=[dict(verdict)])
         orch = build(provider, None, interim_replies=switched_on, answer_goal_max_iterations=3)
         events = run(orch)
         asks = [e for e in events if e["type"] == EVENT_DECISION]
-        if switched_on:
-            assert len(asks) == 1 and asks[0]["data"]["question"] == "Do we accept the logo condition?"
-            assert asks[0]["data"]["assigned_to"] == "u1" and len(orch.escalation.sent) == 1
-            assert [e for e in events if e["type"] == EVENT_RESULT][-1]["text"] == "I've sent Chidi Eze a request."
-        else:
-            assert not asks and not orch.escalation.sent
+        assert len(asks) == 1 and asks[0]["data"]["question"] == "Do we accept the logo condition?"
+        assert asks[0]["data"]["assigned_to"] == "u1" and len(orch.escalation.sent) == 1
+        assert [e for e in events if e["type"] == EVENT_RESULT][-1]["text"] == "I've sent Chidi Eze a request."
 
 
 def test_a_met_final_that_only_offers_help_files_nothing():

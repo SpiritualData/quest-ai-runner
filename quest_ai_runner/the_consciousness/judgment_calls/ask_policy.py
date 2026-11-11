@@ -49,6 +49,17 @@ def blocked_goal_of(meta: Mapping[str, Any]) -> str:
     return ""
 
 
+def run_for_of(meta: Mapping[str, Any]) -> List[str]:
+    """The people the run works for, in order: the task's requester, then its owner (``task_owner_user_id``). A sink routes an ask
+    that names no assignee of its own to the first of them that is not the runner's own account."""
+    out: List[str] = []
+    for key in ("requester_user_id", "task_owner_user_id"):
+        value = str(meta.get(key) or "").strip()
+        if value and value not in out:
+            out.append(value)
+    return out
+
+
 def failure_status(signature: str) -> str:
     """The HTTP-style status inside a ledger failure signature (``tool|status|first sentence``), or ""."""
     parts = str(signature or "").split("|")
@@ -125,7 +136,7 @@ class AskOutcome:
 
 def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options: Optional[List[str]], quest_id: Optional[str],
              conv_id: str, turn_id: str, asker_user_id: str, assignee: Assignee, summary: str,
-             blocked_goal_id: str = "", block_type: str = "") -> AskOutcome:
+             blocked_goal_id: str = "", block_type: str = "", run_for_user_ids: Sequence[str] = ()) -> AskOutcome:
     """File ONE decision-request through the sink. ``decision_id`` is empty when it could not be filed; the caller then
     ends the turn as a final that says the question could not be filed, never as one that claims an ask exists."""
     if sink is None:
@@ -135,7 +146,8 @@ def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options:
             summary=summary, kind="answer", quest_id=quest_id, assignee=assignee.user_id or None,
             default_on_silence="hold", dedupe_key=ask_dedupe_key(turn_id, conv_id, question), conv_id=conv_id or None,
             notify_user_id=asker_user_id or None, options=list(options) if options else None,
-            why_only_you=why_only_you or None, blocked_goal_id=blocked_goal_id or None, block_type=block_type or None))
+            why_only_you=why_only_you or None, blocked_goal_id=blocked_goal_id or None, block_type=block_type or None,
+            run_for_user_ids=list(run_for_user_ids) or None))
     except Exception as e:  # noqa: BLE001 -- a failed filing must end the turn honestly, not break it
         log.warning("ask-on-block: the sink raised %s: %s", type(e).__name__, e)
         return AskOutcome(error=f"{type(e).__name__}: {e}")

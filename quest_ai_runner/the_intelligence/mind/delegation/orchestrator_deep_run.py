@@ -895,7 +895,7 @@ class DeepRunMixin:
                 resume_session = None   # consumed: a continuation is offered per attempt, not sticky
                 # A row the worker filed itself (out of process, its own credentials) is re-filed through the runner's ask path
                 # (core/worker_ask_adoption.py): turn dedupe key, validated assignee, asker told, the worker's row withdrawn.
-                if (getattr(self.cfg, "interim_replies", False) and not getattr(res, "deferred", False) and ctx_meta is not None
+                if (getattr(self, "escalation", None) is not None and not getattr(res, "deferred", False) and ctx_meta is not None
                         and adopt_worker_asks(self.escalation, quest_id=quest_id, before=before_decision_ids, meta=ctx_meta)):
                     adopt_turn_ask(self, emit, ctx_meta, res, ctx_meta.get("turn_asks") or [])
                     res.met = False
@@ -1081,7 +1081,7 @@ class DeepRunMixin:
                 # give files the ask (same structured flag and the same filing as the chat path), met or not. A met final stays met with
                 # its text as written; an unmet one stops, since another attempt cannot answer the question.
                 asked_q = str(verdict.get("question") or "").strip()
-                if (verdict.get("asks_person") and asked_q and getattr(self.cfg, "interim_replies", False) and not res.decision_id):
+                if (verdict.get("asks_person") and asked_q and getattr(self, "escalation", None) is not None and not res.decision_id):
                     asked = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
                     if file_blocked_ask(self, emit, ctx_meta, asked, dict(verdict, blocker="needs_person"), question=asked_q):
                         res.decision_id = asked.decision_id
