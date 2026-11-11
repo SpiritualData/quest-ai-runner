@@ -56,7 +56,7 @@ def test_the_research_note_is_composed_from_the_record_and_is_short_and_readable
     from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
     note = research_note(RECORD)
     assert note.startswith("Research note: How long does daily qigong need to be to notice a change in focus?")
-    assert "How sure" not in note and "(1 source; nccih.nih.gov)" in note and "Not established: a validated minimum number of minutes" in note
+    assert "How sure:" not in note and "(1 source, read in full; nccih.nih.gov)" in note and "Not established: a validated minimum number of minutes" in note
     assert "1 of 2 findings was read in full; the other comes from search results" in note and "—" not in note and len(note) < 800
     assert placeholder_reason(note) is None
     assert research_note({"question": "q", "items": [], "synthesis": {}}) == ""
