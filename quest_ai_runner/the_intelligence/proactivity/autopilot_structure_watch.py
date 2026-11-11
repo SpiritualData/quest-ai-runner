@@ -67,7 +67,10 @@ def provider_ask(provider: Any, call: str = "structure-watch") -> Callable[..., 
 
     def ask(prompt: str, tier: str, cap: int) -> Mapping[str, Any]:
         before = [float(getattr(provider, name, 0) or 0) for name in ("tokens_in", "tokens_out", "cost_usd")]
-        model = ModelRegistry(provider).resolve_role(call)
+        registry = ModelRegistry(provider)
+        model = registry.resolve_role(call)
+        if tier == "best" and "best" not in registry.selected() and "best" not in registry._user_overrides:
+            raise RuntimeError(f"no model is chosen for the best tier (the hub's public choice names none for this lane's providers, and none is pinned), so the structure watch does not run on {model}")
         text = provider.answer([{"role": "user", "content": prompt}], model=model) or ""
         after = [float(getattr(provider, name, 0) or 0) for name in ("tokens_in", "tokens_out", "cost_usd")]
         used = [max(a - b, 0.0) for a, b in zip(after, before)]

@@ -550,7 +550,8 @@
   "modules": {
    "autopilot_gates": "quest_ai_runner.the_intelligence.proactivity.autopilot_gates",
    "autopilot_routines": "quest_ai_runner.the_intelligence.proactivity.autopilot_routines",
-   "live_pass": "quest_ai_runner.the_intelligence.critical_thinking.area"
+   "live_pass": "quest_ai_runner.the_intelligence.critical_thinking.area",
+   "structure_watch_binding": "quest_ai_runner.the_intelligence.proactivity.autopilot_structure_watch"
   }
  },
  "quest-body": {

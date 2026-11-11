@@ -113,3 +113,17 @@ def test_the_poller_passes_the_watch_to_both_passes_and_the_config_switch_turns_
     on, off = poller(), poller(autopilot_structure_watch=False)
     assert on._structure_watch is not None and on._autopilot._structure_watch is on._structure_watch
     assert off._structure_watch is None and off._autopilot._structure_watch is None
+
+
+def test_a_login_only_lane_resolves_best_to_the_hubs_best_choice_and_a_lane_with_none_fails_with_the_reason():
+    from hubofhubs.api import claude_cli
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    login = claude_cli.ClaudeCliProvider()
+    top = ModelRegistry(login).top_models()
+    assert top["best"] != top["quality"] and "fable" in top["best"] and ModelRegistry(login).resolve_role("structure-watch") == top["best"]
+    ask = binding.provider_ask(Provider())      # a provider that is no login and holds no key: the hub names no model for it
+    try:
+        ask("x", "best", 500)
+        raise AssertionError("expected the reason")
+    except RuntimeError as error:
+        assert "no model is chosen for the best tier" in str(error)

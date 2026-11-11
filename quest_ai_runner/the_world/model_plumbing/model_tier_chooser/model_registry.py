@@ -147,9 +147,15 @@ def hub_picks(available: set) -> Dict[str, str]:
     return out
 
 
-def configured_providers(providers) -> set:
-    """The names of the providers that hold a key (or a keyless endpoint): the only ones the tier selector may offer."""
-    return {name for name, p in (providers or {}).items() if getattr(p, "api_key", None) or getattr(p, "keyless", False)}
+def configured_providers(providers, primary=None) -> set:
+    """The names of the providers that hold a key (or a keyless endpoint): the only ones the tier selector may offer. The keyless Claude Code
+    login runs every Claude family, so a lane on it (as the primary provider or one of the providers) offers the hub's ``anthropic`` models;
+    without this a login-only lane offered none, the hub's public choice was never consulted and a tier fell to the live list (best to quality's model)."""
+    names = {name for name, p in (providers or {}).items() if getattr(p, "api_key", None) or getattr(p, "keyless", False)}
+    from hubofhubs.api import claude_cli as hub_cli
+    if any(isinstance(p, hub_cli.ClaudeCliProvider) for p in [primary, *(providers or {}).values()]):
+        names.add("anthropic")
+    return names
 
 
 def next_lower_tier(tier: Optional[str]) -> Optional[str]:
@@ -365,7 +371,7 @@ class ModelRegistry:
         """tier -> model id of the hub's public choice (``hubofhubs.tiers.choose``) among the configured providers. A tier with no public
         choice is absent: the live list or the pin decides it. Never raises: a failing selector leaves the live list in charge."""
         try:
-            names = configured_providers(getattr(self._provider, "providers", None) or self._providers)
+            names = configured_providers(getattr(self._provider, "providers", None) or self._providers, self._provider)
             key = frozenset(names)
         except Exception:  # noqa: BLE001 -- resolve_tier never raises
             log.warning("tier selection skipped: could not read the providers or credits", exc_info=True)
