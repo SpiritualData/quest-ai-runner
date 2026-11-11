@@ -586,3 +586,18 @@ def test_a_clause_saying_the_lead_goal_due_day_again_is_dropped_and_the_new_fact
     assert status_snapshot.without_restated_lead("It was due 8 November.", lead) == ""
     # a clause with its own content keeps the date
     assert status_snapshot.without_restated_lead("Book it today, since it was due 8 November.", lead) == "Book it today, since it was due 8 November."
+
+
+def test_a_sentence_that_only_points_at_the_lead_goal_is_dropped_and_a_count_clause_gives_way_to_its_new_fact():
+    # Measured live 2026-11-11 (run 13): "The first thing to do is that one." and "Both goals in ... are still open, with one due by 18 November, and
+    # photos are what you need before the shop can go live."
+    lead = ('As of 11 November, 1 of the 4 goals in "Run my first half marathon" is done ("Run 5 km without stopping"), 1 is overdue, and 2 are due by '
+            '18 November. The longest overdue is "Book the race entry", due 8 November, so start there.')
+    assert status_snapshot.without_restated_lead('The first thing to do is "Book the race entry".', lead) == ""
+    assert status_snapshot.without_restated_lead("Book the race entry first, since entries can close before race day.", lead) == \
+        "Do that one first, since entries can close before race day."
+    pottery = 'As of 11 November, none of the 2 goals in "Launch my pottery shop" is done yet, none is overdue, and 1 is due by 18 November.'
+    draft = ('The next step is "Photograph the first ten pieces," due 15 November. Both goals in "Launch my pottery shop" are still open, with one due '
+             'by 18 November, and photos are what you need before the shop can go live.')
+    assert status_snapshot.without_restated_lead(draft, pottery) == \
+        'The next step is "Photograph the first ten pieces," due 15 November. Photos are what you need before the shop can go live.'

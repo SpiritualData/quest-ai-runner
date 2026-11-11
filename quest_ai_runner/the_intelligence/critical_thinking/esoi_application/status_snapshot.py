@@ -262,7 +262,7 @@ ISO_DATE = re.compile(r"\b\d{4}-(\d{2})-(\d{2})\b")
 QUOTED = re.compile(r"[\"\u201c][^\"\u201c\u201d]+[\"\u201d]")
 # A sentence that names the lead's goal and holds at most this many words that are not the lead's says nothing but "do it first" (see
 # without_restated_lead). A count, never a list of words: this repository does not read the model's wording against a list.
-REPEAT_SPARE_WORDS = 3
+REPEAT_SPARE_WORDS = 4      # 3 kept "The first thing to do is that one." (four new words, none a fact; measured live 2026-11-11)
 # A sentence about goals holding this many of the lead's figures restates its counts (see without_restated_lead)
 LEAD_COUNT_FIGURES = 3
 
@@ -284,20 +284,25 @@ def lead_days_late(lead: str) -> set:
     return {str((a - d).days)}
 
 
+GOAL_STATUS_WORDS = r"\b(done|complete[d]?|overdue|late|finished|open|none)\b"
+
+
 def restates_goal_counts(sentence: str, held: set) -> bool:
     """A sentence that says the goal counts again in other words ("none of its goals is done, and one is overdue"; "the quest is 0% done"): it talks of goals
     being done, complete or overdue, and every number it holds is one of the lead's (``held``; "none" counts as 0 when the lead says "none"). A percentage of
     goals is never in a snapshot, so it is dropped whatever its numbers (measured 2026-11-11: "Write a children's book is 0% done: none of its 2 goals is
     complete, and 1 is overdue" after a lead saying exactly that)."""
-    if not re.search(r"\b(done|complete[d]?|overdue|late|finished)\b", sentence, re.I):
+    if not re.search(GOAL_STATUS_WORDS, sentence, re.I):
         return False
     if "%" in sentence:
         return bool(re.search(r"\b(goals?|quest|done)\b", sentence, re.I))
     if not re.search(r"\bgoals?\b", sentence, re.I):
         return False
-    numbers = set(LEAD_NUMBER.findall(sentence))
+    numbers = set(LEAD_NUMBER.findall(QUOTED.sub(" ", sentence)))
     if re.search(r"\bnone\b", sentence, re.I):
         numbers.add("0")
+    if re.search(r"\bboth\b", sentence, re.I):
+        numbers.add("2")      # "Both goals ... are still open" says the total of two again (measured live 2026-11-11)
     return bool(numbers) and numbers <= held
 
 
@@ -349,17 +354,21 @@ def without_restated_lead(text: str, lead: str) -> str:
                 # The lead's goal named again and nothing more ("Book the race entry first."; "Your next step is \"Book the race entry\"."; "Finish the
                 # second draft."): measured live 2026-11-11 on next-step replies. The lead names it and already says to start there.
                 continue
-            if numbers and numbers <= (held | late_days if names_goal else held) and (len(numbers) >= 2 or names_goal):
-                continue
-            if len(numbers & held) >= LEAD_COUNT_FIGURES and re.search(r"\bgoals?\b", bare, re.I):
-                # Three or more of the lead's figures about the goals: the counts said again, whatever else is tacked on (measured live 2026-11-11:
-                # "the quest has 4 goals: ... 4 goals, 1 done, 3 open, 1 overdue, and 2 due by 18 November, aimed at ... by 14 March").
-                continue
-            if restates_goal_counts(sentence, held):
-                continue
             words = set(LEAD_WORD.findall(sentence.lower()))
-            if numbers and numbers <= held and len(words) >= 5 and len(words & lead_words) >= LEAD_COPY_SHARE * len(words):
-                # "None of your 2 goals is done, and none is overdue." after "none of the 2 goals in ... is done yet, and none is overdue." (2026-11-11)
+            restated = ((numbers and numbers <= (held | late_days if names_goal else held) and (len(numbers) >= 2 or names_goal))
+                        # Three or more of the lead's figures about the goals: the counts said again, whatever else is tacked on (measured live
+                        # 2026-11-11: "the quest has 4 goals: ... 4 goals, 1 done, 3 open, 1 overdue, and 2 due by 18 November, aimed at ... by 14 March").
+                        or (len(numbers & held) >= LEAD_COUNT_FIGURES and re.search(r"\bgoals?\b", bare, re.I))
+                        or restates_goal_counts(sentence, held)
+                        # "None of your 2 goals is done, and none is overdue." after "none of the 2 goals in ... is done yet, and none is overdue." (2026-11-11)
+                        or (numbers and numbers <= held and len(words) >= 5 and len(words & lead_words) >= LEAD_COPY_SHARE * len(words)))
+            if restated:
+                # A clause of it that holds none of the lead's figures is a new fact and stays: "Both goals in ... are still open, with one due by
+                # 18 November, and photos are what you need before the shop can go live." keeps the photos (measured live 2026-11-11).
+                rescued = "" if names_goal else new_fact_clauses(sentence, held)
+                if rescued:
+                    kept.append(rescued)
+                    seen = True
                 continue
             if lead_due and not seen:
                 # Only the writer's first sentence: it follows the lead, so its "it" is the lead's goal. A later one may be about another goal due
@@ -407,6 +416,31 @@ def without_restated_due(sentence: str, due: str, held: set, lead_words: set) ->
         return ""
     out = ", ".join(k.strip() for k in kept)
     out = re.sub(r"^(?:and|but|so)\s+", "", out.strip(), flags=re.I)
+    out = out[:1].upper() + out[1:]
+    return out if re.search(r"[.!?][\"\u201d]?$", out) else out.rstrip(",;") + "."
+
+
+NEW_FACT_MIN_WORDS = 4
+
+
+def new_fact_clauses(sentence: str, held: set) -> str:
+    """The clauses of a ``sentence`` the restatement checks dropped that hold none of the lead's figures (``held``, counts spelled out included) and
+    at least ``NEW_FACT_MIN_WORDS`` words, joined as a sentence; "" when the sentence is one clause or none qualifies."""
+    parts = CLAUSE_SPLIT.split(sentence)
+    if len(parts) < 2:
+        return ""
+    kept = []
+    for part in parts:
+        bare = SPELLED_COUNT.sub(lambda m: f" {SPELLED_VALUES[m.group(1).lower()]} ", QUOTED.sub(" ", part))
+        if re.search(r"\bboth\b", bare, re.I):
+            bare += " 2"
+        if (set(LEAD_NUMBER.findall(bare)) & held or len(LEAD_WORD.findall(bare.lower())) < NEW_FACT_MIN_WORDS
+                or re.search(GOAL_STATUS_WORDS, bare, re.I)):      # a clause about goals being done, open or late is a count fragment ("None is overdue")
+            continue
+        kept.append(part)
+    if not kept:
+        return ""
+    out = re.sub(r"^(?:and|but|so)\s+", "", ", ".join(k.strip() for k in kept), flags=re.I)
     out = out[:1].upper() + out[1:]
     return out if re.search(r"[.!?][\"\u201d]?$", out) else out.rstrip(",;") + "."
 
