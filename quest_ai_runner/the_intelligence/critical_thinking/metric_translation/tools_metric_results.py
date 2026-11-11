@@ -23,6 +23,7 @@ from esoi import describe_metric
 from hubofhubs.api import default_directory
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.repo_specs import root_for
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import task_metric_scope
 from quest_ai_runner.the_world.tools.tools import (STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec,
                                                    quest_client_from_env, quest_credentials_present)
 
@@ -35,8 +36,8 @@ KEYWORDS = ("metric", "result", "before", "after", "milestone", "measure", "reco
 # changed a quest's structure recorded the quest's paid-subscriber count, 0 before and 0 after, which no structural change
 # could move that day. The relevant metric is the one of the solution the change implements; an outcome further down the
 # chain is context for the reason, not the result.
-WHICH_METRIC = ("Which metric: the one of the solution your change implements (the solution whose implementation, records, "
-                "prompts or code you changed), not an outcome further down the chain that this change cannot move within "
+WHICH_METRIC = ("Which metric: the one of the solution of THIS task's quest specification that your work advanced (the "
+                "solutions are listed in your brief), never a metric of the AI system itself; the tool refuses those. Not an outcome further down the chain that this change cannot move within "
                 "the run; such an outcome belongs in the reason as context. If that solution has no metric, defining one "
                 "is part of the work: add it to the specification (apply_spec_edit, a metrics record linked to the "
                 "solution) and record its value on the state before and after your change. not_applicable only when no "
@@ -64,6 +65,10 @@ def record_metric_result_spec(env: Mapping[str, str]) -> ToolSpec:
             result = build_result(args, run_id, ctx.task_id or "", lambda metric_id: quest_metric_names(env, ctx.quest_id, metric_id))
         except ValueError as e:
             return ToolResult(ok=False, text=f"Not recorded: {e}.")
+        refused = task_metric_scope.refusal(result.solution_id, result.metric_id,
+                                            task_metric_scope.read_quest_spec(env, ctx.quest_id))
+        if refused:
+            return ToolResult(ok=False, text=refused)
         if not ledger.record(result):
             return ToolResult(ok=False, text="Not recorded: the run's metric record could not be written.")
         return ToolResult(ok=True, data=payload_of([result]),

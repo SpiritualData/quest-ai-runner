@@ -186,3 +186,42 @@ def test_the_native_tool_loop_runs_only_when_named(programs, tmp_path, monkeypat
 def test_the_native_tool_loop_note_is_empty_without_a_skills_folder(tmp_path):
     from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
     assert native_loop_runner.skills_note({"QAR_SKILLS_DIR": str(tmp_path / "none"), "HOME": str(tmp_path / "nohome")}) == ""
+
+
+def make_skills(tmp_path, monkeypatch):
+    skills = tmp_path / "skills" / "demo"
+    skills.mkdir(parents=True)
+    (skills / "SKILL.md").write_text("---\nname: demo\ndescription: a demo skill\n---\nbody\n")
+    monkeypatch.setenv("QAR_SKILLS_DIR", str(tmp_path / "skills"))
+    return tmp_path / "skills"
+
+
+def test_the_hubs_solution_agents_pick_builds_the_binding_with_the_skills_folder(programs, picks, tmp_path, monkeypatch):
+    from hubofhubs.api import SolutionAgentsNativeRunner
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import solution_agents_loop_runner
+    folder = make_skills(tmp_path, monkeypatch)
+    table, asked = picks
+    table[frozenset({"anthropic"})] = arm("solution_agents_native_runner", "anthropic", tier="balanced")
+    runner = resolve_deep_runner(cfg())
+    assert type(runner) is solution_agents_loop_runner.SolutionAgentsLoopRunner and isinstance(runner, SolutionAgentsNativeRunner)
+    assert runner.tier == "balanced" and runner.goal_settings().escalation_marker
+    assert runner.skills_dir == str(folder)
+
+
+def test_the_solution_agents_loop_runs_when_named(programs, tmp_path, monkeypatch):
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import solution_agents_loop_runner
+    folder = make_skills(tmp_path, monkeypatch)
+    runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "solution_agents_loop"}))
+    assert type(runner) is solution_agents_loop_runner.SolutionAgentsLoopRunner
+    assert runner.skills_dir == str(folder)                 # the index is the hub's section, not a note
+    assert str(folder) not in runner.notes                 # the plain skills sentence of native_loop is not written
+
+
+def test_the_hubs_tier_reaches_the_native_loop_binding(programs, picks):
+    """``NativeLoopRunner`` names only ``**arguments``; the pick's provider, tier and model translator must still reach the hub class behind it."""
+    from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+    table, _ = picks
+    table[frozenset({"anthropic"})] = arm("native_tool_loop_runner", "anthropic", tier="balanced")
+    runner = resolve_deep_runner(cfg())
+    assert type(runner) is native_loop_runner.NativeLoopRunner
+    assert runner.tier == "balanced" and runner.provider == "anthropic" and runner.model_translator is not None

@@ -134,7 +134,7 @@ def test_every_place_that_asks_for_a_metric_says_which_one(registry):
     """The rule that the metric is the changed solution's, not a downstream outcome, reaches the worker three ways."""
     from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import CLOSING, NUDGE_BRIEF
     from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import WHICH_METRIC
-    assert "solution your change implements" in WHICH_METRIC and "defining one" in WHICH_METRIC
+    assert "solution of THIS task's quest specification" in WHICH_METRIC and "defining one" in WHICH_METRIC
     assert WHICH_METRIC in CLOSING and WHICH_METRIC in NUDGE_BRIEF
     assert WHICH_METRIC in registry.get("record_metric_result").when_to_use
     assert "—" not in WHICH_METRIC

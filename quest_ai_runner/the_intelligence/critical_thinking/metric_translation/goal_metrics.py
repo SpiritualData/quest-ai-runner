@@ -35,6 +35,7 @@ from esoi import MAX_METRICS, MetricLedger, MetricResult, payload_of, render_lin
 from hubofhubs.api import ToolOutcome, changed_something
 
 from quest_ai_runner.the_body.configuration.runtime_settings import core_settings, process_environment
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import task_metric_scope
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import (
     TOOL_NAME, WHICH_METRIC, metric_ledger_from_env)
 
@@ -87,14 +88,20 @@ class GoalMetrics:
 
     def __init__(self, iteration: Any, ledger: MetricLedger, run_id: str, *, task_id: Optional[str] = None,
                  request: str = "", working_dir: Optional[str] = None, gate_applies: bool = False,
-                 status: Optional[Callable[[str], None]] = None):
+                 status: Optional[Callable[[str], None]] = None, quest_id: Optional[str] = None):
         self.iteration, self.ledger, self.run_id = iteration, ledger, run_id
         self.task_id = task_id or ""
         self.request, self.working_dir = request, working_dir
         self.gate_applies = gate_applies
         self.status = status
+        self.quest_id = quest_id or ""
+        self.spec: Any = None
+        self.spec_read = False
+        source = iteration.source
+        if source is not None:
+            source = task_metric_scope.QuestScopedSource(source, self.quest_spec)
         self.record = MetricIteration(
-            ledger, run_id, source=iteration.source, meters=iteration.meters, measures=iteration.measures,
+            ledger, run_id, source=source, meters=iteration.meters, measures=iteration.measures,
             task_id=self.task_id, request=request, working_dir=working_dir, status=status,
             budget_seconds=core_settings().metric_arm_timeout_seconds, closing=CLOSING)
         self.attempts = 0
@@ -110,6 +117,13 @@ class GoalMetrics:
         offered = tools is not None and tools.get(TOOL_NAME) is not None
         return cls(iteration, ledger, run_id, gate_applies=offered, **kwargs)
 
+    def quest_spec(self) -> Any:
+        """The task's own quest specification, read once per goal (None when it cannot be read)."""
+        if not self.spec_read:
+            self.spec_read = True
+            self.spec = task_metric_scope.read_quest_spec(process_environment(), self.quest_id)
+        return self.spec
+
     def say(self, text: str) -> None:
         if self.status is not None:
             self.status(text)
@@ -118,7 +132,7 @@ class GoalMetrics:
 
     def begin(self) -> str:
         """The block for the brief ("" for none), after reading the metric when the arm measures. Never raises."""
-        return self.record.begin()
+        return self.record.begin() + task_metric_scope.quest_solutions_block(self.quest_spec(), self.quest_id)
 
     # -- around the attempts -----------------------------------------------------------------------
 
@@ -171,7 +185,10 @@ class GoalMetrics:
                         and not any(getattr(res, flag, False) for flag in UNFINISHED_FLAGS))
             results = self.record.finish(did_work).results
             self.missing = bool(did_work and self.gate_applies and self.changed and not results)
-            res.metric_results = payload_of(results)
+            kept, refused = task_metric_scope.scope_entries(payload_of(results), self.quest_id, self.quest_spec())
+            if refused:
+                self.missing = bool(did_work and self.gate_applies and self.changed and not kept)
+            res.metric_results = kept
             res.metric_missing = self.missing
             line = render_line(res.metric_results, self.missing) if did_work else ""
             if line and (res.output or "").strip():

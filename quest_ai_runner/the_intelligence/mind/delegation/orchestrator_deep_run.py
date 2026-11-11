@@ -35,7 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_constants import (
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     _run_goal_accepts_context_preamble, _run_goal_accepts_emit, _run_goal_accepts_resume_session_id, _run_goal_accepts_run_id,
     _run_goal_accepts_working_dir, run_goal_accepts_cancel_check, run_goal_accepts_control, run_goal_accepts_gathered_observations,
-    run_goal_accepts_is_subgoal, run_goal_accepts_requested_model, run_goal_accepts_requester_user_id)
+    run_goal_accepts_is_subgoal, run_goal_accepts_quest_id, run_goal_accepts_requested_model, run_goal_accepts_requester_user_id)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import (
     future_context_channel, mark_ceiling_stop, normalize_future_context, _strip_future_context, ellipsize, sentence)
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import TurnCardCache, _Emitter
@@ -514,7 +514,7 @@ class DeepRunMixin:
             metrics = GoalMetrics.for_goal(
                 self.tools, self.goal_iteration, task_uuid, task_id=(ctx_meta or {}).get("task_id"),
                 request=f"{user_message}\n{goal}", working_dir=working_dir_of(terminal_runner, working_dir_override),
-                status=emit.status if emit is not None else None)
+                status=emit.status if emit is not None else None, quest_id=quest_id)
             brief = brief + metrics.begin()
             # EACH ESOI SOLUTION THIS GOAL TOUCHES gets its own consideration through the hub (relevant solutions, then one cheap pass
             # per solution on the prompt its own records form, then the scopes above and the dependents): the worker's brief carries each
@@ -577,7 +577,7 @@ class DeepRunMixin:
                 if runner is None:
                     return {"emit": False, "run_id": False, "preamble": False, "gathered": False,
                             "working_dir": False, "resume": False, "is_subgoal": False,
-                            "requester": False, "cancel": False, "control": False, "requested_model": False}
+                            "requester": False, "cancel": False, "control": False, "requested_model": False, "quest_id": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -589,6 +589,7 @@ class DeepRunMixin:
                         "resume": _run_goal_accepts_resume_session_id(runner),
                         "is_subgoal": run_goal_accepts_is_subgoal(runner),
                         "requester": run_goal_accepts_requester_user_id(runner),
+                        "quest_id": run_goal_accepts_quest_id(runner),
                         "requested_model": run_goal_accepts_requested_model(runner),
                         "cancel": run_goal_accepts_cancel_check(runner),
                         "control": run_goal_accepts_control(runner),
@@ -700,6 +701,9 @@ class DeepRunMixin:
                     # (``QAR_REQUESTER_USER_ID``, see ``core/requester.py``).
                     if caps["requester"] and requester_user_id:
                         kwargs["requester_user_id"] = requester_user_id
+                    # THE RUN'S QUEST as data, for a runner that names ``quest_id`` (it scopes what it offers to the quest's own records).
+                    if caps["quest_id"] and quest_id:
+                        kwargs["quest_id"] = quest_id
                     # A model the person NAMED in this message, for a runner that queues the work for
                     # another lane: the queued task is pinned to it (never to the automatic start).
                     if caps["requested_model"] and typed_request:

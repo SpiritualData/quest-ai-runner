@@ -112,19 +112,26 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
 LIVE_RUNNER_PARTS = frozenset({"config", "settings", "model_translator", "provider", "tier", "root", "select", "should_continue", "complete", "registry", "tools"})   # not plain data, or set by the lane itself
 
 
-def deep_runner_options(cfg: RunnerConfig, runner_cls: Any, taken: Any = ()) -> dict:
-    """The ``cfg.deep_runner_options`` for ``runner_cls``: plain data by the runner's own constructor parameter names (read through its whole class chain, since a
-    binding forwards ``**arguments`` to the hub's class). A name the runner does not take, a part the lane sets itself, or a name already set for it raises
-    ``ValueError`` naming what the runner does take; nothing is silently dropped."""
+def constructor_names(runner_cls: Any) -> set:
+    """The constructor parameter names ``runner_cls`` takes through its whole class chain: a binding that names only ``**arguments`` forwards the rest to the hub's
+    class, so a name that class takes is taken too."""
     import inspect
-    options = dict(getattr(cfg, "deep_runner_options", None) or {})
-    if not options:
-        return {}
     names = set()
     for klass in getattr(runner_cls, "__mro__", (runner_cls,)):
         init = klass.__dict__.get("__init__")
         if init is not None:
             names |= {n for n, p in inspect.signature(init).parameters.items() if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY) and n != "self"}
+    return names
+
+
+def deep_runner_options(cfg: RunnerConfig, runner_cls: Any, taken: Any = ()) -> dict:
+    """The ``cfg.deep_runner_options`` for ``runner_cls``: plain data by the runner's own constructor parameter names (read through its whole class chain, since a
+    binding forwards ``**arguments`` to the hub's class). A name the runner does not take, a part the lane sets itself, or a name already set for it raises
+    ``ValueError`` naming what the runner does take; nothing is silently dropped."""
+    options = dict(getattr(cfg, "deep_runner_options", None) or {})
+    if not options:
+        return {}
+    names = constructor_names(runner_cls)
     offered = sorted(names - LIVE_RUNNER_PARTS)
     bad = sorted(n for n in options if n not in offered)
     if bad:
@@ -231,7 +238,7 @@ def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
         wanted = dict(working_dir=os.getenv("QAR_DEEP_WORKING_DIR") or cfg.corpus_root or os.getcwd(),
                       claude_path=binary, context_preamble=cfg.context_preamble or "")
         config = config_cls(**{k: v for k, v in wanted.items() if k in fields})
-        accepted = inspect.signature(cls.__init__).parameters
+        accepted = constructor_names(cls)    # the whole chain: a binding with only ``**arguments`` forwards these to the hub's class
         extra = {k: v for k, v in dict(provider=choice.provider, tier=choice.tier, model_translator=cli_model,
                                        settings=goal_settings).items() if k in accepted}
         if cls is not hub_cls:

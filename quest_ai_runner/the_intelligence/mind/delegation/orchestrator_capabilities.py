@@ -202,6 +202,16 @@ def run_goal_accepts_requested_model(deep_runner: Any) -> bool:
     return "requested_model" in sig.parameters
 
 
+def run_goal_accepts_quest_id(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` names a ``quest_id`` keyword. Only an explicit name counts (a ``**kwargs`` alone does not): the run's quest is
+    handed to a runner that declares it wants it, and every other runner is called exactly as before."""
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return "quest_id" in sig.parameters
+
+
 def run_goal_accepts_requester_user_id(deep_runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts a ``requester_user_id`` keyword (or **kwargs).
 
