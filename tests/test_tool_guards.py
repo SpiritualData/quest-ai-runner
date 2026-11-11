@@ -410,3 +410,9 @@ def test_a_planner_that_keeps_choosing_a_web_read_has_the_investigation_called_f
                         config=OrchestratorConfig(overseer=False), web=FakeWeb())
     orch.run("Look into what research says about practice length, then add a note", quest_id="q1")
     assert len(calls) == 1 and calls[0]["informs"] == "person_asked_for_research" and calls[0]["quest_id"] == "q1"
+
+
+def test_an_investigation_is_not_the_change_an_order_asked_for():
+    reg = research_registry()
+    entry = {"locator": "tool:investigate_for_quest", "tool_status": "applied"}
+    assert not tool_guards.mutating_tool_ran([entry], reg)

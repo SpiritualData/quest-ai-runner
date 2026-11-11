@@ -425,7 +425,7 @@ def mutating_tool_ran(gathered: Iterable[Mapping[str, Any]], registry: Any) -> b
         return False
     for item in gathered:
         locator = str(item.get("locator") or "") if isinstance(item, Mapping) else ""
-        if locator.startswith("tool:"):
+        if locator.startswith("tool:") and locator[len("tool:"):] not in RESEARCH_TOOLS:        # looking something up is not the change an order asked for
             spec = registry.get(locator[len("tool:"):])
             if spec is not None and getattr(spec, "mutates", False):
                 return True
