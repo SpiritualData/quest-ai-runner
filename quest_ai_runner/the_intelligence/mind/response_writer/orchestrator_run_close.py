@@ -463,8 +463,13 @@ class RunCloseMixin:
                         _composed = research_reply(tool_guards.research_note_text(gathered))
                         if _composed:
                             rs.research_reply_used = True
-                            log.info("Research turn: the reply is composed from the saved note; verifying it again.")
+                            log.info("Research turn: the reply is composed from the saved note; the ask was carried out by receipts.")
                             rs.text = _composed
+                            if not verdict.get("claims_unexecuted") and str(verdict.get("blocker") or "") not in ("needs_person", "tool_failure"):
+                                rs._last_verdict = dict(verdict, met=True, accepted_by_receipts=True)
+                                if emit is not None:
+                                    emit.status("The note was saved from the research; done.")
+                                break
                             _attempt += 1
                             continue
                     if verdict is None:
