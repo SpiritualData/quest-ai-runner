@@ -155,6 +155,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Digest-driven overseer | `nervous-system:overseer` | [quest_ai_runner/the_intelligence/nervous_system/area.py](nervous_system/area.py) |  |
 | Eligibility gate mixin | `quest-autopilot:autopilot_gates` | [quest_ai_runner/the_intelligence/proactivity/autopilot_gates.py](proactivity/autopilot_gates.py) |  |
 | Single-purpose routines | `quest-autopilot:autopilot_routines` | [quest_ai_runner/the_intelligence/proactivity/autopilot_routines.py](proactivity/autopilot_routines.py) |  |
+| Structure watch binding | `quest-autopilot:structure_watch_binding` | [quest_ai_runner/the_intelligence/proactivity/autopilot_structure_watch.py](proactivity/autopilot_structure_watch.py) |  |
 
 ### Metrics
 

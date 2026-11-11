@@ -35,6 +35,7 @@ if TYPE_CHECKING:  # typing only
 
 from quest_ai_runner.the_intelligence.higher_mind.objectives.goal_handoff import make_judge
 from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, _parse_dt
+from quest_ai_runner.the_intelligence.proactivity.autopilot_structure_watch import build_structure_watch
 from quest_ai_runner.the_intelligence.proactivity.poller_routines import RoutinesMixin
 from quest_ai_runner.the_body.intake_sources.context_updates import build_update_engine
 
@@ -152,8 +153,13 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         # every pass it runs, because the engine caches the user-scoped reads (reflections,
         # captures) for its lifetime -- a fresh engine per quest would re-read them per quest.
         self._update_engine = build_update_engine(config, self.client, state_path=state_path)
+        # The hub's structure watch, one per poller, shared by the autopilot pass and the routine pass (None when the lane switched it off or holds no model provider).
+        self._structure_watch = build_structure_watch(
+            self.client, config.model_provider, str(Path(state_path).with_name(Path(state_path).stem + "_structure_watch")) if state_path else "",
+            enabled=config.autopilot_structure_watch, now=self._now)
         self._autopilot = AutopilotPass(
             self.client,
+            structure_watch=self._structure_watch,
             team_id=config.team_id or "",
             # Which team each quest's autopilot work belongs on, for a lane serving several. The
             # pass object is shared across the poller's thread pool, so this is a pure function of

@@ -83,7 +83,7 @@ _FILE_SCALAR_FIELDS = {
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
     "quest_goal_updates_per_goal",
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
-    "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
+    "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring", "autopilot_structure_watch",
     "autopilot_pending_work",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
     "context_updates_judge_relevance", "context_updates_relevance_tier",
@@ -519,6 +519,9 @@ class RunnerConfig:
     # only consulted when the quest does not state one, which includes deployments whose backend
     # predates that field. ``None`` means "no consumer opinion", i.e. off.
     autopilot_adopt_recurring: Optional[bool] = None
+    # The hub's structure watch: once per autopilot or routine run of a quest, one small best-tier call over the quest's goals, experiments and investigations (none when they did not change since
+    # that quest's last watch). Every item is a decision request on the quest and no record is ever edited. On by default; False turns it off for this lane.
+    autopilot_structure_watch: bool = True
     # {quest_id: {"file": path, "label": "what the items are"}}: a file (relative paths are under
     # the quest's ``quest_folder_map`` folder) holding a Markdown table of work waiting on the
     # quest. While it has rows the quest's pass is due at least once a day even if its cadence is

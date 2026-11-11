@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-246 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+247 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -34,6 +34,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_ASYNC_CARD_UPDATE` | Default on; 0/false/off disables updating cards from a deep run's edits in the background. | `the_body/configuration/cli_config.py` | - |
 | `QAR_AUTOPILOT_ADOPT_RECURRING` | 1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass. | `the_body/configuration/cli_config.py` | - |
 | `QAR_AUTOPILOT_PASS_TIME` | Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time. | `the_body/configuration/cli_config.py` | - |
+| `QAR_AUTOPILOT_STRUCTURE_WATCH` | 0/false/off/no turns the structure watch off (RunnerConfig.autopilot_structure_watch): the one small best-tier call per autopilot or routine run of a quest. | `the_body/configuration/cli_config.py` | - |
 | `QAR_BOOTSTRAP_EMAIL_USER` | Quest user id the bootstrap report email is sent to. | `the_consciousness/terminal/cli_context.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS` | Hard cap on cards created in ONE bootstrap pass (unset = no cap). | `the_body/configuration/card_store_settings.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap). | `the_body/configuration/card_store_settings.py` | - |

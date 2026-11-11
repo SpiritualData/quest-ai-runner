@@ -42,7 +42,8 @@ class RoutinesMixin:
                 return
             if getattr(self, "routine_pass", None) is None:
                 self.routine_pass = RoutinePass(self.client, team_resolver=self.autopilot_team_for, team_id=self.cfg.team_id or "",
-                                                lane_user_id=self.cfg.lane_user_id, now=self._now)
+                                                lane_user_id=self.cfg.lane_user_id, now=self._now,
+                                                structure_watch=getattr(self, "_structure_watch", None))
             for quest_id, names in due_names.items():
                 for name in names:
                     outcome = self.routine_pass.run_quest(quest_id, only=name)

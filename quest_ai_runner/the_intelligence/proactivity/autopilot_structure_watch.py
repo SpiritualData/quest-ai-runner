@@ -6,6 +6,7 @@ quest's recent autopilot work is the runs. Every record is a person's (no review
 edit is ever applied: a person's goal is never renamed or re-described, and what a running experiment holds fixed is never reopened. The watch makes no call when nothing changed since the
 last run, and none once the run is at the soft share of its ceilings. Standard library plus ``hubofhubs.api``."""
 import logging
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 log = logging.getLogger(__name__)
@@ -57,3 +58,42 @@ def watch_quest(client: Any, quest_id: str, *, now: str, store: Any, ask: Option
 
 def investigations_of(client: Any, quest_id: str) -> List[Mapping[str, Any]]:
     return client.list_investigations(quest_id) if hasattr(client, "list_investigations") else []
+
+
+def provider_ask(provider: Any, call: str = "structure-watch") -> Callable[..., Mapping[str, Any]]:
+    """The hub's ``ask(prompt, tier, cap)`` over the lane's own model provider: the model is the tier of the call's role in the hub's table (never a named model), and the reply carries
+    the tokens and cost this one call used, read from the provider's per-thread counters (an absent counter reads as 0, and the hub then estimates from the text)."""
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+
+    def ask(prompt: str, tier: str, cap: int) -> Mapping[str, Any]:
+        before = [float(getattr(provider, name, 0) or 0) for name in ("tokens_in", "tokens_out", "cost_usd")]
+        model = ModelRegistry(provider).resolve_role(call)
+        text = provider.answer([{"role": "user", "content": prompt}], model=model) or ""
+        after = [float(getattr(provider, name, 0) or 0) for name in ("tokens_in", "tokens_out", "cost_usd")]
+        used = [max(a - b, 0.0) for a, b in zip(after, before)]
+        log.info("structure watch call: tier %s, %d tokens in, %d out, cost %.4f", tier, used[0], used[1], used[2])
+        return {"text": text, "tokens_in": int(used[0]), "tokens_out": int(used[1]), "cost_usd": used[2], "model": model}
+    return ask
+
+
+def build_structure_watch(client: Any, provider: Any, folder: str, *, enabled: bool = True, now: Optional[Callable[[], Any]] = None) -> Optional[Callable[[str, bool], Any]]:
+    """The ``watch(quest_id, dry_run)`` an autopilot or routine pass is given, or None when the lane switched it off or holds no model provider. Each quest keeps its own record of the last
+    watch under ``folder`` (so a quest whose records did not change since its last run makes no call); the watch never raises."""
+    if not enabled or provider is None or client is None:
+        return None
+    from hubofhubs.api import RunStore
+    from datetime import datetime, timezone
+    ask, stores = provider_ask(provider), {}
+
+    def watch(quest_id: str, dry_run: bool = False) -> Any:
+        if dry_run:
+            return None
+        try:
+            if quest_id not in stores:
+                stores[quest_id] = RunStore(str(Path(folder) / quest_id) if folder else "")
+            stamp = (now() if now else datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return watch_quest(client, quest_id, now=stamp, store=stores[quest_id], ask=ask)
+        except Exception as error:      # noqa: BLE001 the watch never fails a run
+            log.warning("structure watch on %s did not run: %s", quest_id, error)
+            return None
+    return watch

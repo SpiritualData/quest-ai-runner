@@ -10,7 +10,7 @@ NOW = "2026-11-10T09:00:00Z"
 
 class Client:
     def __init__(self):
-        self.decisions, self.edits = [], []
+        self.decisions, self.edits, self.configured = [], [], True
 
     def list_quest_goals(self, quest_id, **kw):
         return {"period_groups": [{"goals": [{"id": "g1", "name": "Ship the first version", "deadline": "2026-10-01", "completed": False},
@@ -71,3 +71,45 @@ def test_a_routine_run_calls_the_watch_once_and_a_run_at_its_ceiling_makes_no_ca
     seen = []
     routine = RoutinePass(c, structure_watch=lambda quest_id, dry: seen.append((quest_id, dry)))
     assert routine._structure_watch is not None and seen == []
+
+
+class Provider:
+    """A provider that counts tokens and cost like the real ones (per-call counters read before and after)."""
+    def __init__(self):
+        self.tokens_in = self.tokens_out = 0
+        self.cost_usd = 0.0
+        self.models = []
+
+    def answer(self, messages, *, model, **kw):
+        self.models.append(model)
+        self.tokens_in += 1200
+        self.tokens_out += 80
+        self.cost_usd += 0.03
+        return json.dumps({"items": []})
+
+
+def test_the_lane_builds_the_watch_by_default_and_a_switch_or_no_provider_leaves_it_off():
+    c, p = Client(), Provider()
+    assert binding.build_structure_watch(c, p, "") is not None
+    assert binding.build_structure_watch(c, p, "", enabled=False) is None and binding.build_structure_watch(c, None, "") is None
+
+
+def test_the_built_watch_asks_by_role_tier_reads_the_calls_usage_and_makes_no_call_in_a_dry_run():
+    c, p = Client(), Provider()
+    watch = binding.build_structure_watch(c, p, "", now=lambda: datetime(2026, 11, 10, 9, tzinfo=timezone.utc))
+    assert watch("q1", True) is None and p.models == []
+    out = watch("q1", False)
+    assert out["called"] and out["tokens_in"] == 1200 and out["tokens_out"] == 80 and len(p.models) == 1 and c.edits == []
+    assert watch("q1", False)["reason"] == "unchanged" and len(p.models) == 1
+
+
+def test_the_poller_passes_the_watch_to_both_passes_and_the_config_switch_turns_it_off():
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from .conftest import StubProvider, StubRetrieval
+    def poller(**kw):
+        cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1", retrieval=StubRetrieval({}), model_provider=StubProvider(decisions=[]), **kw)
+        return Poller(cfg, state_path=None, client=Client())
+    on, off = poller(), poller(autopilot_structure_watch=False)
+    assert on._structure_watch is not None and on._autopilot._structure_watch is on._structure_watch
+    assert off._structure_watch is None and off._autopilot._structure_watch is None

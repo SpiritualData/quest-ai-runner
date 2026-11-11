@@ -454,6 +454,8 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         cfg.autopilot_adopt_recurring = True
     elif _adopt_recurring in ("0", "false", "off", "no"):
         cfg.autopilot_adopt_recurring = False
+    if (os.getenv("QAR_AUTOPILOT_STRUCTURE_WATCH") or "").strip().lower() in ("0", "false", "off", "no"):
+        cfg.autopilot_structure_watch = False
     # --- deep-run context preamble (org/persona doctrine prepended to every deep brief) ---------
     # QAR_CONTEXT_PREAMBLE_FILE (a file path) is preferred: multi-line org doctrine is miserable as
     # a bare env var. QAR_CONTEXT_PREAMBLE (inline) still works for a short one-liner and is kept
