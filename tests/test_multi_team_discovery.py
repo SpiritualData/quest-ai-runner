@@ -203,3 +203,13 @@ def test_claim_teams_skips_other_teams_but_keeps_own_and_teamless():
 def test_empty_claim_teams_restricts_nothing():
     lane = _lane(MockQuestClient([]), team_id="mine", discovery_team_id="")
     assert lane._claimable_team({"task_id": "d", "team_id": "sd"})
+
+
+def test_pinned_only_team_claims_only_tasks_pinned_to_this_env():
+    """A team lent to this lane for env-specific work: its unpinned tasks belong to its own runner."""
+    lane = _lane(MockQuestClient([]), team_id="mine", discovery_team_id="", env_id="mine-env",
+                 claim_teams=["mine", "devops"], pinned_only_teams=["devops"])
+    assert lane._claimable_team({"task_id": "a", "team_id": "devops", "env_id": "mine-env"})
+    assert not lane._claimable_team({"task_id": "b", "team_id": "devops"})
+    assert not lane._claimable_team({"task_id": "c", "team_id": "devops", "env_id": "other"})
+    assert lane._claimable_team({"task_id": "d", "team_id": "mine"})   # other teams unaffected

@@ -69,7 +69,7 @@ if TYPE_CHECKING:
 # deep inside whatever first calls that field. ``RunnerConfig.from_file`` rejects those BY NAME,
 # loudly, instead. Keep this in sync when a new plain-data field is added to ``RunnerConfig``.
 _FILE_SCALAR_FIELDS = {
-    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "team_ids", "claim_teams", "org_id",
+    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "team_ids", "claim_teams", "pinned_only_teams", "org_id",
     "runner_label", "env_id", "lane_user_id",
     "model_fallback", "model_provider_overrides",
     "context_cards_dir", "card_tidy",
@@ -139,6 +139,13 @@ class RunnerConfig:
     # claims only tasks whose ``team_id`` is in this list, plus teamless tasks; a task on any other
     # team is left queued for the lane that serves that team. Empty (default) = no restriction.
     claim_teams: List[str] = field(default_factory=list)
+    # Teams whose tasks this lane claims ONLY when the task is pinned to this lane's own ``env_id``.
+    # Discovery returns a task pinned to this environment PLUS every unpinned one, so a lane that
+    # serves a team it shares with another runner (e.g. a personal lane lent to a DevOps team for the
+    # work that needs its production access) would otherwise race that team's own runner for every
+    # unpinned task. A team listed here must also be in ``claim_teams`` (when that is set); an unpinned
+    # task, or one pinned to another environment, stays queued for the runner it belongs to.
+    pinned_only_teams: List[str] = field(default_factory=list)
     # Optional org-scoped registration for the environment heartbeat, loaded from QUEST_ORG_ID.
     # When set, the poller's heartbeat POSTs to /api/orgs/{org_id}/environment/heartbeat instead
     # of the team-scoped endpoint, registering this runner as available to EVERY team in that

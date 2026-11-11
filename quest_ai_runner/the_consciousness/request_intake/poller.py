@@ -765,10 +765,18 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
     # --- fast lane: real-time tasks, served faster than the background scan ----------------------
 
     def _claimable_team(self, task: Dict[str, Any]) -> bool:
-        """False for a task on a team outside ``cfg.claim_teams`` (see that field). Teamless tasks
-        and an empty allowlist always pass."""
+        """False for a task on a team outside ``cfg.claim_teams`` (see that field), and for a task on
+        a ``cfg.pinned_only_teams`` team that is not pinned to this lane's env. Teamless tasks and an
+        empty allowlist always pass."""
         allowed = self.cfg.claim_teams
         team = task.get("team_id")
+        if team and team in self.cfg.pinned_only_teams:
+            pinned = str(task.get("env_id") or "")
+            if pinned and pinned == str(self.cfg.env_id or ""):
+                return True
+            log.debug("skipping task %s: team %s is pinned-only and the task is not pinned to env %s",
+                      task.get("task_id") or task.get("id"), team, self.cfg.env_id)
+            return False
         if not allowed or not team or team in allowed:
             return True
         log.debug("skipping task %s: team %s is not in this lane's claim_teams",
