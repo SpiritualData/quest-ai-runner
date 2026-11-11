@@ -5,7 +5,6 @@ The arm's own behaviour (flags, JSON extraction, usage accounting, the thinking 
 environment settings it reads, and the lane-wide usage limit. Nothing spawns the real ``claude`` binary.
 """
 import json
-import subprocess
 
 import pytest
 
@@ -72,7 +71,7 @@ def captured_thinking_env(monkeypatch, model):
         return P()
 
     monkeypatch.setattr(hub, "_supported_flags", lambda binary: frozenset(hub._ONE_SHOT_FLAGS.keys()))
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(hub, "run_in_group", fake_run)      # the hub runs the CLI in its own process group, not through subprocess.run
     ClaudeCliProvider()._invoke("hi", model=model)
     return captured["env"].get("MAX_THINKING_TOKENS")
 
@@ -98,7 +97,7 @@ def test_the_effort_setting_is_read_from_the_environment(monkeypatch):
         return P()
 
     monkeypatch.setattr(hub, "_supported_flags", lambda binary: frozenset(hub._ONE_SHOT_FLAGS.keys()))
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(hub, "run_in_group", fake_run)      # the hub runs the CLI in its own process group, not through subprocess.run
     monkeypatch.setenv("QAR_CLI_EFFORT", "low")
     ClaudeCliProvider()._invoke("hi", model="haiku")
     assert argv["cmd"][argv["cmd"].index("--effort") + 1] == "low"
