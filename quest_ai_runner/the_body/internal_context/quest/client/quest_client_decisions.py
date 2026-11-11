@@ -242,6 +242,19 @@ class DecisionsMixin:
             log.warning("list_open_decisions_for_user failed for user %s: %s", user_id, e)
             return []
 
+    def get_decision(self, decision_id: str) -> Optional[Dict[str, Any]]:
+        """GET /api/teams/decisions/{id}: one ask the calling account raised, was asked, or was told the answer
+        to. ``None`` when it cannot be read (missing, not this account's, or the request failed). Never raises."""
+        if not decision_id:
+            return None
+        try:
+            self._require()
+            row = self._request("GET", f"/api/teams/decisions/{decision_id}")
+            return row if isinstance(row, dict) else None
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_decision failed for %s: %s", decision_id, e)
+            return None
+
     def resolve_decision(self, decision_id: str, resolution: str,
                          human_statement: Optional[str] = None, response_text: Optional[str] = None) -> WriteResult:
         """``human_statement``: the person's verbatim approving words, required to approve an AI

@@ -1231,6 +1231,38 @@ def test_executor_deep_decision_reports_needs_you():
     assert ("qaconv_1", "staged the order for approval", "decision") in client.posts
 
 
+def test_executor_deep_decision_reports_the_asks_question():
+    """The worker raised the ask in its own process and printed only its id: the executor reads
+    the question back, so the task's result says what is being asked, not a stand-in sentence."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
+    ])
+    client = MockQuestClient([])
+    client.get_decision = lambda decision_id: (
+        {"decision_id": decision_id, "summary": "Order the blue part or the grey one?"}
+        if decision_id == "dec_56" else None)
+    ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(
+        met=False, output="", decision_id="dec_56")))
+    out = ex.execute({"id": "t10", "text": "order the part", "conv_id": "qaconv_2"})
+    assert out.status == "needs_you"
+    assert client.reports[0][2] == "Order the blue part or the grey one?"
+    assert ("qaconv_2", "Order the blue part or the grey one?", "decision") in client.posts
+
+
+def test_executor_deep_decision_unreadable_ask_keeps_the_old_sentence():
+    """An ask that cannot be read never blocks the report (Quest fills the question in itself)."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
+    ])
+    client = MockQuestClient([])
+    client.get_decision = lambda decision_id: None
+    ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(
+        met=False, output="", decision_id="dec_57")))
+    out = ex.execute({"id": "t11", "text": "order the part"})
+    assert out.status == "needs_you"
+    assert client.reports[0][2] == "A human decision is required to finish this task."
+
+
 def test_poller_discovery_is_team_scoped_to_the_lanes_team():
     """The lane passes its configured team_id into discovery so two teams under the SAME owner are
     isolated: the team-A lane discovers ONLY team-A tasks, never team-B's. (Backend enforces the

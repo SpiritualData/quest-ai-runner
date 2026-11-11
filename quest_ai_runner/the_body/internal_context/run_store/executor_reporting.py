@@ -230,7 +230,9 @@ class ReportingMixin:
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
         if decision_id:
-            summary = "A human decision is required to finish this task."
+            # The worker raised the ask in its own process and printed only its id, so read the
+            # question back: it is what the task's result, its progress line and the chat say.
+            summary = self.ask_question_text(decision_id) or "A human decision is required to finish this task."
             # A confirm-before-act run carries the prepared output (e.g. the code awaiting review).
             chat_text = next((d.output for d in deep if d.output), None) or summary
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
@@ -540,6 +542,21 @@ class ReportingMixin:
         if result_data and client_accepts_named_param(fn, "result_data"):
             kwargs["result_data"] = result_data
         self._safe(lambda: fn(task_id, *args, **kwargs))
+
+    def ask_question_text(self, decision_id: str) -> str:
+        """The question an ask puts (its ``summary``), read back from Quest; ``""`` when it cannot be read.
+
+        A client without ``get_decision`` (an older consumer, a test double) is not asked. Never raises.
+        """
+        read = getattr(self._client, "get_decision", None)
+        if not callable(read):
+            return ""
+        try:
+            row = read(decision_id)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Could not read the question of ask %s: %s", decision_id, e)
+            return ""
+        return str((row or {}).get("summary") or "").strip() if isinstance(row, dict) else ""
 
     def dispatch_done(self, task_id: str, text: str, outcome: str, *,
                       session_id: Optional[str] = None,
