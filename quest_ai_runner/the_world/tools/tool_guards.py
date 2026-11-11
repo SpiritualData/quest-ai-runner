@@ -301,6 +301,18 @@ def research_by_tool_owed(plan: Any, user_intent: Optional[str], registry: Any, 
     return any(isinstance(r, Mapping) and r.get("web") is not None for r in (getattr(plan, "reads", None) or []))
 
 
+def research_note_text(gathered: Iterable[Mapping[str, Any]]) -> str:
+    """The note composed by code from this turn's investigation record (its ``note_text``), or "" when no investigation ran or it holds no finding. A note a turn writes after
+    researching is this text, never the planner's own words for it."""
+    for entry in reversed(list(gathered)):
+        if str(entry.get("locator") or "") == "tool:" + RESEARCH_TOOLS[0] and entry.get("tool_status") not in ("refused", "failed"):
+            data = entry.get("tool_data")
+            text = str(data.get("note_text") or "") if isinstance(data, Mapping) else ""
+            if text.strip():
+                return text
+    return ""
+
+
 def web_read_owed(verdict: Optional[Mapping[str, Any]], web_configured: bool, gathered: Iterable[Mapping[str, Any]],
                   message: str) -> Optional[Dict[str, Any]]:
     """The web read the code runs before an answer, or None. Owed when the reach judge settled that what the person asks lives in

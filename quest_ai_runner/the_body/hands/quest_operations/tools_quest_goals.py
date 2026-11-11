@@ -26,6 +26,10 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         period = goal_links.normalize_period(args.get("period"))
         if not quest_id or not title:
             return ToolResult(ok=False, text="A goal needs a quest and a title; nothing was written." + NO_QUEST_HINT)
+        from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
+        placeholder = next((r for r in (placeholder_reason(title), placeholder_reason(str(args.get("description") or "x"))) if r), None)
+        if placeholder:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"The goal was not written: {placeholder}. Write the goal itself.")
         if args.get("user_asked_for_this_field") is False:       # left out means the order gate decides; an explicit false is only an offer
             return ToolResult(ok=False, text=f"Not written: the user did not ask for the goal {title!r}. Suggest it in your reply instead.")
         try:

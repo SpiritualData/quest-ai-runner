@@ -242,6 +242,26 @@ def tool_landed_account(exec_record: Any) -> str:
         return ""
 
 
+def receipts_reply(exec_record: Any) -> str:
+    """The reply written by code from this turn's receipts, for a reply the verifier found claiming an action the record does not show. One line per tool call that succeeded
+    (its receipt's first sentence, no ids), then plainly that nothing else was done. Never raises."""
+    import re
+    try:
+        lines = []
+        for fact in (getattr(exec_record, "facts", None) or []):
+            goal = str(getattr(fact, "goal", "") or "")
+            if getattr(fact, "succeeded", False) and goal.startswith("tool "):
+                receipt = goal.split(":", 1)[1] if ":" in goal else goal[5:]
+                first = re.split(r"(?<=[.!?])\s", receipt.strip(), maxsplit=1)[0]
+                first = " ".join(re.sub(r"\b[a-z]+_[0-9a-f]{6,}\b", "", first).split())
+                if first and first not in lines:
+                    lines.append(first)
+        done = ("Done this turn: " + " ".join(lines)) if lines else "Nothing was changed this turn."
+        return f"{done}\n\nThe rest of what you asked for was not carried out, so I have not claimed it. Tell me to go ahead and I will do it."
+    except Exception:  # noqa: BLE001 -- a fallback reply must never break the turn
+        return "Part of what you asked for was not carried out, so I have not claimed it."
+
+
 def unconfirmed_no_change_text(result: Any) -> str:
     """One deep result's text for the user, with the honesty gate for an unconfirmed no-change run.
 

@@ -93,7 +93,7 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
         extends = ""
         if answer is not None and answer.get("reuse") == investigate.FRESH and not args.get("look_again"):
             # The read ran and found the answer: applied, never "already set" (the order's own write, a note, is still to do).
-            return ToolResult(ok=True, data=answer,
+            return ToolResult(ok=True, data={**answer, "note_text": investigate.research_note(answer)},
                               text=investigate.summary_text({**answer, "synthesis": {"known": answer.get("known"), "unknown": answer.get("unknown")}}, reused=True)
                               + f" Cite it as the earlier investigation {answer.get('investigation_id')} from {answer.get('done_on')}; nothing new was searched.")
         if answer is not None:
@@ -116,7 +116,7 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
         if not made.get("investigation_id"):
             return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was recorded: the investigation was refused.")
         extended = f" It extends the earlier investigation {extends}." if extends else ""
-        return ToolResult(ok=True, data=made, text=investigate.summary_text(made) + f" Recorded as {made['investigation_id']}." + extended + note)
+        return ToolResult(ok=True, data={**made, "note_text": investigate.research_note(made)}, text=investigate.summary_text(made) + f" Recorded as {made['investigation_id']}." + extended + note)
 
     return ToolSpec(
         name="investigate_for_quest",

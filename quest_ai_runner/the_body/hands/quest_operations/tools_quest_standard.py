@@ -373,6 +373,10 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         if not quest_id or not title or not period:
             return ToolResult(ok=False, text="A goal needs a quest, a title and a period; nothing "
                                              "was created." + NO_QUEST_HINT)
+        from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
+        placeholder = next((r for r in (placeholder_reason(title), placeholder_reason(str(args.get("description") or "x"))) if r), None)
+        if placeholder:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"The goal was not created: {placeholder}. Write the goal itself.")
         if not args.get("user_asked_for_this_field"):
             return ToolResult(ok=False, text=(f"Not created: the user did not ask for the goal "
                                               f"{title!r}. Suggest it in your reply instead."))

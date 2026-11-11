@@ -196,5 +196,49 @@ def summary_text(recorded: Mapping[str, Any], reused: bool = False) -> str:
     return (f"{lead}: {recorded.get('question')}. " + ("" if reused else f"It ran {queries} search(es) and kept {len(recorded.get('items') or [])} finding(s). ")
             + f"How sure: {sure_words(recorded.get('best_grade'))}. Found: {known}." + (f" Not established: {unknown}." if unknown else "")
             + (f" Limits: {limits}." if limits else "") + " It has changed nothing yet; any change to the person's quest is proposed and goes through their confirmation."
-            + " If the person also asked for a note, write it from these findings with its own tool call: each finding, how sure it is and where it came from, with the minutes or "
-              "amounts the findings give; the note is not written until that call has run, and the reply says what the note holds.")
+            + " If the person also asked for a note, call add_quest_note: the system writes its text from this record (the findings, how sure each is, where each came from), so pass a short line "
+              "and do not write the findings yourself. The note is not saved until that call has run; the reply says what the note holds.")
+
+
+NOTE_FINDINGS = 5
+NOTE_CLAIM_CHARS = 170
+
+
+def domain_of(source: Any) -> str:
+    """The site a finding came from, as a reader says it ("nccih.nih.gov"), or the source text itself when it is not a link."""
+    text = str(source or "").strip()
+    found = re.match(r"https?://(?:www\.)?([^/\s]+)", text)
+    return found.group(1) if found else text
+
+
+def clip_words(text: Any, limit: int) -> str:
+    """``text`` on one line, cut at a word with an ellipsis, no em or en dashes."""
+    line = " ".join(str(text or "").replace("\u2014", ",").replace("\u2013", ",").split())
+    if len(line) <= limit:
+        return line
+    return line[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "..."
+
+
+def research_note(recorded: Mapping[str, Any]) -> str:
+    """The note a research ask leaves on the quest, composed by code from the investigation record: its question, how sure it is, the graded findings each with where it came
+    from, what is not established and what was read as a snippet only. Short and readable; the planner does not write it. "" when the record holds no finding."""
+    items = [i for i in (recorded.get("items") or []) if i.get("claim")]
+    known = [str(k) for k in ((recorded.get("synthesis") or {}).get("known") or []) if str(k).strip()]
+    if not items and not known:
+        return ""
+    lines = [f"Research note: {clip_words(recorded.get('question'), 200)}", f"How sure: {sure_words(recorded.get('best_grade'))}."]
+    lines.append("Findings:")
+    if known:
+        lines += [f"- {clip_words(k, NOTE_CLAIM_CHARS)}" for k in known[:NOTE_FINDINGS]]
+    else:
+        order = {"A": 0, "B": 1, "C": 2, "D": 3}
+        for item in sorted(items, key=lambda i: order.get(str(i.get("grade")), 4))[:NOTE_FINDINGS]:
+            lines.append(f"- {clip_words(item.get('claim'), NOTE_CLAIM_CHARS)} ({sure_words(item.get('grade'))}; {domain_of(item.get('source'))})")
+    unknown = [str(u) for u in ((recorded.get("synthesis") or {}).get("unknown") or []) if str(u).strip()]
+    if unknown:
+        lines.append(f"Not established: {clip_words('; '.join(unknown), 220)}")
+    snippets = [i for i in items if i.get("verified") in ("snippet", "not-opened")]
+    opened = len(items) - len(snippets)
+    if snippets:
+        lines.append(f"Limits: {opened} of {len(items)} findings come from pages that were opened; the rest are from search snippets only.")
+    return "\n".join(lines)

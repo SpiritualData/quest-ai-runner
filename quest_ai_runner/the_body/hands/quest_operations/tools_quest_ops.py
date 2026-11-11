@@ -553,6 +553,10 @@ def add_quest_note_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec
             return NO_QUEST
         if not text:
             return ToolResult(ok=False, text="Nothing was written: text is empty.")
+        from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
+        placeholder = placeholder_reason(text)
+        if placeholder:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"The note was not saved: {placeholder}. Write the content itself.")
         try:
             # One tool call is one logical write: the client gives it one Idempotency-Key for all its attempts.
             written = factory().add_quest_note(quest_id, text)

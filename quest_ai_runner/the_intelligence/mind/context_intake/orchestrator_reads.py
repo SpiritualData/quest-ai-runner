@@ -442,6 +442,9 @@ class ReadsMixin:
         companion reads for the same quest run too. None of this reads the model's prose.
         """
         work = list(calls[: self.cfg.max_reads_per_step])
+        # A note written after researching is composed by code from the investigation record, so the research runs before the note whatever order the planner listed.
+        researches = any(w.get("name") in tool_guards.RESEARCH_TOOLS for w in work)
+        work.sort(key=lambda c: 1 if researches and c.get("name") == "add_quest_note" else 0)
         work, merged = tool_guards.merge_near_duplicates(
             work, lambda n: self.tools is None or self.tools.get(n) is None or self.tools.get(n).mutates, ctx.quest_id)
         for name, args in merged:
@@ -486,6 +489,10 @@ class ReadsMixin:
                     continue
                 for wrote, used in checked.mapped:
                     log.info("tool %s: quest id %r is not one this turn saw; used %r", name, wrote, used)
+            if name == "add_quest_note":
+                composed = tool_guards.research_note_text(gathered)
+                if composed:
+                    args["text"] = composed      # the findings come from the record, not from the planner's wording
             sig = (name, json.dumps(args, sort_keys=True, default=str))
             if sig in tool_ok_signatures:
                 settled = as_status(tool_ok_signatures[sig] if isinstance(tool_ok_signatures, dict) else None,

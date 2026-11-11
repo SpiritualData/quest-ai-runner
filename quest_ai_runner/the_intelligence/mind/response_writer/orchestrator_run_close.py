@@ -19,7 +19,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool impo
     DEFERRED_RUNNER_KEY, OWN_ESCALATION_KEPT_STATUS, own_escalation_adds_nothing)
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_information_turn, user_ordered_work
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _strip_future_context, unconfirmed_no_change_text
+from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _strip_future_context, receipts_reply, unconfirmed_no_change_text
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import (
     adopt_turn_ask, ensure_found_constraint_head, file_blocked_ask, records_text)
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import turn_holds_records
@@ -737,6 +737,13 @@ class RunCloseMixin:
             except Exception:  # noqa: BLE001 — the net must never break the turn
                 log.warning("last-resort deep run failed", exc_info=True)
 
+        if ((rs._last_verdict or {}).get("claims_unexecuted") and not (rs._last_verdict or {}).get("met") and not rs._decision_parked
+                and not rs._deferred_handoff_confirmed and exec_record is not None):
+            # The last verdict still says the reply claims an action this turn's record does not show (a rewrite did not fix it, or the attempts ran out): the reply is written
+            # by code from the receipts, so it never states more than happened.
+            log.info("Reply still claims an action without a receipt; replaced by the receipts-only reply.")
+            rs.text = receipts_reply(exec_record)
+            rs._claim_corrected = True
         rs.text = checked_reply(self, rs, rs.text)       # Decision Check: independent views hold the reply to the reads and executed actions (off unless cfg.reply_check)
         _exit_reason = "unverified"
         if rs._deferred_handoff_confirmed:
