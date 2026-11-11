@@ -348,8 +348,13 @@ class QuestDecisionSink(EscalationSinkBase):
         if not (escalation.blocked_goal_id and escalation.block_type and escalation.quest_id and hasattr(self._client, "report_block")):
             return ""
         try:
+            # An ask whose "asker" is this runner's own account (an autopilot or task run nobody is typing into) cannot be answered by
+            # that account: the block then goes to the goal's owner, who must be a person. Otherwise the owner must be who the ask is for.
+            own = self._client.own_user_id() if hasattr(self._client, "own_user_id") else ""
+            for_ai = bool(own) and assignee_user_id == own
             placed = self._client.report_block(escalation.quest_id, escalation.blocked_goal_id, escalation.block_type,
-                                               escalation.summary, expected_owner=assignee_user_id)
+                                               escalation.summary, expected_owner="" if for_ai else assignee_user_id,
+                                               forbidden_owner=own if for_ai else "")
         except Exception as e:  # noqa: BLE001 -- a block that cannot be filed must never lose the ask
             log.info("escalate: block on goal %s not filed (%s); filing the plain ask", escalation.blocked_goal_id, e)
             return ""

@@ -191,3 +191,28 @@ def test_a_block_a_worker_raised_with_its_own_tool_is_adopted_as_the_turns_ask()
     entry = {"decision_id": "d_block", "assignee_user_id": OWNER, "summary": "Blocked: needs the store login"}
     assert messages.adopt_turn_ask(SimpleNamespace(), None, {"asker_user_id": OWNER}, res, [entry]) is True
     assert res.decision_id == "d_block"
+
+
+def test_an_ask_for_the_runners_own_account_goes_to_the_goals_owner_as_a_block(monkeypatch):
+    """A run nobody is typing into has the AI account as its asker; that account cannot answer, so the goal's person gets the block."""
+    routes = [("GET", "/api/teams/whoami", 200, {"user_id": "user_ai"}), *base_routes(STATE, (200, BLOCK))]
+    seen = routed(monkeypatch, routes)
+    filed, res = stuck_turn({"related_goal_id": "g1", "asker_user_id": "user_ai", "participants": []})
+    assert filed is True and res.decision_id == "d_block"
+    assert [r[1] for r in seen if r[0] == "POST"] == ["/api/teams/team_b/process/blocks"]
+
+
+def test_an_ai_owned_goal_with_the_ai_as_asker_stays_a_plain_ask(monkeypatch):
+    goals = {"period_groups": [{"goals": [{"id": "g1", "assigned_to_user_id": "user_ai"}]}]}
+    seen = routed(monkeypatch, [("GET", "/api/teams/whoami", 200, {"user_id": "user_ai"}), *base_routes(STATE, (200, BLOCK), goals=goals)])
+    filed, res = stuck_turn({"related_goal_id": "g1", "asker_user_id": "user_ai", "participants": []})
+    assert res.decision_id == "plain1" and not [r for r in seen if "process/blocks" in r[1]]
+
+
+def test_the_create_decision_tool_takes_the_runs_goal_when_only_a_block_type_is_given(monkeypatch):
+    seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
+    client = QuestClient("https://quest.example", "key", team_id="team_a")
+    ctx = ToolContext(meta={"related_goal_id": "g1"})
+    result = create_decision_spec({}, client_factory=lambda: client).handler(
+        {"summary": "Need the login", "quest_id": "q1", "block_type": "needs_access"}, ctx)
+    assert result.status is ToolStatus.APPLIED and [r[1] for r in seen if r[0] == "POST"] == ["/api/teams/team_b/process/blocks"]

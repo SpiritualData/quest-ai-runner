@@ -168,6 +168,17 @@ class DecisionsMixin:
         return self._write("POST", f"/api/teams/{tid}/decisions", body=body, label="Raising the ask",
                            idempotency_key=idempotency_key or new_idempotency_key())
 
+    def own_user_id(self) -> str:
+        """The account this client's key acts as (``GET /api/teams/whoami``), resolved once. "" when it cannot be read."""
+        cached = self.__dict__.get("own_user_id_cache")
+        if cached is None:
+            try:
+                cached = str((self._request("GET", "/api/teams/whoami") or {}).get("user_id") or "")
+            except (QuestApiError, QuestNotConfigured):
+                return ""
+            self.__dict__["own_user_id_cache"] = cached
+        return cached
+
     BLOCK_TYPES = ("needs_human_step", "needs_access", "needs_decision", "needs_information")
     BLOCK_REASON_MAX = 300
 
@@ -198,7 +209,8 @@ class DecisionsMixin:
                     return {"team_id": team, "owner_id": owner}
         return {"team_id": teams[0], "owner_id": owner}
 
-    def report_block(self, quest_id: str, goal_id: str, block_type: str, reason: str, *, expected_owner: str = "") -> Dict[str, Any]:
+    def report_block(self, quest_id: str, goal_id: str, block_type: str, reason: str, *, expected_owner: str = "",
+                     forbidden_owner: str = "") -> Dict[str, Any]:
         """POST /api/teams/{team}/process/blocks: report a block on a goal so its owner gets an ask with a three-day clock
         and the escalation hand-off applies (the quest team's personal process). Returns ``{block, created, team_id}``;
         ``created`` is False when the same block was already open. Raises ``QuestNotConfigured`` (no team, unknown goal or
@@ -214,6 +226,8 @@ class DecisionsMixin:
         placed = self.block_team_for(quest_id, goal_id)
         if expected_owner and placed["owner_id"] != str(expected_owner):
             raise QuestNotConfigured(f"goal {goal_id} is owned by someone else than the person this ask is for")
+        if forbidden_owner and placed["owner_id"] in ("", str(forbidden_owner)):
+            raise QuestNotConfigured(f"goal {goal_id} has no person other than the AI account to raise the block with")
         written = self._write("POST", f"/api/teams/{placed['team_id']}/process/blocks", label="Reporting the block",
                               body={"goal_id": goal_id, "type": block_type, "reason": text},
                               idempotency_key=new_idempotency_key())

@@ -105,13 +105,13 @@ ASK_ALREADY_ANSWERED_GUIDANCE = (
     "own judgment or report what you could not do.")
 
 
-def blocked_ask(client, args: Mapping[str, Any], quest_id: Optional[str], summary: str) -> Optional[ToolResult]:
+def blocked_ask(client, args: Mapping[str, Any], quest_id: Optional[str], summary: str, run_goal_id: str = "") -> Optional[ToolResult]:
     """The ask raised as a BLOCK on a goal (the quest team's three-day hand-off), or None to raise a plain ask instead.
 
     Only when the worker named the goal it is stuck on and a block type, on a quest that has a team and a known goal. Any
     failure of the block (no team, unknown goal, a Quest without the personal process, a refusal) returns None so the person is
     still asked the ordinary way; a block that already stands is reported as already open, never filed twice."""
-    goal_id = str(args.get("blocked_goal_id") or "").strip()
+    goal_id = str(args.get("blocked_goal_id") or run_goal_id or "").strip()   # a run working one goal needs no id spelled out
     block_type = str(args.get("block_type") or "").strip().lower()
     if not (goal_id and block_type and quest_id):
         return None
@@ -173,7 +173,7 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
             kwargs["dedupe_key"] = ask_dedupe_key(turn_id, conv_id)
             if conv_id:
                 kwargs["conv_id"] = conv_id
-        blocked = blocked_ask(client, args, quest_id, summary)
+        blocked = blocked_ask(client, args, quest_id, summary, str(ctx.value("related_goal_id") or ""))
         if blocked is not None:
             record_turn_ask(ctx.value("turn_asks"), decision_id=str((blocked.data or {}).get("decision_id") or ""),
                             assignee_user_id=str((blocked.data or {}).get("step_owner_id") or ""), summary=summary)
