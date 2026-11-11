@@ -90,7 +90,7 @@ def test_a_result_that_informs_a_decision_is_looked_into_under_the_narrowest_str
     assert body["solution_ids"] == [FUEL] and body["carried_out_by"] == "quest_ai" and body["asked_by_kind"] == "person"
     assert body["items"][0]["grade"] == "B" and "licence" not in body["items"][0] and body["queries"][0]["hits"] == 8
     assert body["screened_out"] == [{"count": 6, "reason": "duplicate result"}]
-    assert "How sure: fairly sure" in result.text and "changed nothing yet" in result.text and chr(0x2014) not in result.text
+    assert "How sure" not in result.text and "changed nothing yet" in result.text and chr(0x2014) not in result.text
 
 
 def test_with_no_narrower_strategy_it_falls_back_to_the_whole_quest():
@@ -187,7 +187,7 @@ def test_a_quick_investigation_without_a_synthesis_reports_its_graded_findings()
     from quest_ai_runner.the_world.science import investigate
     text = investigate.summary_text({"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
                                      "items": [{"claim": "Five minutes a day is the usual start", "grade": "C", "source": "https://example.org/a"}]})
-    assert "Five minutes a day is the usual start (not very sure; https://example.org/a)" in text and "nothing was settled" not in text
+    assert "Five minutes a day is the usual start (1 source; https://example.org/a)" in text and "nothing was settled" not in text
 
 
 def test_a_search_only_web_member_still_reads_a_page_through_the_research_adapter(monkeypatch):

@@ -56,7 +56,7 @@ def test_the_research_note_is_composed_from_the_record_and_is_short_and_readable
     from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
     note = research_note(RECORD)
     assert note.startswith("Research note: How long does daily qigong need to be to notice a change in focus?")
-    assert "How sure: not very sure." in note and "(not very sure; nccih.nih.gov)" in note and "Not established: a validated minimum number of minutes" in note
+    assert "How sure" not in note and "(1 source; nccih.nih.gov)" in note and "Not established: a validated minimum number of minutes" in note
     assert "1 of 2 findings was read in full; the other comes from search results" in note and "—" not in note and len(note) < 800
     assert placeholder_reason(note) is None
     assert research_note({"question": "q", "items": [], "synthesis": {}}) == ""
@@ -95,7 +95,7 @@ def test_the_same_finding_from_several_sites_is_one_finding_and_the_reply_is_com
     note = research_note({**RECORD, "items": items + RECORD["items"]})
     assert note.count("Five minutes a day is enough to start.") == 1
     reply = research_reply(note)
-    assert reply.startswith("I looked into this and saved a note on the quest: How long does daily qigong need") and "How sure: not very sure." in reply
+    assert reply.startswith("I looked into this and saved a note on the quest: How long does daily qigong need") and "How sure" not in reply
     assert "Not established: a validated minimum number of minutes" in reply and "—" not in reply
     assert research_reply("a hand-written note") == ""
 
@@ -137,7 +137,7 @@ def test_a_note_says_the_hosts_written_findings_and_never_a_snippet():
                         {"item_id": "i2", "claim": "no timeline given", "grade": "D", "source": "https://b.example/y", "verified": "snippet"}],
               "findings": [{"item_id": "i1", "claim": "A daily walk of ten minutes lifts mood within a few weeks.", "grade": "B", "source_kind": "research", "source": "https://a.example/x", "also": 2}]}
     note = research_note(record)
-    assert "- A daily walk of ten minutes lifts mood within a few weeks. (fairly sure; a.example, and 2 more sources say the same)" in note
+    assert "- A daily walk of ten minutes lifts mood within a few weeks. (1 study and 2 sources agree, read in full; a.example)" in note
     assert "..." not in note and "no timeline given" not in note and "Limits" not in note
     assert "A daily walk of ten minutes" in summary_text(record)
     assert research_note({**record, "findings": []}) == ""

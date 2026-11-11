@@ -64,6 +64,37 @@ def sure_words(grade: Optional[str]) -> str:
     return SURE_WORDS.get(grade or "", "nothing reliable was found")
 
 
+KIND_WORDS = {"research": ("study", "studies"), "reputable": ("established publication", "established publications"), "guide": ("guide", "guides"),
+              "vendor": ("company page", "company pages"), "personal": ("person's account", "people's accounts")}
+IN_FULL = ("opened", "cross-checked", "observed")
+
+
+def evidence_line(kinds: Sequence[str], read_in_full: bool = False) -> str:
+    """What a finding rests on, in plain words, never a verdict: "1 study", "3 guides agree", "1 person's account", "a company page", "1 study and 2 guides agree",
+    with ", read in full" only when it is true. ``kinds`` is the kind of each source behind the finding (research, reputable, guide, vendor, personal; anything else
+    counts as a plain source). The one wording every place that shows a finding shares (the quest card, the welcome-back card, the email and the chat note)."""
+    counts: Dict[str, int] = {}
+    for kind in kinds:
+        counts[kind if kind in KIND_WORDS else ""] = counts.get(kind if kind in KIND_WORDS else "", 0) + 1
+    if not counts:
+        return ""
+    parts = []
+    for kind, n in counts.items():
+        one, many = KIND_WORDS.get(kind, ("source", "sources"))
+        parts.append("a company page" if (kind, n) == ("vendor", 1) and len(counts) == 1 else f"{n} {one if n == 1 else many}")
+    text = " and ".join(parts) + (" agree" if sum(counts.values()) > 1 else "")
+    return text + (", read in full" if read_in_full else "")
+
+
+def finding_evidence(finding: Mapping[str, Any], verified: Any = None) -> str:
+    """The evidence line of one host-written finding (``source_kind``, ``also`` as a count or ``also_kinds``) with the verification of its own source."""
+    kind = str(finding.get("source_kind") or "")
+    also = finding.get("also_kinds")
+    if not isinstance(also, list):
+        also = [""] * int(finding.get("also") or 0)
+    return evidence_line([kind] + [str(k) for k in also], verified in IN_FULL)
+
+
 @dataclass
 class Placement:
     solution_ids: List[str] = field(default_factory=list)
@@ -186,19 +217,19 @@ def summary_text(recorded: Mapping[str, Any], reused: bool = False) -> str:
     """What was looked into, how sure it is and what it changed, in plain words, for the reply."""
     known = "; ".join((recorded.get("synthesis") or {}).get("known") or [])
     if isinstance(recorded.get("findings"), list):
-        known = "; ".join(f"{f.get('claim')} ({sure_words(f.get('grade'))}; {domain_of(f.get('source'))})" for f in recorded["findings"][:NOTE_FINDINGS] if f.get("claim")) or "nothing worth keeping was found"
+        known = "; ".join(f"{f.get('claim')} ({finding_evidence(f)}; {domain_of(f.get('source'))})" for f in recorded["findings"][:NOTE_FINDINGS] if f.get("claim")) or "nothing worth keeping was found"
     elif not known:
         # A quick review carries no written synthesis: the graded findings themselves are what was found, each with how sure it is and where it came from.
-        found_items = [f"{i.get('claim')} ({sure_words(i.get('grade'))}; {i.get('source')})" for i in (recorded.get("items") or [])[:6] if i.get("claim")]
+        found_items = [f"{i.get('claim')} ({evidence_line(['']) if i.get('source') else 'no source'}; {i.get('source')})" for i in (recorded.get("items") or [])[:6] if i.get("claim")]
         known = "; ".join(found_items) or "nothing was settled"
     unknown = "; ".join((recorded.get("synthesis") or {}).get("unknown") or [])
     limits = "; ".join(recorded.get("limitations") or [])
     lead = "An earlier investigation already answers this" if reused else "Looked into"
     queries = len(recorded.get("queries") or [])
     return (f"{lead}: {recorded.get('question')}. " + ("" if reused else f"It ran {queries} search(es) and kept {len(recorded.get('items') or [])} finding(s). ")
-            + f"How sure: {sure_words(recorded.get('best_grade'))}. Found: {known}." + (f" Not established: {unknown}." if unknown else "")
+            + f"Found: {known}." + (f" Not established: {unknown}." if unknown else "")
             + (f" Limits: {limits}." if limits else "") + " It has changed nothing yet; any change to the person's quest is proposed and goes through their confirmation."
-            + " If the person also asked for a note, call add_quest_note: the system writes its text from this record (the findings, how sure each is, where each came from), so pass a short line "
+            + " If the person also asked for a note, call add_quest_note: the system writes its text from this record (the findings, what each rests on, where each came from), so pass a short line "
               "and do not write the findings yourself. The note is not saved until that call has run; the reply says what the note holds.")
 
 
@@ -231,10 +262,10 @@ def research_note(recorded: Mapping[str, Any]) -> str:
     order = {"A": 0, "B": 1, "C": 2, "D": 3}
     if isinstance(recorded.get("findings"), list):
         rows = [{"claim": f.get("claim"), "grade": f.get("grade"), "source": f.get("source") or (items.get(f.get("item_id")) or {}).get("source"), "also": f.get("also") or 0,
-                 "verified": (items.get(f.get("item_id")) or {}).get("verified")}
+                 "verified": (items.get(f.get("item_id")) or {}).get("verified"), "evidence": finding_evidence(f, (items.get(f.get("item_id")) or {}).get("verified"))}
                 for f in recorded["findings"] if f.get("claim")]
     else:
-        rows = [{"claim": i.get("claim"), "grade": i.get("grade"), "source": i.get("source"), "also": 0, "verified": i.get("verified")} for i in item_list
+        rows = [{"claim": i.get("claim"), "grade": i.get("grade"), "source": i.get("source"), "also": 0, "verified": i.get("verified"), "evidence": evidence_line([""], i.get("verified") in IN_FULL)} for i in item_list
                 if i.get("claim") and "..." not in str(i["claim"]) and "\u2026" not in str(i["claim"]) and str(i["claim"]).strip()[-1:] in ".!?"]      # an earlier record: only a finding already written whole
     seen, picked = set(), []
     for row in sorted(rows, key=lambda r: order.get(str(r.get("grade")), 4)):
@@ -247,11 +278,9 @@ def research_note(recorded: Mapping[str, Any]) -> str:
             break
     if not picked:
         return ""
-    best = min((r.get("grade") or "D" for r in picked), key=lambda g: order.get(str(g), 4))
-    lines = [f"Research note: {clip_words(recorded.get('question'), 200)}", f"How sure: {sure_words(best)}.", "Findings:"]
+    lines = [f"Research note: {clip_words(recorded.get('question'), 200)}", "Findings:"]
     for row in picked:
-        more = f", and {row['also']} more source{'s' if row['also'] > 1 else ''} say the same" if row["also"] else ""
-        lines.append(f"- {' '.join(str(row['claim']).split())} ({sure_words(row.get('grade'))}; {domain_of(row.get('source'))}{more})")
+        lines.append(f"- {' '.join(str(row['claim']).split())} ({row['evidence']}; {domain_of(row.get('source'))})")
     unknown = [re.sub(r"^not established:\s*", "", str(u).strip(), flags=re.IGNORECASE) for u in ((recorded.get("synthesis") or {}).get("unknown") or [])
                if str(u).strip() and not re.match(r"\s*(?:not established:\s*)?licen[cs]e\b", str(u), re.IGNORECASE)]
     if unknown:
@@ -270,8 +299,7 @@ def research_reply(note: str) -> str:
     if not lines or not lines[0].startswith("Research note: "):
         return ""
     question = lines[0][len("Research note: "):].rstrip("?").strip()
-    sure = next((ln for ln in lines if ln.startswith("How sure: ")), "")
     findings = [ln for ln in lines if ln.startswith("- ")][:3]
     unknown = next((ln for ln in lines if ln.startswith("Not established: ")), "")
-    parts = [f"I looked into this and saved a note on the quest: {question}.", sure, "What the note holds first:\n" + "\n".join(findings) if findings else "", unknown]
+    parts = [f"I looked into this and saved a note on the quest: {question}.", "What the note holds first:\n" + "\n".join(findings) if findings else "", unknown]
     return "\n\n".join(p for p in parts if p)

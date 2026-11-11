@@ -55,3 +55,14 @@ def test_what_to_look_into_follows_the_kind_order_then_the_deadline():
 
 def test_nothing_is_ordered_when_nothing_is_due():
     assert look(last_look_at=LAST, candidates=[{"id": "q", "kind": "plan_question"}])["order"] == []
+
+
+def test_the_evidence_line_names_what_a_finding_rests_on_and_never_a_verdict():
+    from quest_ai_runner.api import evidence_line
+    assert evidence_line(["research"]) == "1 study"
+    assert evidence_line(["guide", "guide", "guide"]) == "3 guides agree"
+    assert evidence_line(["personal"]) == "1 person's account"
+    assert evidence_line(["vendor"]) == "a company page"
+    assert evidence_line(["research", "guide", "guide"], True) == "1 study and 2 guides agree, read in full"
+    assert evidence_line([]) == ""
+    assert not any(word in evidence_line(["personal"]) for word in ("sure", "weak", "confident"))

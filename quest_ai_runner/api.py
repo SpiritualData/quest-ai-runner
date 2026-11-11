@@ -131,7 +131,12 @@ from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
 # Proactivity (quest-ai-latest): whether Quest AI should take a new look at a quest now and what to look into first
 from quest_ai_runner.the_intelligence.proactivity.quest_ai_latest import KIND_ORDER as QUEST_AI_LATEST_KIND_ORDER, next_look as quest_ai_latest_next_look
 
+# Investigate (the shared finding writer): what a finding rests on, in plain words, the one wording every place that shows a finding uses
+from quest_ai_runner.the_world.science.investigate import evidence_line, finding_evidence
+
 __all__ = [
+    "evidence_line",
+    "finding_evidence",
     "QUEST_AI_LATEST_KIND_ORDER",
     "quest_ai_latest_next_look",
     "ACCEPTED",
