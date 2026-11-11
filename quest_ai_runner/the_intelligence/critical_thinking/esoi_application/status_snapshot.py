@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Mapping, Optional
 
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue, status_reading
@@ -49,7 +49,8 @@ def reachable_quests(registry: Any) -> List[Dict[str, str]]:
         return []
     rows = (result.data or []) if result.ok else []
     from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import quest_label
-    return [{"quest_id": str(r.get("quest_id") or r.get("id")), "title": quest_label(r), "state": ""} for r in rows if isinstance(r, Mapping) and (r.get("quest_id") or r.get("id"))]
+    return [{"quest_id": str(r.get("quest_id") or r.get("id")), "title": quest_label(r), "name": str(r.get("name") or "").strip(), "state": ""}
+            for r in rows if isinstance(r, Mapping) and (r.get("quest_id") or r.get("id"))]
 
 
 def goal_rows(registry: Any, quest_id: str, **args: Any) -> List[Mapping[str, Any]]:
@@ -115,6 +116,10 @@ def overview(rows: List[Mapping[str, Any]], today: date, window_days: int = OVER
     soon = sorted((g for g in open_rows if g.get("due") and today.isoformat() <= str(g.get("due")) <= last.isoformat()), key=lambda g: str(g.get("due")))
     undated = [g for g in open_rows if not g.get("due")]
     lines = [f"{head} {len(rows)} goals: {len(done)} done, {len(open_rows)} open, {len(overdue)} overdue, {len(soon)} due from today through {last.isoformat()}."]
+    if done and not plan:
+        # Measured 2026-11-11 ("How is this quest going?" on a quest with one goal done): the status never named what was already achieved, so it read as
+        # only a list of what is late. The done goals are named so progress can be said, not just the backlog.
+        lines.append("Done so far (up to three of the completed goals):\n" + "\n".join(f"- {g.get('title')}" for g in done[-3:]))
     if overdue:
         lines.append("Overdue, oldest first:\n" + "\n".join(goal_line(g, today) for g in overdue[:OVERVIEW_MAX]) + (f"\n(and {len(overdue) - OVERVIEW_MAX} more overdue)" if len(overdue) > OVERVIEW_MAX else ""))
     if soon:
@@ -160,7 +165,8 @@ def day_layout(open_rows: List[Mapping[str, Any]], today: date, window_days: int
             unplaced.append(g)
             continue
         late = days_overdue(g, today)
-        placed[room].append(f"{g.get('title')} (" + (f"overdue, due {g.get('due')}" if late else f"due {g.get('due')}") + ")")
+        placed[room].append(f"{g.get('title')} (" + (f"overdue, due {g.get('due')}" if late else f"due {g.get('due')}")
+                            + (f"; carried over from {g.get('carried_from')}" if g.get("carried_from") else "") + ")")
     for g in undated:
         empty = next((d for d in days if not placed[d]), None)
         if empty is None:
@@ -174,9 +180,11 @@ def day_layout(open_rows: List[Mapping[str, Any]], today: date, window_days: int
     return "\n".join(out)
 
 
-def lead_sentence(rows: List[Mapping[str, Any]], today: date) -> str:
+def lead_sentence(rows: List[Mapping[str, Any]], today: date, quest_name: str = "") -> str:
     """The status reply's first sentence, written by code from the goal counts ("As of 11 November, none of the quest's 25 goals is done yet, and 7 are
-    overdue."), so the overall picture is always stated and stated right. "" for a quest with no goals (the reply says that itself)."""
+    overdue."), so the overall picture is always stated and stated right. "" for a quest with no goals (the reply says that itself). ``quest_name`` names
+    the quest in it ("1 of the 4 goals in \"Run my first half marathon\" is done"): measured 2026-11-11, a reply that opened "the quest's 2 goals" never
+    named the quest at all on two of four test accounts, and one called its outcome "The quest 'I sell 20 pieces online'"."""
     if not rows:
         return ""
     done = sum(1 for g in rows if g.get("completed"))
@@ -184,8 +192,10 @@ def lead_sentence(rows: List[Mapping[str, Any]], today: date) -> str:
     late = sum(1 for g in open_rows if g.get("due") and str(g.get("due"))[:10] < today.isoformat())
     when = f"{today.day} {today.strftime('%B')}"
     total = f"{len(rows)} goal" + ("" if len(rows) == 1 else "s")
-    head = (f"As of {when}, none of the quest's {total} is done yet" if done == 0 else
-            f"As of {when}, all of the quest's {total} are done" if done == len(rows) else f"As of {when}, {done} of the quest's {total} " + ("is" if done == 1 else "are") + " done")
+    name = " ".join(str(quest_name or "").split()).replace('"', "'")
+    of = f"the {total} in \"{name}\"" if name else f"the quest's {total}"
+    head = (f"As of {when}, none of {of} is done yet" if done == 0 else
+            f"As of {when}, all of {of} are done" if done == len(rows) else f"As of {when}, {done} of {of} " + ("is" if done == 1 else "are") + " done")
     tail = "" if done == len(rows) else (", and none is overdue." if late == 0 else ", and 1 is overdue." if late == 1 else f", and {late} are overdue.")
     oldest = sorted((g for g in open_rows if days_overdue(g, today)), key=lambda g: str(g.get("due")))
     if oldest:
@@ -201,12 +211,66 @@ LEAD_NUMBER = re.compile(r"\d+")
 LEAD_TITLE = re.compile(r"\"([^\"]+)\"")
 
 
+LEAD_ASOF = re.compile(r"As of (\d{1,2}) ([A-Z][a-z]+)")
+LEAD_COUNTS = re.compile(r"(none|all|\d+) of the (?:quest's )?(\d+) goals?")
+LEAD_QUEST = re.compile(r"goals? in \"([^\"]+)\"")
+LEAD_WORD = re.compile(r"[a-z0-9']+")
+# A sentence is a reworded copy of the lead's count sentence when at least this share of its words are the lead's (and all its numbers are)
+LEAD_COPY_SHARE = 0.8
+LEAD_DUE = re.compile(r"due (\d{1,2}) ([A-Z][a-z]+)")
+
+
+def lead_days_late(lead: str) -> set:
+    """The days-late figure the lead implies (its "As of" day minus the longest-overdue goal's due day), as a set of number strings, so a sentence that only
+    says "3 days late" about the goal the lead names is a restatement too. Empty when the lead holds no such pair."""
+    asof, due = LEAD_ASOF.search(lead), LEAD_DUE.search(lead)
+    if not asof or not due:
+        return set()
+    try:
+        year = date.today().year
+        a = datetime.strptime(f"{asof.group(1)} {asof.group(2)} {year}", "%d %B %Y").date()
+        d = datetime.strptime(f"{due.group(1)} {due.group(2)} {year}", "%d %B %Y").date()
+    except ValueError:
+        return set()
+    if d > a:
+        d = d.replace(year=year - 1)
+    return {str((a - d).days)}
+
+
+def restates_goal_counts(sentence: str, held: set) -> bool:
+    """A sentence that says the goal counts again in other words ("none of its goals is done, and one is overdue"; "the quest is 0% done"): it talks of goals
+    being done, complete or overdue, and every number it holds is one of the lead's (``held``; "none" counts as 0 when the lead says "none"). A percentage of
+    goals is never in a snapshot, so it is dropped whatever its numbers (measured 2026-11-11: "Write a children's book is 0% done: none of its 2 goals is
+    complete, and 1 is overdue" after a lead saying exactly that)."""
+    if not re.search(r"\b(done|complete[d]?|overdue|late|finished)\b", sentence, re.I):
+        return False
+    if "%" in sentence:
+        return bool(re.search(r"\b(goals?|quest|done)\b", sentence, re.I))
+    if not re.search(r"\bgoals?\b", sentence, re.I):
+        return False
+    numbers = set(LEAD_NUMBER.findall(sentence))
+    if re.search(r"\bnone\b", sentence, re.I):
+        numbers.add("0")
+    return bool(numbers) and numbers <= held
+
+
 def without_restated_lead(text: str, lead: str) -> str:
     """``text`` without the writer's sentences that only say again what the code-written ``lead`` says: every number in the sentence is one of the lead's,
     and it has two or more of them or names the goal the lead names. List lines are left alone. Measured 2026-11-11: told the first sentence was code-written,
     a writer still wrote "Your quest is at 1 of 43 goals done, with 8 overdue" after it. Pure comparison of numbers and the quoted title; no wording read."""
     held = set(LEAD_NUMBER.findall(lead or ""))
-    titles = [t.strip(" ,.").lower() for t in LEAD_TITLE.findall(lead or "")]
+    counts = LEAD_COUNTS.search(lead or "")
+    if counts:
+        # the lead's open count is said by it too (total minus done): "3 are open" after "1 of the 4 goals is done" says nothing new (measured 2026-11-11)
+        total = int(counts.group(2))
+        done = 0 if counts.group(1) == "none" else total if counts.group(1) == "all" else int(counts.group(1))
+        held.add(str(total - done))
+    late_days = lead_days_late(lead or "")
+    if re.search(r"\bnone\b", lead or "", re.I):
+        held = held | {"0"}
+    quest = {q.strip().lower() for q in LEAD_QUEST.findall(lead or "")}
+    titles = [t.strip(" ,.").lower() for t in LEAD_TITLE.findall(lead or "") if t.strip().lower() not in quest]
+    lead_words = set(LEAD_WORD.findall((lead or "").lower()))
     if not held or not text:
         return text
     lines = []
@@ -218,14 +282,20 @@ def without_restated_lead(text: str, lead: str) -> str:
         for sentence in LEAD_SENTENCE_SPLIT.split(line):
             numbers = set(LEAD_NUMBER.findall(sentence))
             names_goal = any(t and t in sentence.lower() for t in titles)
-            if numbers and numbers <= held and (len(numbers) >= 2 or names_goal):
+            if numbers and numbers <= (held | late_days if names_goal else held) and (len(numbers) >= 2 or names_goal):
+                continue
+            if restates_goal_counts(sentence, held):
+                continue
+            words = set(LEAD_WORD.findall(sentence.lower()))
+            if numbers and numbers <= held and len(words) >= 5 and len(words & lead_words) >= LEAD_COPY_SHARE * len(words):
+                # "None of your 2 goals is done, and none is overdue." after "none of the 2 goals in ... is done yet, and none is overdue." (2026-11-11)
                 continue
             kept.append(sentence)
         lines.append(" ".join(kept))
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
-def plan_lead(open_rows: List[Mapping[str, Any]], today: date, window_days: int = OVERVIEW_WINDOW_DAYS, across: int = 0) -> str:
+def plan_lead(open_rows: List[Mapping[str, Any]], today: date, window_days: int = OVERVIEW_WINDOW_DAYS, across: int = 0, quest_name: str = "") -> str:
     """A plan reply's first sentence, written by code from the open goals: how many are overdue and how many more fall due in the period ("As of 11 November,
     8 open goals are overdue, and 1 more is due by 18 November."). ``across`` (the number of quests, for a plan over the asker's quests together) names
     the quests. Measured 2026-11-11: written by the model, the count was wrong ("Five goals are overdue" with eight laid out) or cut with the opening.
@@ -235,7 +305,8 @@ def plan_lead(open_rows: List[Mapping[str, Any]], today: date, window_days: int 
     last = today + timedelta(days=max(0, window_days))
     late = sum(1 for g in open_rows if days_overdue(g, today))
     due = sum(1 for g in open_rows if g.get("due") and today.isoformat() <= str(g.get("due"))[:10] <= last.isoformat())
-    where = f" across your {across} quests" if across > 1 else ""
+    name = " ".join(str(quest_name or "").split()).replace('"', "'")
+    where = f" across your {across} quests" if across > 1 else (f" in \"{name}\"" if name else "")       # ``quest_name``: the plan names its quest (see lead_sentence)
     first = (f"no open goal{where} is overdue" if late == 0 else f"1 open goal{where} is overdue" if late == 1 else f"{late} open goals{where} are overdue")
     more = "more " if late else ""
     second = (f"none {'more ' if late else ''}is due by {last.day} {last.strftime('%B')}" if due == 0 else
@@ -265,6 +336,35 @@ def priorities(registry: Any, quest_id: str, tables: Mapping[str, Any]) -> List[
     return kept[:PRIORITY_MAX]
 
 
+def collapse_carried(rows: List[Mapping[str, Any]]) -> List[Mapping[str, Any]]:
+    """The goals as a person counts them: a goal Quest carried over to a later week is ONE goal, not one per week. Open rows with the same title (case and
+    spacing aside) collapse to the one with the latest due day, which also carries ``carried_from`` (the earliest due day, when it differs). Done and set-aside
+    rows, rows with no title and rows with no due day are left as they are. Measured 2026-11-11 on a four-goal quest: the status said "7 goals, 2 overdue" and
+    listed "Run one tempo session per week" twice, once per week it had been carried through."""
+    latest: Dict[str, Mapping[str, Any]] = {}
+    earliest: Dict[str, str] = {}
+    for g in rows:
+        key = " ".join(str(g.get("title") or "").split()).casefold()
+        due = str(g.get("due") or "")[:10]
+        if g.get("completed") or g.get("abandoned") or not key or not due:
+            continue
+        if key not in latest or due > str(latest[key].get("due"))[:10]:
+            latest[key] = g
+        if key not in earliest or due < earliest[key]:
+            earliest[key] = due
+    out: List[Mapping[str, Any]] = []
+    for g in rows:
+        key = " ".join(str(g.get("title") or "").split()).casefold()
+        if key in latest and not g.get("completed") and not g.get("abandoned") and str(g.get("due") or ""):
+            if g is not latest[key]:
+                continue
+            first = earliest[key]
+            out.append(dict(g, carried_from=first) if first < str(g.get("due"))[:10] else g)
+        else:
+            out.append(g)
+    return out
+
+
 def days_overdue(g: Mapping[str, Any], today: Optional[date]) -> int:
     """Whole days a goal is past its due day as of ``today`` (0 when it is not overdue, has no date, or ``today`` is not given)."""
     try:
@@ -280,6 +380,7 @@ def goal_line(g: Mapping[str, Any], today: Optional[date] = None) -> str:
     owner = g.get("assignee_name") or ""
     late = days_overdue(g, today)
     return (f"- {g.get('title')} (due {g.get('due') or 'no date'}" + (f"; {late} days overdue" if late else "") + (f"; owner {owner}" if owner else "")
+            + (f"; carried over from {g.get('carried_from')}" if g.get("carried_from") else "")
             + (f"; {value}" if value else "") + ")")
 
 
@@ -310,7 +411,8 @@ def milestone_part(registry: Any, quest_id: str, tables: Mapping[str, Any], rid:
 
 
 def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False, question: str = "", decide: Any = None,
-          window_days: int = OVERVIEW_WINDOW_DAYS, plan: bool = False, today: Optional[date] = None, quest_title: str = "") -> Optional[Dict[str, Any]]:
+          window_days: int = OVERVIEW_WINDOW_DAYS, plan: bool = False, today: Optional[date] = None, quest_title: str = "",
+          quest_name: str = "") -> Optional[Dict[str, Any]]:
     """The snapshot as one gathered read (locator ``status_snapshot``), or None when no part could be read. With ``question`` and ``decide``, a question about one
     milestone also gets that milestone's records (what blocks it, who owns it, its next step and date). ``plan`` (a request to lay out a coming period, ``window_days``
     long) adds the open goals with no date to the goals at a glance. ``quest_title`` (its name and outcome, ``quest_label``) heads the snapshot, so the reply
@@ -339,11 +441,13 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
         if active:
             parts.append("Active priorities, most important first:\n" + "\n".join(goal_line(g, today) for g in active))
         everything = all_goal_rows(registry, quest_id)
+        if everything is not None:
+            everything = collapse_carried(everything)
         lead = ""
         if everything is not None:
             parts.append(overview(list(everything), today, window_days, plan=plan))
             open_rows = [g for g in everything if not g.get("completed") and not g.get("abandoned")]
-            lead = plan_lead(open_rows, today, window_days) if plan else lead_sentence(list(everything), today)
+            lead = plan_lead(open_rows, today, window_days, quest_name=quest_name) if plan else lead_sentence(list(everything), today, quest_name=quest_name)
         if own and asker_user_id:
             mine = [g for g in goal_rows(registry, quest_id, open_only=True, assignee_user_id=asker_user_id) if not g.get("completed") and not g.get("abandoned")][:OWN_MAX]
             if mine:

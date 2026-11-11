@@ -464,9 +464,10 @@ class RunBeginMixin:
             if snapshot_quest and rs._forced_plan is None:
                 emit.status("Reading where the quest stands…")
                 own = (rs.retrieval_constraints or {}).get("actor") == "me"
-                title = next((str(q.get("title") or "") for q in quests if str(q.get("quest_id")) == str(snapshot_quest)), "")
+                row = next((q for q in quests if str(q.get("quest_id")) == str(snapshot_quest)), {})
                 snapshot = status_snapshot.build(self.tools, snapshot_quest, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
-                                                 question=rs.user_message, decide=self.cheap_decision, plan=plan, quest_title=title)
+                                                 question=rs.user_message, decide=self.cheap_decision, plan=plan, quest_title=str(row.get("title") or ""),
+                                                 quest_name=str(row.get("name") or ""))
             if snapshot is not None and status_flags.get("plans_period"):
                 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN
                 rs.gathered.append(snapshot)

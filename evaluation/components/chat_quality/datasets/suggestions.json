@@ -1,0 +1,331 @@
+[
+ {
+  "id": "SUG-001",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: status, quest open",
+  "quest_key": "fitness",
+  "message": "How is this quest going?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "States where the quest stands as a whole (how many goals are open, done or overdue) from these goals: Build weekly mileage to 40 km, Run one tempo session per week, Do a 10K time trial, Complete the October long-run block",
+   "Says which goal or next step matters most and why in one or two sentences",
+   "Stays short: a few sentences or a short list, no restated quest brief",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-002",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: next step, quest open",
+  "quest_key": "fitness",
+  "message": "What should I do next?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "Picks ONE goal to do next from: Build weekly mileage to 40 km, Run one tempo session per week, Do a 10K time trial, Complete the October long-run block, and says why that one",
+   "Does not list every goal or hand back a menu of options",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-003",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: week plan, quest open",
+  "quest_key": "fitness",
+  "message": "Plan my week for this quest",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "Puts goals from: Build weekly mileage to 40 km, Run one tempo session per week, Do a 10K time trial, Complete the October long-run block on named days of this week, about two a day at most, none after its due day",
+   "Writes nothing to the quest: says the plan is a proposal until the user accepts it",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice",
+   "Notices the physio's 10 day no-running instruction from the Run Log and does not schedule running sessions inside it without flagging the conflict"
+  ],
+  "must_use_pivots": [
+   "KNEE_INJURY"
+  ],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-004",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: status, quest open",
+  "quest_key": "business",
+  "message": "How is this quest going?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "States where the quest stands as a whole (how many goals are open, done or overdue) from these goals: Order wax and wicks, Build the Shopify product page, Run 10 customer interviews, Soft launch to friends and family",
+   "Says which goal or next step matters most and why in one or two sentences",
+   "Stays short: a few sentences or a short list, no restated quest brief",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-005",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: next step, quest open",
+  "quest_key": "business",
+  "message": "What should I do next?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "Picks ONE goal to do next from: Order wax and wicks, Build the Shopify product page, Run 10 customer interviews, Soft launch to friends and family, and says why that one",
+   "Does not list every goal or hand back a menu of options",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-006",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: week plan, quest open",
+  "quest_key": "business",
+  "message": "Plan my week for this quest",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "Puts goals from: Order wax and wicks, Build the Shopify product page, Run 10 customer interviews, Soft launch to friends and family on named days of this week, about two a day at most, none after its due day",
+   "Writes nothing to the quest: says the plan is a proposal until the user accepts it",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-007",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: status, quest open",
+  "quest_key": "family",
+  "message": "How is this quest going?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "States where the quest stands as a whole (how many goals are open, done or overdue) from these goals: Book the plumber, Buy tiles and grout, Paint the walls",
+   "Says which goal or next step matters most and why in one or two sentences",
+   "Stays short: a few sentences or a short list, no restated quest brief",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-008",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: next step, quest open",
+  "quest_key": "family",
+  "message": "What should I do next?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "Picks ONE goal to do next from: Book the plumber, Buy tiles and grout, Paint the walls, and says why that one",
+   "Does not list every goal or hand back a menu of options",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-009",
+  "dataset": "explicit",
+  "area": "dashboard suggestion: week plan, quest open",
+  "quest_key": "family",
+  "message": "Plan my week for this quest",
+  "expected_routing": "inline",
+  "rubric": [
+   "Uses only goals, dates and figures present on the quest; invents none",
+   "Does not ask the user which quest they mean",
+   "Puts goals from: Book the plumber, Buy tiles and grout, Paint the walls on named days of this week, about two a day at most, none after its due day",
+   "Writes nothing to the quest: says the plan is a proposal until the user accepts it",
+   "Uses the quest's goals as the user sees them: a weekly goal carried over to the next week is one goal, listed once, not twice"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-010",
+  "dataset": "implicit",
+  "area": "dashboard suggestion: status, no quest pinned (the reported failure)",
+  "quest_key": "fitness",
+  "message": "How is this quest going?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Does not answer 'I can't see the progress details' or say it received a list of ids without names",
+   "Gives where the user's quests stand BY QUEST NAME (e.g. the 10K race quest, the Tiny Blue Mug shop), or asks one short question listing the quests by name; never ids or a bare goal list with no quest names",
+   "Does not invent progress for a quest it did not read"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "conversation_scope": "none",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-011",
+  "dataset": "implicit",
+  "area": "dashboard suggestion: next step, no quest pinned",
+  "quest_key": "family",
+  "message": "What should I do next?",
+  "expected_routing": "inline",
+  "rubric": [
+   "Picks one goal across the user's quests and names the quest it belongs to by its name, never an id. Any quest's most urgent goal is acceptable if the reason is a due date or overdue status found in the data",
+   "Does not ask the user what needs doing"
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "conversation_scope": "none",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ },
+ {
+  "id": "SUG-012",
+  "dataset": "implicit",
+  "area": "dashboard suggestion: week plan, no quest pinned",
+  "quest_key": "fitness",
+  "message": "Plan my week for this quest",
+  "expected_routing": "inline",
+  "rubric": [
+   "Names which quest or quests the plan covers, by name, never an id",
+   "Places real goals on named days of this week",
+   "Writes nothing to any quest",
+   "Notices the physio's 10 day no-running instruction from the Run Log and does not schedule running sessions inside it without flagging the conflict"
+  ],
+  "must_use_pivots": [
+   "KNEE_INJURY"
+  ],
+  "forbid_writes": true,
+  "evidence_notes": "source: the three suggestion buttons in the quest dashboard Ask box (quest-frontend QuestAskBox.tsx), the exact strings. ideal: a reply a person can act on from their own goals, naming the quest and goals by their titles, never an id, never 'I cannot see'. ",
+  "conversation_scope": "none",
+  "precheck": {
+   "reply_regex_forbidden": [
+    "quest_[0-9a-f]{8}",
+    "list of quest ids",
+    "I can't see the progress",
+    "I could not see",
+    "cannot see its goals"
+   ]
+  }
+ }
+]

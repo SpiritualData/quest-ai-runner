@@ -307,7 +307,7 @@ def test_the_goals_at_a_glance_count_done_open_and_overdue_and_list_overdue_befo
             {"id": "d", "title": "Pick a colour", "due": None, "completed": False}]
     text = status_snapshot.overview(rows, date(2026, 11, 11))
     assert "4 goals: 1 done, 3 open, 1 overdue, 1 due from today through 2026-11-18" in text
-    assert text.index("Book the plumber") < text.index("Buy tiles") and "Demolition" not in text and "Pick a colour" not in text
+    assert text.index("Book the plumber") < text.index("Buy tiles") and "- Demolition" in text and text.index("Demolition") < text.index("Book the plumber") and "Pick a colour" not in text   # done goals are named under "Done so far" (2026-11-11: a status that never said what was achieved read as only a list of what is late)
     assert "Pick a colour" in status_snapshot.overview(rows, date(2026, 11, 11), plan=True)
 
 
@@ -393,3 +393,58 @@ def test_a_writer_sentence_that_only_restates_the_code_written_lead_is_dropped_a
     assert status_snapshot.without_restated_lead(kept, reno) == kept      # one shared date and no goal the lead names: a new fact, kept
     plan_lines = "- **Wednesday 11 November:** Paint the walls (overdue since 1 November)"
     assert status_snapshot.without_restated_lead(plan_lines, reno) == plan_lines
+
+
+def test_a_goal_carried_over_to_a_later_week_is_one_goal_in_the_counts_the_lead_and_the_day_layout():
+    """Measured 2026-11-11 on a four-goal quest whose weekly goals Quest had carried into the next week: the status said "7 goals, 2 overdue" and a week plan
+    put "Run one tempo session per week" on two days. A person counts the quest's goals as four."""
+    from datetime import date
+    rows = [{"id": "a1", "title": "Run one tempo session per week", "due": "2026-11-08", "completed": False},
+            {"id": "a2", "title": "Run one tempo session per week", "due": "2026-11-15", "completed": False},
+            {"id": "b", "title": "Do a 10K time trial", "due": "2026-11-15", "completed": False},
+            {"id": "c1", "title": "Buy tiles", "due": "2026-11-01", "completed": True},
+            {"id": "c2", "title": "Buy tiles", "due": "2026-11-15", "completed": False}]
+    one = status_snapshot.collapse_carried(rows)
+    assert [g["id"] for g in one] == ["a2", "b", "c1", "c2"] and one[0]["carried_from"] == "2026-11-08" and "carried_from" not in one[1]
+    today = date(2026, 11, 11)
+    assert status_snapshot.lead_sentence(one, today)== "As of 11 November, 1 of the quest's 4 goals is done, and none is overdue."
+    text = status_snapshot.overview(one, today, plan=True)
+    assert "due 2026-11-08" not in text.replace("carried over from 2026-11-08", "") and "carried over from 2026-11-08" in text
+    assert text.count("Run one tempo session per week (due 2026-11-15") == 2      # once in the due list, once on its one day in the layout
+
+
+def test_a_sentence_that_only_says_how_late_the_lead_named_goal_is_is_dropped():
+    lead = 'As of 11 November, 1 of the quest\'s 4 goals is done, and 1 is overdue. The longest overdue is "Book the race entry", due 8 November.'
+    text = 'The most overdue goal is "Book the race entry", due 8 November, now 3 days late.'
+    assert status_snapshot.without_restated_lead(text, lead) == ""
+
+
+def test_the_code_written_lead_names_the_quest_and_a_reworded_copy_of_its_counts_is_dropped():
+    """Measured 2026-11-11 on the dashboard's suggestions: replies on a three-quest account never named the tapped quest ("the quest's 2 goals"), and one
+    said its counts twice ("None of your 2 goals is done yet, and none is overdue." after the lead said the same)."""
+    from datetime import date
+    today = date(2026, 11, 11)
+    rows = [{"title": "Photograph the first ten pieces", "due": "2026-11-15"}, {"title": "Set up the shop page", "due": "2026-11-30"}]
+    lead = status_snapshot.lead_sentence(rows, today, quest_name="Launch my pottery shop")
+    assert lead == 'As of 11 November, none of the 2 goals in "Launch my pottery shop" is done yet, and none is overdue.'
+    assert status_snapshot.plan_lead(rows, today, quest_name="Launch my pottery shop") == (
+        'As of 11 November, no open goal in "Launch my pottery shop" is overdue, and 1 is due by 18 November.')
+    text = ('None of your 2 goals is done yet, and none is overdue. Your next step is "Photograph the first ten pieces," due Sunday, 15 November.')
+    assert status_snapshot.without_restated_lead(text, lead) == 'Your next step is "Photograph the first ten pieces," due Sunday, 15 November.'
+    rich = status_snapshot.lead_sentence([{"title": "Run 5 km", "completed": True}, {"title": "Book the race entry", "due": "2026-11-08"},
+                                          {"title": "Long run", "due": "2026-11-14"}, {"title": "Shoes", "due": "2026-11-15"}], today, quest_name="Run my first half marathon")
+    assert rich.startswith('As of 11 November, 1 of the 4 goals in "Run my first half marathon" is done, and 1 is overdue. The longest overdue is "Book the race entry"')
+    said = 'The running quest has 4 goals: 1 is done, 3 are open, and 1 is overdue. Running 5 km without stopping is already behind you.'
+    assert status_snapshot.without_restated_lead(said, rich) == "Running 5 km without stopping is already behind you."      # 3 open is the lead's too
+    named = 'Your quest "Run my first half marathon" is moving: the base is built.'
+    assert status_snapshot.without_restated_lead(named, rich) == named      # naming the quest is not restating a count
+    assert status_snapshot.lead_sentence(rows, today) == "As of 11 November, none of the quest's 2 goals is done yet, and none is overdue."   # no name read
+
+
+def test_a_sentence_that_says_the_goal_counts_again_or_gives_a_percentage_is_dropped():
+    lead = 'As of 11 November, none of the 2 goals in "Write a children\'s book" is done yet, and 1 is overdue. The longest overdue is "Finish the second draft", due 8 November.'
+    text = 'Write a children\'s book is 0% done as of 11 November: none of its 2 goals is complete, and 1 is overdue. Finish that draft first.'
+    assert status_snapshot.without_restated_lead(text, lead) == "Finish that draft first."
+    pottery = 'As of 11 November, none of the 2 goals in "Launch my pottery shop" is done yet, and none is overdue.'
+    assert status_snapshot.without_restated_lead('The shop has no goals done yet, and none is overdue. Photograph the first ten pieces is due soonest.', pottery) == "Photograph the first ten pieces is due soonest."
+    assert status_snapshot.without_restated_lead("Both goals are done and the course is 40 percent paid.", pottery) == "Both goals are done and the course is 40 percent paid."
