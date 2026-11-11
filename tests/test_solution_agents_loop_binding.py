@@ -100,3 +100,31 @@ def test_the_run_names_its_quest_as_data(monkeypatch):
     runner.run_goal(goal="g", brief="This run's quest is quest_fromthebrief: add")
     assert client.asked[-1] == ("quest", "quest_fromthebrief")
     assert runner.view.quest_id == ""
+
+
+def test_a_failure_inside_the_hubs_own_prepare_runs_it_once_and_surfaces_its_error(monkeypatch):
+    """The quest read is guarded; the hub's prepare is not. Re-running it on its own failure repeated its side effects and hid the real error."""
+    import pytest
+    calls = []
+
+    def failing(self, *a):
+        calls.append(a)
+        raise RuntimeError("hub prepare failed")
+    monkeypatch.setattr(SolutionAgentsLoopRunner.__mro__[1], "prepare", failing)
+    runner = make_runner(SPEC)
+    with pytest.raises(RuntimeError, match="hub prepare failed"):
+        runner.prepare("goal", "This run's quest is quest_abc123: add", "", "/tmp", "k")
+    assert len(calls) == 1
+    assert runner.records is None
+
+
+def test_a_quest_that_cannot_be_read_still_prepares_the_hub_once(monkeypatch):
+    calls = []
+    monkeypatch.setattr(SolutionAgentsLoopRunner.__mro__[1], "prepare", lambda self, *a: calls.append(self.solutions(a[0], a[3])))
+
+    class Broken:
+        def get_spec(self, *a):
+            raise OSError("quest unreachable")
+    runner = SolutionAgentsLoopRunner(SubprocessConfig(working_dir="/tmp"), client_factory=lambda: Broken())
+    runner.prepare("goal", "This run's quest is quest_abc123: add", "", "/tmp", "k")
+    assert calls == [[]]

@@ -131,14 +131,15 @@ class SolutionAgentsLoopRunner(HubSolutionAgentsNativeRunner, SubprocessGoalRunn
     def prepare(self, goal: str, brief: str, preamble: str, root: str, session_key: str) -> None:
         self.view.network, self.view.rows = None, {}
         try:
-            quest_id = getattr(self.view, "quest_id", "") or quest_of(brief or goal)
-            spec = self.client().get_spec("quest", quest_id) if quest_id else None
-            rows = quest_solution_rows(spec) if spec else {}
-            if rows:
-                self.view.network, self.view.rows = quest_network(quest_id, rows), rows
-            super().prepare(goal, brief, preamble, root, session_key)
-        except Exception:  # noqa: BLE001 -- a quest that cannot be read leaves the hub's own choice
-            self.view.network, self.view.rows = None, {}
+            try:
+                quest_id = getattr(self.view, "quest_id", "") or quest_of(brief or goal)
+                spec = self.client().get_spec("quest", quest_id) if quest_id else None
+                rows = quest_solution_rows(spec) if spec else {}
+                if rows:
+                    self.view.network, self.view.rows = quest_network(quest_id, rows), rows
+            except Exception:  # noqa: BLE001 -- a quest that cannot be read leaves the hub's own choice
+                self.view.network, self.view.rows = None, {}
+            # Once, outside the read's guard: a failure inside the hub's own prepare is its own error, never a reason to run it again.
             super().prepare(goal, brief, preamble, root, session_key)
         finally:
             self.view.network, self.view.rows = None, {}

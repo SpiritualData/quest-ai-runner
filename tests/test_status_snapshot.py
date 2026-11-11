@@ -955,3 +955,12 @@ def test_a_progress_sentence_that_opens_on_the_counts_again_keeps_only_what_is_n
         "The first real progress will be completing the second draft, which leaves the illustrator choice still to come.")
     kept = "Running 5 km without stopping is a base, so the long runs are what is missing."
     assert status_snapshot.without_count_clause(kept, rows) == kept
+
+
+def test_a_29_february_with_no_year_read_after_that_day_in_a_leap_year_names_no_day_and_never_raises():
+    from datetime import date
+    today = date(2028, 3, 5)                                   # 2028 is a leap year; 2029 has no 29 February
+    assert status_snapshot.outcome_day("Launch by 29 February", today) is None
+    assert status_snapshot.time_left("Launch by 29 February", today) == ""
+    assert status_snapshot.outcome_day("Launch by 29 February", date(2028, 2, 1)) == date(2028, 2, 29)
+    assert status_snapshot.outcome_day("Launch by 14 March", date(2028, 3, 20)) == date(2029, 3, 14)

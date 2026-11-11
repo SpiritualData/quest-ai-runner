@@ -306,10 +306,10 @@ def outcome_day(outcome: str, today: date) -> Optional[date]:
     day, month, year = (m.group(1), m.group(2), m.group(3)) if m.group(1) else (m.group(5), m.group(4), m.group(6))
     try:
         d = date(int(year) if year else today.year, MONTH_NAMES.index(month.lower()) + 1, int(day))
-    except ValueError:
+        if not year and d < today:
+            d = d.replace(year=today.year + 1)
+    except ValueError:  # no such day, or "29 February" with no year read after it in a leap year (next year has none)
         return None
-    if not year and d < today:
-        d = d.replace(year=today.year + 1)
     return d
 
 
