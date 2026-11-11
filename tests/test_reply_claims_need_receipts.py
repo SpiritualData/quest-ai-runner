@@ -46,8 +46,8 @@ def test_a_reply_claiming_a_note_the_record_does_not_show_is_replaced_by_the_rec
 
 
 RECORD = {"question": "How long does daily qigong need to be to notice a change in focus?", "best_grade": "C",
-          "items": [{"claim": "Ten to twenty minutes a day is the usual advice for beginners", "grade": "C", "source": "https://www.nccih.nih.gov/health/tai-chi", "verified": "opened"},
-                    {"claim": "Effects build over several weeks of regular practice", "grade": "C", "source": "https://learnqigong.com/x", "verified": "snippet"}],
+          "items": [{"claim": "Ten to twenty minutes a day is the usual advice for beginners.", "grade": "C", "source": "https://www.nccih.nih.gov/health/tai-chi", "verified": "opened"},
+                    {"claim": "Effects build over several weeks of regular practice.", "grade": "C", "source": "https://learnqigong.com/x", "verified": "snippet"}],
           "synthesis": {"known": [], "unknown": ["a validated minimum number of minutes"]}}
 
 
@@ -91,9 +91,9 @@ def test_the_review_s_generic_synthesis_lines_never_become_the_findings():
 
 def test_the_same_finding_from_several_sites_is_one_finding_and_the_reply_is_composed_from_the_note():
     from quest_ai_runner.the_world.science.investigate import research_note, research_reply
-    items = [{"claim": "Five minutes a day is enough to start", "grade": "C", "source": f"https://s{n}.example/a", "verified": "snippet"} for n in range(3)]
+    items = [{"claim": "Five minutes a day is enough to start.", "grade": "C", "source": f"https://s{n}.example/a", "verified": "snippet"} for n in range(3)]
     note = research_note({**RECORD, "items": items + RECORD["items"]})
-    assert note.count("Five minutes a day is enough to start") == 1
+    assert note.count("Five minutes a day is enough to start.") == 1
     reply = research_reply(note)
     assert reply.startswith("I looked into this and saved a note on the quest: How long does daily qigong need") and "How sure: not very sure." in reply
     assert "Not established: a validated minimum number of minutes" in reply and "—" not in reply
@@ -103,7 +103,7 @@ def test_the_same_finding_from_several_sites_is_one_finding_and_the_reply_is_com
 def test_a_research_turn_with_its_note_saved_and_a_reply_composed_from_it_ends_verified_when_nothing_is_unbacked():
     saved = []
     record = {"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
-              "items": [{"claim": "Ten minutes a day is the usual advice", "grade": "C", "source": "https://example.org/a", "verified": "opened"}]}
+              "items": [{"claim": "Ten minutes a day is the usual advice.", "grade": "C", "source": "https://example.org/a", "verified": "opened"}]}
     from quest_ai_runner.the_world.science.investigate import research_note
     investigate = ToolSpec(name="investigate_for_quest", handler=lambda a, c: ToolResult(ok=True, data={**record, "note_text": research_note(record)}, text="Looked into: How long?"),
                            description="d", when_to_use="w", parameters={"type": "object"}, mutates=True)

@@ -235,7 +235,7 @@ def research_note(recorded: Mapping[str, Any]) -> str:
                 for f in recorded["findings"] if f.get("claim")]
     else:
         rows = [{"claim": i.get("claim"), "grade": i.get("grade"), "source": i.get("source"), "also": 0, "verified": i.get("verified")} for i in item_list
-                if i.get("claim") and "..." not in str(i["claim"]) and "\u2026" not in str(i["claim"])]
+                if i.get("claim") and "..." not in str(i["claim"]) and "\u2026" not in str(i["claim"]) and str(i["claim"]).strip()[-1:] in ".!?"]      # an earlier record: only a finding already written whole
     seen, picked = set(), []
     for row in sorted(rows, key=lambda r: order.get(str(r.get("grade")), 4)):
         key = re.sub(r"[^a-z0-9]+", " ", str(row["claim"]).lower())[:50]
