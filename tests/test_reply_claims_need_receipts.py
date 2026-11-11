@@ -79,3 +79,11 @@ def test_a_note_the_planner_writes_after_researching_is_replaced_by_the_composed
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=cfg, tools=ToolRegistry([investigate, note]))
     orch.run("Look into daily qigong, then add a short note to this quest.", quest_id="q1")
     assert saved == ["Research note: composed from the record"]
+
+
+def test_the_review_s_generic_synthesis_lines_never_become_the_findings():
+    from quest_ai_runner.the_world.science.investigate import research_note
+    record = {**RECORD, "synthesis": {"known": ["Supported by a graded source: a.com, b.com"], "unknown": ["Not established: licence of a.com", "licence of b.com", "a validated minimum"]}}
+    note = research_note(record)
+    assert "Supported by a graded source" not in note and "licence" not in note and "Not established: a validated minimum" in note
+    assert "Ten to twenty minutes a day" in note

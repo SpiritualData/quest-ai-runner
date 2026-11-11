@@ -228,13 +228,15 @@ def research_note(recorded: Mapping[str, Any]) -> str:
         return ""
     lines = [f"Research note: {clip_words(recorded.get('question'), 200)}", f"How sure: {sure_words(recorded.get('best_grade'))}."]
     lines.append("Findings:")
-    if known:
-        lines += [f"- {clip_words(k, NOTE_CLAIM_CHARS)}" for k in known[:NOTE_FINDINGS]]
-    else:
+    if items:
+        # The findings themselves (each source's own words, best grade first), never the review's generic synthesis lines ("supported by a graded source: ...").
         order = {"A": 0, "B": 1, "C": 2, "D": 3}
         for item in sorted(items, key=lambda i: order.get(str(i.get("grade")), 4))[:NOTE_FINDINGS]:
             lines.append(f"- {clip_words(item.get('claim'), NOTE_CLAIM_CHARS)} ({sure_words(item.get('grade'))}; {domain_of(item.get('source'))})")
-    unknown = [str(u) for u in ((recorded.get("synthesis") or {}).get("unknown") or []) if str(u).strip()]
+    else:
+        lines += [f"- {clip_words(k, NOTE_CLAIM_CHARS)}" for k in known[:NOTE_FINDINGS]]
+    unknown = [re.sub(r"^not established:\s*", "", str(u).strip(), flags=re.IGNORECASE) for u in ((recorded.get("synthesis") or {}).get("unknown") or [])
+               if str(u).strip() and not re.match(r"\s*(?:not established:\s*)?licen[cs]e\b", str(u), re.IGNORECASE)]
     if unknown:
         lines.append(f"Not established: {clip_words('; '.join(unknown), 220)}")
     snippets = [i for i in items if i.get("verified") in ("snippet", "not-opened")]
