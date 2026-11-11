@@ -295,6 +295,7 @@ class EvidenceIndex:
     everything: frozenset = frozenset()     # every whole number anywhere the turn held
     computed: frozenset = frozenset()       # the whole numbers a program computed over the rows the turn read (see COMPUTED_MARK)
     windows: tuple = ()                     # per evidence line with its two lines before it: (the dates it states, the whole numbers it states)
+    listed: str = " "                       # the evidence's list lines (goals, steps), squashed: a number inside one is part of a name, not a reading
 
     @classmethod
     def of(cls, evidence: str, reads: Optional[str] = None, figure_basis: Optional[str] = None) -> "EvidenceIndex":
@@ -315,8 +316,9 @@ class EvidenceIndex:
             when = frozenset(d for _, parts in dates_in(near) for d in parts)
             if when:
                 windows.append((when, held_figures(without_dates(near))))
+        listed = " " + " | ".join(squash(line) for line in lines if LIST_LINE.match(line)) + " "
         return cls(days=days, clocks=frozenset(clocks), squashed=" " + squash(evidence) + " ", everything=everything,
-                   computed=computed_figures(reads if reads is not None else evidence), windows=tuple(windows))
+                   computed=computed_figures(reads if reads is not None else evidence), windows=tuple(windows), listed=listed)
 
 
 @dataclass
@@ -370,6 +372,18 @@ def unsupported_values(draft: str, evidence: EvidenceIndex) -> List[str]:
     return list(dict.fromkeys(out))
 
 
+NUMBER_WITH_WORDS = re.compile(r"(?<![\w.])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[\s,;:()-]+[A-Za-z][\w'-]*){2}")
+
+
+def named_figures_out(sentence: str, evidence: "EvidenceIndex") -> str:
+    """``sentence`` without the numbers that, with the two words after them, stand as they are in one of the evidence's list lines: the number is part of a
+    listed goal's own name ("Run 10 customer interviews") or of what the list says beside it ("10 days overdue"), not a reading the sentence dates.
+    Measured 2026-11-11: a week plan that put "Run 10 customer interviews" on Thursday 12 November had that date cut as carried from another fact."""
+    def keep(m: "re.Match[str]") -> str:
+        return " " if f" {squash(m.group(0))} " in evidence.listed or squash(m.group(0)) in evidence.listed else m.group(0)
+    return NUMBER_WITH_WORDS.sub(keep, sentence or "") if evidence.listed.strip() else sentence
+
+
 def misdated_figures(draft: str, evidence: "EvidenceIndex") -> List[str]:
     """Dates a sentence of the draft states beside a figure when no place in the turn's evidence (a line and the two before it) states that date near any of that
     sentence's figures: the date is carried from another fact, not from the reading the figure came from. Pure comparison of dates and numbers; no wording."""
@@ -378,7 +392,7 @@ def misdated_figures(draft: str, evidence: "EvidenceIndex") -> List[str]:
     out: List[str] = []
     for sentence in sentences(draft):
         found = dates_in(sentence)
-        numbers = held_figures(without_dates(sentence))
+        numbers = held_figures(named_figures_out(without_dates(sentence), evidence))
         if not found or not numbers:
             continue
         for text, parts in found:
@@ -521,7 +535,9 @@ def copied_first_person(draft: str, evidence_texts: List[str]) -> List[str]:
     The assistant speaking about its own action this turn is not copied from a record, so it never matches; text authored in the first
     person by someone else ("awaiting my preview before it goes out") does. Compares the words of the draft with the evidence; reads no meaning."""
     held = " " + " ".join(squash(t) for t in evidence_texts if t) + " "
-    words = re.findall(r"[A-Za-z']+", draft or "")
+    # Words inside quotation marks are a name or a quote the reader sees as one ("i want to become self reliant" is a quest's own name): quoted, they are
+    # attributed, not spoken in the assistant's voice (measured 2026-11-11: naming that quest was flagged, and its repair garbled the reply's opening).
+    words = re.findall(r"[A-Za-z']+", QUOTED_NAME.sub(" ", draft or ""))
     out: List[str] = []
     for i, word in enumerate(words):
         if word.lower() in FIRST_PERSON and i + 2 < len(words):

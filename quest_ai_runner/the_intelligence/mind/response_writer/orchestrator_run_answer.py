@@ -6,6 +6,7 @@ run-local namespace ``rs`` that ``RunMixin.run`` builds and hands from one phase
 from __future__ import annotations
 
 import logging
+import re
 from types import SimpleNamespace
 from typing import Optional
 
@@ -521,6 +522,16 @@ class RunAnswerMixin:
         # force gives the checkpoint real authority below: a longer wait for the verdict and code-built repair rounds.
         standard, measured, standard_evidence, standard_in_force, figure_pool, figure_evidence = None, None, "", False, "", ""
         turn_resolved = None
+        status_lead = str(getattr(rs, "status_lead", "") or "").strip()
+        if status_lead and rs.plan is not None and rs.plan.action == "answer" and rs.text:
+            # The code-written first sentence is put on after the repairs (below). A writer that copied or restated it anyway spent the reply's sentence
+            # limit on it, and the length repair then cut the writer's own facts (measured 2026-11-11), so it is taken out of the draft before any measure.
+            from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import without_restated_lead
+            from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN as PLAN_SHAPE
+            draft = rs.text.replace(status_lead, "", 1).strip()
+            if getattr(rs.plan, "reply_shape", None) != PLAN_SHAPE:
+                draft = without_restated_lead(draft, status_lead)
+            rs.text = draft or rs.text
         if getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer":
             try:
                 standard_evidence = (self.link_evidence_for(rs, SimpleNamespace(deep_results=[]))
@@ -654,8 +665,10 @@ class RunAnswerMixin:
         if (getattr(cfg, "reply_standards", False) and rs.plan is not None and rs.plan.action == "answer"
                 and turn_holds_records(getattr(rs, "_sources", None), gathered)):
             try:
-                verdict = self.found_constraint_verdict(
-                    rs.user_message, (getattr(rs, "context_view", "") or "")[:3500] + "\n" + (standard_evidence or ""), rs.text)
+                # A turn answered from a snapshot code read is written from that snapshot alone, so the conflict is judged against it alone: judged against the
+                # older context too, a supplier's message from a past conversation forced a regeneration that pushed it into a week plan (measured 2026-11-11).
+                older = "" if getattr(rs, "status_snapshot", False) else (getattr(rs, "context_view", "") or "")[:3500] + "\n"
+                verdict = self.found_constraint_verdict(rs.user_message, older + (standard_evidence or ""), rs.text)
                 log.info("Reply standard found_constraint verdict: %s", verdict)
                 if verdict and verdict.get("conflict"):
                     # The records say the request cannot happen as asked: nothing may be queued for it below, whatever the
@@ -733,6 +746,19 @@ class RunAnswerMixin:
         # A reply that declines the act on the records (``act_declined``) queues nothing: declining and queuing contradict.
         if getattr(rs, "no_attachment", False) and rs.plan.action == "answer" and not rs.text.startswith(NO_ATTACHMENT_LINE):
             rs.text = f"{NO_ATTACHMENT_LINE} {rs.text}".strip()     # code-written: the fact is the turn's own (no attachment object), not the model's wording
+        lead = str(getattr(rs, "status_lead", "") or "").strip()
+        if lead and rs.plan.action == "answer" and not rs.text.startswith(lead):
+            # Code-written: the goals at a glance, counted by the status snapshot. Put on after the length repairs, which cut it from every busy quest's status
+            # (measured 2026-11-11: "0 of 25 done, 7 overdue" dropped to keep three sentences, and the reply check then refused to add a figure back).
+            # A writer that copied it anyway put it last once (measured 2026-11-11), so it is moved to the front, never stated twice.
+            rest = rs.text.replace(lead, "", 1).strip() if lead in rs.text else rs.text
+            is_plan = getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN
+            if not is_plan:
+                from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import without_restated_lead
+                rest = without_restated_lead(rest, lead) or rest
+            # A plan's day lines (or any list or heading) start on their own paragraph: joined with a space, the opening ran into "**Wednesday 11 November**".
+            apart = is_plan or bool(re.match(r"\s*(?:[-*•|#]|\d+[.)]|\*\*)", rest))
+            rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
         rs.act_declined = bool(rs.plan.act_declined or rs.found_constraint)
         rs.should_defer_deep = (None if (rs.brainstorm_active or rs.act_declined) else rs.plan.deferred_deep)
         if rs.should_defer_deep and tool_guards.escalation_route(

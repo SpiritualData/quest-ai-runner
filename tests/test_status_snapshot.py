@@ -1,5 +1,6 @@
 """Offline tests: a status-shaped turn is answered from one code-composed, dated snapshot, with no planner loop, for the three turn shapes (a status question, a status
 script to read out, a question about the asker's own priority)."""
+import re
 from types import SimpleNamespace
 from typing import Any, List
 
@@ -51,7 +52,7 @@ def test_the_snapshot_holds_the_live_key_measure_the_priorities_in_ladder_order_
     first, second = text.index("First milestone next step"), text.index("Second milestone next step")
     assert first < second and "Current value: 4 (as of 2026-11-06, from Source)" in text and "due 2026-11-08" in text
     assert "Unrelated task" not in text.split("Active priorities")[1].split("Goals at a glance")[0]
-    assert "The asker's own open goals" in text and "Unrelated task (due 2026-10-01)" in text.split("The asker's own")[1]
+    assert "The asker's own open goals" in text and "Unrelated task (due 2026-10-01; " in text.split("The asker's own")[1] and "days overdue)" in text.split("The asker's own")[1]
     assert "The asker's own" not in status_snapshot.build(registry, "q1", "u1", own=False)["text"]
     assert status_snapshot.build(None, "q1") is None
 
@@ -129,10 +130,11 @@ def test_a_status_question_in_a_chat_with_no_quest_is_placed_on_a_quest_and_gets
     provider, res = run_status('Where it stands.\n{"asks_status": true}', "where are we with the release?", quest_id=None, placement=placement)
     assert placement.asked and res.kind == "answer" and provider.planner_calls == 0
     assert any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
+    # No quest fits: the question is answered from all the asker's quests together (the portfolio snapshot), never by asking which quest (2026-11-11).
     abstain = Placement([])
     provider, res = run_status('Where it stands.\n{"asks_status": true}', "where are we with the release?", quest_id=None, placement=abstain)
-    assert abstain.asked and provider.planner_calls == 0 and not any("STATUS SNAPSHOT" in o.get("text", "") for o in res.gathered)
-    assert res.kind == "answer" and "STATUS FROM A SNAPSHOT" not in "".join(provider.writer_prompts)
+    assert abstain.asked and provider.planner_calls == 0 and any("QUESTS TOGETHER" in o.get("text", "") for o in res.gathered)
+    assert res.kind == "answer" and "STATUS FROM A SNAPSHOT" in "".join(provider.writer_prompts)
 
 
 class JudgeProvider(StatusProvider):
@@ -240,6 +242,7 @@ def test_the_portfolio_snapshot_reads_the_open_goals_of_every_quest_soonest_due_
     text = snap["text"]
     assert snap["locator"] == "status_snapshot" and "OF THE ASKER'S QUESTS TOGETHER" in text
     assert "Quest: Reach the target" in text and "Quest: Another aim" in text
+    assert re.search(r"Quest: Reach the target\n\d+ open goals? as of \d{4}-\d{2}-\d{2}, \d+ of them overdue\.", text)     # each quest's own dated counts
     assert text.index("Unrelated task") < text.index("Second milestone next step")      # due 2026-10-01 leads the later due days
     assert status_snapshot.portfolio(registry, []) is None and status_snapshot.portfolio(None, quests) is None
     GOALS_BACKUP = list(GOALS)
@@ -324,3 +327,69 @@ def test_a_plan_snapshot_holds_the_days_of_the_period_so_day_labels_pass_the_dat
     draft = "- **Thu 12 Nov:** Book the plumber.\n- **Sun 15 Nov:** Buy tiles.\n- **Fri 20 Nov:** Paint."
     assert measure(draft, STANDARDS[SHAPE_PLAN], status_snapshot.overview(rows, date(2026, 11, 11), plan=True)).unsupported == ["20 Nov"]
     assert "12 Nov" in measure(draft, STANDARDS[SHAPE_PLAN], status_snapshot.overview(rows, date(2026, 11, 11))).unsupported
+
+
+def test_overdue_goals_carry_their_days_overdue_and_the_snapshot_names_the_quest_never_its_id():
+    from datetime import date
+    rows = [{"id": "a", "title": "Book the plumber", "due": "2026-11-01", "completed": False}, {"id": "b", "title": "Buy tiles", "due": "2026-11-15", "completed": False}]
+    text = status_snapshot.overview(rows, date(2026, 11, 11))
+    assert "Book the plumber (due 2026-11-01; 10 days overdue)" in text and "Buy tiles (due 2026-11-15)" in text
+    snap = status_snapshot.build(Registry(), "q1", quest_title="Kids' bathroom (Renovate it before the visit)")
+    assert "The quest: Kids' bathroom (Renovate it before the visit)" in snap["text"] and "never write its id" in snap["text"]
+
+
+def test_an_empty_quest_plan_snapshot_asks_for_the_proposals_written_out_and_a_portfolio_plan_lists_the_days():
+    from datetime import date
+    empty = status_snapshot.overview([], date(2026, 11, 11), plan=True)
+    assert "write out, in this reply, up to three proposed first goals" in empty and "never only offer" in empty
+    assert "The days of this period: Wednesday 2026-11-11" in empty and "Wednesday 2026-11-18" in empty     # the proposals' days are days the turn read
+    registry = Registry()
+    snap = status_snapshot.portfolio(registry, status_snapshot.reachable_quests(registry), plan=True)
+    assert snap["text"].startswith("PLANNING SNAPSHOT READ JUST NOW OF THE ASKER'S QUESTS TOGETHER") and "The days of this period:" in snap["text"]
+    layout = snap["text"].split("Day layout across these quests")[1]
+    assert "[Reach the target]" in layout and "[Another aim]" in layout       # every quest's goals are placed, each naming its quest
+    assert "Day layout" not in status_snapshot.portfolio(registry, status_snapshot.reachable_quests(registry))["text"]     # a status reply gets no layout
+
+
+def test_the_day_layout_places_every_overdue_and_due_goal_on_or_before_its_due_day_two_a_day_then_fills_empty_days_with_undated_goals():
+    from datetime import date
+    rows = [{"title": f"Late {n}", "due": f"2026-11-0{n}"} for n in range(1, 6)] + [{"title": "Rough-in", "due": "2026-11-13"}, {"title": "Undated A"}, {"title": "Undated B"}]
+    layout = status_snapshot.day_layout(rows, date(2026, 11, 11), window_days=4)
+    lines = layout.splitlines()
+    assert lines[0].startswith("- Wednesday 2026-11-11: Late 1") and "Late 2" in lines[0]
+    assert "Late 5" in lines[2] and "Rough-in" in lines[2] and lines[2].startswith("- Friday 2026-11-13")      # due 13 November: on its day, with room
+    assert "Undated A" in lines[3] and "Undated B" in lines[4] and len(lines) == 5
+    assert status_snapshot.day_layout([], date(2026, 11, 11)) == ""
+
+
+def test_the_status_lead_sentence_states_the_goal_counts_and_the_longest_overdue_goal_and_a_plan_gets_its_own_counts():
+    from datetime import date
+    today = date(2026, 11, 11)
+    rows = [{"title": "A", "due": "2026-11-01"}, {"title": "B", "due": "2026-11-20"}, {"title": "C", "completed": True}]
+    assert status_snapshot.lead_sentence(rows, today) == ('As of 11 November, 1 of the quest\'s 3 goals is done, and 1 is overdue. The longest overdue is "A", '
+                                                          'due 1 November.')
+    assert status_snapshot.lead_sentence(rows[1:], today) == "As of 11 November, 1 of the quest's 2 goals is done, and none is overdue."
+    assert status_snapshot.lead_sentence([], today) == ""
+    snap = status_snapshot.build(Registry(), "q1")
+    assert snap["lead"].startswith("As of ") and "written by code" in snap["text"]
+    open_rows = [{"title": "L1", "due": "2026-11-01"}, {"title": "L2", "due": "2026-11-02"}, {"title": "S", "due": "2026-11-15"}, {"title": "U"}]
+    assert status_snapshot.plan_lead(open_rows, today) == "As of 11 November, 2 open goals are overdue, and 1 more is due by 18 November."
+    assert status_snapshot.plan_lead(open_rows[2:], today, across=3) == "As of 11 November, no open goal across your 3 quests is overdue, and 1 is due by 18 November."
+    assert status_snapshot.plan_lead([], today) == ""
+    plan = status_snapshot.build(Registry(), "q1", plan=True)
+    assert plan["lead"].startswith("As of ") and "overdue" in plan["lead"] and "written by code" in plan["text"]
+    registry = Registry()
+    assert status_snapshot.portfolio(registry, status_snapshot.reachable_quests(registry), plan=True)["lead"].startswith("As of ")
+    assert status_snapshot.portfolio(registry, status_snapshot.reachable_quests(registry))["lead"] == ""
+
+
+def test_a_writer_sentence_that_only_restates_the_code_written_lead_is_dropped_and_one_with_new_facts_stays():
+    lead = ('As of 11 November, 1 of the quest\'s 43 goals is done, and 8 are overdue. The longest overdue is "Choose the bank and account type", due 2 November.')
+    text = ('Your quest "i want to become self reliant" is at 1 of 43 goals done, with 8 overdue. The longest overdue is "Choose the bank and account type", due '
+            '2 November.\n\nDo this first: sit down for 30 minutes and list every source of income. It is 9 days overdue.')
+    assert status_snapshot.without_restated_lead(text, lead) == "Do this first: sit down for 30 minutes and list every source of income. It is 9 days overdue."
+    reno = 'As of 11 November, none of the quest\'s 25 goals is done yet, and 7 are overdue. The longest overdue is "Paint the walls", due 1 November.'
+    kept = 'The most urgent item is booking the plumber. It was due 1 November and is now 10 days overdue.'
+    assert status_snapshot.without_restated_lead(kept, reno) == kept      # one shared date and no goal the lead names: a new fact, kept
+    plan_lines = "- **Wednesday 11 November:** Paint the walls (overdue since 1 November)"
+    assert status_snapshot.without_restated_lead(plan_lines, reno) == plan_lines

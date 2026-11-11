@@ -552,3 +552,18 @@ def test_the_figure_pass_holds_a_reply_to_everything_the_writer_was_shown_not_a_
                          gathered=[{"locator": "quest details", "text": long_read}], _gen_answer=lambda steer: "")
     text = "Paid users are at 0 as of 7 November. Sign-ups are at 5 of 10."
     assert without_unsupported(rs, text, figure_evidence(rs)) == (text, [])
+
+
+def test_a_number_inside_a_listed_goals_own_name_is_not_a_reading_dated_by_the_plan_day_but_a_bare_reading_still_is():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import EvidenceIndex, misdated_figures
+    ev = EvidenceIndex.of("- Run 10 customer interviews (due 2026-11-08; 3 days overdue)\nThe days of this period: Wednesday 2026-11-11, Thursday 2026-11-12.\n\n"
+                          "Paid subscribers: 4 (as of 2026-11-07)")
+    assert misdated_figures("Thursday 12 November: Run 10 customer interviews (3 days overdue).", ev) == []
+    assert misdated_figures("You had 4 subscribers on 12 November.", ev) == ["12 November"]
+
+
+def test_first_person_words_inside_quotation_marks_are_a_name_not_the_assistants_voice():
+    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import copied_first_person
+    evidence = ["The quest: i want to become self reliant. Note: i want to sell the car."]
+    assert copied_first_person('Your quest "i want to become self reliant" has 8 overdue goals.', evidence) == []
+    assert copied_first_person("Next, i want to sell the car.", evidence) == ["i want to"]

@@ -184,6 +184,7 @@ class RunBeginMixin:
         rs.turn_delivery: Optional[str] = None
         rs.turn_needs_records: Optional[bool] = None
         rs.status_snapshot = False             # a code-composed snapshot is in the gathered reads and the plan is forced to answer from it
+        rs.status_lead = ""                    # a status reply's code-written first sentence (status_snapshot.lead_sentence), put on after the repairs
         rs.saves_to_records = False      # the request analyser's report: the message orders something added or saved in the person's records, so the reply text is not the whole work
         rs.writes_text = False      # the request analyser's report: the message asks for a piece of text to use and nothing else (set after understanding)
         rs.turn_information_only = False      # the request analyser's report: the message only asks to be told something (set after understanding)
@@ -439,35 +440,45 @@ class RunBeginMixin:
             # open first places the question on one of the asker's quests (the quest placement); when none fits, the turn asks one short question.
             from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
             snapshot_quest = rs.quest_id
+            quests = status_snapshot.reachable_quests(self.tools)
+            plan = bool(status_flags.get("plans_period"))
+            snapshot = None
             if not snapshot_quest:
-                quests = status_snapshot.reachable_quests(self.tools)
                 log.info("Status turn: no quest open; %d reachable quest(s); find_quest offered=%s", len(quests), bool(self.tools.get("find_quest")))
                 from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
                 # The conversation's last exchange goes to the placement: a follow-up that names nothing continues the quest of the message before it.
                 previous = quoted_phrase.previous_reply(self.conversation_store, conv_id, rs.user_message) if self.conversation_store is not None and conv_id else ""
                 snapshot_quest = self.judge_quest_for_turn(rs.user_message, previous, quests, None) if quests else None
                 if quests and not snapshot_quest:
-                    rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
-                                                   rationale="A status question that fits none of the asker's quests: one short question.")
+                    # A question that names no quest in a chat with none open ("what should I do next?", "plan my week") is about the person's work as a whole:
+                    # it is answered from all their quests' open goals (the portfolio snapshot), choosing among them, never by asking which quest
+                    # (measured 2026-11-11: the clarify reply said it had no material about their quests, with four quests reachable).
+                    emit.status("Reading your quests and goals…")
+                    snapshot = status_snapshot.portfolio(self.tools, quests, plan=plan)
+                    log.info("Status turn: no quest fits; portfolio snapshot %s", "read" if snapshot is not None else "not read")
+                    if snapshot is None:
+                        rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape="clarify", asks_first=False,
+                                                       rationale="A status question that fits none of the asker's quests, none with an open goal: one short question.")
             log.info("Status turn: quest %s (%s), placement asked=%s", snapshot_quest or "none", "pinned" if rs.quest_id else "placed" if snapshot_quest else "unplaced",
                      not rs.quest_id)
             if snapshot_quest and rs._forced_plan is None:
                 emit.status("Reading where the quest stands…")
                 own = (rs.retrieval_constraints or {}).get("actor") == "me"
+                title = next((str(q.get("title") or "") for q in quests if str(q.get("quest_id")) == str(snapshot_quest)), "")
                 snapshot = status_snapshot.build(self.tools, snapshot_quest, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
-                                                 question=rs.user_message, decide=self.cheap_decision, plan=bool(status_flags.get("plans_period")))
-            else:
-                snapshot = None
+                                                 question=rs.user_message, decide=self.cheap_decision, plan=plan, quest_title=title)
             if snapshot is not None and status_flags.get("plans_period"):
                 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN
                 rs.gathered.append(snapshot)
                 rs.status_snapshot = True
+                rs.status_lead = "" if status_flags["read_aloud"] else str(snapshot.get("lead") or "")     # the plan's counts, code-written, put on after the repairs
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, reply_shape=SHAPE_PLAN,
                                                delivery="spoken" if status_flags["read_aloud"] else None,
                                                rationale="A plan for the coming period: laid out from the quest's open goals read for this turn; nothing is saved.")
             elif snapshot is not None:
                 rs.gathered.append(snapshot)
                 rs.status_snapshot = True
+                rs.status_lead = "" if status_flags["read_aloud"] else str(snapshot.get("lead") or "")     # the code-written first sentence, put on after the repairs
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
                                                rationale="A status question: answered from the status snapshot read for this turn.")
 

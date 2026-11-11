@@ -862,28 +862,41 @@ I, my, me or our from a record, say whose it is by name ("waiting for Sam's prev
 
 STATUS_SNAPSHOT_DIRECTIVE = """\
 --- THIS REPLY IS A STATUS FROM A SNAPSHOT (set by the system) ---
-A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only: open with the key measure's value and the date it was read, then the one or two
-priorities that matter most (or the asker's own, when the question is about their own work) with their due days. Name the date of every figure. Leave out anything
-older than the snapshot (earlier campaigns, old notes, earlier replies) unless the question asked for it, add nothing the snapshot does not hold, and keep to the
-length for this kind of reply. When the snapshot is of the asker's quests together, there is no key measure to open with: name the one goal asked for (or the few asked for) with
-its quest, due day and the reason from the snapshot's goals, in the length for this kind of reply. Name ONE goal and keep to it: the reason and any next step
-belong to that same goal, and a goal you mention as overdue or related is never offered as a second answer. Write every date the way a person reads it ("1 November",
-"this Friday"), never as 2026-11-01. When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the
-next step and by when. When the snapshot holds no key measure value, open with the goals at a glance instead (how many are done, open and overdue, and the
-most overdue one by name). When it says the quest has no goals yet, say that plainly in the first sentence, as a fact about a quest that is just starting, never as
-something you could not read, and name the one step that starts it (its first goal). End on the last fact: no offer, no question and no list beyond what was
-asked. Never use an em dash.
+A STATUS SNAPSHOT was read for this turn. Write the reply from the snapshot only, in at most three plain sentences and no list:
+1. Where the quest stands overall: the key measure's value with the date it was read when the snapshot holds one, and the goals at a glance as
+   the snapshot counts them (how many of the total are done, how many are overdue, as of today's date). When the snapshot says the first sentence is
+   written by code, that sentence already gives the counts and goes before your text: do not write it or restate the counts, and start with the key
+   measure when there is one, else with sentence 2.
+2. What is most at risk: the most overdue goal by name, with its due day and how many days overdue the snapshot says it is (when none is overdue, the goal
+   due soonest, with its due day). When the code-written first sentence already names the longest-overdue goal, add only why it matters, from the snapshot.
+3. The one next step that matters most (an active priority, or the asker's own goal when the question is about their own work), by name with its due day.
+Name each goal exactly as the snapshot does, and name the quest by the name the snapshot gives, never by an id. Leave out anything older than the snapshot
+(earlier campaigns, old notes, earlier replies) unless the question asked for it, and add nothing the snapshot does not hold.
+When the snapshot is of the asker's quests together (no quest is open in this chat), there is no key measure: choose the ONE goal to do next across them
+(the most overdue, else the soonest due), name it with its quest and due day, and give the reason from the snapshot's goals. Never ask which quest they mean.
+When the question asks about one particular thing that none of these quests or goals holds, say so in one sentence, naming the quests it looked at, and
+put no goal in its place.
+When the question is about one milestone, say where it stands, what blocks it (named in full, as its records give it), who owns the next step and by when.
+When the snapshot says the quest has no goals yet, say that plainly in the first sentence, as a fact about a quest that is just starting, never as something
+you could not read, and name the one step that starts it (its first goal, written out). Write every date the way a person reads it ("1 November", "this
+Friday"), never as 2026-11-01. Never write the word "snapshot", and say nothing about a measure, percentage or figure the snapshot does not hold.
+Name a quest whose name is written in the first person in quotation marks. End on the last fact: no offer, no question. Never use an em dash.
 """
 
 PLAN_SNAPSHOT_DIRECTIVE = """\
 --- THIS REPLY IS A PLAN FROM A PLANNING SNAPSHOT (set by the system) ---
-A PLANNING SNAPSHOT of the quest's open goals was read for this turn, and the person asked for their coming period to be laid out. Write the plan from the snapshot
-only: one opening sentence on where things stand (how many goals are overdue and due in the period), then the overdue goals first, then one short line per day
-from today naming the goal or goals that day serves, each goal named exactly as the snapshot holds it and placed on or before its due day. Spread the work so no
-day carries more than two goals. Name no goal, date, habit or routine the snapshot does not hold: older conversations are not part of this plan. When the snapshot
-says the quest has no goals yet (or no open goal), say so in the first sentence, then write out up to three proposed first goals, one line each, that move
-the quest's outcome, each marked as a proposal (never only offer to propose them). Say that nothing was saved, and end with one question: whether to add the plan to their goals. Write dates the way a person reads them ("Thursday
-13 November"). Never use an em dash.
+A PLANNING SNAPSHOT of open goals was read for this turn, and the person asked for their coming period to be laid out. Write the plan from the snapshot
+only: one opening sentence on where things stand (how many goals are overdue and how many fall due in the period), then one short line per day. When the
+snapshot says the first sentence is written by code, it already states those counts: write no count of your own and start with the day lines. When the
+snapshot holds a day layout worked out by code, those are the day lines: keep every goal on the day it gives, in that order, named exactly as it is
+there, and add at most a few words of why to a line; drop no goal and add no day. Without a layout, every open goal the snapshot lists as overdue or due in
+the period gets a day from the days it lists, on or before its due day, at most two a day, and free days take the open goals with no date. Name no goal, date, habit,
+supplier, routine or rule the snapshot does not hold: older conversations and notes are not part of this plan. When the snapshot is of the asker's quests
+together (no quest is open in this chat), name each goal's quest beside it. When the snapshot says the quest has no goals yet (or no open goal), say so in
+the first sentence, then write out up to three proposed first goals, one line each, that move the quest's outcome, each marked as a proposal (never only
+offer to propose them). Never write a quest or goal id. Say that nothing was saved, and end with one question: whether to add the plan to their goals.
+Write dates the way a person reads them ("Thursday 13 November"). Never write the word "snapshot". Name a quest whose name is written in the first
+person in quotation marks. Never use an em dash.
 """
 
 DRAFT_ANSWER_DIRECTIVE = """\

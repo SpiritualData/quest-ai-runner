@@ -24,6 +24,10 @@ WORD = re.compile(r"[a-z]{3,}")
 STOP = frozenset("the and for with from that this was were are has have had not but its our your their per out new all one two as of on at by".split())
 SAME_FACT = 0.5          # shared subject words (of the smaller set) at which two readings are of one fact
 SAME_CLAUSE = 0.6        # the same, for two clauses of one draft
+# Words that place a thing in time ("due 1 November", "10 days overdue") but do not name what the thing is. Two clauses about two different goals, each with its
+# own due day, shared only these and were read as one thing with two dates (measured 2026-11-11 on status and plan replies listing overdue goals).
+SCHEDULE_WORDS = frozenset("due overdue late early days day weeks week months since until till which is was it its ago today tomorrow yesterday date dated "
+                           "deadline before after".split())
 MAX_LINE = 300
 MAX_READINGS = 400
 
@@ -152,7 +156,7 @@ class Resolved:
         for c in clauses:
             ds = dates_in(c)
             if len(ds) == 1:
-                dated.append((c, frozenset(ds[0][1]), subject_words(strip_dates(c))))
+                dated.append((c, frozenset(ds[0][1]), subject_words(strip_dates(c)) - SCHEDULE_WORDS))
         out: List[Violation] = []
         for i in range(len(dated)):
             for j in range(i + 1, len(dated)):

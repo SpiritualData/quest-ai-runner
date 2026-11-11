@@ -26,7 +26,8 @@ ASKS_VIEW = ("A question or request spoken TO a named person (the reply addresse
 FACTS_VIEW = ("A statement of fact about the person's quest, work, people, dates, figures or events (something happened, was missed, is due, stands at a value) must be "
               "supported by the reads listed in the evidence. Statements inside a drafted text the reply hands over (a script, message, post or notes) count too: that some "
               "work was done or a result came out, and what a product, service or organisation is, does, has or offers. A plan, an offer, a question, advice, a call to "
-              "action and general knowledge are not this task.")
+              "action and general knowledge are not this task, and neither is a proposed goal or a step put on a day of a plan (what the person could do), "
+              "only what the reply states as already true.")
 DONE_CLAIMS_VIEW = ("A statement in this drafted text that some work was done, something happened or a result came out (a run, a test, a launch, a figure reached) must be "
                     "supported by the evidence. What the text asks its reader to do, a question, a next step or a plan is not this task.")
 PRODUCT_CLAIMS_VIEW = ("A statement in this drafted text about what a product, service, person or organisation is, does, has, offers or helps with (a feature, a benefit, "

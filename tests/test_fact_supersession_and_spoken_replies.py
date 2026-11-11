@@ -158,3 +158,11 @@ def test_a_turn_that_ends_in_the_read_budget_wrap_up_is_regenerated_to_the_spoke
                         config=OrchestratorConfig(max_steps=3, verify_claims=False, answer_goal_max_iterations=1, overseer=False))
     res = orch.run("im on a call, where are we? keep it short, i will read it out")
     assert Writer.steered >= 1 and "*" not in res.text and "?" not in res.text
+
+
+def test_two_different_goals_each_with_its_own_due_day_are_not_one_thing_with_two_dates():
+    # Measured 2026-11-11: a status listing two overdue goals was read as one thing with two dates, because "due", "days" and "overdue" were taken for the subject.
+    std = standard_for(PlanDecision(action="answer", user_intent="ask"))
+    draft = "Book the plumber, which was due 1 November and is 10 days overdue. The schedule check is due 8 November (3 days overdue)."
+    m = measure(draft, std, "Book the plumber (due 2026-11-01). The schedule check (due 2026-11-08).", resolved=resolve("", TODAY))
+    assert not any(v.kind == "contradiction" for v in m.violations)

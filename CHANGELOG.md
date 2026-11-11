@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Status and week-plan answers open with a sentence written by code (`status_snapshot.lead_sentence`, `plan_lead`): the goal counts as of today and the longest-overdue goal, put on after the repairs; a writer sentence that only restates it is dropped (`without_restated_lead`). A week plan with no quest open gets a day layout across all the asker's quests, and the cross-quest snapshot carries each quest's dated counts. An empty quest's plan lists the days of the period. The reply check's facts view treats a proposed goal as a plan, not a claim.
 - An autopilot pass stopped part-way by its team's daily budget now raises one visible ask for the quest's owner through the escalation sink (`autopilot_budget_ask.budget_stop_escalation`): which characters were skipped, today's budget, how many runs were needed, and `autopilot_daily_budget` as the setting that raises it. One ask per quest per day (`dedupe_key`; `QuestDecisionSink` now also matches an open ask by its `dedupe_key`). Before this the stop was a log line and a pass-row note only.
 
 - An autopilot run iterates a Solution by its authoritative Metric: `autopilot_esoi.pick_solution` takes the record named by the Solution's `authoritative_metric_id` when there is one, and only otherwise the least recently measured linked Metric. A consolidated Solution that also carries the Metrics of its milestones is therefore measured by the one number it is judged by.
