@@ -339,6 +339,22 @@ class QuestDecisionSink(EscalationSinkBase):
                      exc_info=True)
             return None
 
+    def file_block(self, escalation: Escalation, assignee_user_id: str) -> str:
+        """The decision id of the ask filed as a BLOCK on ``escalation.blocked_goal_id``, or "" to file the plain ask.
+
+        Only when the escalation names a goal on a quest and a block type, and the goal's owner is the person the ask is for (a block
+        goes to the goal's owner, so an ask meant for someone else stays a plain ask). A quest with no team, an unknown goal, a Quest
+        without the personal process, or a refusal all give "": the person is still asked, the ordinary way."""
+        if not (escalation.blocked_goal_id and escalation.block_type and escalation.quest_id and hasattr(self._client, "report_block")):
+            return ""
+        try:
+            placed = self._client.report_block(escalation.quest_id, escalation.blocked_goal_id, escalation.block_type,
+                                               escalation.summary, expected_owner=assignee_user_id)
+        except Exception as e:  # noqa: BLE001 -- a block that cannot be filed must never lose the ask
+            log.info("escalate: block on goal %s not filed (%s); filing the plain ask", escalation.blocked_goal_id, e)
+            return ""
+        return str((placed.get("block") or {}).get("decision_id") or "")
+
     def escalate(self, escalation: Escalation) -> str:
         existing = self._existing_open_decision(escalation)
         if existing:
@@ -346,6 +362,9 @@ class QuestDecisionSink(EscalationSinkBase):
             return existing
         try:
             assignee_user_id = self.resolve_assignee(escalation)
+            blocked = self.file_block(escalation, assignee_user_id)
+            if blocked:
+                return blocked
             res = self._client.create_decision(
                 escalation.summary,
                 kind=escalation.kind,

@@ -37,10 +37,18 @@ def routed(monkeypatch, routes):
     return seen
 
 
+def real_state(own_fields):
+    """``GET /api/quests/{id}/state`` as production answers it (read 2026-11-11): the quest's own fields, team ids included, sit under
+    ``state``; the top level carries ``team_id: null`` and ``team_name: null`` beside other envelope keys. A reader of the top level finds no team."""
+    return {"quest_id": "q1", "state": {"quest_id": "q1", "user_id": OTHER, "name": "A quest", "completed": False, **own_fields},
+            "field_guidance": {}, "metric_readings": [], "is_shared_with_me": False, "shared_by_user_id": None, "share_access": None,
+            "category_names": [], "backlog_count": 0, "team_id": None, "team_name": None, "org_id": None, "org_name": None}
+
+
 def base_routes(state, block_answer, goals=GOALS):
     return [
         ("GET", "/api/teams/decisions/for-quest", 200, []),
-        ("GET", "/api/quests/q1/state", 200, {"quest_id": "q1", "state": state}),   # the quest's fields sit under "state"
+        ("GET", "/api/quests/q1/state", 200, real_state(state)),
         ("GET", "/goals/", 404, {}),   # the reference backend has no single-goal route
         ("GET", "/quests/q1/goals", 200, goals),
         ("GET", "/api/teams/team_a/members", 200, {"members": [{"user_id": OTHER}]}),
@@ -112,3 +120,74 @@ def test_the_primary_team_is_used_when_the_owner_is_on_none_of_the_teams(monkeyp
                                            goals={"period_groups": [{"goals": [{"id": "g1", "assigned_to_user_id": "stranger"}]}]}))
     ask({"blocked_goal_id": "g1", "block_type": "needs_access"})
     assert [r[1] for r in seen if r[0] == "POST"] == ["/api/teams/team_a/process/blocks"]
+
+
+# --- the runner's own stuck-on-a-person ask (file_blocked_ask -> sink -> block) ------------------------------------------------
+
+from types import SimpleNamespace
+
+from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestDecisionSink
+from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import block_type_of, blocked_goal_of
+from quest_ai_runner.the_intelligence.mind.response_writer import orchestrator_turn_messages as messages
+
+
+def stuck_turn(meta, verdict=None, **verdict_fields):
+    client = QuestClient("https://quest.example", "key", team_id="team_a")
+    orch = SimpleNamespace(escalation=QuestDecisionSink(client), _concise_decision_summary=lambda q: q)
+    res = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+    verdict = verdict or {"blocker": "needs_person", "question": "Please share the store login.", **verdict_fields}
+    meta = {"live_user_turn": False, "asker_user_id": OWNER, "quest_id": "q1", "participants": [{"user_id": OWNER, "name": "Owner"}], **meta}
+    return messages.file_blocked_ask(orch, None, meta, res, verdict, question=verdict.get("question", "")), res
+
+
+def test_the_goal_and_block_type_come_from_structure_only():
+    assert blocked_goal_of({"quest_id": "q1", "related_goal_id": "g1", "goal_id": "q1"}) == "g1"
+    assert blocked_goal_of({"quest_id": "q1", "goal_id": "q1"}) == ""          # a quest-scoped task carries the quest's id as goal_id
+    assert blocked_goal_of({"quest_id": "q1", "goal_id": "g9"}) == "g9"
+    assert blocked_goal_of({}) == ""
+    assert block_type_of("tool_failure") == "needs_access" and block_type_of("needs_person") == "needs_information"
+
+
+def test_the_runners_stuck_ask_on_a_goal_is_filed_as_a_block_and_its_decision_is_the_blocks(monkeypatch):
+    seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
+    filed, res = stuck_turn({"related_goal_id": "g1"})
+    assert filed is True and res.decision_id == "d_block"
+    posts = [r for r in seen if r[0] == "POST"]
+    assert [p[1] for p in posts] == ["/api/teams/team_b/process/blocks"] and posts[0][2]["type"] == "needs_information"
+    assert not [r for r in seen if r[1].endswith("/decisions")]
+
+
+def test_an_ask_meant_for_someone_else_stays_a_plain_ask(monkeypatch):
+    """The block would go to the goal's owner; the verifier named a different teammate, so no block is filed."""
+    seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
+    meta = {"related_goal_id": "g1", "participants": [{"user_id": OWNER, "name": "Owner"}, {"user_id": OTHER, "name": "Other"}]}
+    filed, res = stuck_turn(meta, asked_of="member", member_ref=OTHER)
+    assert filed is True and res.decision_id == "plain1"
+    assert not [r for r in seen if "process/blocks" in r[1]]
+
+
+def test_a_run_on_a_quest_alone_files_the_plain_ask(monkeypatch):
+    seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
+    filed, res = stuck_turn({"goal_id": "q1"})
+    assert filed is True and res.decision_id == "plain1" and not [r for r in seen if "process/blocks" in r[1]]
+
+
+def test_a_quest_without_a_team_or_a_refused_block_files_the_plain_ask(monkeypatch):
+    routed(monkeypatch, base_routes({"team_id": None, "team_ids": []}, (200, BLOCK)))
+    assert stuck_turn({"related_goal_id": "g1"})[1].decision_id == "plain1"
+    routed(monkeypatch, base_routes(STATE, (422, {"detail": "refused"})))
+    assert stuck_turn({"related_goal_id": "g1"})[1].decision_id == "plain1"
+
+
+def test_the_person_typing_is_still_asked_in_the_reply_not_through_a_block(monkeypatch):
+    seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
+    filed, res = stuck_turn({"related_goal_id": "g1", "live_user_turn": True})
+    assert filed is False and res.decision_id is None and "store login" in res.output
+    assert not [r for r in seen if r[0] == "POST"]
+
+
+def test_a_block_a_worker_raised_with_its_own_tool_is_adopted_as_the_turns_ask():
+    res = SimpleNamespace(output="", decision_id=None, observations=[], observations_reported=False, coverage=None)
+    entry = {"decision_id": "d_block", "assignee_user_id": OWNER, "summary": "Blocked: needs the store login"}
+    assert messages.adopt_turn_ask(SimpleNamespace(), None, {"asker_user_id": OWNER}, res, [entry]) is True
+    assert res.decision_id == "d_block"

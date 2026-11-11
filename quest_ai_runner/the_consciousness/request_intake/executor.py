@@ -476,6 +476,9 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
         if task_id:
             context_meta = {**(context_meta or {}), "task_id": task_id}
+        # The specific goal a task serves: a block on a person is filed against it, not against the quest.
+        if related_goal_id:
+            context_meta = {**(context_meta or {}), "related_goal_id": str(related_goal_id)}
         # Who the work is for (the task's creator), so every process this run spawns carries it
         # as QAR_REQUESTER_USER_ID (see core/requester.py).
         requester = requester_from_task(task)

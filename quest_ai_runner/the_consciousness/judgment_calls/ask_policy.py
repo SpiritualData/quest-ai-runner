@@ -32,6 +32,23 @@ STOP_TOOL_FAULT = "tool_fault"
 STOP_UNVERIFIED = "unverified"   # a usable reply with part of it not confirmed (the verdict blocker is evidence_only)
 
 
+def block_type_of(blocker: str) -> str:
+    """What the person must supply, from the verifier's structural ``blocker`` enum: an access refusal is ``needs_access``, any other
+    block on a person is ``needs_information`` (the verdict does not distinguish a decision from a step, so none is guessed)."""
+    return "needs_access" if blocker == "tool_failure" else "needs_information"
+
+
+def blocked_goal_of(meta: Mapping[str, Any]) -> str:
+    """The specific goal the run is working, from the caller's context: ``related_goal_id`` (an AI task's own goal), else ``goal_id``
+    when it is not the quest itself (a quest-scoped task carries the quest's id there). "" when the run is not on one goal."""
+    quest = str(meta.get("quest_id") or "")
+    for key in ("related_goal_id", "goal_id"):
+        value = str(meta.get(key) or "").strip()
+        if value and value != quest:
+            return value
+    return ""
+
+
 def failure_status(signature: str) -> str:
     """The HTTP-style status inside a ledger failure signature (``tool|status|first sentence``), or ""."""
     parts = str(signature or "").split("|")
@@ -107,7 +124,8 @@ class AskOutcome:
 
 
 def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options: Optional[List[str]], quest_id: Optional[str],
-             conv_id: str, turn_id: str, asker_user_id: str, assignee: Assignee, summary: str) -> AskOutcome:
+             conv_id: str, turn_id: str, asker_user_id: str, assignee: Assignee, summary: str,
+             blocked_goal_id: str = "", block_type: str = "") -> AskOutcome:
     """File ONE decision-request through the sink. ``decision_id`` is empty when it could not be filed; the caller then
     ends the turn as a final that says the question could not be filed, never as one that claims an ask exists."""
     if sink is None:
@@ -117,7 +135,7 @@ def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options:
             summary=summary, kind="answer", quest_id=quest_id, assignee=assignee.user_id or None,
             default_on_silence="hold", dedupe_key=ask_dedupe_key(turn_id, conv_id, question), conv_id=conv_id or None,
             notify_user_id=asker_user_id or None, options=list(options) if options else None,
-            why_only_you=why_only_you or None))
+            why_only_you=why_only_you or None, blocked_goal_id=blocked_goal_id or None, block_type=block_type or None))
     except Exception as e:  # noqa: BLE001 -- a failed filing must end the turn honestly, not break it
         log.warning("ask-on-block: the sink raised %s: %s", type(e).__name__, e)
         return AskOutcome(error=f"{type(e).__name__}: {e}")

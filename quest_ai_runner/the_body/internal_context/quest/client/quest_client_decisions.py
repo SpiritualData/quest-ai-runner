@@ -198,11 +198,12 @@ class DecisionsMixin:
                     return {"team_id": team, "owner_id": owner}
         return {"team_id": teams[0], "owner_id": owner}
 
-    def report_block(self, quest_id: str, goal_id: str, block_type: str, reason: str) -> Dict[str, Any]:
+    def report_block(self, quest_id: str, goal_id: str, block_type: str, reason: str, *, expected_owner: str = "") -> Dict[str, Any]:
         """POST /api/teams/{team}/process/blocks: report a block on a goal so its owner gets an ask with a three-day clock
         and the escalation hand-off applies (the quest team's personal process). Returns ``{block, created, team_id}``;
         ``created`` is False when the same block was already open. Raises ``QuestNotConfigured`` (no team, unknown goal or
-        bad type) or a ``QuestWriteError`` (Quest refused it); the caller falls back to a plain ask."""
+        bad type, or an owner other than ``expected_owner`` when one is given: the block would go to someone the ask is not for) or a
+        ``QuestWriteError`` (Quest refused it); the caller falls back to a plain ask."""
         if block_type not in self.BLOCK_TYPES:
             raise QuestNotConfigured(f"block type must be one of: {', '.join(self.BLOCK_TYPES)}")
         text = " ".join(str(reason or "").split())
@@ -211,6 +212,8 @@ class DecisionsMixin:
         if not text:
             raise QuestNotConfigured("a block needs a one-line reason")
         placed = self.block_team_for(quest_id, goal_id)
+        if expected_owner and placed["owner_id"] != str(expected_owner):
+            raise QuestNotConfigured(f"goal {goal_id} is owned by someone else than the person this ask is for")
         written = self._write("POST", f"/api/teams/{placed['team_id']}/process/blocks", label="Reporting the block",
                               body={"goal_id": goal_id, "type": block_type, "reason": text},
                               idempotency_key=new_idempotency_key())

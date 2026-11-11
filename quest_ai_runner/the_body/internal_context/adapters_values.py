@@ -44,6 +44,11 @@ class Escalation:
     notify_user_id: Optional[str] = None
     options: Optional[List[str]] = None
     why_only_you: Optional[str] = None
+    # BLOCK ON A GOAL: when the run is stuck on one goal because of a person, the goal and what is missing (needs_human_step,
+    # needs_access, needs_decision, needs_information). A sink whose Quest has the personal process files the ask as a block on that
+    # goal (a three-day clock and a hand-off) when ``assignee`` is the goal's owner; any other sink, or any failure, files the plain ask.
+    blocked_goal_id: Optional[str] = None
+    block_type: Optional[str] = None
 
 
 # A short relative form the planner can emit instead of computing a real timestamp itself:

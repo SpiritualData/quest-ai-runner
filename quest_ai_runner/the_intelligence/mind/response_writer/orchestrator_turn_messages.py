@@ -21,7 +21,7 @@ from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import render_prompt
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import found_constraint_head, turn_holds_records
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import (
-    Assignee, adopted_assignee, ask_event_data, ask_text, blocks_on_person, file_ask, resolve_assignee, why_only_you_of)
+    Assignee, adopted_assignee, ask_event_data, ask_text, block_type_of, blocked_goal_of, blocks_on_person, file_ask, resolve_assignee, why_only_you_of)
 from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import (
     InterimLedger, InterimState, SEND, SKIP_NO_WHY, decide, done_text, interim_event_data, interim_text_of, progress_signature, ungrounded_terms)
 
@@ -170,7 +170,8 @@ def file_blocked_ask(orch: Any, emit: Any, ctx_meta: Optional[Dict[str, Any]], r
     outcome = file_ask(
         getattr(orch, "escalation", None), question=question, why_only_you=why_only_you, done=done, options=options,
         quest_id=meta.get("quest_id"), conv_id=str(meta.get("conv_id") or ""), turn_id=str(meta.get("turn_id") or ""),
-        asker_user_id=asker, assignee=assignee, summary=orch._concise_decision_summary(question))
+        asker_user_id=asker, assignee=assignee, summary=orch._concise_decision_summary(question),
+        blocked_goal_id=blocked_goal_of(meta), block_type=block_type_of(str(verdict.get("blocker") or "")))
     if not outcome.filed:
         res.output = ((done + "\n\n") if done else "") + (
             "I need one thing from you to finish this, but I could not file the question for you: " + question)
