@@ -22,7 +22,7 @@ from quest_ai_runner.the_intelligence.mind.context_intake.context_doctrine impor
 from hubofhubs.api import ExecutionRecord
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
-from quest_ai_runner.the_intelligence.mind.orchestrator_constants import RECIPE_SKIP_GOAL_CONTEXT, log
+from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEEP_GOAL_CONDENSE_CHARS, RECIPE_SKIP_GOAL_CONTEXT, log
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records, take_status_flags
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
@@ -272,7 +272,7 @@ class RunBeginMixin:
         rs.caller_deep_plan: Optional[PlanDecision] = None
         if (rs.deep_goal or "").strip():
             rs.caller_deep_plan = PlanDecision(
-                action="deep", goal=_truncate_goal(rs.deep_goal.strip()),
+                action="deep", goal=_truncate_goal(self._caller_deep_goal(rs.deep_goal.strip(), getattr(rs, "now", None), emit)),
                 deep_brief=rs.user_message, rationale="the caller started this deep run directly",
                 deep_difficulty=(context_meta or {}).get("deep_difficulty") or None)      # the caller's kind of work picks the start the cascade measured for it
             rs._forced_plan = rs.caller_deep_plan
@@ -404,6 +404,22 @@ class RunBeginMixin:
                     return drained
 
                 rs.pending_inputs = _drain_conversation
+
+    def _caller_deep_goal(self, goal: str, now: Optional[str], emit: Any) -> str:
+        """The goal a caller-chosen deep run is checked against: ``goal`` itself when it is short, else a done-standard
+        condensed from it by the one cheap goal-condition call a chat turn makes (``_derive_goal_condition``).
+
+        A task made in the AI task form names its quest, rep and environment, so its run skips the planner and the
+        goal is the person's whole request. The deep loop verifies every attempt against this goal and retries until
+        it is met, so a whole long request (or one cut at a fixed length, which used to drop the "done when" at its
+        end) made a poor condition to check. Fails safe: the condensing call never raises, and an empty or worse
+        reply keeps the goal as given."""
+        if len(goal) <= DEEP_GOAL_CONDENSE_CHARS:
+            return goal
+        if emit is not None:
+            emit.status("Working out what done looks like for this task…")
+        condensed = (self._derive_goal_condition(goal, now=now)[0] or "").strip()
+        return condensed if condensed and len(condensed) < len(goal) else goal
 
     def _run_own_updates_early(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """A request for the person's OWN updates is answered here, ahead of understanding, context and planning.

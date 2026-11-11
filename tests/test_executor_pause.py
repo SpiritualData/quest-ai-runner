@@ -331,3 +331,19 @@ def test_a_milestone_work_task_runs_as_a_caller_deep_run_of_its_kind_with_the_la
         {"task_id": "atask_9", "text": "Make it.\n" + milestone_completion.work_record_line(record)})
     assert seen["deep_goal"] == "Complete this task: the scripts" and seen["meta"].get("deep_difficulty") == "hard"
     assert seen["text"].startswith(f"First read the skill at {tmp_path}/method-x/SKILL.md")
+
+
+def test_the_topics_attached_to_a_task_are_selected_first_by_its_context_assembly():
+    """The AI task form's Topics (``card_ids``) reach every assembly of the run as ``priority_card_ids``."""
+    seen: Dict[str, Any] = {}
+
+    class Recording(FixedOrchestrator):
+        def run(self, text, *args, deep_goal=None, **kwargs):
+            seen.update(meta=kwargs.get("context_meta") or {})
+            return OrchestratorResult(kind="cancelled", exit_reason="cancelled")
+    TaskExecutor(PauseClient(), Recording(paused_result())).execute(
+        {"task_id": "atask_10", "text": "Summarize the topic.", "card_ids": ["card_a", "", "card_b"]})
+    assert seen["meta"].get("priority_card_ids") == ["card_a", "card_b"]
+    seen.clear()
+    TaskExecutor(PauseClient(), Recording(paused_result())).execute({"task_id": "atask_11", "text": "No topics."})
+    assert "priority_card_ids" not in seen["meta"]

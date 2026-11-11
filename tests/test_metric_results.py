@@ -101,3 +101,40 @@ def test_a_worker_calls_it_from_the_shell_with_a_run_id(tmp_path, monkeypatch, c
     monkeypatch.setenv("QAR_TOOL_RUN_ID", "run_env")
     assert main(["call", "record_metric_result", "--kw", "not_applicable=true", "--kw", "reason=a note"]) == 0
     assert len(FileMetricLedger(str(tmp_path / "ledger")).for_run("run_env")) == 1
+
+
+# -- naming a quest metric, and which metric a run records ---------------------------------------
+
+def test_a_quest_metric_is_named_from_the_quest_records_when_no_repository_holds_it(tmp_path, monkeypatch):
+    """A result recorded against a quest's own metric (an ``esr_`` record) carries its name, so a screen never shows the id."""
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
+    monkeypatch.chdir(tmp_path)
+    seen = []
+
+    def lookup(metric_id):
+        seen.append(metric_id)
+        return {"name": "Paid subscribers", "solution_id": "esr_sol"}
+
+    row = tmr.build_result({"metric_id": "esr_m1", "before": 0, "after": 0, "reason": "read live"}, "run1", "", lookup)
+    assert (row.name, row.solution_id, seen) == ("Paid subscribers", "esr_sol", ["esr_m1"])
+    given = tmr.build_result({"metric_id": "esr_m1", "solution_id": "esr_given", "after": 1}, "run1", "", lookup)
+    assert given.solution_id == "esr_given"   # what the call said wins over the lookup
+
+
+def test_a_failed_quest_lookup_still_keeps_the_result(tmp_path, monkeypatch):
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
+    monkeypatch.chdir(tmp_path)
+    assert tmr.quest_metric_names({}, "quest_1", "esr_m1") == {}            # no Quest credentials: nothing is asked
+    assert tmr.quest_metric_names({"QUEST_BASE_URL": "x", "QUEST_API_KEY": "y"}, None, "esr_m1") == {}
+    row = tmr.build_result({"metric_id": "esr_m1", "after": 2}, "run1", "", lambda _id: {})
+    assert (row.metric_id, row.name, row.after) == ("esr_m1", "", 2)
+
+
+def test_every_place_that_asks_for_a_metric_says_which_one(registry):
+    """The rule that the metric is the changed solution's, not a downstream outcome, reaches the worker three ways."""
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import CLOSING, NUDGE_BRIEF
+    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import WHICH_METRIC
+    assert "solution your change implements" in WHICH_METRIC and "defining one" in WHICH_METRIC
+    assert WHICH_METRIC in CLOSING and WHICH_METRIC in NUDGE_BRIEF
+    assert WHICH_METRIC in registry.get("record_metric_result").when_to_use
+    assert "—" not in WHICH_METRIC

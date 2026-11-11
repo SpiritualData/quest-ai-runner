@@ -17,8 +17,9 @@ from quest_ai_runner.the_intelligence.mind.delegation.auto_followup import Follo
 from quest_ai_runner.the_consciousness.request_intake.executor_contracts import log
 from quest_ai_runner.the_consciousness.request_intake.executor_support import terminal_session_id
 
-# How much of the original ask names the follow-up's goal line.
-_GOAL_ASK_CHARS = 300
+# The whole ask is the goal a direct deep run is checked against. A long one is condensed into a short checkable
+# done-standard by the orchestrator (``DEEP_GOAL_CONDENSE_CHARS``), never cut here: a cut at a fixed length dropped
+# the "done when" a long request ends with, so the goal loop checked the work against half a sentence.
 
 
 class FollowUpMixin:
@@ -37,17 +38,27 @@ class FollowUpMixin:
 
     _WORK_TYPE_LABELS = {"web_search": "web search", "quest_ops": "Quest operations",
                          "quest_docs_ops": "Quest docs operations"}
+    # The task's classified kind of work (``capability``, set once by quest-backend when the task is made) names the
+    # work when the task lists no ``work_types``. A label only: it never skips the planner on its own, and "none"
+    # (generic deep work) adds nothing.
+    _CAPABILITY_LABELS = {"web": "web search", "corpus": "the team's own docs and data", "code": "code"}
 
     @classmethod
     def _declared_route(cls, task: Optional[Dict[str, Any]]) -> Tuple[bool, List[str]]:
         """``(known, work type labels)`` from what the task itself declares. A task is "known" when
-        the person chose an environment (``env_id``) or listed its work types (``work_types``, any
-        mix of web_search, quest_ops, quest_docs_ops). The planner would only rediscover that."""
+        the person chose an environment (``env_id``), listed its work types (``work_types``, any
+        mix of web_search, quest_ops, quest_docs_ops, code), wrote what done means (``done_when``),
+        or quest-backend routed it to the team's environment (``route == "env"``, stamped when a
+        person's task sits on a team with a live runner). The planner would only rediscover that."""
         task = task if isinstance(task, dict) else {}
         raw = task.get("work_types")
         types = [str(t) for t in raw if isinstance(t, str) and t] if isinstance(raw, (list, tuple)) else []
         labels = [cls._WORK_TYPE_LABELS.get(t, t.replace("_", " ")) for t in types]
-        return bool(types or task.get("env_id")), labels
+        if not labels and cls._CAPABILITY_LABELS.get(str(task.get("capability") or "")):
+            labels = [cls._CAPABILITY_LABELS[str(task["capability"])]]
+        declared = bool(types or task.get("env_id") or str(task.get("done_when") or "").strip()
+                        or task.get("route") == "env")
+        return declared, labels
 
     def _direct_deep_extra(self, ask: str, supports_deep_goal: bool,
                            task: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -62,7 +73,10 @@ class FollowUpMixin:
         enabled = getattr(cfg, "task_direct_deep", False) is True
         if not supports_deep_goal or not (enabled or (known and getattr(cfg, "task_route_declared", True) is not False)):
             return None
-        goal = " ".join((ask or "").split())[:_GOAL_ASK_CHARS]
+        # The person's own "done when" is the goal the run is checked against (the ask stays the brief);
+        # without one, the whole ask is the goal and the orchestrator condenses a long one.
+        done_when = " ".join(str((task or {}).get("done_when") or "").split()) if isinstance(task, dict) else ""
+        goal = done_when or " ".join((ask or "").split())
         if not goal:
             return None
         prefix = "Complete this task"
@@ -131,7 +145,7 @@ class FollowUpMixin:
                 return result
             brief = followup_brief(ask, result, decision.remaining, number=done + 1, limit=limit)
             extra = ({"deep_goal": "Finish what remains of the original task: "
-                      + " ".join(ask.split())[:_GOAL_ASK_CHARS]} if supports_deep_goal else None)
+                      + " ".join(ask.split())} if supports_deep_goal else None)
             resume = terminal_session_id(result) or resume_session_id
             done += 1
             try:

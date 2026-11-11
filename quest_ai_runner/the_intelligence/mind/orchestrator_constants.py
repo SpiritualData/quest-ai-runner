@@ -20,6 +20,11 @@ from hubofhubs.api import (
 
 RECIPE_SKIP_GOAL_CONTEXT = "recipe_skip_goal_context"   # ctx_meta key set on a deep-recipe turn
 
+# A caller's deep goal (``Orchestrator.run(deep_goal=...)``) longer than this is the whole request, not a done-standard:
+# the run condenses it into one with the same cheap goal-condition call a chat turn makes, so the goal loop checks the
+# work against a short checkable condition and still makes no planner call. A goal this short is used as given.
+DEEP_GOAL_CONDENSE_CHARS = 300
+
 
 # Log labels for where a deep-worker ladder came from (see Orchestrator.log_deep_ladder).
 CONFIGURED_LADDER_SOURCE = "configured deep_model_ladder (e.g. QAR_DEEP_MODELS)"

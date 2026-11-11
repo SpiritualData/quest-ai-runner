@@ -35,7 +35,8 @@ from esoi import MAX_METRICS, MetricLedger, MetricResult, payload_of, render_lin
 from hubofhubs.api import ToolOutcome, changed_something
 
 from quest_ai_runner.the_body.configuration.runtime_settings import core_settings, process_environment
-from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import TOOL_NAME, metric_ledger_from_env
+from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import (
+    TOOL_NAME, WHICH_METRIC, metric_ledger_from_env)
 
 # The one request made of a worker whose change has no metric result on record. Written here, not by a model. It yields to
 # the person's own request: code never reads the request for that (hard rule #3), the worker, who has it, decides, and a
@@ -45,8 +46,8 @@ NUDGE_BRIEF = (
     "nothing: say so in one sentence and stop. Otherwise record it now with record_metric_result: the value of the "
     "metric this work serves before and after your change (a stage its cascading conditionals did not call for stays "
     "empty, and the reason says so), or not_applicable with a one-sentence reason if no metric "
-    "applies. Do not redo or extend the work, and do not repeat your earlier summary: reply with one sentence saying "
-    "what you recorded.")
+    "applies. " + WHICH_METRIC + " Do not redo or extend the work, and do not repeat your earlier summary: reply with one "
+    "sentence saying what you recorded.")
 # The two statuses below are fixed sentences a person reads on an 80-column screen beside the clock and the spinner, so
 # they stay near 50 characters (the terminal cuts a longer one with an ellipsis).
 NUDGE_STATUS = "Asking the worker to record the metric result."
@@ -55,7 +56,7 @@ UNFINISHED_FLAGS = ("launch_failed", "cancelled", "usage_limited", "paused", "de
 # What the brief asks of the worker after the NEXT PRIORITY block.
 CLOSING = ("Record the metric's value before and after your change with record_metric_result, as far as its cascading "
            "conditionals call for (a stage not run stays empty, with the reason); if no metric applies to "
-           "this work, record not_applicable with a one-sentence reason.")
+           "this work, record not_applicable with a one-sentence reason. " + WHICH_METRIC)
 
 
 def working_dir_of(runner: Any, override: Optional[str]) -> Optional[str]:

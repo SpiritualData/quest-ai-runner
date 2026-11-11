@@ -490,6 +490,12 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         run_scope_tags = task_scope_tags(task)
         if run_scope_tags:
             context_meta = {**(context_meta or {}), "scope_tags": run_scope_tags}
+        # The Topics the person attached to the task (``card_ids``, the AI task form's Topics picker) are context they
+        # chose: selected first by every context assembly of this run (``priority_card_ids``, past the confidence gate
+        # and the card filter, still inside the quest fence above), the same way a chat matched to a quest gets its card.
+        attached_cards = [str(c) for c in (task.get("card_ids") or []) if str(c or "").strip()]
+        if attached_cards:
+            context_meta = {**(context_meta or {}), "priority_card_ids": attached_cards}
         # A milestone deliverable's work (its brief carries the code-written work record) is a deep run the caller decided on: the skill it names is loaded
         # from this lane's skills root, and its kind starts it on the tier the harness cascade measured best for that kind of work.
         from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion

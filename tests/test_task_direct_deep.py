@@ -74,9 +74,10 @@ def test_the_executor_passes_the_task_text_as_the_goal_only_when_enabled():
     assert Executor("yes")._direct_deep_extra("Do it", True) is None  # only a real True counts
     assert Executor(True)._direct_deep_extra("Do it", False) is None  # brain cannot take a goal
     assert Executor(True)._direct_deep_extra("  ", True) is None
-    extra = Executor(True)._direct_deep_extra("Do   it\n now " + "x" * 500, True)
-    assert extra["deep_goal"].startswith("Complete this task: Do it now ")
-    assert len(extra["deep_goal"]) <= len("Complete this task: ") + 300
+    long_ask = "Do   it\n now " + "x" * 500 + " Done when: the note is filed."
+    extra = Executor(True)._direct_deep_extra(long_ask, True)
+    # The whole ask, never cut: the orchestrator condenses a long goal into a done-standard (below).
+    assert extra["deep_goal"] == "Complete this task: " + " ".join(long_ask.split())
 
 
 def test_the_setting_defaults_to_off():
@@ -95,3 +96,75 @@ def test_a_task_that_declares_its_environment_or_work_types_skips_the_planner():
     off = Executor(False)
     off._orch.cfg.task_route_declared = False
     assert off._direct_deep_extra("Do it", True, {"env_id": "e"}) is None
+
+
+def test_the_task_kind_names_the_work_when_no_work_types_are_listed():
+    ex = Executor(False)
+    web = ex._direct_deep_extra("Find it", True, {"env_id": "e", "capability": "web"})
+    assert web == {"deep_goal": "Complete this task (work: web search): Find it"}
+    assert ex._direct_deep_extra("Do it", True, {"env_id": "e", "capability": "none"}) == {"deep_goal": "Complete this task: Do it"}
+    listed = ex._direct_deep_extra("Do it", True, {"work_types": ["quest_ops"], "capability": "web"})
+    assert listed["deep_goal"] == "Complete this task (work: Quest operations): Do it"   # what the task lists wins
+    assert ex._direct_deep_extra("Do it", True, {"capability": "web"}) is None             # a label never skips the planner
+
+
+# -- a long caller goal is condensed into a done-standard, with no planner call ------------------
+
+class CondensingProvider(RecordingProvider):
+    def __init__(self, condensed: str):
+        super().__init__()
+        self.condensed = condensed
+        self.answers = 0
+
+    def answer(self, messages, *, model, system=None, **kw) -> str:
+        self.answers += 1
+        return self.condensed
+
+
+class GoalRunner(Runner):
+    def __init__(self):
+        self.goals: List[str] = []
+
+    def run_goal(self, **kw) -> DeepResult:
+        self.goals.append(kw.get("goal") or "")
+        return DeepResult(met=True, output="done")
+
+
+def run_with_goal(goal: str, condensed: str):
+    provider, runner = CondensingProvider(condensed), GoalRunner()
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
+                        deep_runner=runner, config=OrchestratorConfig())
+    result = orch.run("Review the overdue goals and write a short note.", mode=Mode.BACKGROUND,
+                      message_is_user_turn=False, deep_goal=goal)
+    return result, provider, runner
+
+
+def test_a_long_task_goal_is_condensed_into_a_checkable_done_standard():
+    long_goal = "Complete this task: " + "Review every overdue goal and say why it slipped. " * 10 + "Done when: a note is filed."
+    result, provider, runner = run_with_goal(long_goal, "A note is filed that names every overdue goal and why it slipped.")
+    assert "decide" not in provider.schemas                       # still no planner call
+    assert provider.answers >= 1
+    assert runner.goals and runner.goals[0].startswith("A note is filed that names every overdue goal")
+    assert result.kind == "deep"
+
+
+def test_a_short_task_goal_is_used_as_given_with_no_extra_call():
+    _, provider, runner = run_with_goal("Complete this task: review the overdue goals", "SHOULD NOT BE USED")
+    assert runner.goals and runner.goals[0].startswith("Complete this task: review the overdue goals")
+    assert all("SHOULD NOT BE USED" not in g for g in runner.goals)
+
+
+def test_a_condensing_reply_that_is_empty_keeps_the_whole_goal():
+    long_goal = "Complete this task: " + "Review every overdue goal. " * 20
+    _, _, runner = run_with_goal(long_goal, "")
+    assert runner.goals and "Review every overdue goal." in runner.goals[0]
+
+
+def test_a_done_when_or_an_environment_route_is_a_declared_route():
+    ex = Executor(False)
+    done = ex._direct_deep_extra("Research the grant and draft a summary.", True,
+                                 {"done_when": "  A one-page summary is\n attached.", "work_types": ["web_search"]})
+    assert done == {"deep_goal": "Complete this task (work: web search): A one-page summary is attached."}
+    assert ex._direct_deep_extra("Do it", True, {"route": "env"}) == {"deep_goal": "Complete this task: Do it"}
+    assert ex._direct_deep_extra("Do it", True, {"route": "queue"}) is None
+    assert ex._direct_deep_extra("Do it", True, {"done_when": "   "}) is None
