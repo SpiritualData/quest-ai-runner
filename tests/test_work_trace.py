@@ -588,3 +588,19 @@ def test_records_a_status_snapshot_read_show_when_the_reply_names_them_and_only_
     step = next(s for s in sink.latest().values() if s["kind"] == "records")
     assert [(i["ref"], i["label"], i.get("kind")) for i in step["items"]] == [
         ("quest_1", "Run my first half marathon", "quest"), ("g1", "Book the race entry", "goal")]
+
+
+def test_a_status_answer_shows_the_outcome_and_strategy_it_quotes():
+    # measured live 2026-11-11: the panel listed the quest and its goals but not the outcome and strategy the answer quoted, so nothing showed
+    # which parts of the quest's structure the answer was built on. An outcome is a sentence the person wrote (a colon in "2:15" is kept).
+    sink, trace = make()
+    trace.records_read([{"ref": "quest_1", "label": "Run my first half marathon", "kind": "quest"},
+                        {"ref": "quest_1#outcome", "label": "I finish a half marathon in under 2:15 by 14 March", "kind": "outcome"},
+                        {"ref": "esr_1", "label": "Build a weekly running base", "kind": "strategy"},
+                        {"ref": "esr_2", "label": "Taper before race day", "kind": "strategy"},                  # not in the reply: left out
+                        {"ref": "g1", "label": "Book the race entry", "kind": "goal"}])
+    trace.finish('1 of the 4 goals in "Run my first half marathon" is done. The quest works toward "I finish a half marathon in under 2:15 by '
+                 '14 March", and the plan\'s strategy "Build a weekly running base" has no goal linked to it yet. Start with "Book the race entry".')
+    step = next(s for s in sink.latest().values() if s["kind"] == "records")
+    assert [(i["ref"], i.get("kind")) for i in step["items"]] == [
+        ("quest_1", "quest"), ("quest_1#outcome", "outcome"), ("esr_1", "strategy"), ("g1", "goal")]

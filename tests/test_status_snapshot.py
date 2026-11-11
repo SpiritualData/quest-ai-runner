@@ -733,3 +733,13 @@ def test_a_quest_with_no_goals_opens_without_a_promise_and_a_step_beside_the_cla
     draft = ('Your first step is to pick the simple piece you want to learn first, since "Learn to play the cello" has no goals yet. '
              'Its outcome is "I play a simple piece on the cello", and nothing has been recorded toward it so far.')
     assert status_snapshot.without_restated_lead(draft, lead) == "Your first step is to pick the simple piece you want to learn first."
+
+
+def test_snapshot_records_name_the_outcome_and_the_plan_strategies():
+    tables = {"solutions": {"esr_1": {"name": "Build a weekly running base"}, "esr_2": {"name": "  "}, "esr_3": {"name": "Taper  before race day"}}}
+    rows = [{"id": "g1", "title": "Book the race entry"}]
+    records = status_snapshot.snapshot_records("q1", "Run my first half marathon", rows, " I finish a half marathon\nin under 2:15 ", tables)
+    assert [(r["ref"], r["label"], r["kind"]) for r in records] == [
+        ("q1", "Run my first half marathon", "quest"), ("q1#outcome", "I finish a half marathon in under 2:15", "outcome"),
+        ("esr_1", "Build a weekly running base", "strategy"), ("esr_3", "Taper before race day", "strategy"), ("g1", "Book the race entry", "goal")]
+    assert [r["kind"] for r in status_snapshot.snapshot_records("q1", "Q", rows)] == ["quest", "goal"]      # no outcome, no tables: as before

@@ -874,11 +874,20 @@ def outcome_part(outcome: str, tables: Mapping[str, Any], rows: Optional[List[Ma
     return "\n".join(lines)
 
 
-def snapshot_records(quest_id: str, quest_name: str, rows: Optional[List[Mapping[str, Any]]]) -> List[Dict[str, str]]:
-    """The records the snapshot read, as the work trail names them (``{"ref", "label", "kind"}``): the quest by its name, then each goal by its title.
-    The trail shows only those the finished reply draws on. Measured live 2026-11-11: a status answer read every goal of the quest in code and its
-    reply showed no "See context I used" at all, so the person could not see what it was based on."""
+def snapshot_records(quest_id: str, quest_name: str, rows: Optional[List[Mapping[str, Any]]], outcome: str = "",
+                     tables: Optional[Mapping[str, Any]] = None) -> List[Dict[str, str]]:
+    """The records the snapshot read, as the work trail names them (``{"ref", "label", "kind"}``): the quest by its name, its outcome in the
+    person's words (kind ``outcome``), each strategy of its plan by name (kind ``strategy``, at most ``STRATEGY_MAX``, as ``outcome_part`` reads
+    them), then each goal by its title. The trail shows only those the finished reply draws on. Measured live 2026-11-11: a status answer read every
+    goal of the quest in code and its reply showed no "See context I used" at all; then, once it did, the panel listed the quest and its goals but
+    not the outcome and strategy the answer quoted, so nothing showed which parts of the quest's structure the answer was built on."""
     out = [{"ref": str(quest_id), "label": " ".join(str(quest_name or "").split()), "kind": "quest"}] if quest_name else []
+    aim = " ".join(str(outcome or "").split())
+    if aim:
+        out.append({"ref": f"{quest_id}#outcome", "label": aim, "kind": "outcome"})
+    strategies = [(rid, row) for rid, row in ((tables or {}).get("solutions") or {}).items() if isinstance(row, Mapping) and str(row.get("name") or "").strip()]
+    for rid, row in strategies[:STRATEGY_MAX]:
+        out.append({"ref": str(rid), "label": " ".join(str(row.get("name")).split()), "kind": "strategy"})
     for g in rows or []:
         if g.get("id") and g.get("title"):
             out.append({"ref": str(g.get("id")), "label": " ".join(str(g.get("title")).split()), "kind": "goal"})
@@ -945,7 +954,7 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
                    "the outcome it quotes, the strategy it names, the goal it names, or that the quest has no goals, and never mention that "
                    "anything was said before.\n\n" if lead else "")
         return {"kind": "query", "locator": LOCATOR, "text": (PLAN_HEAD if plan else HEAD) + ":\n\n" + named + opening + "\n\n".join(parts), "lead": lead,
-                "follow": "" if plan else follow_sentence(everything, today), "records": snapshot_records(quest_id, quest_name, everything),
+                "follow": "" if plan else follow_sentence(everything, today), "records": snapshot_records(quest_id, quest_name, everything, quest_outcome, tables),
                 "stems": record_words([quest_name, quest_outcome] + [g.get("title") for g in everything or []]),
                 "layout": day_layout([g for g in everything or [] if not g.get("completed") and not g.get("abandoned")], today, window_days) if plan else ""}
     except Exception as error:      # noqa: BLE001  a snapshot is an addition; its failure never stops the turn

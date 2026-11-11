@@ -40,7 +40,12 @@ LABEL_WEB, LABEL_PAPERS, LABEL_RECORDS, LABEL_LINKS = (
 #: The answering step is only a liveness signal ("Putting the answer together"): its own kind, so no summary counts it.
 STEP_ANSWER, SOLUTION_ANSWER, LABEL_ANSWER = "answer", "vendor-model-caller", "workTrace.answer.composing"
 SCHOLARLY_TOOL ="search_scientific_literature"
-RECORD_KINDS = ("quest", "reflection", "goal", "note")
+#: ``outcome`` (the quest's outcome in the person's words) and ``strategy`` (a strategy of its plan) are the parts of the quest's evolvable structure
+#: a status answer reads; the panel names them so the person sees which parts the answer was built on.
+RECORD_KINDS = ("quest", "reflection", "goal", "note", "outcome", "strategy")
+#: Kinds whose label is a sentence the person wrote (an outcome such as "I finish a half marathon in under 2:15 by 14 March"), not a short name:
+#: code read it from its own field, so it is kept whatever its shape.
+SENTENCE_KINDS = ("outcome",)
 #: A conversation-history card is not one of the person's records.
 HISTORY_ADAPTER = "turn"
 HISTORY_TITLE = "Conversation turn"
@@ -412,7 +417,7 @@ class TurnTrace:
                 if not isinstance(record, Mapping):
                     continue
                 ref, label = canonical_id(record.get("ref")), re.sub(r"\s+", " ", str(record.get("label") or "")).strip()
-                if not ref or not is_record_title(label, ref):
+                if not ref or not label or (record.get("kind") not in SENTENCE_KINDS and not is_record_title(label, ref)):
                     continue
                 item = {"ref": ref, "label": label}
                 if record.get("kind") in RECORD_KINDS:
