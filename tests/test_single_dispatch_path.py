@@ -168,3 +168,20 @@ def test_waiting_autopilot_runs_start_in_the_order_they_were_queued_today():
         gate.set()
 
     assert first == ["work-2"]
+
+
+def test_the_fast_lane_and_the_no_pool_scan_count_against_the_autopilot_limit_too():
+    """The limit was checked only on the pool path: the no-pool scan and the fast lane ran autopilot work without counting it,
+    so a second autopilot run could share the browser or branch the limit exists to protect."""
+    client = MockQuestClient([_work(1), _work(2)])
+    poller, _ = _poller_with_assembler(client, max_concurrent_tasks=3, max_concurrent_autopilot_tasks=1)
+    ran = []
+    poller._handle_one = lambda t: (ran.append(str(t["id"])), str(t["id"]))[1]
+    assert poller._claim_slot("work-1", _work(1)) is True          # an autopilot run already in flight
+    poller._dispatch_fast_task(_work(2))
+    assert poller._handle_one_guarded(_work(2)) is None
+    assert ran == [] and poller._inflight_autopilot == {"work-1"}
+    poller._release_slot("work-1")
+    poller._dispatch_fast_task(_work(2))
+    assert ran == ["work-2"] and poller._inflight_autopilot == set()  # released when it ended
+    assert poller._claim_slot("person-1", _work(3, kind="")) is True and poller._claim_slot("work-9", _work(9)) is True

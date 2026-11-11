@@ -340,11 +340,8 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
             with self._inflight_lock:
                 if len(self._inflight) >= max(1, self.cfg.max_concurrent_tasks):
                     break
-            if not self._autopilot_slot_free(task):
-                continue      # an autopilot run waits its turn; work a person asked for goes on
-            if not self._claim_slot(task_id):
-                continue
-            self._take_autopilot_slot(task)
+            if not self._claim_slot(task_id, task):
+                continue      # already in flight here, or an autopilot run waiting its turn; work a person asked for goes on
             pool.submit(self._run_claimed, task)
             submitted.append(task_id)
         if submitted:
@@ -383,26 +380,10 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
     def _is_autopilot_work(self, task: Dict[str, Any]) -> bool:
         return str(task.get("task_kind") or "") == AUTOPILOT_WORK_KIND
 
-    def _autopilot_slot_free(self, task: Dict[str, Any]) -> bool:
-        """False when ``task`` is autopilot work and ``max_concurrent_autopilot_tasks`` of them
-        already run. It stays queued and unseen, so a later tick starts it, oldest first."""
-        limit = int(getattr(self.cfg, "max_concurrent_autopilot_tasks", 0) or 0)
-        if limit <= 0 or not self._is_autopilot_work(task):
-            return True
-        with self._inflight_lock:
-            running = len(self._inflight_autopilot)
-        if running < limit:
-            return True
-        waiting = str(task.get("id") or task.get("task_id") or "")
-        if waiting != getattr(self, "_last_autopilot_wait_log", None):     # once per task, not per tick
-            self._last_autopilot_wait_log = waiting
-            log.info("autopilot run %s waits: %d autopilot run(s) in flight, the limit is %d", waiting, running, limit)
-        return False
-
-    def _take_autopilot_slot(self, task: Dict[str, Any]) -> None:
-        if self._is_autopilot_work(task):
-            with self._inflight_lock:
-                self._inflight_autopilot.add(str(task.get("id") or task.get("task_id") or ""))
+    def _log_autopilot_wait(self, task_id: str, running: int, limit: int) -> None:
+        if task_id != getattr(self, "_last_autopilot_wait_log", None):     # once per task, not per tick
+            self._last_autopilot_wait_log = task_id
+            log.info("autopilot run %s waits: %d autopilot run(s) in flight, the limit is %d", task_id, running, limit)
 
     def _dispatch_loop(self, stop_event: threading.Event) -> None:
         """Background thread: pick up due tasks every ``dispatch_interval_seconds`` (seconds, not
@@ -601,18 +582,33 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         zone = self._pass_timezone_for(task)
         return f"{base} ({zone})" if zone else base
 
-    def _claim_slot(self, task_id: str) -> bool:
-        """Reserve ``task_id`` for in-process handling. False if another path here already has it.
+    def _claim_slot(self, task_id: str, task: Optional[Dict[str, Any]] = None) -> bool:
+        """Reserve ``task_id`` for in-process handling. False if another path here already has it,
+        or when ``task`` is autopilot work and ``max_concurrent_autopilot_tasks`` of them already
+        run (it stays queued and unseen, so a later tick starts it, oldest first).
+
+        Every dispatch path (the pool, the no-pool scan, the fast lane) claims here and releases in
+        ``_release_slot``, so the autopilot limit holds on all of them: it exists so a shared browser
+        or branch is never used by two autopilot runs at once, and a path that skipped the count was
+        a second run on it. The check and the claim are one step under the lock.
 
         See the ``_inflight`` docstring on ``__init__`` -- this only guards a race BETWEEN this
         process's own background scan and its fast lane, not across separate runner processes."""
         if not task_id:
             return True
+        limit = int(getattr(self.cfg, "max_concurrent_autopilot_tasks", 0) or 0)
+        autopilot = limit > 0 and task is not None and self._is_autopilot_work(task)
         with self._inflight_lock:
             if task_id in self._inflight:
                 return False
-            self._inflight.add(task_id)
-            return True
+            running = len(self._inflight_autopilot)
+            if not (autopilot and running >= limit):
+                self._inflight.add(task_id)
+                if autopilot:
+                    self._inflight_autopilot.add(task_id)
+                return True
+        self._log_autopilot_wait(task_id, running, limit)
+        return False
 
     def _release_slot(self, task_id: str) -> None:
         if not task_id:
@@ -627,8 +623,8 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         Used by the background scan's ThreadPoolExecutor so it never handles a task the fast lane
         (wait channel / fallback poll) picked up in the same instant."""
         task_id = str(task.get("id") or task.get("task_id") or "")
-        if not self._claim_slot(task_id):
-            log.info("task %s already being handled by the fast lane -- skipping this scan", task_id)
+        if not self._claim_slot(task_id, task):
+            log.info("task %s not started by this scan: already in flight here, or an autopilot run waiting its turn", task_id)
             return None
         try:
             return self._handle_one(task)
@@ -847,8 +843,8 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         task_id = str(task.get("id") or task.get("task_id") or "")
         if not task_id or self.state.seen(_task_signature(task)) or not self._claimable_team(task):
             return
-        if not self._claim_slot(task_id):
-            return  # the background scan already has this one in flight
+        if not self._claim_slot(task_id, task):
+            return  # the background scan already has this one in flight, or an autopilot run waits its turn
         try:
             self._handle_one(task)
         except Exception:  # noqa: BLE001 -- the fast lane must never die on a bad task
