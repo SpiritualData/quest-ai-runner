@@ -46,10 +46,17 @@ edit by hand: change the skill and rerun the script. -->
 
 ESOI is the design philosophy behind quest-ai-runner and Quest AI. Every deep run receives the
 principles below as standing instructions (`quest_ai_runner/prompts/evolvable_structure.md`, the
-same text). Under a Quest AI answer, "Explain how I got this" has an Evolvable structure section
-that says how these principles shaped that answer: the ideal it serves, a practical way to check
-it, the structure it built on or left open to change, and what would change or improve it next
-time. It is written by the AI after the answer, as a summary, not a record of every step.
+same text).
+
+In Quest, each quest is held as this kind of structure: the outcome you intend (an ideal), the
+strategies that get you there (solutions), the goals and habits that carry them out
+(implementations), and how you tell it is working (metrics). Under a Quest AI answer, "See context
+I used" names the parts of your quest the answer drew on, such as its outcome and a strategy, and
+"What is Evolvable Structure?" there lists them. When the answer has a "Why it answered this way"
+row, its structure section says how these principles shaped that answer: the ideal it serves, a
+practical way to check it, the structure it built on or left open to change, and what would change
+or improve it next time. That section is written by the AI after the answer, as a summary, not a
+record of every step.
 
 The principles themselves follow, as written by their author.
 """
