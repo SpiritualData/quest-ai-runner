@@ -44,7 +44,7 @@ def with_leading_value_line(record: str, line: str) -> str:
 def metric_records(spec: Mapping[str, Any]) -> List[Mapping[str, Any]]:
     """The metric records of a specification that name a source."""
     return [r for r in (spec.get("records") or []) if r.get("type") == "metric" and str((r.get("fields") or {}).get("source") or "").strip()
-            and not str(r.get("recordId") or "").startswith("derived:")]
+            and not r.get("derived")]
 
 
 def refresh_one(client: Any, record: Mapping[str, Any], read: Callable[[str], Mapping[str, Any]]) -> Dict[str, Any]:

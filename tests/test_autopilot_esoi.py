@@ -14,7 +14,7 @@ def met(rid, record, at="2026-10-20T00:00:00+00:00", solution_ids=None):
                        "solution_ids": solution_ids or []}}
 
 
-PLAN = {"type": "solution", "recordId": "derived:q:solution:plan", "fields": {"name": "Plan"}}
+PLAN = {"type": "solution", "recordId": "esr_plan_anchor", "derived": True, "fields": {"name": "Plan"}}
 
 
 def test_derived_plan_is_never_picked():

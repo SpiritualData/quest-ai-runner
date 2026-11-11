@@ -20,7 +20,7 @@ class FakeQuest:
                        "milestoneEntries": [{"id": "m1", "sentence": "First reached.", "strategy": "", "metricId": None, "direction": "up", "final": False,
                                              "optional": False, "metAt": "2026-01-01T00:00:00Z"}]},
             "esr_m1": {"recordId": "esr_m1", "type": "metric", "revision": 1, "fields": {"name": "Signups", "solution_ids": ["esr_s1"]}, "fieldMeta": {}},
-            "derived:q:problem": {"recordId": "derived:q:problem", "type": "problem", "revision": 1, "derived": True, "fields": {"problem": "Few know us"}, "fieldMeta": {}}}
+            "esr_problem_anchor": {"recordId": "esr_problem_anchor", "type": "problem", "revision": 1, "derived": True, "fields": {"problem": "Few know us"}, "fieldMeta": {}}}
         self.locked = {("esr_s1", "description")}
 
     def get_spec(self, subject_type, subject_id):
@@ -97,7 +97,7 @@ def test_a_milestone_is_added_once_and_keeps_the_ones_already_met():
 
 
 def test_an_edit_quest_holds_for_the_owner_is_reported_as_proposed_not_done():
-    out = arm().apply(change(kind="problem_edit", target="derived:q:problem", field="problem", value="Few people know us"))
+    out = arm().apply(change(kind="problem_edit", target="esr_problem_anchor", field="problem", value="Few people know us"))
     assert out["applied"] is False and out["proposed"] is True and out["decision"] == "decision-9" and "waiting for approval" in out["reason"]
 
 

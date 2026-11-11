@@ -58,7 +58,7 @@ def _measured_at(metric: Dict[str, Any]) -> str:
 def solutions_of(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """The Solutions worth iterating: the derived plan is the quest's own words, not a Solution to improve."""
     return [r for r in records if r.get("type") == "solution"
-            and not str(r.get("recordId") or "").startswith("derived:")]
+            and not r.get("derived")]
 
 
 def pick_solution(records: List[Dict[str, Any]]) -> Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]]:
