@@ -98,3 +98,33 @@ def test_the_same_finding_from_several_sites_is_one_finding_and_the_reply_is_com
     assert reply.startswith("I looked into this and saved a note on the quest: How long does daily qigong need") and "How sure: not very sure." in reply
     assert "Not established: a validated minimum number of minutes" in reply and "—" not in reply
     assert research_reply("a hand-written note") == ""
+
+
+def test_a_research_turn_with_its_note_saved_and_a_reply_composed_from_it_ends_verified_when_nothing_is_unbacked():
+    saved = []
+    record = {"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
+              "items": [{"claim": "Ten minutes a day is the usual advice", "grade": "C", "source": "https://example.org/a", "verified": "opened"}]}
+    from quest_ai_runner.the_world.science.investigate import research_note
+    investigate = ToolSpec(name="investigate_for_quest", handler=lambda a, c: ToolResult(ok=True, data={**record, "note_text": research_note(record)}, text="Looked into: How long?"),
+                           description="d", when_to_use="w", parameters={"type": "object"}, mutates=True)
+    note = ToolSpec(name="add_quest_note", handler=lambda a, c: (saved.append(a["text"]), ToolResult(ok=True, text="Added a note to quest q1."))[1],
+                    description="d", when_to_use="w", parameters={"type": "object", "properties": {"text": {"type": "string"}}}, mutates=True)
+
+    class Picky(ClaimingProvider):
+        def plan(self, prompt, *, model, tool_schema):
+            if tool_schema.get("name") == "goal_verdict":
+                return {"met": False, "reason": "wants more", "next_action": "", "claims_unexecuted": False, "claims_unsupported": False, "blocker": "more_work"}
+            return StubProvider.plan(self, prompt, model=model, tool_schema=tool_schema)
+    provider = Picky(decisions=[
+        {"action": "tool", "user_intent": "act", "rationale": "go", "tool_calls": [{"name": "investigate_for_quest", "args": {"question": "q"}}, {"name": "add_quest_note", "args": {"text": "x"}}]},
+        {"action": "answer", "user_intent": "act", "rationale": "done"},
+    ])
+    cfg = OrchestratorConfig()
+    cfg.overseer = False
+    cfg.verify_claims = True
+    cfg.answer_goal_max_iterations = 3
+    result = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), config=cfg, tools=ToolRegistry([investigate, note])).run(
+        "Look into how long, then add a note.", quest_id="q1")
+    assert saved and saved[0].startswith("Research note: How long?")
+    assert result.text.startswith("I looked into this and saved a note on the quest: How long.")
+    assert result.exit_reason == "verified"

@@ -450,6 +450,14 @@ class RunCloseMixin:
                         break
                     # A RESEARCH NOTE SAVED THIS TURN: the note is composed by code from the investigation record, so the reply that goes with it is too (one pass), and the verdict is
                     # asked again of text that cannot disagree with the note.
+                    # The reply composed from the saved note is asked again; when the verifier still finds no unbacked claim and no unsupported one, and no blocker that needs the person, the ask
+                    # was carried out by receipts (the investigation recorded, the note saved from it, a reply that is that note): the turn is done, whatever else the verifier would like.
+                    if (verdict is not None and getattr(rs, "research_reply_used", False) and not verdict.get("claims_unexecuted") and not verdict.get("claims_unsupported")
+                            and str(verdict.get("blocker") or "") not in ("needs_person", "tool_failure")):
+                        rs._last_verdict = dict(verdict, met=True, accepted_by_receipts=True)
+                        if emit is not None:
+                            emit.status("The note was saved from the research; done.")
+                        break
                     if (verdict is not None and not getattr(rs, "research_reply_used", False) and exec_record is not None
                             and any(getattr(f, "succeeded", False) and str(getattr(f, "goal", "")).startswith("tool add_quest_note") for f in exec_record.facts)):
                         _composed = research_reply(tool_guards.research_note_text(gathered))
