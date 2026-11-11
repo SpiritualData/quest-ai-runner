@@ -345,16 +345,38 @@ def holds_a_fact(sentence: str, stems: List[str], lead: str = "") -> bool:
     outcome." holds none, and said nothing about the quest. With ``lead``, a name the lead already quotes is no new fact (``without_said_names``), so a
     sentence that only adds a judgement or a made-up reason to it holds none. Compares against the quest's records, never a list of words."""
     sentence = without_said_names(sentence, lead) if lead else sentence
+    if lead and LEAD_COUNTS.search(lead):
+        # A lead with goal counts says the quest's figures, dates and the names it quotes: a figure or a word of those names said again is no new fact.
+        # Measured live 2026-11-11 (final pass): "The race is 14 March, so every other step depends on having a confirmed entry." (an invented dependency)
+        # and "Your quest ... has 2 goals open, none done yet, and 1 is overdue." held only the lead's 14, 2 and 1 and the words of "Book the race entry".
+        # A no-goals lead is left out: there every record is in the lead, and a writer's first-goal proposal uses those words.
+        figures = set(LEAD_NUMBER.findall(lead))
+        sentence = LEAD_NUMBER.sub(lambda m: m.group(0) if m.group(0) not in figures else " ", sentence)
+        said = set(record_words([m for m in QUOTED_NAME.findall(lead)]))
+        stems = [s for s in stems if s not in said]
     if re.search(r"\d|[\"\u201c]|\*\*", sentence):
         return True
     return any(w[:FACT_PREFIX] in stems for w in LEAD_WORD.findall(sentence.lower()) if len(w) >= FACT_PREFIX)
+
+
+SPLICED = re.compile(r",\s+([A-Z][a-z]+)\s+[a-z]")
+
+
+def is_spliced(sentence: str, stems: List[str]) -> bool:
+    """True when a sentence is two pieces joined mid-way: a comma, then a capitalised word that is not a word of the quest's records, then a lower-case word
+    ("To build the first goal, Once you tell me which simple piece you want ...", measured live 2026-11-11 on a quest with no goals: a reply-check rewrite
+    left a clause that starts a new sentence and never ends it). Letter case and the records only, no wording read."""
+    return any(m.group(1).lower()[:FACT_PREFIX] not in stems for m in SPLICED.finditer(QUOTED.sub(" ", sentence or "")))
 
 
 def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None, lead: str = "") -> str:
     """What goes after a status reply's lead: the writer's text without a closing question, a sentence that holds no fact (``holds_a_fact``, when the
     record ``stems`` are given) or a leftover fragment ("Your quest" left where the writer had copied the lead, run 19), or, when that leaves no sentence
     of four or more words, ``follow`` (follow_sentence) so the reply still says what comes next. ``lead`` is the code-written opening: a sentence
-    holds a fact only beyond the names it already quotes."""
+    holds a fact only beyond the names it already quotes, and a sentence that says it again is cut here too (``without_restated_lead``): the reply check
+    can rewrite the writer's part after the first cut, and measured live 2026-11-11 its rewrite said the goal counts again."""
+    if lead and text:
+        text = without_restated_lead(text, lead)
     paragraphs = []
     for para in re.split(r"\n\s*\n", text or ""):
         p = para.strip()
@@ -363,13 +385,36 @@ def status_rest(text: str, follow: str = "", stems: Optional[List[str]] = None, 
         if not re.search(r"[.!?:][\"\u201d*)]*$", p) and len(p.split()) < 4 and not re.match(r"\s*(?:[-*\u2022]|\d+[.)])", p):
             continue        # a fragment: no end, a few words
         if stems is not None and not re.match(r"\s*(?:[-*\u2022]|\d+[.)]|\|)", p):
-            p = " ".join(x for x in LEAD_SENTENCE_SPLIT.split(p) if holds_a_fact(x, stems, lead))
+            p = " ".join(x for x in LEAD_SENTENCE_SPLIT.split(p) if holds_a_fact(x, stems, lead) and not is_spliced(x, stems))
+        if p and follow and not re.match(r"\s*(?:[-*\u2022]|\d+[.)]|\|)", p):
+            said: List[str] = []
+            for x in LEAD_SENTENCE_SPLIT.split(p):
+                x = as_follow(x, follow, lead)
+                if x != follow or follow not in said:      # the next goal is said once, however many sentences said it
+                    said.append(x)
+            p = " ".join(said)
         if p:
             paragraphs.append(p)
     out = without_closing_question("\n\n".join(paragraphs))
     if not any(len(x.split()) >= 4 for x in LEAD_SENTENCE_SPLIT.split(out)):
         return follow
     return out
+
+
+def as_follow(sentence: str, follow: str, lead: str = "") -> str:
+    """``follow`` (follow_sentence) in place of a writer sentence that names the same next goal and adds nothing to it: it holds no number the follow does not,
+    and at most ``REPEAT_SPARE_WORDS`` words that neither the follow nor the ``lead`` holds. Measured live 2026-11-11: 'After that, "Set up the shop page" on
+    30 November.' (the writer copied the follow's shape and dropped its verb) and 'Start there, and "Choose the illustrator" follows, due 31 December.'
+    (its "Start there" read as the quest named just before it). A sentence that gives a reason or a condition ("Once those photos are ready, the next one is
+    ...") adds more words and stays. Compares with the code's own sentences, never a list of words."""
+    m = LEAD_TITLE.search(follow or "")
+    if not m or m.group(1).strip().lower() not in (sentence or "").lower():
+        return sentence
+    bare = QUOTED.sub(" ", sentence)
+    if not set(LEAD_NUMBER.findall(bare)) <= set(LEAD_NUMBER.findall(QUOTED.sub(" ", follow))):
+        return sentence
+    known = set(LEAD_WORD.findall(QUOTED.sub(" ", follow).lower())) | set(LEAD_WORD.findall(QUOTED.sub(" ", lead or "").lower()))
+    return follow if len(set(LEAD_WORD.findall(bare.lower())) - known) <= REPEAT_SPARE_WORDS else sentence
 
 
 def no_goals_lead(quest_name: str = "", plan: bool = False, outcome: str = "") -> str:

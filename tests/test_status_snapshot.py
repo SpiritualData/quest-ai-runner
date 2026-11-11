@@ -759,3 +759,68 @@ def test_a_writer_sentence_that_only_repeats_the_openings_quest_name_gives_way_t
     assert status_snapshot.status_rest(kept, follow, stems, lead) == kept
     # without the lead, the old judgement holds (the quoted name counts)
     assert status_snapshot.status_rest('Your quest "Run my first half marathon" is just getting started.', follow, stems) != follow
+
+
+def test_a_writer_sentence_that_only_names_the_next_goal_is_said_as_the_code_written_next_goal():
+    # measured live 2026-11-11: the writer copied the next-goal sentence and dropped its verb, and on another account its "Start there" read as the quest
+    many_lead = ('As of 11 November, none of the 2 goals in "Launch my pottery shop" is done yet, none is overdue, and 1 is due by 18 November. '
+                 'The soonest due is "Photograph the first ten pieces", due 15 November, so start there.')
+    many_follow = 'After that, "Set up the shop page" is due 30 November.'
+    many_stems = status_snapshot.record_words(["Launch my pottery shop", "Photograph the first ten pieces", "Set up the shop page"])
+    assert status_snapshot.status_rest('After that, "Set up the shop page" on 30 November.', many_follow, many_stems, many_lead) == many_follow
+    week_lead = ('As of 11 November, none of the 2 goals in "Write a children\'s book" is done yet, and 1 is overdue. The longest overdue is '
+                 '"Finish the second draft", due 8 November, so start there.')
+    week_follow = 'After that, "Choose the illustrator" is due 31 December.'
+    week_stems = status_snapshot.record_words(["Write a children's book", "Finish the second draft", "Choose the illustrator"])
+    writer = '"Write a children\'s book" is still at the very start. Start there, and "Choose the illustrator" follows, due 31 December.'
+    assert status_snapshot.status_rest(writer, week_follow, week_stems, week_lead) == week_follow
+    # a reason or condition about the next goal is the writer's own and stays
+    reason = 'Once those photos are ready, the next one is "Set up the shop page", due 30 November.'
+    assert status_snapshot.status_rest(reason, many_follow, many_stems, many_lead) == reason
+    # a different day than the follow's is not the follow said again
+    other = 'After that, "Set up the shop page" on 2 December.'
+    assert status_snapshot.status_rest(other, many_follow, many_stems, many_lead) == other
+    # said twice, it comes once
+    assert status_snapshot.status_rest('After that, "Set up the shop page" on 30 November. "Set up the shop page" follows, due 30 November.',
+                                       many_follow, many_stems, many_lead) == many_follow
+
+
+RICH_LEAD = ('As of 11 November, 1 of the 4 goals in "Run my first half marathon" is done ("Run 5 km without stopping"), 1 is overdue, and 2 are due by '
+             '18 November. The quest works toward "I finish a half marathon in under 2:15 by 14 March", and the plan\'s strategy "Build a weekly running '
+             'base" has no goal linked to it yet. The longest overdue is "Book the race entry", due 8 November, so start there.')
+RICH_RECORDS = ["Run my first half marathon", "I finish a half marathon in under 2:15 by 14 March", "Build a weekly running base", "Run 5 km without stopping",
+                "Book the race entry", "Long run of 12 km", "Buy proper running shoes"]
+
+
+def test_a_writer_sentence_holding_only_the_openings_figures_and_names_gives_way_to_the_next_goal():
+    # measured live 2026-11-11, final pass: an invented dependency and a filler line held only the lead's 14 and the words of names it quotes
+    stems = status_snapshot.record_words(RICH_RECORDS)
+    follow = 'After that, "Long run of 12 km" is due 15 November.'
+    for writer in ("The race is 14 March, so every other step depends on having a confirmed entry.",
+                   "The race is 14 March, and the outcome it works toward is still open."):
+        assert status_snapshot.status_rest(writer, follow, stems, RICH_LEAD) == follow, writer
+    # a figure or a record the lead does not hold stays
+    for kept in ("Entries for the race close on 20 November.", "Buy proper running shoes before the long run on Saturday."):
+        assert status_snapshot.status_rest(kept, follow, stems, RICH_LEAD) == kept, kept
+
+
+def test_a_rewritten_writer_part_that_says_the_counts_again_is_cut_in_status_rest_too():
+    # measured live 2026-11-11: the reply check's rewrite said the counts again, and only status_rest ran after it
+    lead = ('As of 11 November, none of the 2 goals in "Write a children\'s book" is done yet, and 1 is overdue. The quest works toward "I send a finished '
+            'manuscript to ten agents by June". The longest overdue is "Finish the second draft", due 8 November, so start there.')
+    stems = status_snapshot.record_words(["Write a children's book", "I send a finished manuscript to ten agents by June", "Finish the second draft",
+                                          "Choose the illustrator"])
+    follow = 'After that, "Choose the illustrator" is due 31 December.'
+    writer = 'Your quest "Write a children\'s book" has 2 goals open, none done yet, and 1 is overdue. "Choose the illustrator" is due 31 December.'
+    assert status_snapshot.status_rest(writer, follow, stems, lead) == follow
+
+
+def test_a_spliced_fragment_is_cut_and_a_first_goal_proposal_stays():
+    # measured live 2026-11-11 on a quest with no goals: "To build the first goal, Once you tell me ..." asked the person and never ended
+    lead = status_snapshot.no_goals_lead("Learn to play the cello", outcome="I play a simple piece on the cello")
+    stems = status_snapshot.record_words(["Learn to play the cello", "I play a simple piece on the cello"])
+    spliced = ("To build the first goal, Once you tell me which simple piece you want to work toward and how much time you can give it this week.")
+    assert status_snapshot.status_rest(spliced, "", stems, lead) == ""
+    proposal = "Start by choosing one simple piece and playing its first line slowly this week."
+    assert status_snapshot.status_rest(proposal, "", stems, lead) == proposal
+    assert not status_snapshot.is_spliced("After that, on Saturday 14 November, play it through once.", stems)
