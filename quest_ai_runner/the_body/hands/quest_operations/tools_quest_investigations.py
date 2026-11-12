@@ -46,6 +46,22 @@ INVESTIGATE_ARGS = {
 }
 
 
+def knowledge_note(made: Mapping[str, Any]) -> str:
+    """What became of the findings as knowledge of the strategy they inform, in plain words, from the statuses Quest answered (never guessed): added, already there, or not
+    added with the reason Quest gave (autopilot off, a person's own text, the whole quest). Empty when Quest answered nothing."""
+    answers = [a for a in made.get("knowledge") or [] if isinstance(a, Mapping)]
+    if not answers:
+        return ""
+    added = sum(1 for a in answers if a.get("status") == "applied")
+    held = [a for a in answers if a.get("status") == "proposed"]
+    parts = []
+    if added:
+        parts.append(f"{added} finding(s) were added to the knowledge of the strategy they inform")
+    if held:
+        parts.append(f"{len(held)} finding(s) were NOT added to the strategy's knowledge ({held[0].get('reason')}); the investigation is still recorded, and the person may add them")
+    return (" " + "; ".join(parts) + ".") if parts else ""
+
+
 def refused(text: str) -> ToolResult:
     return ToolResult(ok=False, status=ToolStatus.REFUSED, text=text)
 
@@ -119,7 +135,8 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
         if not made.get("investigation_id"):
             return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was recorded: the investigation was refused.")
         extended = f" It extends the earlier investigation {extends}." if extends else ""
-        return ToolResult(ok=True, data={**made, "note_text": investigate.research_note(made)}, text=investigate.summary_text(made) + f" Recorded as {made['investigation_id']}." + extended + note)
+        return ToolResult(ok=True, data={**made, "note_text": investigate.research_note(made)},
+                          text=investigate.summary_text(made) + f" Recorded as {made['investigation_id']}." + extended + note + knowledge_note(made))
 
     return ToolSpec(
         name="investigate_for_quest",
