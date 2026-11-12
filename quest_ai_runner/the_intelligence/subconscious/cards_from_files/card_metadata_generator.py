@@ -18,7 +18,7 @@ from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, 
 
 register(PromptSpec(
     id="label-context-cards.metadata", solution="cards-from-files",
-    metric="metric-label-context-cards", tier="fast", cache_layer="none", inputs=("sources",),
+    metric="metric-label-context-cards", tier="caller", cache_layer="none", inputs=("sources",),
     output_schema={"title": "string", "description": "string", "keywords": "list of strings"},
     template="""Given these knowledge sources that belong together in one card, generate metadata:
 

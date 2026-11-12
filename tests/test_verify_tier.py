@@ -14,6 +14,7 @@ Offline, no network.
 """
 from typing import Any, Dict, List
 
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
@@ -59,8 +60,8 @@ def test_verify_goal_runs_at_balanced_tier_by_default():
     assert verdict is not None and verdict["met"] is True
     assert error is None
     registry = ModelRegistry(provider)
-    # verify_tier defaults to planner_tier ("balanced"): one call, no duplicate fallback.
-    assert provider.plan_models == [registry.resolve_tier("balanced")]
+    # verify_tier defaults to the hub table's tier for the verdict call (the stop_decision role): one call, no duplicate fallback.
+    assert provider.plan_models == [registry.resolve_tier(tier_for_call("verify-goal.verdict"))]
 
 
 def test_verify_goal_falls_back_to_planner_tier_when_best_fails():
@@ -95,14 +96,14 @@ def test_verify_goal_falls_back_on_unusable_verdict_too():
 
 
 def test_verify_tier_empty_uses_planner_tier_once():
-    # verify_tier="" restores the previous behavior: ONE call at planner_tier, no double call.
+    # verify_tier="" means the table's tier for the call: ONE call, no double call.
     provider = _PlanRecordingProvider(decisions=[{"met": True, "reason": "done"}])
     orch = _orch(provider, config=OrchestratorConfig(verify_tier=""))
     verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
     assert error is None
     registry = ModelRegistry(provider)
-    assert provider.plan_models == [registry.resolve_tier("balanced")]
+    assert provider.plan_models == [registry.resolve_tier(tier_for_call("verify-goal.verdict"))]
 
 
 def test_verify_goal_returns_real_error_text_when_unverifiable():
@@ -160,7 +161,7 @@ def test_env_wiring_for_overseer_and_verify_tier(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     cfg = _config_from_env()
     assert cfg.orchestrator.overseer is True           # library default: ON (the run's safety net)
-    assert cfg.orchestrator.verify_tier == "balanced"  # library default: same tier as the planner
+    assert cfg.orchestrator.verify_tier == tier_for_call("verify-goal.verdict")  # library default: the hub table's tier for the call
 
     monkeypatch.setenv("QAR_OVERSEER", "true")
     monkeypatch.setenv("QAR_OVERSEER_TIER", "quality")

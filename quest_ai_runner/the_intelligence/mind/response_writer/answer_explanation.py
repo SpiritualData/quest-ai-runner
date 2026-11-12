@@ -208,7 +208,7 @@ HARD RULES:
 
 EXPLAIN_SPEC = register(PromptSpec(
     id="explain-an-answer.how-i-got-this", solution="quest-work-shown",
-    metric="metric-explain-an-answer", tier="balanced", cache_layer="tail",
+    metric="metric-explain-an-answer", tier="caller", cache_layer="tail",
     inputs=("user_message", "goal_condition", "answer", "record", "metric_rule", "language"),
     template=EXPLAIN_PROMPT, output_schema=EXPLAIN_TOOL,
 ))

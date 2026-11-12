@@ -698,7 +698,7 @@ def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,
 
 EXPLICIT_ASK_SPEC = declare(
     "select-a-rep.explicit-ask", solution="quest-representatives", metric="metric-select-a-rep",
-    tier="fast", cache_layer="none", template=JUDGE_PROMPT)
+    tier="caller", cache_layer="none", template=JUDGE_PROMPT)
 
 
 

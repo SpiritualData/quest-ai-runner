@@ -51,9 +51,9 @@ Answer with one JSON object and nothing else:
 - "answered_by": the id of the ONE earlier investigation whose findings answer this question, copied exactly, or an empty string when none does. An investigation about a related but different question does not answer it.
 Write no em dashes."""
 
-PLACE_SPEC = declare("investigate.place", solution="web-search", metric="metric-search-the-web", tier="fast", cache_layer="none",
+PLACE_SPEC = declare("investigate.place", solution="web-search", metric="metric-search-the-web", tier="caller", cache_layer="none",
                      template=PLACE_PROMPT, output_schema=None)
-REUSE_SPEC = declare("investigate.reuse", solution="web-search", metric="metric-search-the-web", tier="fast", cache_layer="none",
+REUSE_SPEC = declare("investigate.reuse", solution="web-search", metric="metric-search-the-web", tier="caller", cache_layer="none",
                      template=REUSE_PROMPT, output_schema=None)
 
 SURE_WORDS = {"A": "well established", "B": "fairly sure", "C": "not very sure", "D": "weak"}

@@ -18,7 +18,7 @@ from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, 
 
 register(PromptSpec(
     id="label-context-cards.categorize-files", solution="cards-from-files",
-    metric="metric-label-context-cards", tier="fast", cache_layer="none",
+    metric="metric-label-context-cards", tier="caller", cache_layer="none",
     inputs=("card_summaries", "file_list"), writes_text=False,
     template="""You have a list of files that were modified during code execution.
 Your task is to categorize each file into one of the context cards below based on semantic relevance.

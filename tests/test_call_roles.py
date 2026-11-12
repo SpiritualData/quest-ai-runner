@@ -112,15 +112,16 @@ def test_the_reply_ignores_the_planners_own_tier_and_never_runs_on_fast():
     assert AnsweringMixin._answer_model(orch, plan, "balanced", hint="quality") == "model-for-quality"
 
 
-def test_deep_work_defaults_to_balanced_and_the_persons_or_tasks_tier_wins():
+def test_deep_work_defaults_to_the_tables_tier_and_the_persons_or_tasks_tier_wins():
     registry = Recorder()
     orch = SimpleNamespace(registry=registry)
     plan = SimpleNamespace(model_tier="opus")
-    assert AnsweringMixin._deep_model(orch, plan) == "model-for-balanced"         # the planner's own opus does not pick the work's tier
+    deep = TABLE["main_session"]["tier"]                                            # the role-tier metric decides it (hub role_tiers.csv)
+    assert AnsweringMixin._deep_model(orch, plan) == f"model-for-{deep}"          # the planner's own opus does not pick the work's tier
     assert AnsweringMixin._deep_model(orch, plan, hint="quality") == "model-for-quality"
     assert AnsweringMixin._deep_model(orch, plan, hint="fast") == "model-for-fast"
     assert AnsweringMixin._deep_model(orch, plan, hint="best") == "model-for-best"
-    assert tier_for_call("deep-run.sub-agent") == "balanced" and tier_for_call("deep-run.sub-agent", "quality") == "quality"
+    assert tier_for_call("deep-run.sub-agent") == deep and tier_for_call("deep-run.sub-agent", "quality") == "quality"
 
 
 def test_deep_runs_start_on_balanced_whatever_the_difficulty():
@@ -165,7 +166,7 @@ def test_every_tier_default_of_the_orchestrator_is_its_calls_tier_in_the_table()
 def test_a_lanes_explicit_tier_applies_to_a_call_that_is_neither_classification_nor_a_response():
     assert tier_for_call("route-a-message.planner") == "balanced"                  # a misrouted turn has a significant downstream effect
     assert tier_for_call("route-a-message.planner", "fast") == "fast"              # a lane that sets its planner tier keeps it
-    assert tier_for_call("replay-known-operations.fill-args") == "fast"            # extraction on an optimised prompt
+    assert tier_for_call("replay-known-operations.fill-args") == TABLE["request_extraction"]["tier"]   # the metric's tier for extraction
     assert tier_for_call("watch-a-run.overseer", "quality") == "quality"
     assert tier_for_call("watch-a-run.overseer", "best") == "quality"              # but never best
 
@@ -180,13 +181,13 @@ def test_science_is_a_domain_word_that_reads_as_its_roles_tier():
 
 def test_resolve_role_gives_the_lanes_model_for_the_tier():
     registry = ModelRegistry(Lister(["claude-haiku-5-5", "claude-sonnet-5-5"]), fallback={"fast": "pin-fast", "balanced": "pin-balanced"})
-    assert registry.resolve_role("replay-known-operations.fill-args") == "pin-fast"
+    assert registry.resolve_role("select-context.rank-files") == "pin-fast"
     assert registry.resolve_role("answer.response") == "pin-balanced"
     assert registry.resolve_role("answer.response", "fast") == "pin-balanced"
 
 
 def test_calls_at_lists_the_calls_of_a_tier():
-    assert "answer.response" in calls_at("balanced") and "replay-known-operations.fill-args" in calls_at("fast")
+    assert "answer.response" in calls_at("balanced") and "select-context.rank-files" in calls_at("fast")
     assert calls_at("best") == [STRUCTURE_WATCH_CALL] and set(TIERS) == {"fast", "balanced", "quality", "best"}
 
 
@@ -214,22 +215,22 @@ def test_spend_by_role_reads_the_per_call_records_and_marks_the_evidence_above_f
     rows = [
         {"ts": 100, "spec_id": "select-context.rank-files", "tokens_in": 1000, "tokens_out": 100, "cost_usd": 0.01},
         {"ts": 101, "spec_id": "select-context.rank-files", "tokens_in": 1000, "tokens_out": 100, "cost_usd": 0.01},
-        {"ts": 102, "spec_id": "verify-goal.verdict", "tokens_in": 2000, "tokens_out": 50, "cost_usd": 0.06},
+        {"ts": 102, "spec_id": "answer.response", "tokens_in": 2000, "tokens_out": 50, "cost_usd": 0.06},
         {"ts": 103, "spec_id": "(untagged)", "tokens_in": 10, "tokens_out": 10, "cost_usd": 0.02},
-        {"ts": 5, "spec_id": "verify-goal.verdict", "tokens_in": 9, "tokens_out": 9, "cost_usd": 9.0},   # before the period
+        {"ts": 5, "spec_id": "answer.response", "tokens_in": 9, "tokens_out": 9, "cost_usd": 9.0},   # before the period
     ]
     report = spend_by_role(rows, since=50)
     by_role = {r["role"]: r for r in report}
-    assert [r["role"] for r in report][0] == "stop_decision" and by_role["context_retrieval"]["calls"] == 2
+    assert [r["role"] for r in report][0] == "response_writing" and by_role["context_retrieval"]["calls"] == 2
     assert by_role["context_retrieval"]["tokens"] == 2200 and by_role["context_retrieval"]["tier"] == "fast"
     assert by_role["context_retrieval"]["evidence"] == ""                                   # fast: no mark needed
-    assert by_role["stop_decision"]["evidence"].startswith(("measured", "owner's policy, unmeasured"))
+    assert by_role["response_writing"]["evidence"].startswith(("direct public", "proxy public", "STALE OR MISSING"))   # computed by the hub's role-tier metric
     assert by_role["(untagged)"]["calls"] == 1
     assert abs(sum(r["share"] for r in report) - 1.0) < 1e-9
-    assert "stop_decision" in render_spend_report(report)
+    assert "response_writing" in render_spend_report(report)
     log = tmp_path / "calls.jsonl"
     import json
     log.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
     from quest_ai_runner.the_consciousness.terminal.cli_spend import _cmd_spend_by_role
     assert _cmd_spend_by_role(SimpleNamespace(log=str(log), days=36500, json=True), None) == 0
-    assert "stop_decision" in capsys.readouterr().out
+    assert "response_writing" in capsys.readouterr().out

@@ -136,14 +136,14 @@ ASSIGNED_GOAL_JUDGE_SYSTEM = (
 
 GOAL_JUDGE_SPEC = register(PromptSpec(
     id="assist-a-terminal-session.goal-judge", solution="system-integrity",
-    metric="metric-assist-a-terminal-session", tier="fast", cache_layer="head",
+    metric="metric-assist-a-terminal-session", tier="caller", cache_layer="head",
     template=ASSIGNED_GOAL_JUDGE_SYSTEM,
     output_schema={"ai_doable": "boolean", "confidence": "number 0 to 1", "reason": "one sentence"},
 ))
 
 ASK_CLASSIFY_SPEC = register(PromptSpec(
     id="assist-a-terminal-session.ask-classify", solution="system-integrity",
-    metric="metric-assist-a-terminal-session", tier="fast", cache_layer="head",
+    metric="metric-assist-a-terminal-session", tier="caller", cache_layer="head",
     template=ASK_CLASSIFY_SYSTEM,
 ))
 

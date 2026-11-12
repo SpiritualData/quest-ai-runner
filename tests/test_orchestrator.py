@@ -6,6 +6,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, Orc
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import (
     _render_gathered, _render_gathered_for_planner, _summarize_observation)
 
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
 
@@ -36,7 +37,7 @@ def test_plan_read_then_answer():
     # stub's exhausted-queue reply has no "met" key, but verify_tier and planner_tier both default
     # to "balanced", so _verify_goal's tier ladder holds ONE model and makes 1 verify call. Plus the
     # found-constraint judge (1b0833dc), which runs once a turn that read records is about to answer.
-    assert provider.plan_calls == 4
+    assert provider.plan_calls == 5       # verification is quality-tier in the role table, so the unusable verdict walks two rungs
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
     assert provider.answer_calls == 2
     # The README content was injected into the grounding the answer saw.
@@ -1113,10 +1114,10 @@ def test_loop_feeds_lean_view_to_planner_on_replan():
     cfg = OrchestratorConfig(max_steps=12, planner_recent_full=2, planner_compress_over=4)
     res = _orch(provider, retrieval, config=cfg).run("question")
     assert res.kind == "answer"
-    # Use plan_prompts[-3]: the last PLANNER prompt; plan_prompts[-2:] are the post-answer
+    # Use plan_prompts[-4]: the last PLANNER prompt; [-3] is the found-constraint judge and [-2:] the post-answer
     # verification calls (verify_tier + its planner-tier fallback on the stub's unusable verdict),
     # which use the VERIFY_GOAL_PROMPT, not the planner prompt — "EARLIER READS" is not there.
-    last_prompt = provider.plan_prompts[-3]
+    last_prompt = provider.plan_prompts[-4]
     assert "EARLIER READS" in last_prompt          # leaning engaged on later steps
     # The oldest full bodies are compressed out of the planner view (only recent kept verbatim).
     assert last_prompt.count(big) <= cfg.planner_recent_full
@@ -1154,7 +1155,7 @@ def test_repeat_context_off_resends_full_on_replan():
     # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the found-constraint judge and plan_prompts[3] the post-answer verification call
     # (verify_tier == planner_tier by default, so the fallback retry is deduplicated away) — not
     # checked here.
-    assert len(provider.plan_prompts) == 4   # + the found-constraint judge call (1b0833dc), which sits before verification
+    assert len(provider.plan_prompts) == 5   # + the found-constraint judge call (1b0833dc) and two verification rungs (verify is quality-tier)
     for p in provider.plan_prompts[:2]:
         assert _CONTEXT in p
         assert "TRANSCRIPT-TAIL-MARKER" in p             # full transcript present each step
@@ -1174,7 +1175,7 @@ def test_repeat_context_on_step1_full_replan_abbreviated():
     # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the found-constraint judge and plan_prompts[3] the post-answer verification call
     # (verify_tier == planner_tier by default, so the fallback retry is deduplicated away) — not
     # checked here.
-    assert len(provider.plan_prompts) == 4   # + the found-constraint judge call (1b0833dc), which sits before verification
+    assert len(provider.plan_prompts) == 5   # + the found-constraint judge call (1b0833dc) and two verification rungs (verify is quality-tier)
     step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
     # Step 1: full context + transcript.
     assert _CONTEXT in step1
@@ -1268,7 +1269,7 @@ def test_model_hint_overrides_planner_tier_on_answer():
     expected_opus = registry.resolve_tier("opus")
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
     # first, on the cheap "fast" tier (never the hint) before the real, hinted answer call.
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier(tier_for_call("ground-in-intent.derive-goal-condition"))   # the table gives the derivation its tier
     assert provider.answer_models == [expected_fast, expected_opus]
 
 
@@ -1306,7 +1307,7 @@ def test_model_hint_absent_leaves_planner_tier_unchanged():
     assert res.kind == "answer"
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
     # first, on the cheap "fast" tier, before the real answer call.
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier(tier_for_call("ground-in-intent.derive-goal-condition"))   # the table gives the derivation its tier
     assert provider.answer_models == [expected_fast, expected_reply]
 
 
@@ -1340,7 +1341,7 @@ def test_model_hint_unknown_value_degrades_gracefully():
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
     # first, on the cheap "fast" tier (unaffected by the answer-step hint/fallback), before the
     # real answer call.
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier(tier_for_call("ground-in-intent.derive-goal-condition"))   # the table gives the derivation its tier
     assert provider.answer_models == [expected_fast, expected_fallback]
 
 
@@ -1559,7 +1560,7 @@ def test_cancel_check_false_never_affects_a_normal_run():
     assert retrieval.read_calls == ["README.md"]
     # Same call counts test_plan_read_then_answer asserts for the identical scripted plan (a
     # cancel_check that is always False changes nothing about the loop's own behavior).
-    assert provider.plan_calls == 4
+    assert provider.plan_calls == 5
     assert provider.answer_calls == 2
 
 
