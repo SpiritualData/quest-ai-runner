@@ -111,9 +111,16 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
 
         notify_and_log = _make_startup_notifier(self._console, self._startup_notices, _startup_notify)
         # Calm start: a line only when something REQUIRED by the hub assembly is unmet.
-        _hub_notice = _hub_requirements_notice()
-        if _hub_notice:
-            notify_and_log(_hub_notice)
+        # The check walks the import closure of every hub seat (about 28 s of CPU), so it runs off the start path:
+        # a start that has nothing unmet (nearly always) must not wait for it.
+        def _check_hub_requirements() -> None:
+            try:
+                _hub_notice = _hub_requirements_notice()
+                if _hub_notice:
+                    notify_and_log(_hub_notice)
+            except Exception:  # noqa: BLE001 - a check that cannot run is never a reason to disturb a start
+                pass
+        threading.Thread(target=_check_hub_requirements, name="qar-hub-requirements", daemon=True).start()
 
         self._cfg = cfg
         self._rep_name = rep_name
