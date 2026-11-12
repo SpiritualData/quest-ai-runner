@@ -246,7 +246,7 @@ _CONFIRMATION_RULE = (
 # structure ... And gaps in specification are filled by AI as needed to fulfill this requirement."
 # What every run of standing work holds to, so a run changes something outside itself instead of
 # re-measuring and re-reporting. The text is the hub's (Proactivity, ``standing_work_standard``), never a
-# copy here. A hub release older than the one that added it (the pin in pyproject.toml is still v0.7.1)
+# copy here. A hub release older than the one that added it (the pin before v0.7.2)
 # has no such name, and the brief then goes without the block instead of failing: drop this guard once
 # the pin is at the release that carries it.
 try:
