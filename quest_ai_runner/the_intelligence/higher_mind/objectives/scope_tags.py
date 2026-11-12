@@ -154,17 +154,32 @@ SCOPE_AFFINITY_NOTE = (
     "when the question needs it, say where it came from, and prefer what this quest records when the two disagree.")
 
 
-def scope_fence_block(quest_ids: ScopeTags) -> str:
-    """The scope note for a turn bound to ``quest_ids``, or ``""`` when it is bound to none. Never raises."""
+#: Follows the scope note when the caller supplies the identity of the open quest (``meta["quest_identity"]``: its name, outcome, state,
+#: whatever the caller holds that says what it is). It leads the context, before any retrieved card, because it decides what the person's
+#: words mean: a question is read in the sense of the subject the quest is about, never as a general-purpose one.
+QUEST_IDENTITY_NOTE = (
+    "--- THE OPEN QUEST: WHAT ITS WORDS MEAN HERE ---\n"
+    "{identity}\n"
+    "Read every term of the person's message in the sense of this quest's own subject (its name, outcome, current state and the "
+    "conversation so far), never as an everyday or general-purpose term, and answer about that subject. When a term is still "
+    "ambiguous with this quest in view, say in a few words which reading you took.")
+
+
+def scope_fence_block(quest_ids: ScopeTags, identity: str = "") -> str:
+    """The scope note for a turn bound to ``quest_ids``, or ``""`` when it is bound to none, followed by the open quest's identity
+    (``QUEST_IDENTITY_NOTE``) when the caller gave one. Never raises."""
     try:
         ids = as_tag_list(quest_ids)
         if not ids:
             return ""
         one = len(ids) == 1
         if affinity_mode():
-            return SCOPE_AFFINITY_NOTE.format(which=f"quest {ids[0]}" if one else "quests " + ", ".join(ids[:6]))
-        return SCOPE_FENCE_NOTE.format(
-            which=f"quest {ids[0]}" if one else "quests " + ", ".join(ids[:6]),
-            those="that quest" if one else "those quests", the_id="the id" if one else "those ids")
+            note = SCOPE_AFFINITY_NOTE.format(which=f"quest {ids[0]}" if one else "quests " + ", ".join(ids[:6]))
+        else:
+            note = SCOPE_FENCE_NOTE.format(
+                which=f"quest {ids[0]}" if one else "quests " + ", ".join(ids[:6]),
+                those="that quest" if one else "those quests", the_id="the id" if one else "those ids")
+        text = str(identity or "").strip()
+        return note + ("\n\n" + QUEST_IDENTITY_NOTE.format(identity=text[:2500]) if text else "")
     except Exception:  # noqa: BLE001
         return ""

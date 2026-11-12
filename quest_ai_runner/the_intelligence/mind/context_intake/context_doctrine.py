@@ -69,6 +69,8 @@ SPECIFICITY (answer about the SPECIFIC subject asked, not its category):
 # ---------------------------------------------------------------------------
 EVIDENCE_GATE: str = """\
 EVIDENCE (back every claim with a NAMED instance, never a label alone):
+  This governs what you say ABOUT THE PERSON or their own records. It never shortens or empties a general answer (how to practice,
+  learn or do something) given from well-established general knowledge: there, concrete, correct practices are the answer.
   A conclusion, pattern, or suggestion about the person or subject is only as good as the specific
   instance it points to. Before writing any trait, tendency, or pattern claim ("you tend to...",
   "a recurring theme is...", "this shows...", "your pattern of X reveals Y"), you must be able to

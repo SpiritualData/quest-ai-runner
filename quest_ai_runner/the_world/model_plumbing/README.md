@@ -26,7 +26,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 ## Solutions from a library
 
-- [Model Tier Chooser](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`model-tier-chooser`): Picks, for each of the four model tiers (fast, balanced, quality, best), the provider, model and reasoning effort that is the cheapest and fastest of the arms at least as good as the tier's held default on public evaluations (capability only for best); the hub's own measurements inform which tier a call role uses, not which model a tier maps to. Adopted from the library `hub`.
+- [Model Tier Chooser](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`model-tier-chooser`): Picks, for each of the four model tiers (fast, balanced, quality, best), the provider, model and reasoning effort that is the cheapest and fastest of the arms at least as good as the tier's held default on public evaluations (capability only for best); which tier each call role uses is decided by the role-tier metric (role_tiers.csv over role_tier_metrics.csv): the lowest tier unless the next tier up shows a significant gain on the public evaluations that speak to the role's kind of call, with the owner's hard constraints applied after. Adopted from the library `hub`.
 - [Vendor Model Caller](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`vendor-model-caller`): Plans, answers and lists models for one vendor, or for several through a router that steps to the next model when a provider fails. Adopted from the library `hub`.
 
 ## Metrics and their leaders

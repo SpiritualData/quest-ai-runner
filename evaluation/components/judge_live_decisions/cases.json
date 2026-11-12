@@ -312,7 +312,36 @@
   "kind": "reach",
   "area": "reach-judge",
   "args": {
-   "message": "What is the team working on this week?",
+   "message": "What is the team working on this week?",   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "inside",
+    "covered": false
+   }
+  }
+ },
+ {
+  "id": "JLD-13",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "What can I do to get better at holding my breath underwater?",
+   "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
+  },
+  "expect": {
+   "eq": {
+    "reach": "general",
+    "covered": false
+   }
+  }
+ },
+ {
+  "id": "JLD-14",
+  "kind": "reach",
+  "area": "reach-judge",
+  "args": {
+   "message": "How far along am I on my swimming goals this month?",
    "reach_summary": "Readable: the team's quests, goals, notes and check-ins, and an index of the project's source files. Attached environment \"Dev machine\": handles work on the dev server (its files, logs, jobs, processes and disk) and the project's code repository. Nothing attached reaches the finance spreadsheet or the mail server."
   },
   "expect": {

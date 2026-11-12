@@ -94,3 +94,20 @@ def test_vector_hit_of_a_quest_card_is_fenced_by_its_quest_alone():
     assert not scope_tags_allow(card_scope_tags(business), ["quest:quest_fit"])
     assert card_scope_tags({"scope_tags": ["global"]}) == ["global"]
     assert card_scope_tags({}) == []
+
+
+def test_the_open_quest_identity_follows_the_scope_note_and_tells_the_reader_to_read_terms_in_its_sense():
+    block = scope_fence_block(["quest_a"], "- [quest_a]: Learn to juggle three balls. Category: Skills.")
+    assert block.startswith(HEAD)
+    assert "THE OPEN QUEST" in block and "Learn to juggle three balls" in block
+    assert block.index("THE OPEN QUEST") > block.index("Things that belong to no quest")
+    assert "in the sense of this quest's own subject" in block and "which reading you took" in block
+    assert "THE OPEN QUEST" not in scope_fence_block(["quest_a"])           # no identity given, no block
+    assert scope_fence_block([], "- [quest_a]: x") == ""                     # an unbound turn adds nothing
+
+
+def test_a_turn_given_a_quest_identity_shows_it_to_the_planner_and_the_answer():
+    provider = StubProvider([{"action": "answer", "user_intent": "ask", "rationale": "a", "pending_read": []}])
+    build(provider).run("What can I do to practice focus?", context_meta={"quest_ids": ["quest_j"], "quest_identity": "- [quest_j]: Juggle reliably"})
+    assert "THE OPEN QUEST" in provider.plan_prompts[0] and "Juggle reliably" in provider.plan_prompts[0]
+    assert "Juggle reliably" in answers(provider)

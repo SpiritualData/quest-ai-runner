@@ -45,7 +45,7 @@ from typing import Any, Dict, Optional
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import declare, render_prompt
 
 #: The verdicts the judge may return. Anything else is treated as "no verdict" and changes nothing.
-REACH_VERDICTS = ("inside", "outside", "world")
+REACH_VERDICTS = ("inside", "outside", "world", "general")
 
 REACH_JUDGE_TOOL: Dict[str, Any] = {
     "name": "reach",
@@ -86,6 +86,11 @@ THE REQUEST:
   description covers that kind of work on that place, or null when none of them does.
 "world": it asks for a current public fact about the world (news, a price, the weather, a result,
   what is happening now). General knowledge the assistant simply knows is NOT this.
+"general": a general question about how to do, practice, learn or improve something, or what a thing
+  is, that the person's own records could not settle however much they hold: the answer is
+  well-established general knowledge or published research, not a fact the person stored. That the
+  question is about a subject their quest covers does not make it "inside": ask whether a stranger
+  with no records could be given the same answer.
 "inside": everything it needs is in the readable sources above.
 {web_note}
 JUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone's own or their
@@ -150,6 +155,22 @@ WORLD_LINE_WEB = (
     "and not in any source you can read, but it IS reachable: this was judged separately and is "
     "settled, so issue a {\"web\": \"<query>\"} read for it instead of answering from memory or "
     "handing it off."
+)
+
+#: What the planner is told when the request is a general how-to or what-is question their records cannot settle.
+GENERAL_LINE = (
+    "This request is a general question: the person's own records cannot settle it, whatever subject their "
+    "quest covers. This was judged separately and is settled, so do not search their records for it and do "
+    "not answer that their records lack it. Answer it in full from well-established general knowledge: "
+    "several distinct, concrete things to do, saying once in a few plain words that it is general knowledge. When a quest is open, "
+    "first read the question's terms in the sense of that quest's own subject (its name, outcome, state and the conversation so far), "
+    "and answer about that subject, not about an everyday sense of the same words; when a term stays ambiguous with the quest in "
+    "view, say in a few words which reading you took."
+)
+#: Same verdict with a live web adapter wired: a source may firm the answer up, but is not owed.
+GENERAL_LINE_WEB = GENERAL_LINE + (
+    " When a published source would materially firm up the advice, you may issue one {\"web\": \"<query>\"} read "
+    "first and cite what it returns; otherwise answer now."
 )
 
 VERDICT_HEADING = "--- WHERE WHAT THIS REQUEST NEEDS ACTUALLY LIVES (already settled) ---\n"
@@ -254,6 +275,8 @@ def verdict_block(verdict: Optional[Dict[str, Any]], *, web_configured: bool = F
     reach = verdict.get("reach")
     if reach == "world":
         return VERDICT_HEADING + (WORLD_LINE_WEB if web_configured else WORLD_LINE) + "\n"
+    if reach == "general":
+        return VERDICT_HEADING + (GENERAL_LINE_WEB if web_configured else GENERAL_LINE) + "\n"
     if reach == "inside":
         return VERDICT_HEADING + RECORDS_LINE + "\n" if verdict.get("needs_records") is True else ""
     if reach != "outside":

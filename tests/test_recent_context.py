@@ -15,7 +15,7 @@ import hashlib
 import json
 
 from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import (
-    FileRecentContextStore, build_item_usage_hint, conv_scope_key, filter_relevant, quest_scope_key, render_recent_cards)
+    FileRecentContextStore, _informative_terms, build_item_usage_hint, conv_scope_key, filter_relevant, quest_scope_key, render_recent_cards)
 
 
 def _seed_raw_file(tmp_path, key: str, turns: list) -> None:
@@ -620,3 +620,35 @@ def test_build_item_usage_hint_caps_items_per_card():
     items = [{"id": f"i{i}", "input_keywords": [], "last_used_ts": ""} for i in range(12)]
     hint = build_item_usage_hint([{"id": "card-1", "items": items}], "q", max_items_per_card=3)
     assert len(hint["card-1"]) == 3
+
+
+def test_a_card_selected_for_a_question_does_not_carry_that_questions_words_into_the_next_one(tmp_path):
+    # The record stamps the turn's own question terms on every card it selected; counted as the card's terms, a card picked once for a stray
+    # shared word would match every later question on that subject for ever.
+    store = FileRecentContextStore(root_dir=str(tmp_path))
+    store.record(quest_scope_key("q1"), [{"id": "guide", "title": "Explains a four week course with many parts and a practice phase and group sessions"}],
+                 "what can I do to practice discernment of the information field")
+    records = store.load(quest_scope_key("q1"))
+    terms = _informative_terms(records[0])
+    assert "discernment" not in terms and "information" not in terms and "practice" in terms
+    kept = filter_relevant(records, "what can I do to practice discernment of the information field", is_followup=False)
+    assert kept == []
+
+
+def test_one_shared_term_passes_only_when_it_is_a_real_part_of_the_card():
+    short = {"id": "a", "turn_index": 5, "title": "Pricing tiers", "keywords": []}
+    long = {"id": "b", "turn_index": 5, "title": "", "keywords": ["practice"] + [f"term{i}" for i in range(9)]}
+    result = filter_relevant([short, long], "tell me about pricing and practice", is_followup=False)
+    assert [r["id"] for r in result] == ["a", "b"] or [r["id"] for r in result] == ["a"]
+    assert "b" not in [r["id"] for r in filter_relevant([long], "practice makes perfect", is_followup=False)]
+
+
+def test_forget_turns_drops_the_deleted_questions_records_from_every_scope(tmp_path):
+    store = FileRecentContextStore(root_dir=str(tmp_path))
+    keys = [conv_scope_key("c1"), quest_scope_key("q1"), "global"]
+    store.record(keys, [{"id": "x", "title": "Alpha beta card"}], "the deleted question")
+    store.record(keys, [{"id": "y", "title": "Gamma delta card"}], "a kept question")
+    assert store.forget_turns(keys, ["the  deleted question"]) == 3          # whitespace-insensitive, once per scope file
+    for key in keys:
+        assert {r["id"] for r in store.load(key)} == {"y"}
+    assert store.forget_turns(keys, []) == 0 and store.forget_turns(keys, ["never asked"]) == 0

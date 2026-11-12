@@ -99,6 +99,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Edit a quest's specification in Quest | `esoi-application:quest_spec_records` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/quest_spec_edit.py](esoi_application/quest_spec_edit.py) |  |
 | Read a metric's current value from its named source | `esoi-application:metric_source` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/tools_metric_source.py](esoi_application/tools_metric_source.py) |  |
 | Chat reply held to the turn's reads and executed actions | `decision-check:chat_reply_views` | [quest_ai_runner/the_intelligence/critical_thinking/decision_check/reply_views.py](decision_check/reply_views.py) |  |
+| Skip a quest's own rows by the wire derived flag | `esoi-application:derived_flag` | [quest_ai_runner/the_intelligence/critical_thinking/esoi_application/autopilot_esoi.py](esoi_application/autopilot_esoi.py) |  |
 
 ### Metrics
 

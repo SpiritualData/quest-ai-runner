@@ -36,12 +36,13 @@ SHAPE_BRIEF = "brief"
 SHAPE_READBACK = "readback"
 SHAPE_DECLINE = "decline"
 SHAPE_SUPPORT = "support"
+SHAPE_ADVICE = "advice"            # a general how-to or "what can I do to improve X" question the person's records need not settle
 SHAPE_DEFAULT = "default"
 SHAPE_SPOKEN = "spoken"            # selected from the planner's ``delivery`` field, not offered as a ``reply_shape``
 SHAPE_INFORMATION = "information"  # selected from the planner's ``user_intent`` (ask) on a default shape
 SHAPE_PLAN = "plan"                # selected only by code (a ``plans_period`` turn answered from the planning snapshot), never offered to the planner
 SHAPE_SETTLED = "settled"          # selected from the planner's ``user_intent`` (act) when it answers on a default shape without a deliverable written in the reply
-REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_DEFAULT)
+REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_ADVICE, SHAPE_DEFAULT)
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,11 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              "marks), sentence two gives the real facts from their records that change the picture, with the date the records hold, and "
              "sentence three is the ONE concrete next step that fits those facts. Three sentences at most, no list, no options menu.",
              max_questions=1, max_chars=500, max_list_lines=0, max_sentences=3, max_exclamations=0, states_a_fact_date=True),
+    Standard(SHAPE_ADVICE,
+             "A general question about how to practice, learn, improve or do something, which the person's records need not settle: a FULL "
+             "answer that opens with the answer itself, three to five distinct, concrete things to do (a short list is welcome), each with one "
+             "clause on how, fitted to what their quest is about when that helps. Say once, in a few plain words, that it is general knowledge "
+             "(or what it rests on) and how sure you are. No apology, no remark about what their records lack, and never one vague sentence."),
     Standard(SHAPE_SPOKEN,
              "The reply will be read aloud: at most three plain spoken sentences, the answer first, no list, no markdown, no quotation marks, "
              "no question, and no more than two figures. Say each date as a person would say it.",

@@ -804,10 +804,17 @@ class RunBeginMixin:
             except Exception:  # noqa: BLE001
                 _is_followup = False
             try:
+                # A message that stands on its own is gated on the person's own words: the resolved restatement of it ("give a
+                # concrete set of steps the user can take...") adds words the person never said, and those matched unrelated cards.
+                _recent_query = f"{rs.goal_condition} {rs.user_message}" if _is_followup else str(rs.user_message or "")
                 _recent_filtered = filter_relevant(
-                    _recent_records, f"{rs.goal_condition} {rs.user_message}",
+                    _recent_records, _recent_query,
                     is_followup=_is_followup, max_cards=cfg.recent_context_max_cards,
                     time_range=_ctx_meta.get("time_range"))
+                _excluded_recent = {str(x).removeprefix("card:") for x in (_ctx_meta.get("exclude_card_ids") or [])}
+                if _excluded_recent:    # the same cards the fresh assembly is told not to retrieve
+                    _recent_filtered = [r for r in _recent_filtered
+                                        if str((r or {}).get("id") or "").removeprefix("card:") not in _excluded_recent]
             except Exception:  # noqa: BLE001
                 _recent_filtered = []
             # ITEM-LEVEL RANKING HINT for fresh assembly (see core/recent_context.py): built from

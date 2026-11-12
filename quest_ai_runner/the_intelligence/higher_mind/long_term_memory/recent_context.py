@@ -149,6 +149,8 @@ _RECENCY_HALF_LIFE_DAYS = 7.0
 # Lexical-overlap thresholds for a record to pass the relevance gate (see filter_relevant).
 _OVERLAP_RATIO_THRESHOLD = 0.15
 _OVERLAP_COUNT_THRESHOLD = 2
+#: A single shared term passes only when it is at least this share of the card's own terms (see ``filter_relevant``).
+_CARD_SHARE_THRESHOLD = 0.34
 # Scope weights: how much a scope's lexical relevance counts toward the ranking score. Conv is
 # the conversation's own history (full weight); quest and global are progressively wider circles
 # of memory and are damped so they never outrank a genuinely on-topic conv-scope record.
@@ -502,6 +504,10 @@ class FileRecentContextStore:
         for turn in turns:
             turn["cards"] = [c for c in (turn.get("cards") or []) if c.get("id") in keep_ids]
 
+        self._write_turns(key, turns)
+
+    def _write_turns(self, key: str, turns: List[Dict[str, Any]]) -> None:
+        """Persist ``turns`` as the scope file of ``key`` (atomic temp file and rename). Never raises."""
         self._dir.mkdir(parents=True, exist_ok=True)
         tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self._dir), prefix=".tmp_", suffix=".json")
         match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
@@ -515,6 +521,25 @@ class FileRecentContextStore:
                 os.unlink(tmp_path)
             except OSError:
                 pass
+
+    def forget_turns(self, scope_keys: Union[str, List[str]], user_texts: List[str]) -> int:
+        """Drop, from every scope in ``scope_keys``, the recorded turns whose question is one of ``user_texts``: the turns the person
+        deleted, so what those turns selected stops being carried into later ones. Returns how many turns were dropped. Best-effort,
+        never raises."""
+        wanted = {" ".join(str(t or "").split()) for t in (user_texts or []) if str(t or "").strip()}
+        dropped = 0
+        if not wanted:
+            return 0
+        for key in _as_key_list(scope_keys):
+            try:
+                turns = self._load_turns(key)
+                kept = [t for t in turns if " ".join(str((t or {}).get("user_text") or "").split()) not in wanted]
+                if len(kept) != len(turns):
+                    dropped += len(turns) - len(kept)
+                    self._write_turns(key, kept)
+            except Exception:  # noqa: BLE001
+                log.debug("FileRecentContextStore.forget_turns failed for key %r", key, exc_info=True)
+        return dropped
 
     def record(
         self, scope_keys: Union[str, List[str]], cards: List[Dict[str, Any]], user_text: str
@@ -540,8 +565,15 @@ class FileRecentContextStore:
 
 
 def _informative_terms(record: Dict[str, Any]) -> set:
-    """Stopword-filtered terms for ``record``: its stored keywords plus fresh terms from its title."""
-    return set(record.get("keywords") or []) | set(keywords_from_text(record.get("title", "") or ""))
+    """Stopword-filtered terms that say what the CARD is about: its title and its own keywords.
+
+    ``record`` stamps the terms of the turn's own question onto every card that turn selected (they rank a card's items later). Those are
+    the question's terms, not the card's: counted here, a card that was selected once for a stray shared word (a guide that only
+    mentioned "practice") matched every later question on that subject and stayed selected for it forever. They are taken out by
+    comparing with the stored ``turn_user_text``, so records written before this rule are read the same way."""
+    asked = set(keywords_from_text(record.get("turn_user_text", "") or ""))
+    stored = set(record.get("keywords") or [])
+    return (stored - asked) | set(keywords_from_text(record.get("title", "") or ""))
 
 
 def _recency_weight(ts: str) -> float:
@@ -601,8 +633,11 @@ def filter_relevant(
             terms = _informative_terms(record)
             overlap = query_terms & terms
             ratio = len(overlap) / len(query_terms) if query_terms else 0.0
+            # One shared word is a topic only when it is a real part of the card: a long description that merely contains a common
+            # word of the question (a guide that says "practice" among thirty other terms) is not about the question.
             lexical_pass = (
-                ratio >= _OVERLAP_RATIO_THRESHOLD or len(overlap) >= _OVERLAP_COUNT_THRESHOLD
+                (ratio >= _OVERLAP_RATIO_THRESHOLD or len(overlap) >= _OVERLAP_COUNT_THRESHOLD)
+                and (len(overlap) >= _OVERLAP_COUNT_THRESHOLD or len(overlap) / max(1, len(terms)) >= _CARD_SHARE_THRESHOLD)
             )
             if not (forced or lexical_pass):
                 continue

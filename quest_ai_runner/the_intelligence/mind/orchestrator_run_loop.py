@@ -45,6 +45,7 @@ from quest_ai_runner.the_intelligence.mind.planner.handoff_gate import HANDOFF_N
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
 from hubofhubs.api import relativize, remove_em_dashes
 from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import figure_evidence, without_unsupported
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_ADVICE, standard_for
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
 
@@ -205,7 +206,13 @@ class RunLoopMixin:
                 # Every figure in a status or answer reply must be one this turn read (the hub's grounded_figures arm): a sentence that states one it did not is taken out.
                 # Held to everything the writer was shown (the reads and the context, uncut: the check reads digits only, so its size costs nothing). A cut of it
                 # (the first 5,000 characters of the context, 2,500 of each read) made true figures read as unsupported and took whole sentences out.
-                res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
+                # Not held to an ADVICE reply (a general how-to answer): its amounts and times ("ten minutes a day") are suggestions, not readings
+                # of the person's records, and cutting them took the sentence (and the list item) out of the very answer the person asked for.
+                advice_reply = (rs.plan is not None and standard_for(
+                    rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE)
+                dropped = []
+                if not advice_reply:
+                    res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
                 if dropped:
                     log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
             track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
@@ -383,7 +390,8 @@ class RunLoopMixin:
         transcript = rs.transcript
         # A person's turn bound to quest(s) is told its scope once, in the context every planner step and the
         # answer read (see ``scope_tags.SCOPE_FENCE_NOTE``); an unbound turn adds nothing.
-        _scope_note = scope_fence_block(self._meta_quest_ids(_ctx_meta)) if message_is_user_turn else ""
+        _scope_note = (scope_fence_block(self._meta_quest_ids(_ctx_meta), str(_ctx_meta.get("quest_identity") or ""))
+                       if message_is_user_turn else "")
         if _scope_note:
             rs.context_view = _scope_note + ("\n\n" + rs.context_view if rs.context_view else "")
         # The milestone the pinned turn's cue concerns was found by code before context assembly (``milestone_cue.resolve``, in run begin): the planner is shown its facts

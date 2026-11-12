@@ -569,3 +569,16 @@ def test_first_person_words_inside_quotation_marks_are_a_name_not_the_assistants
     evidence = ["The quest: i want to become self reliant. Note: i want to sell the car."]
     assert copied_first_person('Your quest "i want to become self reliant" has 8 overdue goals.', evidence) == []
     assert copied_first_person("Next, i want to sell the car.", evidence) == ["i want to"]
+
+
+def test_a_general_advice_question_is_not_held_to_the_information_limits():
+    class Plan:
+        reply_shape = "advice"
+        asks_first = False
+        user_intent = "ask"
+    assert "advice" in REPLY_SHAPES
+    standard = standard_for(Plan())
+    assert standard.shape == "advice"
+    assert standard.max_sentences is None and standard.max_list_lines is None
+    Plan.reply_shape = "default"      # a plain question on the default shape still reads as an information reply
+    assert standard_for(Plan()).shape == "information"

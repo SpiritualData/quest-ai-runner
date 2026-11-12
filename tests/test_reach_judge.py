@@ -262,7 +262,7 @@ def test_judge_prompt_cuts_the_middle_of_an_over_long_message_and_keeps_the_ask_
 # through the NEW code (what this test used to do), proves nothing about whether either one
 # matches what the judge actually said before web_configured existed.
 _PRE_CHANGE_JUDGE_PROMPT_NO_WEB = (
-    'Decide ONE thing about the request below, and nothing else. Do not answer it and do not plan it.\n\nWHAT THIS ASSISTANT CAN REACH:\na short summary\n\nTHE REQUEST:\ncheck the latest score\n\n"outside": doing or answering this needs a machine or server and its files, folders, processes,\n  jobs, logs or quotas; a code repository; or a document, spreadsheet, drive or service held\n  somewhere other than the readable sources above. Set "covered_by" to the environment whose\n  description covers that kind of work on that place, or null when none of them does.\n"world": it asks for a current public fact about the world (news, a price, the weather, a result,\n  what is happening now). General knowledge the assistant simply knows is NOT this.\n"inside": everything it needs is in the readable sources above.\n\nJUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone\'s own or their\nteam\'s work, plans, goals, tasks, records or progress is "inside" even when the work it describes\nis carried out elsewhere: the answer is in the records above. "How is that piece of work going",\n"what is the team on this week", "what is still open", "remind me to do X" are all "inside". It is\n"outside" only when the request needs you to INSPECT OR CHANGE the other place itself. A request\nthat merely RECORDS a fact about another place into these records is also "inside".\n'
+    'Decide ONE thing about the request below, and nothing else. Do not answer it and do not plan it.\n\nWHAT THIS ASSISTANT CAN REACH:\na short summary\n\nTHE REQUEST:\ncheck the latest score\n\n"outside": doing or answering this needs a machine or server and its files, folders, processes,\n  jobs, logs or quotas; a code repository; or a document, spreadsheet, drive or service held\n  somewhere other than the readable sources above. Set "covered_by" to the environment whose\n  description covers that kind of work on that place, or null when none of them does.\n"world": it asks for a current public fact about the world (news, a price, the weather, a result,\n  what is happening now). General knowledge the assistant simply knows is NOT this.\n"general": a general question about how to do, practice, learn or improve something, or what a thing\n  is, that the person\'s own records could not settle however much they hold: the answer is\n  well-established general knowledge or published research, not a fact the person stored. That the\n  question is about a subject their quest covers does not make it "inside": ask whether a stranger\n  with no records could be given the same answer.\n"inside": everything it needs is in the readable sources above.\n\nJUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone\'s own or their\nteam\'s work, plans, goals, tasks, records or progress is "inside" even when the work it describes\nis carried out elsewhere: the answer is in the records above. "How is that piece of work going",\n"what is the team on this week", "what is still open", "remind me to do X" are all "inside". It is\n"outside" only when the request needs you to INSPECT OR CHANGE the other place itself. A request\nthat merely RECORDS a fact about another place into these records is also "inside".\n'
 )
 
 ASKS_CHANGE_PARAGRAPH = (
@@ -842,3 +842,20 @@ def test_a_missing_verdict_skips_the_short_circuit_and_says_why(caplog):
         result = orch.run("whats the latest")
     assert retrieval.update_reads == 0 and result.text != "X"
     assert "short circuit skipped: no reach verdict" in caplog.text
+
+
+def test_general_verdict_is_accepted_and_tells_the_planner_not_to_search_records():
+    assert "general" in REACH_VERDICTS
+    verdict = normalize_verdict({"reach": "general"})
+    assert verdict == {"reach": "general", "covered_by": None}
+    block = verdict_block(verdict)
+    assert block.startswith(VERDICT_HEADING)
+    assert "do not search their records" in block
+    assert "web" not in block.lower()
+    assert '{"web"' in verdict_block(verdict, web_configured=True)
+
+
+def test_general_verdict_keeps_a_web_read(tmp_path=None):
+    from quest_ai_runner.the_world.tools import tool_guards
+    reads = [{"web": "a query"}]
+    assert tool_guards.drop_web_reads_for_own_records({"reach": "general"}, reads) == (reads, [])

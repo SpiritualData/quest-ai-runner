@@ -123,7 +123,7 @@ answer that declines the act and also queues it contradicts itself. False in eve
 When you choose "answer", set `reply_shape` to the shape the reply must take: `yes_no` (the message is a yes
 or no question; the reply opens with the verdict), `one_step` (they ask where to start or what to do next; the
 reply names ONE step), `ask_first` (as `asks_first`), `clarify` (the message is cut off or says nothing to act on, and no known candidates exist to choose between; the reply is ONE short question written from the message alone, so set `asks_first` false and do not read first; when the question is a CHOICE among candidates you know, use `ask_first` instead), `brief` (they asked for a quick, short or one-breath
-reply), `readback` (they asked to be told what is stored or was done), `decline` (they asked for something that cannot be done here, such as moving money or changing an account: decline once, offer the one real alternative), `support` (they are frustrated, discouraged or want to quit: one plain acknowledging sentence, then the real facts from their records with their date, then ONE next step that fits those facts), otherwise `default`.
+reply), `readback` (they asked to be told what is stored or was done), `decline` (they asked for something that cannot be done here, such as moving money or changing an account: decline once, offer the one real alternative), `support` (they are frustrated, discouraged or want to quit: one plain acknowledging sentence, then the real facts from their records with their date, then ONE next step that fits those facts), `advice` (a general question about how to practice, learn, improve or do something in life that their records need not settle, such as "what can I do to get better at X": the reply is a full answer with several concrete things to do, so never use `one_step` or `brief` for it unless they asked for one step or a short reply, and never leave it on `default`, because a plain question on `default` is held to three sentences and no list), otherwise `default`.
 Set `delivery` to `spoken` when the message says the reply will be read out, said aloud or heard (a call, a voice message, a speech) and to `written` when it says it will be read on a page; leave it out when the message says nothing about delivery.
 Set `needs_records` true when the reply depends on what the person's own notes, logs, entries or collections hold beyond what CONTEXT shows verbatim: counts or totals over entries ("my interviews", "my expenses"), a date or constraint that may sit in a note or log (an absence, an injury, a moved date), or how they are doing on something they track, or whether a day and time is free (the team's and quest's standing commitments). Then read those records before you answer. False when CONTEXT already holds every fact the reply needs, and for a general question.
 Set `refers_to_attachment` true when the message speaks of a photo, image or file as sent with it ("here is a photo of...", "see the attached"), whether or not you can see one.
@@ -932,6 +932,18 @@ has no goals and that these are proposals, write nothing before the day lines; w
 practice", not "15 minutes a day", since a figure that is in nothing read is cut from the reply and takes its whole line with it. Never write a quest or goal id. Say that nothing was saved, and end with one question: whether to add the plan to their goals.
 Write dates the way a person reads them ("Thursday 13 November"). Never write the word "snapshot". Name a quest whose name is written in the first
 person in quotation marks. Never use an em dash.
+"""
+
+ADVICE_ANSWER_DIRECTIVE = """\
+--- THIS REPLY IS ADVICE (set by the planner) ---
+The person asked a general question about how to practice, learn, improve or do something. Their records cannot settle it, and that is not a gap to report.
+Open with the answer itself, never with what their records lack, never with "I cannot", "I do not want to pretend" or an apology. Then give three to five
+distinct, concrete things they can do (a short list is fine), each with one clause on how. Before writing, read the question's terms in the sense of the
+open quest's own subject (its name, outcome, state, the conversation so far), not in an everyday sense, and make every item about that subject; when a term
+is still ambiguous with the quest in view, say in a few words which reading you took.
+Begin with the first practice itself. The basis is one short clause after it (for example "from general knowledge", or the source you read), never a sentence about
+what their records hold or lack; say how sure you are only if it is not well established.
+If an earlier reply in the conversation or a stored note declined this question, ignore its wording and answer it properly now. Never use an em dash.
 """
 
 DRAFT_ANSWER_DIRECTIVE = """\

@@ -437,11 +437,12 @@ class ModelRegistry:
         n = (name or "").strip().lower()
         return bool(n) and (n in TIERS or n in LEGACY_TIER_ALIASES or n in LEGACY_TIER_ROLES)
 
-    def resolve_role(self, call: str, requested: Optional[str] = None) -> str:
+    def resolve_role(self, call: str, requested: Optional[str] = None, task_kind: str = "") -> str:
         """The model for the model call ``call``: its role's tier from the hub's table (``call_roles.tier_for_call``), with an explicit tier
         from the person, the task or the lane applied under the guards (classification never above fast, a response never below balanced,
-        best only where a person asked or for the daily structure call). A call with no role raises ``KeyError``."""
-        return self.resolve_tier(tier_for_call(call, requested))
+        best only where a person asked or for the daily structure call). A call with no role raises ``KeyError``. ``task_kind`` is the kind of a deep-work
+        task (see ``tier_for_call``)."""
+        return self.resolve_tier(tier_for_call(call, requested, task_kind=task_kind))
 
     def resolve_tier(self, tier: Optional[str]) -> str:
         """Resolve a tier name to the current top model id. Unknown/None -> "balanced". Never raises.

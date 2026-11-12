@@ -392,9 +392,12 @@ class AssemblyMixin:
         # And never the run's own thread: a card recorded from this thread's earlier runs is its
         # previous brief, already in front of the run through its own history.
         own_task = str((meta or {}).get("task_id") or "")
+        # Cards the caller says this turn must not retrieve (``meta["exclude_card_ids"]``, the same key the vector arm reads).
+        excluded_ids = {str(x).removeprefix("card:") for x in ((meta or {}).get("exclude_card_ids") or [])}
         cards = {
             cid: c for cid, c in cards.items()
-            if card_visible_to_turn(c, turn_scope_tags)
+            if str(cid).removeprefix("card:") not in excluded_ids
+            and card_visible_to_turn(c, turn_scope_tags)
             and not card_origin.is_run_brief_record(c)
             and not (own_task and str(((c.get("provenance") or {}) if isinstance(
                 c.get("provenance"), dict) else {}).get("task_id") or "") == own_task)

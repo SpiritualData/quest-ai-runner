@@ -48,8 +48,8 @@ class Recorder:
         self.asked.append(tier)
         return f"model-for-{tier}"
 
-    def resolve_role(self, call, requested=None):
-        return self.resolve_tier(tier_for_call(call, requested))
+    def resolve_role(self, call, requested=None, task_kind=""):
+        return self.resolve_tier(tier_for_call(call, requested, task_kind=task_kind))
 
     @staticmethod
     def is_tier_name(name):
@@ -116,12 +116,26 @@ def test_deep_work_defaults_to_the_tables_tier_and_the_persons_or_tasks_tier_win
     registry = Recorder()
     orch = SimpleNamespace(registry=registry)
     plan = SimpleNamespace(model_tier="opus")
-    deep = TABLE["main_session"]["tier"]                                            # the role-tier metric decides it (hub role_tiers.csv)
+    deep = role_tiers.tier_for("main_session", table=TABLE)                         # no known task kind: the implementation role's tier (hub role_tiers.csv)
     assert AnsweringMixin._deep_model(orch, plan) == f"model-for-{deep}"          # the planner's own opus does not pick the work's tier
     assert AnsweringMixin._deep_model(orch, plan, hint="quality") == "model-for-quality"
     assert AnsweringMixin._deep_model(orch, plan, hint="fast") == "model-for-fast"
     assert AnsweringMixin._deep_model(orch, plan, hint="best") == "model-for-best"
     assert tier_for_call("deep-run.sub-agent") == deep and tier_for_call("deep-run.sub-agent", "quality") == "quality"
+
+
+def test_a_deep_runs_tier_follows_its_task_kind_and_a_persons_tier_still_wins():
+    kinds = role_tiers.task_kinds(TABLE)
+    assert set(kinds) == {"gather", "implementation", "structure", "review"}
+    for kind, role in kinds.items():
+        assert tier_for_call("deep-run.session", task_kind=kind) == role_tiers.tier_for(role, table=TABLE)
+        assert tier_for_call("deep-run.session", "balanced", task_kind=kind) == "balanced"           # a person's tier wins whatever the kind
+    assert tier_for_call("deep-run.session", task_kind="not-a-kind") == tier_for_call("deep-run.session")
+    assert tier_for_call("answer.response", task_kind="structure") == tier_for_call("answer.response")   # only deep work reads the kind
+    registry = Recorder()
+    plan = SimpleNamespace(model_tier="opus", deep_task_kind="structure")
+    assert AnsweringMixin._deep_model(SimpleNamespace(registry=registry), plan) == f"model-for-{tier_for_call('deep-run.session', task_kind='structure')}"
+    assert AnsweringMixin._deep_model(SimpleNamespace(registry=Recorder()), SimpleNamespace(model_tier="opus")) == f"model-for-{tier_for_call('deep-run.session')}"
 
 
 def test_deep_runs_start_on_balanced_whatever_the_difficulty():

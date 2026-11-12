@@ -477,7 +477,11 @@ class CardsMixin:
         card.setdefault("keywords", sorted(tokenize(decision_excerpt(gist))))
         # NOT the raw task text: for a persona run its first 200 characters are scaffolding that
         # is identical across every run (see _record_summary).
-        card.setdefault("summary", _record_summary("" if own_task else task_text, outcome,
+        # A card may record what a turn OBSERVED, never what it CLAIMED (``card_learning``). A turn that pinned no file and added no
+        # content has observed nothing to keep, so its reply is a claim: the card then says what was ASKED, never the reply's opening
+        # line (a reply that declined the question became a standing card saying so, and every later turn on the subject read it back).
+        observed = bool(own_task or outcome.get("files") or outcome.get("content"))
+        card.setdefault("summary", _record_summary("" if own_task else task_text, outcome if observed else {},
                                                    card.get("name", "") or (card_id if own_task else "")))
         card.setdefault("conventions", [])
         card.setdefault("usage_count", 0)

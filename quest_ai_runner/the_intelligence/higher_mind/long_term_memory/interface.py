@@ -21,6 +21,9 @@ class RecentContextStore(Protocol):
         """Return recent card records merged across ``scope_keys``, deduped by card id with
         narrower-scope-wins precedence (conv > quest > global)."""
 
+    def forget_turns(self, scope_keys: Union[str, List[str]], user_texts: List[str]) -> int:
+        """Drop the recorded turns whose question is one of ``user_texts`` (turns the person deleted) from every scope; returns how many."""
+
 
 @solution("long-term-memory", kind="event", entry="current_slice",
           example={"conv_id": "conversation-id", "query": "what did we decide about the launch?"})

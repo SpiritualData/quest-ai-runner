@@ -29,7 +29,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.delegation.overseer import OverseerSignal
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
     deliverable_texts,
-    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, lost_pointers, measure, pointed_items, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_PLAN, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
+    CLARIFY_DIRECTIVE, SHAPE_DEFAULT, constraint_violated, is_clarify, found_constraint_head, found_constraint_hint, keep_addresses_hint, lost_pointers, measure, pointed_items, repair, repair_limit, standard_for, steering, GENERAL_ANSWER_DIRECTIVE, SHAPE_ADVICE, SHAPE_PLAN, SHAPE_SETTLED, SHAPE_SPOKEN, SPOKEN_DIRECTIVE,
     turn_holds_records)
 from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
 from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import http_addresses
@@ -37,7 +37,7 @@ from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_information_turn
 from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve as resolve_facts
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
-    BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
+    ADVICE_ANSWER_DIRECTIVE, BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
     HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, DRAFT_ANSWER_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, NEXT_STEP_SNAPSHOT_DIRECTIVE, PLAN_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
     READ_BUDGET_WRAPUP_HONESTY_NOTE)
 
@@ -186,6 +186,9 @@ class RunAnswerMixin:
                 and is_information_turn(rs.turn_user_intent, rs.plan)
                 and getattr(rs.plan, "reply_shape", None) in (None, "default") and rs.turn_delivery != "spoken"):
             reply_directive = INFORMATION_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # short by default
+        if (rs.plan is not None and rs.plan.action == "answer" and not getattr(rs.plan, "asks_first", False)
+                and standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE):
+            reply_directive = ADVICE_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # general advice: a full, concrete answer
         if (rs.plan is not None and rs.plan.action == "answer" and not getattr(rs.plan, "asks_first", False)
                 and standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_SETTLED):
             reply_directive = SETTLED_ANSWER_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")      # an order reported: what is now so, then stop
@@ -558,7 +561,10 @@ class RunAnswerMixin:
                 standard, measured, standard_in_force = None, None, False
         repair_rounds = 0
         # An information turn is read-only and its draft is held to the situation standard (figures, dates, length, voice) by code: no overseer consult is spent on it.
+        # An ADVICE reply is not one: its draft is judged against the advice standard's wording (a full answer in the quest's own sense, no
+        # remark about the records) by the overseer, since no code measurement can read that and a cheap writer drifts from it.
         information_turn = bool(getattr(cfg, "cheap_information_turns", True) and is_information_turn(rs.turn_user_intent, rs.plan)
+                                and not (standard is not None and standard.shape == SHAPE_ADVICE)
                                 and not (getattr(rs, "exec_record", None) is not None and rs.exec_record.any_mutation_attempted))
         if cfg.overseer and rs.overseer_submitted < cfg.overseer_max_signals and not rs.records_free and not information_turn and not getattr(rs, "cue_step_attempted", False) and not getattr(rs, "draft_in_chat", False):      # nothing of the person's to check a general answer against
             try:

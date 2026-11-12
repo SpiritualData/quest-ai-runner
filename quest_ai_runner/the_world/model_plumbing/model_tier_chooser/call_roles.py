@@ -123,11 +123,15 @@ def role_of(call: str) -> str:
         raise KeyError(f"model call {call!r} has no role in CALL_ROLES; add it with the hub role whose tier it should have") from None
 
 
-def tier_for_call(call: str, requested: Optional[str] = None, table: Optional[Mapping[str, Mapping[str, str]]] = None) -> str:
+def tier_for_call(call: str, requested: Optional[str] = None, table: Optional[Mapping[str, Mapping[str, str]]] = None, task_kind: str = "") -> str:
     """The tier ``call`` runs on: its role's tier from the hub's table, with an explicit ``requested`` tier (a person's, a task's or a lane's) applied
-    under the guards in the module docstring. ``requested`` that is not a tier is ignored; the legacy word ``science`` reads as its role's tier."""
+    under the guards in the module docstring. ``requested`` that is not a tier is ignored; the legacy word ``science`` reads as its role's tier.
+    ``task_kind`` (gather, implementation, structure or review, from a classification already made on the fast tier, never from words) moves a call of the
+    ``main_session`` role to the deep-work role of that kind; an empty or unknown kind leaves the role as it is (the implementation role's tier)."""
     rows = table if table is not None else role_tiers.read_table()
     role = role_of(call)
+    if task_kind and role == role_tiers.MAIN_ROLE:
+        role = role_tiers.deep_work_role(task_kind, rows)
     row = rows[role]
     base = role_tiers.tier_for(role, table=rows)
     want = (requested or "").strip().lower()

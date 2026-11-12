@@ -37,7 +37,7 @@ def test_the_floor_ideal_and_broken_baseline_separate():
 def test_the_floor_is_right_on_the_cases_it_should_be_and_only_those():
     floor = common.load_impl("no_call_floor", "judge_live_decisions")(common.CallMeter())
     right = {c["id"] for c, ok in zip(CASES, run(floor)) if ok}
-    assert right == {"JLD-04", "JLD-05", "JLD-07", "JLD-11", "JLD-12"}
+    assert right == {"JLD-04", "JLD-05", "JLD-07", "JLD-11", "JLD-12", "JLD-14"}
 
 
 def test_a_good_hand_written_answer_passes_and_a_near_miss_fails():
