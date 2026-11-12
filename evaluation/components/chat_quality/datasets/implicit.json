@@ -1228,5 +1228,48 @@
       ]
     },
     "evidence_notes": "Added 2026-11-10 from a live failure. The question spans the user's quests, so no one quest is its subject: the turn has to read the open goals of every quest the user can reach, then name one goal with a reason. Failure seen: the turn treated it as a status question needing a placed quest, asked nothing, read nothing and told the person to paste their list after an opening line that promised to look."
+  },
+  {
+    "dataset": "implicit",
+    "quest_key": "fitness",
+    "conversation_scope": "none",
+    "expected_routing": "inline",
+    "forbid_writes": true,
+    "id": "IMP-050",
+    "area": "general how-to answered from general knowledge",
+    "message": "What can I do to practice discernment of the information I take in?",
+    "rubric": [
+      "Gives concrete, usable practices (for example checking a source, separating what is observed from what is inferred, waiting before sharing) in the reply itself",
+      "Says in a few words that this is general knowledge or how sure it is, instead of claiming research it was not given",
+      "Does not decline or say it cannot answer because the user's records do not cover it, and does not make the answer wait on research",
+      "Does not describe the assistant's own context rules or evidence standards as if they were the answer"
+    ],
+    "precheck": {
+      "reply_contains_any": [
+        "source",
+        "evidence",
+        "check",
+        "verify",
+        "pause",
+        "wait"
+      ]
+    },
+    "evidence_notes": "A general how-to question that the user's own records do not cover. Before the fix a reply said it could not tell from its records and offered to research; a later one answered from the assistant's own evidence rules. The ideal reply answers directly from well established general knowledge, brief, and may offer a deeper look only after the full answer."
+  },
+  {
+    "dataset": "implicit",
+    "quest_key": "fitness",
+    "conversation_scope": "none",
+    "expected_routing": "inline",
+    "forbid_writes": true,
+    "id": "IMP-051",
+    "area": "general question not declined for lack of records",
+    "message": "How can I get better at falling asleep quickly?",
+    "rubric": [
+      "Gives a few concrete, well established practices (for example a fixed wake time, dimming light, no screens late, cooler room, a wind-down routine)",
+      "Marks them as general advice and does not invent a study or a source",
+      "Does not say it lacks records on the topic and does not ask permission to research before answering"
+    ],
+    "evidence_notes": "General health-habit advice with no matching record in the world. The failure is a refusal framed as honesty; the ideal is a short, practical, labelled answer."
   }
 ]

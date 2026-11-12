@@ -32,9 +32,9 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 ## Solutions from a library
 
-- [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`long-term-memory`): The retention policy and the recall over the Body's store: what the system keeps across requests, for how long, and how it is found again. Adopted from the library `hub`.
+- [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`long-term-memory`): The retention policy and the recall over the Body's store for one subject, a person or an AI representative: what is kept across requests, for how long, how it is found again and which askers may see it. Adopted from the library `hub`.
 - [Guidance](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`guidance`): An infrequent, longer-term nudge to the Planner, drawn from the objectives, and the context-specific criteria for what a good response is in this situation. Adopted from the library `hub`.
-- [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`recall-recent-context`): The retention policy and the recall over the Body's store: what the system keeps across requests, for how long, and how it is found again. Specializes the library `hub`.
+- [Long-Term Memory](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`recall-recent-context`): The retention policy and the recall over the Body's store for one subject, a person or an AI representative: what is kept across requests, for how long, how it is found again and which askers may see it. Specializes the library `hub`.
 - [Guidance](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`guide-toward-the-long-term-goal`): An infrequent, longer-term nudge to the Planner, drawn from the objectives, and the context-specific criteria for what a good response is in this situation. Specializes the library `hub`.
 - [Objectives](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_intelligence/higher_mind/README.md) (`place-on-a-quest`): The live hierarchy of intents and goals across requests. Specializes the library `hub`.
 
@@ -102,6 +102,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Reply voice plus a long-term guidance directive (proposed) | `guide-toward-the-long-term-goal:guided` |  |  |
 | Plain answer only (floor) | `guide-toward-the-long-term-goal:no_nudge` |  |  |
 | Long-term guidance section in the reply voice | `guide-toward-the-long-term-goal:guided_v2` | [quest_ai_runner/the_self/integrity/prompts/auxiliary_prompts.py](../../../the_self/integrity/prompts/auxiliary_prompts.py) |  |
+| Representative's learned notes | `long-term-memory:rep_notes` | [quest_ai_runner/the_intelligence/higher_mind/long_term_memory/note_context_store.py](../long_term_memory/note_context_store.py) |  |
 | Embedding-led candidates, the model picks | `place-on-a-quest:shared-quest-ranker` | [evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py](../../../../evaluation/components/place_on_a_quest/impls/shared_quest_ranker.py) |  |
 | Words and meaning candidates, the model picks | `place-on-a-quest:hybrid-candidate-ranker` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
 | The library judge over the quests it is given | `place-on-a-quest:library-quest-judge` | [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest/quest_placement.py](place_on_a_quest/quest_placement.py) |  |
