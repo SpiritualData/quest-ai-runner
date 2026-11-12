@@ -34,19 +34,21 @@ def hub_row(row: Mapping[str, Any]) -> Dict[str, str]:
             "size": str(row.get("size") or "quick"), "done_on": str(row.get("done_on") or ""), "refresh_on": str(row.get("refresh_on") or ""),
             "synthesis_known": "; ".join(synthesis.get("known") or []), "synthesis_unknown": "; ".join(synthesis.get("unknown") or []),
             "limitations": "; ".join(row.get("limitations") or []), "links": ";".join(f"solution:{s}" for s in row.get("solution_ids") or []),
-            "status": str(row.get("status") or "open")}
+            "status": str(row.get("status") or "open"), "reuse_state": str(row.get("reuse") or "")}      # Quest says how current its own record is (fresh, partial or stale)
 
 
 class QuestInvestigationStore:
-    """The hub's ``InvestigationStore`` over a Quest client: ``related`` is the quest's earlier investigations on the given strategies and the ones above them, open ones only."""
+    """The hub's ``InvestigationStore`` over a Quest client: ``related`` is the quest's earlier investigations on the given strategies and the ones above them (and on the
+    experiment, when given), open ones only. ``record`` is the one way an investigation is recorded on the quest, for a turn's own research, an explicit investigation and a
+    deferred task alike."""
 
-    def __init__(self, client: Any, quest_id: str):
-        self.client, self.quest_id = client, quest_id
+    def __init__(self, client: Any, quest_id: str, research_question_id: str = ""):
+        self.client, self.quest_id, self.research_question_id = client, quest_id, research_question_id
         self.rows: Dict[str, Mapping[str, Any]] = {}
         self.last: Mapping[str, Any] = {}
 
     def related(self, solution_ids: Sequence[str], scope: Sequence[str] = (), today: str = "") -> List[Dict[str, str]]:
-        found = self.client.earlier_investigations(self.quest_id, list(solution_ids)) or []
+        found = self.client.earlier_investigations(self.quest_id, list(solution_ids), self.research_question_id) or []
         self.rows.update({str(r.get("investigation_id")): r for r in found})
         return [hub_row(r) for r in found if (r.get("status") or "open") == "open"]
 
@@ -56,7 +58,6 @@ class QuestInvestigationStore:
     def write(self, spec: Mapping[str, Any]) -> str:
         """Record the hub's investigation on the quest through the Quest API's own record call (the one the ``investigate_for_quest`` tool uses, with the same body builder).
         One that extends an earlier investigation of the quest (the hub keeps its id) is recorded as its successor, so the earlier one is superseded, not duplicated."""
-        from quest_ai_runner.the_world.tools.tools import data_of
         row, items = dict(spec["investigation"]), list(spec["items"])
         cells = [[p.strip() for p in entry.split("|")] for entry in str(row.get("queries") or "").split(";") if entry.strip()]
         counted = [entry.strip().split(" ", 1) for entry in str(row.get("screened_out") or "").split(";") if entry.strip()]
@@ -64,16 +65,33 @@ class QuestInvestigationStore:
                       "screened_out": {reason: int(n) for n, reason in counted if n.isdigit()}}
         solution_ids = [link[9:] for link in str(row.get("links") or "").split(";") if link.startswith("solution:")] or [self.quest_id]
         extends = row["investigation_id"] if row["investigation_id"] in self.rows else ""
-        body = investigate.quest_record(hub_record, solution_ids=solution_ids, origin="chat", asked_by="person", extends=extends)
+        return str(self.record(hub_record, solution_ids=solution_ids, extends=extends)["investigation_id"])
+
+    def record(self, hub_record: Mapping[str, Any], *, solution_ids: Sequence[str], extends: str = "", research_question_id: str = "", goal_id: str = "", asked_by: str = "person",
+               origin: str = "chat", question: str = "") -> Mapping[str, Any]:
+        """Record the hub's investigation on the quest through the Quest API's record call, with the body builder every path shares. One that extends an earlier investigation
+        is recorded as its successor (the earlier one is superseded, not duplicated). Returns what Quest answered, with the investigation id; raises when Quest refuses."""
+        from quest_ai_runner.the_world.tools.tools import data_of
+        row = dict(hub_record.get("investigation") or {})
+        body = investigate.quest_record(hub_record, solution_ids=list(solution_ids), research_question_id=research_question_id or self.research_question_id, goal_id=goal_id,
+                                        asked_by=asked_by, origin=origin, extends=extends)
         if row.get("refresh_on"):
             body["refresh_on"] = row["refresh_on"]
         if row.get("change_my_mind"):
             body["limitations"] = list(body.get("limitations") or []) + [f"What would change this: {row['change_my_mind']}"]
-        made = data_of(self.client.record_investigation(self.quest_id, row["question"], **{k: v for k, v in body.items() if k != "question"})) or {}
+        made = data_of(self.client.record_investigation(self.quest_id, question or row.get("question") or "", **{k: v for k, v in body.items() if k != "question"})) or {}
         if not made.get("investigation_id"):
             raise RuntimeError("Quest refused the investigation")
         self.last = made
-        return str(made["investigation_id"])
+        return made
+
+
+def hub_earlier(store: Any, question: str, decision: str, size: str, solution_ids: Sequence[str], ask: Optional[Callable[[str], str]] = None, today: str = ""):
+    """The hub's recorded_research lookup and judgement over a quest store: ``(earlier or None, the arm)``. ``earlier`` is the investigation to reuse or extend, with its ``state``
+    (fresh, stale or partial). The one implementation a turn's own research, an explicit investigation and a deferred task share."""
+    from hubofhubs.api import RecordedResearch
+    arm = RecordedResearch(freshness=None, science=None, web=None, plumbing=None, ask=ask or investigate.world_ask)
+    return arm.earlier(store, question, decision, size, list(solution_ids), (), today or date.today().isoformat()), arm
 
 
 def choose_solution(records: Mapping[str, Any], text: str, ask: Optional[Callable[[str], str]] = None) -> str:
@@ -95,10 +113,22 @@ def earlier_text(earlier: Mapping[str, str], state: str) -> str:
 class ResearchMemory:
     """Looks up earlier research on one quest for a query."""
 
-    def __init__(self, client: Any, quest_id: str, ask: Optional[Callable[[str], str]] = None, today: str = ""):
+    def __init__(self, client: Any, quest_id: str, ask: Optional[Callable[[str], str]] = None, today: str = "", report: Optional[Callable[[Dict[str, Any]], None]] = None,
+                 card_prefix: str = ""):
         self.client, self.quest_id, self.ask, self.today = client, quest_id, ask, today or date.today().isoformat()
         self.store = QuestInvestigationStore(client, quest_id)
         self.listed: Optional[bool] = None
+        self.report = report            # called with what became of this turn's research once the recording ends (the host writes it onto the stored reply)
+        self.card_prefix = card_prefix  # the host's context card id before an investigation id; with it, earlier research already in the turn's context is not told twice
+        self.context: Any = None        # the turn's card cache, set by the read dispatcher before a web read
+
+    def held_in_context(self, investigation_id: str) -> bool:
+        """True when this turn's context already holds the investigation's card (so its findings are in front of the writer once)."""
+        if not self.card_prefix or self.context is None:
+            return False
+        wanted = self.card_prefix + investigation_id
+        held = list((getattr(self.context, "results", None) or {}).values()) + [getattr(self.context, "turn_start_result", None)]
+        return any(wanted in (getattr(assembled, "card_ids", None) or []) for assembled in held if assembled is not None)
 
     def has_research(self) -> bool:
         if self.listed is None:
@@ -114,11 +144,9 @@ class ResearchMemory:
         if not question.strip() or not self.has_research():
             return None
         try:
-            from hubofhubs.api import RecordedResearch
             solutions = [{"id": s["id"], "name": s.get("name")} for s in self.client.investigation_solutions(self.quest_id)]
             placed = investigate.place(question, "", solutions, None, self.ask)
-            arm = RecordedResearch(freshness=None, science=None, web=None, plumbing=None, ask=self.ask or investigate.world_ask)
-            return arm.earlier(self.store, question, "", "quick", placed.solution_ids, (), self.today)
+            return hub_earlier(self.store, question, "", "quick", placed.solution_ids, self.ask, self.today)[0]
         except Exception as error:  # noqa: BLE001
             log.info("research memory: lookup failed: %s", error)
             return None
@@ -139,6 +167,10 @@ class RecordedWebResearch:
         if earlier is None:
             return self.web.search(queries, fresh=fresh, **kwargs)
         text = earlier_text(earlier, earlier["state"])
+        if earlier["state"] == "fresh" and self.memory.held_in_context(earlier["investigation_id"]):
+            return Observation(kind="query", locator=LOCATOR, hits=[], text=f"Earlier research on this quest (investigation {earlier['investigation_id']}, done {earlier.get('done_on')}, "
+                               f"still current) covers this and its findings are already in your context above. Nothing new was searched. Build on it, and say in a few plain words "
+                               f"that the answer builds on earlier research from {earlier.get('done_on')}. Search again with fresh=true only if the person asks for a new look.")
         if earlier["state"] == "fresh":
             return Observation(kind="query", locator=LOCATOR, text=text + " Nothing new was searched. Build on it, and say in a few plain words that the answer builds on earlier "
                                f"research from {earlier.get('done_on')}. Search again with fresh=true only if the person asks for a new look.", hits=[])

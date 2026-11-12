@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from quest_ai_runner.the_body.hands.quest_operations.tools_quest_investigations import investigate_for_quest_spec
 from quest_ai_runner.the_world.science.research_memory import ResearchMemory
-from quest_ai_runner.the_world.science.turn_research import KEPT_SENTENCE, TurnResearch, observed_from, wanted
+from quest_ai_runner.the_world.science.turn_research import TurnResearch, observed_from, outcome_of, wanted
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
 QUEST, FUEL = "quest_a", "strategy_fuel"
@@ -101,7 +101,24 @@ def test_the_recording_runs_after_the_answer_in_one_thread_and_a_failure_is_kept
     broken = Client()
     broken.investigation_solutions = lambda quest_id: (_ for _ in ()).throw(RuntimeError("down"))
     assert TurnResearch().record(memory(broken), "q", PLAN, "x", *observed_from(GATHERED), ask=ask, today=TODAY)["recorded"] is False
-    assert KEPT_SENTENCE.endswith("next time.") and chr(0x2014) not in KEPT_SENTENCE
+
+
+def test_the_outcome_is_reported_when_the_recording_ends_and_the_reply_never_claims_it_early():
+    reported = []
+    holder, client = TurnResearch(), Client()
+    mem = ResearchMemory(client, QUEST, ask, TODAY, report=reported.append)
+    assert holder.kickoff(mem, "What should I eat on long runs?", PLAN, SimpleNamespace(kind="answer", text="Carbohydrates help."), GATHERED, ask)
+    for _ in range(100):
+        if reported:
+            break
+        time.sleep(0.05)
+    assert reported[0]["outcome"] == "kept" and reported[0]["investigation_id"] == "inv_new"
+    failing = Client()
+    failing.investigation_solutions = lambda quest_id: (_ for _ in ()).throw(RuntimeError("down"))
+    lost = outcome_of(TurnResearch().record(memory(failing), "q", PLAN, "x", *observed_from(GATHERED), ask=ask, today=TODAY))
+    assert lost["outcome"] == "not_kept" and "down" in lost["reason"]
+    assert outcome_of({"recorded": True, "reused": True, "investigation_id": "inv_1"})["outcome"] == "reused"
+    assert outcome_of({"recorded": True, "extended": True, "investigation_id": "inv_1"})["outcome"] == "extended"
 
 
 def test_a_deferred_investigation_task_records_through_the_same_quest_call_and_says_what_became_of_the_knowledge():

@@ -71,6 +71,9 @@ class ReadsMixin:
             trace = getattr(card_context, "trace", None)
             if trace is not None:
                 trace.web_started()
+            memory = getattr(self.web, "memory", None)
+            if memory is not None:          # research memory: which context cards this turn already holds, so earlier research is told once (see research_memory.py)
+                memory.context = card_context
             try:
                 found = self.web.search(queries, fresh=bool(spec.get("fresh")))
             except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop

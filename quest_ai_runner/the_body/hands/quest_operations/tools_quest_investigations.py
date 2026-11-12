@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Mapping, Optional
 
 from quest_ai_runner.the_world.science import investigate
+from quest_ai_runner.the_world.science.research_memory import QuestInvestigationStore, hub_earlier
 from quest_ai_runner.the_world.tools.tools import (
     STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, _QUEST_ID_PARAM, _quest_id, quest_client_from_env, quest_credentials_present, data_of,
     write_failed)
@@ -101,11 +102,13 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
         if not placed.within_scope:
             return refused(f"Not looked into: {placed.scope_note} A running experiment's scope and what it holds fixed are not reopened before its reevaluation. "
                            f"Offer to set the thought aside for the reevaluation instead.")
+        store = QuestInvestigationStore(client, quest_id, research_question_id)
         try:
-            earlier = client.earlier_investigations(quest_id, placed.solution_ids, research_question_id)
+            # One implementation of the lookup and the judgement, shared with the turn's own research: the hub's recorded_research arm over the quest's store.
+            found, hub_arm = hub_earlier(store, question, decision, size, placed.solution_ids, ask)
         except Exception as e:
             return ToolResult(ok=False, text=f"Could not read the earlier investigations: {e}")
-        answer = investigate.answering(question, decision, earlier, ask)
+        answer = {**store.rows[found["investigation_id"]], "reuse": found["state"]} if found and found["investigation_id"] in store.rows else None
         extends = ""
         if answer is not None and answer.get("reuse") == investigate.FRESH and not args.get("look_again"):
             # The read ran and found the answer: applied, never "already set" (the order's own write, a note, is still to do).
@@ -118,22 +121,22 @@ def investigate_for_quest_spec(env: Mapping[str, str], client_factory=None, ask:
         origin = args.get("origin") if args.get("origin") in ORIGINS else "chat"
         criteria = {"include_terms": [], "exclude_terms": []}
         try:
+            gap = {"queries": hub_arm.gap_queries(question, found)} if found else {}       # an extension searches the gap the earlier one left, as the arm does
             hub_record = (carry_out or investigate.review)(question, decision, size, research_question_id=research_question_id, criteria=criteria,
-                                                           solution_ids=placed.solution_ids)
+                                                           solution_ids=placed.solution_ids, **gap)
         except Exception as e:  # the hub's seat may be pending a key: say so, record nothing
             return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"The investigation could not be carried out, so nothing was recorded: {e}")
         failure = investigate.source_failure(hub_record)
         if failure:    # the search itself failed (a provider error), so nothing was judged: say so and record nothing, never "nothing was found"
             return ToolResult(ok=False, status=ToolStatus.FAILED, text=f"The investigation could not be carried out because the search failed ({failure}), so nothing was recorded. Say that the search failed and can be retried; do not say nothing was found.")
-        body = investigate.quest_record(hub_record, solution_ids=placed.solution_ids, research_question_id=research_question_id,
-                                        goal_id=str(args.get("goal_id") or ""), asked_by=asked_by, origin=origin, extends=extends)
         try:
-            made = data_of(client.record_investigation(quest_id, question, **{k: v for k, v in body.items() if k != "question"}))
+            # The one way an investigation is recorded on a quest (the store's ``record``), the same call a turn's own research ends in.
+            made = store.record(hub_record, solution_ids=placed.solution_ids, research_question_id=research_question_id, goal_id=str(args.get("goal_id") or ""),
+                                asked_by=asked_by, origin=origin, extends=extends, question=question)
+        except RuntimeError:
+            return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was recorded: the investigation was refused.")
         except Exception as e:
             return write_failed(e, "Nothing was recorded")
-        made = made or {}
-        if not made.get("investigation_id"):
-            return ToolResult(ok=False, status=ToolStatus.FAILED, text="Nothing was recorded: the investigation was refused.")
         extended = f" It extends the earlier investigation {extends}." if extends else ""
         return ToolResult(ok=True, data={**made, "note_text": investigate.research_note(made)},
                           text=investigate.summary_text(made) + f" Recorded as {made['investigation_id']}." + extended + note + knowledge_note(made))

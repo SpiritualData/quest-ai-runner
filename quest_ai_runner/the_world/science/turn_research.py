@@ -22,7 +22,13 @@ from quest_ai_runner.the_world.science.research_memory import QuestInvestigation
 
 log = logging.getLogger("quest-ai-runner.turn-research")
 
-KEPT_SENTENCE = "I have kept this research on the quest for next time."
+def outcome_of(done: Mapping[str, Any]) -> Dict[str, Any]:
+    """What became of a turn's research, as the host stores it on the reply: ``outcome`` kept, reused (an earlier investigation already answered), extended (an earlier one was
+    updated) or not_kept (with the reason), the ``investigation_id`` and what Quest did with the findings as knowledge."""
+    if not done.get("recorded"):
+        return {"outcome": "not_kept", "reason": str(done.get("error") or "the research could not be recorded"), "investigation_id": str(done.get("investigation_id") or "")}
+    kind = "reused" if done.get("reused") else "extended" if done.get("extended") else "kept"
+    return {"outcome": kind, "investigation_id": str(done.get("investigation_id") or ""), **({"knowledge": dict(done["knowledge"])} if done.get("knowledge") else {})}
 
 
 def observed_from(gathered: Sequence[Any]) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
@@ -74,7 +80,7 @@ class TurnResearch:
             statuses: Dict[str, int] = {}
             for answer in made.get("knowledge") or []:
                 statuses[str(answer.get("status"))] = statuses.get(str(answer.get("status")), 0) + 1
-            return {"recorded": bool(done.get("recorded")), "reused": bool(done.get("reused")), "investigation_id": str(made.get("investigation_id") or done.get("investigation", {}).get("investigation_id") or ""),
+            return {"recorded": bool(done.get("recorded")), "reused": bool(done.get("reused")), "extended": bool(done.get("updated")), "investigation_id": str(made.get("investigation_id") or done.get("investigation", {}).get("investigation_id") or ""),
                     "knowledge": statuses, **({"error": done["record_error"]} if done.get("record_error") else {})}
         except Exception as error:  # noqa: BLE001 -- keeping research is an aid: a failure is logged, never shown to the person
             log.warning("turn research not kept: %s: %s", type(error).__name__, str(error)[:300])
@@ -92,6 +98,12 @@ class TurnResearch:
             try:
                 self.last = self.record(memory, question, plan, answer, observed, pages, ask)
                 log.info("turn research: %s", self.last)
+                report = getattr(memory, "report", None)
+                if report is not None:          # what became of it, for the host to set on the stored reply (the reply itself never says it was kept: that is only true after this)
+                    try:
+                        report(outcome_of(self.last))
+                    except Exception as error:  # noqa: BLE001
+                        log.warning("turn research outcome not reported: %s", error)
             finally:
                 self.running.clear()
 

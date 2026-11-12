@@ -1,5 +1,6 @@
 """Research memory: the planner's web read first asks the quest's earlier research (the hub's recorded_research arm judges it); a quest with none costs nothing."""
 import json
+from types import SimpleNamespace
 
 from quest_ai_runner.the_body.internal_context.adapters_values import Observation
 from quest_ai_runner.the_world.science.research_memory import RecordedWebResearch, ResearchMemory, hub_row
@@ -69,6 +70,16 @@ def test_a_fresh_earlier_investigation_that_answers_is_the_read_and_nothing_is_s
     found = memory.search(["Which sleep routines have evidence behind them?"])
     assert web.searches == [] and "done 2026-11-10" in found.text and "A fixed wake time helps." in found.text and "Effect size." in found.text
     assert "earlier research from 2026-11-10" in found.text and found.locator == "earlier research"
+
+
+def test_earlier_research_already_in_the_turns_context_is_pointed_to_not_repeated():
+    memory, web, _ = wrapped([row()])
+    memory.memory.card_prefix = "investigation-"
+    memory.memory.context = SimpleNamespace(results={"q": SimpleNamespace(card_ids=["investigation-inv_1"])}, turn_start_result=None)
+    found = memory.search(["Which sleep routines have evidence behind them?"])
+    assert web.searches == [] and "already in your context above" in found.text and "A fixed wake time helps." not in found.text and "2026-11-10" in found.text
+    memory.memory.context = SimpleNamespace(results={"q": SimpleNamespace(card_ids=["another-card"])}, turn_start_result=None)
+    assert "A fixed wake time helps." in memory.search(["Which sleep routines have evidence behind them?"]).text      # not in context: the read carries them
 
 
 def test_fresh_true_searches_again():
