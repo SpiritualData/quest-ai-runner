@@ -40,11 +40,14 @@ def test_unconfigured_run_with_no_request_stays_unpinned():
     assert choice.source == "unpinned"
 
 
-def test_configured_default_is_pinned_when_nothing_requested():
+def test_configured_default_is_standing_guidance_not_a_pin_when_nothing_requested():
+    # Changed 2026-11-12: the environment's default used to be returned as the run's model, which pinned it (no escalation, the hub's cheapest-sufficient
+    # rule skipped). It is now standing guidance: ``model`` stays None and the default rides as ``standing``, below the person's own choices.
     choice = apply_work_model(None, _view([_claude("haiku", "economy"), _claude("sonnet", "standard")],
                                           default="haiku"), configured=True)
-    assert choice.model == "haiku"
-    assert choice.source == "default"
+    assert choice.model is None
+    assert choice.standing == "haiku"
+    assert choice.source == "standing"
 
 
 def test_allowed_request_is_used_as_asked():
@@ -74,7 +77,7 @@ def test_request_outside_the_allowed_list_falls_back_even_when_not_excluded_by_t
 def test_default_removed_by_runner_report_falls_back_to_first_available_model():
     view = _view([_claude("haiku", "economy"), _claude("opus", "premium")], default="sonnet")
     choice = apply_work_model(None, view, configured=True)
-    assert choice.model == "haiku"
+    assert (choice.model, choice.standing) == (None, "haiku")   # standing guidance, not a pin
 
 
 def test_only_non_anthropic_models_refuses_the_run():
@@ -115,7 +118,9 @@ def test_team_or_org_configuration_counts_as_configured(source, monkeypatch):
 
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "model_tier": "haiku", "rationale": "ok"}])
     ex = ex_mod.TaskExecutor(_Client([]), _brain(provider))
-    assert ex._work_model_hint({"id": "t1"}, None) == "haiku"
+    ask = ex._deep_model_ask({"id": "t1"})
+    # A configured default is standing guidance (reaches the run as ``standing``), never a pin or a tier request.
+    assert (ask.pin, ask.tier, ask.standing, ask.hint) == (None, None, "haiku", None)
 
 
 def test_built_in_default_source_pins_nothing(monkeypatch):
@@ -127,7 +132,8 @@ def test_built_in_default_source_pins_nothing(monkeypatch):
 
     provider = _ModelCapturingProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     ex = ex_mod.TaskExecutor(_Client([]), _brain(provider))
-    assert ex._work_model_hint({"id": "t2"}, None) is None
+    ask = ex._deep_model_ask({"id": "t2"})
+    assert (ask.pin, ask.tier, ask.standing) == (None, None, None)
 
 
 # --- client -----------------------------------------------------------------
@@ -195,7 +201,8 @@ def test_executor_excluded_opus_pin_runs_on_the_default_instead():
     out = ex.execute({"id": "wm1", "text": "say hi", "deep_run_model": "opus"})
     assert out.status == "done"
     registry = ModelRegistry(provider)
-    assert provider.answer_models == [registry.resolve_tier("fast"), registry.resolve_tier("sonnet")]
+    # The first call is the goal-condition derivation, on the balanced tier the hub's role table gives it (CHANGELOG 2026-11-11), whatever the hint.
+    assert provider.answer_models == [registry.resolve_tier("balanced"), registry.resolve_tier("sonnet")]
 
 
 def test_executor_allowed_pin_is_kept():
@@ -206,7 +213,7 @@ def test_executor_allowed_pin_is_kept():
     out = ex.execute({"id": "wm2", "text": "say hi", "deep_run_model": "haiku"})
     assert out.status == "done"
     registry = ModelRegistry(provider)
-    assert provider.answer_models == [registry.resolve_tier("fast"), registry.resolve_tier("balanced")]   # a reply is never below balanced
+    assert provider.answer_models == [registry.resolve_tier("balanced"), registry.resolve_tier("balanced")]   # a reply is never below balanced
 
 
 def test_executor_read_failure_restricts_nothing():
@@ -217,7 +224,7 @@ def test_executor_read_failure_restricts_nothing():
     out = ex.execute({"id": "wm3", "text": "say hi", "deep_run_model": "opus"})
     assert out.status == "done"
     registry = ModelRegistry(provider)
-    assert provider.answer_models == [registry.resolve_tier("fast"), registry.resolve_tier("opus")]
+    assert provider.answer_models == [registry.resolve_tier("balanced"), registry.resolve_tier("opus")]
 
 
 def test_executor_tier_word_leaves_work_model_alone():
@@ -265,5 +272,5 @@ def test_an_environment_that_allows_a_specific_version_keeps_it():
            "allowed_models": [{"provider": "anthropic", "model": "claude-sonnet-5-5"},
                               {"provider": "openai", "model": "gpt-5.2"}]}
     assert anthropic_options(eff) == ["claude-sonnet-5-5"]
-    assert apply_work_model(None, eff, configured=True).model == "claude-sonnet-5-5"
+    assert apply_work_model(None, eff, configured=True).standing == "claude-sonnet-5-5"
     assert apply_work_model("claude-sonnet-5-5", eff, configured=True).source == "requested"

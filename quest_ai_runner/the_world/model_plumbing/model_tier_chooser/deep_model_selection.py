@@ -7,9 +7,12 @@ module is Quest AI Runner's binding of that rule, and it writes no model name: e
 Order of what decides the start of a run nobody pinned (a pin on the task or a model asked for in the message is resolved before this, in
 ``orchestrator_deep_models.py``, and starts that model alone):
 
+  0. the tier the person picked for this run (a task's, conversation's or autopilot's tier, or a tier word typed in the message), the hub's ``requested``
+     tier: it is the START, not a pin, so an escalation may still move one rung from it;
   1. the person's standing guidance (a guidance card's model preference that names a tier), supplied to the hub as its ``StandingTierGuidance`` function;
+  1b. the environment's default work model (standing guidance below the card: its tier, or the model itself when no tier matches it);
   2. the operator's configuration (``QAR_DEEP_MODEL_SIMPLE`` / ``_NORMAL`` / ``_HARD``), which counts as standing guidance and is read only when no card
-     names a tier;
+     names a tier and the environment names no default;
   3. the hub's default for the role of the task kind (``main_session`` when the kind is not known), the cheapest sufficient tier. The planner may ask for
      the next tier up before the run, but only with a specific reason; without one the default stands.
 
@@ -91,12 +94,26 @@ def hub_roles():
     return role_tiers
 
 
-def hub_choice(task_kind: str = "", standing_tier: Optional[str] = None):
-    """The hub's ``TierChoice`` for a deep run of ``task_kind`` (role by kind, else ``main_session``): the standing tier when the person's guidance names
-    one, else the cheapest sufficient tier. Raises when the hub cannot be read; the caller falls back."""
+def hub_choice(task_kind: str = "", standing_tier: Optional[str] = None, requested_tier: Optional[str] = None):
+    """The hub's ``TierChoice`` for a deep run of ``task_kind`` (role by kind, else ``main_session``): the tier the person named in the current request
+    (``requested_tier``) when there is one, else the standing tier when the person's guidance names one, else the cheapest sufficient tier. Raises when the
+    hub cannot be read; the caller falls back."""
     role_tiers = hub_roles()
     standing = (lambda role: standing_tier) if standing_tier else None
-    return role_tiers.task_choice((task_kind or "").strip().lower(), "", standing=standing)
+    return role_tiers.task_choice((task_kind or "").strip().lower(), requested_tier or "", standing=standing)
+
+
+def pure_tier(word: Any) -> str:
+    """The tier a word names when it is one of the four tier words (fast, balanced, quality, best), else an empty string. The legacy family words
+    (haiku, sonnet, opus) are not tier words here: in a deep-run field they name a model."""
+    w = str(word or "").strip().lower()
+    return w if w in TIER_ORDER else ""
+
+
+def family_of_model(model: Any) -> str:
+    """The Claude family a model name belongs to (``haiku``, ``sonnet``, ``opus``, ``fable``), or an empty string when it names none."""
+    low = str(model or "").strip().lower()
+    return next((f for f in ("haiku", "sonnet", "opus", "fable") if low == f or low.startswith(f"claude-{f}") or f in low.split("-")), "")
 
 
 def tier_models(registry: Any) -> Dict[str, str]:
@@ -180,31 +197,46 @@ def record_choice(selection: Dict[str, Any], choice: Any) -> None:
 def plan_start(registry: Any, *, configured_ladder: Optional[Sequence[str]] = None, task_kind: str = "", standing_tier: Optional[str] = None,
                operator_model: Optional[str] = None, operator_var: str = "", difficulty: Optional[str] = None,
                difficulty_reason: Optional[str] = None,
+               requested_tier: Optional[str] = None,
+               operator_label: str = "",
+               allows: Optional[Callable[[str], bool]] = None,
                rung_key: Callable[[Optional[str]], str] = default_rung_key) -> Optional[StartPlan]:
-    """Choose the start of a run nobody pinned. Returns None when there is no ladder to start on (the caller keeps the ladder it already resolved)."""
+    """Choose the start of a run nobody pinned. Returns None when there is no ladder to start on (the caller keeps the ladder it already resolved).
+
+    ``requested_tier`` is the tier the person named for this run (a task's or a conversation's tier): it is the START, it beats the standing guidance and
+    the default, and it is not a pin, so an escalation may still move one rung from it. ``operator_model`` is standing guidance that names a model rather
+    than a tier (the operator's variable, or the environment's default when no tier matches it); ``operator_label`` says whose it is in the record.
+    ``allows`` is the environment's allowed-model test: a rung it refuses is not on the ladder, so neither the start nor an escalation lands there."""
     try:
         models = tier_models(registry)
         configured = [m for m in (configured_ladder or []) if m]
         ladder = configured or tier_ladder(registry, rung_key)
+        best_model = models.get("best", "")
+        if pure_tier(requested_tier) == "best" and best_model and rung_key(best_model) not in [rung_key(m) for m in ladder]:
+            ladder = list(ladder) + [best_model]   # best is never an escalation rung, but a person's own request may start on it
+        if allows is not None:
+            ladder = [m for m in ladder if allows(m)]
         if not ladder:
             return None
         level = normalize_difficulty(difficulty)
         role_tiers = None
         try:
             role_tiers = hub_roles()
-            choice = hub_choice(task_kind, standing_tier)
+            choice = hub_choice(task_kind, standing_tier, pure_tier(requested_tier))
         except Exception as exc:  # noqa: BLE001 (the hub is a dependency, but a missing or broken rule must not stop a run)
             cheapest = next((t for t in TIER_ORDER if t in models), "fast")
             log.warning("Deep-worker tier: the hub's tier rule could not be applied (%s: %s); starting on the registry's cheapest tier (%s)",
                          type(exc).__name__, exc, cheapest)
             choice = FallbackChoice(MAIN_ROLE, cheapest, FALLBACK_SOURCE, f"the hub's tier rule was unavailable ({type(exc).__name__}); the registry's cheapest tier")
+            if pure_tier(requested_tier):   # the person's own request needs no rule to be honoured
+                choice = FallbackChoice(MAIN_ROLE, pure_tier(requested_tier), "current_input", "the person named this tier in the current request")
             role_tiers = None
         wanted_model = models.get(choice.tier, "")
-        if operator_model and choice.source != "standing_guidance":
-            # Operator configuration is standing guidance, read only when the person's own guidance names no tier.
+        if operator_model and choice.source in ("default", FALLBACK_SOURCE):
+            # Standing guidance naming a model is read only when neither the person's request nor their own guidance names a tier.
             wanted_model = operator_model
             choice = make_choice(role_tiers, choice.role, tier_of_model(operator_model, models, rung_key), OPERATOR_SOURCE,
-                                  f"the operator's configuration {operator_var or 'for the start model'} names this model")
+                                  f"{operator_label or ('the operator' + chr(39) + 's configuration ' + (operator_var or 'for the start model'))} names this model")
         elif choice.source == "default" and role_tiers is not None:
             asked = planner_ask(role_tiers, choice, level, difficulty_reason)
             if asked is not None:

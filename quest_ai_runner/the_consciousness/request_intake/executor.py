@@ -35,7 +35,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, Orc
 from quest_ai_runner.the_intelligence.mind.delegation.requester import requester_from_task
 from quest_ai_runner.the_intelligence.mind.delegation.resume_request import is_resume_request, resume_note
 from hubofhubs.api import ControlMessage, RunControl
-from quest_ai_runner.the_intelligence.mind.delegation.work_model import WorkModelUnavailable, apply_work_model, default_effective, is_tier_word
+from quest_ai_runner.the_intelligence.mind.delegation.work_model import DeepModelAsk, WorkModelUnavailable, deep_model_ask, is_tier_word
 
 from quest_ai_runner.the_consciousness.request_intake.executor_contracts import (
     AUTOMATIC_DELIVERY_NOTE, CANCEL_CHECK_INTERVAL_SECONDS, RESULT_IS_THE_WORK_CONTRACT, earlier_run_block, log)
@@ -343,12 +343,17 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # wins; when it sets only "model" (every task written before the split, and every consumer
         # that never made it), behaviour is exactly as before. This mirrors the same precedence on
         # the in-process path, so a task runs on the same model whichever lane picks it up.
-        model_hint: Optional[str] = task.get("deep_run_model") or task.get("model") or None
-        # The environment's work-model configuration (allowed models, default, excluded cost tiers) is
-        # applied to the literal deep-run pin, or to an unpinned run. A QAR-call tier word is not a work
-        # model and passes through unchanged. A refused run fails here, before any work starts.
+        #
+        # What the fields MEAN (``split_requested``): a specific model (``deep_run_model``, a family word or
+        # a versioned id) is a PIN, and starts that model alone; a TIER (``model``, or a tier word in
+        # ``deep_run_model``) is the person's requested START tier: it beats the environment's default and
+        # standing guidance, reaches the deep run, and may still escalate one rung on a recorded shortfall.
+        # The environment's work-model configuration applies to both (``deep_model_ask``): its allowed list
+        # to a pin and to every rung of a tier run, its default as standing guidance. A refused run fails
+        # here, before any work starts.
         try:
-            model_hint = self._work_model_hint(task, model_hint)
+            ask = self._deep_model_ask(task)
+            model_hint: Optional[str] = ask.hint or (str(task.get("model") or "").strip() if is_tier_word(task.get("model")) else None) or None
         except WorkModelUnavailable as e:
             self._report_progress(task_id, "error", text=str(e))
             self._safe_report_failed(task_id, str(e))
@@ -484,6 +489,9 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
                 context_meta["quest_id"] = str(goal_id)
         # Who the work is for (the task's creator), so every process this run spawns carries it
         # as QAR_REQUESTER_USER_ID (see core/requester.py).
+        if ask.meta():
+            # The environment's default (standing guidance) and allowed models, read by the deep run's start choice.
+            context_meta = {**(context_meta or {}), **ask.meta()}
         requester = requester_from_task(task)
         if requester:
             context_meta = {**(context_meta or {}), "requester_user_id": requester}
@@ -661,20 +669,17 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
 
     # --- per-task working directory (quest_folder_map) ------------------------
 
-    def _work_model_hint(self, task: Dict[str, Any], model_hint: Optional[str]) -> Optional[str]:
-        """The model hint for this run after the environment's work-model configuration is applied.
+    def _deep_model_ask(self, task: Dict[str, Any]) -> DeepModelAsk:
+        """What this run asks of its deep model after the environment's work-model configuration is applied.
 
         Reads the effective view for the task's environment (``env_id`` on the task, else this runner's
-        own). A literal pin the environment does not allow falls back to its default. An unpinned run
-        takes the configured default only when the environment has one; otherwise it stays unpinned.
-        If the read fails, nothing is restricted, exactly as before this existed, and the failure is
-        logged. Raises ``WorkModelUnavailable`` when the environment allows no Claude model this runner
-        can run.
+        own). The task's fields are split into a pin (a specific model) or a requested start tier (see
+        ``split_requested``). A pin the environment does not allow falls back to its default; a tier run's
+        rungs are limited to the allowed models by the deep run (``allowed``). The environment's configured
+        default is standing guidance (``standing``), never a pin. If the read fails, nothing is restricted,
+        exactly as before this existed, and the failure is logged. Raises ``WorkModelUnavailable`` when the
+        environment allows no Claude model this runner can run.
         """
-        if model_hint and is_tier_word(model_hint):
-            return model_hint
-        requested = task.get("deep_run_model") or None
-        requested = requested or (None if is_tier_word(task.get("model")) else task.get("model") or None)
         fetch = getattr(self._client, "get_work_model_config", None)
         effective = None
         configured = False
@@ -687,10 +692,10 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             except Exception as e:  # noqa: BLE001 (a config read must never break a run)
                 log.warning("work-model config unavailable for task %s, using the Claude default: %s",
                             task.get("id") or task.get("task_id"), e)
-        choice = apply_work_model(requested, effective or default_effective(), configured=configured)
-        if choice.note:
-            log.info("task %s: %s", task.get("id") or task.get("task_id"), choice.note)
-        return choice.model
+        ask = deep_model_ask(task.get("deep_run_model"), task.get("model"), effective, configured=configured)
+        if ask.note:
+            log.info("task %s: %s", task.get("id") or task.get("task_id"), ask.note)
+        return ask
 
     def _resolve_working_dir(self, goal_id: Optional[str],
                              quest_id: Optional[str]) -> Optional[str]:

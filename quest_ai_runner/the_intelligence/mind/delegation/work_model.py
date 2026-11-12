@@ -11,21 +11,27 @@ Rules (pure, never raises on bad input):
   * a requested model that is in the effective allowed list is used as asked;
   * a requested model that is excluded (not allowed, or in an excluded cost tier) falls back to the
     effective default, and the choice carries a note saying why, so the run log shows it;
-  * no requested model: an explicitly configured default is pinned; with nothing configured the run is
-    left unpinned, so the existing QAR behaviour is unchanged for environments that never set one;
+  * no requested model: an explicitly configured default is STANDING GUIDANCE, not a pin (``standing``): it starts
+    the run only when nothing above it (the person's request, a guidance card) names a start, and the run may
+    still move up one tier on a recorded shortfall; with nothing configured nothing is applied;
   * only Anthropic models run here (the Claude Code deep worker), so other providers are skipped; a
     specific Claude version ("claude-opus-4-8") counts as runnable, through its family;
   * if the environment allows no Anthropic model at all, the run is refused (``WorkModelUnavailable``)
     rather than silently run on a model the org excluded.
 
-A QAR-call tier word (``fast``, ``balanced``, ``quality``, ``best``, ``science``) in ``model`` is not a
-work model. ``is_tier_word`` lets the executor leave those alone.
+A QAR-call tier word (``fast``, ``balanced``, ``quality``, ``best``, ``science``) in ``model`` is not a work
+model: it is the person's requested START tier (``split_requested``), which beats the default and standing
+guidance and may still escalate one rung. The environment's allowed list applies to both paths: a pin is checked
+by ``apply_work_model`` and every rung of a tier run by ``rung_allowed`` (``deep_model_ask`` hands both to the run).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import pure_tier
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import LEGACY_TIER_ALIASES
 
 ANTHROPIC = "anthropic"
 
@@ -48,12 +54,15 @@ class WorkModelUnavailable(RuntimeError):
 class WorkModelChoice:
     """The model the run pins, and why it differs from the request (if it does)."""
 
-    # None = leave the run unpinned (nothing requested and no default configured).
+    # None = no pin (nothing requested, or only a configured default, which is standing guidance).
     model: Optional[str]
-    # "requested" = the task's own pin was allowed; "default" = the configured default was applied;
+    # "requested" = the task's own pin was allowed; "default" = a refused request fell back to the configured
+    # default (pinned); "standing" = nothing requested and the configured default is returned as ``standing``;
     # "unpinned" = nothing requested and nothing configured.
     source: str
     note: Optional[str] = None
+    # The configured default when nothing was requested: standing guidance, below the person's own choices.
+    standing: Optional[str] = None
 
 
 def is_tier_word(value: Optional[str]) -> bool:
@@ -109,8 +118,8 @@ def apply_work_model(requested: Optional[str], effective: Optional[Dict[str, Any
     """Choose the work model to pin for one run. See the module docstring for the rules.
 
     ``configured`` is True when the effective view came from an org or team's own configuration (the
-    backend's ``source`` is not "default"). Only then is the default pinned for a run that asked for no
-    model; an unconfigured environment keeps today's unpinned behaviour.
+    backend's ``source`` is not "default"). Only then is the default returned (as ``standing`` guidance, never
+    as a pin) for a run that asked for no model; an unconfigured environment applies nothing.
 
     Raises ``WorkModelUnavailable`` when the environment allows no Anthropic model this runner can run.
     """
@@ -124,7 +133,7 @@ def apply_work_model(requested: Optional[str], effective: Optional[Dict[str, Any
     want = (requested or "").strip().lower()
     if not want:
         if configured:
-            return WorkModelChoice(model=default, source="default")
+            return WorkModelChoice(model=None, source="standing", standing=default)
         return WorkModelChoice(model=None, source="unpinned")
     if want in options:
         return WorkModelChoice(model=want, source="requested")
@@ -140,3 +149,88 @@ def apply_work_model(requested: Optional[str], effective: Optional[Dict[str, Any
             f"so the run uses the default '{default}'"
         ),
     )
+
+
+# --- the person's request: a pin, or a start tier ----------------------------------------------------------
+
+def split_requested(deep_run_model: Optional[str], model: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """``(pin, tier)`` of what a task asks for. A specific MODEL (a family word or a versioned id, in ``deep_run_model`` or as a literal in ``model``) is
+    a pin: it starts that model alone. A TIER (fast, balanced, quality, best; in ``model``, the legacy family words read as their tier there) is the
+    person's requested start tier: it beats the default and standing guidance and may still escalate one rung. When both are present the pin wins, being
+    the more specific. ``science`` and any other word that is neither is no request."""
+    deep = (deep_run_model or "").strip().lower()
+    tier_word = (model or "").strip().lower()
+    if deep:
+        if pure_tier(deep):
+            return None, deep
+        return deep, None
+    if not tier_word:
+        return None, None
+    if pure_tier(tier_word):
+        return None, tier_word
+    if tier_word in LEGACY_TIER_ALIASES:
+        return None, LEGACY_TIER_ALIASES[tier_word]
+    if is_tier_word(tier_word):
+        return None, None
+    return tier_word, None
+
+
+def model_family(model: Optional[str]) -> Optional[str]:
+    """The runnable family of a model name (a family word or a versioned id), else None."""
+    low = (model or "").strip().lower()
+    if low in RUNNABLE_MODELS or family_of(low):
+        return low if low in RUNNABLE_MODELS else family_of(low)
+    try:   # a phrase that names a model ("use opus") is judged by what the deep worker would run
+        from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
+        worker = (cli_safe_model(low) or "").strip().lower()
+    except Exception:  # noqa: BLE001
+        return None
+    return worker if worker in RUNNABLE_MODELS else family_of(worker)
+
+
+def rung_allowed(model: Optional[str], options: Optional[List[str]]) -> bool:
+    """Whether the environment's allowed list lets a ladder rung run. A rung is judged by its family (the list may hold a family word or a specific
+    version); a rung that names no runnable family cannot be judged here and passes. ``options`` None means nothing is restricted."""
+    if options is None:
+        return True
+    family = model_family(model)
+    if family is None:
+        return True
+    return any(model_family(option) == family for option in options)
+
+
+@dataclass(frozen=True)
+class DeepModelAsk:
+    """What one task asks of its deep run's model, after the environment's work-model configuration is applied."""
+
+    pin: Optional[str] = None            # a specific model: starts alone, never escalates
+    tier: Optional[str] = None           # the person's requested start tier: not a pin, may escalate one rung
+    standing: Optional[str] = None       # the environment's configured default: standing guidance
+    allowed: Optional[Tuple[str, ...]] = None   # the environment's allowed models, applied to every rung
+    note: Optional[str] = None
+
+    @property
+    def hint(self) -> Optional[str]:
+        """The one string the orchestrator takes as ``model_hint``: the pin, else the start tier."""
+        return self.pin or self.tier
+
+    def meta(self) -> Dict[str, Any]:
+        """The keys the deep run reads from the run's context meta."""
+        out: Dict[str, Any] = {}
+        if self.standing:
+            out["deep_standing_model"] = self.standing
+        if self.allowed is not None:
+            out["deep_allowed_models"] = list(self.allowed)
+        return out
+
+
+def deep_model_ask(deep_run_model: Optional[str], model: Optional[str], effective: Optional[Dict[str, Any]],
+                   *, configured: bool) -> DeepModelAsk:
+    """Split a task's request into a pin or a start tier, apply the environment's configuration to both paths, and carry its default as standing
+    guidance. Raises ``WorkModelUnavailable`` when the environment allows no Claude model this runner can run."""
+    pin, tier = split_requested(deep_run_model, model)
+    view = effective or default_effective()
+    choice = apply_work_model(pin, view, configured=configured)
+    options = tuple(anthropic_options(view))
+    return DeepModelAsk(pin=choice.model if pin else None, tier=None if pin else tier,
+                        standing=choice.standing, allowed=options, note=choice.note)

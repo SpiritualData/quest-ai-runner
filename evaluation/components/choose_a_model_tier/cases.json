@@ -760,5 +760,55 @@
     "resume_at": null
    }
   }
+ },
+ {
+  "id": "MDL-043",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "simple",
+   "ladder": ["haiku", "sonnet", "opus"],
+   "requested_tier": "quality",
+   "standing_tier": "fast"
+  },
+  "expect": {
+   "eq": {
+    "start": "opus",
+    "ladder": ["opus"]
+   }
+  }
+ },
+ {
+  "id": "MDL-044",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "simple",
+   "ladder": ["haiku", "sonnet", "opus"],
+   "requested_tier": "fast"
+  },
+  "expect": {
+   "eq": {
+    "start": "haiku",
+    "ladder": ["haiku", "sonnet", "opus"]
+   }
+  }
+ },
+ {
+  "id": "MDL-045",
+  "kind": "start_model",
+  "area": "start_model",
+  "args": {
+   "difficulty": "simple",
+   "ladder": ["haiku", "sonnet", "opus"],
+   "requested_tier": "quality",
+   "excluded": ["opus"]
+  },
+  "expect": {
+   "eq": {
+    "start": "sonnet",
+    "ladder": ["sonnet"]
+   }
+  }
  }
 ]

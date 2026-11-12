@@ -16,7 +16,8 @@ from hubofhubs.api import (
     CONTINUE, continue_decision, coverage_gap, coverage_progress, interim_data, parse_coverage, render_continue_plan, render_coverage_line)
 from hubofhubs.api import EVENT_EXEC, EVENT_INTERIM, EVENT_MILESTONE, EVENT_STATUS
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import start_status_text
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import pure_tier, start_status_text
+from quest_ai_runner.the_intelligence.mind.delegation.work_model import rung_allowed
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics, run_hint, working_dir_of
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
@@ -309,9 +310,18 @@ class DeepRunMixin:
         # ``deep_model_selection`` payload, which the task lane records on the task's progress feed.
         # The person's own request in THIS message outranks the standing default (the pinned work
         # model of the conversation or task): it is the newer, more specific ask.
+        # The environment's allowed models and default work model ride the run's context meta (the task lane sets them from the
+        # environment's work-model configuration): the allowed list limits what the message may ask for as well as every rung, and the default is
+        # standing guidance below the person's own choices.
+        allowed_models = (ctx_meta or {}).get("deep_allowed_models")
+        standing_model = (ctx_meta or {}).get("deep_standing_model")
         typed_request = self.typed_model_request(getattr(plan, "deep_model_request", None))
+        if typed_request and allowed_models is not None and not pure_tier(typed_request) and not rung_allowed(typed_request, allowed_models):
+            log.info("Deep-worker model requested in the message (%r) is not allowed on this environment; the run keeps its own choice", typed_request)
+            typed_request = None
         if typed_request:
-            log.info("Deep-worker model requested in the message: %r (outranks the standing pin %r)",
+            # A model named in the message is a pin; a tier word named there is the person's start tier (an escalation may still move it).
+            log.info("Deep-worker model requested in the message: %r (outranks the standing choice %r)",
                      typed_request, model_hint)
             model_hint = typed_request
             model = self.registry.resolve_tier(typed_request)
@@ -319,7 +329,7 @@ class DeepRunMixin:
             model_hint, quality_standards, model,
             difficulty=getattr(plan, "deep_difficulty", None),
             difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
-            task_kind=getattr(plan, "deep_task_kind", None))
+            standing_model=standing_model, allowed_models=allowed_models)
         # ANNOUNCED ONLY FOR A RUNNER THAT RUNS THE MODEL, and so only once a goal's runner is
         # resolved (inside ``run_one`` below). A consumer's named runner may answer in-process with
         # its own fixed model, or queue the work for another lane that picks its own; announcing

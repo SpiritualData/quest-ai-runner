@@ -90,12 +90,18 @@ class WorkMixin:
         model = autopilot_cfg.get("model")
         if model:
             from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import _is_claude_model
-            if _is_claude_model(model):
-                # A literal deep-run model pin (e.g. "opus"), not a QAR-call tier -- the field the
+            from quest_ai_runner.the_intelligence.mind.delegation.work_model import split_requested
+            pin, tier = split_requested(model, None)
+            if pin and _is_claude_model(pin):
+                # A Claude model (a family word like "opus" or a versioned id) is a PIN: the field the
                 # backend validates it against post-split. Sending it as ``model`` 400s.
-                kwargs["deep_run_model"] = model
+                kwargs["deep_run_model"] = pin
+            elif tier:
+                # A tier is the person's requested START tier: it reaches the deep run through ``model``,
+                # where an escalation may still move one rung from it.
+                kwargs["model"] = tier
             else:
-                kwargs["model"] = model
+                log.warning("autopilot: the quest's configured model %r is neither a tier nor a Claude model; the run starts on the standing choice", model)
         if self._pass_task_id:
             kwargs["parent_task_id"] = self._pass_task_id
         try:

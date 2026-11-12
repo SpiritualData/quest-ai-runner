@@ -109,8 +109,10 @@ def test_a_per_task_TIER_still_resolves_through_the_registry():
 
     _orch(provider, runner).run("build X", model_hint="best")
 
+    # A tier is the person's start tier (not a pin): the run starts on the model the tier resolves to, named by the ladder's rung for it.
+    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
     resolved = ModelRegistry(provider).resolve_tier("best")
-    assert [c["model"] for c in runner.calls] == [resolved]
+    assert [cli_safe_model(c["model"]) for c in runner.calls] == [cli_safe_model(resolved)]
     assert "fable" not in (runner.calls[0]["model"] or "")
 
 

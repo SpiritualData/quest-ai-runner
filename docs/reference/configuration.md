@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-248 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+249 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -215,6 +215,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `the_consciousness/terminal/cli_quest.py` | - |
 | `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `the_consciousness/terminal/cli_quest.py` | - |
 | `QAR_STANDARD_TOOLS` |  | `the_world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_STARTUP_REQUIREMENTS_CHECK` |  | `the_consciousness/terminal/interactive_session.py` | - |
 | `QAR_STATE_PATH` |  | `the_consciousness/request_intake/lane.py`, `the_consciousness/terminal/cli_poll.py`, `the_consciousness/terminal/interactive_session_persist.py` +1 | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` |
 | `QAR_TASK_DIRECT_DEEP` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
 | `QAR_TEAM_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |

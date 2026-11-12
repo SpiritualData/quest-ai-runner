@@ -63,12 +63,9 @@ class AnsweringMixin(HubAnsweringMixin):
         return self.registry.resolve_role("answer.response", hint)
 
     def _deep_model(self, plan: Any, hint: Optional[str] = None) -> str:
-        """The model a deep run starts from: the ``deep-run.session`` role, moved to the deep-work role of the plan's task kind when the plan carries one
-        (``deep_task_kind``: gather, implementation, structure or review, classified once already; none means the implementation role). A person's or
-        task's explicit tier (``hint``) wins; the planner's own ``model_tier`` never picks the tier of the work."""
-        kind = getattr(plan, "deep_task_kind", "") or ""
-        if kind:
-            return self.registry.resolve_role("deep-run.session", hint, task_kind=kind)
+        """The model a deep run starts from: the ``deep-run.session`` role (the implementation role). A person's or task's explicit tier (``hint``)
+        wins; the planner's own ``model_tier`` never picks the tier of the work. The plan carries no task kind (nothing classified one, so none is
+        read); the run's real start is chosen by ``deep_model_plan``."""
         return self.registry.resolve_role("deep-run.session", hint)
 
     _grounded_answer = HubAnsweringMixin.grounded_answer

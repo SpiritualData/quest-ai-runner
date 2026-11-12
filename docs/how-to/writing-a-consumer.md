@@ -125,16 +125,31 @@ genuinely must not execute, e.g. a read-only chat surface.
 A deep run starts on the **cheapest tier measured good enough for deep work**, and moves up only when a person asked for more or the
 work fell short for a stated reason. The rule is the hub's (`hubofhubs.api.role_tiers`: `task_choice`, `escalate`, `sub_agent_choice`);
 Quest AI Runner binds it in `the_world/model_plumbing/model_tier_chooser/deep_model_selection.py` and resolves the tier it returns to a model
-through the registry, so no model name is written in code. `Orchestrator.deep_model_plan` decides, in this order, and the first one present wins:
+through the registry, so no model name is written in code. `Orchestrator.deep_model_plan` decides, in this order, and the first one present wins.
+A request is one of two things, and the difference is whether the run may still move up:
 
-1. **A per-task `model` request**, or **a model or tier the person names in the current message** (the planner's `deep_model_request`;
-   the message is the newer ask and outranks the task's standing pin). It **pins** the deep worker to that single model for the run, with
-   no escalation.
+- A **tier** the person picked (a task's `model`, a conversation's, an autopilot's or a per-run override's tier, or a tier word typed in the
+  message) is their requested **start tier**. It beats standing guidance and the default, it reaches the deep run, and an escalation may
+  still move that one task one rung on a recorded shortfall (it is not a pin). `best` may be the start but is never an escalation rung.
+- A **model** (a family word or a versioned id: a task's `deep_run_model`, an autopilot's Claude model, a model typed in the message such as
+  "use opus") is a **pin**: that model starts alone and never escalates. A task that carries both is a pin.
+
+`split_requested` (`delegation/work_model.py`) does the split of a task's two fields; the legacy family words are a pin in `deep_run_model`
+and read as their tier in `model`.
+
+1. **The person's own request for this run**: a typed model (pin), a typed tier word, or the task's pin or tier, in the order per-run
+   override, task pin or tier, conversation deep row, quest autopilot (the backend writes whichever wins into the task's two fields; the
+   conversation's answer-model tier is not a deep choice and is never copied there). The message is the newer ask and outranks the task.
 2. **The person's standing guidance.** A guidance card's model preference that names a tier (or a family word that reads as one) is
    handed to the hub as its standing tier guidance: the run starts on that tier and may still escalate. A card that names a concrete model
    id pins that model alone, as in step 1.
+   **The environment's default work model** (the environment's work-model configuration) is standing guidance just below a card: it is not a
+   pin, so it starts the run on its tier and the run may still escalate. The environment's **allowed models** apply to both paths: a pin it
+   excludes falls back to the environment default (pinned, with a note in the log), and an excluded rung is dropped from the ladder, so neither
+   the start nor an escalation lands on it, and a model typed in the message that it excludes is ignored. The deep run reads the default
+   and the allowed list from the run's context meta (`deep_standing_model`, `deep_allowed_models`), which the task lane sets.
 3. **The operator's configuration**: `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL` or `QAR_DEEP_MODEL_HARD` (for the planner's rating, `normal`
-   when unrated) counts as standing guidance, read only when no card names a tier. `QAR_DEEP_AUTO_MODEL=0` starts every run on the first
+   when unrated) counts as standing guidance, read only when no card names a tier and the environment names no default. `QAR_DEEP_AUTO_MODEL=0` starts every run on the first
    rung of the ladder.
 4. **The hub default**: the cheapest tier whose recorded pass rate on the deep-work cases meets the hub's sufficiency bar, for the role of the
    task kind (gather, implementation, structure or review where the caller knows it, else the main session role). With none of the
@@ -165,8 +180,9 @@ worker starts default to the hub's `sub_agent` choice, set as `CLAUDE_CODE_SUBAG
 
 An **autopilot** quest sets step 1 for all of its own created work: the quest's
 `autopilot.model` setting (read by `AutopilotPass._create_autopilot_task`) rides onto every task
-that quest's autopilot pass creates, as that task's `model` field, so the quest's autopilot work
-runs pinned to that model without touching the lane's own `QAR_DEEP_MODELS` ladder.
+that quest's autopilot pass creates, split by `split_requested`: a Claude model becomes the task's `deep_run_model` (a pin), a tier its
+`model` (the start tier, escalation allowed), without touching the lane's own `QAR_DEEP_MODELS` ladder. The plan carries no task kind
+(nothing classifies one yet), so the role is always the main session unless a caller passes a kind to `deep_model_plan`.
 
 ### Fast in-process edits (opt-in, and the only way to grant write access)
 

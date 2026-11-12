@@ -36,8 +36,11 @@ def start_model(args):
     if not ladder:
         return {"start": None, "ladder": []}
     level = normalize_difficulty(args["difficulty"])
+    excluded = set(args.get("excluded") or [])
     plan = plan_start(FixedTiers(), configured_ladder=ladder, difficulty=args["difficulty"],
-                      operator_model=(args.get("models") or {}).get(level or "normal"))
+                      operator_model=(args.get("models") or {}).get(level or "normal"),
+                      requested_tier=args.get("requested_tier"), standing_tier=args.get("standing_tier"),
+                      allows=(lambda rung: rung not in excluded) if excluded else None)
     picked = plan.ladder if plan else ladder
     return {"start": picked[0], "ladder": picked}
 

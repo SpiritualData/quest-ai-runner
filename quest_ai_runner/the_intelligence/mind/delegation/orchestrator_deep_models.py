@@ -8,7 +8,8 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import (
-    choice_of, escalate_choice, normalize_difficulty, plan_start, tier_models, tier_name_of)
+    choice_of, escalate_choice, normalize_difficulty, plan_start, pure_tier, tier_models, tier_name_of, tier_of_model)
+from quest_ai_runner.the_intelligence.mind.delegation.work_model import rung_allowed
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import LEGACY_TIER_ALIASES, ModelRegistry
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONFIGURED_LADDER_SOURCE, FALLBACK_LADDER_SOURCE, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _guidance_model_pref
@@ -30,27 +31,38 @@ class DeepModelsMixin:
                         difficulty: Optional[str] = None,
                         difficulty_reason: Optional[str] = None,
                         task_kind: Optional[str] = None,
+                        requested_tier: Optional[str] = None,
+                        standing_model: Optional[str] = None,
+                        allowed_models: Optional[List[str]] = None,
                         ) -> Tuple[List[Optional[str]], Optional[Dict[str, Any]]]:
         """Resolve the deep-worker ladder plus, when the start was chosen by the hub's tier rule, the
         selection record (difficulty, start_model, ladder, reason, tier, tier_source, tier_reason,
         tier_role) to log and record; None when the ladder came from a pin or from the pre-existing
         resolution unchanged.
 
-        A pin (per-task model, a message's model, a guidance preference naming a model id) wins and
-        starts that model alone. Otherwise, with ``cfg.deep_auto_model`` on, the hub decides (see
-        ``deep_model_selection.plan_start``): a guidance card that names a tier is the person's
-        standing guidance, an operator's ``QAR_DEEP_MODEL_*`` is standing guidance too, and with
-        neither the hub's default (the cheapest tier measured good enough) starts the run. The planner's
-        ``difficulty`` is information: with a specific ``difficulty_reason`` and a hard rating it asks
-        for one tier up, otherwise it changes nothing. Nothing here is written to the task."""
+        A specific MODEL (per-task ``deep_run_model``, a message's model, a guidance preference naming
+        a model id) is a PIN: it starts that model alone and never escalates. A TIER the person picked
+        (``requested_tier``, or a tier word in ``model_hint``) is the START tier instead: it beats the
+        standing guidance and the default, and an escalation may still move one rung from it. Otherwise,
+        with ``cfg.deep_auto_model`` on, the hub decides (see ``deep_model_selection.plan_start``): a
+        guidance card that names a tier is the person's standing guidance, then the environment's default
+        work model (``standing_model``), then an operator's ``QAR_DEEP_MODEL_*``, and with none of them
+        the hub's default (the cheapest tier measured good enough) starts the run. ``allowed_models`` is
+        the environment's allowed list, applied to every rung. The planner's ``difficulty`` is
+        information: with a specific ``difficulty_reason`` and a hard rating it asks for one tier up,
+        otherwise it changes nothing. Nothing here is written to the task."""
         pref = _guidance_model_pref(quality_standards)
         standing_tier = None
         guidance = quality_standards
-        if self.cfg.deep_auto_model and pref and ModelRegistry.is_tier_name(pref):
+        tier_request = pure_tier(requested_tier) or (pure_tier(model_hint) if self.cfg.deep_auto_model else "")
+        pin_hint = None if (tier_request and pure_tier(model_hint)) else model_hint
+        if self.cfg.deep_auto_model and tier_request:
+            guidance = None   # the person's own tier outranks a standing card, whatever the card names
+        elif self.cfg.deep_auto_model and pref and ModelRegistry.is_tier_name(pref):
             standing_tier = tier_name_of(pref)
             if standing_tier:
                 guidance = None   # a tier is handed to the hub below, not pinned
-        ladder, pinned = self.resolve_deep_ladder(model_hint, guidance, fallback, log_ladder=False)
+        ladder, pinned = self.resolve_deep_ladder(pin_hint, guidance, fallback, log_ladder=False)
         if pinned:
             return ladder, None   # a pin logs its own line inside the resolver
         configured = [m for m in (self.cfg.deep_model_ladder or []) if m]
@@ -59,10 +71,22 @@ class DeepModelsMixin:
             return ladder, None
         level = normalize_difficulty(difficulty)
         operator_level = level or "normal"
-        plan = plan_start(self.registry, configured_ladder=configured, task_kind=(task_kind or difficulty or ""), standing_tier=standing_tier,
-                          operator_model=(self.cfg.deep_difficulty_models or {}).get(operator_level),
-                          operator_var=f"QAR_DEEP_MODEL_{operator_level.upper()}",
-                          difficulty=difficulty, difficulty_reason=difficulty_reason)
+        operator_model = (self.cfg.deep_difficulty_models or {}).get(operator_level)
+        operator_var = f"QAR_DEEP_MODEL_{operator_level.upper()}"
+        operator_label = ""
+        if standing_model and not standing_tier and not tier_request:
+            # The environment's default work model is standing guidance below the person's own card and above the operator's variable: its tier when it
+            # names or resolves to one, else the model itself.
+            standing_tier = tier_name_of(standing_model) or tier_of_model(standing_model, tier_models(self.registry)) or None
+            if not standing_tier:
+                operator_model, operator_var, operator_label = standing_model, "", "the environment's default work model"
+        allows = None if allowed_models is None else (lambda rung: rung_allowed(rung, allowed_models))
+        plan = plan_start(self.registry, configured_ladder=configured, task_kind=(task_kind or ""), standing_tier=standing_tier,
+                          operator_model=operator_model, operator_var=operator_var, operator_label=operator_label,
+                          difficulty=difficulty, difficulty_reason=difficulty_reason,
+                          requested_tier=tier_request or None, allows=allows)
+        if plan is None and allows is not None:
+            log.warning("Deep-worker tier: no rung of the ladder is on the environment's allowed models; the resolved ladder is used")
         if plan is None:
             self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if configured else FALLBACK_LADDER_SOURCE))
             return ladder, None
