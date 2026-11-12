@@ -120,7 +120,8 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
                     notify_and_log(_hub_notice)
             except Exception:  # noqa: BLE001 - a check that cannot run is never a reason to disturb a start
                 pass
-        threading.Thread(target=_check_hub_requirements, name="qar-hub-requirements", daemon=True).start()
+        if os.getenv("QAR_STARTUP_REQUIREMENTS_CHECK", "").strip().lower() in ("1", "true", "yes", "on"):
+            threading.Thread(target=_check_hub_requirements, name="qar-hub-requirements", daemon=True).start()   # otherwise `quest-ai-runner doctor`
 
         self._cfg = cfg
         self._rep_name = rep_name
@@ -220,14 +221,8 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
                 self.quest_search_root, getattr(cfg, "quest_folder_map", None))
         except Exception:  # noqa: BLE001 — must never break session startup
             self.quest_folders = []
-        # Each synced quest is a context card, like every quest is in Quest itself, so selection can
-        # find it on its own and a matched turn can put it first. Rewritten only when it changed.
-        try:
-            from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer, sync_quest_cards
-            sync_quest_cards(card_writer(getattr(self._orch, "context_assembler", None)),
-                             self.quest_folders, getattr(cfg, "corpus_root", None))
-        except Exception:  # noqa: BLE001 — must never break session startup
-            pass
+        # Each synced quest is a context card (see ``sync_quest_cards``). It costs one Quest API read per quest, so it runs in the
+        # background after the dead folders are dropped (``fetch_remote_quests``), never before the prompt is usable.
         self.quest_match_mode = ("none" if os.getenv("QAR_QUEST_AUTO_MATCH", "1").strip().lower()
                                  in ("0", "false", "no", "off", "none") else "auto")
         self.pinned_quest = None

@@ -34,6 +34,7 @@ class QuestsMixin:
             ready = getattr(self, "quest_list_ready", None)
             if ready is not None:
                 ready.set()
+        self.sync_cards_of_quest_folders()   # after the dead folders are gone, and also when Quest could not be listed
         for listener in list(getattr(self, "quest_list_listeners", [])):
             try:
                 listener()
@@ -57,6 +58,16 @@ class QuestsMixin:
         home = getattr(self, "home_quest", None)
         if home is not None and home.quest_id not in {f.quest_id for f in keep}:
             self.home_quest = None
+
+    def sync_cards_of_quest_folders(self) -> None:
+        """Write the context card of every live synced quest folder (changed cards only). Never raises: a card that
+        cannot be written is retried at the next start."""
+        try:
+            from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer, sync_quest_cards
+            sync_quest_cards(card_writer(getattr(self._orch, "context_assembler", None)),
+                             self.quest_folders, getattr(self._cfg, "corpus_root", None))
+        except Exception:  # noqa: BLE001
+            pass
 
     def no_quests_reason(self) -> str:
         """Why the quest list is empty, in words a person can act on."""
