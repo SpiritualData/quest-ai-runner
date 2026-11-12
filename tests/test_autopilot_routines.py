@@ -218,3 +218,15 @@ def test_the_poller_runs_a_due_routine_through_the_registered_learning_purpose(m
     assert [t["title"] for t in client.created_tasks] == ["Routine: learning"]
     lane.run_due_routines()
     assert len(client.created_tasks) == 1
+
+
+def test_a_hub_due_entry_becomes_an_item_carrying_its_request():
+    from quest_ai_runner.the_intelligence.proactivity.autopilot_purpose_learning import item_of
+    entry = {"kind": "new-tools-sweep", "id": "new-tools", "question": "Which tools?", "request": "Sweep for new tools since 2026-11-11"}
+    assert item_of(entry)["id"] == "new-tools" and item_of(entry)["what"] == "Sweep for new tools since 2026-11-11"
+
+
+def test_the_default_learning_ask_is_the_hub_due_list_not_only_stale_areas(monkeypatch):
+    import quest_ai_runner.the_intelligence.proactivity.autopilot_purpose_learning as module
+    monkeypatch.setattr(module, "hub_due", lambda day: [{"kind": "new-tools-sweep", "id": "new-tools", "request": "Sweep " + day}])
+    assert [i["what"] for i in module.learning_due("2026-11-12")] == ["Sweep 2026-11-12"]

@@ -1,6 +1,7 @@
 """The ``learning`` routine purpose: keep the hub's registry of the best existing implementations and public evidence current.
 
-What is due is the hub's Learning solution (``quest_ai_runner.run("the-learning", <date>)``): this module only asks it, turns its answer into
+What is due is the hub's Learning solution (its ``due_investigations``: stale areas, past-revisit investigations, experiments to reevaluate and the daily sweep
+for new tools outside every area; ``quest_ai_runner.run("the-learning", <date>)`` runs only its entry, ``stale_areas``): this module only asks it, turns its answer into
 items, and states the standing rules of the work. Each review is a small systematic review under the hub's knowledge search standard; where
 the repository, the registry and the standard live is the routine's own instructions (consumer config), never this file.
 """
@@ -8,8 +9,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Callable, List, Mapping, Optional, Sequence
-
-import quest_ai_runner
 
 from quest_ai_runner.the_intelligence.proactivity.autopilot_routines import RoutinePurpose, register_purpose
 
@@ -28,13 +27,20 @@ def item_of(entry: Any) -> Mapping[str, Any]:
     """One due entry of the hub's answer as an item: a plain name, or a mapping carrying its own id and words."""
     if isinstance(entry, Mapping):
         ident = str(entry.get("id") or entry.get("area") or entry.get("solution_id") or entry.get("name") or "")
-        return {**entry, "id": ident, "what": str(entry.get("what") or entry.get("reason") or ident)}
+        return {**entry, "id": ident, "what": str(entry.get("what") or entry.get("reason") or entry.get("request") or entry.get("question") or ident)}
     return {"id": str(entry), "what": str(entry)}
+
+
+def hub_due(today: str) -> Sequence[Mapping[str, Any]]:
+    """Everything the hub's Learning says is due on ``today``. Not ``run("the-learning")``: that entry is ``stale_areas`` alone, so a pass would never see the
+    new-tools sweep or an investigation past its revisit date, and with every area researched in the last ninety days it would see nothing at all."""
+    from quest_ai_runner.the_world.science.investigate import hub_learning
+    return hub_learning().due_investigations(today)
 
 
 def learning_due(today: str, ask: Optional[Callable[[str], Any]] = None) -> List[Mapping[str, Any]]:
     """What the hub's Learning says is due on ``today`` (ISO date). ``ask`` replaces the hub call (tests, or a newer hub entry)."""
-    answer = (ask or (lambda day: quest_ai_runner.run("the-learning", day)))(today)
+    answer = (ask or hub_due)(today)
     return [item_of(entry) for entry in (answer or [])]
 
 
