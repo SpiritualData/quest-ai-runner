@@ -315,12 +315,33 @@ class DeepRunMixin:
         # What this run says about itself while it works (helpers, structure, spend, the hub's own stop decision) and when it ends: see ``run_facts``.
         run_facts = RunFacts(emit.emit, goal=user_message) if emit is not None else None
         selection_lock = threading.Lock()
-        # SIBLINGS DO NOT PILE UP MORE ASKS: set the moment any subgoal of this fan-out parks on a
-        # human decision (``DeepResult.decision_id``). Checked by every OTHER subgoal's attempt
-        # loop before it starts a new attempt, so a sibling not yet underway (or not yet on its
-        # next retry/rung) stops rather than producing a second, competing ask. Scoped to a single
-        # ``_run_deep`` call; a single-goal turn never sets or checks it (``multi`` guards both).
-        fanout_parked = threading.Event()
+        # SIBLINGS DO NOT PILE UP MORE ASKS, AND THE WINNER IS BY ORDER, NOT BY TIMING: when a subgoal
+        # parks on a human decision (``DeepResult.decision_id``) it records its ORDER KEY here (the
+        # lowest parked key wins). Every subgoal LATER in order stops before starting a new attempt,
+        # so it never produces a second, competing ask. A subgoal EARLIER in order is NOT stopped: it
+        # is allowed to finish and park, because the aggregation step keeps the first parked result
+        # by order, so which ask reaches the reply must not depend on which subtask parked first.
+        # Scoped to a single ``_run_deep`` call; a single-goal turn never sets or checks it
+        # (``multi`` guards both).
+        parked_lock = threading.Lock()
+        parked_order: List[Tuple[int, ...]] = []  # at most one entry: the lowest parked order key
+
+        def order_key(task_index: Any) -> Tuple[int, ...]:
+            # task_index is an int (flat fan-out) or "group.step.n" (staged); compare numerically.
+            try:
+                return tuple(int(p) for p in str(task_index).split("."))
+            except ValueError:
+                return (0,)
+
+        def stopped_by_earlier_park(task_index: Any) -> bool:
+            with parked_lock:
+                return bool(parked_order) and order_key(task_index) > parked_order[0]
+
+        def note_parked(task_index: Any) -> None:
+            key = order_key(task_index)
+            with parked_lock:
+                if not parked_order or key < parked_order[0]:
+                    parked_order[:] = [key]
         # Which subgoal each result came from (keyed by the result object's id), so a sibling the
         # aggregation step cannot report on (it stopped before it ever ran) is still NAMED in the
         # reply as not done yet instead of vanishing.
@@ -847,8 +868,8 @@ class DeepRunMixin:
                     break
                 # A SIBLING subgoal of this same fan-out already parked on a human decision: stop
                 # before starting another attempt rather than piling a second ask onto the same
-                # turn (see ``fanout_parked`` above). Single-goal runs never set this (``multi``).
-                if multi and fanout_parked.is_set():
+                # turn (see ``parked_order`` above). Single-goal runs never set this (``multi``).
+                if multi and stopped_by_earlier_park(task_index):
                     break
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
                 # WHICH RUNNER runs this attempt: the ladder indexed by attempt, cheapest rung
@@ -1286,10 +1307,10 @@ class DeepRunMixin:
                 if tail:
                     res.output = ((res.output or "").rstrip() + "\n\n" + tail).lstrip()
             # This subgoal parked on a human decision: tell siblings so none of them starts a new
-            # attempt after this (see ``fanout_parked`` above; checked at the aggregation step too,
+            # attempt after this (see ``parked_order`` above; checked at the aggregation step too,
             # which is what actually keeps a second ask out of the reply regardless of timing).
             if multi and res.decision_id:
-                fanout_parked.set()
+                note_parked(task_index)
             # res.met is now the brain-verified outcome (not just the worker's exit code). The fact
             # records it for the broken-promise guard; a verified-not-met run is a confirmed failure.
             if fact is not None:
@@ -1446,7 +1467,7 @@ class DeepRunMixin:
         # had actually landed the reply was a bare "please approve these changes to proceed": the
         # landed subgoals' own receipts and text never reached the reader, and the ask was the
         # only thing left to read. The order is therefore what happened, then the one ask, then
-        # one short code-written continuation sentence. ``fanout_parked`` above still stops a
+        # one short code-written continuation sentence. ``parked_order`` above still stops a
         # sibling that had not yet started its next attempt; this step guarantees the shape
         # regardless of how the concurrent runs happened to race.
         #
