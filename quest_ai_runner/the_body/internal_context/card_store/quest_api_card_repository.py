@@ -363,6 +363,8 @@ class QuestApiCardRepository:
         self._cards: Optional[Dict[str, Dict[str, Any]]] = None
         self._max_updated = 0.0
         self._count_offset = 0
+        self._synced_at: Optional[float] = None   # the backend's clock at the last sync: what ``deleted_after`` asks from
+        self._page_meta: Dict[str, Any] = {}
         self._warm_only = False
         self._listing_at = 0.0
         self._stamp: Optional[Dict[str, Any]] = None
@@ -606,6 +608,7 @@ class QuestApiCardRepository:
         """Every page of ``GET /api/cards`` as ``{card_id: card}``; raises on any failed page."""
         out: Dict[str, Dict[str, Any]] = {}
         cursor = ""
+        self._page_meta = {}
         for _ in range(10_000):
             params = self._list_params({"limit": LIST_PAGE_SIZE, **(extra or {})})
             if cursor:
@@ -613,6 +616,8 @@ class QuestApiCardRepository:
             reply = self._call("GET", "/api/cards", params=params)
             if not isinstance(reply, dict):
                 raise self._fail("GET", "/api/cards", 200, "reply was not a JSON object")
+            if not cursor:   # the first page carries the server's clock and, when asked, the deletions
+                self._page_meta = {k: reply[k] for k in ("server_time", "deleted", "deletions_complete_after") if k in reply}
             for cid, card in card_pairs(reply.get("cards")):
                 self._merge_one(out, cid, card)
             cursor = str(reply.get("next_cursor") or "")
@@ -637,6 +642,7 @@ class QuestApiCardRepository:
     def _full_refresh(self, stamp: Dict[str, Any]) -> None:
         self._scope_of = {}
         cards = self._fetch_pages()
+        self._synced_at = self._page_meta.get("server_time")
         self._cards = cards
         self._max_updated = float(stamp.get("max_updated_at") or 0.0)
         count = stamp.get("count")
@@ -680,45 +686,63 @@ class QuestApiCardRepository:
     def _store_listing(self, cards: Dict[str, Dict[str, Any]]) -> None:
         """Keep the listing for the next session, with the offset that lets it detect deletions."""
         try:
-            self._cache.store_listing(cards, self._max_updated, count_offset=self._count_offset)
-        except TypeError:   # a cache written before the offset was kept
+            self._cache.store_listing(cards, self._max_updated, count_offset=self._count_offset, synced_at=self._synced_at)
+        except TypeError:   # a cache written before the offset and the sync time were kept
             self._cache.store_listing(cards, self._max_updated)
 
     def _adopt_stored_listing(self, stamp: Dict[str, Any]) -> bool:
-        """Start from the listing the last session stored and fetch only the cards written since (one small request when
-        nothing changed: the stamp alone settles it). False when nothing usable is stored, so the caller pages everything.
-        The delta falls back to one full refresh by itself when the count says a card was deleted."""
+        """Start from the listing the last session stored and ask only for what changed since: the cards written after its
+        newest card and the cards deleted since the last sync (one small request when nothing changed). False when nothing
+        usable is stored, or the last sync is older than the backend remembers deletions, so the caller pages everything."""
         warm = self._cache.load_listing()
         if not warm or not warm[0]:
             return False
-        stored, stored_max = dict(warm[0]), float(warm[1] or 0.0)
-        count = stamp.get("count")
-        offset_of = getattr(self._cache, "load_count_offset", None)
+        offset_of, synced_of = getattr(self._cache, "load_count_offset", None), getattr(self._cache, "load_synced_at", None)
         offset = offset_of() if callable(offset_of) else None
+        synced_at = synced_of() if callable(synced_of) else None
         if offset is None:
             return False   # a listing stored before the offset was kept: one full refresh stores it
-        self._cards, self._max_updated = stored, stored_max
+        stored, stored_max = dict(warm[0]), float(warm[1] or 0.0)
+        self._cards, self._max_updated, self._count_offset, self._synced_at = stored, stored_max, offset, synced_at
         self._scope_of = {cid: (str(c.get("team_id") or ""), str(c.get("org_id") or "")) for cid, c in stored.items()}
-        if float(stamp.get("max_updated_at") or 0.0) == stored_max:
-            # Nothing was written since: the stored listing is current unless a card was deleted, which the stored offset catches.
-            self._count_offset = offset
-            if isinstance(count, int) and len(stored) - offset != count:
-                return False
-            return True
-        self._count_offset = offset
+        if synced_at is None:
+            # No sync time kept: the stamp settles a quiet backend, the count catches a deletion, a change is a delta.
+            count = stamp.get("count")
+            if float(stamp.get("max_updated_at") or 0.0) == stored_max:
+                return not (isinstance(count, int) and len(stored) - offset != count)
         self._delta_refresh(stamp)
         return True
 
     def _delta_refresh(self, stamp: Dict[str, Any]) -> None:
-        """Merge the cards written since the last ``max_updated_at``; one full refresh if the count
-        still disagrees (something was deleted)."""
-        delta = self._fetch_pages({"updated_after": repr(self._max_updated)})
+        """Merge what changed since the last sync: the cards written after ``max_updated_at`` and, when the last sync time is known,
+        the cards the backend says were deleted since. A backend that does not report deletions (or no longer remembers back to
+        the last sync) is checked by count instead, with one full refresh when the count disagrees."""
+        extra = {"updated_after": repr(self._max_updated)}
+        asked = self._synced_at is not None
+        if asked:
+            extra["deleted_after"] = repr(self._synced_at)
+        delta = self._fetch_pages(extra)
+        meta = dict(self._page_meta)
+        told = meta.get("deleted") if asked else None
+        remembered = float(meta.get("deletions_complete_after") or 0.0) <= float(self._synced_at or 0.0)
+        if asked and isinstance(told, list) and not remembered:
+            self._full_refresh(stamp)      # the last sync is older than the backend's record of deletions
+            return
         for cid, card in delta.items():
             self._cards[cid] = card
+        if isinstance(told, list):
+            for gone in told:
+                cid = str(gone.get("id") or "")
+                held = self._scope_of.get(cid)
+                if cid and cid not in delta and held == (str(gone.get("team_id") or ""), str(gone.get("org_id") or "")):
+                    self._cards.pop(cid, None)
+                    self._scope_of.pop(cid, None)
+        if meta.get("server_time") is not None:
+            self._synced_at = float(meta["server_time"])
         self._max_updated = float(stamp.get("max_updated_at") or self._max_updated)
         if isinstance(stamp.get("count"), int) and (
                 len(self._cards) - self._count_offset != stamp["count"]):
-            self._full_refresh(stamp)
+            self._full_refresh(stamp)      # still disagrees: something was deleted that nobody reported
         else:
             self._store_listing(self._cards)
 

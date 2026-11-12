@@ -174,8 +174,9 @@ def test_a_new_session_starts_from_the_stored_listing_and_downloads_only_what_ch
     assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 3      # the first session pages everything
 
     backend.requests.clear()
-    assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 3      # nothing changed: the stamp settles it
-    assert [r for r in backend.requests if r[1] == "/api/cards"] == []
+    assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 3      # nothing changed: one empty delta, no listing
+    lists = [r for r in backend.requests if r[1] == "/api/cards"]
+    assert len(lists) == 1 and "updated_after" in lists[0][2] and "deleted_after" in lists[0][2]
 
     backend.put("c3", {"name": "Card 3"})
     backend.requests.clear()
@@ -183,10 +184,23 @@ def test_a_new_session_starts_from_the_stored_listing_and_downloads_only_what_ch
     lists = [r for r in backend.requests if r[1] == "/api/cards"]
     assert len(lists) == 1 and float(lists[0][2]["updated_after"]) > 0
 
-    del backend.cards[("", "c0")]
+    del backend.cards[("", "c0")]                                                            # deleted behind the API's back
     backend.requests.clear()
-    cards = make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()                 # a deletion since the last session
+    cards = make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()                 # caught by the count: one full refresh
     assert "c0" not in cards and len(cards) == 3
+
+
+def test_a_new_session_is_told_what_was_deleted_and_does_not_page_everything(backend, tmp_path):
+    from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
+    for i in range(4):
+        backend.put(f"c{i}", {"name": f"Card {i}"})
+    make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()
+    assert make_repo(backend).delete("c1")                                                   # a deletion through the API
+    backend.requests.clear()
+    cards = make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()
+    assert sorted(cards) == ["c0", "c2", "c3"]
+    lists = [r for r in backend.requests if r[1] == "/api/cards"]
+    assert len(lists) == 1 and "deleted_after" in lists[0][2] and "updated_after" in lists[0][2]   # one small delta, no full listing
 
 
 def test_revision_uses_the_stamp_endpoint_and_changes_with_writes(backend):

@@ -71,10 +71,17 @@ class FileCardCache:
             return None
 
     def store_listing(self, cards: Dict[str, Dict[str, Any]], max_updated_at: float,
-                      count_offset: Optional[int] = None) -> None:
+                      count_offset: Optional[int] = None, synced_at: Optional[float] = None) -> None:
         with self.lock:
             self.write_json(LISTING_FILE, {"max_updated_at": max_updated_at, "cards": cards,
-                                           "count_offset": count_offset})
+                                           "count_offset": count_offset, "synced_at": synced_at})
+
+    def load_synced_at(self) -> Optional[float]:
+        """The backend's clock at the last sync of the stored listing (None: unknown)."""
+        with self.lock:
+            data = self.read_json(LISTING_FILE)
+        found = data.get("synced_at") if isinstance(data, dict) else None
+        return float(found) if isinstance(found, (int, float)) else None
 
     def load_count_offset(self) -> Optional[int]:
         """How far the stored listing's size ran from the backend's count when it was stored (None: unknown)."""

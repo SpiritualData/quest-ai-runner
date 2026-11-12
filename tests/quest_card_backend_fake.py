@@ -6,6 +6,7 @@ Implements the contract ``QuestApiCardRepository`` speaks: whoami, embedder, sta
 deterministic; ids and urls are obviously fake.
 """
 import json
+import time
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -17,6 +18,7 @@ class FakeCardBackend:
         self.embedder_id = embedder_id
         self.dimension = dimension
         self.cards = {}            # (team_id, card_id) -> card (with updated_at float)
+        self.deleted = []          # (epoch, team_id, org_id, card_id) of every DELETE answered, for ``deleted_after``
         self.clock = 100.0
         self.requests = []         # (method, path, query dict, headers dict, body)
         self.fail_next = []        # list of (status, detail) consumed per request
@@ -132,6 +134,7 @@ class FakeCardBackend:
                                             "embedder_id": backend.embedder_id,
                                             "dimension": backend.dimension})
                 if path == "/api/cards" and method == "GET":
+                    started = time.time()
                     cards = backend._visible(q)
                     after = float((q.get("updated_after") or ["0"])[0])
                     cards = [c for c in cards if c["updated_at"] > after]
@@ -145,7 +148,12 @@ class FakeCardBackend:
                         if start + limit < len(cards):
                             nxt = str(start + limit)
                         cards = page
-                    return self._send(200, {"cards": cards, "next_cursor": nxt, "revision": "r"})
+                    reply = {"cards": cards, "next_cursor": nxt, "revision": "r", "server_time": started}
+                    if "deleted_after" in q and not q.get("cursor"):
+                        since = float(q["deleted_after"][0])
+                        reply["deleted"] = [{"id": c, "team_id": t, "org_id": o} for at, t, o, c in backend.deleted if at > since]
+                        reply["deletions_complete_after"] = 0.0
+                    return self._send(200, reply)
                 if path.startswith("/api/cards/"):
                     cid = path[len("/api/cards/"):]
                     if method == "PUT":
@@ -158,6 +166,9 @@ class FakeCardBackend:
                         return self._send(200, card) if card else self._send(404, {"detail": "nope"})
                     if method == "DELETE":
                         existed = backend.cards.pop((team, cid), None) is not None
+                        if existed:
+                            backend.deleted.append((time.time(), "" if team.startswith("org:") else team,
+                                                    team[4:] if team.startswith("org:") else "", cid))
                         return self._send(200, {"ok": True, "deleted": existed})
                 return self._send(404, {"detail": "unknown route"})
 
