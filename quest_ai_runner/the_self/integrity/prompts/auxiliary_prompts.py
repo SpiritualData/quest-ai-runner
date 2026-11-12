@@ -27,12 +27,26 @@ _CONDENSE_DECISION_PROMPT = (
 # (Joshua's rule, after a real turn repeated counts and a study name the worker had derived): its only inputs are the request, the
 # run's own receipts and its declared coverage. Code then checks every figure and name in what it wrote against those same stored
 # texts (``interim_policy.ungrounded_terms``) and sends nothing if one is not there.
-# Told to a deep worker in a thread turn (the asker is known): the runner owns asking. A worker that raised its own decision-request
-# in a real team turn filed an unassigned ask that told nobody, beside the runner's correct one (2 asks for 1 block, 2026-11-01).
+# WHO RAISES THE ASK when only a person can unblock a deep run. One of the two notes below ends the worker's brief; in both, "yourself"
+# is the deep worker reading the brief (the delegated session), never the runner.
+#   * A thread turn, where a person asked and is waiting (DEEP_ASK_OWNERSHIP_NOTE): the RUNNER raises the ask. The worker stops and says
+#     what is needed and from whom; the runner's verifier reads that as needs_person and files the one ask, addressed and shown to the
+#     asker (judgment_calls/ask_policy.file_ask). A worker that raised its own decision-request in a real team turn filed an unassigned
+#     ask that told nobody, beside the runner's correct one (2 asks for 1 block, 2026-11-01).
+#   * Standing work, a run the autopilot composed with nobody waiting (STANDING_ASK_NOTE, context meta ``standing_work``): the WORKER
+#     raises the ask with the create_decision operation and keeps working, as its brief and the hub's standing work standard (point 4)
+#     already say. Stopping there on a setup ask threw away the day's work. The runner adopts the worker's ask (worker_ask_adoption)
+#     and files none of its own beside it.
+# Either way the ask passes the hub's Judgment Calls in the decision sink before it is filed (QuestDecisionSink.judge).
 DEEP_ASK_OWNERSHIP_NOTE = (
     "\n\nIf only a person can unblock this work, do not raise a decision-request yourself and do not call the Quest decisions "
     "endpoint: stop, and say plainly in your output what is needed and from whom. The runner raises the one ask, addressed to the "
     "right person and shown to the asker.")
+
+STANDING_ASK_NOTE = (
+    "\n\nWhen something needs a person, raise ONE ask for it yourself with the create_decision operation: it is checked against the "
+    "asks already open and routed to the right person. Ask for what is missing once, then carry on with every part of the work "
+    "that does not depend on the answer. Stop only when nothing else can be done, and name the ask in your result.")
 
 INTERIM_PROGRESS_TOOL: Dict[str, Any] = {
     "name": "interim_progress",

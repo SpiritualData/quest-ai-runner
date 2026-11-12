@@ -490,6 +490,10 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         if task.get("user_id"):
             # the task's owner: a person an ask is routed to when the requester is this runner's own account (an autopilot-created task)
             context_meta = {**(context_meta or {}), "task_owner_user_id": str(task["user_id"])}
+        if composed_by_autopilot:
+            # Standing work (the autopilot composed this task; nobody is waiting on a reply): the deep worker raises its own ask
+            # and keeps working, instead of stopping for the runner to raise it (``orchestrator_deep_run.ask_ownership_note``).
+            context_meta = {**(context_meta or {}), "standing_work": True}
         # Operations this kind of run owes on every pass (see ``run_operations``): their how-to is
         # shown first in the brief, whatever the brief's wording.
         run_pins = pinned_operations(task)

@@ -52,6 +52,9 @@ class Escalation:
     # WHO THE RUN WORKS FOR, in order of preference (the task's requester, its owner): the people an ask is routed to when it names no
     # assignee of its own, or names this runner's own account, which cannot answer. A sink that has no such notion ignores it.
     run_for_user_ids: Optional[List[str]] = None
+    # HOW MUCH RIDES ON THE ANSWER, for the hub's Judgment Calls (the sink consults it before filing): "high" only when nothing in the
+    # run can proceed without the answer (the ask then blocks); left None, the hub reads it as medium (the ask waits while other work continues).
+    severity: Optional[str] = None
 
 
 # A short relative form the planner can emit instead of computing a real timestamp itself:

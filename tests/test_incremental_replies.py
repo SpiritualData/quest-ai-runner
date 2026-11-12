@@ -411,3 +411,12 @@ def test_a_worker_in_a_thread_turn_is_told_the_runner_files_the_one_ask():
     runner = Runner([receipts("done", "Read")])
     run(build(provider, runner), meta={"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1"})
     assert "do not raise a decision-request yourself" in runner.briefs[0].lower()
+
+
+def test_a_worker_on_standing_work_is_told_to_raise_its_own_ask_and_keep_working():
+    provider = Provider([dict(ANALYSIS, work_shape="action")], verdicts=[{"met": True}])
+    runner = Runner([receipts("done", "Read")])
+    run(build(provider, runner), meta={"requester_user_id": "u_ai", "standing_work": True, "conv_id": "c1", "turn_id": "t1"})
+    brief = runner.briefs[0].lower()
+    assert "do not raise a decision-request yourself" not in brief
+    assert "raise one ask for it yourself with the create_decision operation" in brief and "does not depend on the answer" in brief

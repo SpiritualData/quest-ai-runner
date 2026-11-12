@@ -8,7 +8,8 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import (
-    DEEP_ASK_OWNERSHIP_NOTE, DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, DEEP_FUTURE_CONTEXT_INSTRUCTION, SELF_INITIATED_READ_ONLY_INSTRUCTION)
+    DEEP_ASK_OWNERSHIP_NOTE, DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, DEEP_FUTURE_CONTEXT_INSTRUCTION, SELF_INITIATED_READ_ONLY_INSTRUCTION,
+    STANDING_ASK_NOTE)
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import DeepResult, FUTURE_CONTEXT_VIA_FIELD, ProgressEvent, runner_starts_background_work, runner_uses_deep_model
 from hubofhubs.api import (
@@ -57,6 +58,18 @@ def interim_text(output: str, coverage: Any, next_step: str) -> str:
     parts.append("This is a partial result and the goal is not met yet. Still working"
                  + (f": {step}." if step else "."))
     return "\n\n".join(p for p in parts if p)
+
+
+def ask_ownership_note(ctx_meta: Optional[Dict[str, Any]]) -> str:
+    """The closing note of a deep brief on who raises the ask when only a person can unblock the work. Standing work (a run the
+    autopilot composed, ``standing_work`` in the meta, set by the executor from the task's kind) raises its own ask and keeps working;
+    a thread turn with a person waiting leaves the one ask to the runner (judgment_calls/ask_policy.py); a run for nobody gets no note."""
+    meta = ctx_meta or {}
+    if meta.get("standing_work"):
+        return STANDING_ASK_NOTE
+    if meta.get("asker_user_id") or meta.get("requester_user_id"):
+        return DEEP_ASK_OWNERSHIP_NOTE
+    return ""
 
 
 class DeepRunMixin:
@@ -778,8 +791,7 @@ class DeepRunMixin:
                                       verdict_reason="; ".join(checked.gaps))
                 brief = checked.brief
             done_requirements = list(getattr(plan, "done_evidence", None) or [])
-            if ctx_meta and (ctx_meta.get("asker_user_id") or ctx_meta.get("requester_user_id")):
-                brief = brief + DEEP_ASK_OWNERSHIP_NOTE   # the runner files the one ask of a thread turn (core/ask_policy.py)
+            brief = brief + ask_ownership_note(ctx_meta)
             base_brief = brief
             current_brief = brief
             # At least one attempt PER RUNG, so a ladder can always reach its terminal runner even

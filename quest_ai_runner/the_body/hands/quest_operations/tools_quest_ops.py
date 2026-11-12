@@ -136,7 +136,7 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
     factory = client_factory or (lambda: quest_client_from_env(env))
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
-        from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_dedupe_key, record_turn_ask  # ask_policy imports this module, so the import is here
+        from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import ask_dedupe_key, record_turn_ask, timing_guidance  # ask_policy imports this module, so the import is here
         summary = str(args.get("summary") or "").strip()
         if not summary:
             return ToolResult(ok=False, text="Nothing was raised: summary is empty. Write what the "
@@ -187,8 +187,23 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
             kwargs["dedupe_key"] = ask_dedupe_key(turn_id, conv_id)
             if conv_id:
                 kwargs["conv_id"] = conv_id
+        # The hub's Judgment Calls on this ask, before anything is filed (the same call the sink makes for the runner's own asks): whether
+        # to ask at all under this person's policy, and whether the ask blocks the run or waits while other work continues.
+        severity = str(args.get("severity") or "").strip().lower()
+        judgment = sink.judge(Escalation(summary=summary, quest_id=quest_id, severity=severity or None),
+                              str(kwargs.get("assignee_user_id") or ""))
+        if judgment.get("decision") in ("proceed", "decline"):
+            why = f" ({judgment['reason']})" if judgment.get("reason") and judgment["reason"] != summary else ""
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, data=dict(judgment), text=(
+                f"Not raised: this person's own policy is that this is not asked of them{why}. " + (
+                    "Go ahead on your own judgment and record what you did in your result."
+                    if judgment["decision"] == "proceed" else
+                    "Do not do the step it was about, and say in your result that it was left undone.")))
+        guidance = timing_guidance(judgment.get("timing"))
         blocked = blocked_ask(client, args, quest_id, summary, str(ctx.value("related_goal_id") or ""))
         if blocked is not None:
+            if guidance and blocked.status is ToolStatus.APPLIED:
+                blocked.text = f"{blocked.text} {guidance}"
             record_turn_ask(ctx.value("turn_asks"), decision_id=str((blocked.data or {}).get("decision_id") or ""),
                             assignee_user_id=str((blocked.data or {}).get("step_owner_id") or ""), summary=summary)
             return blocked
@@ -219,7 +234,7 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                 "or put it in your result as something you could not raise."))
         record_turn_ask(ctx.value("turn_asks"), decision_id=str(ident), assignee_user_id=str(kwargs.get("assignee_user_id") or ""), summary=summary)
         return ToolResult(ok=status in (ToolStatus.APPLIED, ToolStatus.NOOP), status=status, data=data,
-                          text=f"Raised ask {ident} for the person on quest {quest_id or '(no quest)'}.")
+                          text=f"Raised ask {ident} for the person on quest {quest_id or '(no quest)'}." + (f" {guidance}" if guidance else ""))
 
     return ToolSpec(
         name="create_decision",
@@ -252,6 +267,10 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                              "description": "Optional. Another person in this conversation who is the one to answer "
                                             "(name or id). Left out, or not matched to someone here, the ask goes to "
                                             "the person who gave the input."},
+                "severity": {"type": "string", "enum": ["medium", "high"],
+                             "description": "Optional. high only when nothing in this run can proceed without the answer: the ask "
+                                            "then blocks the work. Left out (medium), the ask waits for the person while you "
+                                            "continue with everything that does not depend on it."},
                 "blocked_goal_id": {"type": "string",
                                     "description": "Optional. Use when you are stuck on ONE specific goal because of a person: the "
                                                    "goal's id. The ask then goes to that goal's owner as a block, with a "

@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, FrozenSet, Mapping, Optional, Sequence
 
@@ -192,6 +193,11 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
 
 
 
+# The answers of the hub's Judgment Calls (``decide``): only "ask" files; "proceed" and "decline" come from a person's own policy.
+JUDGMENT_DECISIONS = ("ask", "proceed", "decline")
+JUDGMENT_NOT_FILED = ("proceed", "decline")
+
+
 @implementation("quest-decision-requests", "quest_decision")
 class QuestDecisionSink(EscalationSinkBase):
     """Adapt a QuestClient into a core EscalationSink.
@@ -206,6 +212,36 @@ class QuestDecisionSink(EscalationSinkBase):
         self._client = client
         self._default_assignee = default_assignee_user_id
         self.default_deadline_hours = default_deadline_hours
+        self.judged_by_thread = threading.local()     # the last judgment, per thread: one sink serves parallel runs
+
+    @property
+    def last_judgment(self) -> Optional[Dict[str, Any]]:
+        """What the hub's Judgment Calls said about the last ask this thread put to ``escalate`` or ``judge``: ``{decision, to, timing,
+        reason, severity}``; {} when the judgment could not be read (the ask is filed as before); None when none was made (no ask yet, a
+        reused open ask, nobody to ask)."""
+        return getattr(self.judged_by_thread, "value", None)
+
+    def judge(self, escalation: Escalation, assignee_user_id: str = "") -> Dict[str, Any]:
+        """Ask the hub's selected Judgment Calls what to do with this ask and how it is timed, before it is filed. An ask that reaches
+        this sink is something only a person can do (``needs_person``), so the default policy always answers ask: a high severity blocks
+        (``timing.mode`` sync), anything else waits while the work that does not depend on the answer continues (async). A person's own
+        policy may answer proceed or decline, and the ask is then not filed. Never raises: a judgment that fails or is not understood
+        is {} and the ask is filed as before, so a fault here never loses an ask."""
+        judgment: Dict[str, Any] = {}
+        try:
+            import hubofhubs
+            signal: Dict[str, Any] = {"reason": escalation.summary}
+            if escalation.severity:
+                signal["severity"] = str(escalation.severity)
+            got = hubofhubs.run("judgment-calls", {"signal": signal, "person": str(assignee_user_id or ""), "context": {"needs_person": True}})
+            if isinstance(got, Mapping) and got.get("decision") in JUDGMENT_DECISIONS:
+                judgment = dict(got)
+            else:
+                log.warning("escalate: Judgment Calls gave no usable decision (%r); filing the ask as before", got)
+        except Exception as e:  # noqa: BLE001 -- a judgment that fails must never lose the ask
+            log.warning("escalate: Judgment Calls failed (%s: %s); filing the ask as before", type(e).__name__, e)
+        self.judged_by_thread.value = judgment
+        return judgment
 
     def quest_owner_assignee(self, quest_id: Optional[str]) -> str:
         """The quest's owner user id, as a last-resort escalation assignee, or "".
@@ -394,6 +430,9 @@ class QuestDecisionSink(EscalationSinkBase):
         return str((placed.get("block") or {}).get("decision_id") or "")
 
     def escalate(self, escalation: Escalation) -> str:
+        """File the ask and return its decision id. "" means nothing was filed: Quest refused or nobody could be asked (logged), or the
+        hub's Judgment Calls answered proceed or decline for this person, which ``last_judgment`` then says."""
+        self.judged_by_thread.value = None
         existing = self._existing_open_decision(escalation)
         if existing:
             log.info("escalate: reusing open decision %s rather than filing a duplicate", existing)
@@ -401,6 +440,11 @@ class QuestDecisionSink(EscalationSinkBase):
         try:
             memo: Dict[str, Any] = {}      # the goal's team and owner, read once for the assignee and the block
             assignee_user_id = self.resolve_assignee(escalation, memo)
+            judgment = self.judge(escalation, assignee_user_id)
+            if judgment.get("decision") in JUDGMENT_NOT_FILED:
+                log.warning("escalate: not filed, Judgment Calls decided %s for %s (%s): %r", judgment["decision"], assignee_user_id,
+                            judgment.get("reason") or "no reason given", escalation.summary)
+                return ""
             blocked = self.file_block(escalation, assignee_user_id, memo)
             if blocked:
                 return blocked

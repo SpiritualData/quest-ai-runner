@@ -122,6 +122,17 @@ def ask_dedupe_key(turn_id: str, conv_id: str, gap: str = "") -> str:
     return f"turn-ask:{turn_id or conv_id or 'none'}"
 
 
+# What a worker is told after it raised an ask, read from the timing the hub's Judgment Calls gave it (``{mode: sync|async, ...}``).
+ASK_WAITS_GUIDANCE = "It waits for the person: continue with the parts that do not depend on the answer."
+ASK_BLOCKS_GUIDANCE = "This blocks the work: stop and say so in your result."
+
+
+def timing_guidance(timing: Optional[Mapping[str, Any]]) -> str:
+    """One sentence for the worker on what the ask's timing means for the rest of its run; "" when no timing is known."""
+    mode = str((timing or {}).get("mode") or "") if isinstance(timing, Mapping) else ""
+    return {"sync": ASK_BLOCKS_GUIDANCE, "async": ASK_WAITS_GUIDANCE}.get(mode, "")
+
+
 @dataclass
 class AskOutcome:
     decision_id: str = ""
@@ -153,6 +164,11 @@ def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options:
         return AskOutcome(error=f"{type(e).__name__}: {e}")
     decision_id = str(decision_id or "")
     if not decision_id:
+        judged = getattr(sink, "last_judgment", None)
+        if isinstance(judged, Mapping) and judged.get("decision") in ("proceed", "decline"):
+            # the hub's Judgment Calls, under this person's own policy: said plainly, so the turn never claims an ask exists
+            return AskOutcome(error=f"not filed: Judgment Calls decided {judged['decision']} for this person"
+                                    + (f" ({judged['reason']})" if judged.get("reason") else ""))
         return AskOutcome(error="the sink returned no decision id")
     return AskOutcome(decision_id=decision_id, assignee=assignee)
 
