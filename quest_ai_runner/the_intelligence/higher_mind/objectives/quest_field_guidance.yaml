@@ -59,7 +59,7 @@ what_a_quest_is:
 
 universal_rules:
   - "Write in the person's own words. Keep their specific nouns, names, numbers and dates."
-  - "Specific beats inspiring. No filler, no exclamation marks, no emoji, no em dashes."
+  - "Specific beats inspiring. No filler, no exclamation marks, no emoji, no em dashes. When you write in English, use American spelling (for example practice, color, organize)."
   - "Never invent a fact, number, date or constraint the person did not give and the record does not show."
   - "Keep what is already in the field and still true. A new fact is added to the field, it does not replace it."
   - "Only change a field the person asked to change. Anything else you notice is a suggestion, not an edit."
@@ -124,10 +124,11 @@ fields:
       The intent's Metrics: measurable indicators that the end state is reached. Each one is
       verifiable by anyone, with a number, a threshold or a named measurement. They are HIGH LEVEL:
       they clarify the intent itself by saying how anyone would know the outcome is true.
-    summary: "Three to six high level pass or fail indicators of the end state, each with a number, threshold or named measurement. Never tasks."
+    summary: "Three to five short, simple pass or fail indicators of the end state (about 8 to 14 words, one number and one thing measured). Never tasks."
     rules:
-      - "Three to six lines. Each line is one pass or fail indicator of the END STATE that a stranger could verify without asking anyone."
-      - "Each line carries a number, threshold, date or named measurement or artifact."
+      - "Three to five lines by default, never more than six. Each line is one pass or fail indicator of the END STATE that a stranger could verify without asking anyone, and each is checkable on its own."
+      - "SHORT AND SIMPLE: one plain sentence of about 8 to 14 words, with ONE number and ONE thing measured, in everyday words. No jargon and no stacked conditions: do not chain 'and', 'with', 'across' or 'for two months in a row'. Keep the number and unit, drop the commentary; the person can ask for detail."
+      - "Start every line with '- ' (a dash and a space), one line per indicator, nothing else on the line."
       - "Describe the world when the quest is done, never activities, tasks or process ('is logged', 'will review')."
       - "Keep them high level. They clarify the intent itself, so they stay true however the work is done."
       - "Never write a criterion from the latest thing the person asked for. A single request, a to-do or a task is not an indicator of the end state, however recent. This is the most common mistake."
@@ -135,9 +136,11 @@ fields:
       - "Each line stands alone and does not restate the outcome."
       - "Keep the person's existing criteria unless they asked to change them. Add or revise only what they asked about."
     good:
-      - "Zero open bugs marked high priority older than 14 days."
-      - "At least 2,000 users are active in a given week for 12 consecutive weeks."
-      - "Median time from sign up to first completed goal is under 10 minutes."
+      - "- Zero open bugs marked high priority older than 14 days."
+      - "- At least 2,000 users are active in a given week for 12 consecutive weeks."
+      - "- Median time from sign up to first completed goal is under 10 minutes."
+      - "- Hit rate on blind tests at least 25 points above chance."
+      - "- Practice 5 days a week for 4 weeks."
     bad:
       - "Every bug is logged here."
       - "The open bug list shrinks."
@@ -245,7 +248,7 @@ fields:
       criterion or a named measurement: one metric, a target and a unit.
     summary: "Each item is one countable metric with a target and a unit."
     rules:
-      - "Each item names one metric, a target value and a unit, and a baseline and date when known."
+      - "Each item names one metric, a target value and a unit, in one short plain sentence of about 8 to 14 words (one number, one thing measured, no stacked conditions). Add a baseline or date only when the person gave one."
       - "Prefer result metrics over effort metrics, with at most one effort metric."
       - "Add an item only when the person asked, or the quest is being specified for the first time. Never reword, merge or delete existing items."
       - "A new goal gets its own criteria instead of a new quest-level item."
