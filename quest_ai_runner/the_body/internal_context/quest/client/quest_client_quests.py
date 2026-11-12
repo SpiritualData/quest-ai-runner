@@ -521,7 +521,10 @@ class QuestsMixin:
             resp = self._request("GET", f"/api/quests/{quest_id}/state") or {}
             return resp if isinstance(resp, dict) else {}
         except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("get_my_quest failed for quest %s: %s", quest_id, e)
+            # A 403 or 404 is Quest's answer that the quest is gone or not this account's to see, which this method
+            # documents as {}. It goes to the log file only; a person in the terminal has nothing to act on.
+            expected = getattr(e, "status", None) in (403, 404)
+            log.warning("get_my_quest failed for quest %s: %s", quest_id, e, extra={"in_transcript": not expected})
             return {}
 
     def archive_quest(self, quest_id: str) -> WriteResult:
