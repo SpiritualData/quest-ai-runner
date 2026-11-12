@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import EVENT_CONTEXT, EVENT_MODE_SIGNAL, EVENT_UNDERSTANDING, Mode
 from hubofhubs.api import ProgressEvent
+from quest_ai_runner.the_intelligence.higher_mind.objectives.scope_tags import affinity_meta
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
@@ -904,7 +905,9 @@ class RunBeginMixin:
                     # ``_ctx_meta`` itself is left untouched, so mid-loop reads through
                     # ``TurnCardCache`` stay unbounded and a late full assembly is still
                     # recoverable there.
-                    assemble_meta = with_assembly_deadline(_ctx_meta)
+                    # In affinity quest-scope mode the turn's quest tags are what it is ABOUT (rank), not a fence, for EVERY arm the assembler
+                    # composes (a consumer's own record arms included), so move them here once; in fence mode this returns the meta unchanged.
+                    assemble_meta = with_assembly_deadline(affinity_meta(_ctx_meta) if _ctx_meta else _ctx_meta)
                     # DOCS-FALLBACK GATING (see ``gate_docs_fallback``): usually a miss this early
                     # in the turn (the reach judge was only just prefetched above, around the same
                     # moment as this), which is correct -- this must never wait on it -- but a
