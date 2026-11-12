@@ -45,13 +45,22 @@ from quest_ai_runner.the_intelligence.mind.planner.handoff_gate import HANDOFF_N
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read, milestone_cue
 from hubofhubs.api import relativize, remove_em_dashes
 from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import figure_evidence, without_unsupported
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_ADVICE, standard_for
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_ADVICE, standard_for, turn_holds_records
 from quest_ai_runner.the_world.tools.tools import ToolContext
 
 
 
 #: Consecutive read steps that found nothing before the planner is told no further read will help.
 EMPTY_READ_STEPS_BEFORE_NOTE = 2
+
+
+def figures_exempt(rs) -> bool:
+    """True when the figure pass is skipped for this reply: the planner took it for general ADVICE and the turn read none of the person's records (Joshua, 2026-11-11,
+    "exempt general answers"). A reply that had records in front of it can state a figure about them, so it stays checked even when the planner called it advice."""
+    return bool(rs.plan is not None
+                and standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE
+                and not turn_holds_records(getattr(rs, "_sources", None), getattr(rs, "gathered", None)))
+
 
 class RunLoopMixin:
     """The turn's exit (``finish``) and the bounded plan, gather and re-plan loop."""
@@ -208,8 +217,7 @@ class RunLoopMixin:
                 # (the first 5,000 characters of the context, 2,500 of each read) made true figures read as unsupported and took whole sentences out.
                 # Not held to an ADVICE reply (a general how-to answer): its amounts and times ("ten minutes a day") are suggestions, not readings
                 # of the person's records, and cutting them took the sentence (and the list item) out of the very answer the person asked for.
-                advice_reply = (rs.plan is not None and standard_for(
-                    rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE)
+                advice_reply = figures_exempt(rs)
                 dropped = []
                 if not advice_reply:
                     res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
