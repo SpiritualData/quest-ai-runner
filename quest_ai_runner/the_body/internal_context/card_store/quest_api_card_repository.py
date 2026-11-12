@@ -641,7 +641,7 @@ class QuestApiCardRepository:
         self._max_updated = float(stamp.get("max_updated_at") or 0.0)
         count = stamp.get("count")
         self._count_offset = (len(cards) - int(count)) if isinstance(count, int) else 0
-        self._cache.store_listing(cards, self._max_updated)
+        self._store_listing(cards)
 
     def _refresh(self) -> Dict[str, Dict[str, Any]]:
         """Bring the in-memory listing up to date: first load pages everything; later refreshes fetch
@@ -654,7 +654,9 @@ class QuestApiCardRepository:
             # Cold start. If the backend cannot be reached, serve the stored listing (still loud: the
             # error was logged and counted) and force a full refresh on the next successful call.
             try:
-                self._full_refresh(self._fetch_stamp(max_age_s=_LISTING_TTL_S))
+                stamp = self._fetch_stamp(max_age_s=_LISTING_TTL_S)
+                if not self._adopt_stored_listing(stamp):
+                    self._full_refresh(stamp)
             except QuestCardApiError:
                 warm = self._cache.load_listing()
                 if warm:
@@ -675,6 +677,38 @@ class QuestApiCardRepository:
         self._listing_at = time.monotonic()
         return self._cards
 
+    def _store_listing(self, cards: Dict[str, Dict[str, Any]]) -> None:
+        """Keep the listing for the next session, with the offset that lets it detect deletions."""
+        try:
+            self._cache.store_listing(cards, self._max_updated, count_offset=self._count_offset)
+        except TypeError:   # a cache written before the offset was kept
+            self._cache.store_listing(cards, self._max_updated)
+
+    def _adopt_stored_listing(self, stamp: Dict[str, Any]) -> bool:
+        """Start from the listing the last session stored and fetch only the cards written since (one small request when
+        nothing changed: the stamp alone settles it). False when nothing usable is stored, so the caller pages everything.
+        The delta falls back to one full refresh by itself when the count says a card was deleted."""
+        warm = self._cache.load_listing()
+        if not warm or not warm[0]:
+            return False
+        stored, stored_max = dict(warm[0]), float(warm[1] or 0.0)
+        count = stamp.get("count")
+        offset_of = getattr(self._cache, "load_count_offset", None)
+        offset = offset_of() if callable(offset_of) else None
+        if offset is None:
+            return False   # a listing stored before the offset was kept: one full refresh stores it
+        self._cards, self._max_updated = stored, stored_max
+        self._scope_of = {cid: (str(c.get("team_id") or ""), str(c.get("org_id") or "")) for cid, c in stored.items()}
+        if float(stamp.get("max_updated_at") or 0.0) == stored_max:
+            # Nothing was written since: the stored listing is current unless a card was deleted, which the stored offset catches.
+            self._count_offset = offset
+            if isinstance(count, int) and len(stored) - offset != count:
+                return False
+            return True
+        self._count_offset = offset
+        self._delta_refresh(stamp)
+        return True
+
     def _delta_refresh(self, stamp: Dict[str, Any]) -> None:
         """Merge the cards written since the last ``max_updated_at``; one full refresh if the count
         still disagrees (something was deleted)."""
@@ -686,7 +720,7 @@ class QuestApiCardRepository:
                 len(self._cards) - self._count_offset != stamp["count"]):
             self._full_refresh(stamp)
         else:
-            self._cache.store_listing(self._cards, self._max_updated)
+            self._store_listing(self._cards)
 
     def load_all(self) -> Dict[str, Dict[str, Any]]:
         """Every readable card as ``{card_id: card}``. On a backend failure the error is logged and

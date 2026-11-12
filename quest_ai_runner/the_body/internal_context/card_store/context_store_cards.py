@@ -198,6 +198,15 @@ class CardsMixin:
             _log.debug("write_card failed for %s", card_id, exc_info=True)
             return False
 
+    def get_listed_card(self, card_id: str) -> Optional[Dict[str, Any]]:
+        """The card as the synced listing holds it (no request per card), or None. For bulk comparisons such as "has this card
+        changed?"; ``get_card`` stays the read-through for a consumer that needs the freshest copy."""
+        try:
+            held = self._load_all().get(card_id)
+            return held if isinstance(held, dict) else None
+        except Exception:  # noqa: BLE001
+            return None
+
     def get_card(self, card_id: str) -> Optional[Dict[str, Any]]:
         """Return the RAW stored card dict for ``card_id`` (or None if absent). Never raises.
 

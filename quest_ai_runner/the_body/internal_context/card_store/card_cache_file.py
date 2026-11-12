@@ -70,9 +70,18 @@ class FileCardCache:
         except (TypeError, ValueError):
             return None
 
-    def store_listing(self, cards: Dict[str, Dict[str, Any]], max_updated_at: float) -> None:
+    def store_listing(self, cards: Dict[str, Dict[str, Any]], max_updated_at: float,
+                      count_offset: Optional[int] = None) -> None:
         with self.lock:
-            self.write_json(LISTING_FILE, {"max_updated_at": max_updated_at, "cards": cards})
+            self.write_json(LISTING_FILE, {"max_updated_at": max_updated_at, "cards": cards,
+                                           "count_offset": count_offset})
+
+    def load_count_offset(self) -> Optional[int]:
+        """How far the stored listing's size ran from the backend's count when it was stored (None: unknown)."""
+        with self.lock:
+            data = self.read_json(LISTING_FILE)
+        found = data.get("count_offset") if isinstance(data, dict) else None
+        return found if isinstance(found, int) else None
 
     def enqueue_write(self, card_id: str, card: Dict[str, Any], team_id: str) -> bool:
         """Queue a failed write; a newer write of the same card replaces the queued one in place."""

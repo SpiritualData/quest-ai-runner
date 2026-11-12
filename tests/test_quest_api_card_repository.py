@@ -167,6 +167,28 @@ def test_a_later_refresh_fetches_only_what_changed_then_a_deletion_forces_one_fu
     assert "updated_after" not in lists[-1][2]      # the count mismatch triggered a full refresh
 
 
+def test_a_new_session_starts_from_the_stored_listing_and_downloads_only_what_changed(backend, tmp_path):
+    from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
+    for i in range(3):
+        backend.put(f"c{i}", {"name": f"Card {i}"})
+    assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 3      # the first session pages everything
+
+    backend.requests.clear()
+    assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 3      # nothing changed: the stamp settles it
+    assert [r for r in backend.requests if r[1] == "/api/cards"] == []
+
+    backend.put("c3", {"name": "Card 3"})
+    backend.requests.clear()
+    assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 4      # one card changed: only it is fetched
+    lists = [r for r in backend.requests if r[1] == "/api/cards"]
+    assert len(lists) == 1 and float(lists[0][2]["updated_after"]) > 0
+
+    del backend.cards[("", "c0")]
+    backend.requests.clear()
+    cards = make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()                 # a deletion since the last session
+    assert "c0" not in cards and len(cards) == 3
+
+
 def test_revision_uses_the_stamp_endpoint_and_changes_with_writes(backend):
     backend.put("c0", {"name": "Zero"})
     repo = make_repo(backend)

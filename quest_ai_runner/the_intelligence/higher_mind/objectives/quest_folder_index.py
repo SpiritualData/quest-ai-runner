@@ -477,7 +477,8 @@ def sync_quest_cards(store, entries: Sequence[QuestFolder], corpus_root: Optiona
             continue
         card = quest_card(entry, corpus_root)
         try:
-            existing = store.get_card(card["id"]) or {}
+            read = getattr(store, "get_listed_card", None) or store.get_card   # the synced listing: no request per quest
+            existing = read(card["id"]) or {}
         except Exception:  # noqa: BLE001
             existing = {}
         if all(existing.get(k) == card[k] for k in ("name", "keywords", "content", "files",
