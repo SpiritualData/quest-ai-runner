@@ -262,6 +262,11 @@ DECIDE_TOOL: Dict[str, Any] = {
             "reply_shape": {"type": "string", "enum": list(REPLY_SHAPES)},
             # The structure move the turn calls for (hub: structure-in-conversation); optional, absent means none. The rubric states each value.
             "structure_move": {"type": "string", "enum": list(MOVES)},
+            # The decision the web research of this turn serves, and the discipline fixed before reading (what would count as a good source, what would change the
+            # conclusion); optional, empty for a quick fact. The rubric states each. The research is kept on the quest only when the decision is set.
+            "research_decision": {"type": "string"},
+            "research_criteria": {"type": "string"},
+            "research_change": {"type": "string"},
             # Whether the message accepts or declines the open offer to keep structure (only when an OFFER IS OPEN note is in the context); optional, absent means false.
             "accepts_offer": {"type": "boolean"},
             "declines_offer": {"type": "boolean"},

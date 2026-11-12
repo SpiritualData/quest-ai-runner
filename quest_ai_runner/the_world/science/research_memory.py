@@ -43,6 +43,7 @@ class QuestInvestigationStore:
     def __init__(self, client: Any, quest_id: str):
         self.client, self.quest_id = client, quest_id
         self.rows: Dict[str, Mapping[str, Any]] = {}
+        self.last: Mapping[str, Any] = {}
 
     def related(self, solution_ids: Sequence[str], scope: Sequence[str] = (), today: str = "") -> List[Dict[str, str]]:
         found = self.client.earlier_investigations(self.quest_id, list(solution_ids)) or []
@@ -53,7 +54,33 @@ class QuestInvestigationStore:
         return [dict(i) for i in (self.rows.get(investigation_id) or {}).get("items") or []]
 
     def write(self, spec: Mapping[str, Any]) -> str:
-        raise NotImplementedError("a quest records an investigation through the investigate_for_quest tool")
+        """Record the hub's investigation on the quest through the Quest API's own record call (the one the ``investigate_for_quest`` tool uses, with the same body builder).
+        One that extends an earlier investigation of the quest (the hub keeps its id) is recorded as its successor, so the earlier one is superseded, not duplicated."""
+        from quest_ai_runner.the_world.tools.tools import data_of
+        row, items = dict(spec["investigation"]), list(spec["items"])
+        cells = [[p.strip() for p in entry.split("|")] for entry in str(row.get("queries") or "").split(";") if entry.strip()]
+        counted = [entry.strip().split(" ", 1) for entry in str(row.get("screened_out") or "").split(";") if entry.strip()]
+        hub_record = {"investigation": row, "items": items, "queries": [dict(zip(("source", "query", "date", "hits"), c)) for c in cells],
+                      "screened_out": {reason: int(n) for n, reason in counted if n.isdigit()}}
+        solution_ids = [link[9:] for link in str(row.get("links") or "").split(";") if link.startswith("solution:")] or [self.quest_id]
+        extends = row["investigation_id"] if row["investigation_id"] in self.rows else ""
+        body = investigate.quest_record(hub_record, solution_ids=solution_ids, origin="chat", asked_by="person", extends=extends)
+        if row.get("refresh_on"):
+            body["refresh_on"] = row["refresh_on"]
+        if row.get("change_my_mind"):
+            body["limitations"] = list(body.get("limitations") or []) + [f"What would change this: {row['change_my_mind']}"]
+        made = data_of(self.client.record_investigation(self.quest_id, row["question"], **{k: v for k, v in body.items() if k != "question"})) or {}
+        if not made.get("investigation_id"):
+            raise RuntimeError("Quest refused the investigation")
+        self.last = made
+        return str(made["investigation_id"])
+
+
+def choose_solution(records: Mapping[str, Any], text: str, ask: Optional[Callable[[str], str]] = None) -> str:
+    """The one solution of the quest's records that ``text`` informs, by the same matcher the structure reply uses (the hub's Relevant Solutions arm: the records' shortlist, then one
+    fast-tier call), or '' when none fits. ``records`` is ``{table: {record id: row}}``."""
+    from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import solution_choice
+    return solution_choice(records, text, ask or investigate.world_ask)
 
 
 def earlier_text(earlier: Mapping[str, str], state: str) -> str:

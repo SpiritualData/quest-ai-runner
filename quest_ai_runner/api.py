@@ -122,7 +122,7 @@ from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
 from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import MetricSourceError, checked_reading
 from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateLinkWebResearch
-from quest_ai_runner.the_world.science.research_memory import RecordedWebResearch, ResearchMemory
+from quest_ai_runner.the_world.science.research_memory import RecordedWebResearch, ResearchMemory, choose_solution
 from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
 
 # Proactivity (gate-an-autopilot-pass): the markers autopilot tasks carry, read back by the host
@@ -214,6 +214,7 @@ __all__ = [
     "PrivateLinkWebResearch",
     "RecordedWebResearch",
     "ResearchMemory",
+    "choose_solution",
     "QUEST_DATA_WRITE_SURFACE_INSTRUCTION",
     "QUEST_SPEC_RECORDS",
     "QdrantCardRepository",

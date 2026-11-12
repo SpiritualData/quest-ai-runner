@@ -17,6 +17,7 @@ from hubofhubs.api import (
     EVENT_TOKENS, Mode)
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
+from quest_ai_runner.the_world.science.turn_research import KEPT_SENTENCE, keep as keep_turn_research
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import turn_grounding
 from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import finish_structure, open_offer_for, open_offer_note, settle_offer
@@ -275,6 +276,10 @@ class RunLoopMixin:
             # threads, zero events.
             if self.anticipator is not None and cfg.anticipation_enabled:
                 self._kickoff_anticipation(user_message=rs.user_message, ctx_meta=_ctx_meta)
+            # RESEARCH KEPT (the_world/science/turn_research.py): a turn that did web reads for a decision the planner named records one investigation on its quest after the
+            # reply, from the reads it already holds (no new search); the reply says in one clause that it was kept.
+            if not dry_run_writes.active() and res.kind == "answer" and keep_turn_research(self, rs, res, gathered) and res.text:
+                res.text = res.text.rstrip() + "\n\n" + KEPT_SENTENCE
             # Final token event so consumers get the definitive total alongside the result.
             _fti = res.tokens_in
             _fto = res.tokens_out
