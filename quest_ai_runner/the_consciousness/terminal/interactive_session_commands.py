@@ -47,7 +47,21 @@ class CommandsMixin:
         "deep": "quality", "thorough": "quality", "hard": "quality",
     }
 
-    _VALID_TIERS = {"fast", "balanced", "quality", "best", "auto"}
+    @staticmethod
+    def _tier_names() -> tuple:
+        """The hub's tiers (one list, ``role_tiers.TIERS``: a tier added or removed there changes this command with no edit here)."""
+        from hubofhubs.api import role_tiers
+        return tuple(role_tiers.TIERS)
+
+    @property
+    def _VALID_TIERS(self) -> set:
+        return {*self._tier_names(), "auto"}
+
+    def _model_choice(self, name: str) -> Optional[str]:
+        """``name`` as a hub tier, or as an explicit model the hub serves (as the registry names it); None when it is neither."""
+        if name in self._VALID_TIERS:
+            return name
+        return self._orch.registry.explicit_model(name)
 
     def _cmd_model(self, arg: str) -> None:
         """Set the model tier directly (no arg resets to auto)."""
@@ -55,7 +69,7 @@ class CommandsMixin:
         if not arg:
             current = self._model_hint or "auto (orchestrator decides)"
             c.dim(f"  Model: {current}")
-            c.dim("  Usage: /model fast | balanced | quality | best, or /models for a menu")
+            c.dim(f"  Usage: /model {' | '.join(self._tier_names())} | <model name>, or /models for a menu")
             return
         tier = arg.lower().strip()
         if tier in ("auto", "reset", "clear"):
@@ -63,11 +77,12 @@ class CommandsMixin:
             c.dim("  Model set to auto (orchestrator decides).")
             self._persist_session_state()
             return
-        if tier not in self._VALID_TIERS:
-            c.dim(f"  Unknown tier {tier!r}. Choose: fast, balanced, quality, best")
+        chosen = self._model_choice(tier)
+        if chosen is None:
+            c.dim(f"  Unknown tier or model {tier!r}. Choose: {', '.join(self._tier_names())}, or /models for the models the hub serves")
             return
-        self._model_hint = tier
-        c.dim(f"  Model set to {tier}.")
+        self._model_hint = chosen
+        c.dim(f"  Model set to {chosen}.")
         self._persist_session_state()
 
     def _cmd_depth(self, arg: str) -> None:
@@ -113,14 +128,11 @@ class CommandsMixin:
         from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
         registry = self._orch.registry
         models = registry.top_models()
-        # Build menu with semantic tiers and actual model names
-        self._model_tiers = [
-            ("auto",      "orchestrator decides (recommended)"),
-            ("fast",      f"light-weight tasks: {models['fast']}"),
-            ("balanced",  f"general chat and coding: {models['balanced']}"),
-            ("quality",   f"thorough, deep reasoning: {models['quality']}"),
-            ("best",      f"best available (if needed): {models['best']}"),
-        ]
+        notes = {"fast": "light-weight tasks", "balanced": "general chat and coding", "quality": "thorough, deep reasoning", "best": "best available (if needed)"}
+        # the tiers come from the hub's list, then the explicit models the hub serves; no name is written here
+        self._model_tiers = [("auto", "orchestrator decides (recommended)")]
+        self._model_tiers += [(t, f"{notes.get(t, 'a hub tier')}: {models.get(t, 'no model chosen')}") for t in self._tier_names()]
+        self._model_tiers += [(m, "a model the hub serves") for m in registry.served_models() if m not in self._tier_names()]
 
     def _skills_dir(self) -> Optional[str]:
         """Resolve the local skills directory: QAR_SKILLS_DIR > corpus_root/.claude/skills > cwd/.claude/skills."""

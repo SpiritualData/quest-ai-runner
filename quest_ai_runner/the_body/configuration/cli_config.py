@@ -351,7 +351,8 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # configured could never execute anything.
     # Allow model tier overrides via env vars: QAR_MODEL_FAST, QAR_MODEL_BALANCED, QAR_MODEL_QUALITY, QAR_MODEL_BEST
     model_fallback = {}
-    for tier in ("fast", "balanced", "quality", "best"):
+    from hubofhubs.api import role_tiers
+    for tier in role_tiers.TIERS:
         env_key = f"QAR_MODEL_{tier.upper()}"
         if os.getenv(env_key):
             model_fallback[tier] = os.getenv(env_key)

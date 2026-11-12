@@ -385,6 +385,21 @@ class ModelRegistry:
             self._selected_for = key
         return dict(self._selected)
 
+    def served_models(self) -> List[str]:
+        """The explicit models the hub can serve among the providers this lane can call (``hubofhubs.tiers.served_models``, read from the hub's registry, never listed here),
+        for a picker to offer after the tiers. Never raises: a failing read offers none."""
+        try:
+            names = configured_providers(getattr(self._provider, "providers", None) or self._providers, self._provider)
+            return list(dict.fromkeys(m for name in sorted(names) for m in hub_tiers.served_models(name)))
+        except Exception:  # noqa: BLE001 -- a picker must open even when the registry cannot be read
+            log.warning("served models skipped: the hub's registry could not be read", exc_info=True)
+            return []
+
+    def explicit_model(self, name: Optional[str]) -> Optional[str]:
+        """The served model ``name`` names (case does not matter), or None."""
+        wanted = (name or "").strip().lower()
+        return next((m for m in self.served_models() if m.lower() == wanted), None) if wanted else None
+
     def lower_tier(self, tier: str) -> Optional[str]:
         return next_lower_tier(tier)
 
