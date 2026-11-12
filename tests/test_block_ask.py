@@ -274,3 +274,25 @@ def test_a_sink_ask_filed_as_a_block_carries_the_full_question_conversation_reci
     assert body["deadline"] == due.isoformat()
     assert len([r for r in seen if r[0] == "GET" and r[1].startswith("/api/quests/q1/state")]) == 1
     assert len([r for r in seen if r[0] == "GET" and "/members" in r[1]]) <= 2
+
+
+# --- a block's ask goes to the goal's owner: never filed onto a goal the person this ask is for does not own ------------------
+
+
+def test_a_block_is_filed_only_for_the_goal_owner_the_ask_resolved_to():
+    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import blocked_ask
+
+    class Client:
+        def __init__(self):
+            self.expected = []
+
+        def report_block(self, quest_id, goal_id, block_type, reason, *, expected_owner=""):
+            self.expected.append(expected_owner)
+            return {"block": {"decision_id": "d1"}, "created": True}
+
+    client = Client()
+    args = {"blocked_goal_id": "g1", "block_type": "needs_access"}
+    assert blocked_ask(client, args, "q1", "Need the login") is None          # nobody to ask: no block, the plain ask goes out
+    assert client.expected == []
+    assert blocked_ask(client, args, "q1", "Need the login", "", OWNER).status is ToolStatus.APPLIED
+    assert client.expected == [OWNER]                                         # the backend is told whose goal it must be

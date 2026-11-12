@@ -1657,8 +1657,8 @@ def test_executor_task_model_field_reaches_provider():
     registry = ModelRegistry(provider)
     expected_opus = registry.resolve_tier("opus")
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
-    # first, on the cheap "fast" tier (never the hint), before the real, hinted answer call.
-    expected_fast = registry.resolve_tier("fast")
+    # first, on the tier the hub's table gives its role (never the hint), before the real, hinted answer call.
+    expected_fast = registry.resolve_tier("balanced")  # the goal-condition call says tier "caller": the hub's role-tier table gives it balanced (CHANGELOG 2026-11-11)
     assert provider.answer_models == [expected_fast, expected_opus]
 
 
@@ -1676,7 +1676,7 @@ def test_executor_task_without_model_field_uses_planner_tier():
     expected_balanced = registry.resolve_tier("balanced")  # planner_tier default = balanced
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
     # first, on the cheap "fast" tier, before the real answer call.
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier("balanced")  # the goal-condition call says tier "caller": the hub's role-tier table gives it balanced (CHANGELOG 2026-11-11)
     assert provider.answer_models == [expected_fast, expected_balanced]
 
 
@@ -1697,7 +1697,7 @@ def test_executor_deep_run_model_wins_over_model():
     assert out.status == "done"
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier("balanced")  # the goal-condition call says tier "caller": the hub's role-tier table gives it balanced (CHANGELOG 2026-11-11)
     expected_opus = registry.resolve_tier("opus")
     # STAGE 1's cheap goal-condition call is always on "fast"; the hinted answer call must be opus.
     assert provider.answer_models == [expected_fast, expected_opus]
@@ -1717,7 +1717,7 @@ def test_executor_falls_back_to_model_when_no_deep_run_model():
     assert out.status == "done"
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier("balanced")  # the goal-condition call says tier "caller": the hub's role-tier table gives it balanced (CHANGELOG 2026-11-11)
     expected_opus = registry.resolve_tier("opus")
     assert provider.answer_models == [expected_fast, expected_opus]
 
@@ -1736,7 +1736,7 @@ def test_executor_task_model_none_is_same_as_absent():
     expected_sonnet = registry.resolve_tier("sonnet")
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
     # first, on the cheap "fast" tier, before the real answer call.
-    expected_fast = registry.resolve_tier("fast")
+    expected_fast = registry.resolve_tier("balanced")  # the goal-condition call says tier "caller": the hub's role-tier table gives it balanced (CHANGELOG 2026-11-11)
     assert provider.answer_models == [expected_fast, expected_sonnet]
 
 

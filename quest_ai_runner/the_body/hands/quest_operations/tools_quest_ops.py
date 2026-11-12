@@ -105,18 +105,23 @@ ASK_ALREADY_ANSWERED_GUIDANCE = (
     "own judgment or report what you could not do.")
 
 
-def blocked_ask(client, args: Mapping[str, Any], quest_id: Optional[str], summary: str, run_goal_id: str = "") -> Optional[ToolResult]:
+def blocked_ask(client, args: Mapping[str, Any], quest_id: Optional[str], summary: str, run_goal_id: str = "", assignee_user_id: str = "") -> Optional[ToolResult]:
     """The ask raised as a BLOCK on a goal (the quest team's three-day hand-off), or None to raise a plain ask instead.
 
     Only when the worker named the goal it is stuck on and a block type, on a quest that has a team and a known goal. Any
     failure of the block (no team, unknown goal, a Quest without the personal process, a refusal) returns None so the person is
-    still asked the ordinary way; a block that already stands is reported as already open, never filed twice."""
+    still asked the ordinary way; a block that already stands is reported as already open, never filed twice.
+
+    The block's ask goes to the goal's own owner (the backend gives it to the goal's assignee, else its creator), so it is filed only
+    when that owner is the person this ask resolved to (``assignee_user_id``, never this runner's own account). With no such person,
+    or a goal owned by someone else (an AI-owned goal would send the ask to an account nobody reads), the plain ask is raised."""
     goal_id = str(args.get("blocked_goal_id") or run_goal_id or "").strip()   # a run working one goal needs no id spelled out
     block_type = str(args.get("block_type") or "").strip().lower()
-    if not (goal_id and block_type and quest_id):
+    if not (goal_id and block_type and quest_id and assignee_user_id):
         return None
     try:
-        placed = client.report_block(quest_id, goal_id, block_type, str(args.get("block_reason") or "").strip() or summary)
+        placed = client.report_block(quest_id, goal_id, block_type, str(args.get("block_reason") or "").strip() or summary,
+                                    expected_owner=str(assignee_user_id))
     except Exception as error:  # noqa: BLE001 -- a block that cannot be filed falls back to the plain ask
         log.info("create_decision: block on goal %s not filed (%s); raising a plain ask", goal_id, error)
         return None
@@ -200,7 +205,8 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
                     if judgment["decision"] == "proceed" else
                     "Do not do the step it was about, and say in your result that it was left undone.")))
         guidance = timing_guidance(judgment.get("timing"))
-        blocked = blocked_ask(client, args, quest_id, summary, str(ctx.value("related_goal_id") or ""))
+        blocked = blocked_ask(client, args, quest_id, summary, str(ctx.value("related_goal_id") or ""),
+                              str(kwargs.get("assignee_user_id") or ""))
         if blocked is not None:
             if guidance and blocked.status is ToolStatus.APPLIED:
                 blocked.text = f"{blocked.text} {guidance}"
