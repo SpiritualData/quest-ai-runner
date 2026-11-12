@@ -243,22 +243,24 @@ def test_the_verifier_is_given_the_participants_of_the_turn():
     assert [p["user_id"] for p in seen["participants"]] == ["u1", "u2"]
 
 
-def test_an_answer_turn_blocked_on_a_person_files_one_ask_when_switched_on_and_none_when_off():
+def test_an_answer_turn_blocked_on_a_person_files_one_ask_whether_streaming_is_on_or_off_and_none_without_a_sink():
     verdict = {"met": False, "reason": "needs the trip dates", "blocker": "needs_person", "question": "What are the trip dates?"}
     meta = {"asker_user_id": "u1", "conv_id": "c1", "turn_id": "t1", "participants": [{"user_id": "u1", "name": "Ana"}]}
+    # Filing the ask is gated on the escalation sink (cbff0e07), not on interim_replies, which controls streaming only.
     for switched_on in (True, False):
         sink = Sink()
         orch = build(Provider([dict(LOOKUP)], verdicts=[dict(verdict), dict(verdict)]), Runner([DeepResult(met=False, output="")]), sink=sink,
                      interim_replies=switched_on, answer_goal_max_iterations=3)
         events = run(orch, meta=meta)
         asks = [e for e in events if e["type"] == EVENT_DECISION]
-        if switched_on:
-            assert len(sink.sent) == 1 and sink.sent[0].assignee == "u1" and len(asks) == 1
-            assert asks[0]["data"]["question"] == "What are the trip dates?"
-            result = [e for e in events if e["type"] == EVENT_RESULT][-1]
-            assert "What are the trip dates?" in result["text"]
-        else:
-            assert not sink.sent and not asks
+        assert len(sink.sent) == 1 and sink.sent[0].assignee == "u1" and len(asks) == 1
+        assert asks[0]["data"]["question"] == "What are the trip dates?"
+        result = [e for e in events if e["type"] == EVENT_RESULT][-1]
+        assert "What are the trip dates?" in result["text"]
+    # No escalation sink: nothing can be filed, and nothing is.
+    orch = build(Provider([dict(LOOKUP)], verdicts=[dict(verdict), dict(verdict)]), Runner([DeepResult(met=False, output="")]), sink=None,
+                 interim_replies=True, answer_goal_max_iterations=3)
+    assert not [e for e in run(orch, meta=meta) if e["type"] == EVENT_DECISION]
 
 
 def test_a_worker_claim_with_figures_and_no_receipt_never_reaches_an_interim():

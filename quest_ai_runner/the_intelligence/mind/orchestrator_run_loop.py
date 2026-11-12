@@ -200,7 +200,8 @@ class RunLoopMixin:
             # --- EM DASH PASS (the hub's Response Quality em_dash_free arm): brand rule, enforced once on the words the reader gets -------------
             # Runs after the link guard so a URL is never touched, and before the write-back and EVENT_RESULT so the text shown,
             # persisted and learned from is the same. Tool arguments are cleaned where the tool runs (ToolRegistry.invoke).
-            if res.kind == "answer" and not getattr(rs, "draft_in_chat", False) and (res.text or "").strip():
+            if (res.kind == "answer" and not getattr(rs, "draft_in_chat", False) and (res.text or "").strip()
+                    and (res.text or "").strip() != (getattr(rs, "_parked_ask_text", "") or "").strip()):    # a parked approval card's own wording goes out verbatim
                 # Every figure in a status or answer reply must be one this turn read (the hub's grounded_figures arm): a sentence that states one it did not is taken out.
                 # Held to everything the writer was shown (the reads and the context, uncut: the check reads digits only, so its size costs nothing). A cut of it
                 # (the first 5,000 characters of the context, 2,500 of each read) made true figures read as unsupported and took whole sentences out.
@@ -210,14 +211,14 @@ class RunLoopMixin:
             track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
             settle_already_set(self, rs, res)    # an ensure-style turn that found everything already there ends with one code-composed sentence
             close_with_metric(self, rs, res)     # message 2 of an act request ends with the metric before and after, read by code
-            if res.kind in ("answer", "deep", "confirm"):
-                res.text = remove_em_dashes(res.text)
-                res.question = remove_em_dashes(res.question)
             if res.kind == "answer" and getattr(rs, "status_snapshot", False) and res.text:
                 # A status or plan answer reads goals by ISO due day; written here, on the words the reader gets, because the figure pass above may
                 # rewrite a sentence after the answer's own repairs ("3 days overdue (due 2026-11-08)" reached a reply that way, measured live 2026-11-11).
                 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.status_snapshot import human_dates
                 res.text = human_dates(res.text)
+            if res.kind in ("answer", "deep", "confirm"):
+                res.text = remove_em_dashes(res.text)
+                res.question = remove_em_dashes(res.question)
                 for _d in res.deep_results:
                     if isinstance(getattr(_d, "output", None), str):
                         _d.output = remove_em_dashes(_d.output)

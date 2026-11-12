@@ -171,8 +171,13 @@ def test_run_goal_signature_matches_the_reference_runner():
     A missing kwarg here would silently drop live progress or the per-task working dir."""
     ours = inspect.signature(acp.AcpDeepRunner.run_goal).parameters
     theirs = inspect.signature(SubprocessGoalRunner.run_goal).parameters
-    assert set(ours) == set(theirs)
+    # ``cancel_check`` is opt-in (run_goal_accepts_cancel_check): the subprocess runner stops its process on a cancel, the hub's ACP runner
+    # has no such hook, so it does not declare the kwarg and a cancel takes effect when its attempt returns. Declaring it without
+    # honoring it would claim a stop that never happens.
+    assert set(ours) | {"cancel_check"} == set(theirs)
     for name, param in theirs.items():
+        if name == "cancel_check":
+            continue
         assert ours[name].kind is param.kind, name
         assert ours[name].default == param.default, name
 

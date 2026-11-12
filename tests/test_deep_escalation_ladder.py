@@ -74,14 +74,14 @@ def test_deep_models_pin_from_model_hint_bypasses_ladder():
 
 
 def test_deep_models_fallback_resolves_claude_id_from_tier_fallback_on_non_claude_session(caplog):
-    # Simulate a Gemini deployment (session/primary model is Gemini) that still has an operator
-    # override naming a real Claude id for its "best" tier (the documented QAR_MODEL_BEST
-    # workaround) -- escalation must find and use it even with no explicit deep_model_ladder.
+    # A Gemini deployment (session/primary model is Gemini) with a Claude id on its "quality" tier: escalation finds it with no explicit
+    # deep_model_ladder. The "best" tier is never an automatic rung (31ca9cc7: best is a person's explicit pin or the structure watch's alone),
+    # so a Claude id only on "best" leaves nothing to escalate to and the operator is told so.
     provider = StubProvider(decisions=[])
     registry = ModelRegistry(provider, fallback={
         "fast": "gemini-3.1-flash-lite",
         "balanced": "gemini-3.5-flash",
-        "quality": "gemini-3.5-flash",
+        "quality": "claude-opus-4-8",
         "best": "claude-opus-4-8",
     })
     orch = _orch(provider, registry=registry, config=OrchestratorConfig())
@@ -90,6 +90,14 @@ def test_deep_models_fallback_resolves_claude_id_from_tier_fallback_on_non_claud
     assert ladder == ["gemini-3.5-flash", "claude-opus-4-8"]
     assert not any(r.levelno >= logging.WARNING for r in caplog.records), (
         "a real Claude id was found for escalation; no warning should fire")
+
+    only_best = ModelRegistry(provider, fallback={
+        "fast": "gemini-3.1-flash-lite", "balanced": "gemini-3.5-flash", "quality": "gemini-3.5-flash", "best": "claude-opus-4-8"})
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
+        ladder = _orch(provider, registry=only_best, config=OrchestratorConfig())._deep_models(None, None, "gemini-3.5-flash")
+    assert ladder == ["gemini-3.5-flash"]
+    assert any(r.levelno >= logging.WARNING and "Escalation unavailable" in r.getMessage() for r in caplog.records)
 
 
 def test_deep_models_warns_when_no_claude_id_available_anywhere(caplog):
@@ -139,13 +147,14 @@ def test_fallback_deep_ladder_dedupes_rungs_by_what_the_worker_would_invoke():
     provider = StubProvider(decisions=[])
     registry = ModelRegistry(provider, fallback={
         "quality": "claude-sonnet-4-6",   # same rung as the fallback below
-        "best": "claude-opus-4-8",        # a genuinely different one
+        "best": "claude-opus-4-8",        # never an automatic rung (31ca9cc7)
     })
     orch = _orch(provider, registry=registry, config=OrchestratorConfig())
 
-    ladder = orch.fallback_deep_ladder("claude-sonnet")
+    assert orch.fallback_deep_ladder("claude-sonnet") == ["claude-sonnet"]
 
-    assert ladder == ["claude-sonnet", "claude-opus-4-8"]
+    stronger = ModelRegistry(provider, fallback={"quality": "claude-opus-4-8", "best": "claude-opus-4-8"})
+    assert _orch(provider, registry=stronger, config=OrchestratorConfig()).fallback_deep_ladder("claude-sonnet") == ["claude-sonnet", "claude-opus-4-8"]
 
 
 def test_fallback_deep_ladder_warns_at_the_opus_ceiling_and_does_not_invent_fable(caplog):

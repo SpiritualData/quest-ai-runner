@@ -211,11 +211,12 @@ def test_a_deep_run_whose_verdict_asks_the_person_stops_and_files_one_ask():
     assert len([e for e in events if e["type"] == EVENT_DECISION]) == 1
 
 
-def test_a_deep_final_that_only_offers_help_or_runs_with_the_gate_off_files_nothing():
+def test_a_deep_final_that_only_offers_help_files_nothing_and_streaming_off_no_longer_stops_a_real_ask():
     sink = RowSink()
     run(build(Provider([dict(ANALYSIS)], verdicts=[{"met": True, "asks_person": False, "question": ""}]), ScriptedRunner([DeepResult(met=True, output="done")]), sink))
     assert not sink.rows
     off = RowSink()
     run(build(Provider([dict(ANALYSIS)], verdicts=[{"met": True, "asks_person": True, "question": "Which logo?"}]),
               ScriptedRunner([DeepResult(met=True, output="done")]), off, interim_replies=False))
-    assert not off.rows
+    # interim_replies controls streaming only (cbff0e07): a real ask is filed on every lane that has an escalation sink.
+    assert len(off.rows) == 1

@@ -47,7 +47,9 @@ def pursue_before_giving_up(orchestrator: Any, rs: SimpleNamespace, goal: str, e
     turn, or None) and ``followup_started`` (the search continues as a queued follow-up)."""
     cfg = orchestrator.cfg
     from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import gathered_content
-    if rs.turn_user_intent in ("ask", "inform") and gathered_content(rs.gathered):
+    # A read that failed ("not found") read nothing: only an observation that returned something counts as having read what the question concerns.
+    read_something = [o for o in gathered_content(rs.gathered) if not (isinstance(o, dict) and o.get("kind") == "error")]
+    if rs.turn_user_intent in ("ask", "inform") and read_something:
         # A question that already read what it concerns is answered from that: a status or count question never goes to a deep background run.
         return {"pursuit": {"outcome": rs.text, "status": "unmet_reported", "met": False, "replans": 0, "tried": [], "missing": "", "interim": "", "message": "", "ignored_writes": []},
                 "result": None, "followup_started": False}

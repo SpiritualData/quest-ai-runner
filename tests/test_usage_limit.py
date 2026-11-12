@@ -163,16 +163,14 @@ def test_provider_raises_typed_limit_and_then_stops_spawning(monkeypatch):
 
     calls = []
 
+    from hubofhubs.api import claude_cli as hub_cli
+
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 1, json.dumps({"is_error": True, "result": WEEKLY}).encode(), b"")
 
-        class P:
-            returncode = 1
-            stdout = json.dumps({"is_error": True, "result": WEEKLY}).encode()
-            stderr = b""
-        return P()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    # The hub's arm spawns the CLI through ``run_in_group`` (its own process group, so a timeout or a stop ends the whole tree), not ``subprocess.run``.
+    monkeypatch.setattr(hub_cli, "run_in_group", fake_run)
     provider = ClaudeCliProvider()
     with pytest.raises(usage_limit.UsageLimitError) as err:
         provider._invoke("hi", model="haiku")

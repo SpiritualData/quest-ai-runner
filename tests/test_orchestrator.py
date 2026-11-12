@@ -34,8 +34,9 @@ def test_plan_read_then_answer():
     assert retrieval.read_calls == ["README.md"]      # it actually read before answering
     # plan_calls = 2 loop steps + the post-answer verification (answer_goal_max_iterations): the
     # stub's exhausted-queue reply has no "met" key, but verify_tier and planner_tier both default
-    # to "balanced", so _verify_goal's tier ladder holds ONE model and makes 1 verify call.
-    assert provider.plan_calls == 3
+    # to "balanced", so _verify_goal's tier ladder holds ONE model and makes 1 verify call. Plus the
+    # found-constraint judge (1b0833dc), which runs once a turn that read records is about to answer.
+    assert provider.plan_calls == 4
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
     assert provider.answer_calls == 2
     # The README content was injected into the grounding the answer saw.
@@ -734,7 +735,7 @@ def test_deep_loop_escalates_model_on_not_met():
           config=OrchestratorConfig(deep_goal_max_iterations=3,
                                     deep_model_ladder=["haiku", "sonnet", "opus"],
                                     deep_goal_token_budget=None)).run("fix it")
-    assert [c["model"] for c in runner.calls] == ["haiku", "sonnet", "opus"]  # escalated each retry
+    assert [c["model"] for c in runner.calls] == ["sonnet", "opus", "opus"]  # deep work starts on balanced whatever the rating (31ca9cc7), then escalates
 
 
 class _RunIdCapturingDeepRunner:
@@ -1150,10 +1151,10 @@ def test_repeat_context_off_resends_full_on_replan():
     res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification call
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the found-constraint judge and plan_prompts[3] the post-answer verification call
     # (verify_tier == planner_tier by default, so the fallback retry is deduplicated away) — not
     # checked here.
-    assert len(provider.plan_prompts) == 3
+    assert len(provider.plan_prompts) == 4   # + the found-constraint judge call (1b0833dc), which sits before verification
     for p in provider.plan_prompts[:2]:
         assert _CONTEXT in p
         assert "TRANSCRIPT-TAIL-MARKER" in p             # full transcript present each step
@@ -1170,10 +1171,10 @@ def test_repeat_context_on_step1_full_replan_abbreviated():
     res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification call
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the found-constraint judge and plan_prompts[3] the post-answer verification call
     # (verify_tier == planner_tier by default, so the fallback retry is deduplicated away) — not
     # checked here.
-    assert len(provider.plan_prompts) == 3
+    assert len(provider.plan_prompts) == 4   # + the found-constraint judge call (1b0833dc), which sits before verification
     step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
     # Step 1: full context + transcript.
     assert _CONTEXT in step1
@@ -1297,14 +1298,16 @@ def test_model_hint_absent_leaves_planner_tier_unchanged():
     retrieval = StubRetrieval({"f.md": "x"})
     from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
-    expected_haiku = registry.resolve_tier("haiku")
+    # A reply a person reads never runs below balanced (the hub's role table, 31ca9cc7), so the planner's
+    # "haiku" request is raised to the balanced tier for the answer call.
+    expected_reply = registry.resolve_tier("balanced")
 
     res = _orch(provider, retrieval).run("q")  # no model_hint
     assert res.kind == "answer"
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
     # first, on the cheap "fast" tier, before the real answer call.
     expected_fast = registry.resolve_tier("fast")
-    assert provider.answer_models == [expected_fast, expected_haiku]
+    assert provider.answer_models == [expected_fast, expected_reply]
 
 
 def test_model_hint_on_deep_step():
@@ -1316,11 +1319,9 @@ def test_model_hint_on_deep_step():
     deep = StubDeepRunner(met=True, output="done")
     res = _orch(provider, retrieval, deep_runner=deep).run("do work", model_hint="haiku")
     assert res.kind == "deep"
-    # The model passed to deep runner must be the registry's "haiku" resolution.
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    registry = ModelRegistry(provider)
-    expected_haiku = registry.resolve_tier("haiku")
-    assert deep.calls[0]["model"] == expected_haiku
+    # A person's pin goes to the deep worker as the alias they gave: the worker's own translator makes the
+    # Claude id at spawn (31ca9cc7: a pinned tier is honored, no registry resolution on the way).
+    assert deep.calls[0]["model"] == "haiku"
 
 
 def test_model_hint_unknown_value_degrades_gracefully():
@@ -1413,7 +1414,7 @@ def test_no_attachments_is_unchanged_behavior():
     provider = _AttachmentCapturingProvider(decisions=[
         {"action": "answer", "rationale": "ok"},
     ])
-    res = _orch(provider, StubRetrieval()).run("hi")
+    res = _orch(provider, StubRetrieval()).run("What does the pricing page say about refunds?")   # a greeting skips the planner
     assert res.kind == "answer"
     # Final answer message is a plain string (no content-block list when there are no attachments).
     assert isinstance(provider.answer_contents[-1], str)
@@ -1558,7 +1559,7 @@ def test_cancel_check_false_never_affects_a_normal_run():
     assert retrieval.read_calls == ["README.md"]
     # Same call counts test_plan_read_then_answer asserts for the identical scripted plan (a
     # cancel_check that is always False changes nothing about the loop's own behavior).
-    assert provider.plan_calls == 3
+    assert provider.plan_calls == 4
     assert provider.answer_calls == 2
 
 
@@ -1740,7 +1741,7 @@ def test_context_assembly_timeout_is_loud_and_recoverable(monkeypatch, caplog):
                         registry=ModelRegistry(provider), context_assembler=SlowAssembler())
     sink = _CapturingSink()
     with caplog.at_level(logging.WARNING, logger="quest-ai-runner.orchestrator"):
-        res = orch.run("hello there", sink=sink)
+        res = orch.run("what is on my plan this week", sink=sink)
 
     assert res.kind == "answer"
     # The slow assembler's context never reached the planner prompt: dropped, not awaited.
@@ -1786,7 +1787,7 @@ def test_context_assembly_partial_result_is_used_and_loud(monkeypatch, caplog):
                         registry=ModelRegistry(provider), context_assembler=PartialAssembler())
     sink = _CapturingSink()
     with caplog.at_level(logging.WARNING, logger="quest-ai-runner.orchestrator"):
-        res = orch.run("hello there", sink=sink)
+        res = orch.run("what is on my plan this week", sink=sink)
 
     assert res.kind == "answer"
     # The partial context reached the planner prompt — used, not dropped.
@@ -1825,7 +1826,7 @@ def test_context_assembly_meta_carries_soft_deadline(monkeypatch):
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
                         registry=ModelRegistry(provider), context_assembler=RecordingAssembler())
     before = time_module.monotonic()
-    orch.run("hello there", sink=_CapturingSink())
+    orch.run("what is on my plan this week", sink=_CapturingSink())
 
     deadline = seen_meta.get("assembly_deadline")
     assert isinstance(deadline, float), f"expected a monotonic deadline, got: {deadline!r}"
@@ -1855,20 +1856,23 @@ def test_partial_turn_start_not_cached_midloop_read_recovers_full():
             pass
 
     provider = StubProvider(decisions=[
-        {"action": "read", "reads": [{"cards": "hello there"}], "rationale": "recheck topic"},
+        {"action": "read", "reads": [{"cards": "what is on my plan this week"}], "rationale": "recheck topic"},
         {"action": "answer", "rationale": "done", "model_tier": "haiku"},
     ])
     assembler = PartialThenFullAssembler()
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
                         registry=ModelRegistry(provider), context_assembler=assembler)
-    res = orch.run("hello there", sink=_CapturingSink())
+    res = orch.run("what is on my plan this week", sink=_CapturingSink())
 
     assert res.kind == "answer"
     # The partial WAS used for the current turn's prompt (beats dropping fresh context).
     assert any("PARTIAL_CONTEXT" in p for p in provider.plan_prompts)
     # Same query at turn start (deadline-bounded) and mid-loop: the mid-loop read must NOT be
     # served the partial from the cache -- it re-assembles fresh (no deadline) and gets FULL.
-    assert assembler.calls == [("hello there", True), ("hello there", False)]
+    # (The turn-start search is worded by the derived goal condition, which the stub answers with its own
+    # text, so only the deadline flag and the mid-loop query are pinned.)
+    assert [had for _, had in assembler.calls] == [True, False]
+    assert assembler.calls[1][0] == "what is on my plan this week"
     cards_obs = [o for o in res.gathered
                  if isinstance(o, dict) and str(o.get("locator", "")).startswith("cards(")]
     assert cards_obs, f"no cards observation in gathered: {res.gathered}"
@@ -1900,7 +1904,7 @@ def test_empty_partial_assembly_is_not_reported_as_used(caplog):
                         context_assembler=EmptyPartialAssembler())
     sink = _CapturingSink()
     with caplog.at_level(logging.WARNING, logger="quest-ai-runner.orchestrator"):
-        res = orch.run("hello there", sink=sink)
+        res = orch.run("what is on my plan this week", sink=sink)
 
     assert res.kind == "answer"
     assert not any("partial context was used" in r.message.lower() for r in caplog.records), (
@@ -1965,7 +1969,7 @@ def test_planner_prompt_carries_the_configured_deferred_semantics():
 
     # Default (inline) configuration.
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
-    _orch(provider, StubRetrieval()).run("hello")
+    _orch(provider, StubRetrieval()).run("what is on my plan this week")
     assert orch_mod.DEFERRED_DEEP_INLINE_SEMANTICS in provider.plan_prompts[0]
     assert orch_mod.DEFERRED_DEEP_QUEUED_SEMANTICS not in provider.plan_prompts[0]
     inline_dd = provider.plan_tool_schemas[0]["input_schema"]["properties"]["deferred_deep"]
@@ -1974,7 +1978,7 @@ def test_planner_prompt_carries_the_configured_deferred_semantics():
     # Queued configuration.
     provider2 = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     _orch(provider2, StubRetrieval(),
-          config=OrchestratorConfig(deferred_deep_queued=True)).run("hello")
+          config=OrchestratorConfig(deferred_deep_queued=True)).run("what is on my plan this week")
     assert orch_mod.DEFERRED_DEEP_QUEUED_SEMANTICS in provider2.plan_prompts[0]
     assert orch_mod.DEFERRED_DEEP_INLINE_SEMANTICS not in provider2.plan_prompts[0]
     queued_dd = provider2.plan_tool_schemas[0]["input_schema"]["properties"]["deferred_deep"]

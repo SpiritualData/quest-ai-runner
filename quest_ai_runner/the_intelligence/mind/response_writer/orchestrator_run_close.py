@@ -275,6 +275,7 @@ class RunCloseMixin:
                         rs.text = "\n\n".join(reply_parts)
                     rs._decision_parked = True
                     rs._parked_decision_id = _parked.decision_id
+                    rs._parked_ask_text = _parked_text      # the card's own code-written wording: the figure pass leaves a reply that IS this alone
                 elif unconfirmed_text:
                     # Nothing landed and nothing parked: the runs failed or could not be verified.
                     # Their own honest text IS the reply, verbatim; the goal-verification loop is

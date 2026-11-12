@@ -119,7 +119,7 @@ def test_escalation_route_from_structured_facts():
     assert route(plan("quest_data"), "act", registry(), True, False) == "inline"
     assert route(plan("quest_data"), "act", registry(), False, True) == "inline"
     assert route(plan(None), "act", registry(), False, False) == "tool"
-    assert route(plan(None), "ask", registry(), False, False) == "deep"
+    assert route(plan(None), "ask", registry(), False, False) == "inline"   # a question is answered inline, never a background run (tool_guards.escalation_route)
     assert route(plan("quest_data"), "act", None, False, False) == "deep"
     assert route(plan("other"), "act", registry(), False, False) == "deep"
 
