@@ -36,8 +36,9 @@
   },
   "expect": {
    "eq": {
-    "start": "sonnet",
+    "start": "haiku",
     "ladder": [
+     "haiku",
      "sonnet",
      "opus"
     ]
@@ -78,7 +79,7 @@
   },
   "expect": {
    "eq": {
-    "start": null,
+    "start": "haiku",
     "ladder": [
      "haiku",
      "sonnet"

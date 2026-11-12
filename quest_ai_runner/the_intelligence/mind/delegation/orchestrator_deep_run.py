@@ -318,7 +318,8 @@ class DeepRunMixin:
         planned_deep_models, deep_selection = self.deep_model_plan(
             model_hint, quality_standards, model,
             difficulty=getattr(plan, "deep_difficulty", None),
-            difficulty_reason=getattr(plan, "deep_difficulty_reason", None))
+            difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
+            task_kind=getattr(plan, "deep_task_kind", None))
         # ANNOUNCED ONLY FOR A RUNNER THAT RUNS THE MODEL, and so only once a goal's runner is
         # resolved (inside ``run_one`` below). A consumer's named runner may answer in-process with
         # its own fixed model, or queue the work for another lane that picks its own; announcing
@@ -801,8 +802,9 @@ class DeepRunMixin:
             budget = self.cfg.deep_goal_token_budget
             # The model ladder for THIS turn: an explicit per-task / guidance model pins it (no
             # escalation); otherwise fast -> strong, starting at the fast tier by default.
-            deep_models = list(planned_deep_models)   # a copy: a verifier tier override edits it
+            deep_models = list(planned_deep_models)   # a copy for this task
             tier_idx = 0
+            task_selection = dict(deep_selection) if deep_selection else None   # this task's tier record; an escalation changes only this copy
             tokens_used = 0
             res = DeepResult(met=False)
             # TURN-BUDGET CONTINUATION state. ``resume_session`` is set when the previous attempt
@@ -1259,25 +1261,25 @@ class DeepRunMixin:
                         extra_context.append(widened)
                         if emit is not None:
                             emit.status("Fetching more context for the next attempt…")
-                # TIER: prefer the verifier's explicit ``next_tier`` (resolved through the registry)
-                # when it names a real tier; otherwise step one rung up the deep-model ladder, since a
-                # capability gap is a common cause of a not-met goal. Either way the next attempt runs
-                # at the chosen tier.
+                # TIER: a not-met goal moves THIS task one rung up the ladder, through the hub's escalation
+                # rule: it needs a specific reason, taken from the verifier's own finding (what was missing),
+                # and it is recorded with the run (tier, tier_source, tier_reason, tier_from). The verifier's
+                # ``next_tier`` is a suggestion and no longer jumps rungs. Nothing is stored for later tasks.
                 # A rung that does not run the ladder's model has no tier to switch: the next
                 # attempt is the same runner with the verifier's feedback, and is described as such.
                 # A tool failure is not a capability gap: the retry keeps the same model.
                 # ...and neither is a tool the runner's ledger shows failing in this attempt, whatever
                 # the verifier called the gap: the same model retries once, and a repeat stops above.
                 keep_model = _blocker == "tool_failure" or bool(failing_now)
-                _vt = verdict.get("next_tier") if model_applies and not keep_model else None
-                _resolved_tier = self._resolved_deep_tier(_vt, deep_models) if _vt else None
-                if _resolved_tier is not None:
-                    run_model = _resolved_tier
-                    deep_models[min(tier_idx, len(deep_models) - 1)] = _resolved_tier
-                    if emit is not None:
-                        emit.status(f"Switching model tier to {_vt} for the next attempt…")
-                elif model_applies and tier_idx < len(deep_models) - 1 and not keep_model:
-                    tier_idx += 1  # a capability gap is a common cause; try a stronger model next
+                if model_applies and tier_idx < len(deep_models) - 1 and not keep_model:
+                    _finding = verdict.get("next_action") or verdict.get("reason")
+                    _moved = self.escalate_deep_choice(task_selection, run_model, "stop_decision", _finding)
+                    if _moved is not None:
+                        tier_idx += 1
+                        task_selection = {**(task_selection or {}), **_moved}
+                        if emit is not None:
+                            emit.emit(ProgressEvent(type=EVENT_STATUS, text="Moving up one model tier for the next attempt...",
+                                                    data={"deep_tier_escalation": {**_moved, "attempt": attempt}}))
                 if budget is not None and tokens_used >= budget:
                     budget_spent = True
                     if emit is not None:

@@ -105,8 +105,9 @@ so there is one set of switches and not two:
 | `QAR_DEEP_TIMEOUT_SECONDS` | optional hard wall-clock cap per deep run (default none) |
 | `QAR_DEEP_REVIEW_INTERVAL_SECONDS` | seconds between LLM liveness reviews of a running deep run (default 300, 0 = off); it stops a run only if stalled, out of tokens or blocked |
 | `QAR_DEEP_MODELS` | the goal loop's escalation ladder (lives on `OrchestratorConfig`) |
-| `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` turns off the automatic starting model (on by default, see below) |
-| `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `sonnet` for all three: deep work starts on balanced) |
+| `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` starts an unpinned run on the first rung of its ladder instead of the hub's tier rule (the rule is on by default, see below) |
+| `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | operator standing guidance: the model a deep run starts on for work the planner rated that difficulty. Unset by default; with none set the hub's tier rule decides |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | the model the deep worker's sub-agents run on. Unset, Quest AI Runner sets it from the hub's `sub_agent` choice (its own cheapest sufficient tier); a value you set wins |
 | `QAR_DEEP_MAX_TURNS` | hard per-attempt turn cap (`OrchestratorConfig.deep_max_turns`, default 30) |
 | `QAR_DEEP_TOOLS`, `QAR_DEEP_SETTING_SOURCES`, `QAR_DEEP_STRICT_MCP`, `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS`, `QAR_DEEP_MAX_BUDGET_USD` | the lean launch of the deep worker (`--tools`, `--setting-sources`, `--strict-mcp-config`, `--exclude-dynamic-system-prompt-sections`, `--max-budget-usd`), the same flags the chat provider already uses; each is a parameter of `SubprocessConfig.launch` (`core/deep_launch.py`) and unset adds no flag, so the default launch is unchanged. The turn cap is `QAR_DEEP_MAX_TURNS` |
 | `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief), preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
@@ -121,37 +122,46 @@ genuinely must not execute, e.g. a read-only chat surface.
 
 ### How the deep-worker model is chosen (precedence)
 
-`QAR_DEEP_MODELS` is one of four ways the deep worker's model gets decided, not the only one.
-`Orchestrator._deep_models` resolves them in this order, and the first one present wins:
+A deep run starts on the **cheapest tier measured good enough for deep work**, and moves up only when a person asked for more or the
+work fell short for a stated reason. The rule is the hub's (`hubofhubs.api.role_tiers`: `task_choice`, `escalate`, `sub_agent_choice`);
+Quest AI Runner binds it in `the_world/model_plumbing/model_tier_chooser/deep_model_selection.py` and resolves the tier it returns to a model
+through the registry, so no model name is written in code. `Orchestrator.deep_model_plan` decides, in this order, and the first one present wins:
 
-1. **A per-task `model` request.** A task carries its own `model` field (the executor reads it as
-   `model_hint`); when it resolves to a model the worker can actually run (a Claude id/alias), it
-   **pins** the deep worker to that single model for the whole run -- no escalation.
-2. **A guidance card's model preference.** If no per-task request applies, a matching guidance
-   card's own model preference also **pins** the deep worker (no escalation).
-3. **The configured ladder** -- `deep_model_ladder` on `OrchestratorConfig`, normally set from
-   `QAR_DEEP_MODELS` (weak -> strong Claude ids/aliases). Unlike the two pins above, this is a real
-   **ladder**: the goal loop escalates up it on a not-met goal.
-4. **The fallback ladder.** With none of the above configured, the ladder is built from whatever
-   single model the orchestrator's normal tier resolution ("quality"/"best") would otherwise use,
-   extended with a real escalation step when a distinct Claude-runnable id can be found for a
-   stronger tier.
+1. **A per-task `model` request**, or **a model or tier the person names in the current message** (the planner's `deep_model_request`;
+   the message is the newer ask and outranks the task's standing pin). It **pins** the deep worker to that single model for the run, with
+   no escalation.
+2. **The person's standing guidance.** A guidance card's model preference that names a tier (or a family word that reads as one) is
+   handed to the hub as its standing tier guidance: the run starts on that tier and may still escalate. A card that names a concrete model
+   id pins that model alone, as in step 1.
+3. **The operator's configuration**: `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL` or `QAR_DEEP_MODEL_HARD` (for the planner's rating, `normal`
+   when unrated) counts as standing guidance, read only when no card names a tier. `QAR_DEEP_AUTO_MODEL=0` starts every run on the first
+   rung of the ladder.
+4. **The hub default**: the cheapest tier whose recorded pass rate on the deep-work cases meets the hub's sufficiency bar, for the role of the
+   task kind (gather, implementation, structure or review where the caller knows it, else the main session role). With none of the
+   operator variables set, this is what starts an unpinned run.
 
-**Automatic starting model (steps 3 and 4, on by default).** When neither pin applies, the
-planner rates the deep work on the call it already makes (`deep_difficulty`: `simple` for clearly
-trivial mechanical work such as a lookup, reformatting or a short status read; `normal` otherwise
-and whenever it is unsure; `hard` for multi-file code, architecture, ambiguous research, or
-outward-facing and irreversible work). The run STARTS on that difficulty's model
-(`OrchestratorConfig.deep_difficulty_models`, defaults `sonnet` for every difficulty) and the goal
-loop still escalates up the ladder on a not-met goal: the configured ladder when set, otherwise
-`haiku,sonnet,opus`. The strongest model is deliberately an escalation rung, not a starting point,
-so hard work is not paid for twice by default; set `QAR_DEEP_MODEL_HARD=opus` if you want it. A
-start model missing from a configured ladder resolves to the nearest stronger rung, so a
-`sonnet,opus` ladder never starts on haiku. No rating (a synthetic escalation, a parse miss) keeps
-the previous behaviour, except that a configured ladder starts at its normal-difficulty rung. The
-choice is logged once per deep run and emitted as a status event carrying
-`data.deep_model_selection` (`difficulty`, `start_model`, `ladder`, `reason`), which the task lane
-posts to the task's progress feed. `QAR_DEEP_AUTO_MODEL=0` restores the old first-rung start.
+The planner still rates the work (`deep_difficulty`, with `deep_difficulty_reason`), but the rating never raises the start by itself.
+A `hard` rating with a specific reason (what a cheaper tier would not manage on this task) asks for one tier up, recorded as
+`tier_source: main_session_ask`; a bare `hard`, or no reason, is ignored and the default stands.
+
+**The ladder** an escalation climbs is `QAR_DEEP_MODELS` (`deep_model_ladder`) when set, weak to strong; unset, it is the registry's tiers in
+order (fast, balanced, quality; `best` is never a rung). A start model missing from a configured ladder resolves to the nearest stronger
+rung. A lane that pins a single-rung ladder keeps working but cannot escalate; this is logged once.
+
+**Escalation.** When the goal check finds the result insufficient, the loop moves THIS task up one rung through the hub's `escalate`
+(signal `stop_decision`; `after_check` and `review` are the hub's other signals). It needs a specific reason, taken from the verifier's own
+finding (`next_action`, else `reason`: what was missing). With none, the retry stays on the same model with the feedback. The verifier's
+`next_tier` is a suggestion and no longer jumps rungs. An escalation is never stored: the next task is chosen again from the
+person's input, their standing guidance and the default. It is never written to the task's `deep_run_model` (that would turn an
+automatic choice into a pin for later runs).
+
+**The record.** The choice is logged once per deep run and emitted as a status event carrying `data.deep_model_selection`
+(`difficulty`, `start_model`, `ladder`, `reason`, and the hub's `tier`, `tier_source`, `tier_reason`, `tier_role`; `tier_source` is
+`default`, `standing_guidance`, `main_session_ask` or `fallback`), which the task lane posts to the task's progress feed. An escalation
+emits `data.deep_tier_escalation` with `tier`, `tier_source: escalation`, `tier_reason` (signal and finding), `tier_from` and the attempt.
+
+**When the hub cannot be read** the start is the registry's cheapest tier and the record says `tier_source: fallback`. **Sub-agents** the
+worker starts default to the hub's `sub_agent` choice, set as `CLAUDE_CODE_SUBAGENT_MODEL` unless the operator already set it.
 
 An **autopilot** quest sets step 1 for all of its own created work: the quest's
 `autopilot.model` setting (read by `AutopilotPass._create_autopilot_task`) rides onto every task

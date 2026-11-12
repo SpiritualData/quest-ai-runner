@@ -87,7 +87,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DEEP_MAX_BUDGET_USD` | A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MAX_TURNS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MODELS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MODEL_HARD` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_resolvers.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MODEL_HARD` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_NORMAL` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_MODEL_SIMPLE` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `the_body/configuration/config_core_settings.py` | `.env.example` |

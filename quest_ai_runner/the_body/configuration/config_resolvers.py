@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any, List
 
 from esoi import implementation
 
-from hubofhubs.api import role_tiers
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import ORDER
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 from quest_ai_runner.the_self.assembler.hub import make_provider
 from quest_ai_runner.the_body.configuration.config_support import _AUTO_DEEP_RUNNER, _log
@@ -170,36 +168,21 @@ def qar_binding_of(hub_cls: Any) -> Any:
     return None
 
 
-def apply_hub_hard_tier(cfg: RunnerConfig, declared: List[str], choose: Any, *, warn: bool = True) -> None:
-    """Start hard deep work on the tier the hub measured best for hard work, unless the operator named one (``QAR_DEEP_MODEL_HARD``).
-
-    Applied only when the hub's hard-work choice was measured on hard work itself, drives Anthropic (the deep-model ladder's family), and
-    its tier resolves to a model on the ladder this deployment climbs, so the start can never fall to a weaker rung than intended."""
-    if os.getenv("QAR_DEEP_MODEL_HARD") or cfg.model_provider is None:
+def apply_hub_sub_agent_tier(cfg: RunnerConfig, *, warn: bool = True) -> None:
+    """Make the sub-agents a deep worker starts default to the hub's ``sub_agent`` choice (its own cheapest sufficient tier), resolved through this
+    deployment's registry; an operator's own ``CLAUDE_CODE_SUBAGENT_MODEL`` still wins. The start of the run itself is chosen per run, in
+    ``deep_model_selection.plan_start``."""
+    if cfg.model_provider is None:
         return
     try:
-        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import (
-            DEFAULT_AUTO_DEEP_LADDER, default_rung_key)
-        hard = choose(declared, difficulty="hard")
-        if hard is None or getattr(hard, "kind", "") != "hard" or hard.provider != "anthropic" or not hard.tier:
-            return
-        if ORDER.get(role_tiers.normalise(hard.tier), 0) > ORDER["balanced"]:
-            # Deep work starts on balanced (the tier table's main_session role) and best is a person's or the structure watch's alone: a measured
-            # preference for a higher tier is a recommendation to the person, who can set it on the task, not a default start.
-            _log.info("deep runner: the hub measured the %s tier best for hard work; hard work still starts on balanced unless the person or task sets a tier", hard.tier)
-            return
-        model = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None).resolve_tier(hard.tier)
-        ladder = [m for m in (cfg.orchestrator.deep_model_ladder or []) if m] or list(DEFAULT_AUTO_DEEP_LADDER)
-        if default_rung_key(model) not in [default_rung_key(m) for m in ladder]:
-            if warn:
-                _log.warning("deep runner: the hub measured the %s tier (%s) best for hard work, but it is not on the deep ladder %s; "
-                             "hard work keeps its configured start", hard.tier, model, ladder)
-            return
-        cfg.orchestrator.deep_difficulty_models["hard"] = model
-        _log.info("deep runner: hard work starts on %s, the %s tier the hub measured best for hard work (%s)", model, hard.tier, hard.reason)
-    except Exception:  # noqa: BLE001 -- the configured start stays when anything here fails
+        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import install_sub_agent_model, sub_agent_default_model
+        model = sub_agent_default_model(ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None))
+        install_sub_agent_model(model)
+        if model:
+            _log.info("deep runner: sub-agents default to %s, the hub's sub-agent tier", model)
+    except Exception:  # noqa: BLE001 -- the worker keeps its own sub-agent default when anything here fails
         if warn:
-            _log.warning("deep runner: could not apply the hub's tier for hard work", exc_info=True)
+            _log.warning("deep runner: could not apply the hub's sub-agent tier", exc_info=True)
 
 
 def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
@@ -244,7 +227,7 @@ def resolve_hub_pick(cfg: RunnerConfig, *, warn: bool = True):
         if cls is not hub_cls:
             extra.pop("settings", None)   # QAR's binding reads its own settings
         runner = cls(config, **extra, **deep_runner_options(cfg, cls, extra))
-        apply_hub_hard_tier(cfg, declared, choose_agent_arm, warn=warn)
+        apply_hub_sub_agent_tier(cfg, warn=warn)
         log_level = _log.info if choice.basis == "measured" else _log.warning
         log_level("deep runner: the hub's pick for providers %s is %s (%s; %s)%s", declared, choice.arm, choice.basis, choice.reason,
                   "" if choice.basis == "measured" else ": NOT MEASURED, chosen by the fallback rule")

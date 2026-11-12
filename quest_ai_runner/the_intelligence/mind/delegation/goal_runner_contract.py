@@ -26,6 +26,7 @@ from hubofhubs.api import GoalSettings
 from quest_ai_runner.the_intelligence.mind.delegation import prompt_budget
 from quest_ai_runner.the_self.integrity.prompts import standing_instructions
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import sub_agent_environment
 from quest_ai_runner.the_intelligence.mind.delegation.requester import apply_requester_env
 from quest_ai_runner.the_body.configuration.runtime_settings import DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS, core_settings, process_environment
 
@@ -60,7 +61,7 @@ def goal_settings() -> GoalSettings:
         run_id_env=RUN_ID_ENV_VAR,
         standing_instructions=lambda: standing_instructions.load_standing_instructions(),
         apply_requester=lambda env, user_id: apply_requester_env(env, user_id),
-        environment=lambda: process_environment(),
+        environment=lambda: sub_agent_environment(process_environment()),
         usage_limits=usage_limit,
         prompt_budget=prompt_budget,
     )

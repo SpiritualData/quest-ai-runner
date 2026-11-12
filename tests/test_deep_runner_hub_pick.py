@@ -148,26 +148,21 @@ def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, 
     assert type(resolve_deep_runner(cfg(deep_providers=["gemini"]))) is SubprocessGoalRunner
 
 
-def test_hard_work_keeps_the_balanced_start_when_the_hub_measures_a_higher_tier_best(programs, picks, monkeypatch):
+def test_the_hubs_hard_work_pick_no_longer_moves_the_start_and_sub_agents_follow_the_hubs_tier(programs, picks, monkeypatch):
+    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import deep_model_selection as selection
     table, _ = picks
     table[frozenset({"anthropic"})] = arm("stream_json_goal_runner", "anthropic")
     hard = arm("subprocess_goal_runner", "anthropic", tier="best")
     hard.kind = "hard"
     table[("hard", frozenset({"anthropic"}))] = hard
-    monkeypatch.delenv("QAR_DEEP_MODEL_HARD", raising=False)
-    config = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "best": "opus"})
+    config = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "quality": "opus", "best": "opus"})
     config.orchestrator.deep_model_ladder = ["haiku", "sonnet", "opus"]
-    resolve_deep_runner(config)
-    assert config.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # best is a person's pin alone: the measured pick does not move the default start
-    off_ladder = cfg(model_fallback={"fast": "haiku", "balanced": "sonnet", "best": "opus"})
-    off_ladder.orchestrator.deep_model_ladder = ["haiku", "sonnet"]
-    resolve_deep_runner(off_ladder)
-    assert off_ladder.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # not on the ladder: the configured start stays
-    monkeypatch.setenv("QAR_DEEP_MODEL_HARD", "sonnet")
-    pinned = cfg(model_fallback={"best": "opus"})
-    pinned.orchestrator.deep_model_ladder = ["haiku", "sonnet", "opus"]
-    resolve_deep_runner(pinned)
-    assert pinned.orchestrator.deep_difficulty_models["hard"] == "sonnet"   # the operator's choice wins
+    try:
+        resolve_deep_runner(config)
+        assert config.orchestrator.deep_difficulty_models == {}   # nothing is written for the start: the hub rule decides per run
+        assert selection.sub_agent_environment({}).get(selection.SUB_AGENT_ENV) == "haiku"   # the hub's sub-agent choice, through the registry
+    finally:
+        selection.install_sub_agent_model(None)
 
 
 def test_the_native_tool_loop_runs_only_when_named(programs, tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import (
-    DEFAULT_AUTO_DEEP_LADDER, normalize_difficulty, select_deep_start)
+    choice_of, escalate_choice, normalize_difficulty, plan_start, tier_models, tier_name_of)
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import LEGACY_TIER_ALIASES, ModelRegistry
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONFIGURED_LADDER_SOURCE, FALLBACK_LADDER_SOURCE, log
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _guidance_model_pref
@@ -29,47 +29,66 @@ class DeepModelsMixin:
                         fallback: Optional[str], *,
                         difficulty: Optional[str] = None,
                         difficulty_reason: Optional[str] = None,
+                        task_kind: Optional[str] = None,
                         ) -> Tuple[List[Optional[str]], Optional[Dict[str, Any]]]:
-        """Resolve the deep-worker ladder plus, when the start was chosen automatically, the
-        selection record (difficulty, start_model, ladder, reason) to log and record; None when
-        the ladder came from a pin or from the pre-existing resolution unchanged.
+        """Resolve the deep-worker ladder plus, when the start was chosen by the hub's tier rule, the
+        selection record (difficulty, start_model, ladder, reason, tier, tier_source, tier_reason,
+        tier_role) to log and record; None when the ladder came from a pin or from the pre-existing
+        resolution unchanged.
 
-        Pins (per-task model, guidance preference) are resolved first and always win. Then, when
-        ``cfg.deep_auto_model`` is on and the planner rated the work (``difficulty``), the run
-        starts on that difficulty's rung of the configured ladder (or ``DEFAULT_AUTO_DEEP_LADDER``)
-        and escalates from there. With no rating the configured ladder starts at the NORMAL
-        model's rung when it has one ("when unsure, normal"), and with no configured ladder either,
-        today's generic fallback ladder is used unchanged."""
-        ladder, pinned = self.resolve_deep_ladder(model_hint, quality_standards, fallback,
-                                                  log_ladder=False)
+        A pin (per-task model, a message's model, a guidance preference naming a model id) wins and
+        starts that model alone. Otherwise, with ``cfg.deep_auto_model`` on, the hub decides (see
+        ``deep_model_selection.plan_start``): a guidance card that names a tier is the person's
+        standing guidance, an operator's ``QAR_DEEP_MODEL_*`` is standing guidance too, and with
+        neither the hub's default (the cheapest tier measured good enough) starts the run. The planner's
+        ``difficulty`` is information: with a specific ``difficulty_reason`` and a hard rating it asks
+        for one tier up, otherwise it changes nothing. Nothing here is written to the task."""
+        pref = _guidance_model_pref(quality_standards)
+        standing_tier = None
+        guidance = quality_standards
+        if self.cfg.deep_auto_model and pref and ModelRegistry.is_tier_name(pref):
+            standing_tier = tier_name_of(pref)
+            if standing_tier:
+                guidance = None   # a tier is handed to the hub below, not pinned
+        ladder, pinned = self.resolve_deep_ladder(model_hint, guidance, fallback, log_ladder=False)
         if pinned:
             return ladder, None   # a pin logs its own line inside the resolver
-        if not self.cfg.deep_auto_model:
-            self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if self.cfg.deep_model_ladder
-                                                 else FALLBACK_LADDER_SOURCE))
-            return ladder, None
         configured = [m for m in (self.cfg.deep_model_ladder or []) if m]
-        level = normalize_difficulty(difficulty)
-        if level is not None:
-            base = configured or list(DEFAULT_AUTO_DEEP_LADDER)
-            picked = select_deep_start(level, base, self.cfg.deep_difficulty_models,
-                                       reason=difficulty_reason)
-        elif configured:
-            picked = select_deep_start("normal", configured, self.cfg.deep_difficulty_models,
-                                       reason="difficulty not assessed; using the normal start")
-            if picked is not None:
-                picked[1]["difficulty"] = None
-        else:
-            picked = None
-        if picked is None:
-            self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if configured
-                                                 else FALLBACK_LADDER_SOURCE))
+        if not self.cfg.deep_auto_model:
+            self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if configured else FALLBACK_LADDER_SOURCE))
             return ladder, None
-        start_ladder, selection = picked
-        log.info("Deep-worker model auto-selected: difficulty=%s, starting model=%s, escalation "
-                 "ladder=%s, reason: %s", selection.get("difficulty") or "not assessed",
-                 selection["start_model"], selection["ladder"], selection["reason"])
-        return list(start_ladder), selection
+        level = normalize_difficulty(difficulty)
+        operator_level = level or "normal"
+        plan = plan_start(self.registry, configured_ladder=configured, task_kind=(task_kind or difficulty or ""), standing_tier=standing_tier,
+                          operator_model=(self.cfg.deep_difficulty_models or {}).get(operator_level),
+                          operator_var=f"QAR_DEEP_MODEL_{operator_level.upper()}",
+                          difficulty=difficulty, difficulty_reason=difficulty_reason)
+        if plan is None:
+            self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if configured else FALLBACK_LADDER_SOURCE))
+            return ladder, None
+        selection = plan.selection
+        log.info("Deep-worker model chosen by the tier rule: tier=%s, tier_source=%s, tier_reason=%s%s, starting model=%s, escalation ladder=%s, "
+                 "difficulty=%s", selection.get("tier") or "(operator model)", selection.get("tier_source"), selection.get("tier_reason"),
+                 f", tier_from={selection['tier_from']}" if selection.get("tier_from") else "", selection["start_model"], selection["ladder"],
+                 selection.get("difficulty") or "not assessed")
+        return list(plan.ladder), selection
+
+    def escalate_deep_choice(self, selection: Optional[Dict[str, Any]], run_model: Optional[str], signal: str,
+                             finding: Optional[str]) -> Optional[Dict[str, str]]:
+        """The tier record of ONE task's escalation (one rung up, with the finding that says what was missing), or None when it must not
+        move. Goes through the hub's ``escalate``; nothing is stored, so the next task is chosen again."""
+        try:
+            models = tier_models(self.registry)
+        except Exception:  # noqa: BLE001
+            models = {}
+        moved = escalate_choice(choice_of(selection, run_model, models), signal, finding)
+        if moved is None:
+            return None
+        record = dict(moved.record())
+        record["tier_role"] = moved.role
+        log.info("Deep-worker tier escalated for this task only: tier=%s, tier_source=%s, tier_reason=%s, tier_from=%s",
+                 record.get("tier"), record.get("tier_source"), record.get("tier_reason"), record.get("tier_from"))
+        return record
 
     def typed_model_request(self, requested: Optional[str]) -> Optional[str]:
         """The model the person named in their message, when the deep worker can run it, else None.
@@ -252,29 +271,3 @@ class DeepModelsMixin:
                     "override (e.g. QAR_MODEL_BEST) at a real Claude id.", ladder)
         except Exception:  # noqa: BLE001 — logging must never break a deep run
             pass
-
-    def _resolved_deep_tier(self, tier: Optional[str],
-                            deep_models: List[Optional[str]]) -> Optional[str]:
-        """Resolve a verifier-requested ``next_tier`` to a worker-runnable model id via the registry.
-
-        The deep worker is Claude Code, so the model must be a Claude id. When the tier resolves to
-        a Claude model we use it; otherwise (e.g. a Gemini/OpenAI deployment whose tiers map to
-        non-Claude ids) we fall back to the STRONGEST model already on the deep ladder so we never
-        hand the Claude worker a foreign id. Returns ``None`` if ``tier`` is empty or unresolvable,
-        so the caller keeps stepping the ladder instead. Never raises."""
-        if not (tier or "").strip():
-            return None
-        if tier.strip().lower() == "best":
-            tier = "quality"   # a verifier's escalation never reaches best: only a person's explicit pin does
-        from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import _is_claude_model  # worker-runnable check
-        try:
-            resolved = self.registry.resolve_tier(tier)
-        except Exception:  # noqa: BLE001 — an unknown tier just means "no override"
-            return None
-        if resolved and _is_claude_model(resolved):
-            return resolved
-        # Non-Claude deployment: pick the strongest Claude model already on the ladder, if any.
-        for m in reversed(deep_models):
-            if m and _is_claude_model(m):
-                return m
-        return None

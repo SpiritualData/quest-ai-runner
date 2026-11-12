@@ -99,6 +99,7 @@ def run_turn(runner, verdicts, **cfg):
     orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
                         registry=ModelRegistry(provider), deep_runner=runner,
                         config=OrchestratorConfig(deep_model_ladder=["haiku", "sonnet", "opus"],
+                                                  deep_difficulty_models={"normal": "sonnet"},   # operator standing guidance: the start is fixed here, the hub default is tested elsewhere
                                                   **cfg))
     result = orch.run("please do the thing", sink=sink)
     return result, sink, provider

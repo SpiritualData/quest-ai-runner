@@ -26,7 +26,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 ## Solutions from a library
 
-- [Model Tier Chooser](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`model-tier-chooser`): Picks, for each of the four model tiers (fast, balanced, quality, best), the provider, model and reasoning effort that is the cheapest and fastest of the arms at least as good as the tier's held default on public evaluations (capability only for best); which tier each call role uses is decided by the role-tier metric (role_tiers.csv over role_tier_metrics.csv): the lowest tier unless the next tier up shows a significant gain on the public evaluations that speak to the role's kind of call, with the owner's hard constraints applied after. Adopted from the library `hub`.
+- [Model Tier Chooser](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`model-tier-chooser`): Picks, for each of the four model tiers (fast, balanced, quality, best), the provider, model and reasoning effort that is the cheapest and fastest of the arms at least as good as the tier's held default on public evaluations (capability only for best); which tier each call role uses is decided by the role-tier metric (role_tiers.csv over role_tier_metrics.csv): for a per-call role the lowest tier unless the next tier up shows a significant gain on the public evaluations that speak to the role's kind of call, with the owner's hard constraints applied after; for every deep-run role (deep-work sessions, the main session, sub-agents, the resumed turn after the check) the cheapest tier whose recorded pass rate on the deep-work cases meets the sufficiency bar, raised only by the person (the current request, then standing guidance on model tiers) or, for one failed task, by the planner one rung with a recorded reason. Adopted from the library `hub`.
 - [Vendor Model Caller](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/the_world/model_plumbing/README.md) (`vendor-model-caller`): Plans, answers and lists models for one vendor, or for several through a router that steps to the next model when a provider fails. Adopted from the library `hub`.
 
 ## Metrics and their leaders
@@ -55,7 +55,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 | Implementation | Handle | Where | Sub-intent |
 |---|---|---|---|
-| Difficulty-to-rung starter | `model-tier-chooser:deep_model_selection` | [quest_ai_runner/the_world/model_plumbing/model_tier_chooser/deep_model_selection.py](model_tier_chooser/deep_model_selection.py) |  |
+| Hub tier rule for a deep run | `model-tier-chooser:deep_model_selection` | [quest_ai_runner/the_world/model_plumbing/model_tier_chooser/deep_model_selection.py](model_tier_chooser/deep_model_selection.py) |  |
 | Live tier registry | `model-tier-chooser:model_registry` | [quest_ai_runner/the_world/model_plumbing/model_tier_chooser/model_registry.py](model_tier_chooser/model_registry.py) |  |
 | Subscription allowance limit detector | `model-tier-chooser:usage_limit` | [quest_ai_runner/the_world/model_plumbing/model_tier_chooser/usage_limit.py](model_tier_chooser/usage_limit.py) |  |
 | Call roles over the hub's tier table | `model-tier-chooser:call_roles` | [quest_ai_runner/the_world/model_plumbing/model_tier_chooser/call_roles.py](model_tier_chooser/call_roles.py) |  |

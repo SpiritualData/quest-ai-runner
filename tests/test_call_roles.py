@@ -23,7 +23,7 @@ from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_answerin
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import SPECS_BY_ID
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import (
     CALL_ROLES, ORDER, PERSON_SET_CALLS, STRUCTURE_WATCH_CALL, TIERS, calls_at, role_of, tier_for_call)
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import DEFAULT_DIFFICULTY_MODELS, select_deep_start
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import plan_start
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 TABLE = role_tiers.read_table()
@@ -138,12 +138,10 @@ def test_a_deep_runs_tier_follows_its_task_kind_and_a_persons_tier_still_wins():
     assert AnsweringMixin._deep_model(SimpleNamespace(registry=Recorder()), SimpleNamespace(model_tier="opus")) == f"model-for-{tier_for_call('deep-run.session')}"
 
 
-def test_deep_runs_start_on_balanced_whatever_the_difficulty():
-    assert set(DEFAULT_DIFFICULTY_MODELS.values()) == {"sonnet"}
-    for ladder in (["haiku", "sonnet", "opus"], ["haiku", "sonnet"]):
-        for level in ("simple", "normal", "hard"):
-            ladder_from_start, _ = select_deep_start(level, ladder)
-            assert ladder_from_start[0] == "sonnet", (level, ladder)
+def test_the_difficulty_rating_alone_never_picks_the_start():
+    registry = SimpleNamespace(resolve_tier=lambda tier: {"fast": "haiku", "balanced": "sonnet", "quality": "opus", "best": "opus"}[tier])
+    starts = {level: plan_start(registry, difficulty=level).selection["tier"] for level in ("simple", "normal", "hard", None)}
+    assert len(set(starts.values())) == 1, starts
 
 
 def test_best_is_not_an_escalation_rung_and_a_verifiers_best_is_lifted_to_quality():
@@ -151,15 +149,14 @@ def test_best_is_not_an_escalation_rung_and_a_verifiers_best_is_lifted_to_qualit
     orch = SimpleNamespace(registry=registry)
     DeepModelsMixin.fallback_deep_ladder(orch, "claude-sonnet")
     assert "best" not in registry.asked
-    DeepModelsMixin._resolved_deep_tier(orch, "best", ["claude-sonnet"])
-    assert registry.asked[-1] == "quality"
+    assert "best" not in registry.asked
 
 
 def test_best_is_reached_only_by_the_persons_explicit_tier_or_the_structure_watch():
     unasked = [call for call in CALL_ROLES if tier_for_call(call) == "best"]
     assert unasked == [STRUCTURE_WATCH_CALL]
     person_may_set = sorted(call for call in CALL_ROLES if tier_for_call(call, "best") == "best" and call != STRUCTURE_WATCH_CALL)
-    assert person_may_set == ["answer.response", "answer.task-report", "autopilot.work", "deep-run.session", "deep-run.sub-agent", "draft-a-metric.value"]
+    assert person_may_set == ["answer.response", "answer.task-report", "autopilot.work", "deep-run.session", "draft-a-metric.value"]
     for call in set(CALL_ROLES) - set(person_may_set) - {STRUCTURE_WATCH_CALL}:
         assert tier_for_call(call, "best") != "best", call
     # the lane-side settings that feed a tier by name are guarded too

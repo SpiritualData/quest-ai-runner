@@ -579,7 +579,10 @@ DEEP DIFFICULTY (`deep_difficulty`): whenever you choose "deep" or fill `deferre
   trivial, mechanical work: a lookup, reformatting, a short status read, a one-line edit.
   "normal" for everything else, and whenever you are unsure. "hard" for multi-file code changes,
   architecture, ambiguous research, or anything outward-facing, user-facing or irreversible.
-  Put one short clause saying why in `deep_difficulty_reason`.
+  Put one short clause saying why in `deep_difficulty_reason`. The work starts on the cheapest tier
+  that is good enough for most tasks; a rating alone never raises it. Rate "hard" only with a
+  specific reason in `deep_difficulty_reason`: what a cheaper tier would not manage on THIS task
+  (a bare "complex" or "hard" is ignored).
 """
 
 DEEP_MODEL_REQUEST = """\

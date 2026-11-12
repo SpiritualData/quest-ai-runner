@@ -84,7 +84,7 @@ def test_deep_models_fallback_resolves_claude_id_from_tier_fallback_on_non_claud
         "quality": "claude-opus-4-8",
         "best": "claude-opus-4-8",
     })
-    orch = _orch(provider, registry=registry, config=OrchestratorConfig())
+    orch = _orch(provider, registry=registry, config=OrchestratorConfig(deep_auto_model=False))
     with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
         ladder = orch._deep_models(None, None, "gemini-3.5-flash")
     assert ladder == ["gemini-3.5-flash", "claude-opus-4-8"]
@@ -95,7 +95,7 @@ def test_deep_models_fallback_resolves_claude_id_from_tier_fallback_on_non_claud
         "fast": "gemini-3.1-flash-lite", "balanced": "gemini-3.5-flash", "quality": "gemini-3.5-flash", "best": "claude-opus-4-8"})
     caplog.clear()
     with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
-        ladder = _orch(provider, registry=only_best, config=OrchestratorConfig())._deep_models(None, None, "gemini-3.5-flash")
+        ladder = _orch(provider, registry=only_best, config=OrchestratorConfig(deep_auto_model=False))._deep_models(None, None, "gemini-3.5-flash")
     assert ladder == ["gemini-3.5-flash"]
     assert any(r.levelno >= logging.WARNING and "Escalation unavailable" in r.getMessage() for r in caplog.records)
 
@@ -128,7 +128,7 @@ def test_deep_models_extends_a_bucket_label_ladder_on_a_cli_only_deployment(capl
     from hubofhubs.api import CLI_RUNNABLE_MODELS
 
     provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
-    orch = _orch(provider, config=OrchestratorConfig())
+    orch = _orch(provider, config=OrchestratorConfig(deep_auto_model=False))
     with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
         ladder = orch._deep_models(None, None, "claude-sonnet")
 
@@ -168,7 +168,7 @@ def test_fallback_deep_ladder_warns_at_the_opus_ceiling_and_does_not_invent_fabl
     from hubofhubs.api import CLI_RUNNABLE_MODELS
 
     provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
-    orch = _orch(provider, config=OrchestratorConfig())
+    orch = _orch(provider, config=OrchestratorConfig(deep_auto_model=False))
     with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
         ladder = orch._deep_models(None, None, "claude-opus")
 

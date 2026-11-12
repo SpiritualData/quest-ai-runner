@@ -82,14 +82,15 @@ Env it reads:
                                                    (OrchestratorConfig.deep_max_turns; library
                                                    default 30 — raise it for a lane whose tasks
                                                    chain several real actions in one run)
-  QAR_DEEP_AUTO_MODEL (optional)                 — "0"/"false"/"off" disables the automatic
-                                                   starting model for unpinned deep runs (on by
-                                                   default; see core/deep_model_selection.py)
-  QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD         — the Claude model a deep run STARTS on for work
-                                                   the planner rated simple / normal / hard
-                                                   (defaults haiku / sonnet / sonnet); the run
-                                                   still escalates up QAR_DEEP_MODELS (or
-                                                   haiku,sonnet,opus when unset) on a not-met goal
+  QAR_DEEP_AUTO_MODEL (optional)                 — "0"/"false"/"off" starts an unpinned deep run on
+                                                   the first rung of its ladder instead of the hub's
+                                                   tier rule (on by default)
+  QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD         — operator standing guidance: the Claude model a deep
+                                                   run STARTS on for work the planner rated simple /
+                                                   normal / hard. Unset (the default), the hub's tier
+                                                   rule decides (the cheapest tier measured good
+                                                   enough); an escalation climbs QAR_DEEP_MODELS (or
+                                                   the registry's tiers when unset) on a not-met goal
   ESOI_SELECT_QUEST_AI_RUNNER_RUN_DEEP_WORK (optional)
                                                  — the deep worker implementation: "subprocess"
                                                    (default, one-shot) or "stream_json" (a live

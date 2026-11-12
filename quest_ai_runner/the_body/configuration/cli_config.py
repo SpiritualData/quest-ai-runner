@@ -560,12 +560,10 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         cfg.orchestrator.deep_model_ladder = (
             [m.strip() for m in deep_models_env.split(",") if m.strip()] or None
         )
-    # Automatic STARTING model for deep runs nobody pinned (core/deep_model_selection.py): the
-    # planner rates the work simple/normal/hard on the call it already makes and the run starts on
-    # that difficulty's model, escalating up the ladder above (or haiku,sonnet,opus when
-    # QAR_DEEP_MODELS is unset) on a not-met goal. QAR_DEEP_AUTO_MODEL=0/false/off disables it (the
-    # ladder then starts at its first rung, as before). QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD set
-    # the per-difficulty start (defaults haiku / sonnet / sonnet). Like QAR_DEEP_MODELS these must be
+    # The START of a deep run nobody pinned is the hub's tier rule (the cheapest tier measured good enough; see
+    # deep_model_selection.py). Setting QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD is operator configuration, which counts as standing
+    # guidance: the start for work of that difficulty is the model set. With none of them set, and QAR_DEEP_AUTO_MODEL not 0, the hub
+    # rule decides. QAR_DEEP_AUTO_MODEL=0/false/off starts at the first rung of the ladder. Like QAR_DEEP_MODELS these must be
     # Claude ids/aliases the deep worker can run, never tier names; an unusable value is ignored.
     _auto = (os.getenv("QAR_DEEP_AUTO_MODEL") or "").strip().lower()
     if _auto in ("0", "false", "off", "no"):

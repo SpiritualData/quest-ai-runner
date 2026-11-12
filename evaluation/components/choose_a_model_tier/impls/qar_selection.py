@@ -1,4 +1,4 @@
-"""CURRENT: the live selection code. ``select_deep_start``, ``resolve_model_name``, ``ModelRegistry.resolve_tier``
+"""CURRENT: the live selection code. ``plan_start``, ``resolve_model_name``, ``ModelRegistry.resolve_tier``
 over a provider that only lists models, ``next_lower_tier``, ``is_vision_capable``, ``provider_outage.is_outage``
 and ``usage_limit.detect_usage_limit`` / ``UsageLimit.resume_at``. The provider's model list is the only fake.
 Zero model calls."""
@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from hubofhubs.api import outage as provider_outage
 from hubofhubs.api import resolve_model_name
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import select_deep_start
+from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import normalize_difficulty, plan_start
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry, is_vision_capable, next_lower_tier
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.usage_limit import detect_usage_limit
 
@@ -21,12 +21,25 @@ class ListingProvider:
         return list(self.live)
 
 
+TIER_MODELS = {"fast": "haiku", "balanced": "sonnet", "quality": "opus", "best": "opus"}
+
+
+class FixedTiers:
+    """A registry whose tiers are fixed, so the start the hub's rule picks is visible as a model."""
+
+    def resolve_tier(self, name):
+        return TIER_MODELS[name]
+
+
 def start_model(args):
-    picked = select_deep_start(args["difficulty"], args["ladder"], args.get("models"))
-    if picked is None:
-        return {"start": None, "ladder": list(args["ladder"])}
-    ladder, _ = picked
-    return {"start": ladder[0], "ladder": ladder}
+    ladder = list(args["ladder"])
+    if not ladder:
+        return {"start": None, "ladder": []}
+    level = normalize_difficulty(args["difficulty"])
+    plan = plan_start(FixedTiers(), configured_ladder=ladder, difficulty=args["difficulty"],
+                      operator_model=(args.get("models") or {}).get(level or "normal"))
+    picked = plan.ladder if plan else ladder
+    return {"start": picked[0], "ladder": picked}
 
 
 def tier(args):

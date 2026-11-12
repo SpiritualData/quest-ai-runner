@@ -8,7 +8,6 @@ from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import DEFAULT_DIFFICULTY_MODELS
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEFAULT_PLANNER_PROMPT_PROFILE
 from hubofhubs.api import DeepResult
 from hubofhubs.api import ExecutionRecord
@@ -89,16 +88,14 @@ class OrchestratorConfig:
     # QAR_DEEP_MODELS); an explicit per-task model request or a guidance "model preference" pins the
     # model and disables auto-escalation.
     deep_model_ladder: Optional[List[str]] = None
-    # AUTOMATIC STARTING MODEL for a deep run nobody pinned (core/deep_model_selection.py). The
-    # planner rates the work "simple" | "normal" | "hard" on the call it already makes, and the run
-    # STARTS on that difficulty's model, then escalates up the ladder (``deep_model_ladder``, or
-    # ``DEFAULT_AUTO_DEEP_LADDER`` = haiku, sonnet when none is configured) on a not-met goal
-    # exactly as before. Defaults: simple -> haiku, normal and hard -> sonnet (the strongest model
-    # is the escalation rung, not a starting point). Consumers set these from QAR_DEEP_AUTO_MODEL
-    # and QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD. False = the ladder is used exactly as before.
+    # THE START OF A DEEP RUN nobody pinned is the hub's tier rule (``deep_model_selection.plan_start``): the cheapest tier measured
+    # good enough, unless a guidance card or the operator's configuration names one. ``deep_model_ladder`` (``QAR_DEEP_MODELS``) is the
+    # escalation ladder; unset, it is the registry's tiers in order. ``deep_auto_model`` False (``QAR_DEEP_AUTO_MODEL=0``) uses the
+    # resolved ladder from its first rung, as before. ``deep_difficulty_models`` holds ONLY what an operator set
+    # (``QAR_DEEP_MODEL_SIMPLE`` / ``_NORMAL`` / ``_HARD``): operator configuration counts as standing guidance, so a model here is
+    # the start for work of that difficulty; empty means the hub rule decides.
     deep_auto_model: bool = True
-    deep_difficulty_models: Dict[str, str] = field(
-        default_factory=lambda: dict(DEFAULT_DIFFICULTY_MODELS))
+    deep_difficulty_models: Dict[str, str] = field(default_factory=dict)
     # The SAME goal loop applied to plain ANSWERS (not just deep execution): after an answer is
     # written, the brain verifies it meets the goal at the quality bar (the guidance cards selected
     # for the input) and, if unmet, regenerates with steering — up to this many attempts. Only

@@ -137,7 +137,7 @@ def test_a_model_the_deep_worker_cannot_run_is_never_passed_through():
 
     got = runner.calls[0]["model"]
     assert got != "gemini-3.5-flash", "Claude Code cannot run it, so it must not be pinned"
-    assert got == ModelRegistry(provider).resolve_tier("gemini-3.5-flash")
+    assert got == ModelRegistry(provider).resolve_role("deep-run.session", "gemini-3.5-flash")   # the hub-ruled model of the role, not the id
 
 
 # --- a model the person names in their own message --------------------------------------------
@@ -170,7 +170,7 @@ def test_no_typed_request_leaves_the_standing_pin_alone():
 
     _orch(provider, runner).run("build X", model_hint="haiku")
 
-    assert [c["model"] for c in runner.calls] == ["haiku"]
+    assert [c["model"] for c in runner.calls] == [ModelRegistry(provider).resolve_role("deep-run.session", "haiku")]
 
 
 def test_a_typed_request_for_a_model_the_worker_cannot_run_is_ignored():
