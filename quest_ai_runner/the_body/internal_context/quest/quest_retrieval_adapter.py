@@ -451,7 +451,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             return Observation(kind="error", error="Quest client not configured")
 
         try:
-            quests = self.client.list_quests()
+            quests = [q for q in (self.client.list_quests() or []) if not q.get("archived")]
             if not quests:
                 return Observation(
                     kind="error",

@@ -142,10 +142,14 @@ def reachable_quests(client, team_ids: Sequence[str]) -> List[QuestFolder]:
     Network calls, so callers run this off the UI thread. Failures shrink the list, never raise.
     """
     found: Dict[str, QuestFolder] = {}
+    archived: set = set()
     for team_id in [t for t in team_ids if t]:
         try:
             for q in client.list_quests(team_id=team_id) or []:
                 qid = q.get("quest_id") or ""
+                if q.get("archived"):
+                    archived.add(qid)   # an archived quest is never offered or selected
+                    continue
                 if qid and qid not in found:
                     found[qid] = quest_without_folder(qid, q.get("outcome") or "")
         except Exception:  # noqa: BLE001
@@ -154,13 +158,16 @@ def reachable_quests(client, team_ids: Sequence[str]) -> List[QuestFolder]:
         for q in client.list_my_quests() or []:
             qid = q.get("quest_id") or ""
             state = q.get("state") or {}
+            if qid and (state.get("archived") or q.get("archived")):
+                archived.add(qid)
+                continue
             if qid:
                 found[qid] = quest_without_folder(
                     qid, state.get("outcome") or (found[qid].title if qid in found else ""),
                     state.get("current_state") or "")
     except Exception:  # noqa: BLE001
         log.info("could not list the account's own quests", exc_info=True)
-    return list(found.values())
+    return [f for qid, f in found.items() if qid not in archived]
 
 
 def merge_quests(local: Sequence[QuestFolder], remote: Sequence[QuestFolder]) -> List[QuestFolder]:

@@ -240,6 +240,7 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
             self.pinned_quest = next((q for q in self.quest_folders if q.quest_id == self._goal_id),
                                      None) or quest_without_folder(self._goal_id)
         self.quest_list_listeners = []  # called (no args) when the remote list arrives
+        self.quest_list_ready = threading.Event()  # set once the remote list is in and dead folders are dropped
         threading.Thread(target=self.fetch_remote_quests, name="qar-quest-list", daemon=True).start()
         # Turn history for /tasks and /status commands
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]

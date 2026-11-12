@@ -22,6 +22,7 @@ class QuestsMixin:
             team_ids = [getattr(self._cfg, "team_id", None) or ""]
             team_ids += [t.strip() for t in os.getenv("QUEST_TEAM_IDS", "").split(",") if t.strip()]
             self.remote_quests = reachable_quests(client, list(dict.fromkeys(team_ids)))
+            self.drop_dead_quest_folders(client)
             pinned = self.pinned_quest
             if pinned is not None and not pinned.folder and not pinned.title:
                 # A quest selected by id before its details were known: fill them in.
@@ -29,11 +30,33 @@ class QuestsMixin:
                     (q for q in self.remote_quests if q.quest_id == pinned.quest_id), pinned)
         except Exception:  # noqa: BLE001 — the menu just shows local quests
             self.remote_quests = []
+        finally:
+            ready = getattr(self, "quest_list_ready", None)
+            if ready is not None:
+                ready.set()
         for listener in list(getattr(self, "quest_list_listeners", [])):
             try:
                 listener()
             except Exception:  # noqa: BLE001
                 pass
+
+    def drop_dead_quest_folders(self, client) -> None:
+        """Forget synced folders whose quest was deleted or archived (a stale QUEST_SYNC.md must never be selected).
+
+        Only folders Quest did not just list are probed (one read each), so live quests cost nothing extra."""
+        listed = {q.quest_id for q in self.remote_quests}
+        keep = []
+        for folder in self.quest_folders:
+            if folder.quest_id in listed:
+                keep.append(folder)
+                continue
+            state = client.get_my_quest(folder.quest_id)
+            if state and not state.get("archived"):
+                keep.append(folder)
+        self.quest_folders = keep
+        home = getattr(self, "home_quest", None)
+        if home is not None and home.quest_id not in {f.quest_id for f in keep}:
+            self.home_quest = None
 
     def no_quests_reason(self) -> str:
         """Why the quest list is empty, in words a person can act on."""
@@ -59,6 +82,10 @@ class QuestsMixin:
         """
         if self.pinned_quest is not None:
             return self.pinned_quest
+        ready = getattr(self, "quest_list_ready", None)
+        if ready is not None:
+            # Selecting before Quest has said which quests still exist could pick a deleted or archived one.
+            ready.wait(timeout=15)
         if self.quest_match_mode == "none" or not self.quest_folders:
             return None
         return self.choose_quest(user_text, self.quest_folders)
