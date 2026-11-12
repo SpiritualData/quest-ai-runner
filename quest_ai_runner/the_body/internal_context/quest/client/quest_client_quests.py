@@ -396,12 +396,14 @@ class QuestsMixin:
 
     def create_habit(self, quest_id: str, strategy_id: str, name: str, *,
                      frequency: str = "daily", start_date: Optional[str] = None,
+                     assigned_to_user_ids: Optional[List[str]] = None,
                      **fields: Any) -> WriteResult:
         """POST /api/planning/habits -- create one habit under a quest strategy.
 
         ``fields`` passes the endpoint's optional keys through in snake_case (``description``,
         ``days``, ``time``, ``duration``, ``linked_goal_id`` ...); ``start_date`` defaults to today.
-        Returns a ``WriteResult`` or raises ``QuestWriteError`` like ``create_goal``: a caller that says
+        ``assigned_to_user_ids`` is sent as ``assigned_to_user_ids`` only when given (``None`` leaves
+        the habit unassigned). Returns a ``WriteResult`` or raises ``QuestWriteError`` like ``create_goal``: a caller that says
         "habit added" must know it was.
         """
         from datetime import date
@@ -409,6 +411,8 @@ class QuestsMixin:
                                 "frequency": frequency,
                                 "start_date": start_date or date.today().isoformat()}
         body.update({k: v for k, v in fields.items() if v is not None})
+        if assigned_to_user_ids is not None:
+            body["assigned_to_user_ids"] = [str(i) for i in assigned_to_user_ids]
         return self._write("POST", "/api/planning/habits", body=body, label="Creating the habit")
 
     def list_experiments(self, quest_id: str) -> List[Dict[str, Any]]:

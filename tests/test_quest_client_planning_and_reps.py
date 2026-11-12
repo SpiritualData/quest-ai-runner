@@ -260,3 +260,37 @@ def test_list_decisions_for_quest_unwraps_decisions_key():
 def test_list_decisions_for_quest_returns_empty_list_on_failure():
     client = client_failing_request()
     assert client.list_decisions_for_quest("quest_1") == []
+
+
+# --- assign_habit / create_habit assignees ----------------------------------------------------
+
+def test_assign_habit_puts_the_assignee_list_to_the_right_route():
+    client, captured = client_capturing_call()
+    assert client.assign_habit("habit_1", ["user_a", "user_b"]).status.value == "applied"
+    assert captured["method"] == "PUT"
+    assert captured["path"] == "/api/planning/habits/habit_1/assign"
+    assert captured["body"] == {"assignedToUserIds": ["user_a", "user_b"]}
+
+
+def test_assign_habit_with_an_empty_list_clears_the_assignment():
+    client, captured = client_capturing_call()
+    client.assign_habit("habit_1", [])
+    assert captured["body"] == {"assignedToUserIds": []}
+
+
+def test_assign_habit_raises_on_failure():
+    client = client_failing_request()
+    with pytest.raises(QuestWriteError):
+        client.assign_habit("habit_1", ["user_a"])
+
+
+def test_create_habit_sends_assignees_only_when_given():
+    client, captured = client_capturing_call()
+    client.create_habit("quest_1", "strategy_1", "Walk", start_date="2026-11-12")
+    assert "assigned_to_user_ids" not in captured["body"]
+    client.create_habit("quest_1", "strategy_1", "Walk", start_date="2026-11-12",
+                        assigned_to_user_ids=["user_a"])
+    assert captured["body"]["assigned_to_user_ids"] == ["user_a"]
+    client.create_habit("quest_1", "strategy_1", "Walk", start_date="2026-11-12",
+                        assigned_to_user_ids=[])
+    assert captured["body"]["assigned_to_user_ids"] == []

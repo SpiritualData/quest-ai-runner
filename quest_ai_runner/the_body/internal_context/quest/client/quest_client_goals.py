@@ -192,6 +192,17 @@ class GoalsMixin:
             body["next_step"] = next_step
         return self._write("PUT", f"/api/planning/goals/{goal_id}/assign", body=body, label="Handing over the goal")
 
+    def assign_habit(self, habit_id: str, assigned_to_user_ids: List[str]) -> WriteResult:
+        """PUT /api/planning/habits/{habit_id}/assign: set who a habit is assigned to.
+
+        ``assigned_to_user_ids`` is the full list of quest members (sent as ``assignedToUserIds``);
+        an empty list clears the assignment. Raises ``QuestWriteError`` on refusal, like
+        ``assign_goal``: a caller that says "assigned" must know it was.
+        """
+        body: Dict[str, Any] = {"assignedToUserIds": [str(i) for i in (assigned_to_user_ids or [])]}
+        return self._write("PUT", f"/api/planning/habits/{habit_id}/assign", body=body,
+                           label="Assigning the habit")
+
     def set_goal_completed(self, goal_id: str, *, completed: bool = True) -> WriteResult:
         """POST /api/planning/goals/{goal_id}/complete — tick or untick one goal.
 

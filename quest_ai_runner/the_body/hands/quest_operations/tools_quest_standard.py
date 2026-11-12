@@ -533,7 +533,8 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
                                               f"strategy to put the habit under. Add a strategy "
                                               f"first (add_quest_strategy)."))
         fields = {k: args[k] for k in ("description", "days", "time", "duration", "start_date",
-                                       "linked_goal_id") if args.get(k) not in (None, "", [])}
+                                       "linked_goal_id", "assigned_to_user_ids")
+                  if args.get(k) not in (None, "", [])}
         try:
             habit = client.create_habit(quest_id, strategy_id, name,
                                         frequency=str(args.get("frequency") or "daily"), **fields)
@@ -574,6 +575,8 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
                 "linked_goal_id": {"type": "string",
                                    "description": "Goal its entries count toward."},
                 "start_date": {"type": "string", "description": "YYYY-MM-DD (default today)."},
+                "assigned_to_user_ids": {"type": "array", "items": {"type": "string"},
+                                         "description": "Quest member user ids to assign the habit to (optional)."},
                 "user_asked_for_this_field": _ASKED_PARAM,
             },
         },

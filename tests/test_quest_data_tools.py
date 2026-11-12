@@ -476,3 +476,15 @@ def test_a_quest_tool_with_no_quest_tells_the_planner_how_to_fix_the_call():
     assert not refused.ok and refused.text.endswith(NO_QUEST_HINT) and client.calls == []
     assert "listed in context" in NO_QUEST_HINT
     assert "chat has none" in _QUEST_ID_PARAM["description"]
+
+
+def test_habit_tool_passes_assignees_through_only_when_given():
+    client = FakeQuestClient(quest={"strategies": [{"id": "s1", "accepted": True}]})
+    spec = create_quest_habit_spec({}, client_factory=factory(client))
+    assert spec.parameters["properties"]["assigned_to_user_ids"]["type"] == "array"
+    spec.handler({"quest_id": "q1", "name": "Walk", "user_asked_for_this_field": True,
+                  "assigned_to_user_ids": ["user_a"]}, ToolContext())
+    spec.handler({"quest_id": "q1", "name": "Stretch", "user_asked_for_this_field": True},
+                 ToolContext())
+    assert client.calls[0][5] == {"assigned_to_user_ids": ["user_a"]}
+    assert client.calls[1][5] == {}
