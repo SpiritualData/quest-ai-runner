@@ -7,7 +7,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, Optional
 
-from hubofhubs.api import compact_schema, normalize_choice, strip_schema_descriptions  # noqa: F401
+from hubofhubs.api import MOVES, compact_schema, normalize_choice, strip_schema_descriptions  # noqa: F401
 
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     DEFAULT_PLANNER_PROMPT_PROFILE, DEFERRED_DEEP_INLINE_SEMANTICS, MODEL_TIER_BLOCK, PLANNER_PROFILES, PLANNER_PROMPT,
@@ -260,6 +260,8 @@ DECIDE_TOOL: Dict[str, Any] = {
             "refers_to_attachment": {"type": "boolean"},
             # The shape the reply must take (core/reply_standards.py); the rubric states each value.
             "reply_shape": {"type": "string", "enum": list(REPLY_SHAPES)},
+            # The structure move the turn calls for (hub: structure-in-conversation); optional, absent means none. The rubric states each value.
+            "structure_move": {"type": "string", "enum": list(MOVES)},
             # How the reply is delivered when the message says so (read aloud or written); the rubric states it.
             "delivery": {"type": "string", "enum": ["spoken", "written"]},
             # The reads this decision still owes: what the planner itself says it has NOT yet

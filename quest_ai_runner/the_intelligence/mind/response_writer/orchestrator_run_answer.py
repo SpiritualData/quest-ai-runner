@@ -36,6 +36,7 @@ from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_pr
 from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up, turn_awaits_person
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_information_turn
 from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve as resolve_facts
+from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import structure_reply
 from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import (
     ADVICE_ANSWER_DIRECTIVE, BRAINSTORM_CLARIFY_ACK_PREFIX, BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, HOLD_OFF_HELD_WORK_ACK_NOTE,
     HOLD_OFF_NO_ACTION_ACK_NOTE, ASK_FIRST_DIRECTIVE, DRAFT_ANSWER_DIRECTIVE, HANDOFF_ANSWER_NOW_DIRECTIVE, INFORMATION_ANSWER_DIRECTIVE, NO_ATTACHMENT_DIRECTIVE, SETTLED_ANSWER_DIRECTIVE, STATUS_SNAPSHOT_DIRECTIVE, NEXT_STEP_SNAPSHOT_DIRECTIVE, PLAN_SNAPSHOT_DIRECTIVE, NO_ATTACHMENT_LINE,
@@ -204,6 +205,11 @@ class RunAnswerMixin:
             snapshot_directive = (PLAN_SNAPSHOT_DIRECTIVE if getattr(rs.plan, "reply_shape", None) == SHAPE_PLAN
                                   else NEXT_STEP_SNAPSHOT_DIRECTIVE if getattr(rs, "status_next_step", False) else STATUS_SNAPSHOT_DIRECTIVE)
             reply_directive = snapshot_directive + ("\n\n" + reply_directive if reply_directive else "")      # a status (or a plan) is written from the snapshot code read
+        # STRUCTURE IN THE REPLY: the planner's structured ``structure_move`` on an open quest's turn adds the quest's held structure as facts, the one paragraph to write
+        # from it and at most one offer (``structure_reply``); a plain turn gets nothing, and the block rides the result for a surface to show.
+        rs.structure = structure_reply(rs.plan, rs._ctx_meta, getattr(cfg, "structure_records", None), rs.message_is_user_turn) if rs.plan is not None else None
+        if rs.structure is not None and rs.structure.directive:
+            reply_directive = (reply_directive + "\n\n" if reply_directive else "") + rs.structure.directive      # last, so it is the instruction closest to the writing
         if rs.plan is not None and rs.plan.action == "answer" and getattr(rs, "no_attachment", False):
             reply_directive = NO_ATTACHMENT_DIRECTIVE + ("\n\n" + reply_directive if reply_directive else "")
         if (rs.plan is not None and rs.plan.action == "answer" and rs.plan.deferred_deep and not rs.brainstorm_active

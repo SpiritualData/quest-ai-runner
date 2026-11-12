@@ -8,7 +8,7 @@ Part of [Mind](../README.md)
 
 | Implementation | Handle | Purpose | Code | Selected |
 |---|---|---|---|---|
-| The loop planner decides the route | `planner:planner_route` | The loop makes one planning call over the model and its decision is the route, returned as data; no tool runs and no worker starts. | [`quest_ai_runner/the_intelligence/mind/planner/message_routing.py`](message_routing.py) | selected |
+| The loop planner decides the route | `planner:planner_route` | The loop makes one planning call over the model and its decision is the route, returned as data; no tool runs and no worker starts. | [`quest_ai_runner/the_intelligence/mind/planner/message_routing.py`](message_routing.py) |  |
 
 ## Where to go next
 

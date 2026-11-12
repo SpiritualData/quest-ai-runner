@@ -17,6 +17,7 @@ from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_sele
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
 from hubofhubs.api import normalize_staged_subtasks
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import log
+from hubofhubs.api import MOVES
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import REPLY_SHAPES
 from hubofhubs.api import clean_requirements
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import (
@@ -286,6 +287,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         refers_to_attachment=raw.get("refers_to_attachment") is True,
         reply_shape=(raw.get("reply_shape") if raw.get("reply_shape") in REPLY_SHAPES else None),
         delivery=(raw.get("delivery") if raw.get("delivery") in ("spoken", "written") else None),
+        structure_move=(raw.get("structure_move") if raw.get("structure_move") in MOVES else None),
         clarification=clarification,
         mode_signal=mode_signal,
         card_thread=card_thread_raw,

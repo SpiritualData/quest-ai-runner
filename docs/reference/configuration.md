@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-247 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+248 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -80,6 +80,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_DECISION_ASSIGNEES` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DECISION_DEFAULT_DEADLINE_HOURS` |  | `the_body/configuration/cli_config.py`, `the_body/internal_context/quest/client/quest_client_support.py` | `docs/how-to/adapters.md`, `docs/reference/quest-api-contract.md` |
 | `QAR_DEEP_AUTO_MODEL` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_CHROME` |  | `the_body/configuration/config_core_settings.py` | - |
 | `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS` | 1 adds --exclude-dynamic-system-prompt-sections to the deep worker launch, which moves per-machine text out of the cached prefix; unset leaves the launch as it was. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
 | `QAR_DEEP_INSTRUCTIONS_FILES` |  | `the_body/configuration/config_core_settings.py`, `the_self/integrity/prompts/standing_instructions.py` | `.env.example`, `docs/how-to/acp-deep-runner.md` |
 | `QAR_DEEP_LAUNCH_PROFILE` | Names a bundle of deep worker launch settings (today only lean_guarded: fewer built-in tools with web kept, user settings kept, no ambient MCP servers, per-machine prompt text out of the cached prefix); unset or unknown leaves the launch as it was. A QAR_DEEP_* name set beside it overrides the profile's field. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | - |

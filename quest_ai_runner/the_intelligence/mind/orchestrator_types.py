@@ -440,6 +440,9 @@ class OrchestratorConfig:
     reply_standards: bool = True
     reply_standard_wait_seconds: float = 12.0
     reply_standard_max_repairs: int = 2
+    # STRUCTURE IN THE REPLY (hub: structure-in-conversation; ``structure_reply``). The host's records port for the open subject's structure: ``read(subject) ->
+    # {table: {id: row}}``. None leaves every reply plain whatever move the planner names.
+    structure_records: Any = None
     # This bounds how long the BACKGROUND finisher will wait before giving up entirely (a late
     # resolution past this point is simply dropped; nothing is waiting on it).
     overseer_background_finish_timeout_seconds: float = 30.0

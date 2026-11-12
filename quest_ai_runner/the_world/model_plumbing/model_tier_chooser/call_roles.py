@@ -84,6 +84,7 @@ CALL_ROLES: Dict[str, str] = {
     "answer.response": "response_writing",
     "answer.task-report": "response_writing",
     "answer.clarify": "response_writing",
+    "answer.structure": "response_writing",
     "explain-an-answer.how-i-got-this": "summary",
     "narrate-a-turn.first-beat": "acknowledgement",
     "assist-a-terminal-session.ack": "acknowledgement",

@@ -19,6 +19,7 @@ from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import turn_grounding
+from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import append_structure
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, mutating_call_count, send_status_first, settle_already_set, track_alternatives, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
@@ -224,6 +225,7 @@ class RunLoopMixin:
                 if dropped:
                     log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
             track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
+            append_structure(self, rs, res)      # a reply that framed or compared options ends with what it serves, the metric, the next milestone and at most one offer
             settle_already_set(self, rs, res)    # an ensure-style turn that found everything already there ends with one code-composed sentence
             close_with_metric(self, rs, res)     # message 2 of an act request ends with the metric before and after, read by code
             if res.kind == "answer" and getattr(rs, "status_snapshot", False) and res.text:
@@ -310,7 +312,8 @@ class RunLoopMixin:
                                         data={**({"exit_reason": res.exit_reason,
                                                   "goal_verdict": res.goal_verdict} if res.exit_reason else {}),
                                               **(metric_data if res.deep_results else {}),
-                                              **end_report_data(res), **turn_outcome(res)}))
+                                              **end_report_data(res), **turn_outcome(res),
+                                              **({"structure": rs.structure.block} if getattr(rs, "structure", None) else {})}))
             elif res.kind == "confirm":
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
