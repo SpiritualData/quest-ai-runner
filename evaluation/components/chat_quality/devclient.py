@@ -252,8 +252,30 @@ def must_get(path, attempts=3):
     raise RuntimeError(f"snapshot read {path} failed after {attempts} tries: {status} {str(body)[:200]}")
 
 
-def list_collections():
-    return unwrap_list(must_get("/api/data/collections"), "collections", "items")
+def pagination_of(body):
+    """The ``pagination`` block of a paged list response, or {} when the response is not paged."""
+    if isinstance(body, dict):
+        if isinstance(body.get("pagination"), dict):
+            return body["pagination"]
+        if isinstance(body.get("data"), dict):
+            return pagination_of(body["data"])
+    return {}
+
+
+def list_collections(max_pages=50):
+    """Every collection on the account, across all pages. The endpoint pages at 20 (0-based
+    ``page``); reading only page 0 left tagged collections on later pages undeleted, so teardown
+    reported CLEANUP INCOMPLETE and every reset aborted (2026-11-12)."""
+    found, seen = [], set()
+    for page in range(max_pages):
+        body = must_get(f"/api/data/collections?page={page}" if page else "/api/data/collections")
+        items = unwrap_list(body, "collections", "items")
+        fresh = [c for c in items if not isinstance(c, dict) or c.get("id") not in seen]
+        found += fresh
+        seen.update(c.get("id") for c in fresh if isinstance(c, dict))
+        if not fresh or not pagination_of(body).get("has_next"):
+            break
+    return found
 
 
 def notes_of(quest_id):

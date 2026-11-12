@@ -2555,6 +2555,112 @@
         ]
       },
       "evidence_notes": "Added 2026-11-10 from a live failure: the note was saved but the person was told it was not, asked for a go-ahead already given, then given a developer's test plan ending with the model name. The saved note is written as list lines, not a pipe table, because the notes screen shows plain text (backend test `test_chat_note_tool_e2e.py` pins it)."
+    },
+    {
+      "id": "EXP-091",
+      "dataset": "explicit",
+      "area": "vague or misspelled: budget question (new user)",
+      "quest_key": "business",
+      "message": "hw much hav i spnt on the lanch so far n am i ovr my budgt??",
+      "expected_routing": "inline",
+      "rubric": [
+        "Reads the misspelled question as asking for launch spend versus the budget, without asking the user to rephrase",
+        "Gives the total from Launch Expenses: 2,340 USD",
+        "Says it is over the 2,000 USD cap, by 340 USD",
+        "Does not add, edit or delete an expense"
+      ],
+      "must_use_pivots": [
+        "BUDGET_OVERRUN"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "reply_regex": [
+          "2[,.]?340"
+        ]
+      },
+      "evidence_notes": "Kind: vague or misspelled. User: new. Typos are how busy people type on a phone; the data answer must survive them. Facts: BUDGET_OVERRUN (total 2,340, cap 2,000, over by 340)."
+    },
+    {
+      "id": "EXP-092",
+      "dataset": "explicit",
+      "area": "vague or misspelled: vocabulary count (heavy user)",
+      "quest_key": "language",
+      "message": "how mny wrds in my vocab log hav i masterd vs not yet",
+      "expected_routing": "inline",
+      "rubric": [
+        "Answers from the Vocabulary Log: two mastered and two not yet, four in total",
+        "Any word it names as mastered is saudade or desculpe, and any it names as not yet mastered is embora or contudo",
+        "Does not add, edit or delete a word"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "reply_regex": [
+          "(2|two)"
+        ]
+      },
+      "evidence_notes": "Kind: vague or misspelled. User: heavy. Counts come from the Vocabulary Log entries (mastered yes: saudade, desculpe; no: embora, contudo)."
+    },
+    {
+      "id": "EXP-093",
+      "dataset": "explicit",
+      "area": "another language: Spanish spend question (new user)",
+      "quest_key": "business",
+      "message": "¿Cuánto llevo gastado en el lanzamiento y por cuánto me pasé del presupuesto?",
+      "expected_routing": "inline",
+      "rubric": [
+        "The reply is written in Spanish, not in English",
+        "Gives the total spent, 2,340 USD, and the overrun of 340 USD against the 2,000 USD cap",
+        "Names the label printer (900 USD) as the largest line, or names it when suggesting where to cut",
+        "Does not add, edit or delete an expense and does not claim to change an app language setting"
+      ],
+      "must_use_pivots": [
+        "BUDGET_OVERRUN"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "reply_regex": [
+          "340"
+        ]
+      },
+      "evidence_notes": "Kind: another language. User: new. Only one other-language case existed (Portuguese). The figures must survive the language switch."
+    },
+    {
+      "id": "EXP-094",
+      "dataset": "explicit",
+      "area": "long pasted text: supplier email (team member)",
+      "quest_key": "business",
+      "message": "Got this from the supplier this morning, what does it actually mean for us?\n\n---\nHi there,\n\nThank you for your continued business. We are writing to let you know that due to a backlog at our pouring facility and a delayed inbound container of soy and coconut blend, orders placed in the last three weeks are being rescheduled. Your order of starter wax and wicks is now expected to leave our warehouse on 28 October rather than the originally confirmed 14 October. We understand this may affect your plans and we apologise for the inconvenience. If you would like to cancel or change the order, reply to this email before Friday and we will process it within two working days. Partial shipments are not available for this product line. Tracking details will be emailed when the order ships.\n\nKind regards,\nCustomer Care\n---",
+      "expected_routing": "inline",
+      "rubric": [
+        "Summarises the pasted email in one or two sentences: the wax and wicks now ship 28 Oct instead of 14 Oct",
+        "Connects it to the user's own plan: the 20 Oct soft launch cannot happen as planned with materials arriving after it",
+        "Offers a concrete next step (move the launch date, or ask about a change before Friday), without inventing a supplier or option the email does not name",
+        "Does not save anything unless asked"
+      ],
+      "bonus_pivots": [
+        "SUPPLIER_DELAY"
+      ],
+      "forbid_writes": true,
+      "evidence_notes": "Kind: long pasted text. User: team member forwarding mail. No pasted-text case existed. The point is reading a long paste quickly and tying it to the quest's own dates."
+    },
+    {
+      "id": "EXP-095",
+      "dataset": "explicit",
+      "area": "plan or draft: mentor check-in on budget (mentor)",
+      "quest_key": "business",
+      "message": "I'm mentoring the owner of this shop. Give me three questions to ask them at our call this week, based on how the launch is actually going.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Gives exactly three questions, written to be asked to the shop owner",
+        "At least one question rests on a real figure from the quest: the 2,340 USD spend against the 2,000 USD cap, or the 900 USD label printer",
+        "No question invents a fact, date or figure that is not in the quest's data",
+        "Does not save, schedule or send anything"
+      ],
+      "must_use_pivots": [
+        "BUDGET_OVERRUN"
+      ],
+      "forbid_writes": true,
+      "evidence_notes": "Kind: plan or draft. User: mentor. No case was written from a mentor's point of view; mentors are a launch audience. Grounding beats generic coaching questions."
     }
   ]
 }
