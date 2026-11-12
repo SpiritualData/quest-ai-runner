@@ -54,6 +54,21 @@ def normalise_hosts(hosts: Iterable[str]) -> frozenset:
     return frozenset(h.lower().removeprefix("www.") for h in hosts if h)
 
 
+REMOVED = "\x00"
+LEAD_IN = r"(?:see(?: also)?|read more|learn more|more details|more|details|full guide|guide|docs|link)"
+
+
+def without_address_remnants(text: str) -> str:
+    """``text`` with the marks left where bare addresses were removed turned into clean punctuation: the full stop that followed an address is dropped when a sentence
+    already ended before it ("from here. <address>." was "from here.."), a lead-in line that only pointed at it ("Read more: <address>.") goes whole, and a lead-in word
+    left at the end of a sentence ("..., see <address>.") goes with it. Punctuation and a short list of pointing words only; no meaning read."""
+    out = re.sub(rf"(?m)^[ \t]*(?:[-*\u2022][ \t]+)?{LEAD_IN}?[ \t]*[:\-]?[ \t]*{REMOVED}[ \t]*[.,;:]?[ \t]*\n?", "", text, flags=re.I)
+    out = re.sub(rf"([.!?][\"\u201d)]?)[ \t]*{REMOVED}[ \t]*[.,;:]?", r"\1", out)
+    out = re.sub(rf"[ \t]*[,;:]?[ \t]*\b{LEAD_IN}\b[ \t]*[:,]?[ \t]*{REMOVED}", "", out, flags=re.I)
+    out = re.sub(r"[ \t]*\([ \t]*\)", "", out.replace(REMOVED, ""))
+    return re.sub(r"([.!?]),", r"\1", out)
+
+
 def strip_unseen_links(text: str, evidence: str, trusted_hosts: Sequence[str] = ()) -> Tuple[str, List[str]]:
     """``text`` without any address that is neither in ``evidence`` nor on a trusted host, and the addresses removed."""
     if not text or not isinstance(text, str):
@@ -72,7 +87,7 @@ def strip_unseen_links(text: str, evidence: str, trusted_hosts: Sequence[str] = 
             if keep(address):
                 return match.group(0)
             removed.append(address)
-            return match.group(0)[len(address):]
+            return REMOVED + match.group(0)[len(address):]
         target = match.group("target")
         if not is_judged(target):
             return match.group(0)
@@ -90,6 +105,8 @@ def strip_unseen_links(text: str, evidence: str, trusted_hosts: Sequence[str] = 
         return "" if normalize_url_for_match(label) == normalize_url_for_match(target) else label
 
     out = MARKDOWN_OR_BARE.sub(judge, text)
+    if REMOVED in out:
+        out = without_address_remnants(out)
     if removed:
         out = re.sub(r"[ \t]{2,}", " ", out)
         out = re.sub(r"[ \t]+([.,;:!?])", r"\1", out)

@@ -95,3 +95,11 @@ def test_the_switch_leaves_the_reply_untouched():
     cfg.link_provenance = False
     orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider), config=cfg)
     assert "invented.example.com" in orch.run("hi").text
+
+
+def test_removed_address_leaves_no_doubled_stop_or_dangling_lead_in():
+    """Measured 2026-11-11: a how-to reply ending "from here. <address>." read "from here.." and "Read more: <address>." left "Read more:."."""
+    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import strip_unseen_links
+    assert strip_unseen_links("I can't send one from here. https://x.org/a.", "")[0] == "I can't send one from here."
+    assert strip_unseen_links("Open it.\n\nRead more: https://x.org/a.\n", "")[0].strip() == "Open it."
+    assert strip_unseen_links("I can't confirm that button, see https://x.org/a.", "")[0] == "I can't confirm that button."
