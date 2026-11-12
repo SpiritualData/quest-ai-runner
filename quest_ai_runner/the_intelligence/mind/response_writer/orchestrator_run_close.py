@@ -380,6 +380,7 @@ class RunCloseMixin:
         information_turn = bool(getattr(self.cfg, "cheap_information_turns", True)
                                 and is_information_turn(rs.turn_user_intent, rs.plan) and not (exec_record is not None and exec_record.any_mutation_attempted))
         if (not rs._deferred_handoff_confirmed and not rs._decision_parked and not rs.deferred_unconfirmed and not information_turn
+                and not getattr(rs, "offer_receipt", "")      # the reply to an accepted or declined offer is the sentence code composed from what it did: nothing to regenerate or verify
                 and (self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims)):
             try:
                 # Verify against the turn's DERIVED GOAL CONDITION (the checkable done-standard

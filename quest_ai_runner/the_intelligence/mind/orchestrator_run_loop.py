@@ -19,7 +19,7 @@ from hubofhubs.api import ProgressEvent
 from quest_ai_runner.the_world.tools import dry_run_writes
 from quest_ai_runner.the_intelligence.mind.context_intake import shared_thread
 from quest_ai_runner.the_intelligence.critical_thinking.decision_check.reply_views import turn_grounding
-from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import append_structure
+from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import finish_structure, open_offer_for, open_offer_note, settle_offer
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, mutating_call_count, send_status_first, settle_already_set, track_alternatives, turn_outcome
 from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
 from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
@@ -224,8 +224,9 @@ class RunLoopMixin:
                     res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
                 if dropped:
                     log.info("figure pass: took out sentences stating figures no read of this turn holds: %s", dropped)
-            track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
-            append_structure(self, rs, res)      # a reply that framed or compared options ends with what it serves, the metric, the next milestone and at most one offer
+            rs.alternatives_kept = track_alternatives(self, rs, res)    # alternatives written for the quest are kept by it, keyed, and the reply says which were already there
+            settle_offer(rs, res)                # an accepted or declined offer is answered by the one sentence code composed from what it did
+            finish_structure(self, rs, res)      # a reply that framed or compared options ends with what it serves, the metric, the next milestone and at most one offer, parked by key
             settle_already_set(self, rs, res)    # an ensure-style turn that found everything already there ends with one code-composed sentence
             close_with_metric(self, rs, res)     # message 2 of an act request ends with the metric before and after, read by code
             if res.kind == "answer" and getattr(rs, "status_snapshot", False) and res.text:
@@ -405,6 +406,11 @@ class RunLoopMixin:
                        if message_is_user_turn else "")
         if _scope_note:
             rs.context_view = _scope_note + ("\n\n" + rs.context_view if rs.context_view else "")
+        # An offer the previous reply left open on this quest (parked by key on the host's records port) is shown to the planner, which reports in structured fields whether this
+        # message accepts or declines it; code carries out the answer (``handle_offer``).
+        rs.open_offer = getattr(rs, "open_offer", None) or open_offer_for(_ctx_meta, getattr(cfg, "structure_records", None), bool(message_is_user_turn))
+        if rs.open_offer:
+            rs.context_view = (rs.context_view + "\n\n" if rs.context_view else "") + open_offer_note(rs.open_offer)
         # The milestone the pinned turn's cue concerns was found by code before context assembly (``milestone_cue.resolve``, in run begin): the planner is shown its facts
         # so it neither asks which milestone nor reads another quest's records, and a lane gap is shown to the reply as well as the planner.
         if rs.cue_gap:
@@ -901,6 +907,7 @@ class RunLoopMixin:
             # was changed and a tool could change something (``tool_guards.act_answered_without_a_write``). At most twice, and only while no tool
             # that changes something has run (a read between the two is progress, not the work). Without it the answer's overseer escalated this to a deep run.
             if (rs.plan and message_is_user_turn and getattr(rs, "deep_to_tool_runs", 0) < 2 and not getattr(rs, "draft_in_chat", False)       # copy written for the person is the work, not a description of it
+                    and not (getattr(rs, "open_offer", None) and (rs.plan.accepts_offer or rs.plan.declines_offer))      # an accepted or declined offer is carried out by code (handle_offer), not by a tool
                     and tool_guards.act_answered_without_a_write(rs.plan, rs.turn_user_intent, self.tools, tool_guards.mutating_tool_ran(gathered, self.tools))
                     and step + 1 < cfg.max_steps and not budget_exhausted()):
                 rs.deep_to_tool_runs = getattr(rs, "deep_to_tool_runs", 0) + 1

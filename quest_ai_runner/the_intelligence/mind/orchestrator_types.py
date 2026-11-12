@@ -443,6 +443,8 @@ class OrchestratorConfig:
     # STRUCTURE IN THE REPLY (hub: structure-in-conversation; ``structure_reply``). The host's records port for the open subject's structure: ``read(subject) ->
     # {table: {id: row}}``. None leaves every reply plain whatever move the planner names.
     structure_records: Any = None
+    # Whether a framed or compared reply gets its closing paragraph from the single answer call (True) or from one small second call that code appends (False, the default).
+    structure_in_one_call: bool = False
     # This bounds how long the BACKGROUND finisher will wait before giving up entirely (a late
     # resolution past this point is simply dropped; nothing is waiting on it).
     overseer_background_finish_timeout_seconds: float = 30.0

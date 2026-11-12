@@ -1,23 +1,25 @@
 """Structure in a reply: what the open quest's structure adds to ONE reply, decided by code from the planner's structured ``structure_move`` and the records.
 
 The planner names the move (``none`` by default; the stay-out turns never reach here). This reads the records of the one open quest through the host's
-``structure_records`` port (``read(subject) -> {table: {id: row}}``), lets the hub's Structure in Conversation arm build the block from them, and then:
+``structure_records`` port (``read(subject) -> {table: {id: row}}``), picks the solution the question serves (one solution is used; with several the hub's Relevant Solutions
+arm, a records shortlist then one fast-tier classification, picks one or says none fits), lets the hub's Structure in Conversation arm build the block from the records, and then:
 
-* ``frame`` and ``compare``: the reply is written as usual, and ONE small second call writes the closing paragraph (what it serves, the alternatives, the metric, the next
-  milestone) and the one offer from the held facts, which code appends (``append_structure``). A single call asked to do both ignored the paragraph on advice turns.
-* ``review`` and ``focus``: the reply itself is written from the records, so the writer gets a directive (``directive_for``).
+* ``frame`` and ``compare``: the reply is written as usual and the closing paragraph (what it serves, the alternatives, the metric, the next milestone) and the one offer are
+  appended by code from the held facts, by one small second call (``append_structure``), or asked of the single answer call (``OrchestratorConfig.structure_in_one_call``).
+* ``review`` and ``focus``: the reply itself is written from the records. When the turn is a status or next-step snapshot (the one home of those turns) the structure facts
+  are fed into that snapshot reply and nothing else is written.
 
-The block rides the result for a surface to show. Nothing here reads the words of the user or of the reply. A quest with exactly one solution uses it; with several,
-none is guessed and no offer is made (so no solution is duplicated). The offer is only a sentence and a ``{pieces}`` note in the block: what it keeps is applied later,
-on a yes, by the host's ``keep_structure`` through ensure-one edits. Generic: no org, product or deployment names.
+The offer is parked on the port with a key (``park_offer``); the next turn shows the planner an open offer, the planner reports ``accepts_offer`` or ``declines_offer`` as
+structured fields, and CODE keeps (``accept_offer``) or remembers the decline (``decline_offer``). Nothing here reads the words of the user or of the reply. Generic: no org,
+product or deployment names.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from hubofhubs.api import STEP_SUMMARIZE, StructureMove, answer_with_reasoning, missing, vocabulary_note
+from hubofhubs.api import STEP_SUMMARIZE, RecordsThenModel, SolutionNetwork, StructureMove, answer_with_reasoning, missing, vocabulary_note
 
 log = logging.getLogger("quest-ai-runner.structure_reply")
 
@@ -26,6 +28,7 @@ PLAIN_SHAPES = ("yes_no", "ask_first", "clarify", "brief", "readback", "decline"
 APPENDED = ("frame", "compare")
 CALL = "answer.structure"
 MAX_REPLY_CHARS = 3500
+KEYED = {"problems": "problem_id", "ideals": "ideal_id", "solutions": "solution_id", "implementations": "implementation_id", "metrics": "metric_id"}
 
 
 @dataclass
@@ -36,6 +39,9 @@ class StructureReply:
     move: str = "none"
     facts: str = ""
     pieces: Optional[List[str]] = None
+    quest_id: str = ""
+    one_call: bool = False
+    snapshot: bool = False
 
 
 def single_quest_id(meta: Optional[Mapping[str, Any]]) -> str:
@@ -44,10 +50,40 @@ def single_quest_id(meta: Optional[Mapping[str, Any]]) -> str:
     return ids[0] if len(ids) == 1 else ""
 
 
-def solution_choice(records: Mapping[str, Any]) -> str:
-    """The solution this reply builds on: the one solution a quest holds, else '' (with several, nothing is guessed from the person's words)."""
+def cell(value: Any) -> str:
+    return ";".join(str(v) for v in value) if isinstance(value, (list, tuple)) else ("" if value is None else str(value))
+
+
+def rows_of(records: Mapping[str, Any]) -> Dict[str, List[Dict[str, str]]]:
+    """The quest's records as the rows the hub's relevance network reads (``{table: [row]}``, a record id in each row's own id column, lists as semicolon text)."""
+    return {table: [dict({key: cell(value) for key, value in row.items()}, **{column: str(record_id)}) for record_id, row in (records.get(table) or {}).items()]
+            for table, column in KEYED.items()}
+
+
+class Plumbing:
+    """The one-argument model call of the turn as the hub's Relevant Solutions arm asks for it (``ask(prompt, tier)``)."""
+
+    def __init__(self, ask: Callable[[str], str]):
+        self.ask_once = ask
+
+    def ask(self, prompt: str, tier: str = "fast") -> str:
+        return self.ask_once(prompt)
+
+
+def solution_choice(records: Mapping[str, Any], message: str = "", ask: Optional[Callable[[str], str]] = None) -> str:
+    """The solution this reply serves: the one solution a quest holds, else the one the hub's Relevant Solutions arm (the records' shortlist, then one fast-tier call over each
+    candidate's name and purpose) says the question concerns, else '' (none fits, or nothing could be asked)."""
     solutions = records.get("solutions") or {}
-    return next(iter(solutions)) if len(solutions) == 1 else ""
+    if len(solutions) == 1:
+        return next(iter(solutions))
+    if len(solutions) < 2 or not message or ask is None:
+        return ""
+    try:
+        hits = RecordsThenModel(Plumbing(ask), "fast").relevant(message, SolutionNetwork.from_rows(rows_of(records)), 1).get("solutions") or []
+    except Exception as error:  # noqa: BLE001 -- a failed match is "none fits", never a failed turn
+        log.warning("relevant solution not chosen, none fits: %s: %s", type(error).__name__, str(error)[:200])
+        return ""
+    return str(hits[0]["solution_id"]) if hits and str(hits[0]["solution_id"]) in solutions else ""
 
 
 def held_lines(block: Mapping[str, Any]) -> List[str]:
@@ -66,14 +102,14 @@ def held_lines(block: Mapping[str, Any]) -> List[str]:
     if metric and metric.get("name"):
         reading = metric.get("reading")
         value = (f", latest value {reading['value']} as of {reading['as_of']}" + (f" ({reading['source']})" if reading.get("source") else "")) if reading else ", no value logged yet"
-        lines.append(f"The metric already kept: {metric['name']}{value}")
+        lines.append(f"The metric already kept (never propose another): {metric['name']}{value}")
     if (block.get("milestone") or {}).get("sentence"):
         lines.append(f"The next milestone: {block['milestone']['sentence']}")
     return lines
 
 
 def candidate_lines(records: Mapping[str, Any], block: Mapping[str, Any]) -> str:
-    """When the quest holds several problems or ideals and none was matched to a solution, their names as candidates (a few of each), for the writer to pick the one this serves."""
+    """When none of the quest's solutions fits and the quest holds several problems or ideals, their names as candidates (a few of each), for the writer to pick the one this serves."""
     lines = []
     for table, key, label in (("problems", "problem", "The quest's problems (name the one this reply serves)"), ("ideals", "ideal", "The quest's ideals (name the one that fits)")):
         names = [str(row.get("name") or row.get("problem") or "") for row in (records.get(table) or {}).values()]
@@ -82,27 +118,31 @@ def candidate_lines(records: Mapping[str, Any], block: Mapping[str, Any]) -> str
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def facts_text(records: Mapping[str, Any], block: Mapping[str, Any]) -> str:
-    """What the quest holds, as facts a writer must use first and never add a value or a date to; its solutions when several; and the candidates when nothing was matched."""
+def facts_text(records: Mapping[str, Any], block: Mapping[str, Any], matched: bool) -> str:
+    """What the quest holds for this question, as facts a writer must use first and never add a value or a date to; the candidate problems and ideals when none was matched."""
     held = held_lines(block)
-    text = ("What the quest already holds (use it first, exactly as written, and never invent a value or a date):\n- " + "\n- ".join(held) + "\n") if held else \
+    text = ("What the quest already holds for this question (use it first, exactly as written, and never invent a value or a date):\n- " + "\n- ".join(held) + "\n") if held else \
         "The quest holds none of this structure yet, so propose each piece briefly from what you know of the quest.\n"
-    solutions = [str(row.get("name") or "") for row in (records.get("solutions") or {}).values() if row.get("name")]
-    if len(solutions) > 1:
-        text += "The quest holds these solutions (name the one this reply serves, if one does): " + "; ".join(solutions[:6]) + ".\n"
-    return text + candidate_lines(records, block)
+    if not matched and len(records.get("solutions") or {}) > 1:
+        text += "None of the quest's solutions is about this question, so a new one would be proposed.\n"
+    return text + (candidate_lines(records, block) if not matched else "")
 
 
 OFFER_WORDS = {"solution": "the approach", "alternatives": "these alternatives", "metric": "a metric to measure them by", "milestone": "a next milestone"}
 
 TAIL_TASK = {"frame": ("Write ONE short paragraph of two or three sentences (not a list, not a heading, and do not repeat the reply) that ties the reply to this quest: which problem of "
                        "the quest it serves, what good looks like for the person, that the options in the reply are alternatives to compare, the one metric that would show which works "
-                       "(the held one with its latest value and date; otherwise propose one in a few words) and the next milestone (the held one; otherwise propose a small one)."),
+                       "and the next milestone. Use every held fact above as it is written, with the metric's latest value and date when one is given; a held metric is never replaced "
+                       "by a new one, and only a piece the facts do not hold is proposed, in a few words."),
              "compare": ("Write ONE short paragraph of two sentences that says the options in the reply are alternatives for the same solution and names the one metric that would show "
-                         "which works (the held one with its latest value and date; otherwise propose one).")}
+                         "which works. Use the held metric with its latest value and date when one is given and never propose another; propose one only when none is held.")}
 REVIEW_PARAGRAPH = ("REQUIRED: answer from the records. Say what the metric's latest value is with the date it was read and from where, and where the next milestone stands against it. If no value "
                     "is logged, say so plainly and name the metric that would show it. Two or three sentences, no list. ")
 FOCUS_PARAGRAPH = ("REQUIRED: keep the short support shape. In it, name the one problem that stands in the way (in the person's own terms) and make the one next step the next milestone. ")
+ONE_CALL_PARAGRAPH = ("REQUIRED, and it overrides any instruction above to give the answer alone: after the answer, add one more short paragraph of two or three sentences (not a list, not a "
+                      "heading, and do not repeat the list) that ties the answer to this quest: which problem of the quest it serves, what good looks like for the person, that the options "
+                      "above are alternatives to compare, the one metric that would show which works and the next milestone, using the held facts as written (never a new metric when one "
+                      "is held). ")
 
 
 def offer_instruction(pieces: List[str]) -> str:
@@ -112,10 +152,14 @@ def offer_instruction(pieces: List[str]) -> str:
             "If the conversation shows the person already declined keeping this, write no offer.")
 
 
-def directive_for(move: str, block: Mapping[str, Any], facts: str) -> str:
-    """The reply directive of a move whose reply is itself written from the records (review, focus): the held structure as facts, what to write, the words to use."""
-    paragraph = {"review": REVIEW_PARAGRAPH, "focus": FOCUS_PARAGRAPH}[move]
-    return "--- STRUCTURE FOR THIS REPLY (from the quest's own records) ---\n" + facts + paragraph + vocabulary_note()
+def directive_for(move: str, facts: str, snapshot: bool, one_call: bool, pieces: List[str]) -> str:
+    """The reply directive when the writer itself writes from the facts: a review or focus reply, a snapshot reply, or a framed or compared reply asked of one call."""
+    head = "--- STRUCTURE FOR THIS REPLY (from the quest's own records) ---\n" + facts
+    if snapshot:
+        return ""      # a snapshot reply is composed by code and model calls of its own; the structure joins it as one code-written sentence (``snapshot_sentence``)
+    if move in APPENDED:
+        return (head + ONE_CALL_PARAGRAPH + offer_instruction(pieces) + " " + vocabulary_note()) if one_call else ""
+    return head + {"review": REVIEW_PARAGRAPH, "focus": FOCUS_PARAGRAPH}[move] + vocabulary_note()
 
 
 def tail_prompt(move: str, reply: str, facts: str, pieces: List[str]) -> str:
@@ -124,7 +168,30 @@ def tail_prompt(move: str, reply: str, facts: str, pieces: List[str]) -> str:
             + offer_instruction(pieces) + " " + vocabulary_note() + " Write only the closing text, in the voice of the reply, with no heading and no quotation marks.")
 
 
-def structure_reply(plan: Any, meta: Optional[Mapping[str, Any]], records_source: Any, user_turn: bool) -> Optional[StructureReply]:
+def snapshot_sentence(move: str, block: Mapping[str, Any]) -> str:
+    """The structure of a status or next-step snapshot turn, in plain sentences composed by code from the block (no model, no value not in the records): for a review the
+    metric the solution is measured by with its latest value and date (or that none is logged yet) and the next milestone; for a focus the problem standing in the way and
+    the next milestone. '' when the block holds none of it."""
+    parts: List[str] = []
+    if move == "review":
+        metric = block.get("metric") or {}
+        if metric.get("name"):
+            reading = metric.get("reading")
+            parts.append((f"The metric that shows whether this is working is {metric['name']}, last recorded as {reading['value']} on {reading['as_of']}." if reading
+                          else f"The metric that shows whether this is working is {metric['name']}, and no value is logged for it yet."))
+    elif (block.get("problem") or {}).get("name"):
+        parts.append(f"The problem standing in your way is: {block['problem']['name']}.")
+    if (block.get("milestone") or {}).get("sentence"):
+        parts.append(f"The next milestone is {block['milestone']['sentence'].rstrip('.')}.")
+    return " ".join(parts)
+
+
+def offer_key(chosen: str, pieces: List[str]) -> str:
+    return "structure:" + (chosen or "new") + ":" + ",".join(pieces)
+
+
+def structure_reply(plan: Any, meta: Optional[Mapping[str, Any]], records_source: Any, user_turn: bool, message: str = "", ask: Optional[Callable[[str], str]] = None,
+                    snapshot: bool = False, one_call: bool = False) -> Optional[StructureReply]:
     """The structure of one reply, or None when the reply stays plain: no move, a plain shape, no single open quest, no records port or no records."""
     move = getattr(plan, "structure_move", None)
     if (not move or move == "none" or not user_turn or records_source is None or getattr(plan, "action", None) != "answer"
@@ -138,42 +205,119 @@ def structure_reply(plan: Any, meta: Optional[Mapping[str, Any]], records_source
     except Exception as error:  # noqa: BLE001
         log.warning("structure records not read, reply stays plain: %s: %s", type(error).__name__, str(error)[:200])
         return None
-    chosen = solution_choice(records)
+    chosen = solution_choice(records, message, ask)
     result = StructureMove().decide({"move": move, "records": records, "relevant_solution_ids": [chosen] if chosen else []})
     block = result.get("block")
     if not block:
         return None
-    several = len(records.get("solutions") or {}) > 1
-    pieces = [] if several else missing(block)     # with several solutions one of them may be the one this serves: never offer a second beside it
-    can_write = getattr(records_source, "can_write", None)
-    if pieces and callable(can_write):
+    pieces = missing(block)
+    mode = ""
+    if pieces:
         try:
-            pieces = pieces if can_write(quest_id) else []      # the person's settings decide: an AI write needs the quest's autopilot on, so no offer that could not be kept
+            mode = str(records_source.write_mode(quest_id) or "")      # the person's settings and the quest's autopilot decide: "auto", "ask_first", or "" when the AI may not write
+            if mode not in ("auto", "ask_first"):
+                pieces = []
+            elif offer_key(chosen, pieces) in set(records_source.declined(quest_id) or ()):
+                pieces = []      # a declined offer stands, in every conversation
         except Exception as error:  # noqa: BLE001
             log.warning("structure write check failed, no offer: %s: %s", type(error).__name__, str(error)[:200])
             pieces = []
-    block = dict(block, offer={"pieces": pieces} if pieces else None, solution_id=chosen or None)
-    facts = facts_text(records, block)
-    directive = "" if move in APPENDED else directive_for(move, block, facts)
-    log.info("structure reply: move=%s held=%s offer=%s", move, len(held_lines(block)), (block["offer"] or {}).get("pieces"))
-    return StructureReply(block=block, offer=block["offer"], directive=directive, move=move, facts=facts, pieces=pieces)
+    key = offer_key(chosen, pieces) if pieces else ""
+    block = dict(block, offer={"key": key, "pieces": pieces, "mode": mode} if pieces else None, solution_id=chosen or None)
+    facts = facts_text(records, block, bool(chosen))
+    directive = directive_for(move, facts, snapshot, one_call, pieces)
+    log.info("structure reply: move=%s held=%s offer=%s snapshot=%s", move, len(held_lines(block)), pieces, snapshot)
+    return StructureReply(block=block, offer=block["offer"], directive=directive, move=move, facts=facts, pieces=pieces, quest_id=quest_id, one_call=one_call and not snapshot,
+                          snapshot=snapshot)
 
 
-def append_structure(orch: Any, rs: Any, res: Any) -> bool:
-    """Append the closing paragraph and offer of a ``frame`` or ``compare`` turn to its answer. True when something was added. A failed or empty call adds nothing: the reply
-    stays the plain answer it was, never a guess."""
+def finish_structure(orch: Any, rs: Any, res: Any) -> bool:
+    """After the reply is final: append the closing paragraph and offer of a ``frame`` or ``compare`` turn (unless the single answer call wrote them), then park the offer with its
+    key and the reply it came from. True when text was appended. A failed or empty call adds nothing: the reply stays the plain answer it was, never a guess."""
     structure = getattr(rs, "structure", None)
-    if structure is None or structure.move not in APPENDED or getattr(res, "kind", "") != "answer" or not (res.text or "").strip():
+    if structure is None or getattr(res, "kind", "") != "answer" or not (res.text or "").strip():
         return False
+    added = False
+    if structure.snapshot:
+        sentence = snapshot_sentence(structure.move, structure.block)
+        if sentence:
+            res.text = res.text.rstrip() + " " + sentence
+            added = True
+        return added
+    if structure.move in APPENDED and not structure.one_call and not getattr(rs, "alternatives_kept", False):
+        try:
+            model = orch.registry.resolve_role(CALL)
+            tail = answer_with_reasoning(orch.provider, [{"role": "user", "content": tail_prompt(structure.move, res.text, structure.facts, structure.pieces or [])}], model=model,
+                                         step=STEP_SUMMARIZE, system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
+        except Exception as error:  # noqa: BLE001 -- the structure must never lose the reply
+            log.warning("structure closing paragraph skipped: %s: %s", type(error).__name__, str(error)[:200])
+            tail = ""
+        tail = tail.replace("—", ",").strip()
+        if tail:
+            res.text = res.text.rstrip() + "\n\n" + tail
+            added = True
+    if structure.offer:
+        try:
+            ids = (getattr(rs, "_ctx_meta", None) or {})
+            parked = orch.cfg.structure_records.park_offer(structure.quest_id, str(ids.get("conversation_id") or ""),
+                                                           dict(structure.offer, solution_id=structure.block.get("solution_id") or ""), res.text)
+            structure.block["offer"] = dict(structure.offer, id=parked)
+        except Exception as error:  # noqa: BLE001 -- not parked: the reply still stands, and the offer cannot be accepted
+            log.warning("structure offer not parked: %s: %s", type(error).__name__, str(error)[:200])
+    return added
+
+
+OPEN_NOTE = ("--- AN OFFER IS OPEN (your previous reply offered to keep structure in the quest) ---\nIt offered to keep: {pieces}. Set `accepts_offer` true when the person's message "
+             "accepts it and `declines_offer` true when it declines it; neither when it does something else.")
+
+
+def open_offer_for(meta: Optional[Mapping[str, Any]], records_source: Any, user_turn: bool) -> Optional[Dict[str, Any]]:
+    """The offer the previous reply of this conversation left open on the one open quest, or None."""
+    quest_id = single_quest_id(meta)
+    if not (user_turn and quest_id and records_source is not None and getattr(records_source, "open_offer", None)):
+        return None
     try:
-        model = orch.registry.resolve_role(CALL)
-        tail = answer_with_reasoning(orch.provider, [{"role": "user", "content": tail_prompt(structure.move, res.text, structure.facts, structure.pieces or [])}], model=model,
-                                     step=STEP_SUMMARIZE, system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
-    except Exception as error:  # noqa: BLE001 -- the structure must never lose the reply
-        log.warning("structure closing paragraph skipped: %s: %s", type(error).__name__, str(error)[:200])
+        return records_source.open_offer(quest_id, str((meta or {}).get("conversation_id") or ""))
+    except Exception as error:  # noqa: BLE001
+        log.warning("open offer not read: %s: %s", type(error).__name__, str(error)[:200])
+        return None
+
+
+def open_offer_note(offer: Mapping[str, Any]) -> str:
+    return OPEN_NOTE.format(pieces=", ".join(OFFER_WORDS.get(p, p) for p in (offer.get("pieces") or [])))
+
+
+def handle_offer(plan: Any, rs: Any, records_source: Any) -> str:
+    """When the planner reported that the message accepts or declines the open offer, code keeps it or remembers the decline, and the reply directive says what happened."""
+    offer = getattr(rs, "open_offer", None)
+    if not offer or records_source is None or getattr(plan, "action", None) != "answer":
+        return ""
+    if getattr(rs, "offer_receipt", ""):
+        return "--- THE OFFER WAS CARRIED OUT ---\nResult: " + rs.offer_receipt + "\nSay only what this result says."      # a second pass over the same turn never carries it out twice
+    if getattr(plan, "accepts_offer", False) and getattr(plan, "declines_offer", False):
+        return ""      # contradictory structured fields: nothing is kept and nothing is declined (a decline that kept records, or an accept that dropped the offer, is the worse error)
+    try:
+        if getattr(plan, "accepts_offer", False):
+            result = records_source.accept_offer(str(offer["id"]))
+            log.info("offer accepted: status=%s steps=%s", result.get("status"), [(s.get("table"), s.get("status")) for s in result.get("steps") or []])
+            rs.offer_receipt = str(result.get("message") or "Not changed: the offer could not be carried out just now.")      # the reply is this sentence, composed by code
+            return "--- THE OFFER WAS ACCEPTED, AND CODE HAS CARRIED IT OUT ---\nResult: " + rs.offer_receipt + "\nSay only what this result says."
+        if getattr(plan, "declines_offer", False):
+            records_source.decline_offer(str(offer["id"]))
+            rs.offer_receipt = "Understood, I will not offer to keep this again."
+            return "--- THE OFFER WAS DECLINED ---\nAcknowledge it in one short sentence and do not offer to keep this again."
+    except Exception as error:  # noqa: BLE001 -- said plainly, never claimed as done
+        log.warning("open offer not carried out: %s: %s", type(error).__name__, str(error)[:200])
+        rs.offer_receipt = "Not changed: the offer could not be kept just now."
+        return "--- THE OFFER COULD NOT BE CARRIED OUT ---\nSay in one sentence that it could not be kept just now and nothing was changed."
+    return ""
+
+
+def settle_offer(rs: Any, res: Any) -> bool:
+    """The reply to an accepted or declined offer is the one sentence code composed from what it did (the keep result, or the decline), never the model's text: a model told to
+    describe a write it did not make is how a reply claims more than was done. True when the reply was replaced."""
+    receipt = getattr(rs, "offer_receipt", "")
+    if not receipt or getattr(res, "kind", "") != "answer":
         return False
-    tail = tail.replace("—", ",").strip()
-    if not tail:
-        return False
-    res.text = res.text.rstrip() + "\n\n" + tail
+    res.text = receipt
     return True

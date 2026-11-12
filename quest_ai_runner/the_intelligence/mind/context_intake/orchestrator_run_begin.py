@@ -27,6 +27,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEEP_GO
 from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _truncate_goal, is_small_talk, message_forbids_new_task, restates_meaningfully, take_information_only, take_needs_records, take_status_flags
 from quest_ai_runner.the_intelligence.mind.response_writer import work_trace
+from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import open_offer_for
 from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event, _project_sources_for_event
 from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import Narrator, TurnCardCache, _Emitter
 from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
@@ -496,6 +497,7 @@ class RunBeginMixin:
                 rs.status_insight = "" if status_flags["read_aloud"] else str(snapshot.get("insight") or "")      # the checked sentence the reply exists for
                 rs.status_next_step = bool(snapshot.get("next_step"))      # "what should I do next?": the writer says how to start, the reply closes on the goal after
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, delivery="spoken" if status_flags["read_aloud"] else None,
+                                               structure_move="focus" if rs.status_next_step else "review",      # the snapshot is the one home of these turns; the quest's structure feeds it
                                                rationale="A status question: answered from the status snapshot read for this turn.")
 
     def _caller_deep_goal(self, goal: str, now: Optional[str], emit: Any) -> str:
@@ -632,9 +634,14 @@ class RunBeginMixin:
         # alongside the goal condition below (else-branch only -- see ``_derive_goal_condition``).
         # None whenever nothing in the message calls for filtering (today's behavior).
         rs.retrieval_constraints: Optional[Dict[str, Any]] = None
+        # An offer the previous reply left open on this quest (parked by key on the host's records port): a short answer to it ("yes", "no thanks") is not a cut-off message
+        # to ask about; the planner reads it with the offer in view and reports whether it accepts or declines (``structure_reply.handle_offer``).
+        rs.open_offer = open_offer_for(_ctx_meta, getattr(self.cfg, "structure_records", None), bool(rs.message_is_user_turn))
         if rs.caller_deep_plan is not None:
             # The caller chose this deep run, so there is no request to resolve, no clarifying
             # question to ask and no done-standard to derive: the worker's session holds the context.
+            pass
+        elif rs.open_offer:
             pass
         elif (self.conversation_store is not None and conv_id
                 and self._needs_context_to_understand(rs.user_message)):

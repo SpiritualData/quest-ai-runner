@@ -262,6 +262,9 @@ DECIDE_TOOL: Dict[str, Any] = {
             "reply_shape": {"type": "string", "enum": list(REPLY_SHAPES)},
             # The structure move the turn calls for (hub: structure-in-conversation); optional, absent means none. The rubric states each value.
             "structure_move": {"type": "string", "enum": list(MOVES)},
+            # Whether the message accepts or declines the open offer to keep structure (only when an OFFER IS OPEN note is in the context); optional, absent means false.
+            "accepts_offer": {"type": "boolean"},
+            "declines_offer": {"type": "boolean"},
             # How the reply is delivered when the message says so (read aloud or written); the rubric states it.
             "delivery": {"type": "string", "enum": ["spoken", "written"]},
             # The reads this decision still owes: what the planner itself says it has NOT yet
