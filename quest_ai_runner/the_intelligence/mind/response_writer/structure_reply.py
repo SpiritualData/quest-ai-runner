@@ -16,9 +16,11 @@ product or deployment names.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_STRUCTURE_TAIL, STANDARDS, measure, repair
 from hubofhubs.api import STEP_SUMMARIZE, RecordsThenModel, SolutionNetwork, StructureMove, answer_with_reasoning, missing, vocabulary_note
 
 log = logging.getLogger("quest-ai-runner.structure_reply")
@@ -90,21 +92,21 @@ def held_lines(block: Mapping[str, Any]) -> List[str]:
     """The held parts of a block as one plain line each, the facts a reply is written from."""
     lines = []
     if (block.get("problem") or {}).get("name"):
-        lines.append(f"What stands in the way (the problem): {block['problem']['name']}")
+        lines.append(f"The problem: {block['problem']['name']}")
     if (block.get("ideal") or {}).get("name"):
-        lines.append(f"What good looks like (the ideal): {block['ideal']['name']}")
+        lines.append(f"The ideal: {block['ideal']['name']}")
     if (block.get("solution") or {}).get("name"):
-        lines.append(f"The approach already chosen (the solution): {block['solution']['name']}")
+        lines.append(f"The solution (always call it the solution, whatever the record's own text calls it): {block['solution']['name']}")
     names = [a["name"] for a in block.get("alternatives") or [] if a.get("name")]
     if names:
-        lines.append("Alternatives already kept for it: " + "; ".join(names))
+        lines.append("The alternatives already kept for it: " + "; ".join(names))
     metric = block.get("metric")
     if metric and metric.get("name"):
         reading = metric.get("reading")
         value = (f", latest value {reading['value']} as of {reading['as_of']}" + (f" ({reading['source']})" if reading.get("source") else "")) if reading else ", no value logged yet"
-        lines.append(f"The metric already kept (never propose another): {metric['name']}{value}")
+        lines.append(f"The metric (never propose another; name it once by exactly this name): {metric['name']}{value}")
     if (block.get("milestone") or {}).get("sentence"):
-        lines.append(f"The next milestone: {block['milestone']['sentence']}")
+        lines.append(f"The milestone: {block['milestone']['sentence']}")
     return lines
 
 
@@ -130,12 +132,21 @@ def facts_text(records: Mapping[str, Any], block: Mapping[str, Any], matched: bo
 
 OFFER_WORDS = {"solution": "the approach", "alternatives": "these alternatives", "metric": "a metric to measure them by", "milestone": "a next milestone"}
 
-TAIL_TASK = {"frame": ("Write ONE short paragraph of two or three sentences (not a list, not a heading, and do not repeat the reply) that ties the reply to this quest: which problem of "
-                       "the quest it serves, what good looks like for the person, that the options in the reply are alternatives to compare, the one metric that would show which works "
-                       "and the next milestone. Use every held fact above as it is written, with the metric's latest value and date when one is given; a held metric is never replaced "
-                       "by a new one, and only a piece the facts do not hold is proposed, in a few words."),
-             "compare": ("Write ONE short paragraph of two sentences that says the options in the reply are alternatives for the same solution and names the one metric that would show "
-                         "which works. Use the held metric with its latest value and date when one is given and never propose another; propose one only when none is held.")}
+TERM_RULES = ("Use each of these words as the word itself, in a sentence a newcomer understands: problem, ideal, solution, alternatives, metric, milestone. Say the ideal as \"the ideal\" and the "
+              "metric as \"the metric\" (never \"what you are aiming for\", \"your rate\", \"the measure\" or the like), name the held metric once by exactly its own name, and always say "
+              "\"solution\", never \"strategy\" or \"approach\", even when a record's own text uses another word. Use every held fact as written, with the metric's latest value and date "
+              "when one is given; a held metric is never replaced by a new one, and only a piece the facts do not hold is proposed, in a few words. ")
+TAIL_TASK = {"frame": ("Write ONE paragraph of at most three short sentences and about sixty words in all, one idea per sentence, not a list and not repeating the reply: "
+                       "(1) \"This serves the problem of ..., and the ideal here is ...\" (2) \"The options above are alternatives for the solution of ..., and the metric that shows which "
+                       "one works best is ..., which ... (currently the latest value and date, or: has no value logged yet).\" (3) \"The next milestone is ...\" Keep those sentence frames, "
+                       "and say each name in its own plain words so a person who has never heard the term understands it. Every sentence is under 22 words: name the problem, the ideal and "
+                       "the solution in a few words each, and never drop the metric's value or the milestone to make room. " + TERM_RULES),
+             "compare": ("Write ONE paragraph of at most two short sentences and about forty words in all: (1) \"The options above are alternatives for the solution of ..., and the "
+                         "metric that shows which one works best is ..., which ... (currently the latest value and date, or: has no value logged yet).\" (2) \"The next milestone is "
+                         "...\" only when the facts hold or you propose one. " + TERM_RULES)}
+CLOSING_RULE = ("--- THE REPLY ENDS WITH THE LAST PRACTICE (a closing paragraph is added after yours by code) ---\nEnd your reply with the last item of the answer. If you took a reading "
+                "of the question, say it in one short sentence right after the first line, never as a closing paragraph. Write no closing summary, no advice about measuring or setting a "
+                "baseline, no offer of more details or sources and no question: the paragraph that follows carries the intent's structure and the one offer.")
 REVIEW_PARAGRAPH = ("REQUIRED: answer from the records. Say what the metric's latest value is with the date it was read and from where, and where the next milestone stands against it. If no value "
                     "is logged, say so plainly and name the metric that would show it. Two or three sentences, no list. ")
 FOCUS_PARAGRAPH = ("REQUIRED: keep the short support shape. In it, name the one problem that stands in the way (in the person's own terms) and make the one next step the next milestone. ")
@@ -149,7 +160,7 @@ def offer_instruction(pieces: List[str]) -> str:
     if not pieces:
         return "Make no offer to keep anything."
     return ("After the paragraph write ONE short sentence offering to keep " + ", ".join(OFFER_WORDS[p] for p in pieces) + " in the quest so the next conversation builds on it, and nothing after it. "
-            "If the conversation shows the person already declined keeping this, write no offer.")
+            "If the conversation shows the person already declined keeping this, write no offer. It is the only offer of the reply.")
 
 
 def directive_for(move: str, facts: str, snapshot: bool, one_call: bool, pieces: List[str]) -> str:
@@ -158,14 +169,51 @@ def directive_for(move: str, facts: str, snapshot: bool, one_call: bool, pieces:
     if snapshot:
         return ""      # a snapshot reply is composed by code and model calls of its own; the structure joins it as one code-written sentence (``snapshot_sentence``)
     if move in APPENDED:
-        return (head + ONE_CALL_PARAGRAPH + offer_instruction(pieces) + " " + vocabulary_note()) if one_call else ""
+        return (head + ONE_CALL_PARAGRAPH + offer_instruction(pieces) + " " + vocabulary_note()) if one_call else CLOSING_RULE      # two calls: the writer leaves the ending to the paragraph
     return head + {"review": REVIEW_PARAGRAPH, "focus": FOCUS_PARAGRAPH}[move] + vocabulary_note()
 
 
-def tail_prompt(move: str, reply: str, facts: str, pieces: List[str]) -> str:
-    """The prompt of the closing paragraph: the reply as written, the held facts, the task of the move, the one offer, the words to use."""
+def tail_prompt(move: str, reply: str, facts: str, pieces: List[str], hint: str = "") -> str:
+    """The prompt of the closing paragraph: the reply as written, the held facts, the task of the move, the one offer on its own line, the words to use; ``hint`` is a measured
+    correction of an earlier try."""
     return ("You write the closing part of a reply a person will read in their own quest. The reply so far:\n\n" + reply[:MAX_REPLY_CHARS] + "\n\n" + facts + "\n" + TAIL_TASK[move] + " "
-            + offer_instruction(pieces) + " " + vocabulary_note() + " Write only the closing text, in the voice of the reply, with no heading and no quotation marks.")
+            + offer_instruction(pieces) + " " + vocabulary_note() + " Write the paragraph on its own first line" + (" and the offer sentence on a second line" if pieces else "")
+            + ", in the voice of the reply, with no heading and no quotation marks." + (f" A reviewer flagged your earlier try: {hint}" if hint else ""))
+
+
+def tail_lines(text: str, pieces: List[str]) -> List[str]:
+    """The paragraph and, when an offer is asked for, the offer sentence, from the two lines the call wrote (structure by line, not by words)."""
+    lines = [line.strip() for line in (text or "").replace("—", ",").splitlines() if line.strip()]
+    return [lines[0]] + ([lines[1]] if pieces and len(lines) > 1 else []) if lines else []
+
+
+def measured_tail(call: Callable[[str], str], move: str, reply: str, facts: str, pieces: List[str], rounds: int = 2) -> str:
+    """The closing text within the closing paragraph's standard (``SHAPE_STRUCTURE_TAIL``: at most three short sentences and about sixty words), by the reply standards' own measure and
+    repair: a length breach is handed back to the call with the measured hint, up to ``rounds`` times, and a paragraph that still breaks is cut by the standards' repair (the
+    sentences the reply needs least go first), never by position. Only the length is held here, so a milestone proposed in numbers is not cut as an unread figure."""
+    standard, hint, lines = STANDARDS[SHAPE_STRUCTURE_TAIL], "", []
+    for _ in range(rounds + 1):
+        lines = tail_lines(call(tail_prompt(move, reply, facts, pieces, hint)), pieces)
+        measured = measure(lines[0], standard, facts) if lines else None
+        long = [v for v in (measured.violations if measured else []) if v.kind == "length"]
+        if not long:
+            return " ".join(lines)
+        hint = "; ".join(v.detail for v in long)
+    measured.violations, measured.unsupported = long, []
+    return " ".join([cut_to_clauses(repair(lines[0], standard, measured, facts), standard.max_chars or 400)] + lines[1:])
+
+
+def cut_to_clauses(text: str, limit: int) -> str:
+    """``text`` cut at a clause boundary (after a comma, semicolon or colon: punctuation, not wording) so it fits ``limit`` characters, for a paragraph that is one run-on
+    sentence the sentence repair cannot shorten. A text that fits, or has no boundary to cut at, is returned as it was."""
+    if len(text) <= limit:
+        return text
+    kept = ""
+    for clause in re.split(r"(?<=[,;:])\s+", text):
+        if len(kept) + len(clause) + 1 > limit - 1:
+            break
+        kept = (kept + " " + clause).strip()
+    return (kept.rstrip(",;: ") + ".") if kept else text
 
 
 def snapshot_sentence(move: str, block: Mapping[str, Any]) -> str:
@@ -247,12 +295,14 @@ def finish_structure(orch: Any, rs: Any, res: Any) -> bool:
     if structure.move in APPENDED and not structure.one_call and not getattr(rs, "alternatives_kept", False):
         try:
             model = orch.registry.resolve_role(CALL)
-            tail = answer_with_reasoning(orch.provider, [{"role": "user", "content": tail_prompt(structure.move, res.text, structure.facts, structure.pieces or [])}], model=model,
-                                         step=STEP_SUMMARIZE, system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
+
+            def call(prompt: str) -> str:
+                return answer_with_reasoning(orch.provider, [{"role": "user", "content": prompt}], model=model, step=STEP_SUMMARIZE,
+                                             system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
+            tail = measured_tail(call, structure.move, res.text, structure.facts, structure.pieces or [], int(getattr(orch.cfg, "reply_standard_max_repairs", 2)))
         except Exception as error:  # noqa: BLE001 -- the structure must never lose the reply
             log.warning("structure closing paragraph skipped: %s: %s", type(error).__name__, str(error)[:200])
             tail = ""
-        tail = tail.replace("—", ",").strip()
         if tail:
             res.text = res.text.rstrip() + "\n\n" + tail
             added = True

@@ -7,6 +7,7 @@ from quest_ai_runner.the_intelligence.mind.orchestrator_types import Orchestrato
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
 from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
 from quest_ai_runner.the_intelligence.mind.response_writer import structure_reply as module
+from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import sentences
 from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import finish_structure, handle_offer, open_offer_for, settle_offer, snapshot_sentence, solution_choice, structure_reply, tail_prompt
 
 RECORDS = {"problems": {"p": {"name": "A problem"}}, "ideals": {"i": {"name": "An ideal"}}}
@@ -73,7 +74,7 @@ def test_a_plain_turn_gets_no_structure():
 
 def test_a_bare_quest_offers_the_missing_pieces_with_a_key():
     got = structure_reply(plan("frame"), META, Port(RECORDS), True)
-    assert "A problem" in got.facts and got.directive == ""
+    assert "A problem" in got.facts and got.directive.startswith("--- THE REPLY ENDS WITH THE LAST PRACTICE") and "The ideal: An ideal" in got.facts
     assert got.offer["pieces"] == ["solution", "alternatives", "metric", "milestone"] and got.offer["key"] == "structure:new:solution,alternatives,metric,milestone"
     assert "holds none of this structure yet" in structure_reply(plan("frame"), META, Port({}), True).facts
 
@@ -206,3 +207,31 @@ def test_the_reply_to_an_accepted_or_declined_offer_is_the_sentence_code_compose
     res = SimpleNamespace(kind="answer", text="x")
     assert settle_offer(rs, res) and "will not offer" in res.text
     assert not settle_offer(SimpleNamespace(), SimpleNamespace(kind="answer", text="x"))
+
+
+LONG = ("This practice serves the intent's core problem, which is that with no way to know whether a strategy works your time is wasted and your motivation fades, and what you are "
+        "aiming for is objective measurement that shows you real progress, so the practices above are alternatives to compare and not a checklist to finish and you should try them side "
+        "by side and let your measured development rate tell you which one moves the needle, because that rate has no value logged yet and your first reading will set the baseline.")
+SHORT = ("The problem this serves is wasted time, and the ideal here is visible progress. The alternatives above are different ways to carry out the solution of measuring, and the "
+         "metric for them is Hit rate, currently no value logged yet. The next milestone is ten logged sessions.")
+
+
+def test_the_closing_paragraph_is_held_to_three_short_sentences_by_the_reply_standards_measure(monkeypatch):
+    prompts = []
+
+    def call(prompt):
+        prompts.append(prompt)
+        return (LONG if len(prompts) == 1 else SHORT) + "\nShall I keep these alternatives?"
+    got = module.measured_tail(call, "frame", "The answer.", "facts", ["alternatives"])
+    assert got == SHORT + " Shall I keep these alternatives?" and len(prompts) == 2 and "reviewer flagged your earlier try" in prompts[1] and "cut it to under 420 characters" in prompts[1]
+    stubborn = module.measured_tail(lambda prompt: LONG, "frame", "The answer.", "facts", [], rounds=1)
+    assert len(sentences(stubborn)) <= 3 and len(stubborn) <= 420 and stubborn
+    assert module.tail_lines("One.\nTwo.\nThree.", []) == ["One."] and module.tail_lines("One.\nTwo.", ["alternatives"]) == ["One.", "Two."] and module.tail_lines("", []) == []
+
+
+def test_the_term_rules_name_the_six_words_and_the_one_home_of_the_closing():
+    prompt = tail_prompt("frame", "r", "facts", ["alternatives"])
+    for word in ("problem", "ideal", "solution", "alternatives", "metric", "milestone"):
+        assert word in module.TERM_RULES
+    assert "never \"strategy\" or \"approach\"" in prompt and "name the held metric once by exactly its own name" in prompt and "It is the only offer of the reply." in prompt
+    assert "no offer of more details" in module.CLOSING_RULE and "—" not in prompt

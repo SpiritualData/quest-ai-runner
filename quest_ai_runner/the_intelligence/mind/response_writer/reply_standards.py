@@ -42,6 +42,7 @@ SHAPE_SPOKEN = "spoken"            # selected from the planner's ``delivery`` fi
 SHAPE_INFORMATION = "information"  # selected from the planner's ``user_intent`` (ask) on a default shape
 SHAPE_PLAN = "plan"                # selected only by code (a ``plans_period`` turn answered from the planning snapshot), never offered to the planner
 SHAPE_SETTLED = "settled"          # selected from the planner's ``user_intent`` (act) when it answers on a default shape without a deliverable written in the reply
+SHAPE_STRUCTURE_TAIL = "structure_tail"      # the closing paragraph of a framed or compared reply (``structure_reply``), written by its own call and measured here; not offered as a ``reply_shape``
 REPLY_SHAPES = (SHAPE_YES_NO, SHAPE_ONE_STEP, SHAPE_ASK_FIRST, SHAPE_CLARIFY, SHAPE_BRIEF, SHAPE_READBACK, SHAPE_DECLINE, SHAPE_SUPPORT, SHAPE_ADVICE, SHAPE_DEFAULT)
 
 
@@ -122,6 +123,10 @@ STANDARDS: Dict[str, Standard] = {s.shape: s for s in (
              # No list-line cap: a cut list line leaves a plan with days missing and broken fragments (measured 2026-11-11 with a cap of 14 on a
              # quest with eight overdue goals). The planning snapshot already bounds what the plan can hold.
              max_questions=1, voice_check=True),
+    Standard(SHAPE_STRUCTURE_TAIL,
+             "The closing paragraph that ties a reply to the structure of the person's intent: at most three short sentences and about sixty words in all, one idea per sentence "
+             "(what it serves and what good looks like; the alternatives and the metric that shows which works, with its value; the next milestone), no list, no question.",
+             max_questions=0, max_chars=420, max_list_lines=0, max_sentences=3),
     Standard(SHAPE_DEFAULT,
              "Every date, clock time and quoted name in the reply must come from the person's records or this turn's reads."),
 )}
