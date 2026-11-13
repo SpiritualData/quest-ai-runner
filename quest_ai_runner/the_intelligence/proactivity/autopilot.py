@@ -94,7 +94,7 @@ from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import (
     PERSONA_HELD, default_persona_instructions_for, default_quest_instructions_for, persona_entries_on_duty, persona_instructions_for,
     resolve_persona, split_held_for_another_day)
 from quest_ai_runner.the_intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, next_steps_from_pass
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_for
+from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick, solution_title
 from quest_ai_runner.the_intelligence.proactivity.autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
 from quest_ai_runner.the_intelligence.proactivity.autopilot_budget_ask import budget_stop_escalation
 from quest_ai_runner.the_intelligence.proactivity.autopilot_gates import GatesMixin
@@ -503,8 +503,14 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                 # Titled from what the PERSON wrote, composed from what actually governs the run.
                 # A default is identical on every unconfigured quest, so titling from one would
                 # name every task and every mail subject after the same built-in first line.
+                # The Solution this character's run iterates, picked ONCE and used twice: its block rides in
+                # the brief, and its name titles the task, so the list says what the run is doing instead of
+                # showing the brief's machine line ("SOLUTIONS YOU ITERATE: esr_...").
+                esoi_text, esoi_solution = readiness_and_pick(esoi_read, persona_instructions, roster_rep_id)
                 title = _batch_title(tasks, instructions=instructions,
-                                     persona_instructions=persona_instructions)
+                                     persona_instructions=persona_instructions,
+                                     solution_name=solution_title(esoi_solution),
+                                     persona_label=self._persona_label(persona) if persona else None)
                 if dry_run:
                     result.proposals.append({
                         "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
@@ -547,8 +553,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                   experiments=experiments_text,
                                                   asked=asked_text,
                                                   intent_frame=intent_frame_text,
-                                                  esoi_readiness=readiness_for(
-                                                      esoi_read, persona_instructions, roster_rep_id))
+                                                  esoi_readiness=esoi_text)
                 if task_id:
                     experiment_proposal_offered = True
                     result.created.append({

@@ -237,13 +237,14 @@ def read_readiness(client: Any, quest_id: str) -> Optional[Tuple[Dict[str, Any],
         return None
 
 
-def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Optional[str] = None,
-                  rep_id: Optional[str] = None) -> Optional[str]:
-    """The readiness block for ONE character's run, from the specification ``read_readiness`` read: the pick is made among
-    the Solutions the specification links to the character ``rep_id`` (``linked_solutions``), else among the ones that
-    character's ``instructions`` name, else quest-wide. Never raises."""
+def readiness_and_pick(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Optional[str] = None,
+                       rep_id: Optional[str] = None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    """``(readiness block, picked Solution record)`` for ONE character's run, from the specification ``read_readiness`` read:
+    the pick is made among the Solutions the specification links to the character ``rep_id`` (``linked_solutions``), else
+    among the ones that character's ``instructions`` name, else quest-wide. The Solution is returned beside the block so the
+    pass can title the task after it (``solution_title``) from the same single pick. Never raises."""
     if read is None:
-        return None
+        return None, None
     spec, refreshed = read
     try:
         records = spec.get("records") or []
@@ -256,22 +257,41 @@ def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Opt
             if named is not None and set(named) != set(linked):
                 scope += (" Your instructions' SOLUTIONS YOU ITERATE line names a different set (" + (", ".join(named) or "none")
                           + "); the specification is the source of truth, so say so in your result and the line gets corrected.")
-            return render(spec, pick_solution(records, only=linked), refreshed, scope=scope)
-        if named is None:
-            return render(spec, pick_solution(records), refreshed)
-        if not named:
-            return NO_SOLUTION_NAMED
-        known = [i for i in named if any(sol.get("recordId") == i for sol in solutions_of(records))]
-        if not known:
-            return render(spec, pick_solution(records), refreshed,
-                          scope="Your instructions name Solutions to iterate (" + ", ".join(named) + ") that are not Solutions of this quest's "
-                                "specification, so the choice below is quest-wide. Say so in your result, so the line is corrected.")
-        return render(spec, pick_solution(records, only=known), refreshed,
-                      scope="Chosen among the Solutions your instructions name (" + ", ".join(known) + "): these are yours on this quest, "
-                            "and the other Solutions belong to other runs.")
+            picked, scope_text = pick_solution(records, only=linked), scope
+        elif named is None:
+            picked, scope_text = pick_solution(records), ""
+        elif not named:
+            return NO_SOLUTION_NAMED, None
+        else:
+            known = [i for i in named if any(sol.get("recordId") == i for sol in solutions_of(records))]
+            if not known:
+                picked = pick_solution(records)
+                scope_text = ("Your instructions name Solutions to iterate (" + ", ".join(named) + ") that are not Solutions of this "
+                              "quest's specification, so the choice below is quest-wide. Say so in your result, so the line is corrected.")
+            else:
+                picked = pick_solution(records, only=known)
+                scope_text = ("Chosen among the Solutions your instructions name (" + ", ".join(known) + "): these are yours on this "
+                              "quest, and the other Solutions belong to other runs.")
+        return render(spec, picked, refreshed, scope=scope_text), (picked[0] if picked else None)
     except Exception as e:  # noqa: BLE001 -- an extra for the brief, never a reason to lose the run
         log.warning("autopilot: ESOI readiness could not be rendered: %s", e)
+        return None, None
+
+
+def readiness_for(read: Optional[Tuple[Dict[str, Any], bool]], instructions: Optional[str] = None,
+                  rep_id: Optional[str] = None) -> Optional[str]:
+    """The readiness block alone (see ``readiness_and_pick``). Never raises."""
+    return readiness_and_pick(read, instructions, rep_id)[0]
+
+
+def solution_title(solution: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The human name of a picked Solution, for a task title: its ``name`` field, never its record id (a person cannot read
+    ``esr_3d63298c8f4c``). None when the Solution has no name written."""
+    if not solution:
         return None
+    name = str((solution.get("fields") or {}).get("name") or "").strip()
+    name = name.splitlines()[0].strip() if name else ""
+    return name or None
 
 
 def esoi_readiness(client: Any, quest_id: str, instructions: Optional[str] = None, rep_id: Optional[str] = None) -> Optional[str]:

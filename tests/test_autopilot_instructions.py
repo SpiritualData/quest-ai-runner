@@ -201,3 +201,53 @@ def test_custom_quest_instructions_still_get_the_before_after_metric_requirement
     assert "edit_spec_record" in written and "create_goal" in written
     assert "—" not in written
     assert prompt_budget.estimate_tokens(written) < AUTOPILOT_BRIEF_TOKEN_BUDGET
+
+
+def test_batch_title_skips_a_solutions_you_iterate_directive_line():
+    brief = "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c\nYou are the lead of the onboarding flow."
+    assert _batch_title([], persona_instructions=brief) == "You are the lead of the onboarding flow."
+
+
+def test_batch_title_never_shows_a_raw_record_id():
+    assert _batch_title([], persona_instructions="SOLUTIONS YOU ITERATE: esr_3d63298c8f4c") == "Autopilot run"
+    assert "esr_" not in _batch_title([], instructions="Review esr_3d63298c8f4c weekly")
+
+
+def test_batch_title_names_the_autopilot_and_the_solution_it_iterates():
+    brief = "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c\nYou are the lead of the onboarding flow."
+    assert _batch_title([], persona_instructions=brief, solution_name="Onboarding emails",
+                        persona_label="Mary") == "Mary: improve Onboarding emails"
+    assert _batch_title([], solution_name="Onboarding emails") == "Improve Onboarding emails"
+    # An unresolved persona label is the raw rep id: never put it in a title.
+    assert _batch_title([], solution_name="Onboarding emails",
+                        persona_label="rep_09d389aeb9ff") == "Improve Onboarding emails"
+    # A task the run took over still names the batch.
+    assert _batch_title([{"title": "Email the morning brief"}], solution_name="Onboarding emails",
+                        persona_label="Mary") == "Email the morning brief"
+
+
+def test_a_pass_titles_its_task_after_the_solution_the_specification_picked():
+    """End to end: the persona brief opens with its machine line, the specification names the Solution, and the task the pass
+    files is titled with the autopilot's name and that Solution's name, never with the record id."""
+    from .test_autopilot import _defaulted_quest
+
+    class SpecClient(FakeAutopilotClient):
+        def get_spec(self, kind, quest_id):
+            return {"records": [
+                {"type": "solution", "recordId": "esr_3d63298c8f4c",
+                 "fields": {"name": "Weekly grant pipeline", "milestones": "M1 five applications", "metric_ids": ["esr_m1aaaaaa"]}},
+                {"type": "metric", "recordId": "esr_m1aaaaaa", "fieldMeta": {"record": {"at": "2026-10-20T00:00:00+00:00"}},
+                 "fields": {"name": "Applications sent", "record": "3 (2026-10-20)", "solution_ids": []}}]}
+
+        def get_ai_profile(self, rep_id, *, team_id=None):
+            return {"display_name": "Mary"}
+
+    q1 = _defaulted_quest()
+    q1["autopilot"]["personas"] = [
+        {"rep_id": "rep_a", "instructions": "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c\nWork the grants."}]
+    client = SpecClient(quests=[q1], goals_by_quest={})
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    created = client.created_tasks[0]
+    assert created["title"] == "Mary: improve Weekly grant pipeline"
+    assert "esr_" not in created["title"]
+    assert "Iterate this Solution: Weekly grant pipeline" in created["text"]

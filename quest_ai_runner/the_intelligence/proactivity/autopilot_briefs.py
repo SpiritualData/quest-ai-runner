@@ -4,6 +4,7 @@ Split out of ``autopilot.py`` by definition; that module re-exports every name h
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
@@ -617,9 +618,30 @@ def compose_batch_text(quest_outcome: str,
     return "\n\n".join(sec.text for sec in fit.sections if sec.text)
 
 
+# A machine directive line ("SOLUTIONS YOU ITERATE: esr_3d63298c8f4c") is configuration the runner
+# reads (see esoi_application.autopilot_esoi), not a description of the work. As a task title it
+# showed raw record ids to the person (2026-11-12), so it never titles a batch.
+_MACHINE_DIRECTIVE_RE = re.compile(r"^[A-Z][A-Z0-9 _/-]{3,40}:\s*(?:\S.*)?$")
+_RECORD_ID_RE = re.compile(r"\b(?:esr|rep|goal|task|atask|quest)_[0-9a-f]{6,}\b", re.IGNORECASE)
+
+
+def _is_machine_directive_line(line: str) -> bool:
+    """True for an ALL-CAPS ``LABEL: value`` line, or any line that is only record ids."""
+    if _MACHINE_DIRECTIVE_RE.match(line):
+        return True
+    return bool(_RECORD_ID_RE.search(line)) and not _RECORD_ID_RE.sub("", line).strip(" ,;:-")
+
+
+def _strip_record_ids(line: str) -> str:
+    """Drop raw record ids (e.g. esr_3d63298c8f4c) from a title: a person cannot read them."""
+    return re.sub(r"\s{2,}", " ", _RECORD_ID_RE.sub("", line)).strip(" ,;:-(")
+
+
 def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                  instructions: Optional[str] = None,
-                 persona_instructions: Optional[str] = None) -> str:
+                 persona_instructions: Optional[str] = None,
+                 solution_name: Optional[str] = None,
+                 persona_label: Optional[str] = None) -> str:
     """A short label for the task list: what this batch is ABOUT.
 
     Without one the server derives a title from the first line of the text, which is the "Act as
@@ -644,17 +666,32 @@ def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
     the quest-wide ``instructions``. Then the plain "Autopilot run", which is what a fully defaulted
     quest gets: honest, and short enough that a person reading their list sees the quest's name
     doing the work instead.
+
+    THE SOLUTION THIS RUN ITERATES comes right after an adopted task (2026-11-12). Every run improves
+    the one Solution the runner picked for it (``autopilot_esoi.readiness_and_pick``), so its name is
+    the most specific thing a title can say about the run: "Mary: improve Grant applications". The
+    autopilot's own name leads it (``persona_label``, a display name, never a rep id) so a list with
+    several autopilots on one quest says whose run each is. Before this, a persona brief that opened
+    with its machine line titled every task "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c". Directive
+    lines and raw record ids are never used as a title, whichever source the title comes from.
     """
     if adopted_tasks:
         first = str((adopted_tasks[0].get("title") or adopted_tasks[0].get("text") or "")).strip()
         lines = first.splitlines()
         if lines and lines[0].strip():
             return lines[0].strip()[:120]
+    solution = _strip_record_ids(str(solution_name or "").strip())
+    if solution:
+        who = _strip_record_ids(str(persona_label or "").strip())
+        return (f"{who}: improve {solution}" if who else f"Improve {solution}")[:80]
     for source in (persona_instructions, instructions):
         if not source:
             continue
         for line in source.splitlines():
             stripped = _MD_TITLE_FURNITURE_RE.sub("", line).strip()
+            if not stripped or _is_machine_directive_line(stripped):
+                continue
+            stripped = _strip_record_ids(stripped)
             if stripped:
                 return stripped[:80]
     return "Autopilot run"
