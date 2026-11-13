@@ -73,6 +73,19 @@ def resolve_screen(chosen=None, env=None, which=None) -> str:
     return "chat"
 
 
+def _apply_lane_environment(config_path=None) -> None:
+    """Apply the lane config's ``[env]`` table (the file named by the flag, else ``QAR_CONFIG_FILE``) to this process. Never raises: no config simply means no extra settings."""
+    path = config_path or os.getenv("QAR_CONFIG_FILE")
+    if not path:
+        return
+    try:
+        from quest_ai_runner.the_body.configuration.config import RunnerConfig
+        from quest_ai_runner.the_body.configuration.config_environment import apply_config_environment
+        apply_config_environment(RunnerConfig.from_file(path))
+    except Exception:  # noqa: BLE001 -- the screen choice falls back to the one that always works
+        return
+
+
 def _cmd_chat(args, log) -> int:
     """Run the `chat` subcommand; returns the process exit code."""
     if getattr(args, "check", False):
@@ -95,6 +108,7 @@ def _cmd_chat(args, log) -> int:
         log.info("chat prerequisites OK")
         return 0
 
+    _apply_lane_environment(getattr(args, "config", None))   # the config's [env] (e.g. which opencode client to use) must be in place before the screen is chosen
     screen = resolve_screen(getattr(args, "screen", None))
     if screen == "hub":
         # The hub's screen: a goal run on a real harness in this folder, the person named by the name form (`chat NAME`) as who the AI acts for.
@@ -176,13 +190,13 @@ def _cmd_chat(args, log) -> int:
     # it, rather than dying on a raw ImportError traceback.
     if screen == "opencode":
         from quest_ai_runner.the_consciousness.terminal.opencode_terminal import OpencodeTerminal
-        reason = OpencodeTerminal.unavailable()
+        reason = OpencodeTerminal.unavailable("", dict(os.environ))
         if reason:
             log.error("the opencode screen is unavailable: %s", reason)
             return 1
         conv_id = OpencodeTerminal().start(
             cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, rep_specified=rep_specified,
-            persona_specified=persona_specified, resume=resume, verbosity=args.verbose)
+            persona_specified=persona_specified, resume=resume, verbosity=args.verbose, environ=dict(os.environ))
         return 0
     from quest_ai_runner.the_consciousness.terminal.textual_session import is_textual_available, start_textual_interactive
     if not is_textual_available():
