@@ -405,8 +405,10 @@ class Turn:
         cost = sum(float(getattr(r, "cost_usd", 0.0) or 0.0) for r in results) or None
         changed = tuple(item[len("changed "):] for r in results for item in (getattr(r, "observations", None) or []) if str(item).startswith("changed "))
         met = outcome in (None, OUTCOME_FINISHED)
+        from quest_ai_runner.the_consciousness.terminal.turn_usage import turn_usage
+        used = turn_usage(final, getattr(s._orch, "provider", None), Finished)       # the whole turn's tokens and calls, and "included in subscription" on a flat plan
         return Finished(outcome="met" if met else "unmet", report=report, changed=changed, session_id=conv, cost_usd=cost, at=elapsed, elapsed_seconds=elapsed,
-                        spend_usd=cost, end_reason="" if met else (outcome or ""))
+                        spend_usd=cost, end_reason="" if met else (outcome or ""), **used)
 
     def answer_of(self, final: Any) -> Optional[str]:
         """The reply the person reads: the result's text, else what streamed, else (a deep turn) what its workers produced."""

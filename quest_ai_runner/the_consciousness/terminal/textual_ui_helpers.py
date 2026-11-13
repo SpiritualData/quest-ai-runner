@@ -64,7 +64,7 @@ def _build_shallow_context_bullets(cards: List[dict]) -> str:
     empty string when there is nothing to show.
     """
     lines: List[str] = []
-    for card in cards or []:
+    for card in distinct_sources(cards):
         lines.append(f"- {clean_title(card.get('title'))}")
     return "\n".join(lines)
 
@@ -170,13 +170,25 @@ def card_score(card: dict) -> float:
         return 0.0
 
 
+def distinct_sources(cards: Any) -> List[dict]:
+    """The cards with one entry per source a person would tell apart: two cards that carry the same title are one source (the first, which is the best ranked when the list is)."""
+    seen: set = set()
+    kept: List[dict] = []
+    for card in cards or []:
+        key = clean_title(card.get("title") if isinstance(card, dict) else card).casefold()
+        if key not in seen:
+            seen.add(key)
+            kept.append(card)
+    return kept
+
+
 def source_count(card_meta: List[dict], sources: List[dict]) -> int:
     """How many sources the context holds: the cards, else the items of the source groups.
 
     "Sources" is the one word for the notes and files the AI looked at, in the context line, behind Alt+C
     (``Sources looked at``) and in the explanation, so the counts agree wherever they appear."""
     if card_meta:
-        return len(card_meta)
+        return len(distinct_sources(card_meta))
     return sum(len(src.get("items") or []) for src in sources or [] if isinstance(src, dict))
 
 
@@ -199,7 +211,7 @@ def context_block_lines(card_meta: List[dict], sources: List[dict]) -> List[Text
     total = source_count(card_meta, sources)
     if not total:
         return []
-    ranked = sorted(card_meta, key=card_score, reverse=True)
+    ranked = distinct_sources(sorted(card_meta, key=card_score, reverse=True))       # the same title twice is one source
     titles = [ellipsize(clean_title(card.get("title")), CONTEXT_TITLE_CHARS) for card in ranked[:CONTEXT_TITLES_SHOWN]]
     more = total - len(titles)
     head = f"Looked at {plural(total, 'source')}"
@@ -407,7 +419,7 @@ def _build_future_context_text(bullets: str, relied: bool = False) -> Optional[T
     cleaned = bullets.strip()
     if not cleaned:
         return None
-    lines = [STORE_KIND_PREFIX.sub(r"\1", ln) for ln in cleaned.splitlines() if ln.strip()]
+    lines = list(dict.fromkeys(STORE_KIND_PREFIX.sub(r"\1", ln) for ln in cleaned.splitlines() if ln.strip()))      # one line per distinct source
     if not lines:
         return None
     t = Text(no_wrap=False)
