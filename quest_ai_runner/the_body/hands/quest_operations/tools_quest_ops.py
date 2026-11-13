@@ -1216,9 +1216,19 @@ def reachable_quest_rows(client: Any) -> List[Dict[str, Any]]:
     """Every quest the account can reach, once each: the quests it owns (``list_my_quests``) and the quests of every team it is on (``list_quests``).
     Each row carries ``quest_id``, ``name``, ``outcome`` and ``completed``. Before 2026-11-11 only the team quests were walked, so a person's own quests were
     missing from every listing (a chat with no quest open found one of four quests, and that one by id alone)."""
+    from concurrent.futures import ThreadPoolExecutor
     rows: List[Dict[str, Any]] = []
     seen: set = set()
-    for item in (getattr(client, "list_my_quests", lambda: [])() or []):
+    # The reads are independent, so they run together (one round trip's wait instead of one per team): the person's own quests and the team list first,
+    # then each team's quests. Rows are kept in the order the sequential walk gave (own quests, then team by team).
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        own_future = pool.submit(getattr(client, "list_my_quests", lambda: []))
+        teams = client.list_teams()
+        team_ids = [team.get("team_id") or team.get("id") for team in teams]
+        team_futures = [pool.submit(client.list_quests, team_id=team_id) for team_id in team_ids if team_id]
+        own = own_future.result() or []
+        team_rows = [future.result() for future in team_futures]
+    for item in own:
         if not isinstance(item, Mapping):
             continue
         state = item.get("state") if isinstance(item.get("state"), Mapping) else item
@@ -1229,11 +1239,8 @@ def reachable_quest_rows(client: Any) -> List[Dict[str, Any]]:
         rows.append({"quest_id": quest_id, "name": state.get("name"), "outcome": state.get("vision_statement") or state.get("outcome"),
                      "completed": bool(state.get("completed")), "archived": bool(state.get("archived")),
                      "created_at": state.get("created_at") or item.get("created_at") or state.get("start_date")})
-    for team in client.list_teams():
-        team_id = team.get("team_id") or team.get("id")
-        if not team_id:
-            continue
-        for row in client.list_quests(team_id=team_id):
+    for found in team_rows:
+        for row in found or []:
             quest_id = row.get("quest_id") or row.get("id")
             if quest_id and quest_id not in seen:
                 seen.add(quest_id)

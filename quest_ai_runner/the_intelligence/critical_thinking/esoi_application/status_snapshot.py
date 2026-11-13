@@ -27,6 +27,7 @@ PRIORITY_MAX = 5
 OWN_MAX = 8
 PAGE = 100
 PAGES = 10
+PAGES_TOGETHER = 3      # pages of one goal list read at the same time (a quest with hundreds of goals was read a page at a time)
 HEAD = "STATUS SNAPSHOT READ JUST NOW (every figure carries its own date; nothing older is part of it)"
 PORTFOLIO_HEAD = "STATUS SNAPSHOT READ JUST NOW OF THE ASKER'S QUESTS TOGETHER (each quest with its open goals, soonest due first; nothing older is part of it)"
 PORTFOLIO_PLAN_HEAD = ("PLANNING SNAPSHOT READ JUST NOW OF THE ASKER'S QUESTS TOGETHER (no quest is open in this chat: each quest with its open goals, soonest "
@@ -81,8 +82,9 @@ def all_goal_rows(registry: Any, quest_id: str) -> Optional[List[Mapping[str, An
     from quest_ai_runner.the_world.tools.tools import ToolContext
     if registry is None or registry.get("list_quest_goals") is None:
         return None
-    rows: List[Mapping[str, Any]] = []
-    for page in range(PAGES):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def read_page(page: int) -> Optional[List[Mapping[str, Any]]]:
         try:
             result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "limit": PAGE, "offset": page * PAGE, "open_only": False}, ToolContext(quest_id=quest_id))
         except Exception as error:      # noqa: BLE001
@@ -90,10 +92,24 @@ def all_goal_rows(registry: Any, quest_id: str) -> Optional[List[Mapping[str, An
             return None
         if not getattr(result, "ok", False):
             return None
-        got = [g for g in (result.data or []) if isinstance(g, Mapping)]
-        rows.extend(got)
-        if len(got) < PAGE:
-            break
+        return [g for g in (result.data or []) if isinstance(g, Mapping)]
+
+    rows: List[Mapping[str, Any]] = []
+    first = read_page(0)
+    if first is None:
+        return None
+    rows.extend(first)
+    page = 1
+    with ThreadPoolExecutor(max_workers=PAGES_TOGETHER) as pool:
+        while len(rows) == page * PAGE and page < PAGES:      # the last page read was full, so more may follow: the next few pages are read together, not one after another
+            batch = list(pool.map(read_page, range(page, min(PAGES, page + PAGES_TOGETHER))))
+            for got in batch:
+                if got is None:
+                    return None
+                rows.extend(got)
+                page += 1
+                if len(got) < PAGE:
+                    return rows
     return rows
 
 

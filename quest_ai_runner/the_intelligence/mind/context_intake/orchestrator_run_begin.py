@@ -685,6 +685,9 @@ class RunBeginMixin:
             # A status or plan question that points at its subject ("how is THIS quest going?") takes this branch too. It is answered from the same snapshot as
             # a self-contained one: before 2026-11-11 only the other branch checked, so the dashboard's own "How is this quest going?" went to the planner
             # and was answered "I could not see its goals" on a quest with none.
+            if restates_meaningfully(rs.goal_condition, rs.user_message) or conv_ctx_text:        # said before the snapshot read below, as in the other branch
+                emit.emit(ProgressEvent(type=EVENT_UNDERSTANDING, text=f"Understood as: {rs.goal_condition}",
+                                        data={"goal_condition": rs.goal_condition, "internal": True}))
             self.answer_from_snapshot(rs, analysed, conv_id=conv_id, ctx_meta=_ctx_meta, emit=emit, attachments=attachments)
             if analysed.get("writes_text") and rs.message_is_user_turn and not attachments:
                 rs.draft_in_chat = True
@@ -696,10 +699,6 @@ class RunBeginMixin:
             # the resolved request. (Narrowing to a minimal, just-what-it-needs slice happens later
             # per SUBGOAL in _run_deep, to keep each subgoal focused, not on this main flow.)
             if restates_meaningfully(rs.goal_condition, rs.user_message) or conv_ctx_text:
-                emit.emit(ProgressEvent(
-                    type=EVENT_UNDERSTANDING,
-                    text=f"Understood as: {rs.goal_condition}",
-                    data={"goal_condition": rs.goal_condition, "internal": True}))
                 # The resolver used this context to derive goal_condition, so it IS relevant.
                 # Strip the defensive hedge label added during retrieval so the answerer does
                 # not treat confirmed-useful context as uncertain background noise.
@@ -734,6 +733,16 @@ class RunBeginMixin:
                 # no tool write, task or deep run stands in for it (``orchestrator_run_loop``), and the writer is told to write it in full.
                 rs.draft_in_chat = True
                 rs.writes_text = True
+            # Said as soon as it is known: the status snapshot below reads the person's quests and goals (many round trips), and the understanding used to wait for it,
+            # which left the screen silent for up to a minute after the quest was matched.
+            if restates_meaningfully(rs.goal_condition, rs.user_message) or rs.retrieval_constraints:
+                _event_data: Dict[str, Any] = {"goal_condition": rs.goal_condition, "internal": True}
+                if rs.retrieval_constraints:
+                    _event_data["constraints"] = rs.retrieval_constraints
+                emit.emit(ProgressEvent(
+                    type=EVENT_UNDERSTANDING,
+                    text=f"Understood as: {rs.goal_condition}",
+                    data=_event_data))
             self.answer_from_snapshot(rs, status_flags, conv_id=conv_id, ctx_meta=_ctx_meta, emit=emit, attachments=attachments)
             if is_small_talk(rs.user_message):
                 rs.turn_needs_records = False      # a greeting needs none of the person's records
@@ -745,14 +754,6 @@ class RunBeginMixin:
                 rs.records_free = True
                 rs._forced_plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
                                                rationale="A general question: answered from the question alone.")
-            if restates_meaningfully(rs.goal_condition, rs.user_message) or rs.retrieval_constraints:
-                _event_data: Dict[str, Any] = {"goal_condition": rs.goal_condition, "internal": True}
-                if rs.retrieval_constraints:
-                    _event_data["constraints"] = rs.retrieval_constraints
-                emit.emit(ProgressEvent(
-                    type=EVENT_UNDERSTANDING,
-                    text=f"Understood as: {rs.goal_condition}",
-                    data=_event_data))
             if rs.retrieval_constraints and isinstance(rs.retrieval_constraints.get("time_range"), dict):
                 # C2 card stores (item level): thread the turn's time_range into the assembly meta
                 # so a time-filter-capable assembler (e.g. ``FileContextStore``) hard-filters card

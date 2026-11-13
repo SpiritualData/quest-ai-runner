@@ -35,6 +35,8 @@ if TYPE_CHECKING:
 AUTO = "auto"                         # the picker's first choice: the orchestrator decides the tier (no model hint)
 COMMAND_PREFIX = "quest-ai-runner chat"
 HEARTBEAT_PHASE = "heartbeat"
+WAIT_ROW_AFTER_SECONDS = 3.0      # a stretch with no event this long gets a row naming what the turn is on
+WAIT_TICK_SECONDS = 1.0
 # The commands this screen can run. The others of /help are the Textual screen's own (its menus, panels and keys): /quit (the client has its own exit), /models (the client's model picker), /trace,
 # /updates, /continue, /notnow, /answer, /pause and /resume.
 SUPPORTED = ("help", "clear", "reps", "rep", "file", "whoami", "status", "tasks", "model", "depth", "system", "replan", "save", "load", "sessions", "quest")
@@ -243,6 +245,11 @@ class Turn:
         self.runs: Dict[str, bool] = {}        # exec run id -> its step is open
         self.cancelled = False
         self.control: Optional[Any] = None
+        self.last_event = time.monotonic()       # when the stream last said anything: a wait longer than WAIT_ROW_AFTER_SECONDS gets a row that names what it is waiting on
+        self.status_text = ""
+        self.wait_open = ""                       # the id of the open "still working" row, empty when none
+        self.waits = 0
+        self.wait_lock = threading.Lock()
 
     def at(self) -> float:
         return time.monotonic() - self.begun
@@ -275,6 +282,8 @@ class Turn:
         stream = s._orch.run_stream(goal, transcript=s._last_transcript(), quest_id=s.bound_quest_id(), rep_preamble=preamble, model_hint=model_hint, pending_inputs=pending,
                                     conv_id=s._conv_id, context_meta=grounding, cancel_check=cancel.is_set, **extra)
         final = None
+        ticker_done = threading.Event()
+        threading.Thread(target=self.watch_waits, args=(ticker_done,), name="qar-opencode-waits", daemon=True).start()
         try:
             for item in stream:
                 if cancel.is_set():
@@ -288,6 +297,8 @@ class Turn:
                 else:
                     self.take(item)
         finally:
+            ticker_done.set()
+            self.close_wait()
             close = getattr(stream, "close", None)
             if callable(close):
                 close()
@@ -304,6 +315,10 @@ class Turn:
                                    progress_events)
         event = as_event(raw)
         kind, text, data = event.type, event.text, event.data
+        self.last_event = time.monotonic()
+        self.close_wait()
+        if kind == EVENT_STATUS and text.strip() and not (isinstance(data, dict) and "deep_run_model" in data):
+            self.status_text = text.strip()
         for item in progress_events(event, stream=self.stream):
             if getattr(item, "type", "") != "waiting":       # a question of this package is answered by the next line typed, not by approve or refuse (``question`` below)
                 self.sink(with_time(item, self.at()))
@@ -340,6 +355,29 @@ class Turn:
                 self.parts.append(text)
         elif kind == EVENT_DECISION and text:
             self.question = text
+
+    def watch_waits(self, done: threading.Event) -> None:
+        """A wait the person would otherwise sit through in silence: after WAIT_ROW_AFTER_SECONDS with no event, one running row says what the turn is on (the last status it
+        gave), and the next event closes it. The row is true (it names the stage the stream last reported) and never a clock of its own: the client shows how long the row has run."""
+        while not done.wait(WAIT_TICK_SECONDS):
+            if time.monotonic() - self.last_event < WAIT_ROW_AFTER_SECONDS:
+                continue
+            with self.wait_lock:
+                if self.wait_open or done.is_set():
+                    continue
+                from hubofhubs.api import Step
+                self.waits += 1
+                self.wait_open = f"wait-{self.waits}"
+                label = self.status_text or "Working on your request…"
+                self.sink(Step(at=self.at(), step_id=self.wait_open, kind="status", label=label, state="running"))
+
+    def close_wait(self) -> None:
+        with self.wait_lock:
+            if not self.wait_open:
+                return
+            from hubofhubs.api import Step
+            step_id, self.wait_open = self.wait_open, ""
+            self.sink(Step(at=self.at(), step_id=step_id, kind="status", label=self.status_text or "Working on your request…", state="done"))
 
     def exec_event(self, data: Dict[str, Any]) -> None:
         """A worker's first sign of life is one running row for its goal (a worker that reports the contract's own events has its steps drawn from them); the row ends with the turn."""
