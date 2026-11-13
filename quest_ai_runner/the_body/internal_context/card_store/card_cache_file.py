@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from esoi import implementation
+from hubofhubs.api import match_umask
 
 _log = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class FileCardCache:
         try:
             self.directory.mkdir(parents=True, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=str(self.directory), prefix=name + ".", suffix=".tmp")
+            match_umask(fd)  # mkstemp makes 0600; another account sharing the corpus (Zee, sduser, Joshua) must read the cache
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as fh:
                     json.dump(payload, fh)
