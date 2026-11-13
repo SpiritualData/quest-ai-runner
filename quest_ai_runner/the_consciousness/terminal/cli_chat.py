@@ -194,6 +194,9 @@ def _cmd_chat(args, log) -> int:
         if reason:
             log.error("the opencode screen is unavailable: %s", reason)
             return 1
+        import logging
+        for name in ("", "esoi"):         # the screen is the person's: assembly notices (INFO) stay out of it; a warning or an error still shows
+            logging.getLogger(name).setLevel(logging.WARNING)
         conv_id = OpencodeTerminal().start(
             cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, rep_specified=rep_specified,
             persona_specified=persona_specified, resume=resume, verbosity=args.verbose, environ=dict(os.environ))
