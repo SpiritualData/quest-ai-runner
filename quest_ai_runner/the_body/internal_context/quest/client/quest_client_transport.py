@@ -28,6 +28,7 @@ import errno
 import json
 import os
 import random
+import re
 import socket
 import threading
 import time
@@ -120,6 +121,40 @@ def parse_capabilities(payload: Any) -> FrozenSet[str]:
             return frozenset(str(n).strip().lower() for n in names if str(n).strip())
     return frozenset()
 
+
+
+# --- Download accounting -------------------------------------------------------------------------------------------
+# A lane restart once pulled ~2.4 MB/s for a minute and nothing in the log said which call it was (2026-11-13, home data
+# cap). Every Quest response's size is now counted per endpoint (ids collapsed), and a summary of the biggest endpoints is
+# logged at INFO every DOWNLOAD_REPORT_SECONDS, so the next burst names itself. Counting costs one len() per response.
+DOWNLOAD_REPORT_SECONDS = 300.0
+_ID_SEGMENT = re.compile(r"\b([a-z]+)_[0-9a-f]{8,}\b")
+_downloads: Dict[str, list] = {}
+_downloads_lock = threading.Lock()
+_downloads_since = [time.monotonic()]
+
+
+def endpoint_key(method: str, path: str) -> str:
+    """``GET /api/quests/quest_ab12.../goals`` -> ``GET /api/quests/quest_*/goals`` (ids collapsed, query dropped)."""
+    return f"{method} {_ID_SEGMENT.sub(lambda m: m.group(1) + '_*', path.split('?')[0])}"
+
+
+def record_download(method: str, path: str, nbytes: int, now: Optional[float] = None) -> Optional[str]:
+    """Count one response; return the summary line when a report is due (and reset), else None."""
+    now = time.monotonic() if now is None else now
+    with _downloads_lock:
+        row = _downloads.setdefault(endpoint_key(method, path), [0, 0])
+        row[0] += 1
+        row[1] += int(nbytes)
+        if now - _downloads_since[0] < DOWNLOAD_REPORT_SECONDS:
+            return None
+        total = sum(r[1] for r in _downloads.values())
+        top = sorted(_downloads.items(), key=lambda kv: kv[1][1], reverse=True)[:6]
+        span = now - _downloads_since[0]
+        _downloads.clear()
+        _downloads_since[0] = now
+    parts = "; ".join(f"{k} x{v[0]} = {v[1] / 1e6:.2f} MB" for k, v in top)
+    return f"Quest API downloaded {total / 1e6:.2f} MB in the last {span:.0f}s: {parts}"
 
 class ProbeCache:
     """What each backend said about itself, once per process. A client is built for every tool call, so the answer lives
@@ -271,6 +306,9 @@ class TransportMixin:
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()
+                line = record_download(method, path, len(raw))
+                if line:
+                    log.info("%s", line)
                 try:
                     payload = json.loads(raw) if raw else None
                 except ValueError:
