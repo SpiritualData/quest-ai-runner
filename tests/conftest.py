@@ -166,7 +166,7 @@ class StubProvider:
 
     def answer(self, messages, *, model, system=None) -> str:
         said = "\n".join(str(m.get("content", "")) for m in messages)
-        if "Does the reply itself answer what was asked" in said:      # the critical data check's judgement of the reply: the stub says yes, and it is not one of the turn's answers
+        if "WHAT THE REQUEST ASKS FOR" in said:      # the critical data check's judgement of the reply: the stub says yes, and it is not one of the turn's answers
             return '{"answers_request": true, "missing": ""}'
         if "These sources are available" in said:                      # its declaration of what the request depends on: nothing
             return '{"needed": [], "about": []}'

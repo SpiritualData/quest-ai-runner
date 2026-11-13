@@ -102,7 +102,7 @@ def test_a_fluent_reply_that_does_not_address_the_request_is_not_met_and_is_rewr
     critical_data_pass.surface(orch, rs, META)
     verdict = critical_data_pass.check(orch, rs)
     assert verdict["met"] is True and rs.text == "Rewritten from the asks."
-    assert [m for m in orch.asked if "Does the reply itself answer" in m].__len__() == 2
+    assert [m for m in orch.asked if "WHAT THE REQUEST ASKS FOR" in m].__len__() == 2
 
 
 def test_a_reply_that_never_addresses_the_request_ends_not_met():
