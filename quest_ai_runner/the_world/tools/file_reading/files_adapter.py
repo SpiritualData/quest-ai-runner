@@ -112,6 +112,17 @@ def resolve_in_tree(root: Path, rel_or_abs: str) -> Optional[Path]:
 
 
 @implementation("quest-context", "files")
+def unsearched_after(pass_root: Path, stats: Dict[str, Any]) -> List[str]:
+    """The folders a cut-short walk of ``pass_root`` did not finish: the top-level folder it was in (partly searched) and every top-level folder after it, relative to the root."""
+    top, at = list(stats.get("top") or ()), stats.get("at")
+    try:
+        current = Path(at).relative_to(pass_root).parts[0] if at is not None and Path(at) != pass_root else ""
+    except ValueError:
+        current = ""
+    left = top[top.index(current):] if current in top else top
+    return [f"{name}/" for name in left][:12]
+
+
 class FilesAdapter(RetrievalAdapterBase):
     def __init__(self, root: str, *, default_read_max_bytes: int = 20000,
                  default_grep_max_hits: int = 40, grep_max_file_bytes: int = 256 * 1024):
@@ -238,10 +249,11 @@ class FilesAdapter(RetrievalAdapterBase):
             if hits or stats["stopped"]:
                 break
         if stats["stopped"]:
+            # The record goes to the log file; the person is not shown it (the note below is for the planner, and the loop continues on what was not searched).
             log.warning("grep(%r) stopped early (%s) after %d files; pass a narrower scope",
-                        pattern, stats["stopped"], stats["files"])
-        note = (f"Search stopped early ({stats['stopped']}) after {stats['files']} files; "
-                f"results may be incomplete. Retry with a narrower scope." if stats["stopped"] else None)
+                        pattern, stats["stopped"], stats["files"], extra={"in_transcript": False})
+        note = (f"Search stopped early ({stats['stopped']}) after {stats['files']} files; the results are incomplete and NOT evidence that the pattern is absent. "
+                f"Not searched: {', '.join(stats.get('unsearched') or ['part of the tree'])}. Search those folders next, one at a time, with a scope." if stats["stopped"] else None)
         return Observation(kind="grep", pattern=pattern, scope=scope, hits=hits, text=note)
 
     def focus_dir(self) -> Optional[Path]:
@@ -273,6 +285,9 @@ class FilesAdapter(RetrievalAdapterBase):
             walk = os.walk(pass_root)
         for dirpath, dirnames, filenames in walk:
             prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.skip_dirs)
+            if Path(dirpath) == pass_root:
+                stats["top"] = sorted(dirnames)      # the folders this pass will walk, in the order it walks them (``unsearched_after`` names what a cut leaves)
+            stats["at"] = Path(dirpath)
             for fn in filenames:
                 if fn.startswith(".") and not pass_root.is_file():
                     continue
@@ -281,9 +296,11 @@ class FilesAdapter(RetrievalAdapterBase):
                     continue
                 if time.monotonic() > deadline:
                     stats["stopped"] = "time budget"
+                    stats["unsearched"] = unsearched_after(pass_root, stats)
                     return hits
                 if stats["files"] >= max_files:
                     stats["stopped"] = "file cap"
+                    stats["unsearched"] = unsearched_after(pass_root, stats)
                     return hits
                 stats["files"] += 1
                 try:

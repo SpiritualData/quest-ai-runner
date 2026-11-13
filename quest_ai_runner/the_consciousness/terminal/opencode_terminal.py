@@ -580,6 +580,7 @@ class OpencodeTerminal:
               environ: Optional[Dict[str, str]] = None, say: Callable[[str], None] = print) -> Optional[str]:
         """Open the client on this terminal and return the id of the conversation the session wrote to (for the resume hint), or None when nothing was saved."""
         from hubofhubs.api import default_tier, host_in_opencode, offered_choices
+        from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.chat_conversations import chat_log_path
         owner = Owner(config, rep_name=rep_name, persona=persona, goal_id=goal_id, rep_specified=rep_specified, persona_specified=persona_specified, resume=resume, verbosity=verbosity)
         harness = QuestSessionHarness(owner)
         tiers = (AUTO,) + tuple(offered_choices())
@@ -596,9 +597,12 @@ class OpencodeTerminal:
             owner.select_picker = bridge.select_tier
             threading.Thread(target=self.announce, args=(owner, bridge), name="qar-opencode-announce", daemon=True).start()
 
-        host_in_opencode(build, folder, client=client, mode=mode, environ=environ, person="",  # the header's AI line says who answers; "acting for" is a person the AI works for
-                        command=self.resume_prefix(rep_name if rep_specified else None), tiers=tiers,
-                         tier=AUTO, commands=QuestCommands(owner).specs(), header=owner.header, say=say, color=bool(os.isatty(1)), on_bridge=keep)
+        try:
+            host_in_opencode(build, folder, client=client, mode=mode, environ=environ, person="",  # the header's AI line says who answers; "acting for" is a person the AI works for
+                            command=self.resume_prefix(rep_name if rep_specified else None), tiers=tiers,
+                             tier=AUTO, commands=QuestCommands(owner).specs(), header=owner.header, say=say, color=bool(os.isatty(1)), on_bridge=keep, log_path=str(chat_log_path()))
+        except KeyboardInterrupt:      # Ctrl+C is the person leaving: no traceback; the hub already said how to continue
+            pass
         session = owner._session
         from quest_ai_runner.the_consciousness.terminal.textual_session import saved_conversation_id
         return saved_conversation_id(SimpleNamespace(sess=session), resume) if session is not None else None

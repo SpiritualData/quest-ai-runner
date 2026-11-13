@@ -214,9 +214,12 @@ def _cmd_chat(args, log) -> int:
         keep_warnings_off_the_screen()
         for name in ("", "esoi"):         # the screen is the person's: assembly notices (INFO) stay out of it; a warning or an error still shows
             logging.getLogger(name).setLevel(logging.WARNING)
-        conv_id = OpencodeTerminal().start(
-            cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, rep_specified=rep_specified,
-            persona_specified=persona_specified, resume=resume, verbosity=args.verbose, environ=dict(os.environ))
+        try:
+            conv_id = OpencodeTerminal().start(
+                cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, rep_specified=rep_specified,
+                persona_specified=persona_specified, resume=resume, verbosity=args.verbose, environ=dict(os.environ))
+        except KeyboardInterrupt:      # Ctrl+C is leaving, not a failure: no traceback (the screen already said how to continue)
+            return 130
         return 0
     from quest_ai_runner.the_consciousness.terminal.textual_session import is_textual_available, start_textual_interactive
     if not is_textual_available():

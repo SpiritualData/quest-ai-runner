@@ -9,7 +9,9 @@ import re
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
-from quest_ai_runner.the_self.role_understanding.terms import open_names as open_names_of
+from quest_ai_runner.the_self.role_understanding.terms import open_names as open_names_of, view_block
+from quest_ai_runner.the_intelligence.critical_thinking.names_pass import iterate_on_names
+from quest_ai_runner.the_intelligence.critical_thinking.names_deep import names_deep_search
 
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
 from hubofhubs.api import EVENT_INTENT, EVENT_MILESTONE, Mode
@@ -811,10 +813,26 @@ class RunCloseMixin:
         else:
             rs.text = checked_reply(self, rs, rs.text)       # Decision Check: independent views hold the reply to the reads and executed actions (off unless cfg.reply_check)
         unplaced = open_names_of(getattr(rs, "terms", ()))
-        if unplaced and not rs._deferred_handoff_confirmed and not rs._decision_parked and not (rs._last_verdict or {}).get("awaiting_person"):
+        rs.names_decision = None
+        if unplaced and not rs._deferred_handoff_confirmed and not rs._decision_parked and not rs.brainstorm_active:
+            # The hub's stop decision, not a count, decides whether another pass runs on a name nothing placed: each pass tries a route the run had not used (a wider file
+            # search, a read-only deep search), and the answer is written again once the meaning is known. Only ``stop_met`` makes the goal met.
+            try:
+                outcome = iterate_on_names(self, rs, rs.emit, deep_search=lambda open_names: names_deep_search(self, rs, open_names))
+                rs.names_decision = outcome["decision"]
+                if outcome["placed"]:
+                    rs.context_view = (view_block(rs.terms) + "\n\n" + rs.context_view) if rs.context_view else view_block(rs.terms)
+                    rs.text = rs._gen_answer("The names in the request are now placed (see the NAMES block at the top of the context). Answer the request using those meanings; do not ask what they stand for.")
+                    unplaced = []
+                    if outcome["passes"] and not rs._last_verdict:
+                        rs._last_verdict = {"met": True, "reason": "every name the request holds was placed after another pass", "stop_decision": "stop_met"}
+            except Exception:  # noqa: BLE001 -- the pass only enriches; the turn ends with what it has and the goal stays open
+                log.warning("names pass failed", exc_info=True)
+            unplaced = open_names_of(getattr(rs, "terms", ()))
+        if unplaced and not rs._deferred_handoff_confirmed and not rs._decision_parked:
             # No verdict (the answer was never checked) or one that missed it: a name nothing placed leaves the goal open, as a structured fact, so the terminal
             # and the task report never say "met" for a reply that guessed it or asked what it means with the files unsearched.
-            rs._last_verdict = dict(rs._last_verdict or {}, met=False, names_unplaced=unplaced,
+            rs._last_verdict = dict(rs._last_verdict or {}, met=False, names_unplaced=unplaced, stop_decision=(rs.names_decision or {}).get("decision"),
                                     reason="no source placed what the request names: " + ", ".join(unplaced),
                                     next_action="say plainly that no file or glossary defines " + ", ".join(unplaced) + ", and ask what is meant; never guess an expansion")
         _exit_reason = "unverified"

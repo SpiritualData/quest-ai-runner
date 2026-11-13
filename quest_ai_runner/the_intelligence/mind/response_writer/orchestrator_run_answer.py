@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
+from quest_ai_runner.the_self.role_understanding.terms import view_block as names_view_block
 from types import SimpleNamespace
 from typing import Optional
 
@@ -448,9 +449,11 @@ class RunAnswerMixin:
             # context, transcript, reads or persona, so it cannot name a topic it never saw; a regeneration gets the same restricted input, one tier up.
             if is_clarify(rs.plan) or rs.records_free:
                 # A general question (the request analyser reported ``needs_records`` false) is written the same way: from the question alone.
+                named = names_view_block([t for t in (getattr(rs, "terms", None) or []) if t.get("grounded")])      # a placed name's meaning reaches even the answer written from the question alone
+                directive = CLARIFY_DIRECTIVE if is_clarify(rs.plan) else GENERAL_ANSWER_DIRECTIVE
                 return self._grounded_answer(rs.user_message, "", "", [], rs.model if steering is None else self.regeneration_model(rs), False,
                                              native_blocks=None, rep_preamble=None,
-                                             reply_directive=CLARIFY_DIRECTIVE if is_clarify(rs.plan) else GENERAL_ANSWER_DIRECTIVE)
+                                             reply_directive=(named + "\n\n" + directive) if named else directive)
             cv = _answer_grounding(steering)
             # A reply that came back for a correction is written one tier up: the cheaper model already missed it once (Joshua's rule: when a
             # cheaper model fails, retry one tier up rather than the same way).
