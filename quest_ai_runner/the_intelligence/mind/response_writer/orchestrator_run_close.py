@@ -9,6 +9,8 @@ import re
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
+from quest_ai_runner.the_self.role_understanding.terms import open_names as open_names_of
+
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
 from hubofhubs.api import EVENT_INTENT, EVENT_MILESTONE, Mode
 from hubofhubs.api import ProgressEvent
@@ -426,6 +428,13 @@ class RunCloseMixin:
                         gathered=gathered,
                         check_support=bool(self.cfg.verify_claims and self.cfg.verify_support),
                         participants=(_ctx_meta or {}).get("participants"))
+                    open_names = open_names_of(getattr(rs, "terms", ()))
+                    if verdict is not None and open_names and verdict.get("met"):
+                        # A name the request holds that no glossary or readable file placed: the reply guessed it or never said so, whatever the verifier thought
+                        # of its prose. The structured fact outranks the reading (the same rule as a declared coverage gap).
+                        verdict = dict(verdict, met=False, names_unplaced=open_names,
+                                       reason="no source placed what the request names: " + ", ".join(open_names),
+                                       next_action="say plainly that no file or glossary defines " + ", ".join(open_names) + ", and ask what is meant; never guess an expansion")
                     if verdict is not None:
                         # One line per verdict, so a turn that stops without filing an ask can be explained from the log: whether the
                         # verifier said the answer asks the person, what blocker it named, and whether it gave the one question.
@@ -801,6 +810,13 @@ class RunCloseMixin:
             rs.text = f"{lead}{chr(10) * 2 if apart else ' '}{rest}".strip()
         else:
             rs.text = checked_reply(self, rs, rs.text)       # Decision Check: independent views hold the reply to the reads and executed actions (off unless cfg.reply_check)
+        unplaced = open_names_of(getattr(rs, "terms", ()))
+        if unplaced and not rs._deferred_handoff_confirmed and not rs._decision_parked and not (rs._last_verdict or {}).get("awaiting_person"):
+            # No verdict (the answer was never checked) or one that missed it: a name nothing placed leaves the goal open, as a structured fact, so the terminal
+            # and the task report never say "met" for a reply that guessed it or asked what it means with the files unsearched.
+            rs._last_verdict = dict(rs._last_verdict or {}, met=False, names_unplaced=unplaced,
+                                    reason="no source placed what the request names: " + ", ".join(unplaced),
+                                    next_action="say plainly that no file or glossary defines " + ", ".join(unplaced) + ", and ask what is meant; never guess an expansion")
         _exit_reason = "unverified"
         if rs._deferred_handoff_confirmed:
             # The work was confirmed queued out-of-band (deferred contract): neither verified nor

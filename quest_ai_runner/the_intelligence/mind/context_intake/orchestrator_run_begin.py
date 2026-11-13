@@ -21,6 +21,7 @@ from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecisi
 from hubofhubs.api import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from quest_ai_runner.the_intelligence.mind.context_intake.context_doctrine import CACHED_HINT_GATE
 from hubofhubs.api import ExecutionRecord
+from quest_ai_runner.the_self.role_understanding.terms import ground as ground_names, view_block
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEEP_GOAL_CONDENSE_CHARS, RECIPE_SKIP_GOAL_CONTEXT, log
@@ -106,6 +107,17 @@ class RunBeginMixin:
         if declined_block:
             rs.context_view = (declined_block + "\n\n" + rs.context_view
                              if rs.context_view else declined_block)
+        # NAMES THE REQUEST HOLDS (an acronym such as QAR, AHOHS or ESOI): placed from QAR's and the hub's glossaries and from the files around the folders this
+        # deployment works in BEFORE anything is planned, so no later step guesses what a name stands for or asks the person what it means while the files
+        # were never searched. A name nothing placed is kept on the run (``rs.terms``) and the goal check below cannot call the goal met while one is open.
+        rs.terms = []
+        try:
+            rs.terms = ground_names(rs.user_message, list(getattr(self.cfg, "private_path_roots", None) or []))
+            named = view_block(rs.terms)
+            if named:
+                rs.context_view = (named + "\n\n" + rs.context_view) if rs.context_view else named
+        except Exception:  # noqa: BLE001 -- placing names only enriches the turn; it never breaks it
+            log.warning("placing the names in the request failed", exc_info=True)
         # Run-local durable EXECUTION FACTS (the broken-promise guard's evidence): each deep
         # subtask that actually executes records its outcome (success/failure) here, threaded like
         # ``gathered``. Attached to the OrchestratorResult in finish().

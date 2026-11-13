@@ -131,7 +131,7 @@ where = ["."]
 include = ["quest_ai_runner*"]
 
 [tool.setuptools.package-data]
-quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "the_intelligence/higher_mind/objectives/quest_field_guidance.yaml"]
+quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "the_intelligence/higher_mind/objectives/quest_field_guidance.yaml", "the_self/role_understanding/glossary.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evaluation/components"]

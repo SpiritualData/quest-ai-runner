@@ -28,6 +28,7 @@ OUTCOME_NOT_STARTED = "not_started"    # the worker could not start; nothing ran
 OUTCOME_NOT_RUN = "not_run"            # a plan, but no worker was run at all
 OUTCOME_LIMIT = "limit"                # paused at the subscription's usage limit
 OUTCOME_WAITING = "waiting"            # waiting for the person's answer
+OUTCOME_UNMET = "unmet"                # an answer the goal check found short of the goal (never shown as met)
 
 
 def speaker_label(rep_name: str) -> str:
@@ -60,7 +61,9 @@ def turn_outcome(final: Any) -> Optional[str]:
     if waits_for_person(final):
         return OUTCOME_WAITING
     if getattr(final, "kind", None) != "deep":
-        return None
+        verdict = getattr(final, "goal_verdict", None)
+        # The goal check's own structured verdict: an answer it found short of the goal is not "met", whatever it said (``met`` absent or true leaves a plain answer).
+        return OUTCOME_UNMET if isinstance(verdict, dict) and verdict.get("met") is False else None
     results = deep_results(final)
     if any(getattr(d, "usage_limited", False) for d in results):
         return OUTCOME_LIMIT
@@ -119,6 +122,8 @@ def closing_text(outcome: str) -> Tuple[str, str]:
         return "~ Nothing was run", "yellow"
     if outcome == OUTCOME_LIMIT:
         return "~ Stopped at the limit", "yellow"
+    if outcome == OUTCOME_UNMET:
+        return "~ Goal not met", "yellow"
     return "Waiting for your answer", "yellow"
 
 

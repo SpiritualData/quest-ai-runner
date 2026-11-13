@@ -37,6 +37,7 @@ the-intelligence-subconscious-context-digest,the_intelligence,quest_ai_runner/th
 the-intelligence-subconscious-intuition,the_intelligence,quest_ai_runner/the_intelligence/subconscious/intuition/*.py,QAR's code for subconscious / intuition (the intelligence),response-quality;the-intuition;planner
 the-self,the_self,quest_ai_runner/the_self/*.py,QAR's code for  (the self),quest-self;system-integrity;quest-work-shown;guide-toward-the-long-term-goal
 the-self-assembler,the_self,quest_ai_runner/the_self/assembler/*.py,QAR's code for assembler (the self),quest-self;system-integrity
+the-self-role-understanding,the_self,quest_ai_runner/the_self/role_understanding/*.py;quest_ai_runner/the_self/role_understanding/glossary.csv,QAR's own names (QAR) and the placing of the names a request holds (the hub does the placing),role-understanding;system-integrity
 the-self-integrity-prompts,the_self,quest_ai_runner/the_self/integrity/prompts/*.py,QAR's code for integrity / prompts (the self),guidance;quest-intents;model-plumbing;planner;the-mind;the-subconscious;guide-toward-the-long-term-goal
 the-world-model-plumbing-model-tier-chooser,the_world,quest_ai_runner/the_world/model_plumbing/model_tier_chooser/*.py,QAR's code for model plumbing / model tier chooser (the world),model-tier-chooser
 the-world-model-plumbing-spend,the_world,quest_ai_runner/the_world/model_plumbing/spend/*.py,QAR's code for model plumbing / spend (the world),model-plumbing
