@@ -54,6 +54,12 @@ class QuestsMixin:
             state = client.get_my_quest(folder.quest_id)
             if state and not state.get("archived"):
                 keep.append(folder)
+            else:
+                import logging
+                logging.getLogger("quest-ai-runner.quest_folder_index").info(
+                    "Ignoring %s: quest %s is deleted, archived, or not shared with this account. If it was deleted, "
+                    "rename that folder's QUEST_SYNC.md (for example to QUEST_SYNC.md.deleted-%s) so it is not found again.",
+                    folder.sync_file, folder.quest_id, folder.quest_id, extra={"in_transcript": False})
         self.quest_folders = keep
         home = getattr(self, "home_quest", None)
         if home is not None and home.quest_id not in {f.quest_id for f in keep}:

@@ -4,6 +4,8 @@ A mixin of ``QuestClient`` (see ``quest_client.py``): methods only, state lives 
 """
 from __future__ import annotations
 
+import logging
+
 from typing import Any, Dict, List, Optional, Sequence
 
 from quest_ai_runner.the_world.tools.tools_status import ToolStatus
@@ -524,7 +526,13 @@ class QuestsMixin:
             # A 403 or 404 is Quest's answer that the quest is gone or not this account's to see, which this method
             # documents as {}. It goes to the log file only; a person in the terminal has nothing to act on.
             expected = getattr(e, "status", None) in (403, 404)
-            log.warning("get_my_quest failed for quest %s: %s", quest_id, e, extra={"in_transcript": not expected})
+            # Expected answers are DEBUG (not a warning; shown only by -vv) and logged once per quest per process: a stale folder is probed at every start.
+            seen = self.__dict__.setdefault("_refused_quests", set())
+            if expected and quest_id in seen:
+                return {}
+            seen.add(quest_id)
+            log.log(logging.DEBUG if expected else logging.WARNING, "get_my_quest failed for quest %s: %s", quest_id, e,
+                    extra={"in_transcript": not expected})
             return {}
 
     def archive_quest(self, quest_id: str) -> WriteResult:
