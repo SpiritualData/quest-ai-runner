@@ -345,6 +345,22 @@ class DecisionsMixin:
             log.warning("list_decisions_for_quest failed for quest %s: %s", quest_id, e)
             return []
 
+    def open_decisions_or_none(self, quest_id: str) -> Optional[List[Dict[str, Any]]]:
+        """The OPEN decision-requests on a quest (the asks waiting on a person), or ``None`` when the read failed.
+
+        ``[]`` means the read succeeded and nothing is open; ``None`` means it could not be read, so a caller never reads a failure as "nothing is waiting"
+        (the same split as ``list_asks``). Never raises."""
+        try:
+            self._require()
+            resp = self._request("GET", "/api/teams/decisions/for-quest", params={"quest_id": quest_id})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("open_decisions_or_none failed for quest %s: %s", quest_id, e)
+            return None
+        rows = resp if isinstance(resp, list) else (resp or {}).get("decisions") if isinstance(resp, dict) else None
+        if not isinstance(rows, list):
+            return None
+        return [d for d in rows if isinstance(d, dict) and str(d.get("status") or "").strip().lower() == "open"]
+
     def list_asks(self, *, quest_id: str, limit: int = 50) -> Optional[List[Dict[str, Any]]]:
         """GET /api/asks?quest_id=... -- every tracked ask on this quest, for Autopilot's
         REACTIVE-mode gate (see ``quest_schedule.new_ask_since``): a quest in that mode makes its

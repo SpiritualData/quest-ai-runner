@@ -12,6 +12,8 @@ from typing import Any, Dict, Optional
 from quest_ai_runner.the_self.role_understanding.terms import open_names as open_names_of, view_block
 from quest_ai_runner.the_intelligence.critical_thinking.names_pass import iterate_on_names
 from quest_ai_runner.the_intelligence.critical_thinking.names_deep import names_deep_search
+from quest_ai_runner.the_intelligence.critical_thinking.critical_data_pass import check as critical_check
+from hubofhubs.api import reason_unread as critical_reason, unread as critical_unread
 
 from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
 from hubofhubs.api import EVENT_INTENT, EVENT_MILESTONE, Mode
@@ -832,6 +834,18 @@ class RunCloseMixin:
         if unplaced and not rs._deferred_handoff_confirmed and not rs._decision_parked:
             # No verdict (the answer was never checked) or one that missed it: a name nothing placed leaves the goal open, as a structured fact, so the terminal
             # and the task report never say "met" for a reply that guessed it or asked what it means with the files unsearched.
+        if (getattr(self.cfg, "critical_check", False) and not rs._deferred_handoff_confirmed and not rs._decision_parked and not rs.brainstorm_active and rs.message_is_user_turn
+                and getattr(rs.plan, "action", None) == "answer" and str(rs.text or "").strip() and not unplaced):
+            # THE GOAL IS NOT MET UNTIL IT WAS CHECKED. A turn the verifier never saw (an information turn ships without it) used to end with no verdict, which the terminal read as met.
+            # Critical thinking judges it here: data the request depends on and nobody consulted, or a reply that does not address the request as understood, is not met and iterates
+            # as the hub's stop decision says. A verdict the verifier made keeps its own say, except that unread critical data outranks it (a structured fact).
+            try:
+                if rs._last_verdict is None:
+                    rs._last_verdict = critical_check(self, rs, rs.emit)
+                elif rs._last_verdict.get("met") and critical_unread(getattr(rs, "critical_data", [])):
+                    rs._last_verdict = dict(rs._last_verdict, met=False, reason=critical_reason(getattr(rs, "critical_data", [])))
+            except Exception:  # noqa: BLE001 -- the check only adds a verdict; a failure leaves the turn unchecked, which is never shown as met
+                log.warning("critical data check failed", exc_info=True)
             rs._last_verdict = dict(rs._last_verdict or {}, met=False, names_unplaced=unplaced, stop_decision=(rs.names_decision or {}).get("decision"),
                                     reason="no source placed what the request names: " + ", ".join(unplaced),
                                     next_action="say plainly that no file or glossary defines " + ", ".join(unplaced) + ", and ask what is meant; never guess an expansion")

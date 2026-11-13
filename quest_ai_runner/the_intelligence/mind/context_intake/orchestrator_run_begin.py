@@ -198,6 +198,7 @@ class RunBeginMixin:
         rs.turn_delivery: Optional[str] = None
         rs.turn_needs_records: Optional[bool] = None
         rs.status_snapshot = False             # a code-composed snapshot is in the gathered reads and the plan is forced to answer from it
+        rs.critical_data = []                  # what the request depends on, declared and read at turn start (critical_data_pass); the check after the answer reads it
         rs.status_lead = ""                    # a status reply's code-written first sentence (status_snapshot.lead_sentence), put on after the repairs
         rs.status_follow = ""                  # the code-written next goal after the lead's, closing a status reply whose writer added nothing
         rs.status_stems = None                 # the word stems of the quest's records, which a status sentence must share to hold a fact
@@ -431,6 +432,11 @@ class RunBeginMixin:
         ``rs._forced_plan``. Called from both understanding branches (a self-contained message, and one whose referent was resolved first), so a status
         question is answered the same way however it is worded. Leaves the turn alone when no snapshot applies or none could be read."""
         cfg = rs.cfg
+        try:       # what this request depends on is read before the route is chosen, so a status route, the planner and the writer all start from it
+            from quest_ai_runner.the_intelligence.critical_thinking.critical_data_pass import surface as surface_critical_data
+            surface_critical_data(self, rs, ctx_meta, emit)
+        except Exception:  # noqa: BLE001 -- surfacing only enriches; the check after the answer still holds the turn to it
+            log.warning("critical data not surfaced", exc_info=True)
         if (self.tools is not None and rs._forced_plan is None and not attachments and rs.message_is_user_turn and getattr(cfg, "cheap_information_turns", True)
                 and status_flags["asks_status"] and status_flags["across_quests"] and not self.reach_asks_change(rs.user_message)):
             # A question about the asker's quests TOGETHER (the analyser's structured ``across_quests`` report, with the status shape): no one quest is the subject, whether or

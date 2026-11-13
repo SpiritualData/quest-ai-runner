@@ -147,6 +147,8 @@ class QuestsMixin:
         except Exception:  # noqa: BLE001 — grounding is a bonus, never a reason to fail a turn
             quest = None
         self.turn_quest = quest
+        if quest is not None:
+            self.refresh_open_asks_card(quest)
         standing = getattr(self, "_standing_next_steps", None)
         if quest is not None and standing is not None and standing.quest_id == quest.quest_id:
             # The quest's card already carries its next steps; do not say them twice.
@@ -160,6 +162,8 @@ class QuestsMixin:
         if quest is None:
             return base, None
         meta: dict = {}
+        from quest_ai_runner.the_body.internal_context.quest.quest_ask_cards import asks_card_id, ASKS_SOURCE_WHAT
+        meta["critical_sources"] = [{"id": asks_card_id(quest.quest_id), "what": ASKS_SOURCE_WHAT}]     # offered, not read: the turn reads it only when the request depends on it
         if quest is self.pinned_quest:
             # SELECTED, not guessed: bind the turn to it exactly as choosing a quest in the Quest AI
             # chat does (quest-backend passes the chosen quest as quest_id and in quest_ids), so the
@@ -173,6 +177,22 @@ class QuestsMixin:
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import render_quest_folder_context
         block = render_quest_folder_context(quest)
         return (f"{base}\n\n{block}" if base else block), (meta or None)
+
+    def refresh_open_asks_card(self, quest, wait_seconds: float = 4.0) -> None:
+        """Make the matched quest's open-asks card current (one Quest read, at most every two minutes per quest). The card is an ordinary one: it is chosen for a turn only when the
+        request is about what waits on a person, never named in the turn's priority list. Never raises and never holds the turn past ``wait_seconds``."""
+        import threading
+        try:
+            from quest_ai_runner.the_body.internal_context.quest.quest_ask_cards import sync_open_asks_card
+            from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
+            store, client = card_writer(getattr(self._orch, "context_assembler", None)), self._quest_client()
+            if store is None or client is None:
+                return
+            worker = threading.Thread(target=sync_open_asks_card, args=(store, client, quest.quest_id, quest.title or ""), name="qar-open-asks-card", daemon=True)
+            worker.start()
+            worker.join(wait_seconds)
+        except Exception:  # noqa: BLE001 -- a bonus card, never a reason to fail the turn
+            pass
 
     def bound_quest_id(self) -> Optional[str]:
         """The quest id this session's turns are bound to: a selected quest, else /goal's."""

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Critical data (2026-11-13): a turn is met only after it was checked, and what a request depends on is read before the mind plans. The consumer offers sources in `context_meta["critical_sources"]` (the chat offers a matched quest's open asks, one card per quest, fenced to the quest); one narrow fast-tier question (the hub's `declare`) names the ones THIS request depends on and only those are read into the turn, so an unrelated question brings no ask into the context. After the answer a turn the verifier never saw (an information turn) is judged by the hub's selected Goal Completion: unread critical data, or a reply that does not address the request as understood, is not met, and the hub's stop decision continues by naming the unread source or rewriting the reply with the gap named. A source that cannot be read is `unreadable`, never "nothing is waiting". `OrchestratorConfig.critical_check` (off in the library, `QAR_CRITICAL_CHECK` on in the chat and lanes). Needs the hub's `declare`, `judge_answer`, `selected_goal_checker`. See `docs/explanation/critical-data.md`.
+
 ## [0.7.3] - 2026-11-13
 
 - Two fixes found by the release run (2026-11-13): a turn that did no web search no longer touches the web adapter when its research is kept (the own-updates short circuit failed six tests), and "add a trial" selects the experiment tool.

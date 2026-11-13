@@ -251,6 +251,11 @@ class OrchestratorConfig:
     # escalate to the full assembly only when the cheap result is weak or empty; the goal-verifier loop is skipped; the "how I got
     # this" panel is built from the turn's record without its prose call. False is the other arm: every turn takes the full path.
     cheap_information_turns: bool = True
+    # CRITICAL DATA CHECK (``critical_thinking/critical_data_pass.py``): what the request depends on is read at turn start from the sources the consumer offers in
+    # ``context_meta["critical_sources"]``, and a turn nobody verified is judged after the answer by the hub's selected Goal Completion (it must address the request, and
+    # what it depends on must have been consulted) before it is called met; two narrow fast-tier questions, and a rewrite only when the check fails. Off in the library so a
+    # consumer that does not offer sources keeps its call counts; the chat and the lanes turn it on (``QAR_CRITICAL_CHECK``, default on there).
+    critical_check: bool = False
     max_remediations: int = 1
     # SUPPORT CHECK, folded into the SAME verdict as ``verify_claims`` (no extra call): the verdict
     # also flags factual claims or advice the reply states as certain that nothing this turn
