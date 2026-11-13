@@ -214,3 +214,19 @@ def _make_startup_notifier(console: "_Console", notices: List[str], startup_noti
             console.dim(f"  {msg}")
 
     return notify_and_log
+
+
+def default_rep_name(cfg: "RunnerConfig", quest: object = None) -> Tuple[str, str]:
+    """Who answers when nobody was picked, as ``(name, how)``: the AI rep tied to the quest this session stands in (a ``rep_name`` its record carries), else the
+    team's default rep (``QAR_DEFAULT_REP``), else the hub's built-in General assistant. A session always has one; the header never says none was selected."""
+    tied = str(getattr(quest, "rep_name", "") or "").strip()
+    if tied:
+        return tied, "quest"
+    team = str(os.getenv("QAR_DEFAULT_REP", "") or getattr(cfg, "default_rep_name", "") or "").strip()
+    if team:
+        return team, "team"
+    try:
+        from hubofhubs.api import default_representative
+        return str(default_representative()["name"]), "default"
+    except ImportError:       # a hub release older than the built-in default: the same name, so a session still starts
+        return "General assistant", "default"

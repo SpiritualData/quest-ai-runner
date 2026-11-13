@@ -233,6 +233,11 @@ class InteractiveSession(QuestsMixin, CommandsMixin, PersistenceMixin, StatusMix
         except Exception:  # noqa: BLE001 — grounding is a bonus, never a reason to fail startup
             self.home_quest = None
         self.turn_quest = None  # the quest the latest turn was grounded in, for the UI
+        # Always one AI rep: an explicit pick stands, else the quest's rep, the team's default rep, or the built-in General assistant.
+        self._rep_source = "picked" if rep_specified else ""
+        if not rep_specified and str(self._rep_name or "").strip() in ("", "Assistant"):
+            from quest_ai_runner.the_consciousness.terminal.interactive_session_persona import default_rep_name
+            self._rep_name, self._rep_source = default_rep_name(cfg, self.home_quest)
         # Quests the Quest account can reach but that have no local folder, for the "/quest" menu.
         # Fetched off-thread: a slow or absent Quest API must never delay the session.
         self.remote_quests = []

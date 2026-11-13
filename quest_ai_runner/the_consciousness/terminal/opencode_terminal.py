@@ -154,10 +154,10 @@ class Owner:
         return lines
 
     def ai_line(self) -> str:
-        """Which AI answers, in words a person understands: the chosen rep's name, else the plain assistant with no persona."""
+        """Which AI answers, in words a person understands: the rep's name. A session always has one; with nothing chosen it is the built-in General assistant."""
         name = str(getattr(self._session, "_rep_name", "") or "").strip()
         if not name or name == "Assistant":
-            return "AI: General assistant (no persona selected)"
+            return "AI: General assistant"
         return f"AI: {name}"
 
     def person(self) -> str:
