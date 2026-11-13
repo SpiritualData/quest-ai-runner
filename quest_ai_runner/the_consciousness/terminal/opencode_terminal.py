@@ -91,6 +91,7 @@ class Owner:
         self.select_picker: Callable[[str], bool] = lambda tier: False
         self.error: Optional[BaseException] = None
         self.ready = threading.Event()
+        self.announced = False                  # notices that arrive before the announcement are in the session's list and said with it
         self._session: Any = None
         self._factory = factory or (lambda: self.build(rep_name, persona, goal_id, rep_specified, persona_specified, verbosity))
         threading.Thread(target=self.start_session, name="qar-opencode-session", daemon=True).start()
@@ -98,7 +99,17 @@ class Owner:
     def build(self, rep_name: str, persona: Optional[str], goal_id: Optional[str], rep_specified: bool, persona_specified: bool, verbosity: int) -> Any:
         from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
         return InteractiveSession(self.config, rep_name=rep_name, persona=persona, goal_id=goal_id, verbose=bool(verbosity), rep_specified=rep_specified,
-                                  persona_specified=persona_specified, resume=self.resume)
+                                  persona_specified=persona_specified, resume=self.resume, _startup_notify=self.notice)
+
+    @staticmethod
+    def is_progress(message: str) -> bool:
+        """A startup line that only says something is under way (it ends with an ellipsis): the transcript is permanent, so the line that states the outcome is the one worth a row."""
+        return message.rstrip().endswith(("...", "\u2026"))
+
+    def notice(self, message: str) -> None:
+        """A startup notice that arrives after the client is up (the context index finishing, a tidy): one quiet row, unless it is only progress."""
+        if self.announced and not self.is_progress(message):
+            self.say([message])
 
     def start_session(self) -> None:
         try:
@@ -596,7 +607,8 @@ class OpencodeTerminal:
         except RuntimeError as error:
             bridge.say(str(error))
             return
-        lines = list(getattr(session, "_startup_notices", None) or [])
+        owner.announced = True
+        lines = [line for line in (getattr(session, "_startup_notices", None) or []) if not owner.is_progress(line)]
         if getattr(session, "resumed", None) is not None:
             lines.append(f"Continuing a saved conversation of {len(session._session_history)} turns; the AI has them as context.")
         bridge.say(lines)
