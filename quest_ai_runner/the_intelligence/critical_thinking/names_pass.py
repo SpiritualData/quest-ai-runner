@@ -12,7 +12,7 @@ import time
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from hubofhubs.api import ground_terms, selected_stop_decider
+from hubofhubs.api import ProgressEvent, ground_terms, selected_stop_decider
 
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import log
 from quest_ai_runner.the_self.role_understanding import terms as names
@@ -20,6 +20,8 @@ from quest_ai_runner.the_self.role_understanding import terms as names
 GLOSSARY, FILES, WIDER, DEEP = "glossary", "file-search", "wider-file-search", "deep-run"
 WIDER_SECONDS, WIDER_LEVELS_UP, WIDER_DEPTH_DOWN = 10.0, 8, 5
 MAX_PASSES = 4
+ROUTE_WORDS = {GLOSSARY: "the glossary", FILES: "the readable files", WIDER: "nearby folders", DEEP: "a deeper read-only search"}
+STOP_DECISION = "stop_decision"
 
 
 def available_routes(deep_capable: bool) -> List[str]:
@@ -34,6 +36,35 @@ def attempted_routes(terms: List[Mapping[str, Any]], ran: List[str]) -> List[str
     if not any(t.get("grounded") is False and t.get("complete") is False for t in terms):
         used.append(FILES)
     return list(dict.fromkeys(used + list(ran)))
+
+
+def route_words(routes: List[str]) -> str:
+    """The routes in plain words, in order, for the person ("the glossary, the readable files and folders around them")."""
+    words = [ROUTE_WORDS.get(r, r) for r in routes]
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1] if words else ""
+
+
+def ask_line(open_names: List[str], attempted: List[str]) -> str:
+    """The question a turn ends with when the hub decides only the person can place the name: written by code from the run's own record (what was open, what was tried), never a model's wording."""
+    what = ", ".join(open_names)
+    looked = route_words(attempted)
+    return f"What does {what} stand for here?" + (f" I looked in {looked}." if looked else "")
+
+
+def announce(emit: Any, decision: Mapping[str, Any], open_names: List[str], next_route: str = "") -> None:
+    """One ``stop_decision`` progress event per decision of the hub: whether the turn goes on, why (the hub's reason code), what is left (the open names) and, when it goes on,
+    what it tries next. The chat shows it as a live "still working" line and, at the end, as the plain reason the goal is not met. Never raises."""
+    if emit is None:
+        return
+    go = decision.get("decision") == "continue"
+    data: Dict[str, Any] = {"continue": go, "decision": decision.get("decision"), "reason": decision.get("code"),
+                            "left": "what " + ", ".join(open_names) + (" stands" if len(open_names) == 1 else " stand") + " for"}
+    if go and next_route:
+        data["next"] = ROUTE_WORDS.get(next_route, next_route)
+    try:
+        emit.emit(ProgressEvent(type=STOP_DECISION, text=None, data=data))
+    except Exception:  # noqa: BLE001 -- a sink that fails never stops the run
+        pass
 
 
 def decide(history: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -69,9 +100,10 @@ def iterate_on_names(orchestrator: Any, rs: SimpleNamespace, emit: Any, deep_sea
         history = history_of(rs, available, attempted, began, open_names, passes)
         decision = decide(history)
         log.info("names pass: %s (%s) untried=%s", decision.get("decision"), decision.get("code"), decision.get("untried"))
+        route = (decision.get("untried") or [""])[0]
+        announce(emit, decision, open_names, route if decision.get("decision") == "continue" and len(passes) < MAX_PASSES else "")
         if decision.get("decision") != "continue" or len(passes) >= MAX_PASSES:
             break
-        route = (decision.get("untried") or [""])[0]
         if emit is not None:
             emit.status(f"Looking for what {', '.join(open_names)} stands for ({route})…")
         if route in (FILES, WIDER):
@@ -101,4 +133,4 @@ def iterate_on_names(orchestrator: Any, rs: SimpleNamespace, emit: Any, deep_sea
     placed = not names.open_names(rs.terms)
     if placed:
         decision = {"decision": "stop_met", "code": "placed", "reason": "every name the request holds was placed", "passes": len(passes)}
-    return {"decision": dict(decision), "passes": passes, "placed": placed}
+    return {"decision": dict(decision), "passes": passes, "placed": placed, "open": list(open_names), "attempted": attempted_routes(rs.terms, ran)}

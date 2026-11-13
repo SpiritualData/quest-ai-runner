@@ -21,7 +21,7 @@ from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import render_prompt
 from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import found_constraint_head, turn_holds_records
 from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import (
-    Assignee, adopted_assignee, ask_event_data, ask_text, block_type_of, blocked_goal_of, blocks_on_person, file_ask, resolve_assignee, run_for_of, why_only_you_of)
+    Assignee, STOP_NEEDS_ANSWER, adopted_assignee, ask_event_data, ask_text, block_type_of, blocked_goal_of, blocks_on_person, file_ask, resolve_assignee, run_for_of, why_only_you_of)
 from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import (
     InterimLedger, InterimState, SEND, SKIP_NO_WHY, decide, done_text, interim_event_data, interim_text_of, progress_signature, ungrounded_terms)
 
@@ -245,6 +245,9 @@ def turn_outcome(res: Any) -> Dict[str, Any]:
     if getattr(res, "exit_reason", "") == "deferred":
         return {"outcome": "met"}      # handed to a longer run: it is going on, the turn did not stop
     verdict = getattr(res, "goal_verdict", None)
+    if isinstance(verdict, dict) and not verdict.get("met") and verdict.get("names_unplaced"):
+        # The hub's stop decision on a name nothing placed ended the turn: it needs the person's own answer, which is not a limit of tries.
+        return {"outcome": "stopped", "stop_reason": STOP_NEEDS_ANSWER}
     if isinstance(verdict, dict) and not verdict.get("met"):
         # The verifier's own enum: the reply is complete but part of it could not be confirmed. Not a failure to try enough.
         return {"outcome": "stopped", "stop_reason": "unverified" if (

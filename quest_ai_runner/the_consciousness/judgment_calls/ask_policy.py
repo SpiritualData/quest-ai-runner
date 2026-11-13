@@ -29,6 +29,7 @@ STOP_BUDGET = "budget"
 STOP_STALLED = "stalled"
 STOP_ATTEMPT_CAP = "attempt_cap"
 STOP_TOOL_FAULT = "tool_fault"
+STOP_NEEDS_ANSWER = "needs_answer"   # the turn needs the person's own answer in the chat (a name nothing placed): not a limit, so nothing to resume
 STOP_UNVERIFIED = "unverified"   # a usable reply with part of it not confirmed (the verdict blocker is evidence_only)
 
 
