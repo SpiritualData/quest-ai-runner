@@ -118,7 +118,7 @@ def check(orchestrator: Any, rs: SimpleNamespace, emit: Any = None) -> Optional[
     decider = selected_stop_decider()
     if checker is None:
         return None
-    ask = orchestrator.cheap_decision
+    ask = getattr(orchestrator, "careful_decision", None) or orchestrator.cheap_decision      # the judgement the goal rests on runs at the verify tier
     request = (getattr(rs, "goal_condition", "") or rs.user_message or "").strip()
     began, passes = time.monotonic(), 0
     while True:

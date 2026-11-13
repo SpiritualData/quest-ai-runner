@@ -230,6 +230,14 @@ class UnderstandingMixin:
             self.provider, [{"role": "user", "content": prompt}], model=self.registry.resolve_role("milestone-progress.judgment"), step=STEP_UNDERSTAND,
             system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
 
+    def careful_decision(self, prompt: str) -> str:
+        """One model call at the verify tier for a judgement a goal's outcome rests on (does the reply address the request): a gate that can call a wrong reply met earns the stronger
+        tier, where ``cheap_decision`` is for narrow lookups. Same contract: raises when the call fails, and the caller does not guess."""
+        model = self.registry.resolve_role("verify-goal.verdict", self.cfg.verify_tier)
+        return answer_with_reasoning(
+            self.get_provider_for_model(model), [{"role": "user", "content": prompt}], model=model, step=STEP_UNDERSTAND,
+            system="Answer exactly what is asked and nothing else. Never use em dashes.") or ""
+
     def _derive_goal_condition(
         self, user_message: str, *, now: Optional[str] = None
     ) -> Tuple[str, Optional[Dict[str, Any]]]:
