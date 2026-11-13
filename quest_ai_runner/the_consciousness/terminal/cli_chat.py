@@ -86,6 +86,22 @@ def _apply_lane_environment(config_path=None) -> None:
         return
 
 
+def keep_warnings_off_the_screen() -> str:
+    """Python warnings (a library's version notice, for one) are written to a file instead of the terminal, where they would be drawn over the full-screen client. Returns the file's path."""
+    import tempfile
+    import warnings
+    path = os.path.join(tempfile.gettempdir(), "qar-warnings.log")
+
+    def to_file(message, category, filename, lineno, file=None, line=None):
+        try:
+            with open(path, "a", encoding="utf-8") as out:
+                out.write(warnings.formatwarning(message, category, filename, lineno, line))
+        except OSError:
+            pass
+    warnings.showwarning = to_file
+    return path
+
+
 def _cmd_chat(args, log) -> int:
     """Run the `chat` subcommand; returns the process exit code."""
     if getattr(args, "check", False):
@@ -195,6 +211,7 @@ def _cmd_chat(args, log) -> int:
             log.error("the opencode screen is unavailable: %s", reason)
             return 1
         import logging
+        keep_warnings_off_the_screen()
         for name in ("", "esoi"):         # the screen is the person's: assembly notices (INFO) stay out of it; a warning or an error still shows
             logging.getLogger(name).setLevel(logging.WARNING)
         conv_id = OpencodeTerminal().start(

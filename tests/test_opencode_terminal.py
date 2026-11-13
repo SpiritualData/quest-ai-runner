@@ -177,3 +177,16 @@ def test_the_screen_follows_the_hub_selected_terminal_and_the_switch_keeps_the_t
     assert cli_chat.resolve_screen(None, {"QAR_SCREEN": "chat"}) == "chat"
     assert cli_chat.resolve_screen(None, {"PATH": "/nonexistent"}) == "chat"      # no client installed: the screen that always works
     assert AUTO == "auto"
+
+
+def test_python_warnings_go_to_a_file_not_the_terminal(capsys):
+    import warnings
+    from quest_ai_runner.the_consciousness.terminal.cli_chat import keep_warnings_off_the_screen
+    saved = warnings.showwarning
+    try:
+        path = keep_warnings_off_the_screen()
+        warnings.warn("Qdrant client version 1.19.0 is incompatible with server version 1.15.5", UserWarning)
+        assert capsys.readouterr().err == ""
+        assert "incompatible" in open(path).read()
+    finally:
+        warnings.showwarning = saved
