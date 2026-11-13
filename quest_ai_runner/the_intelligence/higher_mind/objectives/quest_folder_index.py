@@ -176,6 +176,16 @@ def merge_quests(local: Sequence[QuestFolder], remote: Sequence[QuestFolder]) ->
     return list(local) + [q for q in remote if q.quest_id not in seen]
 
 
+def is_copy_folder(name: str) -> bool:
+    """A folder of unedited copies (``human_context/originals``): its QUEST_SYNC.md belongs to another quest's folder, so it is no working folder.
+    The judgment is the hub's (``folder_view.judgment.is_copy_folder``); the fallback keeps discovery working with a hub that predates it."""
+    try:
+        from hubofhubs.api import is_copy_folder as hub_is_copy_folder
+    except ImportError:
+        return name.lower() == "originals"
+    return hub_is_copy_folder(name)
+
+
 def discover_quest_folders(corpus_root: Optional[str],
                            quest_folder_map: Optional[Dict[str, str]] = None,
                            max_depth: int = DISCOVERY_MAX_DEPTH) -> List[QuestFolder]:
@@ -204,7 +214,7 @@ def discover_quest_folders(corpus_root: Optional[str],
                              seen_dirs, root)
                     break
                 depth = dirpath[len(root):].count(os.sep)
-                dirnames[:] = ([d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS]
+                dirnames[:] = ([d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS and not is_copy_folder(d)]
                                if depth < max_depth else [])
                 if SYNC_FILE_NAME in filenames:
                     candidates.append((depth, dirpath))

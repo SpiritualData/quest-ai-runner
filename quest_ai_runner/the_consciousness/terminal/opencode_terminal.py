@@ -134,7 +134,7 @@ class Owner:
         s = self._session
         if s is None:
             return ["Starting the session..."]
-        lines: List[str] = []
+        lines: List[str] = [self.ai_line()]
         pinned, matched = getattr(s, "pinned_quest", None), getattr(s, "turn_quest", None)
         if pinned is not None:
             lines.append(f"Quest: {pinned.title or pinned.quest_id} (selected)")
@@ -144,17 +144,25 @@ class Owner:
             lines.append(f"Quest: {matched.title or matched.quest_id} (matched)")
         else:
             lines.append("Quest: matched per message")
-        if s._persona_file:
-            lines.append(f"Persona: {os.path.basename(os.path.dirname(s._persona_file)) or os.path.basename(s._persona_file)}")
-        elif s._persona:
-            lines.append("Persona: loaded")
+        # The AI line already names the rep; the persona is a second line only when it says something else (never "AI: Joshua" over "Persona: joshua").
+        persona = (os.path.basename(os.path.dirname(s._persona_file)) or os.path.basename(s._persona_file)) if s._persona_file else ("loaded" if s._persona else "")
+        if persona and persona.strip().lower() != str(getattr(s, "_rep_name", "") or "").strip().lower():
+            lines.append(f"Persona: {persona}")
         lines.append(f"Model: {s._model_hint or AUTO}")
         if self.notes_line:
             lines.append(self.notes_line)
         return lines
 
+    def ai_line(self) -> str:
+        """Which AI answers, in words a person understands: the chosen rep's name, else the plain assistant with no persona."""
+        name = str(getattr(self._session, "_rep_name", "") or "").strip()
+        if not name or name == "Assistant":
+            return "AI: General assistant (no persona selected)"
+        return f"AI: {name}"
+
     def person(self) -> str:
-        return str(getattr(self._session, "_rep_name", "") or "") if self._session is not None else ""
+        """Nothing: the AI line of ``header`` says who answers, and the client's own "acting for" label means a person the AI works for."""
+        return ""
 
 
 class QuestSessionHarness:
@@ -588,7 +596,8 @@ class OpencodeTerminal:
             owner.select_picker = bridge.select_tier
             threading.Thread(target=self.announce, args=(owner, bridge), name="qar-opencode-announce", daemon=True).start()
 
-        host_in_opencode(build, folder, client=client, mode=mode, environ=environ, person=rep_name, command=self.resume_prefix(rep_name if rep_specified else None), tiers=tiers,
+        host_in_opencode(build, folder, client=client, mode=mode, environ=environ, person="",  # the header's AI line says who answers; "acting for" is a person the AI works for
+                        command=self.resume_prefix(rep_name if rep_specified else None), tiers=tiers,
                          tier=AUTO, commands=QuestCommands(owner).specs(), header=owner.header, say=say, color=bool(os.isatty(1)), on_bridge=keep)
         session = owner._session
         from quest_ai_runner.the_consciousness.terminal.textual_session import saved_conversation_id

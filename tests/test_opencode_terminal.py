@@ -113,9 +113,9 @@ def test_the_saved_notes_line_is_said_once_and_kept_for_the_header():
 def test_the_header_names_the_quest_the_persona_and_the_model():
     session = Session(Orchestrator([], None))
     owner = owner_with(session)
-    assert owner.header()[:2] == ["Quest: matched per message", "Persona: loaded"] and owner.header()[-1] == "Model: auto"
+    assert owner.header()[0].startswith("AI: ") and owner.header()[1:3] == ["Quest: matched per message", "Persona: loaded"] and owner.header()[-1] == "Model: auto"
     session.pinned_quest, session._model_hint = QUEST, "fast"
-    assert owner.header()[0] == "Quest: Garden (selected)" and "Model: fast" in owner.header()
+    assert owner.header()[1] == "Quest: Garden (selected)" and "Model: fast" in owner.header()
 
 
 def test_a_question_waits_for_the_next_typed_line_and_is_not_a_permission_prompt():
@@ -190,3 +190,10 @@ def test_python_warnings_go_to_a_file_not_the_terminal(capsys):
         assert "incompatible" in open(path).read()
     finally:
         warnings.showwarning = saved
+
+
+def test_the_persona_line_is_left_out_when_it_only_repeats_the_ai_line():
+    session = Session(Orchestrator([], None))
+    session._rep_name, session._persona_file = "Joshua", "/skills/joshua/persona.md"
+    owner = owner_with(session)
+    assert owner.header()[0] == "AI: Joshua" and not any(line.startswith("Persona:") for line in owner.header())
