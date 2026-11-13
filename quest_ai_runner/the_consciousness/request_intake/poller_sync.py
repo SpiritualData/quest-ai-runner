@@ -4,6 +4,7 @@ A mixin of ``Poller`` (see ``poller.py``): methods only, state lives on the inst
 """
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
@@ -244,6 +245,13 @@ class SyncMixin:
         folder_map = getattr(self.cfg, "quest_folder_map", None)
         if not folder_map:
             return
+        # Full re-download of every mapped quest: throttle it (see the config field's note).
+        gap = max(0, int(getattr(self.cfg, "quest_folder_sweep_min_seconds", 1800) or 0))
+        now = time.monotonic()
+        last = getattr(self, "_last_folder_sweep", None)
+        if gap and last is not None and now - last < gap:
+            return
+        self._last_folder_sweep = now
         direction = self.cfg.quest_folder_sync_direction
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import sync_quest_folder
         for quest_id, folder in folder_map.items():

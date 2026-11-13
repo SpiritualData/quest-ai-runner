@@ -636,6 +636,36 @@ def test_run_once_syncs_mapped_quest_folders_even_with_no_due_tasks():
     assert "100 paying clients" in content
 
 
+def test_folder_sweep_is_throttled_between_scans():
+    """The sweep re-downloads every mapped quest; it must not run on every scan (2026-11-13: ~30k
+    goals an hour). Second scan inside the gap skips; a gap of 0 sweeps every scan."""
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    def scans(gap):
+        qc = MockQuestFolderClient()
+        client = MockQuestClient([])
+        client.get_my_quest = qc.get_my_quest
+        client.list_quest_notes = qc.list_quest_notes
+        client.add_quest_note = qc.add_quest_note
+        with tempfile.TemporaryDirectory() as d:
+            cfg = RunnerConfig(
+                quest_base_url="http://x", quest_api_key="qsk_test",
+                retrieval=StubRetrieval({"README.md": "fact"}),
+                model_provider=StubProvider(decisions=[]),
+                quest_folder_map={QUEST_ID: d}, quest_folder_sweep_min_seconds=gap,
+            )
+            poller = Poller(cfg, state_path=None, client=client)
+            poller.run_once(); poller.run_once(); poller.run_once()
+        return len(qc.get_calls)
+
+    assert scans(1800) == 1
+    assert scans(0) == 3
+
+
 def test_run_once_periodic_sync_failure_never_breaks_the_scan():
     from quest_ai_runner.the_body.configuration.config import RunnerConfig
     from quest_ai_runner.the_consciousness.request_intake.poller import Poller

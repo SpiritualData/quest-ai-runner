@@ -81,7 +81,7 @@ _FILE_SCALAR_FIELDS = {
     "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
     "rep_sync_direction",
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
-    "quest_goal_updates_per_goal",
+    "quest_goal_updates_per_goal", "quest_folder_sweep_min_seconds",
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring", "autopilot_structure_watch",
     "autopilot_pending_work",
@@ -491,6 +491,13 @@ class RunnerConfig:
     # 0 turns the update lines off; descriptions still render either way. Push is unaffected: this
     # is pull-side rendering only (runner/quest_goal_sync.py).
     quest_goal_updates_per_goal: int = 3
+    # Minimum seconds between two full sweeps of EVERY mapped folder (QUEST_SYNC.md + GOALS.md).
+    # The sweep re-downloads each mapped quest's notes and every goal, and it used to run on every
+    # poll scan: on 2026-11-13 the sd-shared lane re-pulled about 30,000 goals an hour (every quest
+    # in its map, every ~108 s), which was most of the home internet data cap. A task's own run
+    # still pulls its folder fresh right before it runs, so the sweep only keeps IDLE folders
+    # roughly current. 0 sweeps on every scan (the old behavior).
+    quest_folder_sweep_min_seconds: int = 1800
 
     # --- Autopilot (opt-in per QUEST; see runner/autopilot.py and quest_autopilot_design.md).
     # Autopilot runs as a recurring "autopilot pass" task carrying ``task_kind: "autopilot"``,
