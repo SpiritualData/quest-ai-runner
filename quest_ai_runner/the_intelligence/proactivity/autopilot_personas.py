@@ -242,7 +242,7 @@ def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str
 
     Truncated defensively at ``MAX_INSTRUCTIONS_CHARS``, the same cap and the same warning the
     quest-level field gets. As there, the text itself is never logged: it is the person's private
-    content and can run to 8 KB.
+    content and can run to 12 KB.
     """
     if not rep_id:
         return None

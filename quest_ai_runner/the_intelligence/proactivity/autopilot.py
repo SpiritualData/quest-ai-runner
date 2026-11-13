@@ -311,7 +311,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # Standing instructions: read once, near the top, defensively truncated at the same cap
         # the backend enforces on write (values written before the cap existed are the only way
         # this ever fires in practice). Never logged verbatim -- it is the person's private
-        # content and can run to 8 KB.
+        # content and can run to 12 KB.
         instructions = str(autopilot_cfg.get("instructions") or "").strip()
         if len(instructions) > MAX_INSTRUCTIONS_CHARS:
             log.warning("autopilot: quest %s instructions truncated from %d to %d characters",

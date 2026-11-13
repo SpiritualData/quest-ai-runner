@@ -128,10 +128,10 @@ AUTOPILOT_BRIEF_TOKEN_BUDGET = prompt_budget.DEFAULT_DEEP_PROMPT_TOKEN_BUDGET //
 
 
 # A quest's standing ``autopilot.instructions``, in characters. Mirrors the backend's own
-# ``AutopilotSettings.instructions`` cap (``max_length=8000``) so a value written before either
+# ``AutopilotSettings.instructions`` cap (``max_length=12000``) so a value written before either
 # cap existed, or written through some other client, still gets truncated defensively here rather
 # than riding an oversized block into every prompt this quest ever gets.
-MAX_INSTRUCTIONS_CHARS = 8000
+MAX_INSTRUCTIONS_CHARS = 12000
 
 
 # The standing briefs a batch works to where the person has written none of their own. There are
