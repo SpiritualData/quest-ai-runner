@@ -71,7 +71,7 @@ class FakePassClient:
             rows = [t for t in rows if t.get("task_kind") == task_kind]
         return rows
 
-    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None):
+    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None):
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
                                        source=source, task_kind=task_kind) or []
 

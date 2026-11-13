@@ -813,7 +813,8 @@ class TasksMixin:
                   status: Optional[str] = None,
                   goal_id: Optional[str] = None,
                   source: Optional[str] = None,
-                  task_kind: Optional[str] = None) -> List[Dict[str, Any]]:
+                  task_kind: Optional[str] = None,
+                  created_after: Optional[str] = None) -> List[Dict[str, Any]]:
         """GET /api/assistant-tasks, for Autopilot's budget/backpressure math.
 
         SERVER-SIDE filters (the only ones the Quest API's list route actually implements):
@@ -843,13 +844,14 @@ class TasksMixin:
         ``list_tasks_or_none`` instead.
         """
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
-                                       source=source, task_kind=task_kind) or []
+                                       source=source, task_kind=task_kind, created_after=created_after) or []
 
     def list_tasks_or_none(self, *, team_id: Optional[str] = None,
                            status: Optional[str] = None,
                            goal_id: Optional[str] = None,
                            source: Optional[str] = None,
-                           task_kind: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+                           task_kind: Optional[str] = None,
+                           created_after: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
         """``list_tasks``, but a FAILED read is reported instead of swallowed.
 
         Same filters and the same owner-scoping contract as ``list_tasks`` (read its docstring
@@ -871,12 +873,23 @@ class TasksMixin:
             params["goal_id"] = goal_id
         if tid:
             params["team_id"] = tid
+        # Narrowed ON THE SERVER where it can: a counting read otherwise downloads every finished task with its result text
+        # (~6 MB a call, 50 calls in 5 minutes on 2026-11-13). An older server ignores these params and answers a superset,
+        # so the same filters are applied to the rows below too, and the answer is the same either way.
+        if created_after is not None:
+            params["created_after"] = created_after
+        if task_kind is not None:
+            params["task_kind"] = task_kind
+        if source is not None:
+            params["source"] = source
         try:
             resp = self._request("GET", "/api/assistant-tasks", params=params)
             tasks = _as_task_list(resp)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_tasks failed: %s", e)
             return None
+        if created_after is not None:
+            tasks = [t for t in tasks if not t.get("created_at") or str(t["created_at"]) >= created_after]
         if source is not None:
             tasks = [t for t in tasks if t.get("source") == source]
         if task_kind is not None:

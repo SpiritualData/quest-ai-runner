@@ -17,3 +17,22 @@ def test_report_names_the_biggest_endpoint_once_per_interval():
     assert line.startswith("Quest API downloaded 5.00 MB")
     assert line.index("GET /api/quests/quest_*/goals x2 = 4.00 MB") < line.index("GET /api/assistant-tasks x2 = 1.00 MB")
     assert t.record_download("GET", "/api/assistant-tasks", 1, now=t.DOWNLOAD_REPORT_SECONDS + 2) is None   # counters reset
+
+
+def test_task_count_reads_ask_the_server_to_filter_and_still_filter_the_rows():
+    """The budget count must not download every finished task: created_after/task_kind/source go to the server, and an older
+    server that ignores them (answers a superset) gives the same answer."""
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    seen = {}
+
+    def fake(method, path, **kw):
+        seen.update(kw["params"])
+        return {"tasks": [{"id": "new", "created_at": "2026-11-13T10:00:00Z", "task_kind": "autopilot_work"},
+                          {"id": "old", "created_at": "2026-11-01T10:00:00Z", "task_kind": "autopilot_work"},
+                          {"id": "other", "created_at": "2026-11-13T10:00:00Z", "task_kind": "plain"}]}
+    c._request = fake
+    got = c.list_tasks(status="done", task_kind="autopilot_work", created_after="2026-11-12")
+    assert seen["created_after"] == "2026-11-12" and seen["task_kind"] == "autopilot_work" and seen["status"] == "done"
+    assert [t["id"] for t in got] == ["new"]

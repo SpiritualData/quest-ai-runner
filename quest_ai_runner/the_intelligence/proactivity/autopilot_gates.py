@@ -5,7 +5,7 @@ A mixin of ``AutopilotPass`` (see ``autopilot.py``): methods only, state lives o
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from quest_ai_runner.the_consciousness.request_intake.local_time import now_in_zone
 from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
@@ -234,8 +234,10 @@ class GatesMixin:
         today = self._now().date()
         seen: set = set()
         count = 0
+        # Only rows from yesterday on can be "today" in any timezone: the server returns just those, not every finished task.
+        since = (today - timedelta(days=1)).isoformat()
         for status in TASK_STATUSES_FOR_COUNT:
-            for t in self._client.list_tasks(team_id=scope, status=status) or []:
+            for t in self._client.list_tasks(team_id=scope, status=status, created_after=since) or []:
                 task_id = str(t.get("id") or t.get("task_id") or "")
                 if task_id and task_id in seen:
                     continue
