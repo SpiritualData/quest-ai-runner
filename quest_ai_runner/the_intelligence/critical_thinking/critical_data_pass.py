@@ -28,8 +28,16 @@ def menu_of(ctx_meta: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     return [m for m in ((ctx_meta or {}).get("critical_sources") or []) if isinstance(m, dict) and str(m.get("id") or "").strip()]
 
 
-def read_source(orchestrator: Any, source: str) -> Optional[str]:
-    """The text of one offered source (a card of the context store), or None when it could not be read. A card is read whole from the store, never searched for."""
+def read_source(orchestrator: Any, source: str, menu: Any = None) -> Optional[str]:
+    """The text of one offered source, or None when it could not be read. An offer may carry its own ``read`` (a callable returning the text or None, for a consumer whose records are
+    not cards of the context store, such as an embedding service's database); otherwise the source is a card of the context store, read whole by id, never searched for."""
+    entry = next((m for m in (menu or ()) if isinstance(m, dict) and m.get("id") == source), None)
+    if entry is not None and callable(entry.get("read")):
+        try:
+            text = entry["read"]()
+        except Exception:  # noqa: BLE001 -- an unreadable source is reported as such, never as nothing
+            return None
+        return str(text).strip() or None if text is not None else None
     try:
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import card_writer
         store = card_writer(getattr(orchestrator, "context_assembler", None))
@@ -47,6 +55,7 @@ def surface(orchestrator: Any, rs: SimpleNamespace, ctx_meta: Optional[Mapping[s
     """Declare what the request depends on, read it, and put it into the turn. Leaves ``rs.critical_data`` as the declared items with ``consulted`` or ``unreadable`` set."""
     rs.critical_data = []
     menu = menu_of(ctx_meta)
+    rs.critical_menu = menu
     if not menu or not getattr(rs, "message_is_user_turn", True):
         return
     items = declare(getattr(rs, "goal_condition", "") or rs.user_message, menu, orchestrator.cheap_decision)
@@ -54,7 +63,7 @@ def surface(orchestrator: Any, rs: SimpleNamespace, ctx_meta: Optional[Mapping[s
         return
     blocks: List[str] = []
     for item in items:
-        text = read_source(orchestrator, item["source"])
+        text = read_source(orchestrator, item["source"], menu)
         if text is None:
             item["unreadable"] = True
             log.warning("critical data %s could not be read", item["source"])
@@ -109,7 +118,7 @@ def check(orchestrator: Any, rs: SimpleNamespace, emit: Any = None) -> Optional[
         steer_parts: List[str] = []
         for source in decision.get("untried") or []:
             item = next((i for i in rs.critical_data if i["source"] == source), None)
-            text = read_source(orchestrator, source) if item is not None else None
+            text = read_source(orchestrator, source, getattr(rs, "critical_menu", None)) if item is not None else None
             if item is None or text is None:
                 if item is not None:
                     item["unreadable"] = True

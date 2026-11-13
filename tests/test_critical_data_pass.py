@@ -119,3 +119,14 @@ def test_an_unread_declared_source_leaves_the_turn_open_whatever_the_reply_says(
     rs.critical_data = [{"source": SOURCE, "why": "asks", "consulted": False, "unreadable": False}]
     verdict = critical_data_pass.check(orchestrator(store), rs)
     assert rs.critical_data[0]["consulted"] is True and verdict["met"] is True      # the stop decision read the named source and the reply was written again from it
+
+
+def test_an_offer_may_carry_its_own_reader_for_a_consumer_whose_records_are_not_cards():
+    menu = [{"id": SOURCE, "what": quest_ask_cards.ASKS_SOURCE_WHAT, "read": lambda: "Open asks: one waits on Ana."}]
+    rs = turn("What is the primary human blocker?")
+    critical_data_pass.surface(orchestrator(Store()), rs, {"critical_sources": menu})
+    assert "one waits on Ana" in rs.context_view
+    broken = [{"id": SOURCE, "what": quest_ask_cards.ASKS_SOURCE_WHAT, "read": lambda: None}]
+    rs2 = turn("What is the primary human blocker?")
+    critical_data_pass.surface(orchestrator(Store()), rs2, {"critical_sources": broken})
+    assert rs2.critical_data[0]["unreadable"] is True

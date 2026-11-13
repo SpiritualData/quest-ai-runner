@@ -16,3 +16,5 @@ or a reply the check found not to address the request as understood (`judge_answ
 source, or rewrite the reply with the gap named; an unreadable source makes the reply say so and ask. Nothing reads the words of the request or the reply: both questions return structure.
 
 There is no switch: a correctness gate that can be turned off is not a gate. Its cost is held down by structure: the two-question declaration runs only when the consumer offers a source for the turn (a matched quest), the judgement after the answer runs only when the goal verifier gave no verdict (a verdict exists then, and it already judges the reply against the request), both questions run on the fast tier, and a failed check rewrites at most twice.
+
+A consumer whose records are not cards of the context store (Quest's embedded brain keeps its decisions in a database) offers a source with its own `read`: a callable returning the text, or None when it could not be read. The brain offers each quest in scope's open asks this way and the runner reads one only when the request depends on it.
