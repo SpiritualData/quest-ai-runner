@@ -44,7 +44,7 @@ def orchestrator(store, asks=None, judge=None):
             return json.dumps({"needed": named} if "WITHOUT reading" in prompt else {"about": named})
         return json.dumps(judge(prompt) if judge else {"answers_request": True})
     assembler = SimpleNamespace(write_card=store.write_card, get_card=store.get_card)
-    return SimpleNamespace(cheap_decision=cheap, context_assembler=assembler, asked=asked, cfg=SimpleNamespace(critical_check=True))
+    return SimpleNamespace(cheap_decision=cheap, context_assembler=assembler, asked=asked)
 
 
 def turn(message, text="A reply."):

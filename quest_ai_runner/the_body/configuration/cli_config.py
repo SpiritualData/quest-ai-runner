@@ -401,7 +401,6 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # OrchestratorConfig, like QAR_MAX_PARALLEL above. The reach judge is left inert unless the
     # consumer also supplies ``read_reach_summary``: the library cannot write that statement for a
     # deployment it knows nothing about, and a judge given a generic guess is worse than none.
-    cfg.orchestrator.critical_check = os.getenv("QAR_CRITICAL_CHECK", "1").strip().lower() not in ("0", "false", "off", "no")      # on in the chat and the lanes
     if os.getenv("QAR_TASK_DIRECT_DEEP"):
         cfg.orchestrator.task_direct_deep = (
             os.environ["QAR_TASK_DIRECT_DEEP"].strip().lower() in ("1", "true", "on", "yes"))

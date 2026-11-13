@@ -15,5 +15,4 @@ as structure. Those are read into the top of the turn's context; the rest are no
 or a reply the check found not to address the request as understood (`judge_answer`, one more narrow question), is not met. The hub's stop decision then says what runs next: read the named
 source, or rewrite the reply with the gap named; an unreadable source makes the reply say so and ask. Nothing reads the words of the request or the reply: both questions return structure.
 
-Off in the library (`OrchestratorConfig.critical_check`), on in the chat and the lanes (`QAR_CRITICAL_CHECK=0` turns it off). Cost: one fast-tier call at turn start for a turn that is offered sources,
-and one on every answer turn the verifier did not see; a rewrite only when the check fails.
+There is no switch: a correctness gate that can be turned off is not a gate. Its cost is held down by structure: the two-question declaration runs only when the consumer offers a source for the turn (a matched quest), the judgement after the answer runs only when the goal verifier gave no verdict (a verdict exists then, and it already judges the reply against the request), both questions run on the fast tier, and a failed check rewrites at most twice.

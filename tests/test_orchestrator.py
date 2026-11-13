@@ -1250,7 +1250,8 @@ class _ModelCapturingProvider(StubProvider):
         return super().plan(prompt, model=model, tool_schema=tool_schema)
 
     def answer(self, messages, *, model, system=None):
-        self.answer_models.append(model)
+        if not any("Does the reply itself answer what was asked" in str(m.get("content", "")) for m in messages):      # the critical data check's own judgement is not one of the turn's answers
+            self.answer_models.append(model)
         return super().answer(messages, model=model, system=system)
 
 
@@ -1356,6 +1357,8 @@ class _AttachmentCapturingProvider(StubProvider):
         self.answer_contents = []
 
     def answer(self, messages, *, model, system=None):
+        if any("Does the reply itself answer what was asked" in str(m.get("content", "")) for m in messages):      # the critical data check's own judgement is not the turn's answer
+            return '{"answers_request": true, "missing": ""}'
         self.answer_calls += 1
         self.last_answer_messages = messages
         self.answer_contents = [m.get("content") for m in messages]

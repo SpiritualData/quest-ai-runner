@@ -31,8 +31,10 @@ class _RecordingAnswerProvider(StubProvider):
         self.answer_prompts: List[str] = []
 
     def answer(self, messages, *, model, system=None) -> str:
-        self.answer_models.append(model)
         prompt = "\n".join(m["content"] for m in messages)
+        if "Does the reply itself answer what was asked" in prompt:      # the critical data check's own judgement is not one of the turn's answers
+            return '{"answers_request": true, "missing": ""}'
+        self.answer_models.append(model)
         self.answer_prompts.append(prompt)
         if self._replies:
             return self._replies.pop(0)

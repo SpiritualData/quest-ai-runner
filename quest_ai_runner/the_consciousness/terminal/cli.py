@@ -158,10 +158,6 @@ Env it reads:
                                                    check still judges the result. Turn it on where
                                                    tasks are work orders, since a task that is only
                                                    a question then costs a deep run.
-  QAR_CRITICAL_CHECK (optional)                 : "0"/"false"/"off" turns off the critical data check (default on in the chat and the
-                                                   lanes): what a request depends on is read at turn start from the sources offered, and a
-                                                   turn nobody verified is judged after the answer (it must address the request and have
-                                                   consulted what it depends on) before it is called met.
   QAR_PLANNER_REACH_JUDGE (optional)            : "1"/"true"/"on" enables the reach judge (default:
                                                    off): one small question answered by a stronger
                                                    tier before planning, settling whether what the

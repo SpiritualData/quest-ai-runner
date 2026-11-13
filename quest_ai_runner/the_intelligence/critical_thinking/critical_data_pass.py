@@ -47,7 +47,7 @@ def surface(orchestrator: Any, rs: SimpleNamespace, ctx_meta: Optional[Mapping[s
     """Declare what the request depends on, read it, and put it into the turn. Leaves ``rs.critical_data`` as the declared items with ``consulted`` or ``unreadable`` set."""
     rs.critical_data = []
     menu = menu_of(ctx_meta)
-    if not menu or not getattr(rs, "message_is_user_turn", True) or not getattr(orchestrator.cfg, "critical_check", False):
+    if not menu or not getattr(rs, "message_is_user_turn", True):
         return
     items = declare(getattr(rs, "goal_condition", "") or rs.user_message, menu, orchestrator.cheap_decision)
     if not items:

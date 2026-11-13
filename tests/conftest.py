@@ -165,6 +165,11 @@ class StubProvider:
         return {"action": "answer", "rationale": "fallback", "model_tier": "sonnet"}
 
     def answer(self, messages, *, model, system=None) -> str:
+        said = "\n".join(str(m.get("content", "")) for m in messages)
+        if "Does the reply itself answer what was asked" in said:      # the critical data check's judgement of the reply: the stub says yes, and it is not one of the turn's answers
+            return '{"answers_request": true, "missing": ""}'
+        if "These sources are available" in said:                      # its declaration of what the request depends on: nothing
+            return '{"needed": [], "about": []}'
         self.answer_calls += 1
         self.last_answer_messages = messages
         self.all_answer_messages.append(list(messages))
