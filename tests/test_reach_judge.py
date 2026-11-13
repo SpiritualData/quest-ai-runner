@@ -289,6 +289,9 @@ ASKS_STATUS_PARAGRAPH = (
     'ALSO set "asks_status": true when the meaning of the request is "where does this stand": the status or progress\n'
     'of a piece of work, or which item matters most or comes first (a priority). Wording and spelling never matter, only the meaning.\n'
     'False for a request to do or change something, for a question about how something works, and for a count.\n'
+    'False for a question whose answer is a figure or fact the person keeps in their own records (an amount spent,\n'
+    'a total, a balance against a budget, an entry of a list): that needs the record itself read, not a progress summary.\n'
+    'False for a worry or feeling about such a thing too. The language of the message never matters.\n'
 )
 
 

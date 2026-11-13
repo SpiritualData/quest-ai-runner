@@ -65,7 +65,7 @@ REACH_JUDGE_TOOL: Dict[str, Any] = {
             "asks_own_updates": {"type": "boolean", "description": "Whether it asks what is new or what changed in the "
                                                                     "person's own work since they last looked, naming no subject."},
             "asks_status": {"type": "boolean", "description": "Whether it asks where something stands, what matters most or "
-                                                               "comes first."},
+                                                               "comes first. False for a figure or fact kept in the person's records (spend, totals, budget, entries)."},
         },
         "required": ["reach"],
     },
@@ -113,6 +113,9 @@ a thing in the world, and false for everything else.
 ALSO set "asks_status": true when the meaning of the request is "where does this stand": the status or progress
 of a piece of work, or which item matters most or comes first (a priority). Wording and spelling never matter, only the meaning.
 False for a request to do or change something, for a question about how something works, and for a count.
+False for a question whose answer is a figure or fact the person keeps in their own records (an amount spent,
+a total, a balance against a budget, an entry of a list): that needs the record itself read, not a progress summary.
+False for a worry or feeling about such a thing too. The language of the message never matters.
 """
 
 #: What the planner is told when the work is out of reach AND something can do it.

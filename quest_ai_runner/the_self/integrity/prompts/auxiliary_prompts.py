@@ -928,8 +928,10 @@ Reply with ONE OR TWO LINES, nothing else:
         scheduled or sent. Omit it for any request to do or produce something, and whenever unsure.
       "asks_status": true -- ONLY when the message asks where something stands, what matters or comes
         first or next (a priority), or for a summary or script of that to be read out or shared ("how is
-        this quest going?", "where are we?", "what should I do next?"). Omit it for anything else, and
-        whenever unsure.
+        this quest going?", "where are we?", "what should I do next?"). Omit it for a question whose answer
+        is a figure or fact kept in the person's records (an amount spent, a total, a balance against a
+        budget, an entry of a list), in any language, and for a worry about such a thing: those need the
+        record itself read. Omit it for anything else, and whenever unsure.
       "asks_next_step": true -- ONLY together with asks_status, when the message asks what to do next, first or
         now ("what should I do next?", "what's my next step?", "where do I start?"). Omit it when the message asks how
         something is going or where it stands ("how is this quest going?"), and whenever unsure.
