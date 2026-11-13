@@ -325,7 +325,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
         workflow_step=False,  # needs the user's own say-so (user_asked_for_this_field); a scheduled step cannot assert it
         origin="standard",
         keywords=("experiment", "experiments", "research", "question", "hypothesis", "test",
-                  "trial", "start", "set up", "create", "add", "new"),
+                  "trial", "trials", "add a trial", "see if", "start", "set up", "create", "add", "new"),
         context_args={"quest_id": "quest_id"},
         timeout_seconds=45.0,
     )

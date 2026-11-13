@@ -113,8 +113,10 @@ class TurnResearch:
 
 def keep(orchestrator: Any, rs: Any, res: Any, gathered: Sequence[Any], ask: Optional[Callable[[str], str]] = None) -> bool:
     """Start keeping this turn's research when it is to be kept (see ``wanted``); True when started, so the reply can say so."""
+    if getattr(rs, "plan", None) is None or not observed_from(gathered)[0]:   # no plan or no web search in the turn (an own-updates short circuit): nothing to keep, and the web adapter is not even looked at
+        return False
     memory = getattr(getattr(orchestrator, "web", None), "memory", None)
-    if memory is None or getattr(rs, "plan", None) is None:
+    if memory is None:
         return False
     holder = getattr(orchestrator, "turn_research", None)
     if holder is None:
