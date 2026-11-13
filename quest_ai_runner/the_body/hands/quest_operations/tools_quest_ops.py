@@ -707,6 +707,7 @@ def list_quest_notes_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
 #: ``list_quest_goals`` output caps: a quest can hold hundreds of goals, so a call shows one page.
 GOALS_DEFAULT_LIMIT = 25
 GOALS_MAX_LIMIT = 100
+GOALS_ALL_MAX = 2000      # what ``everything`` returns at most: the whole read in ONE call, for code that counts and filters (never for text a model reads)
 GOAL_TEXT_CHARS = 320
 
 
@@ -797,8 +798,9 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
             rows = [r for r in rows if r["due"] and day_of(r["due"]) <= last
                     and (early is None or day_of(r["due"]) >= early)]
         rows.sort(key=lambda r: (r["due"] is None, r["due"] or "", str(r["id"])))
-        limit = max(1, min(int(args.get("limit") or GOALS_DEFAULT_LIMIT), GOALS_MAX_LIMIT))
-        offset = max(0, int(args.get("offset") or 0))
+        everything = bool(args.get("everything"))      # one read, every matching goal (up to GOALS_ALL_MAX): paging re-reads the whole quest on every page
+        limit = GOALS_ALL_MAX if everything else max(1, min(int(args.get("limit") or GOALS_DEFAULT_LIMIT), GOALS_MAX_LIMIT))
+        offset = 0 if everything else max(0, int(args.get("offset") or 0))
         page = rows[offset:offset + limit]
         if not rows:
             return ToolResult(ok=True, data=[], text=(
@@ -807,7 +809,7 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         head = (f"{len(rows)} matching goals on quest {quest_id} ({total} in all); showing "
                 f"{offset + 1}-{offset + len(page)}, soonest due first"
                 + (f". {more} more: call again with offset={offset + len(page)}." if more > 0 else "."))
-        return ToolResult(ok=True, data=page, text=head + "\n" + "\n".join(goal_line(r) for r in page))
+        return ToolResult(ok=True, data=page, text=head + "\n" + "\n".join(goal_line(r) for r in (page[:GOALS_DEFAULT_LIMIT] if everything else page)))      # whatever the call, the text a model reads is one page
 
     return ToolSpec(
         name="list_quest_goals",
@@ -841,6 +843,7 @@ def list_quest_goals_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                                              "for example an owner line."},
             "limit": {"type": "integer",
                       "description": f"Page size (default {GOALS_DEFAULT_LIMIT}, at most {GOALS_MAX_LIMIT})."},
+            "everything": {"type": "boolean", "description": f"Return every matching goal in one call (at most {GOALS_ALL_MAX}), for code that counts them (the text still shows one page of them)."},
             "offset": {"type": "integer", "description": "Skip this many matches (next page)."}}},
         mutates=False, workflow_step=False, origin="standard",
         keywords=("goals", "goal", "list", "read", "due", "open", "assigned", "owner", "tasks",

@@ -58,59 +58,34 @@ def reachable_quests(registry: Any) -> List[Dict[str, str]]:
 
 
 def goal_rows(registry: Any, quest_id: str, **args: Any) -> List[Mapping[str, Any]]:
-    """The goals the tool lists for ``args``, every page of them (up to ``PAGES`` pages of ``PAGE``): a quest with hundreds of goals keeps its priority steps past the first page."""
+    """The goals the tool lists for ``args``, all of them in ONE read (the tool re-reads the whole quest for every page it is asked for, so paging a quest of hundreds of goals
+    cost one full read per page). [] when they could not be read."""
     from quest_ai_runner.the_world.tools.tools import ToolContext
     if registry is None or registry.get("list_quest_goals") is None:
         return []
-    rows: List[Mapping[str, Any]] = []
-    for page in range(PAGES):
-        try:
-            result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "limit": PAGE, "offset": page * PAGE, **args}, ToolContext(quest_id=quest_id))
-        except Exception as error:      # noqa: BLE001
-            log.info("goals not read: %s: %s", type(error).__name__, error)
-            return rows
-        got = [g for g in (result.data or []) if isinstance(g, Mapping)] if result.ok else []
-        rows.extend(got)
-        if len(got) < PAGE:
-            break
-    return rows
+    try:
+        result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "everything": True, **args}, ToolContext(quest_id=quest_id))
+    except Exception as error:      # noqa: BLE001
+        log.info("goals not read: %s: %s", type(error).__name__, error)
+        return []
+    return [g for g in (result.data or []) if isinstance(g, Mapping)] if result.ok else []
 
 
 def all_goal_rows(registry: Any, quest_id: str) -> Optional[List[Mapping[str, Any]]]:
-    """Every goal of the quest, done ones included, or None when the goals could not be read. Unlike ``goal_rows`` this keeps "the quest has no goals" (a read that
-    succeeded with nothing in it) apart from "the goals were not read": the first is a fact the reply states, the second is never presented as one."""
+    """Every goal of the quest, done ones included, from one read, or None when the goals could not be read. Unlike ``goal_rows`` this keeps "the quest has no goals" (a read that
+    succeeded with nothing in it) apart from "the goals were not read": the first is a fact the reply states, the second is never presented as one. The goals are counted and
+    filtered by code here; a model is only ever shown the bounded slices built from them (``overview``, ``priorities``, the insight prompts)."""
     from quest_ai_runner.the_world.tools.tools import ToolContext
     if registry is None or registry.get("list_quest_goals") is None:
         return None
-    from concurrent.futures import ThreadPoolExecutor
-
-    def read_page(page: int) -> Optional[List[Mapping[str, Any]]]:
-        try:
-            result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "limit": PAGE, "offset": page * PAGE, "open_only": False}, ToolContext(quest_id=quest_id))
-        except Exception as error:      # noqa: BLE001
-            log.info("goals not read: %s: %s", type(error).__name__, error)
-            return None
-        if not getattr(result, "ok", False):
-            return None
-        return [g for g in (result.data or []) if isinstance(g, Mapping)]
-
-    rows: List[Mapping[str, Any]] = []
-    first = read_page(0)
-    if first is None:
+    try:
+        result = registry.invoke("list_quest_goals", {"quest_id": quest_id, "everything": True, "open_only": False}, ToolContext(quest_id=quest_id))
+    except Exception as error:      # noqa: BLE001
+        log.info("goals not read: %s: %s", type(error).__name__, error)
         return None
-    rows.extend(first)
-    page = 1
-    with ThreadPoolExecutor(max_workers=PAGES_TOGETHER) as pool:
-        while len(rows) == page * PAGE and page < PAGES:      # the last page read was full, so more may follow: the next few pages are read together, not one after another
-            batch = list(pool.map(read_page, range(page, min(PAGES, page + PAGES_TOGETHER))))
-            for got in batch:
-                if got is None:
-                    return None
-                rows.extend(got)
-                page += 1
-                if len(got) < PAGE:
-                    return rows
-    return rows
+    if not getattr(result, "ok", False):
+        return None
+    return [g for g in (result.data or []) if isinstance(g, Mapping)]
 
 
 def overview(rows: List[Mapping[str, Any]], today: date, window_days: int = OVERVIEW_WINDOW_DAYS, plan: bool = False) -> str:

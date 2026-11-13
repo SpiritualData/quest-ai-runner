@@ -78,28 +78,33 @@ def test_a_wait_gets_a_row_naming_the_last_status_and_the_next_event_closes_it(m
     thread.join(1)
 
 
-def test_the_goal_pages_of_a_big_quest_are_read_together_in_order_and_a_failed_page_means_not_read():
+def test_the_goals_of_a_big_quest_are_read_in_one_call_not_one_full_read_per_page():
+    """The goal tool re-reads the whole quest for every page, so a 536-goal quest read in pages cost six full reads (about 29 s on prod). One call returns them all."""
     from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
-    page, total = status_snapshot.PAGE, status_snapshot.PAGE * 5 + 7
-    lock, active, peak = threading.Lock(), [0], [0]
+    calls = []
 
-    class Paged:
+    class One:
         def get(self, name):
             return object()
 
         def invoke(self, name, args, ctx):
-            with lock:
-                active[0] += 1
-                peak[0] = max(peak[0], active[0])
-            time.sleep(0.05)
-            with lock:
-                active[0] -= 1
-            start = args["offset"]
-            if start == args.get("fail_at", -1):
-                return SimpleNamespace(ok=False, data=[], text="")
-            return SimpleNamespace(ok=True, data=[{"id": n} for n in range(start, min(total, start + args["limit"]))], text="")
-    rows = status_snapshot.all_goal_rows(Paged(), "q1")
-    assert [g["id"] for g in rows] == list(range(total)) and peak[0] > 1
-    original = Paged.invoke
-    Paged.invoke = lambda self, name, args, ctx: original(self, name, dict(args, fail_at=2 * page), ctx)
-    assert status_snapshot.all_goal_rows(Paged(), "q1") is None
+            calls.append(args)
+            return SimpleNamespace(ok=True, data=[{"id": n} for n in range(536)], text="")
+    assert len(status_snapshot.all_goal_rows(One(), "q1")) == 536 and len(calls) == 1 and calls[0]["everything"] is True
+    assert len(status_snapshot.goal_rows(One(), "q1", open_only=True)) == 536 and len(calls) == 2
+
+
+def test_a_goal_read_that_failed_is_not_read_and_an_empty_one_is_no_goals():
+    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+
+    class Failing:
+        def get(self, name):
+            return object()
+
+        def invoke(self, name, args, ctx):
+            return SimpleNamespace(ok=False, data=[], text="")
+
+    class Empty(Failing):
+        def invoke(self, name, args, ctx):
+            return SimpleNamespace(ok=True, data=[], text="")
+    assert status_snapshot.all_goal_rows(Failing(), "q1") is None and status_snapshot.all_goal_rows(Empty(), "q1") == []

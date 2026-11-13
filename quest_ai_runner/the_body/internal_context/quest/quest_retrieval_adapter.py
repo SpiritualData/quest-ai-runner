@@ -245,6 +245,27 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             flat.extend(g for g in (group.get("goals") or []) if isinstance(g, dict))
         return flat
 
+    GOAL_LINES_BUDGET = 500      # tokens of goal lines one quest read may hand a model (a quest holds hundreds of goals)
+
+    def bounded_goal_lines(self, goals: List[Dict[str, Any]], request: str = "") -> List[str]:
+        """The goals a model is shown: never the whole list. Open goals first, soonest due first (or, when the read has words, the goals those words are rare in), the done
+        ones represented by TF-DF-IDF, all within ``GOAL_LINES_BUDGET`` tokens, and one line saying how many were left out and what they were about, so a follow-up read can
+        ask for a window, a status or words instead of everything."""
+        from hubofhubs.api import Note, Slice, shortlist
+        notes = [Note(id=str(g.get("id") or g.get("goal_id") or n), title=str(g.get("name") or g.get("title") or g.get("id") or "?")[:160], text="",
+                      due=str(g.get("deadline") or g.get("due") or "")[:10], status="done" if g.get("completed") else "abandoned" if g.get("abandoned") else "open")
+                 for n, g in enumerate(goals)]
+        open_notes = [n for n in notes if n.status == "open"]
+        shown = shortlist(open_notes, Slice(order="soonest"), request, self.GOAL_LINES_BUDGET)
+        room = max(0, self.GOAL_LINES_BUDGET - shown.tokens)
+        done = shortlist([n for n in notes if n.status == "done"], Slice(), request, room) if room > 60 else None
+        lines = [f"  • {n.title}" + (f" (due {n.due})" if n.due else "") + f" ({n.id})" for n in shown.notes]
+        lines += [f"  • done: {n.title} ({n.id})" for n in (done.notes if done else [])]
+        missing = (len(notes) - len(shown.notes) - (len(done.notes) if done else 0))
+        head = f"\nGoals in this quest ({len(notes)} in all, {len(open_notes)} open; the soonest due first):"
+        tail = [f"  ({missing} more goals not listed" + (f"; {shown.digest}" if shown.digest else "") + "; ask for a due window, a status or words to see them.)"] if missing > 0 else []
+        return [head] + lines + tail
+
     def render_quest_decisions(self, decisions: List[Dict[str, Any]]) -> List[str]:
         """Compact "what's already been asked/answered on this quest" block.
 
@@ -310,11 +331,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         # Fetch goals in this quest
         goals = self.flatten_quest_goals(self.client.list_quest_goals(quest_id))
         if goals:
-            text_parts.append("\nGoals in this quest:")
-            for goal in goals:
-                goal_id = goal.get("id") or goal.get("goal_id", "?")
-                goal_name = goal.get("name", goal_id)
-                text_parts.append(f"  • {goal_name} ({goal_id})")
+            text_parts.extend(self.bounded_goal_lines(goals, str(spec.get("query") or spec.get("text") or spec.get("question") or "")))
 
         # What's already been asked and answered on this quest, so the reader doesn't re-raise a
         # duplicate or re-ask something already settled (see render_quest_decisions).
