@@ -898,3 +898,167 @@ def test_pull_passes_the_clients_total_through():
     with tempfile.TemporaryDirectory() as d:
         pull_quest_to_folder(client, QUEST_ID, d)
         assert "_34611 older notes not shown, total 34616._" in Path(d, "QUEST_SYNC.md").read_text()
+
+
+# --- token-gated sweep: download only what changed -----------------------------------------
+
+class _TokenClient(MockQuestFolderClient):
+    """MockQuestFolderClient plus goals and the sync-token route."""
+
+    def __init__(self, tokens="supported"):
+        super().__init__()
+        self.tokens = {QUEST_ID: "t1"} if tokens == "supported" else tokens  # None = old server
+        self.token_calls = 0
+        self.goal_calls = 0
+        self.fail_goals = False
+        self.configured = True
+
+    def get_quest_sync_tokens(self, quest_ids):
+        self.token_calls += 1
+        return None if self.tokens is None else dict(self.tokens)
+
+    def list_quest_goals(self, quest_id, **kw):
+        self.goal_calls += 1
+        if self.fail_goals:
+            raise RuntimeError("goals down")
+        return {"period_groups": []}
+
+    def heavy(self):
+        return len(self.get_calls) + len(self.notes_calls) + self.goal_calls
+
+
+def _token_poller(qc, folder, state_path=None, **cfg_kw):
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    client = MockQuestClient([])
+    for name in ("get_my_quest", "list_quest_notes", "add_quest_note", "get_quest_sync_tokens",
+                 "list_quest_goals"):
+        setattr(client, name, getattr(qc, name))
+    cfg_kw.setdefault("quest_folder_sweep_min_seconds", 0)
+    cfg = RunnerConfig(
+        quest_base_url="http://x", quest_api_key="qsk_test",
+        retrieval=StubRetrieval({"README.md": "fact"}),
+        model_provider=StubProvider(decisions=[]),
+        quest_folder_map={QUEST_ID: folder}, **cfg_kw,
+    )
+    return Poller(cfg, state_path=state_path, client=client)
+
+
+def test_sweep_unchanged_token_downloads_nothing_on_later_scans():
+    qc = _TokenClient()
+    with tempfile.TemporaryDirectory() as d:
+        p = _token_poller(qc, d)
+        p.run_once()
+        first = qc.heavy()
+        assert first > 0
+        p.run_once(); p.run_once()
+        assert qc.heavy() == first          # no quest, notes or goals call after the first
+        assert qc.token_calls == 3          # but the tiny token check runs every scan
+
+
+def test_sweep_changed_token_resyncs_only_that_quest():
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    other = "quest_other000000000"
+    qc = _TokenClient(tokens={QUEST_ID: "a", other: "b"})
+    with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+        p = _token_poller(qc, d1)
+        p.cfg.quest_folder_map = {QUEST_ID: d1, other: d2}
+        p.run_once()
+        qc.get_calls.clear()
+        qc.tokens[other] = "b2"
+        p.run_once()
+        assert qc.get_calls == [other]
+
+
+def test_sweep_local_edit_is_pushed_without_a_token_change():
+    qc = _TokenClient()
+    with tempfile.TemporaryDirectory() as d:
+        p = _token_poller(qc, d)
+        p.run_once()                          # first pull creates QUEST_SYNC.md and GOALS.md
+        p.cfg.quest_folder_sync_direction = "both"
+        qc.add_note_calls.clear()
+        f = Path(d, "QUEST_SYNC.md")
+        text = f.read_text()
+        assert "## Notes to push to Quest" in text
+        f.write_text(text.rstrip("\n") + "\n\n- a local note to send\n")
+        p.run_once()
+        assert any("a local note to send" in t for _q, t in qc.add_note_calls)
+        before = qc.heavy()
+        p.run_once()
+        assert qc.heavy() == before          # settled again
+
+
+def test_sweep_without_tokens_falls_back_to_the_throttle():
+    def scans(gap):
+        qc = _TokenClient(tokens=None)
+        with tempfile.TemporaryDirectory() as d:
+            p = _token_poller(qc, d, quest_folder_sweep_min_seconds=gap)
+            p.run_once(); p.run_once(); p.run_once()
+        return len(qc.get_calls)
+    assert scans(1800) == 1
+    assert scans(0) == 3
+
+
+def test_sweep_failed_sync_does_not_store_the_token():
+    qc = _TokenClient()
+    qc.fail_goals = True
+    with tempfile.TemporaryDirectory() as d:
+        p = _token_poller(qc, d)
+        p.run_once()
+        assert "token" not in p._folder_sync_state().get(QUEST_ID, {})
+        qc.fail_goals = False
+        qc.get_calls.clear()
+        p.run_once()
+        assert qc.get_calls == [QUEST_ID]    # retried, now succeeds
+        assert p._folder_sync_state()[QUEST_ID]["token"] == "t1"
+        qc.get_calls.clear()
+        p.run_once()
+        assert qc.get_calls == []
+
+
+def test_sweep_forces_a_full_resync_after_the_interval():
+    qc = _TokenClient()
+    with tempfile.TemporaryDirectory() as d:
+        p = _token_poller(qc, d, quest_folder_full_resync_seconds=3600)
+        p.run_once()
+        qc.get_calls.clear()
+        p.run_once()
+        assert qc.get_calls == []
+        p._folder_sync_state()[QUEST_ID]["full_at"] -= 7200
+        p.run_once()
+        assert qc.get_calls == [QUEST_ID]
+
+
+def test_sweep_state_persists_across_pollers():
+    qc = _TokenClient()
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as s:
+        sp = str(Path(s, "qar_state.json"))
+        _token_poller(qc, d, state_path=sp).run_once()
+        assert Path(s, "qar_state_folder_sync.json").exists()
+        qc.get_calls.clear()
+        _token_poller(qc, d, state_path=sp).run_once()   # a restart
+        assert qc.get_calls == []
+
+
+def test_client_sync_tokens_chunks_and_reports_unsupported():
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test")
+    seen = []
+
+    def ok(method, path, **kw):
+        seen.append(kw["body"]["quest_ids"])
+        return {"tokens": {q: "t" for q in kw["body"]["quest_ids"][:1]}}
+    c._request = ok
+    got = c.get_quest_sync_tokens([f"q{i}" for i in range(250)])
+    assert [len(x) for x in seen] == [100, 100, 50] and len(got) == 3
+
+    def old(method, path, **kw):
+        raise QuestApiError("not found", status=404)
+    c._request = old
+    assert c.get_quest_sync_tokens(["q1"]) is None

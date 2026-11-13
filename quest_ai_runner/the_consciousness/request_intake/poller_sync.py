@@ -245,33 +245,131 @@ class SyncMixin:
         folder_map = getattr(self.cfg, "quest_folder_map", None)
         if not folder_map:
             return
-        # Full re-download of every mapped quest: throttle it (see the config field's note).
+        direction = self.cfg.quest_folder_sync_direction
+        tokens = None
+        if direction in ("pull", "both"):
+            try:
+                tokens = self.client.get_quest_sync_tokens(list(folder_map))
+            except Exception as e:  # noqa: BLE001 -- an old client or a bad answer means "no tokens"
+                log.info("quest sync tokens unavailable (%s); sweeping on the throttle", e)
+                tokens = None
         gap = max(0, int(getattr(self.cfg, "quest_folder_sweep_min_seconds", 1800) or 0))
         now = time.monotonic()
-        last = getattr(self, "_last_folder_sweep", None)
-        if gap and last is not None and now - last < gap:
-            return
-        self._last_folder_sweep = now
-        direction = self.cfg.quest_folder_sync_direction
+        if tokens is None:
+            # No tokens (older backend, or a push-only direction): every pass is a full
+            # re-download of every mapped quest, so throttle it (see the config field's note).
+            last = getattr(self, "_last_folder_sweep", None)
+            if gap and last is not None and now - last < gap:
+                return
+            self._last_folder_sweep = now
+        full_gap = max(0, int(getattr(self.cfg, "quest_folder_full_resync_seconds", 86400) or 0))
+        state = self._folder_sync_state()
+        wall = time.time()
         from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import sync_quest_folder
+        dirty = False
         for quest_id, folder in folder_map.items():
             try:
+                rec = state.get(quest_id) or {}
+                token = None
+                if tokens is not None:
+                    token = tokens.get(quest_id)
+                    full_age = wall - float(rec.get("full_at") or 0)
+                    if (gap and wall - float(rec.get("failed_at") or 0) < gap
+                            and not self._local_changed(rec, folder)):
+                        continue  # failed lately: back off to the throttle pace, not every scan
+                    if token is None:
+                        # Unreadable to this key: nothing to compare, so retry at the throttle pace.
+                        if rec.get("full_at") and gap and full_age < gap and not self._local_changed(rec, folder):
+                            continue
+                    elif (token == rec.get("token") and not self._local_changed(rec, folder)
+                          and not (full_gap and full_age >= full_gap)):
+                        continue  # nothing changed on either side: download nothing
                 sync_quest_folder(self.client, quest_id, folder, direction=direction,
                                   zones=getattr(self.cfg, 'quest_folder_zones', True))
-                self._sync_quest_goals(quest_id, folder, direction)
+                if not self._sync_quest_goals(quest_id, folder, direction):
+                    # A failed sync must not record its token. Remember the failure so a quest
+                    # that can never finish (goals unlistable) is retried at the throttle pace.
+                    state[quest_id] = {**rec, "failed_at": wall}
+                    dirty = True
+                    continue
+                # The token fetched BEFORE the sync: a change landing during the pull then
+                # differs from it and triggers another sync on the next scan.
+                state[quest_id] = {"token": token, "full_at": wall,
+                                   "hashes": self._folder_hashes(folder)}
+                dirty = True
             except Exception as e:  # noqa: BLE001 — one bad folder must not block the others/scan
                 log.info("quest-folder periodic sync for %s failed (%s) — will retry next scan",
                          quest_id, e)
+                if tokens is not None:
+                    state[quest_id] = {**(state.get(quest_id) or {}), "failed_at": wall}
+                    dirty = True
+        if dirty:
+            self._save_folder_sync_state(state)
 
-    def _sync_quest_goals(self, quest_id: str, folder: str, direction: str) -> None:
-        """Best-effort GOALS.md sync for one mapped folder. Never raises.
+    # The two files whose local edits the sweep must push promptly.
+    _SYNC_HASHED_FILES = ("QUEST_SYNC.md", "GOALS.md")
+
+    @classmethod
+    def _folder_hashes(cls, folder: str) -> Dict[str, str]:
+        import hashlib
+        out: Dict[str, str] = {}
+        for name in cls._SYNC_HASHED_FILES:
+            try:
+                out[name] = hashlib.sha256(Path(folder, name).read_bytes()).hexdigest()
+            except OSError:
+                out[name] = ""
+        return out
+
+    def _local_changed(self, rec: Dict[str, Any], folder: str) -> bool:
+        """True when a synced file differs from what it was right after the last sync (or no
+        sync was ever recorded): a local edit that needs pushing."""
+        return self._folder_hashes(folder) != (rec.get("hashes") or {})
+
+    def _folder_sync_state(self) -> Dict[str, Any]:
+        """Per-quest ``{token, full_at, hashes}``, loaded once (file beside the poller's state
+        file when it has one, else memory only)."""
+        state = getattr(self, "_folder_sync_cache", None)
+        if state is not None:
+            return state
+        state = {}
+        path = getattr(self, "_folder_sync_state_path", None)
+        if path:
+            try:
+                import json
+                data = json.loads(Path(path).read_text())
+                if isinstance(data, dict):
+                    state = {str(k): v for k, v in data.items() if isinstance(v, dict)}
+            except (OSError, ValueError) as e:
+                if not isinstance(e, FileNotFoundError):
+                    log.warning("folder sync state unreadable (%s); starting fresh", e)
+        self._folder_sync_cache = state
+        return state
+
+    def _save_folder_sync_state(self, state: Dict[str, Any]) -> None:
+        path = getattr(self, "_folder_sync_state_path", None)
+        if not path:
+            return
+        try:
+            import json
+            import os
+            p = Path(path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+            os.replace(tmp, p)  # atomic: never a partial file after a crash
+        except OSError as e:
+            log.warning("could not persist folder sync state: %s", e)
+
+    def _sync_quest_goals(self, quest_id: str, folder: str, direction: str) -> bool:
+        """Best-effort GOALS.md sync for one mapped folder. Never raises; True when it succeeded
+        (or goal sync is switched off), False when it failed.
 
         Separate from the folder sync rather than folded into it: a quest whose goals cannot be
         listed (an older backend, a permission gap) must still get its QUEST_SYNC.md, and one
         try/except around both would lose that.
         """
         if not getattr(self.cfg, "quest_goal_sync", True):
-            return
+            return True
         try:
             from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_goal_sync import sync_quest_goals
             # How many of each goal's check-ins the pulled GOALS.md carries. Passed explicitly
@@ -280,8 +378,10 @@ class SyncMixin:
             sync_quest_goals(self.client, quest_id, folder, direction=direction,
                              updates_per_goal=int(
                                  getattr(self.cfg, "quest_goal_updates_per_goal", 3) or 0))
+            return True
         except Exception as e:  # noqa: BLE001 -- goals are additive; never block the scan
             log.info("goal sync for %s skipped (%s) — will retry next scan", quest_id, e)
+            return False
 
     def _pull_quest_folder_for(self, task: Dict[str, Any]) -> None:
         """Best-effort PRE-run pull: refresh the mapped folder's QUEST_SYNC.md from Quest.

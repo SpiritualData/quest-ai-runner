@@ -590,6 +590,32 @@ class QuestsMixin:
             log.warning("list_quest_notes failed for quest %s: %s", quest_id, e)
             return NotesList([], total=0)
 
+    def get_quest_sync_tokens(self, quest_ids: List[str]) -> Optional[Dict[str, str]]:
+        """POST /api/quests/sync-tokens -- one opaque change token per readable quest.
+
+        A token is identical while the quest's state, notes, goals (completion included) and goal
+        check-ins are unchanged, and differs after any add, edit, complete or delete, so a caller
+        that keeps the last token can skip a full re-download when it still matches. Quests the
+        caller cannot read are omitted from the result. Asked in chunks of 100 ids.
+
+        Returns None (never ``{}``) when the route is unavailable (an older backend answers 404 or
+        405) or any chunk fails, so a caller can tell "unsupported, fall back" from "no tokens"."""
+        ids = [str(q) for q in quest_ids if q]
+        tokens: Dict[str, str] = {}
+        try:
+            self._require()
+            for i in range(0, len(ids), 100):
+                resp = self._request("POST", "/api/quests/sync-tokens",
+                                     body={"quest_ids": ids[i:i + 100]})
+                got = resp.get("tokens") if isinstance(resp, dict) else None
+                if not isinstance(got, dict):
+                    return None
+                tokens.update({str(k): str(v) for k, v in got.items() if v})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.info("get_quest_sync_tokens unavailable (%s)", e)
+            return None
+        return tokens
+
     def update_outcome_progress(self, quest_id: str, outcome_id: str, progress_pct: Any,
                                 note: str, current_value: Any = None) -> WriteResult:
         """POST /api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress

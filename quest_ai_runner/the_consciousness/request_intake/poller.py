@@ -139,6 +139,11 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         # or test that reads config.rep_sync_resolver after construction sees the resolved callable.
         config.rep_sync_resolver = runner_config.resolve_rep_sync_resolver(config, quest_client=self.client)
         self.state = StateStore(state_path)
+        # The folder sweep's per-quest change tokens and file hashes live beside the state file
+        # (None keeps them in memory only).
+        self._folder_sync_state_path = (
+            str(Path(state_path).with_name(Path(state_path).stem + "_folder_sync.json"))
+            if state_path else None)
         # The lane's Claude usage-limit note lives beside its state file, so a lane restarted
         # mid-pause keeps honouring the reset instead of re-discovering the limit task by task.
         if state_path:
