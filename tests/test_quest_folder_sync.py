@@ -1003,11 +1003,27 @@ def test_sweep_without_tokens_falls_back_to_the_throttle():
     assert scans(0) == 3
 
 
+def test_sweep_failed_quest_backs_off_instead_of_resyncing_every_scan():
+    """A quest whose goals can never be listed must not be re-downloaded on every scan (3 quests
+    did on 2026-11-13: the failure record had no file hashes, so 'local changed' was always true)."""
+    qc = _TokenClient()
+    qc.fail_goals = True
+    with tempfile.TemporaryDirectory() as d:
+        p = _token_poller(qc, d, quest_folder_sweep_min_seconds=1800)
+        p.run_once()
+        qc.get_calls.clear()
+        p.run_once(); p.run_once()
+        assert qc.get_calls == []       # backed off
+        Path(d, "QUEST_SYNC.md").write_text(Path(d, "QUEST_SYNC.md").read_text() + "\nlocal edit\n")
+        p.run_once()
+        assert qc.get_calls == [QUEST_ID]   # a local edit still goes through promptly
+
+
 def test_sweep_failed_sync_does_not_store_the_token():
     qc = _TokenClient()
     qc.fail_goals = True
     with tempfile.TemporaryDirectory() as d:
-        p = _token_poller(qc, d)
+        p = _token_poller(qc, d, quest_folder_sweep_min_seconds=0)
         p.run_once()
         assert "token" not in p._folder_sync_state().get(QUEST_ID, {})
         qc.fail_goals = False

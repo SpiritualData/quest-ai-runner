@@ -289,7 +289,9 @@ class SyncMixin:
                 if not self._sync_quest_goals(quest_id, folder, direction):
                     # A failed sync must not record its token. Remember the failure so a quest
                     # that can never finish (goals unlistable) is retried at the throttle pace.
-                    state[quest_id] = {**rec, "failed_at": wall}
+                    # Hashes too: without them _local_changed() is always True for this quest, and the
+                    # back-off above never applies (3 quests re-pulled every scan on 2026-11-13).
+                    state[quest_id] = {**rec, "failed_at": wall, "hashes": self._folder_hashes(folder)}
                     dirty = True
                     continue
                 # The token fetched BEFORE the sync: a change landing during the pull then
@@ -301,7 +303,8 @@ class SyncMixin:
                 log.info("quest-folder periodic sync for %s failed (%s) — will retry next scan",
                          quest_id, e)
                 if tokens is not None:
-                    state[quest_id] = {**(state.get(quest_id) or {}), "failed_at": wall}
+                    state[quest_id] = {**(state.get(quest_id) or {}), "failed_at": wall,
+                                       "hashes": self._folder_hashes(folder)}
                     dirty = True
         if dirty:
             self._save_folder_sync_state(state)
