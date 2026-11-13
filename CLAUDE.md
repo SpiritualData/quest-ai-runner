@@ -202,6 +202,8 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 
 **Tier guidance:** a call names its role (`resolve_role(call_id)`); the hub's role table gives the tier (`docs/how-to/writing-a-consumer.md`, "Which tier each model call runs on"). Classification is fast, a response a person reads is at least balanced, `"best"` only where a person set it or for `structure-watch`. The `model_fallback` config maps tiers to real model IDs.
 
+**Never hand a model a whole collection** (Joshua, 2026-11-13: "must NEVER require ALL context to be read by LLM, where that context is infinite like goals, notes, unrelated quests"). Goals, notes, conversation turns, quests, cards and files are unbounded: before any prompt, filter by structure (a time window, statuses, scope), rank what is RELEVANT by rarity-weighted words, and when the relevant set still exceeds the token budget show its REPRESENTATIVES (TF-DF-IDF, `select_representatives`) plus a one-line digest of what was left out, all through the hub's `shortlist` / `plan_retrieval` (`hubofhubs.api`). A read the code does for counting may fetch everything in one call (`list_quest_goals` with `everything`), a prompt never lists everything. An unread source is `None`, never empty. Standard: `docs/standards/bounded-model-context.md`; example: `QuestRetrievalAdapter.bounded_goal_lines`.
+
 **JSON parsing:** LLM responses often include markdown fences. Never call `json.loads(raw)` directly: strip fences first with a helper like `_extract_json()` in `core/card_filter.py`.
 
 ## 🔒 Hard rule #3: do not gate decisions on keywords in AI output
