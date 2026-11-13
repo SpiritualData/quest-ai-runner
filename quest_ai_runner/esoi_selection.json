@@ -841,9 +841,10 @@
   }
  },
  "terminal-session": {
-  "default": "textual_screen",
+  "default": "opencode_terminal",
   "modules": {
    "hub_terminal": "quest_ai_runner.the_consciousness.terminal.hub_terminal",
+   "opencode_terminal": "quest_ai_runner.the_consciousness.terminal.opencode_terminal",
    "textual_screen": "quest_ai_runner.the_consciousness.terminal.textual_session"
   }
  },

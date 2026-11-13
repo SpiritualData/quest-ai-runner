@@ -56,6 +56,23 @@ def _check_chat_prerequisites(env=None, which=shutil.which) -> List[str]:
     return problems
 
 
+def resolve_screen(chosen=None, env=None, which=None) -> str:
+    """``opencode``, ``chat`` or ``hub``: the flag, else ``QAR_SCREEN``, else ``auto``. ``auto`` follows the hub's selected terminal: the opencode screen when the hub selected the opencode
+    client and it is installed, otherwise ``chat`` (the Textual screen, the fallback that always works)."""
+    env = env if env is not None else os.environ
+    name = (chosen or env.get("QAR_SCREEN") or "auto").strip().lower()
+    if name in ("opencode", "chat", "hub"):
+        return name
+    from hubofhubs.api import opencode_available, terminal_arm
+    try:
+        _arm, selected, _why = terminal_arm("", dict(env))
+    except Exception:  # noqa: BLE001 -- the hub's choice cannot be read: the screen that always works
+        return "chat"
+    if selected == "opencode_client_session" and not opencode_available("", dict(env)):
+        return "opencode"
+    return "chat"
+
+
 def _cmd_chat(args, log) -> int:
     """Run the `chat` subcommand; returns the process exit code."""
     if getattr(args, "check", False):
@@ -78,7 +95,8 @@ def _cmd_chat(args, log) -> int:
         log.info("chat prerequisites OK")
         return 0
 
-    if getattr(args, "screen", "chat") == "hub":
+    screen = resolve_screen(getattr(args, "screen", None))
+    if screen == "hub":
         # The hub's screen: a goal run on a real harness in this folder, the person named by the name form (`chat NAME`) as who the AI acts for.
         from quest_ai_runner.the_consciousness.terminal.hub_terminal import HubTerminal
         return HubTerminal().start(person=getattr(args, "rep_positional", None) or args.rep or "")
@@ -156,6 +174,16 @@ def _cmd_chat(args, log) -> int:
     # import, the install is incomplete (e.g. an editable install never re-synced
     # after `textual` was added to dependencies) — say exactly that and how to fix
     # it, rather than dying on a raw ImportError traceback.
+    if screen == "opencode":
+        from quest_ai_runner.the_consciousness.terminal.opencode_terminal import OpencodeTerminal
+        reason = OpencodeTerminal.unavailable()
+        if reason:
+            log.error("the opencode screen is unavailable: %s", reason)
+            return 1
+        conv_id = OpencodeTerminal().start(
+            cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, rep_specified=rep_specified,
+            persona_specified=persona_specified, resume=resume, verbosity=args.verbose)
+        return 0
     from quest_ai_runner.the_consciousness.terminal.textual_session import is_textual_available, start_textual_interactive
     if not is_textual_available():
         log.error(

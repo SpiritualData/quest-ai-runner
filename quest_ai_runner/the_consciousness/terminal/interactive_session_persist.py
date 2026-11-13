@@ -197,3 +197,67 @@ class PersistenceMixin:
                 c.dim(f"  {p.stem}")
         c.dim("")
         c.dim("  /load <name>  to restore a session")
+
+
+def record_stopped_turn(session, user_text: str, paused: bool = False) -> None:
+    """Keep a turn the person paused or cancelled in the history, with the marker the next turn reads back, and in the context store (shared by every screen)."""
+    marker = "[paused by user]" if paused else "[cancelled by user]"
+    session._last_user = user_text
+    session._last_assistant = marker
+    session._session_history.append((user_text, marker))
+    session._write_session_file()
+    ctx = getattr(session._orch, "context_assembler", None)
+    if ctx is not None:
+        try:
+            ctx.record(user_text, {"kind": "cancelled",
+                                   "response": "[turn was paused by user]" if paused else "[turn was cancelled by user]"})
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def record_turn(session, user_text: str, final, *, answer=None, fallback_text: str = "", could_not_start: bool = False) -> str:
+    """Keep a finished turn: what the next turn reads back, what this one showed and ran (for ``chat --resume``), the session file, and the quest's standing next steps.
+
+    Shared by every screen (any object with the session's fields works), so a turn is recorded the same way wherever it was drawn. ``answer`` is what the screen showed as the reply, ``fallback_text`` the streamed text
+    used when the result carries none. Returns the assistant text recorded."""
+    from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import turn_work
+    session._last_user = user_text
+    # For deep runs, signal completion clearly — goal strings look like unfinished TODOs
+    if final.kind == "deep":
+        deep_results = final.deep_results or []
+        goals = final.goals or []
+        all_met = bool(deep_results) and all(d.met for d in deep_results)
+        goal_str = ("; ".join(goals))[:300] if goals else ""
+        # THREE outcomes, not two. With no deep results at all, nothing was even attempted
+        # (no executor wired), and recording "Attempted: <goal>" put a false claim into the
+        # session history the NEXT turn reads back as context.
+        if all_met:
+            prefix = "Completed"
+        elif could_not_start:
+            prefix = "Could not start"
+        elif deep_results:
+            prefix = "Attempted"
+        else:
+            prefix = "Planned but NOT executed (no deep executor configured)"
+        session._last_assistant = f"{prefix}: {goal_str}" if goal_str else f"{prefix}."
+    else:
+        # The streamed text is the fallback: what was displayed may differ from final.text
+        # when the answer streamed via EVENT_PARTIAL or when goal-check text lands in
+        # final.text instead of the actual user-facing response.
+        session._last_assistant = final.text or fallback_text
+    session._session_history.append((user_text, session._last_assistant))
+    # What this turn showed and ran, saved with it for `chat --resume` (a session without the stores, such as
+    # a test double, simply keeps nothing).
+    turn_index = len(session._session_history) - 1
+    if answer and isinstance(getattr(session, "_shown_by_turn", None), dict):
+        session._shown_by_turn[turn_index] = answer
+    work = turn_work(final)
+    if work and isinstance(getattr(session, "_work_by_turn", None), dict):
+        session._work_by_turn[turn_index] = work
+    session._write_session_file()
+    session._turn_count += 1
+    # A turn that executed work and left some unfinished refreshes the quest folder's
+    # standing next-steps artifact. The session owns the decision and the write; this is only
+    # the call site for "a turn just completed".
+    session._maybe_refresh_next_steps(final)
+    return session._last_assistant

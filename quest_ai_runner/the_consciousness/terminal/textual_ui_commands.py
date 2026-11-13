@@ -247,19 +247,8 @@ class CommandsMixin:
             c.dim(f"  No SKILL.md files found in {skills_dir}")
             c.dim("  Create .claude/skills/<name>/SKILL.md, or use /rep <name> and /file <path>.")
             return
-        reps: List[dict] = []
-        for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
-            if not entry.is_dir():
-                continue
-            skill_file = os.path.join(entry.path, "SKILL.md")
-            if not os.path.isfile(skill_file):
-                continue
-            meta = _parse_skill_frontmatter(skill_file)
-            reps.append({
-                "name": entry.name,
-                "display_name": meta.get("display_name") or entry.name,
-                "skill_file": skill_file,
-            })
+        from quest_ai_runner.the_consciousness.terminal.interactive_session_persona import discover_reps
+        reps = discover_reps(skills_dir)
         if not reps:
             c.dim(f"  No SKILL.md files found under {skills_dir}."); return
 

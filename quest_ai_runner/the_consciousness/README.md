@@ -50,7 +50,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Hand Off A Goal | `hand-off-a-goal` | `quest_ai_runner.run("hand-off-a-goal", ...)` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | `quest_ai_runner.run("guide-by-feedback", 'What should I work on first this week?')` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
 | Prioritization | `prioritization` | no entry declared | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
-| Terminal Experience | `terminal-session` | no entry declared | Conversation screen (Textual) (`textual_screen`) | The terminal meets the requirements of working with the AI while it works |
+| Terminal Experience | `terminal-session` | no entry declared | Conversation in the hub's selected terminal (opencode) (`opencode_terminal`) | The terminal meets the requirements of working with the AI while it works |
 | Feedback Learning | `feedback-learning` | `quest_ai_runner.run("feedback-learning", 'quest-id')` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ## Solutions from a library
@@ -124,7 +124,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Hand Off A Goal | `hand-off-a-goal` | Two small model verdicts when a goal is created (today) (`model_judge`) | Hand-offs a person keeps per unit of cost and time |
 | Guide By Feedback | `guide-by-feedback` | Universal guidance provider (`universal`) | Repeat-correction recall and precision over feedback sequences |
 | Prioritization | `prioritization` | Quest ordering (`quest_ordering`) | Quest's work in the order Quest's rules give |
-| Terminal Experience | `terminal-session` | Conversation screen (Textual) (`textual_screen`) | The terminal meets the requirements of working with the AI while it works |
+| Terminal Experience | `terminal-session` | Conversation in the hub's selected terminal (opencode) (`opencode_terminal`) | The terminal meets the requirements of working with the AI while it works |
 | Feedback Learning | `feedback-learning` | File-backed feedback ledger (`ledger`) | Correction carry-through over the feedback-loop cases |
 
 ### Implementations
@@ -148,6 +148,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/the_body/internal_context/quest/client/quest_client.py](../the_body/internal_context/quest/client/quest_client.py) |  |
 | Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
 | Conversation screen (Textual) | `terminal-session:textual_screen` | [quest_ai_runner/the_consciousness/terminal/textual_session.py](terminal/textual_session.py) |  |
+| Conversation in the hub's selected terminal (opencode) | `terminal-session:opencode_terminal` | [quest_ai_runner/the_consciousness/terminal/opencode_terminal.py](terminal/opencode_terminal.py) |  |
 | The hub's terminal with this package's binding | `terminal-session:hub_terminal` | [quest_ai_runner/the_consciousness/terminal/hub_terminal.py](terminal/hub_terminal.py) |  |
 | File-backed feedback ledger | `feedback-learning:ledger` | [quest_ai_runner/the_consciousness/feedback_learning/feedback_ledger.py](feedback_learning/feedback_ledger.py) |  |
 | History floor | `intent-evolution:history_floor` | [quest_ai_runner/the_consciousness/intent_evolution/history_floor.py](intent_evolution/history_floor.py) |  |

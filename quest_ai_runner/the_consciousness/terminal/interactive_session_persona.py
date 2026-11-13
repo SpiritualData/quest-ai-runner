@@ -86,6 +86,21 @@ CLAUDE.md content:
 """
 
 
+def discover_reps(skills_dir: Optional[str]) -> List[dict]:
+    """The representatives a skills folder holds (``<name>/SKILL.md``), by name: ``name``, ``display_name`` (its frontmatter's, else the folder's) and ``skill_file``. Empty when there is no folder."""
+    from quest_ai_runner.the_consciousness.terminal.interactive_session_render import _parse_skill_frontmatter
+    if not skills_dir or not os.path.isdir(skills_dir):
+        return []
+    reps: List[dict] = []
+    for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
+        skill_file = os.path.join(entry.path, "SKILL.md")
+        if not entry.is_dir() or not os.path.isfile(skill_file):
+            continue
+        meta = _parse_skill_frontmatter(skill_file)
+        reps.append({"name": entry.name, "display_name": meta.get("display_name") or entry.name, "skill_file": skill_file})
+    return reps
+
+
 def _read_persona_file_in_corpus(corpus_root: str, rel_path: str) -> Optional[str]:
     """Resolve rel_path against corpus_root and read it, refusing anything that escapes
     corpus_root. Mirrors the containment check in adapters/files_adapter.py's

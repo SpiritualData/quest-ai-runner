@@ -15,6 +15,7 @@ from quest_ai_runner.the_consciousness.terminal.textual_ui_widgets import (
     DECISION_COMING_STATUS, _AWAITING_DECISION_PLACEHOLDER, _BUSY_PLACEHOLDER, _READY_PLACEHOLDER)
 from quest_ai_runner.the_consciousness.terminal.textual_ui_prompt import PromptTextArea
 from quest_ai_runner.the_consciousness.terminal.session_contract import TurnSession
+from quest_ai_runner.the_consciousness.terminal.interactive_session_persist import record_stopped_turn, record_turn
 from esoi import without_line
 from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
     HangingText, _build_shallow_context_bullets, context_block_lines, indented_line, metric_groups, person_line, plural, working_notes_in)
@@ -469,19 +470,7 @@ class TurnMixin:
                 self._console.dim("  Paused." if paused else "  Cancelled.")
             if ended:
                 self._console.dim("  Finished work is kept. /resume continues the same session.")
-            marker = "[paused by user]" if paused else "[cancelled by user]"
-            s._last_user = user_text
-            s._last_assistant = marker
-            s._session_history.append((user_text, marker))
-            s._write_session_file()
-            ctx = getattr(s._orch, "context_assembler", None)
-            if ctx is not None:
-                try:
-                    ctx.record(user_text, {"kind": "cancelled",
-                                           "response": "[turn was paused by user]" if paused
-                                           else "[turn was cancelled by user]"})
-                except Exception:  # noqa: BLE001
-                    pass
+            record_stopped_turn(s, user_text, paused)
         elif final is not None:
             self._record_turn(final, elapsed)
             self._maybe_handle_deep_plan(final)   # prints planned changes (once)
@@ -534,45 +523,7 @@ class TurnMixin:
             # result's, the explanation's) after the answer and its link and before the closing line.
             explanation = getattr(final, "explanation", None)
             self.write_turn_metrics(final)
-            s._last_user = user_text
-            # For deep runs, signal completion clearly — goal strings look like unfinished TODOs
-            if final.kind == "deep":
-                deep_results = final.deep_results or []
-                goals = final.goals or []
-                all_met = bool(deep_results) and all(d.met for d in deep_results)
-                goal_str = ("; ".join(goals))[:300] if goals else ""
-                # THREE outcomes, not two. With no deep results at all, nothing was even attempted
-                # (no executor wired), and recording "Attempted: <goal>" put a false claim into the
-                # session history the NEXT turn reads back as context.
-                if all_met:
-                    prefix = "Completed"
-                elif launch_lines:
-                    prefix = "Could not start"
-                elif deep_results:
-                    prefix = "Attempted"
-                else:
-                    prefix = "Planned but NOT executed (no deep executor configured)"
-                s._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
-            else:
-                # Use _answer_parts as fallback: what was displayed may differ from final.text
-                # when the answer streamed via EVENT_PARTIAL or when goal-check text lands in
-                # final.text instead of the actual user-facing response.
-                s._last_assistant = final.text or "\n".join(self._answer_parts).strip()
-            s._session_history.append((user_text, s._last_assistant))
-            # What this turn showed and ran, saved with it for `chat --resume` (a session without the stores, such as
-            # a test double, simply keeps nothing).
-            turn_index = len(s._session_history) - 1
-            if answer and isinstance(getattr(s, "_shown_by_turn", None), dict):
-                s._shown_by_turn[turn_index] = answer
-            work = turn_work(final)
-            if work and isinstance(getattr(s, "_work_by_turn", None), dict):
-                s._work_by_turn[turn_index] = work
-            s._write_session_file()
-            s._turn_count += 1
-            # A turn that executed work and left some unfinished refreshes the quest folder's
-            # standing next-steps artifact. The session owns the decision and the write (shared by
-            # every UI); this is only the call site for "a turn just completed".
-            s._maybe_refresh_next_steps(final)
+            record_turn(s, user_text, final, answer=answer, fallback_text="\n".join(self._answer_parts).strip(), could_not_start=bool(launch_lines))
             log.write(Text(""))
             # If the work flagged the context it used, load the panel so Alt+C opens it.
             # Shallow turns don't get a future_context bullet list from the orchestrator, but they
