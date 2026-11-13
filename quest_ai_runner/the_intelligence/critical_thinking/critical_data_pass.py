@@ -16,7 +16,7 @@ import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, Mapping, Optional
 
-from hubofhubs.api import declare, judge_answer, selected_goal_checker, selected_stop_decider
+from hubofhubs.api import ProgressEvent, declare, judge_answer, selected_goal_checker, selected_stop_decider
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import log
 
 MAX_PASSES = 2
@@ -92,6 +92,25 @@ def history_of(rs: SimpleNamespace, outcome: Mapping[str, Any], began: float, pa
             "metric": None, "policy": {"max_iterations": MAX_PASSES + 1}}
 
 
+def unread_of(outcome: Mapping[str, Any]) -> List[str]:
+    return [i["source"] for i in outcome.get("critical_data") or [] if not i.get("consulted")]
+
+
+def announce(emit: Any, decision: Mapping[str, Any], outcome: Mapping[str, Any], next_step: str = "") -> None:
+    """One ``stop_decision`` progress event per decision of the hub, the same shape the names pass sends: whether the turn goes on, why, what is left and what comes next. Never raises."""
+    if emit is None:
+        return
+    unread = [i["source"] for i in outcome.get("critical_data") or [] if not i.get("consulted")]
+    left = ("the data the answer depends on" if unread else "") or (str(outcome.get("missing") or "").strip() or "an answer to what was asked")
+    data: Dict[str, Any] = {"continue": decision.get("decision") == "continue", "decision": decision.get("decision"), "reason": decision.get("code"), "left": left}
+    if data["continue"] and next_step:
+        data["next"] = next_step
+    try:
+        emit.emit(ProgressEvent(type="stop_decision", text=None, data=data))
+    except Exception:  # noqa: BLE001 -- a sink that fails never stops the run
+        pass
+
+
 def check(orchestrator: Any, rs: SimpleNamespace, emit: Any = None) -> Optional[Dict[str, Any]]:
     """Judge the finished reply with the hub's selected Goal Completion and iterate while its stop decision says continue. Returns the verdict (``met`` and the structured facts), or
     None when no check could be made (no selected arm): a turn nobody checked is not called met."""
@@ -112,6 +131,7 @@ def check(orchestrator: Any, rs: SimpleNamespace, emit: Any = None) -> Optional[
         decision = dict(decider(history_of(rs, outcome, began, passes + 1)))
         verdict["stop_decision"] = decision.get("decision")
         log.info("critical data pass: %s (%s) untried=%s", decision.get("decision"), decision.get("code"), decision.get("untried"))
+        announce(emit, decision, outcome, "reading it and writing the answer again" if unread_of(outcome) else "writing the answer again, naming what was left out")
         if decision.get("decision") != "continue":
             break
         passes += 1

@@ -130,3 +130,24 @@ def test_an_offer_may_carry_its_own_reader_for_a_consumer_whose_records_are_not_
     rs2 = turn("What is the primary human blocker?")
     critical_data_pass.surface(orchestrator(Store()), rs2, {"critical_sources": broken})
     assert rs2.critical_data[0]["unreadable"] is True
+
+
+def test_each_decision_of_the_hub_is_one_stop_decision_event_for_the_chat():
+    class Sink:
+        def __init__(self):
+            self.events = []
+
+        def emit(self, event):
+            self.events.append(event)
+
+        def status(self, text):
+            pass
+    sink = Sink()
+    store = Store()
+    quest_ask_cards.sync_open_asks_card(store, Client(ASKS), QUEST, "Growth", force=True)
+    verdicts = iter([{"answers_request": False, "missing": "who is blocking the work"}, {"answers_request": True}])
+    orch = orchestrator(store, judge=lambda prompt: next(verdicts))
+    rs = turn("What is the primary human blocker?", text="Goals: 85 done.")
+    critical_data_pass.surface(orch, rs, META)
+    critical_data_pass.check(orch, rs, sink)
+    assert [e.type for e in sink.events] == ["stop_decision"] and sink.events[0].data["continue"] is True and sink.events[0].data["left"] == "who is blocking the work"
