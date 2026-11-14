@@ -139,3 +139,33 @@ def test_poller_heartbeat_is_throttled_until_something_changes():
     cfg.heartbeat_min_seconds = 0                           # 0 = the old every-scan behavior
     p._emit_heartbeat(); p._emit_heartbeat()
     assert len(beats) == 8
+
+
+def test_keepalive_heartbeat_leaves_the_models_and_tools_listing_out():
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    c.available_tools = [{"name": "t", "parameters": {"big": "schema"}}]
+    bodies = []
+    c._request = lambda method, path, **kw: bodies.append(kw["body"]) or {}
+    c.post_environment_heartbeat({"web": True}, runner_label="r")
+    c.post_environment_heartbeat({"web": True}, runner_label="r", listing=False)
+    assert "available_models" in bodies[0] and bodies[0]["available_tools"]
+    assert "available_models" not in bodies[1] and "available_tools" not in bodies[1] and bodies[1]["capabilities"] == {"web": True}
+
+
+def test_poller_sends_the_listing_on_the_first_beat_and_a_keepalive_after():
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    client = MockQuestClient([])
+    kinds = []
+    client.post_environment_heartbeat = lambda caps, **kw: kinds.append(kw.get("listing", True)) or {}
+    cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_id="team_a", heartbeat_min_seconds=0,
+                       retrieval=StubRetrieval({"README.md": "fact"}), model_provider=StubProvider(decisions=[]))
+    p = Poller(cfg, state_path=None, client=client)
+    p._emit_heartbeat(); p._emit_heartbeat()
+    assert kinds == [True, False]

@@ -565,6 +565,9 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         now = time.monotonic()
         if gap and last is not None and last[0] == fingerprint and now - last[1] < gap:
             return
+        # The models and tools listing goes up only when it is new or changed; a keepalive beat leaves it out (the backend keeps
+        # the last report), so repeat beats are a few hundred bytes each way.
+        keepalive = {} if (last is None or last[0] != fingerprint) else {"listing": False}
         self._last_heartbeat = (fingerprint, now)
         for team in self.configured_teams():
             try:
@@ -573,6 +576,7 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
                     runner_label=self.cfg.runner_label,
                     env_id=self.cfg.env_id,
                     team_id=team,
+                    **keepalive,
                 )
             except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
                 log.info("environment heartbeat (team %s) failed (%s) — continuing poll", team, e)
@@ -583,6 +587,7 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
                     runner_label=self.cfg.runner_label,
                     env_id=self.cfg.env_id,
                     org_id=self.cfg.org_id,
+                    **keepalive,
                 )
             except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
                 log.info("environment heartbeat (org scope) failed (%s) — continuing poll", e)

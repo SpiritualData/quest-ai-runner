@@ -559,8 +559,12 @@ class TasksMixin:
                                    runner_label: Optional[str] = None,
                                    env_id: Optional[str] = None,
                                    team_id: Optional[str] = None,
-                                   org_id: Optional[str] = None) -> Dict[str, Any]:
+                                   org_id: Optional[str] = None,
+                                   listing: bool = True) -> Dict[str, Any]:
         """Tell the backend this runner is ALIVE and what it can do (the env heartbeat).
+
+        ``listing=False`` leaves the models and tools listing out of the body (the backend keeps the last report when they are
+        omitted), so a keepalive beat is a few hundred bytes instead of the whole tool catalog.
 
         By default POSTs to ``/api/teams/{team_id}/environment/heartbeat`` with the runner's
         declared ``capabilities`` ({web, corpus, code}). The backend stamps last_heartbeat_at,
@@ -583,11 +587,12 @@ class TasksMixin:
             body: Dict[str, Any] = {"capabilities": dict(capabilities), "minimal": True}   # no need for the stored state back
             # The work models this runner can run (Claude Code deep worker). The backend narrows the
             # environment's configured options to these, so an org never offers a model the runner lacks.
-            body["available_models"] = [{"provider": "anthropic", "model": m} for m in RUNNABLE_MODELS]
+            if listing:
+                body["available_models"] = [{"provider": "anthropic", "model": m} for m in RUNNABLE_MODELS]
             # The direct tools this runner has (read-only listing set by the poller), so the backend can
             # offer each as an action. Omitted when none are known, which leaves the last report alone.
             tools = getattr(self, "available_tools", None)
-            if tools:
+            if tools and listing:
                 body["available_tools"] = list(tools)
             if runner_label:
                 body["runner_label"] = runner_label
