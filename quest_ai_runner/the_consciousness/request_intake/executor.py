@@ -27,7 +27,7 @@ import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from hubofhubs.api import outage as provider_outage
+from hubofhubs.api import login_failure, outage as provider_outage
 
 from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
 from hubofhubs.api import Mode
@@ -602,6 +602,10 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             if limit is not None:
                 return self._pause_for_usage_limit(task, task_id, limit, conv_id=conv_id,
                                                    card_id=card_id, session_id=resume_session_id)
+            # The Claude login is not valid: it needs a person, so the task is held, never failed.
+            if login_failure(e) is not None:
+                return self._pause_for_login(task, task_id, e, conv_id=conv_id, card_id=card_id,
+                                             session_id=resume_session_id)
             # The model provider is overloaded or down: the same kind of wait, not a failure.
             outage = provider_outage.from_exception(e)
             if outage is not None:
@@ -730,6 +734,8 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             limit = usage_limit.from_exception(e)
             if limit is not None:
                 return self._pause_for_usage_limit(task, task_id, limit, conv_id=None, card_id=None, session_id=None)
+            if login_failure(e) is not None:
+                return self._pause_for_login(task, task_id, e, conv_id=None, card_id=None, session_id=None)
             outage = provider_outage.from_exception(e)
             if outage is not None:
                 return self._pause_for_provider_outage(task, task_id, outage, conv_id=None, card_id=None, session_id=None)

@@ -11,6 +11,7 @@ import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
+from hubofhubs.api import stops_work
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import (
     EVENT_CARD_THREAD, EVENT_DECISION, EVENT_DONE, EVENT_EXPLANATION, EVENT_MODE_SIGNAL, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_RESULT,
@@ -574,6 +575,8 @@ class RunLoopMixin:
                                       turn_facts={"user_intent": rs.turn_user_intent,
                                                   "runs_in_flight": (rs._ctx_meta or {}).get("runs_in_flight")})
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
+                if stops_work(e):
+                    raise       # an invalid login or a usage limit: the answer call would fail the same way, so the turn ends here, once, with the typed error
                 log.exception(
                     f"Planner failed on step {rs.steps}: {e}. Falling back to grounded answer."
                 )

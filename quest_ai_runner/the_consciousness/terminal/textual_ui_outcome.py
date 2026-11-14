@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, List, Optional, Sequence, Tuple
 
-from hubofhubs.api import outage as provider_outage
+from hubofhubs.api import login_failure, outage as provider_outage
 from hubofhubs.api import format_provider_error
 
 from quest_ai_runner.the_intelligence.mind.delegation import launch_failure
@@ -179,6 +179,9 @@ def provider_error_lines(error: BaseException, *, message_restored: bool,
         if when:
             what += f" It resets {when}."
         later = " after it resets"
+    elif login_failure(error) is not None:
+        what = "Your Claude login is not valid, so I couldn't answer. Sign in again with /login in Claude Code."
+        later = " after you sign in"
     elif provider_outage.from_exception(error) is not None:
         what = "The AI service is busy right now, so I couldn't answer."
         later = " in a minute"

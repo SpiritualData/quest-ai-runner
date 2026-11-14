@@ -14,7 +14,7 @@ import tempfile
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pathlib import Path
 
-from hubofhubs.api import FilesystemCardRepository
+from hubofhubs.api import FilesystemCardRepository, stops_work
 from hubofhubs.api import MODE_MOUNT, resolve_mounts
 from hubofhubs.api import MAX_CARD_REF_ITEM_CHARS
 from hubofhubs.api import is_claude_state_file, prune_dirnames, skip_subtrees
@@ -110,7 +110,9 @@ class BootstrapMixin:
         """
         try:
             n = self._bootstrap_inner(root=root, provider=provider, model=model)
-        except Exception:  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
+            if stops_work(error):
+                raise       # an invalid login or a usage limit: the pass did not run (not "0 cards"), nothing was written, the caller says why once
             # Never silently: a bootstrap that dies here reports "0 cards" exactly like one that
             # had nothing to do, and the difference matters enormously -- the first leaves the
             # corpus permanently uncovered while looking finished. One real run identified 48
@@ -270,15 +272,19 @@ class BootstrapMixin:
         rewritten with fresh fingerprints.
 
         Designed to be called from a background thread at startup so the context
-        index stays warm without blocking the caller.  Never raises; returns the
-        number of cards written (0 = everything was already up to date).
+        index stays warm without blocking the caller.  Returns the number of cards
+        written (0 = everything was already up to date); raises only an error that
+        says no model call can run now (an invalid login, a usage limit), which the
+        caller reports once.
         """
         try:
             n = self._bootstrap_inner(root=root, provider=provider, model=model, skip_unchanged=True)
             if n > 0 and not self._dry_run:
                 self.tidy()
             return n
-        except Exception:  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
+            if stops_work(error):
+                raise
             return 0
 
     @staticmethod

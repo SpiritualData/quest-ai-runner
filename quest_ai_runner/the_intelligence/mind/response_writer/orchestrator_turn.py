@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.the_self.integrity.prompts.prompt_specs import PromptSpec, register, render_prompt
 
-from hubofhubs.api import STEP_NARRATION, answer_with_reasoning
+from hubofhubs.api import STEP_NARRATION, answer_with_reasoning, stops_work
 from hubofhubs.api import ScopedThreadPoolExecutor as ThreadPoolExecutor
 from hubofhubs.api import EVENT_PARTIAL, EVENT_STATUS, Mode  # noqa: F401  (EVENT_STATUS and Mode stay importable from here)
 from hubofhubs.api import Emitter as HubEmitter, TurnCardCache  # noqa: F401
@@ -124,6 +124,7 @@ class Narrator:
         self.ack_outcome: Optional[str] = None
         self.ack_seconds: Optional[float] = None   # turn start (begin) to the moment the model ack was emitted
         self.ack_error: Optional[str] = None
+        self.ack_stopped = False         # the first beat failed on an error that stops all model work: the turn's own answer says so once, so this is not a second notice
         self._first_future: Optional[Any] = None
         self._executor: Optional[ThreadPoolExecutor] = None
         # Guards _said + the emit call so the background first beat (emitted from its own thread the
@@ -237,6 +238,7 @@ class Narrator:
         except Exception as exc:  # noqa: BLE001 — narration must never break the run
             outcome = "failed"
             self.ack_error = f"{type(exc).__name__}: {str(exc)[:160]}"
+            self.ack_stopped = stops_work(exc)
         self._record_outcome(outcome)
 
     def _record_outcome(self, outcome: str) -> None:
@@ -247,7 +249,7 @@ class Narrator:
             self.ack_outcome = outcome
         ACK_OUTCOMES[outcome] += 1
         if outcome == "failed":
-            log.warning("Quick acknowledgement failed (dropped, the turn goes on): %s", self.ack_error)
+            (log.info if self.ack_stopped else log.warning)("Quick acknowledgement failed (dropped, the turn goes on): %s", self.ack_error)
         elif outcome == "dropped_late":
             log.warning("Quick acknowledgement was not ready before the turn moved on (dropped)")
 

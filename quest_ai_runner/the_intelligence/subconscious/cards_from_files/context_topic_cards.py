@@ -10,11 +10,28 @@ from typing import Any, Dict, List
 from pathlib import Path
 
 from hubofhubs.api import discover_areas, extract_topic_cards
-from hubofhubs.api import CHUNK_SIZE, run_parallel, select_representative_files
+from hubofhubs.api import CHUNK_SIZE, run_parallel, select_representative_files, stops_work
 from quest_ai_runner.the_body.configuration.card_store_settings import bootstrap_workers
 from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_dedup import _dedup_topic_cards
 
 _log = logging.getLogger("quest-ai-runner.context")
+
+
+def stopping_at_first_failure(stopped: List[BaseException], job):
+    """``job`` for ``run_parallel``, which turns a raised error into ``None``: a failure that says nothing further can run (an invalid
+    login, a usage limit) is remembered in ``stopped`` and every job still waiting returns at once without calling the model, so one
+    failed call ends the pass instead of one per area."""
+    def guarded():
+        if stopped:
+            return None
+        try:
+            return job()
+        except Exception as error:  # noqa: BLE001
+            if stops_work(error):
+                stopped.append(error)
+                return None
+            raise
+    return guarded
 
 
 def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk_root=None):
@@ -49,12 +66,15 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
             len(representative_paths), len(paths), len(chunks),
         )
         areas: List[Dict[str, Any]] = []
+        stopped: List[BaseException] = []
         for result in run_parallel(
-            [lambda c=chunk: discover_areas(c, provider, model) for chunk in chunks],
+            [stopping_at_first_failure(stopped, lambda c=chunk: discover_areas(c, provider, model)) for chunk in chunks],
             max_workers=bootstrap_workers(),
         ):
             if result:
                 areas.extend(result)
+        if stopped:
+            raise stopped[0]    # unread, never "no areas": the caller keeps the cards it has and says why once
 
         if not areas:
             _log.warning("context index: bootstrap stage 1 returned no areas")
@@ -65,11 +85,13 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         raw_cards: List[Dict[str, Any]] = []
         walk_root_path = Path(walk_root).resolve() if walk_root else None
         for result in run_parallel(
-            [lambda a=area: extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path) for area in areas],
+            [stopping_at_first_failure(stopped, lambda a=area: extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path)) for area in areas],
             max_workers=bootstrap_workers(),
         ):
             if result:
                 raw_cards.extend(result)
+        if stopped:
+            raise stopped[0]
 
         if not raw_cards:
             _log.warning("context index: bootstrap stage 2 returned no topic cards")
@@ -84,5 +106,7 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         return merged
 
     except Exception as exc:  # noqa: BLE001
+        if stops_work(exc):
+            raise       # not "no cards": the pass did not run, so nothing is recorded as discovered and the cards held stay as they are
         _log.warning("context index: LLM topic identification failed: %s", exc, exc_info=True)
         return []

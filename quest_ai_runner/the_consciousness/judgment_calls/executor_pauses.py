@@ -4,6 +4,8 @@ A mixin of ``TaskExecutor`` (see ``executor.py``): methods only, state lives on 
 """
 from __future__ import annotations
 
+import time
+
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -222,10 +224,24 @@ class PausesMixin:
             return recent
         return None
 
+    def _pause_for_login(self, task: Dict[str, Any], task_id: str, failure: BaseException, *,
+                         conv_id: Optional[str], card_id: Optional[str],
+                         session_id: Optional[str]) -> ExecutionOutcome:
+        """Hold a task whose Claude login is not valid, not fail it: it needs a person to sign in again, and until then every call
+        is refused at once, so the task is tried again a few minutes later (the provider-unavailable hold, with the reason in its
+        detail; no new hold kind) and runs as soon as the login works."""
+        return self._pause_for_provider_outage(
+            task, task_id, provider_outage.ProviderOutage(message=str(failure)[:300], at=time.time()), conv_id=conv_id, card_id=card_id,
+            session_id=session_id,
+            note_for=lambda at: ("The Claude login is not valid, so this is paused, not failed. Sign in again with /login in Claude "
+                                 f"Code; it is tried again at {utc_stamp(at)}."),
+            phase="login_invalid")
+
     def _pause_for_provider_outage(self, task: Dict[str, Any], task_id: str,
                                    outage: "provider_outage.ProviderOutage", *,
                                    conv_id: Optional[str], card_id: Optional[str],
-                                   session_id: Optional[str]) -> ExecutionOutcome:
+                                   session_id: Optional[str], note_for=None,
+                                   phase: str = "provider_unavailable") -> ExecutionOutcome:
         """Put a task back in the queue to retry once the model provider is available again.
 
         The task waits (``start_at`` a few minutes ahead, ``hold_reason=provider_unavailable``) and
@@ -234,10 +250,10 @@ class PausesMixin:
         claim it again at once, so the person is told to run it again instead.
         """
         resume_at = next_try_at()
-        note = (f"The AI model provider is unavailable right now, so this is paused, not failed. "
+        note = (note_for(resume_at) if note_for else f"The AI model provider is unavailable right now, so this is paused, not failed. "
                 f"It will be tried again at {utc_stamp(resume_at)}.")
         self._report_progress(task_id, "status", text=note,
-                              data={"phase": "provider_unavailable",
+                              data={"phase": phase,
                                     "resume_at": utc_stamp(resume_at),
                                     "detail": outage.message})
         requeue = getattr(self._client, "requeue_for_provider_outage", None)

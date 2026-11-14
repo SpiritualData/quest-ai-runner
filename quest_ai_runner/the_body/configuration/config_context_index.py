@@ -14,6 +14,7 @@ from pathlib import Path
 from quest_ai_runner.the_body.internal_context.card_store.file_context_store import (
     BOOTSTRAP_META_FILE, BOOTSTRAP_VERSION, TFDFIDF_VERSION, read_bootstrap_meta)
 from quest_ai_runner.the_body.configuration.config_support import _log
+from hubofhubs.api import login_failure, stops_work
 
 
 def _cards_exist(cards_dir: str) -> bool:
@@ -227,7 +228,9 @@ def _bootstrap_if_needed(
                         _tell(f"Context index updated: {n} card(s) refreshed.")
                     else:
                         _log.debug("context index: all cards up to date")
-                except Exception:  # noqa: BLE001
+                except Exception as error:  # noqa: BLE001
+                    if stops_work(error):
+                        _tell(index_paused_note(error))
                     _log.debug("context index: refresh failed", exc_info=True)
                 finally:
                     if lock_fd is not None:
@@ -275,12 +278,21 @@ def _bootstrap_if_needed(
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 lock_fd.close()
-        except Exception:  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
+            if stops_work(error):
+                _tell(index_paused_note(error))
             _log.debug("context index: bootstrap failed", exc_info=True)
 
     _bootstrap_thread = threading.Thread(target=_bg, daemon=True, name="qar-bootstrap")
     _register_index_thread(_bootstrap_thread, keyword)
     _bootstrap_thread.start()
+
+
+def index_paused_note(error: BaseException) -> str:
+    """The one plain line for an index pass that stopped because no call can run now: why, and that the cards it holds are untouched."""
+    cause = ("the Claude login is not valid" if login_failure(error) is not None
+             else "Claude Code's usage limit is reached")
+    return f"Context index paused: {cause}. The cards it holds are unchanged, and it tries again on the next refresh."
 
 
 # --- Env vars the CARD-PERSISTENCE backend reads (documented here so config is discoverable) -------

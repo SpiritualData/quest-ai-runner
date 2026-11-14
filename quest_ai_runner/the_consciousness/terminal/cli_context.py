@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from quest_ai_runner.the_world.model_plumbing.spend.pricing import estimate_bootstrap_cost
+from quest_ai_runner.the_body.configuration.config_context_index import index_paused_note
 from quest_ai_runner.the_body.configuration.cli_config import _config_from_env, _model_provider_from_env
 
 
@@ -366,7 +367,15 @@ def _cmd_bootstrap(args, log) -> int:
     model = os.getenv(f"QAR_MODEL_{tier.upper()}" if tier else "QAR_MODEL_FAST") or registry.resolve_role("label-context-cards.bootstrap", tier)
 
     start_time = time.time()
-    n = store.bootstrap(root=corpus, provider=provider, model=model)
+    try:
+        n = store.bootstrap(root=corpus, provider=provider, model=model)
+    except Exception as error:  # noqa: BLE001
+        from hubofhubs.api import stops_work
+        if not stops_work(error):
+            raise
+        # An invalid login or a usage limit: no call can run now, so nothing was indexed and the cards it holds are unchanged.
+        print("Bootstrap did not run: " + (index_paused_note(error).split(": ", 1)[1]))
+        return 1
     elapsed_time = time.time() - start_time
 
     log.info("done: %d cards in %s", n, cards_dir)
