@@ -249,6 +249,7 @@ class Turn:
         self.status_text = ""
         self.wait_open = ""                       # the id of the open "still working" row, empty when none
         self.waits = 0
+        self.wait_shown = ""                      # the words of the last "still working" row drawn; the same words are not drawn again until something else was
         self.wait_lock = threading.Lock()
 
     def at(self) -> float:
@@ -322,11 +323,13 @@ class Turn:
         for item in progress_events(event, stream=self.stream):
             if getattr(item, "type", "") != "waiting":       # a question of this package is answered by the next line typed, not by approve or refuse (``question`` below)
                 self.sink(with_time(item, self.at()))
+                self.wait_shown = ""
         if kind == EVENT_PARTIAL:
             if data.get("narration") or data.get("ack"):
                 beat = text.strip()
                 if beat and beat != self.last_narration:
                     self.last_narration = beat
+                    self.wait_shown = ""
                     self.sink(Step(at=self.at(), step_id=f"narration-{len(self.runs)}-{abs(hash(beat)) % 10**6}", kind="note", label=beat, state="done"))
                 return
             self.partial_started = True
@@ -366,9 +369,12 @@ class Turn:
                 if self.wait_open or done.is_set():
                     continue
                 from hubofhubs.api import Step
+                label = self.status_text or "Working on your request…"
+                if label == self.wait_shown:      # the same stage, nothing new drawn since: one row says it, not a pile of identical ones
+                    continue
+                self.wait_shown = label
                 self.waits += 1
                 self.wait_open = f"wait-{self.waits}"
-                label = self.status_text or "Working on your request…"
                 self.sink(Step(at=self.at(), step_id=self.wait_open, kind="status", label=label, state="running"))
 
     def close_wait(self) -> None:

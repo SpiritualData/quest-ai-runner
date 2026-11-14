@@ -108,3 +108,32 @@ def test_a_goal_read_that_failed_is_not_read_and_an_empty_one_is_no_goals():
         def invoke(self, name, args, ctx):
             return SimpleNamespace(ok=True, data=[], text="")
     assert status_snapshot.all_goal_rows(Failing(), "q1") is None and status_snapshot.all_goal_rows(Empty(), "q1") == []
+
+
+def test_a_long_deep_run_does_not_pile_up_identical_wait_rows(monkeypatch):
+    """Heartbeats that draw nothing close the wait row each time; the same stage must not open a new identical row after each one (a screen showed a column of 'Running on ...' rows)."""
+    monkeypatch.setattr(opencode_terminal, "WAIT_ROW_AFTER_SECONDS", 0.05)
+    monkeypatch.setattr(opencode_terminal, "WAIT_TICK_SECONDS", 0.02)
+    sent = []
+    harness = SimpleNamespace(owner=SimpleNamespace(say=lambda text: None))
+    turn = opencode_terminal.Turn(harness, None, sent.append, time.monotonic())
+    turn.status_text = "Running on a model"
+    done = threading.Event()
+    thread = threading.Thread(target=turn.watch_waits, args=(done,), daemon=True)
+    thread.start()
+    for _ in range(4):
+        time.sleep(0.15)
+        turn.close_wait()           # a heartbeat or other event that draws no row of its own
+    time.sleep(0.15)
+    done.set()
+    thread.join(1)
+    assert len([e for e in sent if getattr(e, "state", "") == "running"]) == 1
+    turn.status_text = "Checking the result"
+    turn.wait_shown = ""            # a row of any other kind was drawn
+    done2 = threading.Event()
+    thread2 = threading.Thread(target=turn.watch_waits, args=(done2,), daemon=True)
+    thread2.start()
+    time.sleep(0.2)
+    done2.set()
+    thread2.join(1)
+    assert [e.label for e in sent if getattr(e, "state", "") == "running"] == ["Running on a model", "Checking the result"]
