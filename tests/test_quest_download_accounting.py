@@ -47,3 +47,33 @@ def test_slim_task_lists_ask_the_server_to_leave_out_progress_and_result():
     c.list_tasks(status="done", slim=True)
     c.list_tasks(status="done")
     assert seen[0]["slim"] == "true" and "slim" not in seen[1]       # opt-in: a caller that wants results still gets them
+
+
+def test_an_unchanged_task_list_is_answered_from_the_kept_copy():
+    """The server says unchanged and sends no rows; the client returns what it kept, and a changed list replaces it."""
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    asked = []
+    answers = [{"tasks": [{"task_id": "a"}], "etag": "e1"},
+               {"tasks": [], "unchanged": True, "etag": "e1"},
+               {"tasks": [{"task_id": "a"}, {"task_id": "b"}], "etag": "e2"}]
+    c._request = lambda method, path, **kw: asked.append(dict(kw["params"])) or answers.pop(0)
+    q = {"status": "queued", "for_execution": "true", "team_id": "team_1"}
+    assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
+    assert "want_etag" in asked[0] and "if_none_match" not in asked[0]
+    got = c.discover_due(team_id="team_1")                               # due_before differs; the question is the same
+    assert [t["task_id"] for t in got] == ["a"] and asked[1]["if_none_match"] == "e1"
+    got.append({"task_id": "mutated"})                                    # a caller's edits never reach the kept copy
+    assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a", "b"]
+    assert asked[2]["if_none_match"] == "e1"
+
+
+def test_a_server_without_etags_is_used_as_before():
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    c._request = lambda method, path, **kw: {"tasks": [{"task_id": "a"}]}
+    assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
+    assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
+    assert c.__dict__.get("task_list_cache") == {}

@@ -17,6 +17,34 @@ from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support
 class TasksMixin:
     """Assistant tasks: discovery, claim, reporting, requeue, messages, heartbeat and task CRUD."""
 
+    def get_task_list(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """GET /api/assistant-tasks, asking for an etag and sending the last one seen for this same question.
+
+        A queue read repeats every few seconds and mostly returns the same rows (a held or foreign-lane task was downloaded in full,
+        about 35 KB, on every poll). The server answers ``unchanged: true`` when the rows are the same as the etag's, and this
+        returns the copy kept from last time. A server that does not know etags answers a normal list, which is returned as before.
+        The key leaves out ``due_before``, which is the current time and differs on every call. Raises like ``_request``."""
+        import copy
+        import json
+        cache = self.__dict__.setdefault("task_list_cache", {})
+        key = json.dumps({k: v for k, v in params.items() if k != "due_before"}, sort_keys=True, default=str)
+        entry = cache.get(key)
+        asked = dict(params)
+        if entry:
+            asked["if_none_match"] = entry[0]
+        else:
+            asked["want_etag"] = "true"
+        resp = self._request("GET", "/api/assistant-tasks", params=asked)
+        if entry and isinstance(resp, dict) and resp.get("unchanged"):
+            return copy.deepcopy(entry[1])
+        tasks = _as_task_list(resp)
+        etag = resp.get("etag") if isinstance(resp, dict) else None
+        if etag:
+            cache[key] = (str(etag), copy.deepcopy(tasks))
+        else:
+            cache.pop(key, None)
+        return tasks
+
     def discover_due(self, *, now: Optional[datetime] = None,
                      status: str = "queued",
                      team_id: Optional[str] = None,
@@ -66,8 +94,7 @@ class TasksMixin:
         if env_id:
             params["env_id"] = env_id
         try:
-            resp = self._request("GET", "/api/assistant-tasks", params=params)
-            return _as_task_list(resp)
+            return self.get_task_list(params)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("discover_due failed: %s", e)
             return []
@@ -92,8 +119,7 @@ class TasksMixin:
         if env_id:
             params["env_id"] = env_id
         try:
-            resp = self._request("GET", "/api/assistant-tasks", params=params)
-            return _as_task_list(resp)
+            return self.get_task_list(params)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_interactive_due failed: %s", e)
             return []
@@ -892,8 +918,7 @@ class TasksMixin:
         if source is not None:
             params["source"] = source
         try:
-            resp = self._request("GET", "/api/assistant-tasks", params=params)
-            tasks = _as_task_list(resp)
+            tasks = self.get_task_list(params)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_tasks failed: %s", e)
             return None

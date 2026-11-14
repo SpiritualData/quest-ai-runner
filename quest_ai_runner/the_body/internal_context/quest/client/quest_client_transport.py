@@ -139,11 +139,17 @@ def endpoint_key(method: str, path: str) -> str:
     return f"{method} {_ID_SEGMENT.sub(lambda m: m.group(1) + '_*', path.split('?')[0])}"
 
 
-def record_download(method: str, path: str, nbytes: int, now: Optional[float] = None) -> Optional[str]:
-    """Count one response; return the summary line when a report is due (and reset), else None."""
+def record_download(method: str, path: str, nbytes: int, now: Optional[float] = None,
+                    query_names: Optional[Any] = None) -> Optional[str]:
+    """Count one response; return the summary line when a report is due (and reset), else None.
+
+    ``query_names`` (the request's query parameter names, never their values) tells two different questions to one path apart."""
     now = time.monotonic() if now is None else now
+    key = endpoint_key(method, path)
+    if query_names:
+        key += "?" + ",".join(sorted(str(n) for n in query_names if n not in ("due_before", "if_none_match")))
     with _downloads_lock:
-        row = _downloads.setdefault(endpoint_key(method, path), [0, 0])
+        row = _downloads.setdefault(key, [0, 0])
         row[0] += 1
         row[1] += int(nbytes)
         if now - _downloads_since[0] < DOWNLOAD_REPORT_SECONDS:
@@ -306,7 +312,7 @@ class TransportMixin:
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()
-                line = record_download(method, path, len(raw))
+                line = record_download(method, path, len(raw), query_names=params.keys() if params else None)
                 if line:
                     log.info("%s", line)
                 try:
