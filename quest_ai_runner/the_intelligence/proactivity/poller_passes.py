@@ -320,9 +320,9 @@ class PassesMixin:
         strict = getattr(self.client, "list_tasks_or_none", None)
         if callable(strict):
             return strict(team_id=team_id, goal_id=goal_id, status=status,
-                          task_kind=AUTOPILOT_PASS_KIND)
+                          task_kind=AUTOPILOT_PASS_KIND, slim=True)
         return self.client.list_tasks(team_id=team_id, goal_id=goal_id, status=status,
-                                      task_kind=AUTOPILOT_PASS_KIND)
+                                      task_kind=AUTOPILOT_PASS_KIND, slim=True)
 
     def _list_owned_pass_tasks(self) -> Optional[List[Dict[str, Any]]]:
         """This account's pass-kind tasks on EVERY team, in one read, for the scan's team-wide view.

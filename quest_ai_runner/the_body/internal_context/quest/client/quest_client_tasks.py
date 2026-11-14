@@ -814,7 +814,8 @@ class TasksMixin:
                   goal_id: Optional[str] = None,
                   source: Optional[str] = None,
                   task_kind: Optional[str] = None,
-                  created_after: Optional[str] = None) -> List[Dict[str, Any]]:
+                  created_after: Optional[str] = None,
+                  slim: bool = False) -> List[Dict[str, Any]]:
         """GET /api/assistant-tasks, for Autopilot's budget/backpressure math.
 
         SERVER-SIDE filters (the only ones the Quest API's list route actually implements):
@@ -844,14 +845,15 @@ class TasksMixin:
         ``list_tasks_or_none`` instead.
         """
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
-                                       source=source, task_kind=task_kind, created_after=created_after) or []
+                                       source=source, task_kind=task_kind, created_after=created_after, slim=slim) or []
 
     def list_tasks_or_none(self, *, team_id: Optional[str] = None,
                            status: Optional[str] = None,
                            goal_id: Optional[str] = None,
                            source: Optional[str] = None,
                            task_kind: Optional[str] = None,
-                           created_after: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+                           created_after: Optional[str] = None,
+                           slim: bool = False) -> Optional[List[Dict[str, Any]]]:
         """``list_tasks``, but a FAILED read is reported instead of swallowed.
 
         Same filters and the same owner-scoping contract as ``list_tasks`` (read its docstring
@@ -878,6 +880,8 @@ class TasksMixin:
         # so the same filters are applied to the rows below too, and the answer is the same either way.
         if created_after is not None:
             params["created_after"] = created_after
+        if slim:
+            params["slim"] = "true"       # no progress log or result text: a counting or liveness read does not use them
         if task_kind is not None:
             params["task_kind"] = task_kind
         if source is not None:

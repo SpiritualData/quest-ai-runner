@@ -367,7 +367,7 @@ class CollapsingGoalListingClient(FakeRunTimeClient):
     hidden_in_goal_listing = ()
 
     def list_tasks_or_none(self, *, team_id=None, status=None, goal_id=None, source=None,
-                           task_kind=None):
+                           task_kind=None, slim=False):
         rows = super().list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
                                           source=source, task_kind=task_kind)
         if goal_id is not None and rows is not None:

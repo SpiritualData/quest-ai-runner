@@ -237,7 +237,7 @@ class GatesMixin:
         # Only rows from yesterday on can be "today" in any timezone: the server returns just those, not every finished task.
         since = (today - timedelta(days=1)).isoformat()
         for status in TASK_STATUSES_FOR_COUNT:
-            for t in self._client.list_tasks(team_id=scope, status=status, created_after=since) or []:
+            for t in self._client.list_tasks(team_id=scope, status=status, created_after=since, slim=True) or []:
                 task_id = str(t.get("id") or t.get("task_id") or "")
                 if task_id and task_id in seen:
                     continue
@@ -271,7 +271,7 @@ class GatesMixin:
         QUEST id (its handler loads the quest by it), and there is no separate ``quest_id`` field
         on a task at all. So the per-quest listing is ``list_tasks(goal_id=quest_id)``."""
         tasks = self._client.list_tasks(
-            team_id=self._team_for(quest_id) or None, goal_id=quest_id) or []
+            team_id=self._team_for(quest_id) or None, goal_id=quest_id, slim=True) or []
         return any(
             self._is_autopilot_authored(t)
             and str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES

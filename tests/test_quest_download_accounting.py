@@ -36,3 +36,14 @@ def test_task_count_reads_ask_the_server_to_filter_and_still_filter_the_rows():
     got = c.list_tasks(status="done", task_kind="autopilot_work", created_after="2026-11-12")
     assert seen["created_after"] == "2026-11-12" and seen["task_kind"] == "autopilot_work" and seen["status"] == "done"
     assert [t["id"] for t in got] == ["new"]
+
+
+def test_slim_task_lists_ask_the_server_to_leave_out_progress_and_result():
+    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    seen = []
+    c._request = lambda method, path, **kw: seen.append(dict(kw["params"])) or {"tasks": []}
+    c.list_tasks(status="done", slim=True)
+    c.list_tasks(status="done")
+    assert seen[0]["slim"] == "true" and "slim" not in seen[1]       # opt-in: a caller that wants results still gets them

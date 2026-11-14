@@ -44,7 +44,7 @@ class FakePassClient:
         self.state_reads = []
 
     def list_tasks_or_none(self, *, team_id=None, status=None, goal_id=None, source=None,
-                           task_kind=None):
+                           task_kind=None, slim=False):
         """The failure-reporting listing, faked the way the real route BEHAVES.
 
         Three properties are load-bearing and a stub that ignored them would pass tests the real
@@ -71,7 +71,7 @@ class FakePassClient:
             rows = [t for t in rows if t.get("task_kind") == task_kind]
         return rows
 
-    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None):
+    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None, slim=False):
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
                                        source=source, task_kind=task_kind) or []
 
@@ -433,7 +433,7 @@ class MultiTeamPassClient(FakePassClient):
         return [dict(q) for q in self.quests_by_team.get(team_id, [])]
 
     def list_tasks_or_none(self, *, team_id=None, status=None, goal_id=None, source=None,
-                           task_kind=None):
+                           task_kind=None, slim=False):
         if team_id in self.fail_list_for_teams:
             self.list_tasks_calls.append({"team_id": team_id, "goal_id": goal_id,
                                           "task_kind": task_kind})

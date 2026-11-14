@@ -109,7 +109,7 @@ class FakeAutopilotClient:
     def get_goal(self, goal_id, *, quest_id=None, team_id=None):
         return self.goal_docs.get(goal_id, {})
 
-    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None):
+    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None, slim=False):
         out = []
         for t in self.tasks:
             if status is not None and t.get("status") != status:
@@ -2082,7 +2082,7 @@ class TeamRecordingClient(FakeAutopilotClient):
         self.team_by_quest = dict(team_by_quest or {})
         self.list_task_teams = []
 
-    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None):
+    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None, created_after=None, slim=False):
         self.list_task_teams.append(team_id)
         rows = super().list_tasks(status=status, goal_id=goal_id, source=source,
                                   task_kind=task_kind)
