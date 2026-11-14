@@ -38,6 +38,7 @@ def test_heartbeat_with_org_id_posts_to_org_scoped_endpoint():
     assert captured["body"] == {
         "capabilities": {"web": True, "corpus": True, "code": True},
         "available_models": RUNNABLE_AVAILABLE_MODELS,
+        "minimal": True,
     }
 
 
@@ -70,6 +71,7 @@ def test_heartbeat_with_no_org_id_keeps_hitting_team_url_exactly_as_before():
     assert captured["body"] == {
         "capabilities": {"web": True, "corpus": True, "code": True},
         "available_models": RUNNABLE_AVAILABLE_MODELS,
+        "minimal": True,
         "runner_label": "my-runner",
         "env_id": "env_1",
     }
@@ -113,3 +115,27 @@ def test_tool_registry_public_listing_is_serializable_and_hides_handlers():
     assert "flag" not in zeta["parameters"]["properties"]["q"]
     assert "handler" not in zeta
     json.dumps(listing)
+
+
+def test_poller_heartbeat_is_throttled_until_something_changes():
+    """The backend counts an environment live for 45 minutes after a beat, so one per scan (8 teams x 128 KB) was waste."""
+    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    client = MockQuestClient([])
+    beats = []
+    client.post_environment_heartbeat = lambda caps, **kw: beats.append(kw.get("team_id")) or {}
+    cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_ids=["team_a", "team_b"],
+                       retrieval=StubRetrieval({"README.md": "fact"}), model_provider=StubProvider(decisions=[]))
+    p = Poller(cfg, state_path=None, client=client)
+    p._emit_heartbeat(); p._emit_heartbeat(); p._emit_heartbeat()
+    assert len(beats) == 2                                  # one beat per team, once, not per scan
+    client.available_tools = [{"name": "new_tool"}]         # something the backend stores changed: beat again at once
+    p._emit_heartbeat()
+    assert len(beats) == 4
+    cfg.heartbeat_min_seconds = 0                           # 0 = the old every-scan behavior
+    p._emit_heartbeat(); p._emit_heartbeat()
+    assert len(beats) == 8

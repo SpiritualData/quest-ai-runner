@@ -81,7 +81,7 @@ _FILE_SCALAR_FIELDS = {
     "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
     "rep_sync_direction",
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
-    "quest_goal_updates_per_goal", "quest_folder_sweep_min_seconds", "quest_folder_full_resync_seconds",
+    "quest_goal_updates_per_goal", "quest_folder_sweep_min_seconds", "heartbeat_min_seconds", "quest_folder_full_resync_seconds",
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring", "autopilot_structure_watch",
     "autopilot_pending_work",
@@ -498,6 +498,9 @@ class RunnerConfig:
     # still pulls its folder fresh right before it runs, so the sweep only keeps IDLE folders
     # roughly current. 0 sweeps on every scan (the old behavior).
     quest_folder_sweep_min_seconds: int = 1800
+    # Minimum seconds between environment heartbeats while nothing the backend stores has changed. The backend counts a
+    # runner as live for 45 minutes after one, so the default 900 keeps three beats inside that window. 0 = every scan.
+    heartbeat_min_seconds: int = 900
     # When the backend can answer ``POST /api/quests/sync-tokens`` the sweep downloads a quest
     # only when its token changed or a local file needs pushing, so it may run on every scan (one
     # tiny request). Safety net against a token blind spot: each mapped quest is still fully

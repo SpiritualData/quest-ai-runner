@@ -580,7 +580,7 @@ class TasksMixin:
         failed heartbeat must never break task execution.
         """
         try:
-            body: Dict[str, Any] = {"capabilities": dict(capabilities)}
+            body: Dict[str, Any] = {"capabilities": dict(capabilities), "minimal": True}   # no need for the stored state back
             # The work models this runner can run (Claude Code deep worker). The backend narrows the
             # environment's configured options to these, so an org never offers a model the runner lacks.
             body["available_models"] = [{"provider": "anthropic", "model": m} for m in RUNNABLE_MODELS]

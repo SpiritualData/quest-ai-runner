@@ -553,6 +553,19 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         if not self.cfg.org_id and not self.cfg.team_id and not self.cfg.team_ids:
             return  # no team or org to attach the env to — nothing to heartbeat (still a valid poll)
         self.attach_tool_listing()
+        # The backend treats an environment as live for 45 minutes after a heartbeat, so one every scan (about 8 teams x
+        # 128 KB each, a minute apart) was most of a lane's download on 2026-11-13. Send when something the backend stores
+        # changed (capabilities, tools, teams), or every ``heartbeat_min_seconds``; never more often.
+        import json as _json
+        fingerprint = _json.dumps([self._capabilities, getattr(self.client, "available_tools", None) or [],
+                                   list(self.configured_teams()), self.cfg.org_id, self.cfg.env_id, self.cfg.runner_label],
+                                  sort_keys=True, default=str)
+        gap = max(0, int(getattr(self.cfg, "heartbeat_min_seconds", 900) or 0))
+        last = getattr(self, "_last_heartbeat", None)
+        now = time.monotonic()
+        if gap and last is not None and last[0] == fingerprint and now - last[1] < gap:
+            return
+        self._last_heartbeat = (fingerprint, now)
         for team in self.configured_teams():
             try:
                 self.client.post_environment_heartbeat(
