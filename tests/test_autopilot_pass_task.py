@@ -640,3 +640,34 @@ def test_a_legacy_team_pass_older_than_the_newest_200_tasks_is_still_retired():
     client.update_task = lambda task_id, fields: client.update_calls.append((task_id, fields))
     _poller(client)._ensure_autopilot_pass()
     assert [task_id for task_id, _ in client.update_calls] == ["legacy_team_pass"]
+
+
+def test_schedule_refresh_makes_one_small_call_instead_of_reading_every_quests_state():
+    """15 quests every 5 minutes cost about 1.2 MB of whole-state reads (2026-11-13): one autopilot-schedules call replaces them."""
+    state_reads, schedule_calls = [], []
+
+    class SchedClient(MultiTeamPassClient):
+        def get_quest_autopilot(self, quest_id):
+            state_reads.append(quest_id)
+            return super().get_quest_autopilot(quest_id)
+
+        def get_autopilot_schedules(self, quest_ids):
+            schedule_calls.append(list(quest_ids))
+            return {q: {"autopilot": {"mode": "act", "run_time": "07:30", "has_instructions": True}, "archived": False}
+                    for q in quest_ids if q != "q_hidden"}
+
+    client = SchedClient(quests_by_team={"team1": [{"quest_id": "q1"}, {"quest_id": "q2"}, {"quest_id": "q_hidden"}]},
+                         autopilot_by_quest={"q1": {"mode": "off"}, "q2": {"mode": "off"}})
+    snapshot = _poller(client)._quest_schedule_snapshot()
+    assert state_reads == [] and len(schedule_calls) == 1                     # no whole-state reads, one call for all
+    assert snapshot["q1"]["mode"] == "act" and snapshot["q1"]["run_time"] == "07:30" and snapshot["q1"]["has_instructions"] is True
+    assert snapshot["q_hidden"]["mode"] == "off"                              # unreadable: left off, as an empty state always was
+
+
+def test_schedule_refresh_falls_back_to_per_quest_reads_on_an_older_backend():
+    class OldBackend(MultiTeamPassClient):
+        def get_autopilot_schedules(self, quest_ids):
+            return None
+
+    client = OldBackend(quests_by_team={"team1": [{"quest_id": "q1"}]}, autopilot_by_quest={"q1": {"mode": "act"}})
+    assert _poller(client)._quest_schedule_snapshot()["q1"]["mode"] == "act"

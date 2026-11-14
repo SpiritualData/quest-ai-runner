@@ -616,6 +616,28 @@ class QuestsMixin:
             return None
         return tokens
 
+    def get_autopilot_schedules(self, quest_ids: List[str]) -> Optional[Dict[str, Dict[str, Any]]]:
+        """POST /api/quests/autopilot-schedules -- each readable quest's ``{autopilot, archived}``, nothing else.
+
+        The schedule refresh used to read every quest's whole state (about 80 KB each) to see these two fields. The
+        ``autopilot`` block comes back without its instruction text (``has_instructions`` says whether any exists). Quests the
+        caller cannot read are omitted. Asked in chunks of 100. Returns None (never ``{}``) when the route is unavailable (an
+        older backend answers 404 or 405) or any chunk fails, so the caller falls back to per-quest reads."""
+        ids = [str(q) for q in quest_ids if q]
+        out: Dict[str, Dict[str, Any]] = {}
+        try:
+            self._require()
+            for i in range(0, len(ids), 100):
+                resp = self._request("POST", "/api/quests/autopilot-schedules", body={"quest_ids": ids[i:i + 100]})
+                got = resp.get("quests") if isinstance(resp, dict) else None
+                if not isinstance(got, dict):
+                    return None
+                out.update({str(k): v for k, v in got.items() if isinstance(v, dict)})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.info("get_autopilot_schedules unavailable (%s)", e)
+            return None
+        return out
+
     def update_outcome_progress(self, quest_id: str, outcome_id: str, progress_pct: Any,
                                 note: str, current_value: Any = None) -> WriteResult:
         """POST /api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress

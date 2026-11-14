@@ -157,9 +157,17 @@ class PassesMixin:
                     snapshot[quest_id] = {"team_id": team or self.cfg.team_id,
                                           "archived": bool(row.get("archived"))}
         opted_in = 0
+        # One small call for every quest's autopilot block (about 1 KB each) instead of every quest's whole state (about 80 KB
+        # each, 15 quests every 5 minutes). None = an older backend: read each quest's state as before.
+        schedules = None
+        try:
+            fetch = getattr(self.client, "get_autopilot_schedules", None)
+            schedules = fetch(list(snapshot)) if callable(fetch) else None
+        except Exception:  # noqa: BLE001 -- the per-quest read below is the fallback
+            log.info("autopilot: schedules read failed; reading each quest's state", exc_info=True)
         for quest_id, entry in list(snapshot.items()):
             try:
-                state = self.client.get_quest_autopilot(quest_id) or {}
+                state = (schedules.get(quest_id) or {}) if schedules is not None else (self.client.get_quest_autopilot(quest_id) or {})
             except Exception:  # noqa: BLE001 -- one bad quest never voids the snapshot
                 log.info("autopilot: could not read quest %s's schedule this refresh -- skipping",
                          quest_id, exc_info=True)
@@ -194,7 +202,7 @@ class PassesMixin:
                 "cadence": autopilot_cfg.get("cadence"),
                 "last_pass_at": autopilot_cfg.get("last_pass_at"),
                 "run_requested_at": autopilot_cfg.get("run_requested_at"),
-                "has_instructions": bool(instructions),
+                "has_instructions": bool(autopilot_cfg["has_instructions"]) if "has_instructions" in autopilot_cfg else bool(instructions),
                 # The quest's single-purpose autopilots and their last passes (see ``poller_routines``).
                 "routines": autopilot_cfg.get("routines") or [],
                 "routine_runs": autopilot_cfg.get("routine_runs") or {},
