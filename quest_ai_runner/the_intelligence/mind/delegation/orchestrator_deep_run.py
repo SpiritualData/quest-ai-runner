@@ -32,7 +32,7 @@ from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool impo
 from quest_ai_runner.the_consciousness.judgment_calls.interface import StagedPlanRunner
 from hubofhubs.api import count_tasks, is_staged, split_plan, step_allows, tasks_flat, tasks_in
 from quest_ai_runner.the_intelligence.mind.orchestrator_constants import (
-    CONTINUE_AFTER_DECISION_NOTE, DEEP_CONTINUATION_TURN_MULTIPLIER_CAP, NOT_STARTED_AFTER_DECISION_NOTE, NO_DEEP_EXECUTOR_TEXT, log,
+    CONTINUE_AFTER_DECISION_NOTE, DEEP_ATTEMPT_BACKSTOP, DEEP_CONTINUATION_TURN_MULTIPLIER_CAP, NOT_STARTED_AFTER_DECISION_NOTE, NO_DEEP_EXECUTOR_TEXT, log,
     result_reports_something)
 from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import (
     _run_goal_accepts_context_preamble, _run_goal_accepts_emit, _run_goal_accepts_resume_session_id, _run_goal_accepts_run_id,
@@ -808,8 +808,12 @@ class DeepRunMixin:
             # At least one attempt PER RUNG, so a ladder can always reach its terminal runner even
             # if a consumer configured a very small iteration cap. With the default one-rung ladder
             # this is exactly ``max(1, deep_goal_max_iterations)``, unchanged.
-            max_iters = max(max(1, self.cfg.deep_goal_max_iterations), len(runner_ladder))
+            configured_iters = max(max(1, self.cfg.deep_goal_max_iterations), len(runner_ladder))
             budget = self.cfg.deep_goal_token_budget
+            # A goal that is not met goes on until it is met, the token budget is used, or a justified blocker stops it (a person's ask, a failing tool, two
+            # attempts that changed nothing): the attempt count is not a reason to stop while a budget is measuring the spend. The count stays the bound
+            # only where nothing measures it (no budget set, or a runner that reports no tokens), and ``DEEP_ATTEMPT_BACKSTOP`` bounds a runaway.
+            max_iters = max(configured_iters, DEEP_ATTEMPT_BACKSTOP) if budget is not None else configured_iters
             # The model ladder for THIS turn: an explicit per-task / guidance model pins it (no
             # escalation); otherwise fast -> strong, starting at the fast tier by default.
             deep_models = list(planned_deep_models)   # a copy for this task
@@ -890,6 +894,8 @@ class DeepRunMixin:
                 # mid-subprocess). ``res`` keeps whatever the prior attempt produced.
                 if cancel_check is not None and cancel_check():
                     break
+                if attempt > configured_iters and tokens_used <= 0:
+                    break      # nothing measures this run's spend, so the configured attempt count is its budget
                 # A SIBLING subgoal of this same fan-out already parked on a human decision: stop
                 # before starting another attempt rather than piling a second ask onto the same
                 # turn (see ``parked_order`` above). Single-goal runs never set this (``multi``).

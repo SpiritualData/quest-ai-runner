@@ -48,6 +48,9 @@ NO_DEEP_EXECUTOR_TEXT = (
     "wired, or pass RunnerConfig.deep_runner explicitly, then ask again."
 )
 
+# The most attempts one deep goal makes while a token budget is measuring its spend: the budget ends the work, this only bounds a runaway.
+DEEP_ATTEMPT_BACKSTOP = 40
+
 
 # Said once a fanned-out turn has a subgoal PARKED on a human decision (``DeepResult.decision_id``
 # set): the rest of that turn's subgoals do not also surface, so the person sees exactly one ask,
