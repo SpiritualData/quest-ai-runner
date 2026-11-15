@@ -277,7 +277,7 @@ class Turn:
         extra: Dict[str, Any] = {}
         pending = None
         if inbox is not None:
-            self.control = TerminalRunControl(inbox, key, cancel_check=cancel.is_set, on_seen=self.taken_up)
+            self.control = TerminalRunControl(inbox, key, cancel_check=cancel.is_set, on_seen=self.taken_up, on_sent=self.handed)
             extra["run_control"] = self.control.run_control()
             pending = self.pending_notes
         stream = s._orch.run_stream(goal, transcript=s._last_transcript(), quest_id=s.bound_quest_id(), rep_preamble=preamble, model_hint=model_hint, pending_inputs=pending,
@@ -409,6 +409,12 @@ class Turn:
         if texts:
             self.taken_up(texts)
         return texts
+
+    def handed(self, texts: List[str], remaining: int) -> None:
+        """The live worker asked for the person's notes and has them: each is drawn in the transcript now, said as handed over (not yet confirmed written to the model)."""
+        from hubofhubs.api import Step
+        for text in texts:
+            self.sink(Step(at=self.at(), step_id=self.harness.sent.get(text, ""), kind="message-received", label=text, state="running"))
 
     def taken_up(self, texts: List[str]) -> None:
         """The live worker confirmed it has the person's notes: the hub says each as taken up."""
