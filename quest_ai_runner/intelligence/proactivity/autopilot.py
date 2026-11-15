@@ -1,38 +1,30 @@
-"""Autopilot: the recurring pass task that makes a quest's NAMED autopilots do their work.
+"""Autopilot: one run of a quest's NAMED autopilot, executed inside the one ``autopilot_run`` task the backend queued for it.
 
-A quest holds any number of named autopilots, served resolved in ``autopilot.effective_autopilots`` (``autopilot_units.py``). Each one that runs
-(enabled, not paused by the plan, resolved mode not off) is its own pass unit with its own series, schedule, tier, environment, prompt and
-bookkeeping (``autopilot.autopilot_state[id]``). A pass task names its autopilot in its text, and a pass:
+A quest holds any number of named autopilots (``autopilot.autopilots``, each storing every setting it uses; read with ``list_autopilots``). The backend's
+scheduler decides WHEN each runs and queues one task per run, naming the autopilot in the task's ``autopilot_id`` field; the runner keeps no series, no
+schedule and no bookkeeping, because the run rows are the record. A run:
 
-  1. Reads the quest and keeps the autopilots that run (a pass naming one runs only that one).
-  2. Gates each, cheapest first: a team-wide daily budget, the autopilot's own schedule (the hub's Proactivity, from its days or cadence, its last
-     pass and its "Run now" request), REACTIVE mode's own "is there anything new to react to" check, and, only where the deployment opts into
-     backpressure, an open autopilot-created task or an unresolved HOLD decision already sitting on the quest.
-  3. Runs each due autopilot as ONE work task, titled with its name and marked with its id:
-       * ``works_goals``: reads the quest once (goals as the GOAL LADDER, prior tasks, the plan of record, experiments, asks, the person's
-         reflection, insights and context updates) and composes the brief in two levels that default independently, the quest-wide
-         ``autopilot.instructions`` first and the autopilot's own after, the goals routed to its rep last. A goal is worked by one autopilot: the
-         earliest in list order that shares the rep. Recurring tasks the quest opted into adopting are folded into the autopilot of the rep they name.
-       * otherwise it works ONLY its prompt (the quest's outcome, the shared brief and its own instructions), reads no goals and never plans;
-         with a ``gate`` it is the old routine: the gate's own question may refuse the pass, which then stamps the occasion and creates nothing.
-  4. Stamps the autopilot's own ``autopilot_state[id]`` (``last_pass_at``, ``miss_streak``) and verifies it stuck; never the quest-level
-     ``last_pass_at`` of a stored autopilot.
-  5. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES its canonical next-steps artifact with the conclusion the pass
-     reached, and READS the existing artifact into the brief first.
+  1. Reads the autopilot by the task's field and skips, with the reason, when it does not run (paused, past the plan's cap, removed) or when a
+     SCHEDULED run waited past its grace ("missed: the lane was down").
+  2. Gates the run: the allowance for automatic extra runs (3 per autopilot a day and the team's budget; never a scheduled run or Run now) and,
+     only where the deployment opts into backpressure, an unfinished earlier run of THIS autopilot or an unresolved HOLD decision on the quest.
+  3. Asks its work source what is due (``source``, today ``learning``), or reads the quest once (goals as the GOAL FRAME, prior tasks, the plan of
+     record, experiments, asks, the person's reflection, insights and context updates) and takes the goals the day's routing gave it
+     (``autopilot_routing``: one recorded judgment per quest per day, a goal to one on-duty autopilot or to none). Nothing to work (no items, no
+     goals, an empty prompt) closes the run as skipped, "no goals relevant to this scope".
+  4. Composes ONE brief: the quest's outcome and "About this quest", then the autopilot's own words, the routed goals, the frame and, for a
+     source, its bounds and what is due.
+  5. Returns the plan the executor applies: ``skipped``, ``suggested`` (parked with the brief until a person approves) or ``act`` (the deep agent
+     runs on the brief). For a quest with a mapped folder it also refreshes the canonical next-steps artifact.
 
-WHAT A PASS REPORTS is what it set in motion, in plain words: the work by name, the quest by its outcome, which autopilot, and what is waiting on
-the person. The pass also stamps its OWN task id as ``parent_task_id`` on everything it creates, which is the link a consumer uses to replace this
-summary with the work's actual output once that work finishes (quest-backend does this in ``app/business/quests/autopilot_rollup.py``).
+A DRY RUN (the task's text contains "dry-run") reports the brief it WOULD work on and changes nothing.
 
-A DRY RUN (the pass task's own text contains "dry-run") reports what WOULD be created and creates nothing: no tasks, no goals, no bookkeeping writes.
-
-Per-quest and per-autopilot failures are isolated: one's error never aborts the rest of the pass (recorded in the result instead), and every
-skipped autopilot is logged with its gate reason, because silent skips are exactly the failure mode the qar playbook bans.
+Every skip is logged with its reason, because silent skips are exactly the failure mode the qar playbook bans.
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from quest_ai_runner.body.intake_sources.context_updates import ContextUpdates, UpdateEngine
@@ -50,7 +42,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_personas import (
     capped_instructions, default_persona_instructions_for, default_quest_instructions_for)
 from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone
 from quest_ai_runner.intelligence.proactivity.autopilot_routing import route_goals
-from quest_ai_runner.intelligence.proactivity.autopilot_units import label_of, on_duty, unit_named, units_of
+from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND, label_of, on_duty, unit_named, units_of
 from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, source_section
 from quest_ai_runner.intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick
 from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_HEADER, AutopilotResult, RunPlan, _quest_label, _quest_pass_lock, _task_label
@@ -260,7 +252,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         text = compose_batch_text(
             str(quest.get("outcome") or ""), self._persona_label(persona), scope_label=ctx.get("scope_label"),
             adopted_tasks=ctx.get("adopted"), next_steps=ctx.get("next_steps"), previous=ctx.get("previous"), last_run=ctx.get("last_run_text"),
-            reflection=ctx.get("reflection"), insights=(ctx.get("insights") if self._update_engine is not None else None),
+            reflection=ctx.get("reflection"), insights=ctx.get("insights"),
             context_updates=ctx.get("context_updates"), instructions=quest_brief, persona_instructions=own,
             default_quest_instructions=None if source_text else default_quest_instructions_for(autopilot_cfg),
             default_persona_instructions=None, goal_ladder=ctx.get("goal_ladder"), routed_goals=assigned or None,
@@ -275,7 +267,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         quest per day and recorded on the quest (``PUT .../autopilots/routing/{day}``), so every run of that day, in this process or the next one after
         a restart, reads the same record instead of judging again."""
         autopilot_cfg = quest.get("autopilot") or {}
-        zone = autopilot_cfg.get("run_timezone")
+        zone = autopilot_cfg.get("run_timezone") or "UTC"      # the backend keys the day in the quest's zone, UTC when it names none
         today = now_in_zone(zone, self._now()).date().isoformat()
         key = (quest_id, today)
         if key not in self._routing_cache:
@@ -317,6 +309,13 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         THIS autopilot or an unresolved HOLD decision on the quest.
         """
         key = str(task.get("occurrence_key") or "")
+        if not key.startswith(("run:",) + EXTRA_RUN_KEY_PREFIXES):
+            # A SCHEDULED run that waited longer than its autopilot's grace was missed (the lane was down): the backend records the miss, so the late
+            # run is not worked now. Run now and automatic extra runs are a person's or a reply's own moment and never expire.
+            queued = _parse_dt(task.get("created_at"))
+            grace = int(unit.get("grace_minutes") or 360)
+            if queued is not None and queued + timedelta(minutes=grace) < self._now():
+                return "missed: the lane was down"
         if key.startswith(EXTRA_RUN_KEY_PREFIXES):
             used = self._extra_runs_today(quest_id, unit["id"], str(task.get("id") or task.get("task_id") or ""))
             if used["autopilot"] >= MAX_EXTRA_RUNS_PER_AUTOPILOT:
@@ -368,7 +367,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             quest_tasks = None
         previous = self._previous_period_summary(quest_id, goals_payload, scope_label, quest_tasks)
         # The previous run's own output, independent of any period boundary (see ``select_last_run_output``).
-        last_run_text = self._last_run_output(quest_tasks or [], previous)
+        last_run_text = self._last_run_output(quest_tasks or [], previous, str(unit['id']))
         # The standing artifact, read BEFORE this pass overwrites it.
         standing_next_steps = self._read_next_steps(quest_id)
         # The quest's experiments, read ONCE (None = could not be read, which renders as no section at all, never as "no experiments").
@@ -400,10 +399,18 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             insights_note = bundle.slot_summary("insights")
             context_updates_text = bundle.as_prompt_block(exclude_slots=("reflection", "insights")) or None
         else:
-            # No engine: the reflection is read directly (the captures are read per autopilot, since each has its own last pass).
+            # No engine: the reflection and the captures are read directly. The captures are the ones taken since THIS autopilot's own previous run
+            # (the newest earlier ``autopilot_run`` row of it), so each autopilot has its own window.
             reflections = self._reflections(scope_label)
             reflection_text = reflections.as_text() or None
             reflection_note = reflections.one_line()
+            earlier = [_parse_dt(t.get("created_at")) for t in (quest_tasks or [])
+                       if t.get("task_kind") == AUTOPILOT_RUN_KIND and str(t.get("autopilot_id") or "") == str(unit["id"])
+                       and str(t.get("id") or t.get("task_id") or "") != (self._pass_task_id or "")]
+            latest = max((d for d in earlier if d is not None), default=None)
+            captured = self._insights(latest.isoformat() if latest else None, quest_id)
+            insights_text = captured.as_text() or None
+            insights_note = captured.one_line()
         return {"goals_payload": goals_payload, "scope_label": scope_label, "goal_ladder": goal_ladder, "current_goals": current_goals,
                 "adopted": adopted, "previous": previous, "last_run_text": last_run_text, "next_steps": standing_next_steps,
                 "experiments": quest_experiments, "proposal_open": experiment_proposal_open, "intent_frame": intent_frame_text,

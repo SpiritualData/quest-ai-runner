@@ -216,3 +216,97 @@ def test_the_days_routing_is_recorded_with_a_reason_and_read_back_instead_of_jud
     assert "Write chapter" in routed(first)
     again = plan_for(client, "ap-b", scripted_judge({}, calls))          # a restarted lane: a new runner reads the record
     assert len(calls) == 1 and routed(again) == ""
+
+
+def test_a_scheduled_run_that_waited_past_its_grace_is_missed_but_run_now_and_extras_never_expire():
+    client = Client([ap("ap-a", "A", instructions="x", grace_minutes=60)])
+    late = {"created_at": "2026-07-12T07:00:00Z"}                            # queued two hours before NOW, grace is one
+    assert plan_for(client, "ap-a", task={**late, "occurrence_key": "q1:ap-a:2026-07-12T07:00"}).reason == "missed: the lane was down"
+    assert plan_for(client, "ap-a", task={**late, "occurrence_key": "run:r1"}).status == "act"
+    assert plan_for(client, "ap-a", task={**late, "occurrence_key": "reply:n1"}).status == "act"
+    assert plan_for(client, "ap-a", task={"created_at": "2026-07-12T08:30:00Z", "occurrence_key": "q1:ap-a:2026-07-12T08:30"}).status == "act"
+
+
+def test_on_duty_is_the_backends_answer_and_only_without_it_the_weekly_days_rule():
+    from quest_ai_runner.intelligence.proactivity.autopilot_units import on_duty
+    assert on_duty({"status": {"runs_today": False}, "days": []}, NOW, "UTC") is False       # a monthly autopilot on a day that is not its day
+    assert on_duty({"status": {"runs_today": True}, "days": [MON]}, NOW, "UTC") is True
+    assert on_duty({"days": [MON]}, NOW, "UTC") is False and on_duty({"days": [SUN]}, NOW, None) is True
+
+
+def test_the_routing_day_is_utc_when_the_quest_names_no_zone():
+    late_utc = datetime(2026, 7, 12, 23, 30, tzinfo=timezone.utc)
+    client = RecordingClient([ap("ap-a", "A", instructions="x")], goals_payload(goal("g1", "Write chapter")), quest_fields={"run_timezone": None})
+    AutopilotPass(client, team_id="team1", now=lambda: late_utc, judge=scripted_judge({"g1": "ap-a"}, [])).run(
+        {"id": "r", "goal_id": "q1", "task_kind": "autopilot_run", "autopilot_id": "ap-a", "text": "run"})
+    assert ("q1", "2026-07-12") in client.records
+
+
+def test_a_run_for_one_autopilot_sees_only_its_own_last_run():
+    from quest_ai_runner.intelligence.proactivity.autopilot_briefs import select_last_run_output
+    rows = [{"id": "a", "task_kind": "autopilot_run", "autopilot_id": "ap-a", "result": "A's result", "updated_at": "2026-07-11T09:00:00Z"},
+            {"id": "b", "task_kind": "autopilot_run", "autopilot_id": "ap-b", "result": "B's result", "updated_at": "2026-07-12T08:00:00Z"}]
+    assert select_last_run_output(rows, "ap-a")["id"] == "a" and select_last_run_output(rows, "ap-b")["id"] == "b"
+    assert select_last_run_output(rows)["id"] == "b"
+
+
+def test_a_lane_without_an_update_engine_still_reads_the_captures_since_the_autopilots_own_last_run():
+    from quest_ai_runner.intelligence.higher_mind.guidance.insights import InsightsContext
+    seen = []
+
+    class Reading(AutopilotPass):
+        def _insights(self, last_pass_at, quest_id=""):
+            seen.append((last_pass_at, quest_id))
+            return InsightsContext()
+    client = Client([ap("ap-a", "A", instructions="x")], goals_payload(goal("g1", "G")),
+                    tasks=[{"id": "t0", "goal_id": "q1", "task_kind": "autopilot_run", "autopilot_id": "ap-a", "status": "done", "created_at": "2026-07-11T09:00:00Z"},
+                           {"id": "t1", "goal_id": "q1", "task_kind": "autopilot_run", "autopilot_id": "ap-b", "status": "done", "created_at": "2026-07-12T08:00:00Z"}])
+    Reading(client, team_id="team1", now=lambda: NOW).run({"id": "r", "goal_id": "q1", "task_kind": "autopilot_run", "autopilot_id": "ap-a", "text": "run"})
+    assert len(seen) == 1 and seen[0][1] == "q1" and seen[0][0].startswith("2026-07-11")      # ap-b's later run is not ap-a's window
+
+
+def test_the_email_contract_follows_the_autopilots_own_email_setting():
+    from quest_ai_runner.consciousness.request_intake.executor_context import ContextViewMixin
+
+    class Quests:
+        def get_quest(self, quest_id):
+            return {"autopilot": {"email": {"enabled": False}}}
+
+        def list_autopilots(self, quest_id):
+            return {"autopilots": [{"id": "ap-a", "email": {"enabled": True}}, {"id": "ap-b", "email": {"enabled": False}}]}
+
+    mixin = ContextViewMixin.__new__(ContextViewMixin)
+    mixin._client = Quests()
+    assert mixin._mailing_quest_id(None, "q1", "ap-a") == "q1" and mixin._mailing_quest_id(None, "q1", "ap-b") is None
+
+
+def test_leftover_pass_tasks_are_retired_once_and_then_the_lane_stops_listing_for_them():
+    from types import SimpleNamespace
+    from quest_ai_runner.intelligence.proactivity.poller_passes import PassesMixin
+
+    class Lane(PassesMixin):
+        def __init__(self):
+            self.cfg = SimpleNamespace(autopilot_ensure_pass_task=True, team_id="t", team_ids=[])
+            self.client = SimpleNamespace(configured=True)
+            self.open = [{"id": "p1", "status": "queued", "goal_id": "q1"}]
+            self.lists, self.retired = 0, []
+
+        def _list_owned_pass_tasks(self):
+            self.lists += 1
+            return list(self.open)
+
+        def _quest_schedule_snapshot(self):
+            return {"q1": {"team_id": "t"}}
+
+        def _retire_team_pass(self, occurrences):
+            pass
+
+        def _ensure_quest_pass_tasks(self, open_by_series, snapshot, owned=None):
+            self.retired += [o["id"] for o in open_by_series["q1"]]
+            self.open = []
+
+    lane = Lane()
+    lane._ensure_autopilot_pass()                    # finds the leftover, retires it
+    lane._ensure_autopilot_pass()                    # finds none: done
+    lane._ensure_autopilot_pass()                    # no list at all
+    assert lane.retired == ["p1"] and lane.lists == 2

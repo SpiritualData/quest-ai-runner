@@ -331,7 +331,7 @@ class PassContextMixin:
         return summary
 
     def _last_run_output(self, tasks: List[Dict[str, Any]],
-                         previous: Optional[Dict[str, Any]]) -> Optional[str]:
+                         previous: Optional[Dict[str, Any]], autopilot_id: str = "") -> Optional[str]:
         """The rendered last-run-output block for this quest's batch text, or None.
 
         Thin orchestration over the two module-level pure functions: ``select_last_run_output``
@@ -350,7 +350,7 @@ class PassContextMixin:
         shortening either block to paper over the overlap: the reader sees the work once, in full,
         exactly where the more specific of the two blocks puts it.
         """
-        task = select_last_run_output(tasks)
+        task = select_last_run_output(tasks, autopilot_id)
         if task is None:
             return None
         if previous is not None:

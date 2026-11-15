@@ -14,6 +14,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_BRIEF_TOKEN_BUDGET, AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, LAST_RUN_CUT_MARKER, LAST_RUN_OUTPUT_MAX_CHARS, PROPOSAL_TEXT_PREFIX,
     _LADDER_SCOPE_LABELS, _MD_TITLE_FURNITURE_RE, log)
 from quest_ai_runner.intelligence.proactivity.autopilot_periods import _parse_dt
+from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND
 
 
 def _summarize_previous(previous: Dict[str, Any]) -> str:
@@ -57,7 +58,7 @@ def _summarize_previous(previous: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def select_last_run_output(tasks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def select_last_run_output(tasks: List[Dict[str, Any]], autopilot_id: str = "") -> Optional[Dict[str, Any]]:
     """The task whose result IS this quest's own last run, with no period window at all.
 
     ``_previous_period_summary`` answers "what finished in the previous calendar period", which is
@@ -93,6 +94,8 @@ def select_last_run_output(tasks: List[Dict[str, Any]]) -> Optional[Dict[str, An
          their outputs, not just the one that happens to have finished most recently -- so it is
          preferred whenever it is available.
 
+    ``autopilot_id`` (a named autopilot's id) keeps only that autopilot's own runs among the ``autopilot_run`` rows.
+
     Returns ``None`` when nothing qualifies (a fresh quest, or a quest whose only rows are
     proposals, empty, or unparseable).
     """
@@ -102,7 +105,10 @@ def select_last_run_output(tasks: List[Dict[str, Any]]) -> Optional[Dict[str, An
         task_id = str(t.get("id") or t.get("task_id") or "").strip()
         if task_id:
             by_id[task_id] = t
-        if t.get("task_kind") not in (AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND):
+        if t.get("task_kind") not in (AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, AUTOPILOT_RUN_KIND):
+            continue
+        # A run of a named autopilot is that autopilot's own history: with ``autopilot_id`` given, another autopilot's run is not "the last run".
+        if autopilot_id and t.get("task_kind") == AUTOPILOT_RUN_KIND and str(t.get("autopilot_id") or "") != autopilot_id:
             continue
         if str(t.get("text") or "").lstrip().startswith(PROPOSAL_TEXT_PREFIX):
             continue

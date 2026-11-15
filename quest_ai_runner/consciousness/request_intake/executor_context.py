@@ -210,9 +210,13 @@ class ContextViewMixin:
                 continue
             cfg = quest.get("autopilot") or {}
             settings = cfg.get("email") or {}
-            unit = next((e for e in cfg.get("effective_autopilots") or [] if autopilot_id and e.get("id") == autopilot_id), None)
-            if unit is not None and isinstance(unit.get("email"), dict):
-                settings = unit["email"]
+            if autopilot_id:
+                # A run for a named autopilot follows that autopilot's own email settings (``email.enabled``), read from the quest's autopilots.
+                lister = getattr(self._client, "list_autopilots", None)
+                listed = (lister(candidate) or {}).get("autopilots") if callable(lister) else None
+                unit = next((e for e in (listed if listed is not None else cfg.get("autopilots") or []) if e.get("id") == autopilot_id), None)
+                if unit is not None and isinstance(unit.get("email"), dict):
+                    settings = unit["email"]
             if settings.get("enabled"):
                 return candidate
         return None

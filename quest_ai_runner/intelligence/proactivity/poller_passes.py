@@ -23,56 +23,22 @@ class PassesMixin:
     """Autopilot and quest-pass scheduling: ensure, create, retune and retire pass tasks."""
 
     def _ensure_autopilot_pass(self) -> None:
-        """Make every opted-in quest's autopilot pass series EXIST, and keep each one in tune.
+        """Retire the pass tasks left over from before named autopilots, then stop looking.
 
-        Autopilot is deliberately implemented as a task rather than a daemon (no cron, pausable
-        from the same UI, auditable in the same activity stream). The original gap was that
-        NOTHING created that task at all: opting a quest into Suggest/Act saved the setting and
-        produced silence forever. This closes the loop from the runner side -- the lane that would
-        execute the pass is the one that ensures it exists.
+        The backend schedules autopilots now (one ``autopilot_run`` task per run), so no pass series is created here any more. A deployment that
+        migrated has its open legacy pass tasks cancelled by the migration; any that remain (a lane that was down, a task owned by another
+        account) are retired by this scan. The first scan that finds none open sets ``_legacy_passes_retired`` and every later scan returns at once.
 
-        EVERY opted-in quest has its own recurring pass series (``goal_id`` == that quest's id),
-        at its own run time -- created when missing, retuned when its schedule drifts from what
-        the quest now says (including the backend's UTC-midnight spawn-date bug), and retired when
-        the quest stops being eligible. A quest that names no run time of its own is not a
-        different case: it is given the lane's default hour when its schedule is read, so there is
-        one kind of pass and one path that makes it. Any surviving team-wide series (no
-        ``goal_id``) is retired on sight.
-
-        Liveness: "exactly one open occurrence" per SERIES, keyed by ``goal_id``. A quest's group
-        can also hold a one-off CATCH-UP pass (see ``_split_pass_occurrences``), which shares the
-        ``goal_id`` but is not part of the series and never stands in for it.
-
-        THE LIVENESS READ IS PER QUEST, and used to be one team-wide list (incident, 2026-09-17).
-        This method used to advertise "still ONE ``list_tasks`` call per scan, no list call per
-        quest" as a deliberate property. It was wrong, and quietly so. The team-wide listing is
-        OWNER-SCOPED by the backend (``list_assistant_tasks`` filters on the authenticated
-        ``user_id``; ``team_id`` narrows that set, it does not widen it), while a pass created
-        against a quest is owned by the QUEST's owner, with the creating account recorded only as
-        ``created_by``. So on any quest whose owner is not the lane's own account, the team-wide
-        list never returned the pass the lane itself had created: the liveness check read "no open
-        pass" on every single scan and created another recurring series each time. Measured live:
-        three series, each a weekly recurrence, created for one quest inside six minutes, which
-        would have meant three briefs a day. It went unnoticed for as long as it did because the
-        one lane anybody watched happened to run a quest owned by its own account. The per-quest
-        listing (``goal_id=<quest>``) is answered by ``list_assistant_tasks_for_goal``, which is
-        scoped to the quest rather than to a user, so it returns the pass whoever owns it. The
-        cost is one extra list call per OPTED-IN quest per scan, and that is the right trade: the
-        saved call was buying a liveness answer that was not true.
-
-        A FAILED read never creates. ``list_tasks`` returns ``[]`` on any error, which is
-        indistinguishable from "no pass exists" and is what turned a rate-limit burst into
-        duplicate series. The reads here go through ``list_tasks_or_none``, and a ``None`` (the
-        read failed) skips that quest entirely until the next scan.
-
-        Best-effort throughout: any failure is logged and retried next scan. A missing or
-        out-of-tune pass task is a degraded feature, never a reason to skip the ordinary task
-        pickup that follows.
+        A FAILED read never retires (``None`` is not "nothing open"), and the read is one status-filtered list per open status, never the unfiltered
+        owner list the backend caps (see ``_list_owned_pass_tasks``). Best-effort throughout: a failure is logged and retried next scan, and never
+        blocks the ordinary task pickup that follows.
         """
         if not self.cfg.autopilot_ensure_pass_task:
             return
         if not self.client.configured or not (self.cfg.team_id or self.cfg.team_ids):
             return
+        if getattr(self, "_legacy_passes_retired", False):
+            return          # one cheap check per scan once a scan has found no open pass task of the old kind
         try:
             # ONE owner-scoped read per scan (see ``_list_owned_pass_tasks`` for why it is one).
             # It serves three purposes: retiring a surviving team-wide series (no ``goal_id``,
@@ -88,6 +54,11 @@ class PassesMixin:
                 if str(t.get("status", "")).strip().lower() not in OPEN_TASK_STATUSES:
                     continue
                 open_by_series.setdefault(str(t.get("goal_id") or ""), []).append(t)
+            if not any(open_by_series.values()):
+                # Nothing of the old kind is open anywhere this lane can see: the retirement is done, and the lane stops listing for it.
+                self._legacy_passes_retired = True
+                log.info("autopilot: no leftover pass task of the old kind is open; retirement is done")
+                return
             snapshot = self._quest_schedule_snapshot()
             self._retire_team_pass(open_by_series.get("", []))
             self._ensure_quest_pass_tasks(open_by_series, snapshot, owned=existing)

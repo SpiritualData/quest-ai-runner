@@ -107,12 +107,3 @@ class GatesMixin:
             log.info("autopilot: list_open_decisions_for_quest failed for %s", quest_id,
                      exc_info=True)
             return False
-
-    def _skip(self, result: AutopilotResult, quest_id: str, quest_label: str,
-              reason: str, unit: Optional[Dict[str, Any]] = None) -> None:
-        log.info("autopilot: skipping quest %s%s (%s)", quest_id, f" autopilot {unit['id']}" if unit else "", reason)
-        row = {"quest_id": quest_id, "quest_label": quest_label, "reason": reason}
-        if unit is not None:
-            row["autopilot"] = unit["id"]
-            row["autopilot_name"] = label_of(unit)
-        result.skipped.append(row)

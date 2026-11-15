@@ -40,9 +40,15 @@ def unit_named(autopilot_cfg: Mapping[str, Any], autopilot_id: str) -> Optional[
 
 
 def on_duty(entry: Mapping[str, Any], now: datetime, zone: Optional[str]) -> bool:
-    """Whether the autopilot works today in the quest's zone: it names no days, or names today's. Its time of day is the scheduler's, not a duty."""
+    """Whether the autopilot works today in the quest's zone (UTC when the quest names none, as the backend reads it).
+
+    The backend answers it for every cadence (``status.runs_today``: a monthly, quarterly or yearly autopilot is on duty only on its day). Only an
+    older answer without that field falls back to the weekly rule: no days, or today's. Its time of day is the scheduler's, not a duty."""
+    served = entry.get("status")
+    if isinstance(served, Mapping) and "runs_today" in served:
+        return bool(served["runs_today"])
     days = {str(d).strip().lower()[:3] for d in (entry.get("days") or [])}
-    return not days or WINDOW_DAYS[now_in_zone(zone, now).weekday()] in days
+    return not days or WINDOW_DAYS[now_in_zone(zone or "UTC", now).weekday()] in days
 
 
 def label_of(entry: Mapping[str, Any]) -> str:

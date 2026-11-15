@@ -66,7 +66,7 @@ OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
 # Every status a task can hold (quest-backend ``TASK_STATUSES``). The daily budget counts a pass's
 # output whatever state it has reached, so the count reads each one.
 TASK_STATUSES_FOR_COUNT = ("cancelled", "done", "failed", "incomplete", "in_progress",
-                           "needs_you", "queued", "suggested")
+                           "needs_you", "queued", "skipped", "suggested")
 
 
 # Every proposed-goal task's text starts with this, which is how a later pass recognizes the
