@@ -31,6 +31,9 @@ class Recent:
     def record(self, scope_keys, cards, user_text):
         return None
 
+    def forget_turns(self, scope_keys, user_texts):
+        return 0
+
 
 class Guidance:
     def select(self, user_message="", **options):
