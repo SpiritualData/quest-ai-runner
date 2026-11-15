@@ -393,7 +393,7 @@ class Turn:
             return
         goal = " ".join(str(data.get("goal") or "Working").split())
         self.runs[run_id] = True
-        self.sink(Step(at=self.at(), step_id=f"run-{run_id}", kind="note", label=goal[:120], state="running"))
+        self.sink(Step(at=self.at(), step_id=f"run-{run_id}", kind="note", label=goal[:120], full=goal if len(goal) > 120 else "", state="running"))
 
     def close_runs(self) -> None:
         from hubofhubs.api import Step
@@ -466,7 +466,25 @@ class Turn:
         from quest_ai_runner.the_consciousness.terminal.turn_usage import turn_usage
         used = turn_usage(final, getattr(s._orch, "provider", None), Finished)       # the whole turn's tokens and calls, and "included in subscription" on a flat plan
         return Finished(outcome="met" if met else "unmet", report=report, changed=changed, session_id=conv, cost_usd=cost, at=elapsed, elapsed_seconds=elapsed,
-                        spend_usd=cost, end_reason="" if met else (outcome or ""), **used)
+                        spend_usd=cost, end_reason="" if met else (outcome or ""), error="" if met else self.unmet_reason(final, outcome), **used)
+
+    @staticmethod
+    def unmet_reason(final: Any, outcome: Optional[str]) -> str:
+        """Why the goal is not met, in one short sentence, from what the run itself reported: the worker's stop reason, the answer check's verdict, else what the outcome says. Never empty."""
+        from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import deep_results, OUTCOME_NOT_RUN, OUTCOME_NOT_STARTED, OUTCOME_LIMIT, OUTCOME_WAITING
+        results = deep_results(final)
+        candidates = [str(getattr(d, "stalled", "") or "") for d in results] + [str(getattr(d, "error", "") or "") for d in results]
+        verdict = getattr(final, "goal_verdict", None)
+        if isinstance(verdict, dict):
+            candidates += [str(verdict.get("reason") or ""), str(verdict.get("next_action") or "")]
+        words = {OUTCOME_NOT_RUN: "no work was run", OUTCOME_NOT_STARTED: "the worker could not start", OUTCOME_LIMIT: "the usage limit was reached", OUTCOME_WAITING: "it is waiting for your answer"}
+        candidates.append(words.get(outcome or "", "the work did not reach the goal and gave no reason"))
+        reason = next((" ".join(c.split()) for c in candidates if c.strip()), "")
+        for lead in ("Goal not yet met:", "Goal not met:"):
+            if reason.lower().startswith(lead.lower()):
+                reason = reason[len(lead):].strip()
+        first = reason.split(". ")[0].rstrip(".")
+        return first if len(first) <= 200 else first[:197].rsplit(" ", 1)[0] + "..."
 
     def answer_of(self, final: Any) -> Optional[str]:
         """The reply the person reads: the result's text, else what streamed, else (a deep turn) what its workers produced."""

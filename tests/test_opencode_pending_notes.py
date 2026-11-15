@@ -41,3 +41,11 @@ def test_an_interface_with_only_an_inbox_gets_a_control_that_carries_unconfirmed
     got = control.claim_inputs()
     control.mark_seen([m.id for m in got], "deep_worker")
     assert notes.between_attempts() == []
+
+
+def test_a_goal_not_met_always_says_why_in_one_short_sentence():
+    from quest_ai_runner.the_consciousness.terminal.opencode_terminal import Turn
+    worker = SimpleNamespace(stalled="", error="Goal not yet met: the build never produced an installable app. More detail follows.")
+    assert Turn.unmet_reason(SimpleNamespace(deep_results=[worker]), "stopped") == "the build never produced an installable app"
+    assert Turn.unmet_reason(SimpleNamespace(deep_results=[], goal_verdict={"met": False, "reason": "no files were changed"}), "unmet") == "no files were changed"
+    assert Turn.unmet_reason(SimpleNamespace(deep_results=[]), "stopped")           # even with nothing reported, a reason is said
