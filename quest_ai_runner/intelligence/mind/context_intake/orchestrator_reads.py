@@ -30,6 +30,12 @@ from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities impo
 ACTING_TOOL_ARGS_CHARS = 4000
 
 
+
+# What the planner does after naming a tool that does not exist. The slip is usually a read of the person's own records (collection entries, notes, goals) named
+# as a tool; nothing was read, so the re-plan reads it through the capability menu instead of answering as if the records were empty.
+NOT_A_TOOL_NEXT = ("Nothing was read. If you meant the person's own records (collection entries, notes, goals, tasks), read them as an operation of the "
+                   "CAPABILITY MENU (list_operations, then the operation) in the next step; never answer that nothing is recorded from this.")
+
 class ReadsMixin:
     """Executing the planner's read specs and direct tool calls."""
 
@@ -468,7 +474,7 @@ class ReadsMixin:
                 # Not a tool (the planner named a retrieval operation or made one up): say so to the planner, never "not ordered". It is the planner's own slip, not something
                 # the turn read or tried in the world, so it is planner_only: the reply never reports it as work that could not be done.
                 gathered.append({"kind": "query", "locator": f"tool:{name}", "tool_status": ToolStatus.REFUSED.value, "planner_only": True,
-                                 "text": f"TOOL {name} NOT RUN: it is not a tool. Available tools: {', '.join(self.tools.names()) or 'none'}."})
+                                 "text": f"TOOL {name} NOT RUN: it is not a tool. Available tools: {', '.join(self.tools.names()) or 'none'}. {NOT_A_TOOL_NEXT}"})
                 emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}: not a tool",
                                         data={"phase": "failed", "tool": name, "status": ToolStatus.REFUSED.value}))
                 continue
