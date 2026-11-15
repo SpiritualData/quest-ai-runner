@@ -49,6 +49,23 @@ class QuestsMixin:
                              params={"limit": limit, "include_archived": str(include_archived).lower()})
         return list(resp.get("people") or resp.get("items") or []) if isinstance(resp, dict) else list(resp or [])
 
+    def list_orgs(self) -> List[Dict[str, Any]]:
+        """GET /api/orgs — the organizations the authenticated account belongs to (explicit membership or
+        email-domain match); each row carries ``org_id``, ``name`` and ``email_domains``. Raises
+        ``QuestApiError`` on a refusal.
+        """
+        self._require()
+        resp = self._request("GET", "/api/orgs")
+        return list(resp.get("orgs") or []) if isinstance(resp, dict) else list(resp or [])
+
+    def list_org_teams(self, org_id: str) -> List[Dict[str, Any]]:
+        """GET /api/orgs/{org_id}/teams — the org's teams, flat (each row carries ``team_id``, ``name`` and
+        ``parent_team_id``). Raises ``QuestApiError`` on a refusal.
+        """
+        self._require()
+        resp = self._request("GET", f"/api/orgs/{org_id}/teams")
+        return list(resp.get("teams") or []) if isinstance(resp, dict) else list(resp or [])
+
     def add_org_person(self, org_id: str, email: str, *, display_name: str = "",
                        team_ids: Optional[List[str]] = None, role: str = "member") -> WriteResult:
         """POST /api/orgs/{org_id}/people — org admin: add a person by email, creating a placeholder account
