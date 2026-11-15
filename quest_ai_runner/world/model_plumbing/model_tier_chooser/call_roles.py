@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Dict, Mapping, Optional
 
 from hubofhubs.api import role_tiers
+from quest_ai_runner.world.model_plumbing.spend import llm_budget
 
 TIERS = role_tiers.TIERS
 ORDER = {tier: rank for rank, tier in enumerate(TIERS)}
@@ -125,6 +126,19 @@ def role_of(call: str) -> str:
 
 
 def tier_for_call(call: str, requested: Optional[str] = None, table: Optional[Mapping[str, Mapping[str, str]]] = None, task_kind: str = "") -> str:
+    """``resolve_tier_for_call`` plus the rule that ``best`` is only ever a person's explicit request (``QAR_BEST_REQUIRES_USER_REQUEST``, default on):
+    a result of ``best`` that no person asked for (the structure watch's own row, any other role) is ``quality``. A person's request is a ``requested``
+    of ``best`` on a call that takes the person's tier (it also marks the context, see ``llm_budget.mark_user_requested_best``)."""
+    tier = resolve_tier_for_call(call, requested, table, task_kind)
+    if tier != "best" or not llm_budget.best_requires_user_request():
+        return tier
+    if (requested or "").strip().lower() == "best":
+        llm_budget.mark_user_requested_best()
+        return tier
+    return "quality"
+
+
+def resolve_tier_for_call(call: str, requested: Optional[str] = None, table: Optional[Mapping[str, Mapping[str, str]]] = None, task_kind: str = "") -> str:
     """The tier ``call`` runs on: its role's tier from the hub's table, with an explicit ``requested`` tier (a person's, a task's or a lane's) applied
     under the guards in the module docstring. ``requested`` that is not a tier is ignored; the legacy word ``science`` reads as its role's tier.
     ``task_kind`` (gather, implementation, structure or review, from a classification already made on the fast tier, never from words) moves a call of the

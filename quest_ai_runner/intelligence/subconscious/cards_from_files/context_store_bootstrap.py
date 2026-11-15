@@ -25,6 +25,7 @@ from hubofhubs.api import card_origin
 from quest_ai_runner.intelligence.subconscious.cards_from_files.bootstrap_reporter import mark_bootstrap_completed
 from hubofhubs.api import Pacer
 from hubofhubs.api import match_umask
+from quest_ai_runner.world.model_plumbing.spend.llm_budget import llm_job
 from hubofhubs.api import (
     context_bootstrap_support_BOOTSTRAP_MAX_BYTES as BOOTSTRAP_MAX_BYTES, context_bootstrap_support_BOOTSTRAP_META_FILE as BOOTSTRAP_META_FILE,
     DISCOVERED_FILE, MAX_ANCESTOR_WALK_LEVELS, MAX_MERGED_KEYWORDS, context_bootstrap_support_SOURCE_EXTS as SOURCE_EXTS, TFDFIDF_VERSION,
@@ -793,8 +794,9 @@ class BootstrapMixin:
                 "into the wider store with `quest-ai-runner context merge-into`.", walk_root, built_for)
             return 0
         if self._mount_mode != MODE_MOUNT:
-            return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
-                                        max_cards=max_cards, skip_unchanged=skip_unchanged)
+            with llm_job("context-index"):
+                return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
+                                            max_cards=max_cards, skip_unchanged=skip_unchanged)
         # The gate is settled FIRST: a store inside a folder it turns away is neither claimed nor
         # mounted, and the walk below is handed the very same decision.
         skip_dirs = effective_skip_dirs(walk_root)
@@ -813,7 +815,7 @@ class BootstrapMixin:
         if outcome.mounts:
             _log.info("context index: mounting %d store(s) read-only and in place; their subtrees "
                       "are not indexed here", len(outcome.mounts))
-        with skip_subtrees(outcome.claimed_roots):
+        with skip_subtrees(outcome.claimed_roots), llm_job("context-index"):
             return self._bootstrap_walk(root, provider=provider, model=model, max_files=max_files,
                                         max_cards=max_cards, skip_unchanged=skip_unchanged,
                                         gate=gate)

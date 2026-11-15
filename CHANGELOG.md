@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Model call budget and volume guards (2026-11-15, after a night of unattended calls): `QAR_MAX_LLM_CALLS_PER_JOB` (200) and `QAR_MAX_LLM_CALLS_PER_HOUR` (600) raise `LlmBudgetExceeded`, named jobs (`llm_job`) step requests above balanced down to balanced after 20 calls, the best tier runs only for a person's explicit request (`QAR_BEST_REQUIRES_USER_REQUEST`, the structure watch now runs on balanced), and the context index skips every model stage over 3000 files or cards and caps each run at 300 new files and 100 stale cards.
+
 ## [0.7.5] - 2026-11-15
 
 - Release run (2026-11-15): the five container folders and modules lose their leading "the" (`body`, `consciousness`, `intelligence`, `world`, `self`), following the hub's 0.7.5; consumers import `quest_ai_runner.intelligence...`, `quest_ai_runner.world...` and so on from this tag, and 0.7.4 and earlier use the old paths. The hub pin moves to `v0.7.5`. Also: the planner default row is realigned (an extra empty cell shifted every column, so a chat turn failed with an unchosen-default error); autopilot acts on answered asks and closes out what it acted on; a tool name the planner made up is refused with the next step; slim task reads for cancel and pause checks and slim progress replies; opencode screen fixes (a note typed mid-run reaches the next attempt, a not-met goal says why, resume shows the earlier turns).

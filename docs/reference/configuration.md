@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-251 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+258 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -35,6 +35,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_AUTOPILOT_ADOPT_RECURRING` | 1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass. | `body/configuration/cli_config.py` | - |
 | `QAR_AUTOPILOT_PASS_TIME` | Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time. | `body/configuration/cli_config.py` | - |
 | `QAR_AUTOPILOT_STRUCTURE_WATCH` | 0/false/off/no turns the structure watch off (RunnerConfig.autopilot_structure_watch): the one small best-tier call per autopilot or routine run of a quest. | `body/configuration/cli_config.py` | - |
+| `QAR_BEST_REQUIRES_USER_REQUEST` | 1 (default): the best tier runs only when a person explicitly asked for it; any other request for best resolves to quality. 0 lifts the rule. | `world/model_plumbing/spend/llm_budget.py` | - |
 | `QAR_BOOTSTRAP_EMAIL_USER` | Quest user id the bootstrap report email is sent to. | `consciousness/terminal/cli_context.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS` | Hard cap on cards created in ONE bootstrap pass (unset = no cap). | `body/configuration/card_store_settings.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap). | `body/configuration/card_store_settings.py` | - |
@@ -132,6 +133,10 @@ the docs and `.env.example` that describe what it does.
 | `QAR_GREP_BUDGET_SECONDS` | Wall-clock budget for one corpus grep (default 20). | `world/tools/file_reading/files_adapter.py` | `docs/how-to/file-server.md` |
 | `QAR_GREP_MAX_FILES` | Most files one grep opens (default 20000). | `world/tools/file_reading/files_adapter.py`, `world/tools/file_reading/files_search_worker.py`, `world/tools/file_reading/files_server.py` | - |
 | `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` |  | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/guidance-cards.md` |
+| `QAR_INDEX_LLM_MAX_CARDS` | Context index pass over a store already holding more cards than this skips every model stage and writes a marker (default 3000; 0 means no rule). | `body/configuration/card_store_settings.py` | - |
+| `QAR_INDEX_LLM_MAX_FILES` | Context index pass with more unanalysed files than this skips every model stage and writes a marker (default 3000; 0 means no rule). | `body/configuration/card_store_settings.py` | - |
+| `QAR_INDEX_MAX_NEW_FILES_PER_RUN` | New files one context index pass sends to topic discovery; the rest carry over to the next pass (default 300; 0 means no cap). | `body/configuration/card_store_settings.py` | - |
+| `QAR_INDEX_MAX_STALE_CARDS_PER_RUN` | Stale cards one context index pass regenerates with the model; the rest carry over to the next pass (default 100; 0 means no cap). | `body/configuration/card_store_settings.py` | - |
 | `QAR_INTENT_JUDGE_TIMEOUT_SECONDS` | Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds. | `body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_INTERIM_REPLIES` |  | `consciousness/terminal/textual_ui_trail.py` | `docs/how-to/chat.md` |
 | `QAR_LANE_USER_ID` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
@@ -139,6 +144,8 @@ the docs and `.env.example` that describe what it does.
 | `QAR_LINK_POLICY_FILE` |  | `body/configuration/cli_config.py`, `body/configuration/config_core_settings.py` | `.env.example`, `docs/explanation/link-guard.md` |
 | `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `body/configuration/card_store_settings.py` | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
 | `QAR_MAX_CARDS_PER_FILE` | The most cards a batch to write or upload may hold per distinct file it names (default 0.25; 0 = no rule). A batch over it is refused whole, with a notice. | `body/configuration/card_store_settings.py` | `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md` |
+| `QAR_MAX_LLM_CALLS_PER_HOUR` | Model calls the whole process may make in any rolling hour, in or out of a job, before LlmBudgetExceeded is raised (default 600; 0 or off disables). | `world/model_plumbing/spend/llm_budget.py` | - |
+| `QAR_MAX_LLM_CALLS_PER_JOB` | Model calls one named job (context index, digests) may make before LlmBudgetExceeded is raised (default 200; 0 or off disables). After 20 calls in a job, requests above the balanced tier run on balanced. | `world/model_plumbing/spend/llm_budget.py` | - |
 | `QAR_MAX_LOAD_PER_CORE` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `body/configuration/card_store_settings.py`, `body/configuration/cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md` |

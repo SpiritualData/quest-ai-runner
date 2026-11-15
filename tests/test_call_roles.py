@@ -154,7 +154,7 @@ def test_best_is_not_an_escalation_rung_and_a_verifiers_best_is_lifted_to_qualit
 
 def test_best_is_reached_only_by_the_persons_explicit_tier_or_the_structure_watch():
     unasked = [call for call in CALL_ROLES if tier_for_call(call) == "best"]
-    assert unasked == [STRUCTURE_WATCH_CALL]
+    assert unasked == []        # QAR_BEST_REQUIRES_USER_REQUEST: even the structure watch's row resolves to quality here
     person_may_set = sorted(call for call in CALL_ROLES if tier_for_call(call, "best") == "best" and call != STRUCTURE_WATCH_CALL)
     assert person_may_set == ["answer.response", "answer.task-report", "autopilot.work", "deep-run.session", "draft-a-metric.value"]
     for call in set(CALL_ROLES) - set(person_may_set) - {STRUCTURE_WATCH_CALL}:

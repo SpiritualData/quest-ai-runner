@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import (
     choice_of, escalate_choice, normalize_difficulty, plan_start, pure_tier, tier_models, tier_name_of, tier_of_model)
 from quest_ai_runner.intelligence.mind.delegation.work_model import rung_allowed
+from quest_ai_runner.world.model_plumbing.spend.llm_budget import mark_user_requested_best
 from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import LEGACY_TIER_ALIASES, ModelRegistry
 from quest_ai_runner.intelligence.mind.orchestrator_constants import CONFIGURED_LADDER_SOURCE, FALLBACK_LADDER_SOURCE, log
 from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import _guidance_model_pref
@@ -91,6 +92,8 @@ class DeepModelsMixin:
             self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if configured else FALLBACK_LADDER_SOURCE))
             return ladder, None
         selection = plan.selection
+        if selection.get("tier") == "best" and selection.get("tier_source") == "current_input":
+            mark_user_requested_best()      # a person named best in this request: the only thing that lets the best tier run
         log.info("Deep-worker model chosen by the tier rule: tier=%s, tier_source=%s, tier_reason=%s%s, starting model=%s, escalation ladder=%s, "
                  "difficulty=%s", selection.get("tier") or "(operator model)", selection.get("tier_source"), selection.get("tier_reason"),
                  f", tier_from={selection['tier_from']}" if selection.get("tier_from") else "", selection["start_model"], selection["ladder"],

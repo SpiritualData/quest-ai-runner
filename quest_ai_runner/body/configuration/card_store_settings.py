@@ -20,7 +20,7 @@ from quest_ai_runner.body.configuration.walk_settings import STORE_DIR_NAME, ski
 
 __all__ = [
     "ENV_MAX_CARDS", "STORE_DIR_NAME", "max_cards_per_file", "max_single_file_card_share", "card_shape_min_files", "bootstrap_max_cards", "card_mount_mode", "bootstrap_max_files", "bootstrap_workers", "folder_review_enabled",
-    "max_cards_from_env", "max_cards_per_folder", "prune_dead_cards", "skip_dirs_from_env", "skip_nested_repos",
+    "max_cards_from_env", "index_llm_max_files", "index_llm_max_cards", "index_max_new_files_per_run", "index_max_stale_cards_per_run", "max_cards_per_folder", "prune_dead_cards", "skip_dirs_from_env", "skip_nested_repos",
 ]
 
 ENV_MAX_CARDS = "QAR_MAX_CARDS"
@@ -56,6 +56,26 @@ def max_cards_per_folder() -> int:
     """``QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER``: topic cards one folder may hold (default 8, ``0`` means no rule)."""
     return positive_int("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", os.getenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER"),
                         MAX_CARDS_PER_FOLDER_DEFAULT)
+
+
+def index_llm_max_files() -> int:
+    """``QAR_INDEX_LLM_MAX_FILES``: with more unanalysed files than this in a context index pass, every model stage is skipped (default 3000, ``0`` means no rule)."""
+    return positive_int("QAR_INDEX_LLM_MAX_FILES", os.getenv("QAR_INDEX_LLM_MAX_FILES"), 3000)
+
+
+def index_llm_max_cards() -> int:
+    """``QAR_INDEX_LLM_MAX_CARDS``: with more cards than this already in the store, every model stage of a context index pass is skipped (default 3000, ``0`` means no rule)."""
+    return positive_int("QAR_INDEX_LLM_MAX_CARDS", os.getenv("QAR_INDEX_LLM_MAX_CARDS"), 3000)
+
+
+def index_max_new_files_per_run() -> int:
+    """``QAR_INDEX_MAX_NEW_FILES_PER_RUN``: new files one pass sends to topic discovery; the rest wait for the next run (default 300, ``0`` means no cap)."""
+    return positive_int("QAR_INDEX_MAX_NEW_FILES_PER_RUN", os.getenv("QAR_INDEX_MAX_NEW_FILES_PER_RUN"), 300)
+
+
+def index_max_stale_cards_per_run() -> int:
+    """``QAR_INDEX_MAX_STALE_CARDS_PER_RUN``: stale cards one pass regenerates with the model; the rest wait for the next run (default 100, ``0`` means no cap)."""
+    return positive_int("QAR_INDEX_MAX_STALE_CARDS_PER_RUN", os.getenv("QAR_INDEX_MAX_STALE_CARDS_PER_RUN"), 100)
 
 
 def skip_nested_repos() -> bool:

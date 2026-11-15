@@ -83,10 +83,16 @@ def provider_ask(provider: Any, call: str = "structure-watch") -> Callable[..., 
 
     def ask(prompt: str, tier: str, cap: int) -> Mapping[str, Any]:
         before = [float(getattr(provider, name, 0) or 0) for name in ("tokens_in", "tokens_out", "cost_usd")]
+        from quest_ai_runner.world.model_plumbing.spend import llm_budget
         registry = ModelRegistry(provider)
-        model = registry.resolve_role(call)
-        if tier == "best" and "best" not in registry.selected() and "best" not in registry._user_overrides:
-            raise RuntimeError(f"no model is chosen for the best tier (the hub's public choice names none for this lane's providers, and none is pinned), so the structure watch does not run on {model}")
+        if tier == "best" and llm_budget.best_requires_user_request():
+            # Automation never asks for the best tier (the hub's row still says best: hub follow-up). The watch runs on balanced, its own lower tier.
+            tier = "balanced"
+            model = registry.resolve_tier("balanced")
+        else:
+            model = registry.resolve_role(call)
+            if tier == "best" and "best" not in registry.selected() and "best" not in registry._user_overrides:
+                raise RuntimeError(f"no model is chosen for the best tier (the hub's public choice names none for this lane's providers, and none is pinned), so the structure watch does not run on {model}")
         text = provider.answer([{"role": "user", "content": prompt}], model=model) or ""
         after = [float(getattr(provider, name, 0) or 0) for name in ("tokens_in", "tokens_out", "cost_usd")]
         used = [max(a - b, 0.0) for a, b in zip(after, before)]

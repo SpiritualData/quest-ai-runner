@@ -16,6 +16,7 @@ from hubofhubs.api import MultiProvider
 
 from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import DEFAULT_FALLBACK_TOP, configured_providers
 from quest_ai_runner.world.model_plumbing.spend.usage import active_spec, limit_message
+from quest_ai_runner.world.model_plumbing.spend import llm_budget
 
 MODEL_PREFIXES: Dict[str, str] = dict(MODEL_PREFIX_PROVIDERS)       # process-wide, like the config that extends it
 
@@ -79,6 +80,18 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
 
 
 
+class BudgetedMultiProvider(MultiProvider):
+    """The hub's router with QAR's call budget (``spend/llm_budget.py``): every routed call is counted against the job and hourly budgets
+    (``LlmBudgetExceeded`` past a limit), steps down to the balanced tier after 20 calls in a job, and a ``best`` request with no person's
+    request behind it runs on the quality tier."""
+
+    def routed(self, model: str, call: Any) -> Any:
+        job = llm_budget.count_call()
+        if self.registry is not None:
+            model = llm_budget.settle_model(model, self.tier_of, self.registry.resolve_tier, job)
+        return super().routed(model, call)
+
+
 @implementation("vendor-model-caller", "multi_provider")
 def routed(primary: Any = None, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
            fallback_models: Sequence[str] = ()) -> MultiProvider:
@@ -88,7 +101,7 @@ def routed(primary: Any = None, providers: Optional[Dict[str, Any]] = None, usag
     ``primary`` the router is built over the hub's default ``vendor-model-caller`` arm, the Claude Code subscription (``claude``)."""
     if primary is None:
         primary = ClaudeCliProvider()
-    return MultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES,
+    return BudgetedMultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES,
                          limit_message=limit_message(usage_tracker), spec_of=active_spec, fallback_models=fallback_models)
 
 
