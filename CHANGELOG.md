@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-11-15
+
+- Release run (2026-11-15): the five container folders and modules lose their leading "the" (`body`, `consciousness`, `intelligence`, `world`, `self`), following the hub's 0.7.5; consumers import `quest_ai_runner.intelligence...`, `quest_ai_runner.world...` and so on from this tag, and 0.7.4 and earlier use the old paths. The hub pin moves to `v0.7.5`. Also: the planner default row is realigned (an extra empty cell shifted every column, so a chat turn failed with an unchosen-default error); autopilot acts on answered asks and closes out what it acted on; a tool name the planner made up is refused with the next step; slim task reads for cancel and pause checks and slim progress replies; opencode screen fixes (a note typed mid-run reaches the next attempt, a not-met goal says why, resume shows the earlier turns).
+
 ## [0.7.4] - 2026-11-14
 
 - Release run (2026-11-14): everything under Unreleased above ships as 0.7.4, the first tag that holds `body/internal_context/quest/quest_ask_cards` (critical data, 2026-11-13) which quest-backend imports; v0.7.3 lacks it. The hub pin moves to `v0.7.4` (declare, judge_answer, selected_goal_checker, stop_rule.persist). Also: an invalid Claude login stops the turn and the card index once, and wait rows draw the same stage once.
