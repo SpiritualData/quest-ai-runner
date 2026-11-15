@@ -14,9 +14,9 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality import scaffolding
+from quest_ai_runner.intelligence.critical_thinking.response_quality import scaffolding
 from hubofhubs.api import signature_probe
-from quest_ai_runner.the_consciousness.request_intake import async_bridge
+from quest_ai_runner.consciousness.request_intake import async_bridge
 from hubofhubs.api import editblock as aider_editblock
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([.-]\w+)?$")
@@ -91,16 +91,16 @@ def front_door(args):
 
 
 def hook(args):
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_intelligence.mind.delegation import goal_runner_contract
-    from quest_ai_runner.the_world.tools import tools
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.intelligence.mind.delegation import goal_runner_contract
+    from quest_ai_runner.world.tools import tools
     if args["hook"] == "translator":
         return {"is_cli_model": getattr(goal_runner_contract, "_cli_model_translator") is cli_model}
     if args["hook"] == "client_factory":
         client = tools.quest_client_from_env({"QUEST_BASE_URL": "http://quest.invalid", "QUEST_API_KEY": "synthetic"})
         return {"client": type(client).__name__}
-    from quest_ai_runner.the_body.configuration import config
+    from quest_ai_runner.body.configuration import config
     registered = [name for name in ("derive_capabilities", "resolve_tool_registry") if callable(getattr(config, name, None))]
     return {"registered": sorted(registered)}
 

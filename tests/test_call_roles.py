@@ -17,14 +17,14 @@ import pytest
 
 import quest_ai_runner
 from hubofhubs.api import role_tiers
-from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_deep_models import DeepModelsMixin
-from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_answering import AnsweringMixin
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import SPECS_BY_ID
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import (
+from quest_ai_runner.intelligence.mind.delegation.orchestrator_deep_models import DeepModelsMixin
+from quest_ai_runner.intelligence.mind.orchestrator_types import OrchestratorConfig
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_answering import AnsweringMixin
+from quest_ai_runner.self.integrity.prompts.prompt_specs import SPECS_BY_ID
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.call_roles import (
     CALL_ROLES, ORDER, PERSON_SET_CALLS, STRUCTURE_WATCH_CALL, TIERS, calls_at, role_of, tier_for_call)
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import plan_start
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import plan_start
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 TABLE = role_tiers.read_table()
 ALL_ASKS = (None, "", "fast", "balanced", "quality", "best", "strong", "science", "not-a-tier")
@@ -203,8 +203,8 @@ def test_calls_at_lists_the_calls_of_a_tier():
 
 
 def test_a_deployment_can_keep_a_model_out_of_its_tier_defaults_without_touching_pins():
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import model_registry
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import excluded_models_from_environment
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser import model_registry
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import excluded_models_from_environment
     assert excluded_models_from_environment({"QAR_EXCLUDED_MODELS": " Opus, gpt "}) == ("opus", "gpt")
     assert excluded_models_from_environment({}) == ()
     top = {"fast": "claude-haiku-5-5", "balanced": "claude-sonnet-5-5", "quality": "claude-opus-5-5", "best": "claude-opus-5-5"}
@@ -222,7 +222,7 @@ def test_a_deployment_can_keep_a_model_out_of_its_tier_defaults_without_touching
 
 
 def test_spend_by_role_reads_the_per_call_records_and_marks_the_evidence_above_fast(tmp_path, capsys):
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import render_spend_report, spend_by_role
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.call_roles import render_spend_report, spend_by_role
     rows = [
         {"ts": 100, "spec_id": "select-context.rank-files", "tokens_in": 1000, "tokens_out": 100, "cost_usd": 0.01},
         {"ts": 101, "spec_id": "select-context.rank-files", "tokens_in": 1000, "tokens_out": 100, "cost_usd": 0.01},
@@ -242,6 +242,6 @@ def test_spend_by_role_reads_the_per_call_records_and_marks_the_evidence_above_f
     log = tmp_path / "calls.jsonl"
     import json
     log.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
-    from quest_ai_runner.the_consciousness.terminal.cli_spend import _cmd_spend_by_role
+    from quest_ai_runner.consciousness.terminal.cli_spend import _cmd_spend_by_role
     assert _cmd_spend_by_role(SimpleNamespace(log=str(log), days=36500, json=True), None) == 0
     assert "response_writing" in capsys.readouterr().out

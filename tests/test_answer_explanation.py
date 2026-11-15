@@ -24,12 +24,12 @@ import pytest
 
 from hubofhubs.api import DeepResult
 from hubofhubs.api import EVENT_DONE, EVENT_EXPLANATION, EVENT_RESULT
-from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import (
+from quest_ai_runner.intelligence.mind.response_writer.answer_explanation import (
     EXPLAIN_PROMPT, EXPLANATION_VERSION, MAX_ITEMS_PER_KIND, METRIC_KEYS, METRIC_RULE, TurnTrace, build_payload, has_renderable_content,
     is_eligible, metric_rule, render_metrics, render_record_for_prompt, render_used, trace_from_result)
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Mode, Orchestrator, OrchestratorConfig, OrchestratorResult
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Mode, Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
 
 from .conftest import StubProvider, StubRetrieval
 from .test_goal_metrics_flow import TASK, Worker, deep_plan, world  # noqa: F401  (world is a fixture)
@@ -296,7 +296,7 @@ def test_evolvable_structure_is_optional_and_cleaned():
 
 
 def test_evolvable_structure_alone_is_renderable():
-    from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import has_renderable_content
+    from quest_ai_runner.intelligence.mind.response_writer.answer_explanation import has_renderable_content
     assert has_renderable_content({"used": {}, "evolvable_structure": {"ideal": "x"}})
 
 
@@ -563,7 +563,7 @@ def test_the_flag_off_leaves_a_turn_with_metrics_exactly_as_it_was(world):
 
 
 def test_each_used_card_names_what_it_is_the_quest_it_belongs_to_and_a_description_of_its_own_beside_the_old_keys():
-    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event
+    from quest_ai_runner.intelligence.mind.context_intake.orchestrator_events import _project_card_metadata_for_event
     metas = [
         {"id": "card:quest-q1", "title": "Renovate the bathroom", "adapter": "keyword", "managed_by": "quest", "quest_id": "q1",
          "description": "Tile the floor before the visit. Two goals are overdue.", "items": [{"id": "quest-state", "type": "quest", "locator": {"quest_id": "q1"}}]},

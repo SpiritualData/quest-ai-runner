@@ -2,8 +2,8 @@
 title the case allows, or whose title is the exact title of the allowed call. Every other goal is a person's, and the write is blocked and reported as an unexpected write."""
 import pytest
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
-from quest_ai_runner.the_world.tools import dry_run_writes as dry
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import QuestApiError
+from quest_ai_runner.world.tools import dry_run_writes as dry
 
 TITLES = {"h1": "Submit the Quest app to Google Play and advance the written feature test pass", "k1": "P3 next step: week of 2026-11-02", "x1": "FB push post A"}
 
@@ -72,7 +72,7 @@ def test_a_goal_whose_title_cannot_be_read_is_not_changed_and_reads_and_other_pa
 
 
 def test_the_tool_call_records_the_exact_title_and_a_created_goal_is_remembered(guarded):
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
 
     class Client:
         def list_quest_goals(self, quest_id):

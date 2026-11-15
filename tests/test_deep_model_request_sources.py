@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from hubofhubs.api import role_tiers
-from quest_ai_runner.the_intelligence.mind.delegation.work_model import (
+from quest_ai_runner.intelligence.mind.delegation.work_model import (
     DeepModelAsk, deep_model_ask, default_effective, rung_allowed, split_requested)
 
 from .test_deep_difficulty_model_selection import (
@@ -183,7 +183,7 @@ def test_difficulty_is_never_passed_as_the_task_kind_and_the_plan_carries_no_kin
     for level in ("simple", "normal", "hard"):
         _, sel = fresh_orchestrator().deep_model_plan(None, None, "sonnet", difficulty=level)
         assert sel["tier_role"] == "main_session"
-    from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
+    from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
     assert not hasattr(PlanDecision(action="deep"), "deep_task_kind")
 
 

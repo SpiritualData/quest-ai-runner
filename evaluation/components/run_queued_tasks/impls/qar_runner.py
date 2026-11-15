@@ -6,12 +6,12 @@ import os
 import tempfile
 from pathlib import Path
 
-from quest_ai_runner.the_body.configuration.config import RunnerConfig
-from quest_ai_runner.the_consciousness.request_intake.lane import build_arg_parser, load_env_file
-from quest_ai_runner.the_consciousness.request_intake.local_time import scheduled_moment
-from quest_ai_runner.the_consciousness.representatives.personas import PersonaResolverConfig, build_persona_resolver
-from quest_ai_runner.the_consciousness.request_intake.poller import Poller
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import (
+from quest_ai_runner.body.configuration.config import RunnerConfig
+from quest_ai_runner.consciousness.request_intake.lane import build_arg_parser, load_env_file
+from quest_ai_runner.consciousness.request_intake.local_time import scheduled_moment
+from quest_ai_runner.consciousness.representatives.personas import PersonaResolverConfig, build_persona_resolver
+from quest_ai_runner.consciousness.request_intake.poller import Poller
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_sync import (
     QuestFolderSyncError, pull_quest_to_folder, push_folder_to_quest, quest_for_path)
 
 from common import hermetic_env
@@ -41,7 +41,7 @@ def lifecycle(args):
 
 
 def persona(args):
-    from quest_ai_runner.the_consciousness.representatives.personas import PersonaRegistry
+    from quest_ai_runner.consciousness.representatives.personas import PersonaRegistry
     cfg = PersonaResolverConfig(skills_root="/skills", registry=PersonaRegistry.from_mapping(args["registry"]),
                                 cache_dir=args.get("cache_dir"))
     found = build_persona_resolver(cfg)(args["task"])

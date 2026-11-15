@@ -9,11 +9,11 @@ from types import SimpleNamespace
 from typing import Any, Dict
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import (
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import (
     QUEST_DATA_WRITE_SURFACE_INSTRUCTION, apply_quest_data_ladder_guard, rung_offers_quest_data_tools)
-from quest_ai_runner.the_intelligence.mind.response_writer import orchestrator_turn_messages as messages
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.response_writer import orchestrator_turn_messages as messages
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 from .conftest import StubProvider, StubRetrieval
 

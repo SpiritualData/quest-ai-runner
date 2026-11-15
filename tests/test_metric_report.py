@@ -7,11 +7,11 @@ carries them passes them on as the progress post's ``data``. A client or a test 
 """
 from hubofhubs.api import DeepResult, ProgressEvent
 from esoi import MAX_METRICS, MetricResult, payload_of, reconcile
-from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorResult
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
-from quest_ai_runner.the_consciousness.request_intake.executor_support import _TaskProgressSink
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+from quest_ai_runner.intelligence.mind.orchestrator_types import OrchestratorResult
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.consciousness.request_intake.executor_support import _TaskProgressSink
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import QuestApiError
 
 ENTRIES = payload_of(reconcile([
     MetricResult(source="measured", solution_id="receive-input", metric_id="metric-receive-input",

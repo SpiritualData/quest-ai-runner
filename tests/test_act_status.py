@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from hubofhubs.api import EVENT_INTERIM, EVENT_RESULT
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.response_writer import act_status
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.response_writer import act_status
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 from .conftest import StubProvider, StubRetrieval
 from .test_tools import make_spec
@@ -111,7 +111,7 @@ def test_voice_keeps_each_message_to_a_line_and_a_figure_the_records_lack_is_dro
 
 
 def test_every_request_measured_carries_the_metric_records_own_readings_into_both_messages():
-    from quest_ai_runner.the_intelligence.critical_thinking.area import CaseIteration
+    from quest_ai_runner.intelligence.critical_thinking.area import CaseIteration
     state = {"value": "0"}                      # no goal line states a figure: the readings come from the metric record
     provider = StubProvider(decisions=[act_plan("act", WRITE), {"action": "answer", "rationale": "done", "user_intent": "act"}])
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=registry(state, []),
@@ -140,15 +140,15 @@ def test_the_closing_metric_line_is_one_clean_line_or_none_and_never_a_piece_of_
 
 
 def test_the_code_steps_own_receipt_is_not_listed_again_as_already_in_place():
-    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import receipt_observation
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
+    from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import receipt_observation
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
     code = receipt_observation("create_or_update_quest_goal", "RECEIPT written by code for X. This week's next step for X was already set.", "noop")
     other = {"kind": "query", "locator": "tool:update_goal", "tool_status": "noop", "text": "The weekly check-in is already on the quest"}
     assert already_in_place([code, other]) == ["It's already set."]
 
 
 def test_an_already_there_workflow_is_said_in_one_plain_sentence_with_its_title_and_schedule_and_no_ids_or_tool_text():
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
     receipt = {"kind": "query", "locator": "tool:create_quest_workflow", "tool_status": "noop",
                "text": "TOOL create_quest_workflow: Already there: the workflow 'Weekly check-in' (qwf_d9df4f414728) on quest quest_e8257dd0aa3d already has every one of these steps",
                "tool_data": {"workflowId": "qwf_d9df4f414728", "title": "Weekly check-in: Thursday office hour",
@@ -185,8 +185,8 @@ def test_the_already_there_sentence_carries_the_schedule_and_the_next_occurrence
 
 def test_the_final_reply_of_an_ensure_turn_that_found_everything_there_is_exactly_the_code_sentence_and_nothing_else_changes_it():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import settle_already_set
-    from quest_ai_runner.the_world.tools.tools import ToolRegistry
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import settle_already_set
+    from quest_ai_runner.world.tools.tools import ToolRegistry
     from .test_tools import make_spec
     tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True),
                           make_spec("list_quest_workflows", handler=lambda a, c: ToolResult(ok=True), mutates=False)])
@@ -232,7 +232,7 @@ def test_a_planner_that_only_reads_an_existing_workflow_gets_the_idempotent_writ
 
 
 def test_no_ensure_call_is_built_from_a_read_of_several_workflows_or_none():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import ensure_from_read
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import ensure_from_read
     from .test_tools import make_spec
     tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True)])
     two = {"locator": "tool:list_quest_workflows", "tool_data": [{"workflow_id": "a", "workflow_title": "A", "title": "s"}, {"workflow_id": "b", "workflow_title": "B", "title": "s"}]}
@@ -242,7 +242,7 @@ def test_no_ensure_call_is_built_from_a_read_of_several_workflows_or_none():
 
 def test_the_already_set_sentence_says_where_it_is_with_the_quests_name_and_no_id():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import settle_already_set
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import settle_already_set
     from .test_tools import make_spec
     tools = ToolRegistry([make_spec("create_quest_workflow", handler=lambda a, c: ToolResult(ok=True), mutates=True),
                           make_spec("list_quest_workflows", handler=lambda a, c: ToolResult(ok=True), mutates=False)])
@@ -259,8 +259,8 @@ def test_the_already_set_sentence_says_where_it_is_with_the_quests_name_and_no_i
 
 
 def test_the_workflow_listing_rows_carry_the_quests_plain_name():
-    from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.body.hands.quest_operations import tools_quest_ops as ops
+    from quest_ai_runner.world.tools.tools import ToolContext
     from .test_create_quest_workflow_tool import PRODUCTION_SHAPED, ListingClient
 
     class Named(ListingClient):
@@ -272,7 +272,7 @@ def test_the_workflow_listing_rows_carry_the_quests_plain_name():
 
 
 def test_a_repeated_call_with_no_data_of_its_own_does_not_add_a_second_already_set_sentence():
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import already_in_place
     full = {"locator": "tool:create_quest_workflow", "tool_status": "noop", "tool_data": {"title": "Weekly check-in"}}
     repeat = {"locator": "tool:create_quest_workflow", "tool_status": "noop", "text": "ALREADY SUCCEEDED earlier this turn"}
     phrases = already_in_place([full, repeat])

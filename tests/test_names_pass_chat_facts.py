@@ -3,9 +3,9 @@
 Each decision of the hub's Goal Completion becomes one ``stop_decision`` progress event (whether it goes on, why, what is left, what is tried next), the turn that
 only the person can finish ends with a question written by code from the run's own record, and it is stopped with ``needs_answer``, which is not a limit of tries.
 """
-from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import STOP_NEEDS_ANSWER
-from quest_ai_runner.the_intelligence.critical_thinking.names_pass import DEEP, FILES, GLOSSARY, WIDER, announce, ask_line, route_words
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
+from quest_ai_runner.consciousness.judgment_calls.ask_policy import STOP_NEEDS_ANSWER
+from quest_ai_runner.intelligence.critical_thinking.names_pass import DEEP, FILES, GLOSSARY, WIDER, announce, ask_line, route_words
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
 from types import SimpleNamespace
 
 

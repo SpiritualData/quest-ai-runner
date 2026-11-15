@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 
 from tests.test_opencode_terminal import Orchestrator, Session, owner_with
-from quest_ai_runner.the_consciousness.terminal.interactive_session_persona import default_rep_name
+from quest_ai_runner.consciousness.terminal.interactive_session_persona import default_rep_name
 
 
 def test_nothing_picked_gets_the_built_in_general_assistant(monkeypatch):

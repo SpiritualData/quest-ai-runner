@@ -3,7 +3,7 @@ on the milestone's keyed goal, with the metric read again and at most one person
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue, milestone_progress
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_cue, milestone_progress
 
 TABLES = {"solutions": {"sol-1": {"name": "M1 Tutorials published", "milestones": "Six tutorials are published and linked on the goal",
                                   "purpose": "Teach new users the product with short tutorials.", "measures_of_success": "tutorials published"}},
@@ -506,7 +506,7 @@ def test_long_work_queued_on_the_deep_harness_is_acknowledged_with_its_before():
 
 
 def test_the_deep_brief_carries_the_work_record_the_task_executor_measures_on_completion():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion
     briefs = []
     made = milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda goal, brief: briefs.append(brief) or {"output": "queued", "deferred": True})
     record = milestone_completion.work_record_of(briefs[0])
@@ -516,7 +516,7 @@ def test_the_deep_brief_carries_the_work_record_the_task_executor_measures_on_co
 
 
 def test_with_a_work_skill_the_worker_carries_it_out_on_the_solution_and_the_lane_finds_it(tmp_path):
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion
     briefs = []
     milestone_progress.make_progress(cue(), Registry(), decide, deep=lambda g, b: briefs.append(b) or {"output": "queued", "deferred": True}, skill="method-x")
     record = milestone_completion.work_record_of(briefs[0])
@@ -542,7 +542,7 @@ def test_evidence_work_goes_to_the_deep_harness_with_the_question_form():
             return json.dumps({"pick": "others"})
         return decide(prompt)
     made = milestone_progress.make_progress(cue(), Registry(), decomposing, deep=lambda g, b: briefs.append(b) or {"output": "queued", "deferred": True})
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion
     assert made.status == "handed_off" and 'written as lines "Q1.' in briefs[0] and milestone_completion.work_record_of(briefs[0])["method"] == "evidence"
 
 
@@ -553,7 +553,7 @@ def test_a_reader_sees_names_never_bare_record_ids_and_the_ack_states_the_metric
 
 
 def test_the_next_brief_names_the_unmet_parts_and_frames_the_worker_by_the_solution():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion
     kept_text = ("Kept by Quest AI: Overview:\nTutorials." + milestone_completion.unmet_section([{"part": 2, "requirements": ["Ends with a call to action"]}])
                  + "\n\n--- Part 1 ---\nOpening line one. Call to action: go.\n\n--- Part 2 ---\nOpening line two.")
     tables = json.loads(json.dumps(TABLES))
@@ -580,6 +580,6 @@ def test_the_next_brief_names_the_unmet_parts_and_frames_the_worker_by_the_solut
 
 
 def test_a_brief_without_unmet_parts_or_frame_is_the_plain_brief():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_depth import deliverable_brief
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application.milestone_depth import deliverable_brief
     _, brief = deliverable_brief({"name": "scripts"}, ["Has an opening"], ["Script one."], "T", "records", "reads")
     assert "rewrite each one whole" not in brief and "It serves the milestone named in the records below.\nIts metric:" in brief and "- Script one." in brief

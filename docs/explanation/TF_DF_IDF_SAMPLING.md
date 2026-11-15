@@ -154,7 +154,7 @@ At 10,000 files, you're still under 30k tokens, and costs are *sublinear* in cor
 
 ### In FileContextStore (code bootstrap)
 ```python
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 store = FileContextStore(
     cards_dir="/path/to/cards",
@@ -168,7 +168,7 @@ context = store.assemble("find auth middleware")
 
 ### In ClaudeConversationsAdapter (conversation retrieval)
 ```python
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
 
 adapter = ClaudeConversationsAdapter(sessions_dir="~/.claude/sessions")
 
@@ -182,7 +182,7 @@ context = adapter.query({
 
 ### Shared Utilities
 ```python
-from hubofhubs.the_body.internal_context.card_store.text_sampling import (
+from hubofhubs.body.internal_context.card_store.text_sampling import (
     extract_terms,
     select_representatives,
 )
@@ -266,7 +266,7 @@ A: ~62% on bootstrap + ~27% per conversation query on a typical codebase. Exact 
 ## See Also
 
 - `docs/explanation/BOOTSTRAP_TOKEN_SAVINGS.md`: Detailed token analysis
-- `hubofhubs.the_body.internal_context.card_store.text_sampling` (the hub's `ai-hub-of-hubs-structure/hubofhubs/recall/text_sampling.py`): Implementation
+- `hubofhubs.body.internal_context.card_store.text_sampling` (the hub's `ai-hub-of-hubs-structure/hubofhubs/recall/text_sampling.py`): Implementation
 - `tests/test_bootstrap_token_savings.py`: Benchmarks
 - `FileContextStore`: Stage 1 & 2 optimizations
 - `ClaudeConversationsAdapter`: Conversation sampling

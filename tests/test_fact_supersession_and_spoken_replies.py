@@ -3,11 +3,11 @@ thing breaks the standard; a figure the reads do not hold is caught on an inform
 spoken shape; a plain information turn is held to four sentences; the planner's `delivery` field reaches the plan."""
 from datetime import date
 
-from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
-from quest_ai_runner.the_intelligence.mind.response_writer.fact_supersession import resolve
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
+from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.intelligence.mind.response_writer.fact_supersession import resolve
+from quest_ai_runner.intelligence.mind.response_writer.reply_standards import (
     SHAPE_INFORMATION, SHAPE_SPOKEN, measure, repair, standard_for)
 
 TODAY = date(2026, 11, 6)
@@ -91,8 +91,8 @@ def test_the_planners_delivery_field_reaches_the_plan_and_a_bad_value_is_not_giv
 
 def test_the_writer_is_handed_the_resolved_fact_and_a_spoken_reply_directive():
     from hubofhubs.api import Mode
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
     from .conftest import StubProvider, StubRetrieval
 
     class Capturing(StubProvider):
@@ -113,8 +113,8 @@ def test_the_writer_is_handed_the_resolved_fact_and_a_spoken_reply_directive():
 
 def test_the_read_budget_wrap_up_is_held_to_the_standard_and_regenerated_with_the_hint():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
+    from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorConfig
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
 
     steers = []
     rs = SimpleNamespace(plan=PlanDecision(action="read"), turn_user_intent="ask", turn_delivery="spoken", exec_record=None,
@@ -135,8 +135,8 @@ def test_the_read_budget_wrap_up_is_held_to_the_standard_and_regenerated_with_th
 def test_a_turn_that_ends_in_the_read_budget_wrap_up_is_regenerated_to_the_spoken_standard():
     """The whole path: the planner keeps reading until the budget is spent, the wrap-up writes a long marked-up draft, and the standard
     (selected from the planner's reported delivery) regenerates it once with the measurement's hint."""
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
     from .conftest import StubProvider, StubRetrieval
 
     drafts = ["**Status:** We are at 50.0% as of 5 Nov. Paid subscribers are 0. Grants are on hold. Ask me more? Done.",

@@ -1,10 +1,10 @@
 """A message that orders a text ALSO saved in the person's records (research, then a note on the quest) is not answered with the text alone: the request
 analyser's structured ``saves_to_records`` report keeps the planner's ``draft_in_chat`` from standing for the write, so the order not carried out is handed
 back to plan the tool step (hard rule #3: a structured report, never a word of the message or the reply)."""
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import parse_goal_condition_reply, take_status_flags
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import parse_goal_condition_reply, take_status_flags
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -88,7 +88,7 @@ def test_a_plain_question_with_no_save_ordered_stays_a_question():
 
 
 def test_a_research_note_the_planner_never_wrote_is_saved_by_code_from_the_investigation_record():
-    from quest_ai_runner.the_world.science.investigate import research_note
+    from quest_ai_runner.world.science.investigate import research_note
     record = {"question": "How long?", "best_grade": "C", "synthesis": {"known": [], "unknown": []},
               "items": [{"item_id": "i1", "claim": "Ten minutes a day is the usual advice.", "grade": "C", "source": "https://example.org/a", "verified": "opened"}],
               "findings": [{"item_id": "i1", "claim": "Ten minutes a day is the usual advice.", "grade": "C", "source": "https://example.org/a", "also": 0}]}

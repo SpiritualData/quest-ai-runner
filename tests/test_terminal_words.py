@@ -1,8 +1,8 @@
 """QAR keeps the Quest wording in the hub's terminal blocks: what users see is the Quest app's sentence, not the hub's generic one."""
 from hubofhubs.api import strings
 
-import quest_ai_runner.the_consciousness.terminal.textual_ui_trail  # noqa: F401  (the terminal's setup imports the Quest wording)
-from quest_ai_runner.the_consciousness.terminal.terminal_words import QUEST_WORDS
+import quest_ai_runner.consciousness.terminal.textual_ui_trail  # noqa: F401  (the terminal's setup imports the Quest wording)
+from quest_ai_runner.consciousness.terminal.terminal_words import QUEST_WORDS
 
 
 def event(visible=False):

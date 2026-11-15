@@ -15,9 +15,9 @@ from typing import Any, Dict, List, Optional
 from hubofhubs.api import DeepResult, ProgressEvent
 from hubofhubs.api import EVENT_EXEC
 from hubofhubs.api import ExecutionFact, ExecutionRecord, classify_exec_phase
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubRetrieval
 

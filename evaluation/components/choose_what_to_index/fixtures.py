@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 
 from hubofhubs.api import FilesystemCardRepository
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import write_bootstrap_meta
+from quest_ai_runner.body.internal_context.card_store.file_context_store import write_bootstrap_meta
 
 SERIES_DIR = "backups"
 DOCS_DIR = "docs"

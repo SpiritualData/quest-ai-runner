@@ -1,5 +1,5 @@
 """Which milestone a short cue concerns, from synthetic spec records: the right one, the first-listed one when two are close, none when nothing fits."""
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue as cue
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_cue as cue
 
 TABLES = {
     "solutions": {
@@ -23,8 +23,8 @@ import json
 
 import pytest
 
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 CUE = "lets get the apple store release moving"
 
@@ -33,7 +33,7 @@ CUE = "lets get the apple store release moving"
 def cheap_model(monkeypatch):
     """The turn's one cheap model call, answered offline: the milestone judgment picks the first candidate listed, any other question is answered NONE."""
     import re
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
 
     from .test_milestone_progress import decide as progress_decide
 
@@ -154,8 +154,8 @@ def test_the_third_rung_runs_only_for_an_act_turn_that_took_no_higher_rung():
 
 
 def test_a_pinned_turn_skips_the_broad_retrieval_and_the_code_records_the_step_and_the_plan_becomes_the_answer():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     calls = []
     provider = StubProvider([{"action": "deep", "user_intent": "act", "rationale": "r", "pending_read": [], "deep_brief": "do it"}])
@@ -168,8 +168,8 @@ def test_a_pinned_turn_skips_the_broad_retrieval_and_the_code_records_the_step_a
 
 
 def test_a_lane_gap_is_shown_to_the_reply_not_swallowed():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
     config = OrchestratorConfig()
@@ -180,14 +180,14 @@ def test_a_lane_gap_is_shown_to_the_reply_not_swallowed():
 
 
 def test_the_cue_facts_are_read_as_a_milestone_measure_for_the_status_message():
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
     block = cue.fact_block(TABLES, CUE, monday="2026-11-02")
     reading = act_status.pick_reading(act_status.readings_in([{"text": block}]), "apple store release")
     assert reading.milestone.startswith("P3 Mobile app live on the Apple Store") and reading.value.startswith("No") and "App Store" in reading.done_when
 
 
 def test_a_replan_drops_card_context_reads_when_the_turn_holds_its_context():
-    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import split_context_reassembly
+    from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import split_context_reassembly
     reads = [{"cards": "anything"}, {"grep": "x"}]
     assert split_context_reassembly(reads, True) == ([{"grep": "x"}], [{"cards": "anything"}])
     assert split_context_reassembly(reads, False) == (reads, [])
@@ -195,8 +195,8 @@ def test_a_replan_drops_card_context_reads_when_the_turn_holds_its_context():
 
 def test_reading_a_pinned_quests_records_goes_through_no_placement_and_carries_the_quests_time_zone(monkeypatch):
     import quest_ai_runner.api as api
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_intents import read_spec_records_spec
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_intents import read_spec_records_spec
+    from quest_ai_runner.world.tools.tools import ToolContext
 
     class Client:
         def get_spec(self, subject_type, subject):
@@ -233,7 +233,7 @@ def test_an_old_format_goal_sharing_the_milestones_code_and_words_is_listed_as_a
 
 
 def test_adopting_an_existing_goal_renames_links_and_moves_it_and_a_repeat_is_already_there():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
 
     class Client:
         def __init__(self):
@@ -279,9 +279,9 @@ def test_settle_plan_turns_a_deep_run_or_a_permission_question_into_the_answer_a
 
 def test_the_first_message_is_composed_from_the_records_before_the_write_and_no_deep_run_is_launched():
     from hubofhubs.api import EVENT_INTERIM
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     order = []
     calls = []
@@ -340,7 +340,7 @@ KEYED = "P3 Mobile app live on the Apple Store next step: week of 2026-11-02"
 
 
 def test_a_goal_already_linked_or_already_titled_is_updated_in_place_and_never_created_again():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     fields = {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "d"}
     # the keyed goal exists next to a legacy unlinked one: nothing is created
     client = GoalClient([{"id": "k", "name": KEYED, "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "Kept by Quest AI: d", "period": "2026_W45"},
@@ -357,12 +357,12 @@ def test_a_goal_already_linked_or_already_titled_is_updated_in_place_and_never_c
 
 
 def test_the_receipt_states_the_assignee_name_solution_and_metric_as_read_back_after_the_write(monkeypatch):
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
+    from quest_ai_runner.world.tools.tools import ToolContext
     client = GoalClient([{"id": "old", "name": "P3 next step: week of 2026-11-02", "spec_solution_id": None, "period": "2026_W45"}])
     spec = create_or_update_quest_goal_spec({}, client_factory=lambda: client)
     client.members = [{"user_id": "u1", "name": "Cy Owner", "email": "x"}]
-    import quest_ai_runner.the_body.hands.quest_operations.goal_links as gl
+    import quest_ai_runner.body.hands.quest_operations.goal_links as gl
     monkeypatch.setattr(gl, "resolve_assignee", lambda c, q, who: ("u1", None))      # undone at the end of the test, so no other test sees it
     result = spec.handler({"quest_id": "q1", "title": KEYED, "assignee": "Cy", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True,
                            "adopt_goal_id": "old", "user_asked_for_this_field": True}, ToolContext(quest_id="q1"))
@@ -373,8 +373,8 @@ def test_the_receipt_states_the_assignee_name_solution_and_metric_as_read_back_a
 
 
 def test_the_code_step_is_in_the_execution_record_so_no_net_re_runs_the_work_as_a_deep_run():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
     config = OrchestratorConfig()
@@ -386,9 +386,9 @@ def test_the_code_step_is_in_the_execution_record_so_no_net_re_runs_the_work_as_
 
 def test_a_milestone_act_cue_sends_two_messages_the_status_first_and_the_result():
     from hubofhubs.api import EVENT_INTERIM, EVENT_RESULT
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
     orch = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider), tools=registry([]),
@@ -401,9 +401,9 @@ def test_a_milestone_act_cue_sends_two_messages_the_status_first_and_the_result(
 
 def test_the_first_message_names_no_record_id_and_none_of_the_planners_fact_blob():
     from hubofhubs.api import EVENT_INTERIM
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": [],
                               "facts_read": ["Metric record esr_mc (P3 App Store listing live)", "Owners named: Cy, Di"]}])
@@ -427,8 +427,8 @@ class StaleListingClient(GoalClient):
 
 
 def run_tool(client, **extra):
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_goals import create_or_update_quest_goal_spec
+    from quest_ai_runner.world.tools.tools import ToolContext
     spec = create_or_update_quest_goal_spec({}, client_factory=lambda: client)
     # A fixed period (the week of KEYED): a test that left it to "this week" changed outcome when the calendar week rolled over.
     args = {"quest_id": "q1", "title": KEYED, "period": "2026_W45", "spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "match_by_link": True,
@@ -499,8 +499,8 @@ def test_a_found_goal_without_the_links_gets_them_written_and_the_write_response
 
 
 def test_the_receipt_entry_of_the_progress_step_is_by_code_and_the_reply_leads_with_the_deliverable():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
     config = OrchestratorConfig(interim_replies=True, overseer=False, min_seconds_between_interims=0.0)
@@ -547,7 +547,7 @@ def test_the_judgment_shows_each_milestones_purpose_where_milestones_of_one_area
 
 
 def test_an_answer_naming_no_option_is_asked_once_more_and_an_id_without_its_prefix_or_the_name_label_counts():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.milestone_cue import JUDGE_ASKS, judged_option
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application.milestone_cue import JUDGE_ASKS, judged_option
     ids = ["esr_aaaa1111bbbb", "esr_cccc2222dddd"]
     names = {"esr_aaaa1111bbbb": "P4 Onboarding test", "esr_cccc2222dddd": "P5 Foundational product videos"}
     assert judged_option("cccc2222dddd", ids) == (True, "esr_cccc2222dddd")
@@ -579,8 +579,8 @@ def test_neutral_messages_of_other_kinds_never_resolve_a_milestone_when_the_judg
 
 
 def test_a_none_judgment_leaves_the_turn_without_cue_facts_or_a_write():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     import pytest as pt
     calls = []
@@ -629,7 +629,7 @@ def alt_registry(calls, goals=ALT_GOALS):
 
 
 def test_alternatives_in_a_reply_are_kept_by_the_quest_one_goal_each_and_the_tail_says_which_were_already_tracked():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     calls, asked = [], []
     tail = alternatives_flow.run(alt_registry(calls), "q1", "write a couple of posts for the push", "the two posts...",
                                  lambda prompt: asked.append(prompt) or alt_answer(A_EXISTING, B_NEW))
@@ -643,7 +643,7 @@ def test_alternatives_in_a_reply_are_kept_by_the_quest_one_goal_each_and_the_tai
 
 
 def test_ids_the_model_was_not_offered_are_dropped_and_fewer_than_two_alternatives_record_nothing():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     calls = []
     forged = dict(B_NEW, goal_id="g_not_offered", solution_id="esr_not_offered", metric_id="esr_made_up")
     tail = alternatives_flow.run(alt_registry(calls), "q1", "cue", "reply", lambda prompt: alt_answer(A_EXISTING, forged))
@@ -656,7 +656,7 @@ def test_ids_the_model_was_not_offered_are_dropped_and_fewer_than_two_alternativ
 
 def test_a_refused_write_still_leaves_the_versions_their_hypotheses_and_the_metric_in_the_reply_and_says_which_were_not_recorded():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
     refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
                                                                          handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: not allowed"))])
     orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
@@ -669,7 +669,7 @@ def test_a_refused_write_still_leaves_the_versions_their_hypotheses_and_the_metr
 
 def test_the_refusals_own_words_reach_the_reply_without_ids():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
     refusing = ToolRegistry([read_spec(), list_goals(ALT_GOALS), ToolSpec(name="create_or_update_quest_goal", description="d", mutates=True,
                                                                          handler=lambda a, c: ToolResult(ok=False, text="Nothing was written: Quest refused it (esr_fbcc56e182f7 is not a strategy of this quest)"))])
     orch = SimpleNamespace(tools=refusing, cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
@@ -681,7 +681,7 @@ def test_the_refusals_own_words_reach_the_reply_without_ids():
 
 def test_the_tracking_step_runs_only_for_a_drafted_deliverable_ordered_by_the_person():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import track_alternatives
     calls = []
     orch = SimpleNamespace(tools=alt_registry(calls), cheap_decision=lambda prompt: alt_answer(A_EXISTING, B_NEW))
     base = dict(draft_in_chat=True, turn_user_intent="act", quest_id="q1", cue_resolved=None, gathered=[], user_message="m")
@@ -695,8 +695,8 @@ def test_the_tracking_step_runs_only_for_a_drafted_deliverable_ordered_by_the_pe
 
 
 def test_message_one_for_a_tracked_deliverable_says_what_the_quest_already_holds_and_never_the_empty_status():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
     line = alternatives_flow.status_line(alt_registry([], [dict(ALT_GOALS[0]), dict(ALT_GOALS[0], id="g3", title="Launch push post C")]), "q1", "write two posts for the launch push")
     assert line == ("The quest already tracks 2 goals like this (Launch push post A, Launch push post C), under P3 Mobile app live on the Apple Store, "
                     "which moves P3 App Store listing live.")
@@ -708,13 +708,13 @@ def test_message_one_for_a_tracked_deliverable_says_what_the_quest_already_holds
 
 
 def test_the_reply_voice_keeps_prices_and_optional_questions_out_of_drafted_content():
-    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
+    from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
     assert "Never state a price, a plan name, a tier" in REPLY_VOICE_SYSTEM and "no question about an optional choice" in REPLY_VOICE_SYSTEM and "no list of what you could not confirm" in REPLY_VOICE_SYSTEM
 
 
 def test_a_drafted_deliverable_is_shown_once_in_the_final_message_with_no_milestone_copy_and_no_deep_run():
     from hubofhubs.api import EVENT_RESULT
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
     from .test_done_evidence import Provider, Runner
     from .test_incremental_replies import build, NOT_MET
     plan = {"action": "answer", "rationale": "write them", "user_intent": "act", "deep_target": "draft_in_chat", "work_shape": "lookup", "done_evidence": ["x"]}
@@ -728,9 +728,9 @@ def test_a_drafted_deliverable_is_shown_once_in_the_final_message_with_no_milest
 
 def test_message_one_for_a_drafted_deliverable_is_the_code_status_and_not_the_planners_plan():
     from hubofhubs.api import EVENT_INTERIM
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     goals = [dict(ALT_GOALS[0])]
     plan_read = {"action": "tool", "rationale": "I will read the priority ladder and the quest sync file", "user_intent": "act", "deep_target": "draft_in_chat",
@@ -752,7 +752,7 @@ HUMAN = {"id": "h1", "name": "Submit the app to the store and advance the writte
 
 
 def test_a_goal_with_any_other_title_is_never_adopted_by_a_model_pick_or_by_the_link_and_nothing_is_written_to_it():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     fields = {"spec_solution_id": "esr_c", "spec_metric_id": "esr_mc", "description": "Next step ..."}
     for kwargs in ({"adopt_goal_id": "h1"}, {"link_match": True}, {"adopt_goal_id": "h1", "link_match": True}):
         client = GoalClient([dict(HUMAN)])
@@ -762,7 +762,7 @@ def test_a_goal_with_any_other_title_is_never_adopted_by_a_model_pick_or_by_the_
 
 
 def test_only_a_keyed_next_step_goal_can_be_taken_over_and_the_pattern_is_the_one_the_flow_writes():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     for title in ("P3 next step: week of 2026-11-02", "P3 Mobile app live on the Apple Store next step: week of 2026-11-09", "X next step: week of 2026-11-02 "):
         assert goal_links.is_keyed_next_step(title), title
     for title in ("Submit the app to the store", "Next step review", "P3 next step: this week", "next step: week of soon", "", None):
@@ -825,7 +825,7 @@ def test_other_refusals_are_not_retried_and_an_accepted_link_is_untouched():
 
 def test_the_first_message_for_a_resolved_milestone_is_read_from_its_record_fields_not_parsed_out_of_a_reads_text():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import send_status_first
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import send_status_first
     resolved = cue.resolve(registry(), "q1", CUE, datetime.datetime(2026, 11, 4, tzinfo=datetime.timezone.utc))
     sent = []
     emit = SimpleNamespace(emit=lambda event: sent.append(event), status=lambda text: None)
@@ -855,8 +855,8 @@ def test_a_deliverable_goal_the_planner_wrote_under_its_own_title_does_not_stand
 
 def test_the_closing_line_reports_unchanged_from_the_read_when_nothing_wrote_the_metric():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, metric_written
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric, metric_written
     before = act_status.MetricReading("esr_c", "P3 Mobile app live on the Apple Store", "App live", "0 of 6 on the working list (niche videos 1 to 6), read 2026-")
     rs = SimpleNamespace(status_first={"before": before, "voice": False}, gathered=[], turn_metrics=None, quest_id="q1")
     res = SimpleNamespace(kind="answer", text="I recorded the step.", deep_results=[])
@@ -870,7 +870,7 @@ def test_the_closing_line_reports_unchanged_from_the_read_when_nothing_wrote_the
 
 
 def test_the_alternatives_are_cut_from_the_reply_by_where_each_begins_so_the_models_answer_stays_short():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     reply = ("**Post 1** Spiritual growth does not have to be vague. What if you could set an intention and track it?\n\n**Post 2** Most people quit because nobody walks it with them. "
              "Quest gives you small daily steps.")
     answer = json.dumps({"alternatives": [{"title": "Push post A", "starts_with": "Spiritual growth does not have", "hypothesis": "intention hook"},
@@ -885,7 +885,7 @@ def test_the_alternatives_are_cut_from_the_reply_by_where_each_begins_so_the_mod
 # ---- run 4 of the milestone baseline
 
 def test_an_alternative_is_found_in_the_reply_through_curly_quotes_markdown_and_spacing():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     reply = "**Post 1**\n\nSpiritual growth doesn’t have to mean taking things on faith.  What if you could\nexplore it?\n\n**Post 2**\n\nAI can’t do your inner work for you."
     cut = alternatives_flow.segment(reply, ["Spiritual growth doesn't have to mean", "AI can't do your inner work"])
     assert cut[0].startswith("Spiritual growth") and "AI can" not in cut[0] and cut[1].startswith("AI can")
@@ -895,7 +895,7 @@ def test_an_alternative_is_found_in_the_reply_through_curly_quotes_markdown_and_
 
 
 def test_message_one_shows_a_clean_current_value_never_a_fragment_or_a_link():
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
     assert act_status.status_value("public listing https://play.google.com/store/apps/details?id=com.example.app returned HTTP 404. More text.") == "public listing a link returned HTTP 404"
     assert act_status.status_value("50.0 percent (5 of 10) of OUTSIDE new sign-ups in the last 30 days") == "50.0 percent"
     assert act_status.status_value("0 integrations announced, 0 recorded as passed testing (Quest checked it)") == "0 integrations announced, 0 recorded as passed testing"
@@ -912,8 +912,8 @@ def test_message_one_says_the_step_already_exists_when_this_weeks_goal_is_on_the
 
 def test_the_closing_line_reads_the_milestones_metric_record_again_after_the_write():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import close_with_metric
     now_tables = {**TABLES, "metrics": {**TABLES["metrics"], "esr_mc": {**TABLES["metrics"]["esr_mc"], "record": "Yes. Listing live since this morning."}}}
     read = ToolSpec(name="read_spec_records", description="d", mutates=False, handler=lambda a, c: ToolResult(ok=True, data={"records": now_tables, "time_zone": "UTC"}, text="read"))
     tools = ToolRegistry([read_spec(), list_goals([]), write_goal([])])
@@ -926,8 +926,8 @@ def test_the_closing_line_reads_the_milestones_metric_record_again_after_the_wri
 
 
 def test_the_planners_own_goal_writes_are_taken_out_for_a_milestone_cue_and_the_deliverable_stays_in_the_one_keyed_goal():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     calls = []
     extra = {"name": "create_or_update_quest_goal", "args": {"quest_id": "q1", "title": "P3 Mobile app live on the Apple Store outreach message", "description": "x"}}
@@ -948,7 +948,7 @@ REAL_GOALS = [{"id": "r1", "name": "Every lead pool has received a subscription 
 
 
 def test_a_goal_that_is_not_one_quest_ai_keeps_is_left_exactly_as_it_is_even_when_the_call_carries_its_own_title():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     for goal in REAL_GOALS:
         client = GoalClient([dict(goal)])
         done = goal_links.ensure_goal(client, "q1", goal["name"], "2026_W45", {"description": "Post copy ...", "spec_solution_id": "esr_c"}, "u9", goal["id"], True, True)
@@ -959,7 +959,7 @@ def test_a_goal_that_is_not_one_quest_ai_keeps_is_left_exactly_as_it_is_even_whe
 
 
 def test_what_the_tool_creates_is_marked_as_kept_by_quest_ai_and_only_such_a_goal_is_updated_later():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     client = GoalClient([])
     goal_links.ensure_goal(client, "q1", "Launch push post A", "2026_W45", {"description": "Post one"}, None)
     assert client.posts[0][1]["description"] == "Kept by Quest AI: Post one"
@@ -972,7 +972,7 @@ def test_what_the_tool_creates_is_marked_as_kept_by_quest_ai_and_only_such_a_goa
 
 
 def test_the_alternatives_flow_never_offers_or_changes_a_goal_that_merely_shares_words_with_the_request():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     rows = [{"id": g["id"], "title": g["name"], "text": g["description"], "spec_solution_id": None, "completed": False, "abandoned": False} for g in REAL_GOALS]
     rows.append({"id": "k1", "title": "Launch push post A", "text": "Kept by Quest AI: Post one", "spec_solution_id": "esr_c", "completed": False, "abandoned": False})
     assert [g["id"] for g in alternatives_flow.goals_kept(rows)] == ["k1"]
@@ -992,8 +992,8 @@ def test_the_alternatives_flow_never_offers_or_changes_a_goal_that_merely_shares
 def test_a_goal_that_cannot_be_read_blocks_the_write_but_is_a_lane_gap_not_an_unexpected_write_and_does_not_stop_the_run():
     import sys
     from pathlib import Path
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
-    from quest_ai_runner.the_world.tools import dry_run_writes as dry
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_support import QuestApiError
+    from quest_ai_runner.world.tools import dry_run_writes as dry
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evaluation/components/chat_quality/impls"))
     import prod_qar_readonly as arm
     import os
@@ -1021,8 +1021,8 @@ def test_a_goal_that_cannot_be_read_blocks_the_write_but_is_a_lane_gap_not_an_un
 
 def test_the_figure_pass_does_not_touch_a_drafted_deliverable_or_a_reply_whose_figures_were_read():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "ask", "rationale": "r", "pending_read": []}])
     config = OrchestratorConfig()
@@ -1032,7 +1032,7 @@ def test_the_figure_pass_does_not_touch_a_drafted_deliverable_or_a_reply_whose_f
 
 
 def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_title_leaves_it_as_it_is():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     rows = [{"id": "p1", "title": "FB push post A", "text": "a person's own goal", "spec_solution_id": None, "completed": False},
             {"id": "p2", "title": "FB push post B", "text": "a person's own goal", "spec_solution_id": None, "completed": False},
             {"id": "x", "title": "Budget review", "text": "", "spec_solution_id": None, "completed": False}]
@@ -1054,24 +1054,24 @@ def test_a_reference_goal_the_quest_holds_is_shown_by_title_and_reusing_its_titl
 
 
 def test_a_tool_that_leaves_an_unmarked_goal_alone_is_reported_as_already_on_the_quest():
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     person = {"id": "p1", "name": "FB push post A", "description": "a person's own goal", "period": "2026_W45", "completed": False, "abandoned": False}
     result = run_tool(GoalClient([dict(person)]), title="FB push post A", description="New copy", match_by_link=False)
     assert result.ok and result.data["state"] == "left_alone" and "left exactly as it is" in result.text
 
 
 def test_the_reply_voice_forbids_tool_chatter_offers_and_unread_figures_in_every_reply_and_the_draft_status_does_not_claim_a_save():
-    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
+    from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
     for rule in ("Never mention a file, tool, report, search or read you could or could not use", "no offer of further work", "Never recall a number from memory"):
         assert rule in REPLY_VOICE_SYSTEM
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
     assert "keeping them" not in act_status.status_texts(None, [], "Writing the draft now.", evidence="", found="")["text"]
 
 
 def test_a_drafting_turn_stops_reading_after_two_rounds_and_has_no_overseer():
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     read = {"action": "tool", "user_intent": "act", "deep_target": "draft_in_chat", "rationale": "r", "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}
     provider = StubProvider([read, read, read, read, {"action": "answer", "user_intent": "act", "deep_target": "draft_in_chat", "rationale": "r"}])
@@ -1082,7 +1082,7 @@ def test_a_drafting_turn_stops_reading_after_two_rounds_and_has_no_overseer():
 
 
 def test_look_alike_goals_that_are_a_persons_mean_nothing_is_created_even_under_other_titles():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     rows = [{"id": "p1", "title": "FB push post A", "text": "a person's own goal", "spec_solution_id": None, "completed": False},
             {"id": "p2", "title": "FB push post B", "text": "a person's own goal", "spec_solution_id": None, "completed": False}]
     calls = []
@@ -1096,16 +1096,16 @@ def test_look_alike_goals_that_are_a_persons_mean_nothing_is_created_even_under_
 
 def test_a_question_that_already_read_what_it_concerns_never_goes_to_a_deep_background_run():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
+    from quest_ai_runner.intelligence.critical_thinking.unmet_goal import pursue_before_giving_up
     rs = SimpleNamespace(turn_user_intent="ask", gathered=[{"kind": "query", "locator": "tool:list_quest_goals", "text": "595 matching goals"}], text="The quest has 595 goals.", _last_verdict={"met": False})
     done = pursue_before_giving_up(SimpleNamespace(cfg=SimpleNamespace()), rs, "g", None, {}, None, None, None, None)
     assert done["result"] is None and done["followup_started"] is False and done["pursuit"]["status"] == "unmet_reported" and done["pursuit"]["message"] == ""
 
 
 def test_a_question_asked_inside_a_quests_chat_is_not_answered_from_the_question_alone():
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     reads = {"action": "tool", "user_intent": "ask", "rationale": "count them", "tool_calls": [{"name": "list_quest_goals", "args": {"quest_id": "q1"}}]}
     provider = StubProvider([reads, {"action": "answer", "user_intent": "ask", "rationale": "r"}])
@@ -1117,13 +1117,13 @@ def test_a_question_asked_inside_a_quests_chat_is_not_answered_from_the_question
 
 
 def test_the_reply_voice_asks_for_short_attributed_answers_with_the_core_fact_first():
-    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
+    from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import REPLY_VOICE_SYSTEM
     for rule in ("in as few sentences as it needs", "never tell the person what you would need or could do for them", 'Never an unattributed "I", "we" or "our"', "open with the core fact asked about"):
         assert rule in REPLY_VOICE_SYSTEM
 
 
 def test_a_draft_turn_on_a_quest_with_many_goals_finds_the_look_alikes_past_the_first_page_and_names_only_them():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     everything = ([{"id": f"j{i}", "title": f"Grow subscribers task {i}", "text": "", "spec_solution_id": None, "completed": False} for i in range(150)]
                   + [{"id": "p1", "title": "FB push post A", "text": "a person's goal", "spec_solution_id": None, "completed": False},
                      {"id": "p2", "title": "FB push post B", "text": "a person's goal", "spec_solution_id": None, "completed": False}])
@@ -1164,8 +1164,8 @@ def test_the_flow_asks_only_for_the_milestones_own_open_goals_and_finds_this_wee
 
 
 def test_the_goals_tool_asks_the_server_for_the_linked_goals_and_filters_an_older_servers_full_answer():
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import list_quest_goals_spec
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import list_quest_goals_spec
+    from quest_ai_runner.world.tools.tools import ToolContext
     calls = []
 
     class Client:
@@ -1187,8 +1187,8 @@ def test_the_goals_tool_asks_the_server_for_the_linked_goals_and_filters_an_olde
 def test_a_bookkeeping_request_gets_its_bookkeeping_and_no_forced_deliverable(monkeypatch):
     """Joshua's scope (2026-11-08): only progress on a milestone must make an AI increment. A request that IS bookkeeping (move a due date, set an owner) is judged
     NONE by the milestone judgment, so no progress step runs and the planner's own write is the turn's work."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     monkeypatch.setattr(Orchestrator, "cheap_decision", lambda self, prompt: "Asks to change a goal's due date.\nNONE")
     calls = []
@@ -1208,9 +1208,9 @@ def test_the_milestone_judgment_names_bookkeeping_as_none():
 
 
 def test_a_progress_turn_with_a_queued_deep_harness_hands_the_deliverable_there_and_acknowledges():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DEFERRED_RUNNER_KEY
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.intelligence.mind.planner.orchestrator_decide_tool import DEFERRED_RUNNER_KEY
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubDeepRunner, StubProvider, StubRetrieval
     provider = StubProvider([{"action": "answer", "user_intent": "act", "rationale": "r", "pending_read": []}])
     config = OrchestratorConfig(overseer=False, deferred_deep_queued=True)

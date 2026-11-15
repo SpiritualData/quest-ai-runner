@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from hubofhubs.api import role_tiers
 
-from quest_ai_runner.the_consciousness.terminal.interactive_session_commands import CommandsMixin
+from quest_ai_runner.consciousness.terminal.interactive_session_commands import CommandsMixin
 
 
 class Console:

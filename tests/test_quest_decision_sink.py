@@ -15,8 +15,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestDecisionSink
+from quest_ai_runner.body.internal_context.adapters_values import Escalation
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient, QuestDecisionSink
 
 
 def fake_client(*, quest: Optional[Dict[str, Any]] = None,
@@ -202,7 +202,7 @@ def test_an_explicit_person_still_wins_over_the_goal_owner():
 
 def test_nobody_but_the_runners_own_account_is_refused():
     import pytest
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestNotConfigured
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestNotConfigured
     client, calls = ai_client(goal_owner="user_ai", quest_owners=["user_ai"])
     with pytest.raises(QuestNotConfigured):
         assignee_of(QuestDecisionSink(client), assignee="user_ai", blocked_goal_id="g1", run_for_user_ids=["user_ai"])

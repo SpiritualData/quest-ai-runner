@@ -9,7 +9,7 @@ to remove.
 """
 from pathlib import Path
 
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def _dead(rel, walked=(), root=Path("/nope"), skip=("Android", "node_modules")):
@@ -89,7 +89,7 @@ def test_bootstrap_never_indexes_a_claude_code_state_file(tmp_path):
 
 
 def test_prune_is_opt_outable(monkeypatch):
-    from quest_ai_runner.the_body.configuration.card_store_settings import prune_dead_cards as _prune_dead_cards
+    from quest_ai_runner.body.configuration.card_store_settings import prune_dead_cards as _prune_dead_cards
     monkeypatch.delenv("QAR_PRUNE_DEAD_CARDS", raising=False)
     assert _prune_dead_cards() is True          # default ON
     for off in ("0", "false", "no", "FALSE"):
@@ -118,7 +118,7 @@ def test_a_file_we_lack_permission_to_read_is_never_pruned(tmp_path):
 
 def test_a_dry_run_never_deletes(tmp_path, monkeypatch):
     """--dry-run promises an estimate WITHOUT running the bootstrap. It must not delete either."""
-    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+    from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
     corpus = tmp_path / "corpus"
     (corpus / "Android" / "Sdk").mkdir(parents=True)
@@ -145,7 +145,7 @@ def test_a_dry_run_never_deletes(tmp_path, monkeypatch):
 
 
 def _degenerate(card):
-    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+    from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
     return FileContextStore._card_is_degenerate(card)
 
 
@@ -229,7 +229,7 @@ def test_a_dedup_merge_across_new_and_stored_cards_yields_plain_paths():
 
 
 def test_a_prompt_echo_summary_is_recognised():
-    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_dedup import _is_prompt_echo
+    from quest_ai_runner.intelligence.subconscious.cards_from_files.context_card_dedup import _is_prompt_echo
     # Every persona run carries the same scaffolding, so a summary made of it cannot distinguish
     # one card from another and does no work in retrieval.
     assert _is_prompt_echo("Act as Batman.\n\nQuest outcome: I've completed my dissertation") is True
@@ -240,7 +240,7 @@ def test_a_prompt_echo_summary_is_recognised():
 
 
 def test_a_recorded_card_summarises_what_happened_not_what_was_asked():
-    from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_card_dedup import _record_summary
+    from quest_ai_runner.intelligence.subconscious.cards_from_files.context_card_dedup import _record_summary
     task = "Act as Bailey.\n\nQuest outcome: PhD\n\nScope: this week's target."
     # The run's own result describes the work; the prompt only describes the ask.
     assert _record_summary(task, {"response": "Chose the ITRS ranking formula and recorded why."}) \

@@ -5,9 +5,9 @@ import logging
 
 import pytest
 
-from quest_ai_runner.the_consciousness.terminal import cli, cli_poll
-from quest_ai_runner.the_consciousness.terminal.cli_parser import _build_parser as build_parser
-from quest_ai_runner.the_self.assembler import hub_requirements
+from quest_ai_runner.consciousness.terminal import cli, cli_poll
+from quest_ai_runner.consciousness.terminal.cli_parser import _build_parser as build_parser
+from quest_ai_runner.self.assembler import hub_requirements
 
 
 @pytest.mark.parametrize("argv", [["--check", "poll"], ["poll", "--check"]])
@@ -35,7 +35,7 @@ def test_check_never_builds_a_poller_or_runs_the_loop(monkeypatch):
 
 
 def test_check_lane_passes_and_fails_clearly(monkeypatch):
-    monkeypatch.setattr("quest_ai_runner.the_consciousness.terminal.cli_chat._check_chat_prerequisites", lambda: [])
+    monkeypatch.setattr("quest_ai_runner.consciousness.terminal.cli_chat._check_chat_prerequisites", lambda: [])
     monkeypatch.setattr(hub_requirements, "requirements_report", lambda *a, **k: hub_requirements.Report())
 
     class Client:

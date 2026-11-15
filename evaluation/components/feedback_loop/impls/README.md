@@ -10,5 +10,5 @@
 
 ## Where to go next
 
-- Owning intent: [Quest Intents](../../../../quest_ai_runner/the_intelligence/higher_mind/objectives/README.md)
+- Owning intent: [Quest Intents](../../../../quest_ai_runner/intelligence/higher_mind/objectives/README.md)
 - Repository: [top README](../../../../README.md)

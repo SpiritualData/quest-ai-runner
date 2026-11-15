@@ -5,7 +5,7 @@ from pathlib import Path
 import hubofhubs
 from hubofhubs.api import Card
 
-import quest_ai_runner.the_self.assembler.hub as qar_hub
+import quest_ai_runner.self.assembler.hub as qar_hub
 
 ROOT = Path(__file__).resolve().parents[1]
 

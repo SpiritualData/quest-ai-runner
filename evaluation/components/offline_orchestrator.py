@@ -23,8 +23,8 @@ def build_offline_orchestrator(meter, registry=None, planner_tier="haiku", recip
                       QUEST_AI_ANTICIPATION="off")
     for k in common.SCRUB:
         os.environ.pop(k, None)
-    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
-    from quest_ai_runner.the_body.configuration.config import build_orchestrator
+    from quest_ai_runner.consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.body.configuration.config import build_orchestrator
     cfg = _config_from_env()
     cfg.selections = {**(cfg.selections or {}), **(selections or {})}
     cfg.deep_runner = None  # THE LATCH: explicit None = execution disabled (config.resolve_deep_runner)

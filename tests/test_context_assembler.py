@@ -10,13 +10,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore, tokenize
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore, tokenize
 from hubofhubs.api import card_slug
 from hubofhubs.api import AssembledContext, ContextAssembler
-from quest_ai_runner.the_intelligence.mind.context_intake.context_doctrine import (
+from quest_ai_runner.intelligence.mind.context_intake.context_doctrine import (
     DEEP_CONTEXT_DOCTRINE, MODEL_TIER_GATE, SUFFICIENCY_GATE, compose_deep_preamble)
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import MODEL_TIER_BLOCK
-from quest_ai_runner.the_intelligence.mind.orchestrator import PLANNER_PROMPT, Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.planner_prompt import MODEL_TIER_BLOCK
+from quest_ai_runner.intelligence.mind.orchestrator import PLANNER_PROMPT, Orchestrator, OrchestratorConfig
 
 
 # ---------------------------------------------------------------------------
@@ -645,7 +645,7 @@ class TestStaleCardsFor:
 
 def _make_orchestrator(assembler=None, provider=None, plan_action="answer"):
     """Build a minimal Orchestrator with mock adapters."""
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
     mock_provider = provider or MagicMock()
     mock_provider.list_models.return_value = []
@@ -895,8 +895,8 @@ class TestWriteBackCapturesGatheredFiles:
     def test_record_pins_files_the_brain_read(self):
         """After a run, the card pins the rel_paths the brain actually read this turn (from the
         gathered reads/greps), so staleness has something to invalidate. This is the loop closing."""
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
-        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
+        from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
         recorded = {}
 

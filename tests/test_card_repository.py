@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 
 # ---------------------------------------------------------------------------

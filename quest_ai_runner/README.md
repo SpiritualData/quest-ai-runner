@@ -13,7 +13,22 @@ Make each Quest user meet one whole assistant whose parts agree, so that a part 
 - Entry call: `quest_ai_runner.run("quest-self", 'What should I work on first this week?')`
 - Selected implementation: quest-ai-runner library (`library`)
 - Metric: Judge pass rate over the chat quality cases, Whole-path turns right on a small mixed set, Quest answers that name the person's goal and circumstance and fit features to them, Day-with-Jarvis turns right end to end, Asks filed and deletes held before anything outward or irreversible happens, Replies that claim only what was done, Passing chat turns per dollar, Delegated tasks meeting their standard, Exact and consented changes, Data kept in scope, Engine reuse, Measured coverage, QAR overall score
-- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 1128 more
+- Implemented by: [`evaluation/components/act_as_the_body/__init__.py`](../evaluation/components/act_as_the_body/__init__.py), [`evaluation/components/act_as_the_body/broken/__init__.py`](../evaluation/components/act_as_the_body/broken/__init__.py), [`evaluation/components/act_as_the_body/broken/blind_replay.py`](../evaluation/components/act_as_the_body/broken/blind_replay.py), [`evaluation/components/act_as_the_body/cases.json`](../evaluation/components/act_as_the_body/cases.json), [`evaluation/components/act_as_the_body/impls/__init__.py`](../evaluation/components/act_as_the_body/impls/__init__.py), [`evaluation/components/act_as_the_body/impls/card_and_reads.py`](../evaluation/components/act_as_the_body/impls/card_and_reads.py), [`evaluation/components/act_as_the_body/interface.py`](../evaluation/components/act_as_the_body/interface.py), [`evaluation/components/act_as_the_body/score.py`](../evaluation/components/act_as_the_body/score.py) and 1132 more
+
+### Top implementations of Quest Self
+
+| # | Implementation | Result | Cost per pass | In use |
+|---|---|---|---|---|
+| 1 | Offline metric validity check (`reference_replies`) | 100% (331 of 331 cases) | free |  |
+| 2 | Planner-only route check on the chat dataset (`planner_route`) | 94% (94 of 100 cases) | $0.0007 |  |
+| 3 | Live chat on a disposable world (`dev_quest_chat`) | 80% (24 of 30 cases) | 1.2 calls |  |
+
+The one in use is chosen at the deciding stage of the cascade (see the leaderboard), which can differ from the latest run ranked here.
+
+3 more compared; the full list is in the results log.
+
+**How it is scored:** Passing chat turns per dollar. share of realistic chat turns that pass their rubric (grounded facts, right handling, exact changes), and cost per passing turn
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
 ## Quest Body (`quest-body`)
 
@@ -24,18 +39,32 @@ Give the assistant one declared place where a person's Quest data lives and wher
 - Entry call: `quest_ai_runner.run("quest-body", 'quest-id')`
 - Selected implementation: Quest HTTP client from the environment (`quest_client`)
 - Metric: Parity of Quest operations across access points
-- Implemented by: [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py), [`quest_ai_runner/the_body/internal_context/quest/__init__.py`](the_body/internal_context/quest/__init__.py), [`quest_ai_runner/the_body/internal_context/quest/cached_db_adapter.py`](the_body/internal_context/quest/cached_db_adapter.py), [`quest_ai_runner/the_body/internal_context/quest/interface.py`](the_body/internal_context/quest/interface.py), [`quest_ai_runner/the_body/internal_context/quest/quest_retrieval_adapter.py`](the_body/internal_context/quest/quest_retrieval_adapter.py), [`quest_ai_runner/the_body/internal_context/quest/spec_records.py`](the_body/internal_context/quest/spec_records.py)
+- Implemented by: [`quest_ai_runner/body/area_body.py`](body/area_body.py), [`quest_ai_runner/body/internal_context/quest/__init__.py`](body/internal_context/quest/__init__.py), [`quest_ai_runner/body/internal_context/quest/cached_db_adapter.py`](body/internal_context/quest/cached_db_adapter.py), [`quest_ai_runner/body/internal_context/quest/interface.py`](body/internal_context/quest/interface.py), [`quest_ai_runner/body/internal_context/quest/quest_ask_cards.py`](body/internal_context/quest/quest_ask_cards.py), [`quest_ai_runner/body/internal_context/quest/quest_retrieval_adapter.py`](body/internal_context/quest/quest_retrieval_adapter.py), [`quest_ai_runner/body/internal_context/quest/spec_records.py`](body/internal_context/quest/spec_records.py)
+
+### Top implementations of Quest Body
+
+No implementation has a recorded result yet, so the choice is not backed by a measurement.
+
+**How it is scored:** Parity of Quest operations across access points. Ensures that an operation on Quest's data gives the same result whether it is reached in the same process as Quest or over its HTTP API.
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
 ## Quest Intelligence (`quest-intelligence`)
 
 Let every request be answered for what the person is working toward.
 
-- Out of scope: How each member does its job, and the order a whole request meets them, which the_self/respond.py owns.
+- Out of scope: How each member does its job, and the order a whole request meets them, which self/respond.py owns.
 - Delegates to: quest-intents, the-subconscious, the-mind, nervous-system, critical-thinking, quest-autopilot, proactivity
 - Entry call: `quest_ai_runner.run("quest-intelligence", {'request': 'what is the latest Rust version?'})`
 - Selected implementation: `composition`
 - Metric: Quest Intelligence on Quest cases
-- Implemented by: [`quest_ai_runner/the_intelligence/flow.py`](the_intelligence/flow.py), [`quest_ai_runner/the_intelligence/interface.py`](the_intelligence/interface.py)
+- Implemented by: [`quest_ai_runner/intelligence/flow.py`](intelligence/flow.py), [`quest_ai_runner/intelligence/interface.py`](intelligence/interface.py)
+
+### Top implementations of Quest Intelligence
+
+No implementation has a recorded result yet, so the choice is not backed by a measurement.
+
+**How it is scored:** Quest Intelligence on Quest cases. One balanced number over Quest cases for the composition of the Intelligence members (Quest Intents, Subconscious, Mind, Nervous System, Critical Thinking, Quest Autopilot and Proactivity), run on Quest-only cases.
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
 ## Quest World (`quest-world`)
 
@@ -46,7 +75,14 @@ Let the assistant learn what lies outside a person's Quest and act on it through
 - Entry call: `quest_ai_runner.run("quest-world", 'latest Rust version')`
 - Selected implementation: `composition`
 - Metric: Quest World on Quest cases
-- Implemented by: [`quest_ai_runner/the_world/flow.py`](the_world/flow.py), [`quest_ai_runner/the_world/interface.py`](the_world/interface.py)
+- Implemented by: [`quest_ai_runner/world/flow.py`](world/flow.py), [`quest_ai_runner/world/interface.py`](world/interface.py)
+
+### Top implementations of Quest World
+
+No implementation has a recorded result yet, so the choice is not backed by a measurement.
+
+**How it is scored:** Quest World on Quest cases. One balanced number over Quest cases for the composition of the World members (Model Plumbing, Science and Tools), run on Quest-only cases.
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
 ## Quest Consciousness (`quest-consciousness`)
 
@@ -57,18 +93,25 @@ Let each Quest user grow with an AI aligned to them.
 - Entry call: `quest_ai_runner.run("quest-consciousness", 'team-1')`
 - Selected implementation: `composition`
 - Metric: Quest Consciousness on Quest cases
-- Implemented by: [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py), [`quest_ai_runner/the_consciousness/interface.py`](the_consciousness/interface.py)
+- Implemented by: [`quest_ai_runner/consciousness/flow.py`](consciousness/flow.py), [`quest_ai_runner/consciousness/interface.py`](consciousness/interface.py)
+
+### Top implementations of Quest Consciousness
+
+No implementation has a recorded result yet, so the choice is not backed by a measurement.
+
+**How it is scored:** Quest Consciousness on Quest cases. One balanced number over Quest cases for the composition of the five Consciousness records (Quest Requests, Quest Representatives, Quest Decision Requests, Feedback Learning and Intent Evolution), built on the hub's metric-the-consciousness and run on Quest-only cases.
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
 ## One level below
 
-- [Quest Body](the_body/README.md) (sub-intent): Quest is the AI's body.
-- [Quest Consciousness](the_consciousness/README.md) (sub-intent): The AI acts for each person the way that person would want.
-- [Intelligence](the_intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
-- [Quest Self](the_self/README.md) (sub-intent): Each Quest user meets one whole assistant.
-- [World](the_world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.
-- [Feedback Learning](the_consciousness/feedback_learning/README.md) (solution with implementations)
-- [Write Through MCP](the_world/tools/connected_system_operations/README.md) (solution with implementations): Carry out one named change on an external tool server, and only when an explicit allowlist permits that operation.
-- [Place On A Quest](the_intelligence/higher_mind/objectives/place_on_a_quest/README.md) (solution with implementations): Say which of the person's quests a message, goal, note or task belongs to, or none, the same way on every surface that picks one.
+- [Quest Body](body/README.md) (sub-intent): Quest is the AI's body.
+- [Quest Consciousness](consciousness/README.md) (sub-intent): The AI acts for each person the way that person would want.
+- [Intelligence](intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
+- [Quest Self](self/README.md) (sub-intent): Each Quest user meets one whole assistant.
+- [World](world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.
+- [Feedback Learning](consciousness/feedback_learning/README.md) (solution with implementations)
+- [Write Through MCP](world/tools/connected_system_operations/README.md) (solution with implementations): Carry out one named change on an external tool server, and only when an explicit allowlist permits that operation.
+- [Place On A Quest](intelligence/higher_mind/objectives/place_on_a_quest/README.md) (solution with implementations): Say which of the person's quests a message, goal, note or task belongs to, or none, the same way on every surface that picks one.
 
 ## Diagram
 
@@ -94,16 +137,16 @@ flowchart LR
 | Per-consumer worker | `quest-self:per-consumer-worker` | Each product writes its own worker and chat backend around a model vendor's API. | no code yet |  |
 | Agent framework with Quest glue | `quest-self:agent-framework-with-quest-glue` | Build the engine from a general framework (LangGraph, CrewAI, an agent SDK) and add Quest grounding, escalation and the executor as glue. | no code yet |  |
 | Deep runner only | `quest-self:deep-runner-only` | Hand every task straight to a coding agent such as Claude Code with the person's material available, with no routing or answering loop in front. | no code yet |  |
-| quest-ai-runner library | `quest-self:library` | A domain-free Python library: a bounded plan, gather, re-plan, answer loop that escalates to a deep runner when real work is needed (the core), a task executor that polls Quest, claims, runs, escalates and reports (the runner), and reference adapters for retrieval, model providers, cards, vectors, web research and deep runners, all wired by one configuration per lane and each swappable part chosen by metric. | [`quest_ai_runner/the_self/respond.py`](the_self/respond.py) | selected |
-| Quest HTTP client from the environment | `quest-body:quest_client` | Builds the Quest client from QUEST_BASE_URL (or QUEST_API_URL), QUEST_API_KEY and, when set, QUEST_TEAM_ID, so the runner works in the account those name. | [`quest_ai_runner/the_body/area_body.py`](the_body/area_body.py) | selected |
-| Composition | `quest-consciousness:composition` | One Quest user's alignment: each line is handed to the member that owns it. | [`quest_ai_runner/the_consciousness/flow.py`](the_consciousness/flow.py) | selected |
-| Composition | `quest-intelligence:composition` | A request read against the person's intents, its context chosen, thought through and held to a measure. | [`quest_ai_runner/the_intelligence/flow.py`](the_intelligence/flow.py) | selected |
-| Composition | `quest-world:composition` | Research and reach: the outside world answered from public research, and a request placed inside or outside the readable sources. | [`quest_ai_runner/the_world/flow.py`](the_world/flow.py) | selected |
-| QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | The orchestrator built the way production builds it, with the claude CLI backend on the cheapest tier, the real tool catalogue and the real send command, over the placeholder account. | [`quest_ai_runner/the_intelligence/mind/orchestrator.py`](the_intelligence/mind/orchestrator.py) |  |
+| quest-ai-runner library | `quest-self:library` | A domain-free Python library: a bounded plan, gather, re-plan, answer loop that escalates to a deep runner when real work is needed (the core), a task executor that polls Quest, claims, runs, escalates and reports (the runner), and reference adapters for retrieval, model providers, cards, vectors, web research and deep runners, all wired by one configuration per lane and each swappable part chosen by metric. | [`quest_ai_runner/self/respond.py`](self/respond.py) | selected |
+| Quest HTTP client from the environment | `quest-body:quest_client` | Builds the Quest client from QUEST_BASE_URL (or QUEST_API_URL), QUEST_API_KEY and, when set, QUEST_TEAM_ID, so the runner works in the account those name. | [`quest_ai_runner/body/area_body.py`](body/area_body.py) | selected |
+| Composition | `quest-consciousness:composition` | One Quest user's alignment: each line is handed to the member that owns it. | [`quest_ai_runner/consciousness/flow.py`](consciousness/flow.py) | selected |
+| Composition | `quest-intelligence:composition` | A request read against the person's intents, its context chosen, thought through and held to a measure. | [`quest_ai_runner/intelligence/flow.py`](intelligence/flow.py) | selected |
+| Composition | `quest-world:composition` | Research and reach: the outside world answered from public research, and a request placed inside or outside the readable sources. | [`quest_ai_runner/world/flow.py`](world/flow.py) | selected |
+| QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | The orchestrator built the way production builds it, with the claude CLI backend on the cheapest tier, the real tool catalogue and the real send command, over the placeholder account. | [`quest_ai_runner/intelligence/mind/orchestrator.py`](intelligence/mind/orchestrator.py) |  |
 | Scripted ideal planner (offline) | `quest-self:reference_script` | The same orchestrator and tool catalogue with a planner that replays each case's ideal decisions and reply. | no code yet |  |
 | Rules only, no model (floor) | `quest-self:rules_only` | No orchestrator: a few message shapes become a note, a goal or a queued task, everything else gets a fixed non-answer, and the terminal prints the fixed Queued line. | no code yet |  |
-| One turn of the orchestrator over the model | `quest-self:orchestrator_turn` | The loop plans, gathers, re-plans and answers one message over the model seat, with no cards behind it, and returns the reply, how the loop ended and what ran. | [`quest_ai_runner/the_intelligence/mind/area_mind.py`](the_intelligence/mind/area_mind.py) |  |
-| The shipped path as one call | `quest-self:shipped_path` | Answers a message with one turn of the loop over the model and returns the turn whole, which is the path the end-to-end metric measures. | [`quest_ai_runner/the_intelligence/mind/area_mind.py`](the_intelligence/mind/area_mind.py) |  |
+| One turn of the orchestrator over the model | `quest-self:orchestrator_turn` | The loop plans, gathers, re-plans and answers one message over the model seat, with no cards behind it, and returns the reply, how the loop ended and what ran. | [`quest_ai_runner/intelligence/mind/area_mind.py`](intelligence/mind/area_mind.py) |  |
+| The shipped path as one call | `quest-self:shipped_path` | Answers a message with one turn of the loop over the model and returns the turn whole, which is the path the end-to-end metric measures. | [`quest_ai_runner/intelligence/mind/area_mind.py`](intelligence/mind/area_mind.py) |  |
 
 ## Metrics
 
@@ -130,26 +173,26 @@ flowchart LR
 ## Where to go next
 
 - Intent: [Quest AI Runner](../esoi/README.md)
-- Down: [quest_ai_runner/the_body/configuration](the_body/configuration/README.md)
-- Down: [quest_ai_runner/the_consciousness/feedback_learning](the_consciousness/feedback_learning/README.md)
-- Down: [quest_ai_runner/the_consciousness/intent_evolution](the_consciousness/intent_evolution/README.md)
-- Down: [quest_ai_runner/the_consciousness/prioritization](the_consciousness/prioritization/README.md)
-- Down: [quest_ai_runner/the_consciousness/representatives](the_consciousness/representatives/README.md)
-- Down: [quest_ai_runner/the_intelligence/nervous_system](the_intelligence/nervous_system/README.md)
-- Down: [quest_ai_runner/the_intelligence/proactivity](the_intelligence/proactivity/README.md)
-- Down: [quest_ai_runner/the_body/internal_context/card_store](the_body/internal_context/card_store/README.md)
-- Down: [quest_ai_runner/the_intelligence/critical_thinking/esoi_application](the_intelligence/critical_thinking/esoi_application/README.md)
-- Down: [quest_ai_runner/the_intelligence/mind/planner](the_intelligence/mind/planner/README.md)
-- Down: [quest_ai_runner/the_intelligence/mind/response_writer](the_intelligence/mind/response_writer/README.md)
-- Down: [quest_ai_runner/the_intelligence/subconscious/cards_from_files](the_intelligence/subconscious/cards_from_files/README.md)
-- Down: [quest_ai_runner/the_intelligence/subconscious/intuition](the_intelligence/subconscious/intuition/README.md)
-- Down: [quest_ai_runner/the_world/model_plumbing/model_tier_chooser](the_world/model_plumbing/model_tier_chooser/README.md)
-- Down: [quest_ai_runner/the_world/model_plumbing/vendor_model_caller](the_world/model_plumbing/vendor_model_caller/README.md)
-- Down: [quest_ai_runner/the_world/tools/connected_system_operations](the_world/tools/connected_system_operations/README.md)
-- Down: [quest_ai_runner/the_world/tools/delegated_agent_sessions](the_world/tools/delegated_agent_sessions/README.md)
-- Down: [quest_ai_runner/the_world/tools/file_editing](the_world/tools/file_editing/README.md)
-- Down: [quest_ai_runner/the_world/tools/web_search](the_world/tools/web_search/README.md)
-- Down: [quest_ai_runner/the_intelligence/higher_mind/objectives/place_on_a_quest](the_intelligence/higher_mind/objectives/place_on_a_quest/README.md)
+- Down: [quest_ai_runner/body/configuration](body/configuration/README.md)
+- Down: [quest_ai_runner/consciousness/feedback_learning](consciousness/feedback_learning/README.md)
+- Down: [quest_ai_runner/consciousness/intent_evolution](consciousness/intent_evolution/README.md)
+- Down: [quest_ai_runner/consciousness/prioritization](consciousness/prioritization/README.md)
+- Down: [quest_ai_runner/consciousness/representatives](consciousness/representatives/README.md)
+- Down: [quest_ai_runner/intelligence/nervous_system](intelligence/nervous_system/README.md)
+- Down: [quest_ai_runner/intelligence/proactivity](intelligence/proactivity/README.md)
+- Down: [quest_ai_runner/body/internal_context/card_store](body/internal_context/card_store/README.md)
+- Down: [quest_ai_runner/intelligence/critical_thinking/esoi_application](intelligence/critical_thinking/esoi_application/README.md)
+- Down: [quest_ai_runner/intelligence/mind/planner](intelligence/mind/planner/README.md)
+- Down: [quest_ai_runner/intelligence/mind/response_writer](intelligence/mind/response_writer/README.md)
+- Down: [quest_ai_runner/intelligence/subconscious/cards_from_files](intelligence/subconscious/cards_from_files/README.md)
+- Down: [quest_ai_runner/intelligence/subconscious/intuition](intelligence/subconscious/intuition/README.md)
+- Down: [quest_ai_runner/world/model_plumbing/model_tier_chooser](world/model_plumbing/model_tier_chooser/README.md)
+- Down: [quest_ai_runner/world/model_plumbing/vendor_model_caller](world/model_plumbing/vendor_model_caller/README.md)
+- Down: [quest_ai_runner/world/tools/connected_system_operations](world/tools/connected_system_operations/README.md)
+- Down: [quest_ai_runner/world/tools/delegated_agent_sessions](world/tools/delegated_agent_sessions/README.md)
+- Down: [quest_ai_runner/world/tools/file_editing](world/tools/file_editing/README.md)
+- Down: [quest_ai_runner/world/tools/web_search](world/tools/web_search/README.md)
+- Down: [quest_ai_runner/intelligence/higher_mind/objectives/place_on_a_quest](intelligence/higher_mind/objectives/place_on_a_quest/README.md)
 - Repository: [top README](../README.md)
 
 *Generated from the CSV files in this folder by `esoi readmes`. Edit the CSV files, not this page.*

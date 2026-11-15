@@ -6,12 +6,12 @@ from datetime import date, timedelta
 
 import pytest
 
-from quest_ai_runner.the_world.tools import tool_guards
-from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.the_world.tools.file_reading.date_references import (
+from quest_ai_runner.world.tools import tool_guards
+from quest_ai_runner.world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.world.tools.file_reading.date_references import (
     date_references_in, name_date, name_in_span, newest_dated, resolve_date_reference)
-from quest_ai_runner.the_world.tools.file_reading.files_server import FileOperations, build_server
-from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.world.tools.file_reading.files_server import FileOperations, build_server
+from quest_ai_runner.world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
 
 TOKEN = "t" * 12 + "-test-token-0123456789"
 FRIDAY = date(2026, 11, 6)
@@ -99,8 +99,8 @@ def test_newest_dated_needs_three_files_per_folder():
 def test_the_loop_searches_by_date_before_asking_the_person_to_paste():
     """A planner that would answer "paste it" for a file named by yesterday's date runs the dated find first."""
     import json
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider
 
     calls = []

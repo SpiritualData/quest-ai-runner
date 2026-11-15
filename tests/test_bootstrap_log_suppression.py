@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import logging
 
-from quest_ai_runner.the_consciousness.terminal.interactive_session_persona import _BACKGROUND_BOOTSTRAP_LOGGER_NAMES
-from quest_ai_runner.the_consciousness.terminal.interactive_session import _suppress_background_bootstrap_logs
+from quest_ai_runner.consciousness.terminal.interactive_session_persona import _BACKGROUND_BOOTSTRAP_LOGGER_NAMES
+from quest_ai_runner.consciousness.terminal.interactive_session import _suppress_background_bootstrap_logs
 
 
 def _reset_loggers():
@@ -39,7 +39,7 @@ def test_default_call_also_raises_bm25_content_store_logger():
     _reset_loggers()
     try:
         _suppress_background_bootstrap_logs(verbose=False)
-        log = logging.getLogger("quest_ai_runner.the_intelligence.subconscious.context_retriever.bm25_content_store")
+        log = logging.getLogger("quest_ai_runner.intelligence.subconscious.context_retriever.bm25_content_store")
         assert not log.isEnabledFor(logging.INFO)
     finally:
         _reset_loggers()
@@ -109,7 +109,7 @@ def test_the_hub_recall_loggers_are_kept_out_of_the_transcript_too():
         _suppress_background_bootstrap_logs(verbose=False)
         for module in ("context_folder_review", "context_card_ceilings", "card_store_mounts", "context_bootstrap_support"):
             assert not logging.getLogger(f"hubofhubs.recall.{module}").isEnabledFor(logging.INFO), module
-        assert logging.getLogger("hubofhubs.the_body.internal_context.card_store.card_limit").isEnabledFor(logging.WARNING)
+        assert logging.getLogger("hubofhubs.body.internal_context.card_store.card_limit").isEnabledFor(logging.WARNING)
     finally:
         root.setLevel(before)
         _reset_loggers()

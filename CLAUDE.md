@@ -6,13 +6,13 @@ This file orients any contributor (human or AI) working in `quest-ai-runner`, an
 ## What this project is
 
 `quest-ai-runner` is **Quest's connector** and the production consumer of the hub of hubs (`hubofhubs`, a required
-dependency; `quest_ai_runner/the_self/assembler/hub.py` imports it at startup and registers QAR's parts under names QAR owns): the
-orchestrator **brain** (`the_intelligence/`) plus the queued-task **executor** (`the_consciousness/request_intake/`) for Quest AI
+dependency; `quest_ai_runner/self/assembler/hub.py` imports it at startup and registers QAR's parts under names QAR owns): the
+orchestrator **brain** (`intelligence/`) plus the queued-task **executor** (`consciousness/request_intake/`) for Quest AI
 tasks. It is published as open source (Apache-2.0) and is meant to run for *any* org, not one specific deployment. The
-brain (`the_intelligence/`) holds the plan, gather, answer loop; the Quest-specific parts are the Body arms (the Quest client, card stores, configuration), Request Intake and the terminal. Generic engines
+brain (`intelligence/`) holds the plan, gather, answer loop; the Quest-specific parts are the Body arms (the Quest client, card stores, configuration), Request Intake and the terminal. Generic engines
 are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR keeps what knows Quest.
-- **The package mirrors the hub's five containers** (`the_self/`, `the_body/`, `the_intelligence/`, `the_world/`, `the_consciousness/`) and holds a
-  folder only where QAR overrides or adds a solution; the folder path is the hub's solution path (`the_intelligence/mind/planner/` is QAR's arm of the
+- **The package mirrors the hub's five containers** (`self/`, `body/`, `intelligence/`, `world/`, `consciousness/`) and holds a
+  folder only where QAR overrides or adds a solution; the folder path is the hub's solution path (`intelligence/mind/planner/` is QAR's arm of the
   hub's Planner). A solution's records (`solutions.csv`, `implementations.csv`, `metrics.csv`, generated `README.md`) sit in the folder of its code.
   Quest is the interface: the Quest API client and card stores are Body arms, quests and goals are Objectives under Higher Mind, the task queue
   and terminal are Request Intake and Terminal under the Consciousness. There are no layer folders (`core/`, `adapters/`, `runner/` are gone).
@@ -21,16 +21,16 @@ are moving into the hub seat by seat (`docs/explanation/hub-of-hubs.md`); QAR ke
   solution through the entry its interface declares (beside `hubofhubs.run`); `quest_ai_runner/api.py` is the only surface a host application (the Quest backend) imports: `run` and the few
   names it implements or reads, grouped by solution, never underscore-prefixed, never a capability probe (the interface is the contract). A name is added there only when a consumer outside
   this repository imports it. `python -m quest_ai_runner <cli|tools|lane|requirements>` is the one stable command line (deep workers and lane scripts call it, never a module path).
-- **The flow is code.** `quest_ai_runner/the_self/respond.py` is the flow of one request (Request intake, Higher mind, Subconscious, Mind, Nervous System, Critical Thinking); the Mind's
+- **The flow is code.** `quest_ai_runner/self/respond.py` is the flow of one request (Request intake, Higher mind, Subconscious, Mind, Nervous System, Critical Thinking); the Mind's
   orchestrator loop is the selected arm and hosts most parts until a hub arm of that part wins by metric. The intent paragraph in `esoi/intent.csv` states the same order.
 - **Autopilot is the hub's.** WHEN standing work starts is the hub's Proactivity solution and WHAT matters first is the hub's Prioritization solution (both reached with `quest_ai_runner.run`); QAR
   supplies only the Quest-specific parts, Quest as the source of events (`feed-context-sources`) and of priorities (`hold-the-intents`), and the run-or-skip gate (`gate-an-autopilot-pass`, which
   delegates to both). New autopilot logic goes to those two hub solutions first; see `docs/explanation/hub-of-hubs.md`.
 - **The hub only through `hubofhubs.api` and `hubofhubs.run`.** Never import a hub internal path; a missing name is
   added to the hub's `api.py` first.
-- The orchestrator loop (`the_intelligence/mind/orchestrator*.py`, split by role into mixins) is the one arm of the hub's Mind that QAR selects today;
-  `the_intelligence/mind/delegation/` holds the deep run and its goal runner. Tests are in `tests/`, evaluation components in `evaluation/components/`.
-- `config`: `RunnerConfig` and the `config_*` modules are in `the_body/configuration/`, the single place a consumer supplies everything specific.
+- The orchestrator loop (`intelligence/mind/orchestrator*.py`, split by role into mixins) is the one arm of the hub's Mind that QAR selects today;
+  `intelligence/mind/delegation/` holds the deep run and its goal runner. Tests are in `tests/`, evaluation components in `evaluation/components/`.
+- `config`: `RunnerConfig` and the `config_*` modules are in `body/configuration/`, the single place a consumer supplies everything specific.
 - `examples/`: runnable reference consumers (env-driven, no real data).
 - `docs/`: four Diataxis folders (`tutorials/`, `how-to/`, `explanation/`, `reference/`), indexed by `docs/README.md`; `esoi docs check` enforces them and `esoi docs wiki` generates the wiki from them (never edit the wiki). A new page goes in exactly one folder and in the index.
 
@@ -48,7 +48,7 @@ evolvable-structure skill, not copied here). **The records live beside the code*
 `README.md` in each of those folders shows its solutions, implementations, metrics and diagram. `esoi/` keeps the top intent (`intent.csv`, why this project
 exists, in its own words, with the generated `README.md` that links to every folder), `components.csv` (placement only), `waivers.csv`, `overrides.csv`,
 `tags.csv`, `hub_seats.csv`, `env_descriptions.csv` and `metric-run-policy.md`, which are not records, and the records that follow no code of the package
-(measuring arms in `evaluation/`, solutions with no code yet). **The areas of QAR are sub-intents**: an area is a folder named by its intent id, holding the `intent.csv`, records and README of `mind`, `subconscious`, `context_retriever`, `request_intake`, `internal_context`, `critical_thinking`, `nervous_system`, `objectives`, `integrity` and `science` (under `the_intelligence/`, `the_consciousness/`, `the_body/`, `the_self/` and `the_world/`), each arising from the composition arm of its area solution (named back in that arm's `sub_intent`). The composition arm's code sits in the folder above its intent folder (`the_body/area_body.py`, `the_intelligence/subconscious/area_context_retriever.py`), so the arm's record is owned by the parent intent. The five containers are one rank in `esoi.toml` (they depend on one another in every direction). To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
+(measuring arms in `evaluation/`, solutions with no code yet). **The areas of QAR are sub-intents**: an area is a folder named by its intent id, holding the `intent.csv`, records and README of `mind`, `subconscious`, `context_retriever`, `request_intake`, `internal_context`, `critical_thinking`, `nervous_system`, `objectives`, `integrity` and `science` (under `intelligence/`, `consciousness/`, `body/`, `self/` and `world/`), each arising from the composition arm of its area solution (named back in that arm's `sub_intent`). The composition arm's code sits in the folder above its intent folder (`body/area_body.py`, `intelligence/subconscious/area_context_retriever.py`), so the arm's record is owned by the parent intent. The five containers are one rank in `esoi.toml` (they depend on one another in every direction). To add a record, write it in the folder of its code (or of its area), then `esoi records place` and `esoi check --write-docs`; a
 program reads the records as one tree (`esoi.read_tree(folder, name)` or `esoi.registry.load`), never one CSV file. `esoi.toml` configures esoi for this repo and
 `scripts/esoi_rules.py` adds QAR's own rules: S15 (environment variables are documented), Q1 (solution tags), Q2 (every metric starts model-free) and Q3 (no generic code left in QAR: a module under `quest_ai_runner/` with no Quest-domain word from `QUEST_DOMAIN_WORDS` and no `hubofhubs` import that its code uses is generic and belongs in the hub; the `Q3` rows of `esoi/waivers.csv` are the hub-migration backlog, and each check prints the waived count). Nothing lives outside a solution:
 a component that serves none (S19) fails the check, and the code is removed rather than waived; a solution with no
@@ -56,7 +56,7 @@ recorded run, or a row whose measured code changed (S20), is advice that never f
 **Swappable parts are declared once, beside their code.** An implementation of a port is a class with
 `@implementation("<solution id>", "<name>")` (from `esoi`), and the `implementations.csv` of its folder lists the same implementation
 with the file it lives in (`esoi records sync` writes a missing row; `esoi check` rule S30 fails a declaration with no
-record). There is no table to keep in step: `the_self/assembler/resolve.py` is a thin entry point over `esoi.runtime` under the scope
+record). There is no table to keep in step: `self/assembler/resolve.py` is a thin entry point over `esoi.runtime` under the scope
 `quest_ai_runner`, imports each implementation lazily from the file its record names, and takes the default from the
 solution's `selected` (change it with `esoi select --promote`, then `esoi select --snapshot
 quest_ai_runner/esoi_selection.json`, because an installed copy ships without the records; `tests/test_resolve.py` pins the
@@ -85,7 +85,7 @@ write the class, add the decorator, run `esoi records sync`, fill the text, add 
   `python -m quest_ai_runner requirements --write-env-example .env.example`; `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md`.
 - **The hub of hubs** (`ai-hub-of-hubs-structure`, a sibling repository; package `hubofhubs`) is a REQUIRED dependency: the
   registry of AI-intelligence hubs, the seats (Protocols), the assembly and the scorer behind sub-metric QME9. QAR imports it at
-  startup in one place, `quest_ai_runner/the_self/assembler/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
+  startup in one place, `quest_ai_runner/self/assembler/hub.py`, and registers its parts there. For dev and tests keep the sibling checkout
   beside this repository (pytest `pythonpath` in `pyproject.toml`; `evaluation/components/hub_of_hubs` also puts it on the path)
   rather than pip-installing it. QAR keeps its bindings (`esoi/hub_seats.csv`), probes and Quest adapters; registry facts are
   changed in the hub repository, never copied here (`docs/explanation/hub-of-hubs.md`). Generic assembly, selection, cascade and checking
@@ -247,12 +247,12 @@ capabilities that never met, until both were rebuilt as one generic module.
 function inside a consumer, ask "would a second lane need this?" If yes, it is not consumer logic;
 it is a gap in this library, and the fix is here:
 
-- A shared entry-point shape, loop, or process-lifecycle concern → `the_consciousness/request_intake/lane.py` (or a new
+- A shared entry-point shape, loop, or process-lifecycle concern → `consciousness/request_intake/lane.py` (or a new
   module next to it), not a copy in your consumer. Start from
   [`docs/tutorials/tutorial-your-first-lane.md`](docs/tutorials/tutorial-your-first-lane.md).
 - A policy for deciding WHO or WHAT handles a task, expressible as data rather than one lane's
   bespoke code → a `RunnerConfig` field with a resolver function beside it (see
-  `the_consciousness/representatives/personas.py`), documented in [`docs/how-to/personas.md`](docs/how-to/personas.md), not a hand-written
+  `consciousness/representatives/personas.py`), documented in [`docs/how-to/personas.md`](docs/how-to/personas.md), not a hand-written
   callable duplicated across consumers.
 - Anything else generic → an adapter interface (hard rule #2) or a new `RunnerConfig` field, per
   the usual rule.

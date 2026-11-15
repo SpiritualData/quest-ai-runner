@@ -27,11 +27,11 @@ import pytest
 from hubofhubs.api import AssembledContext, ContextAssembler
 from hubofhubs.api import ProgressEvent
 from hubofhubs.api import EVENT_PARTIAL, EVENT_STATUS, Mode
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -613,7 +613,7 @@ class TestDailyUsageStatus:
 
     def _make_session_stub(self):
         """A bare object carrying just enough for _daily_usage_status to run unbound."""
-        from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
+        from quest_ai_runner.consciousness.terminal.interactive_session import InteractiveSession
         return InteractiveSession.__new__(InteractiveSession)
 
     def test_no_usage_file_returns_none(self, tmp_path, monkeypatch):
@@ -672,14 +672,14 @@ class TestHelpPointers:
     """The in-session /help text points at search-context and bootstrap --dry-run."""
 
     def test_help_mentions_search_context(self):
-        from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
+        from quest_ai_runner.consciousness.terminal.interactive_session import _HELP
         assert "search-context" in _HELP
 
     def test_help_mentions_bootstrap_dry_run(self):
-        from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
+        from quest_ai_runner.consciousness.terminal.interactive_session import _HELP
         assert "bootstrap --dry-run" in _HELP
 
     def test_help_has_no_em_dash(self):
         """Brand rule: no em dashes in user-facing copy, including the new help lines."""
-        from quest_ai_runner.the_consciousness.terminal.interactive_session import _HELP
+        from quest_ai_runner.consciousness.terminal.interactive_session import _HELP
         assert "—" not in _HELP

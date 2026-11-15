@@ -17,8 +17,8 @@ import pytest
 qdrant_client = pytest.importorskip("qdrant_client", reason="qdrant-client not installed")
 
 from hubofhubs.api import card_embed_text
-from quest_ai_runner.the_body.internal_context.card_store.qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 
 _DIM = 16

@@ -3,9 +3,9 @@ import pytest
 from esoi import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.higher_mind.objectives.interface import IntentHolding
+from quest_ai_runner.intelligence.higher_mind.objectives.interface import IntentHolding
 
-AREA_IDS = ("quest-intents", "long-term-memory", "recall-recent-context", "guide-by-feedback", "feedback-learning", "the-intuition",
+AREA_IDS = ("quest-intents", "long-term-memory", "recall-recent-context", "guide-by-feedback", "feedback-learning", "intuition",
             "quest-representatives", "guide-toward-the-long-term-goal")
 
 
@@ -95,7 +95,7 @@ class Conversations:
 def test_the_area_reads_each_store_for_one_request_and_hands_the_other_lines_to_their_members():
     area = quest_ai_runner.run(IntentHolding, environ={}, provided={
         "long-term-memory": Conversations(), "recall-recent-context": Recent(), "guide-by-feedback": Guidance(), "feedback-learning": Ledger(),
-        "the-intuition": Predictions(), "quest-representatives": Reps(), "guide-toward-the-long-term-goal": Directive()})
+        "intuition": Predictions(), "quest-representatives": Reps(), "guide-toward-the-long-term-goal": Directive()})
     held = area.hold("quest-1", "plan the week")
     assert held["recent"][0]["scope"] == "quest-1"
     assert held["guidance"] == ["applies to: plan the week (3)"]
@@ -109,7 +109,7 @@ def test_the_area_reads_each_store_for_one_request_and_hands_the_other_lines_to_
 def test_the_view_orders_the_persons_goals_as_solution_milestones_through_prioritization():
     area = quest_ai_runner.run(IntentHolding, environ={}, provided={
         "long-term-memory": Conversations(), "recall-recent-context": Recent(), "guide-by-feedback": Guidance(), "feedback-learning": Ledger(),
-        "the-intuition": Predictions(), "quest-representatives": Reps(), "guide-toward-the-long-term-goal": Directive()})
+        "intuition": Predictions(), "quest-representatives": Reps(), "guide-toward-the-long-term-goal": Directive()})
     goals = [{"id": "later", "deadline": "2026-07-30", "solution_id": "s2"}, {"id": "soon", "deadline": "2026-07-14", "solution_id": "s1"},
              {"id": "done", "completed": True, "deadline": "2026-07-13"}]
     view = area.view("what first", "p", goals, {"order": ["s2"]}, "2026-07-12T09:00:00Z")

@@ -8,7 +8,7 @@ pin what each layer is for -- and what it must not do.
 import json
 from pathlib import Path
 
-import quest_ai_runner.the_body.internal_context.card_store.file_context_store as fcs
+import quest_ai_runner.body.internal_context.card_store.file_context_store as fcs
 
 
 def _mk(root: Path, rel: str, n=3, ext=".md"):
@@ -151,9 +151,9 @@ import re
 import pytest
 
 from hubofhubs.api import card_store_mounts as mounts
-from quest_ai_runner.the_body.internal_context.card_store import card_store_migrate as migrate
-from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_risk_gate as gate_mod
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store import card_store_migrate as migrate
+from quest_ai_runner.intelligence.subconscious.cards_from_files import context_risk_gate as gate_mod
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 from tests.test_card_store_mounts import card, make_owner, reader_store
 
 DATES = ("2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04")

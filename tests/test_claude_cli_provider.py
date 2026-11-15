@@ -9,10 +9,10 @@ import json
 import pytest
 
 from hubofhubs.api import claude_cli as hub
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller import claude_cli_provider as ccp
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import _is_claude_model
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+from quest_ai_runner.world.model_plumbing.vendor_model_caller import claude_cli_provider as ccp
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import _is_claude_model
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 
 def test_the_provider_is_the_hubs_arm_with_qars_collaborators_bound():
@@ -104,7 +104,7 @@ def test_the_effort_setting_is_read_from_the_environment(monkeypatch):
 
 
 def test_the_lanes_usage_limit_is_the_typed_error_of_core():
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit
     provider = ClaudeCliProvider()
     assert isinstance(provider.usage_limit_error(usage_limit.UsageLimit(message="weekly limit")), usage_limit.UsageLimitError)
     with pytest.raises(usage_limit.UsageLimitError):

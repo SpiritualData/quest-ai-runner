@@ -7,7 +7,7 @@ as failed. These tests pin: own step, no emission on failure (detected via the s
 the stand-in text), and a prompt that does not ask the model to reveal its thinking.
 """
 from hubofhubs.api import STEP_NARRATION, STEP_REPLY
-from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
+from quest_ai_runner.intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
 
 STAND_IN = "Sorry, something went wrong on my side."
 

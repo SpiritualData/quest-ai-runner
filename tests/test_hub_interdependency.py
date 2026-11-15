@@ -6,7 +6,7 @@ from hubofhubs.api import CardStore
 from hubofhubs.api import ContextRetrieval
 from hubofhubs.api import SearchBackend
 
-import quest_ai_runner.the_self.assembler.hub as qar_hub
+import quest_ai_runner.self.assembler.hub as qar_hub
 
 
 class DictRepository:

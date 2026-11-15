@@ -33,16 +33,16 @@ from esoi import scaffold
 from hubofhubs.api import FastEditRunner
 from hubofhubs.api import MCPOperationRunner
 from hubofhubs.api import WriteResult
-from quest_ai_runner.the_world.tools.delegated_agent_sessions import acp_deep_runner as acp
-from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
+from quest_ai_runner.world.tools.delegated_agent_sessions import acp_deep_runner as acp
+from quest_ai_runner.world.tools.file_editing.files_writer import FilesWriter
 from hubofhubs.api import stream_runner as hub_stream
-from quest_ai_runner.the_world.tools.delegated_agent_sessions import goal_runner_stream
-from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import NUDGE_BRIEF
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import PlanDecision
-from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.world.tools.delegated_agent_sessions import goal_runner_stream
+from quest_ai_runner.intelligence.critical_thinking.metric_translation.goal_metrics import NUDGE_BRIEF
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import PlanDecision
+from quest_ai_runner.world.tools.tools import ToolContext, build_tool_registry
 
 from .conftest import StubProvider
 from .test_acp_deep_runner import FakeConn, config as acp_config, install_fake_connection

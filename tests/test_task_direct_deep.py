@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import DeepResult
 from hubofhubs.api import Mode
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.delegation.executor_followup import FollowUpMixin
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.delegation.executor_followup import FollowUpMixin
 
 from .conftest import StubRetrieval
 

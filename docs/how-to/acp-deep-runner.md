@@ -7,7 +7,7 @@ session, instead of shelling out to `claude -p` once and parsing the JSON it pri
 
 **This is additive.** `SubprocessGoalRunner` is unchanged and remains the default. Nothing switches
 to ACP unless a consumer explicitly wires it. The brain cannot tell the two apart: both satisfy
-`hubofhubs.the_world.tools.deep.DeepRunner`, with the same `run_goal` signature, the same `DeepResult`, the same
+`hubofhubs.world.tools.deep.DeepRunner`, with the same `run_goal` signature, the same `DeepResult`, the same
 `EVENT_EXEC` progress stream, and the same human-fork behaviour.
 
 ## Why it exists: mid-turn steering
@@ -67,9 +67,9 @@ otherwise pick up whichever `node` is first on `PATH`, usually the too-old one.
 Selecting a deep runner is just `RunnerConfig.deep_runner`, exactly as it is for the subprocess one:
 
 ```python
-from quest_ai_runner.the_body.configuration.config import RunnerConfig
+from quest_ai_runner.body.configuration.config import RunnerConfig
 from quest_ai_runner.adapters.__init__ import AcpConfig, AcpDeepRunner
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.intelligence.mind.delegation.inbox import InMemoryInbox
 
 inbox = InMemoryInbox()          # the same inbox the interface pushes user messages into
 
@@ -142,7 +142,7 @@ texture, so every existing consumer renders this unchanged.
 | `usage_update` | n/a | accounted as cost on the result, not shown |
 | `user_message_chunk`, `available_commands_update`, `config_option_update`, `session_info_update` | n/a | dropped (our own echo, and startup chatter) |
 
-A tool finishing deliberately does **not** use the phase strings `hubofhubs.the_body.internal_context.run_store.execution_record` treats as terminal
+A tool finishing deliberately does **not** use the phase strings `hubofhubs.body.internal_context.run_store.execution_record` treats as terminal
 (`done` / `completed` / `failed`): a completed `Read` is not a completed subgoal, and reusing those
 would let one tool call mark the whole deep task succeeded. Only the run's own final tick is
 terminal (`done` or `error`).
@@ -217,4 +217,4 @@ every deployment. That file is generated from Joshua's `evolvable-structure` ski
 `tests/test_standing_instructions.py` fails if the two drift. `QAR_DEEP_INSTRUCTIONS_FILES` changes it: unset uses the default, empty turns the
 layer off, and a path list (`os.pathsep`-separated, with `default` standing for the shipped file)
 replaces it, for example `default:/srv/org/rules.md`. Files are read on every run, so an edit applies
-to the next deep run without a restart. See `quest_ai_runner/the_self/integrity/prompts/standing_instructions.py`.
+to the next deep run without a restart. See `quest_ai_runner/self/integrity/prompts/standing_instructions.py`.

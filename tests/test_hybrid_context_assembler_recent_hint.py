@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import render_block_lines
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
 from hubofhubs.api import AssembledContext
 
 

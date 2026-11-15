@@ -6,7 +6,7 @@ import tempfile
 
 from context_selection.store_cost import store_charged
 from hubofhubs.api import file_card, group_card
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def folder_cards(root, files):

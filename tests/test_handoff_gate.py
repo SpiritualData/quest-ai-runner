@@ -3,9 +3,9 @@ from hubofhubs.api import Mode
 
 from .conftest import StubProvider, StubRetrieval
 from .test_answer_explanation import RecordingSink
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.handoff_gate import must_hand_off
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.handoff_gate import must_hand_off
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 ORDER = {"reach": "outside", "covered_by": "build-environment", "asks_change": True}
 
@@ -44,8 +44,8 @@ def test_a_covered_order_that_the_planner_answered_as_a_question_is_sent_back_on
 
 # --- the hand-off steps: records read and one owned next-step write before the work is accepted as handed over
 
-from quest_ai_runner.the_intelligence.mind.planner import handoff_gate
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.intelligence.mind.planner import handoff_gate
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 
 RAN = []
 

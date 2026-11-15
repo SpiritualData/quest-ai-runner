@@ -2,7 +2,7 @@
 import datetime
 
 from quest_ai_runner.api import MetricSourceError, ToolRegistry, WriteResult, checked_reading, milestone_flow_tools
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue as cue
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_cue as cue
 
 NOW = datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc)
 SPEC = {"records": [
@@ -166,8 +166,8 @@ def test_goal_write_and_metric_reads_are_not_offered_to_the_planner():
 def test_a_planner_call_to_a_flow_owned_tool_is_refused_and_writes_nothing():
     from types import SimpleNamespace
 
-    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
+    from quest_ai_runner.world.tools.tools import ToolContext
 
     written = []
 
@@ -197,8 +197,8 @@ def test_a_planner_call_to_a_flow_owned_tool_is_refused_and_writes_nothing():
 def test_a_write_that_reads_first_runs_its_read_in_its_place_and_runs_once_the_read_is_in():
     from types import SimpleNamespace
 
-    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
-    from quest_ai_runner.the_world.tools.tools import ToolContext, ToolResult, ToolSpec
+    from quest_ai_runner.intelligence.mind.context_intake.orchestrator_reads import ReadsMixin
+    from quest_ai_runner.world.tools.tools import ToolContext, ToolResult, ToolSpec
 
     ran = []
 
@@ -233,7 +233,7 @@ def test_a_write_that_reads_first_runs_its_read_in_its_place_and_runs_once_the_r
 
 
 def test_a_workflow_worded_nearly_the_same_on_the_same_schedule_is_already_there():
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import workflow_already_there
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import workflow_already_there
     weekly_monday = {"repeat": {"freq": "weekly", "interval": 1, "byWeekday": [0], "tz": "UTC"}}
     existing = [{"workflowId": "w1", "title": "Monday check: how the 1000 subscribers are doing",
                  "steps": [{"title": "Check how the 1000 subscribers are doing", "timing": weekly_monday}]}]
@@ -246,7 +246,7 @@ def test_a_workflow_worded_nearly_the_same_on_the_same_schedule_is_already_there
 
 
 def test_a_record_named_whole_comes_back_uncut_and_the_others_stay_cut():
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.world.tools.tools import ToolContext
     long_text = "x " * 300
     SPEC["records"][0]["fields"]["knowledge"] = long_text
     try:
@@ -259,7 +259,7 @@ def test_a_record_named_whole_comes_back_uncut_and_the_others_stay_cut():
 
 
 def test_a_lane_offers_the_keep_tool_to_the_code_that_measures_finished_background_work_never_to_a_planner():
-    from quest_ai_runner.the_world.tools.tools import STANDARD_TOOL_BUILDERS
+    from quest_ai_runner.world.tools.tools import STANDARD_TOOL_BUILDERS
     build = STANDARD_TOOL_BUILDERS["keep_milestone_deliverable"]
     assert build({}) is None
     spec = build({"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "qsk_..."})

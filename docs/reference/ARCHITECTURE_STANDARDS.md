@@ -49,10 +49,10 @@ the `solutions.csv` files of the tree (`esoi/README.md` links to each). The tabl
 | `core/model_registry.py` | tier → live top-model id (via a `ModelProvider`) |
 | `core/goal_runner.py` | the `/goal --max-turns` contract (`GoalRunner`, `SubprocessGoalRunner`) |
 | `core/card_filter.py` | LLM card selection + `_extract_json()` fence-stripping helper |
-| `hubofhubs.the_body.internal_context.run_store.execution_record`, `core/inbox.py` | per-turn `ExecutionRecord` (claim honesty is judged in the goal verification); mid-run `InputInbox` |
+| `hubofhubs.body.internal_context.run_store.execution_record`, `core/inbox.py` | per-turn `ExecutionRecord` (claim honesty is judged in the goal verification); mid-run `InputInbox` |
 | `adapters/files_adapter.py` | reference `RetrievalAdapter` over a configured file root |
 | `body/cached_db_adapter.py` | reference `RetrievalAdapter` over a live DB with a short-TTL cache |
-| `providers.py` | builds the hub's provider arms (`hubofhubs.the_world.model_plumbing.vendor_model_caller`: Anthropic, Gemini, OpenAI, DeepSeek) and its router from the environment |
+| `providers.py` | builds the hub's provider arms (`hubofhubs.world.model_plumbing.vendor_model_caller`: Anthropic, Gemini, OpenAI, DeepSeek) and its router from the environment |
 | `adapters/claude_cli_provider.py` | QAR's binding of the hub's keyless `claude_cli` arm (the local `claude` CLI) |
 | `subconscious/qdrant_*.py`, `select_context/*_context_assembler.py` | optional vector/card context assembly |
 | `runner/quest_client.py` | the Quest HTTP client (`qsk_` auth) + `QuestDecisionSink` |
@@ -125,7 +125,7 @@ The most common source of bugs here. Four rules, in order:
    `ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")`. Never a
    hardcoded id, never `list_models()[0]` (the current provider may not route it). Tiers: `"fast"`
    cheap lookups, `"balanced"` filtering/judgment, `"best"` high-stakes reasoning.
-3. **Retry transient errors** (503/429/timeout) with the helpers in `hubofhubs.the_world.model_plumbing.vendor_model_caller.retry`
+3. **Retry transient errors** (503/429/timeout) with the helpers in `hubofhubs.world.model_plumbing.vendor_model_caller.retry`
    (the retry decorator; `parse_json_with_retry` when the call must yield valid JSON).
 4. **Strip fences before `json.loads`**: LLM JSON often arrives in ```` ```json ```` fences. Use a
    helper like `_extract_json()` in `core/card_filter.py`, never `json.loads(raw)`.
@@ -147,7 +147,7 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 `Mode` only selects which `ProgressSink` is wired, and **the sink, never the orchestrator, decides
 what surfaces**. `Mode.LIVE` → `StreamSink` forwards every event; `Mode.BACKGROUND` → `MilestoneSink`
 drops planning/reading/status chatter and forwards only `SURFACING_EVENTS` (result, decision,
-milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `hubofhubs/the_world/tools/events.py` (the hub's ports) and a
+milestone, context, done, tokens). A new event gets an `EVENT_*` constant in `hubofhubs/world/tools/events.py` (the hub's ports) and a
 deliberate choice: in `SURFACING_EVENTS` (always shown) or LIVE-only texture (like `EVENT_EXEC`).
 Never branch the orchestrator on mode for visibility: that policy lives in the sink, once.
 

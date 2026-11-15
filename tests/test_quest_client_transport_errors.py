@@ -10,7 +10,7 @@ import urllib.request
 
 import pytest
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 
 def make_client():
@@ -54,7 +54,7 @@ def test_a_path_with_no_id_is_refused_before_sending(monkeypatch):
 
 
 def test_a_filled_path_and_a_trailing_slash_are_not_refused():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_transport import missing_id_segment
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_transport import missing_id_segment
     assert missing_id_segment("/api/quests/quest_1/state") is None
     assert missing_id_segment("/api/assistant-tasks/") is None
     assert missing_id_segment("/api/quests/quest_1/state?x=None") is None

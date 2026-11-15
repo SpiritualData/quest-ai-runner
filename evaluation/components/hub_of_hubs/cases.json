@@ -3613,11 +3613,11 @@
  },
  {
   "id": "HUB-259",
-  "seat": "the-learning",
+  "seat": "learning",
   "kind": "by_config",
-  "description": "the-learning: by_config",
+  "description": "learning: by_config",
   "args": {
-   "seat": "the-learning"
+   "seat": "learning"
   },
   "expect": {
    "eq": {
@@ -3627,11 +3627,11 @@
  },
  {
   "id": "HUB-260",
-  "seat": "the-learning",
+  "seat": "learning",
   "kind": "seam",
-  "description": "the-learning: seam",
+  "description": "learning: seam",
   "args": {
-   "seat": "the-learning"
+   "seat": "learning"
   },
   "expect": {
    "eq": {
@@ -3641,11 +3641,11 @@
  },
  {
   "id": "HUB-261",
-  "seat": "the-learning",
+  "seat": "learning",
   "kind": "selectable",
-  "description": "the-learning: selectable",
+  "description": "learning: selectable",
   "args": {
-   "seat": "the-learning"
+   "seat": "learning"
   },
   "expect": {
    "eq": {
@@ -3655,11 +3655,11 @@
  },
  {
   "id": "HUB-262",
-  "seat": "the-learning",
+  "seat": "learning",
   "kind": "core_clean",
-  "description": "the-learning: core_clean",
+  "description": "learning: core_clean",
   "args": {
-   "seat": "the-learning"
+   "seat": "learning"
   },
   "expect": {
    "eq": {
@@ -3669,11 +3669,11 @@
  },
  {
   "id": "HUB-263",
-  "seat": "the-learning",
+  "seat": "learning",
   "kind": "fake_hub",
-  "description": "the-learning: fake_hub",
+  "description": "learning: fake_hub",
   "args": {
-   "seat": "the-learning"
+   "seat": "learning"
   },
   "expect": {
    "eq": {
@@ -3753,11 +3753,11 @@
  },
  {
   "id": "HUB-269",
-  "seat": "the-assembler",
+  "seat": "assembler",
   "kind": "by_config",
-  "description": "the-assembler: by_config",
+  "description": "assembler: by_config",
   "args": {
-   "seat": "the-assembler"
+   "seat": "assembler"
   },
   "expect": {
    "eq": {
@@ -3767,11 +3767,11 @@
  },
  {
   "id": "HUB-270",
-  "seat": "the-assembler",
+  "seat": "assembler",
   "kind": "seam",
-  "description": "the-assembler: seam",
+  "description": "assembler: seam",
   "args": {
-   "seat": "the-assembler"
+   "seat": "assembler"
   },
   "expect": {
    "eq": {
@@ -3781,11 +3781,11 @@
  },
  {
   "id": "HUB-271",
-  "seat": "the-assembler",
+  "seat": "assembler",
   "kind": "selectable",
-  "description": "the-assembler: selectable",
+  "description": "assembler: selectable",
   "args": {
-   "seat": "the-assembler"
+   "seat": "assembler"
   },
   "expect": {
    "eq": {
@@ -3795,11 +3795,11 @@
  },
  {
   "id": "HUB-272",
-  "seat": "the-assembler",
+  "seat": "assembler",
   "kind": "core_clean",
-  "description": "the-assembler: core_clean",
+  "description": "assembler: core_clean",
   "args": {
-   "seat": "the-assembler"
+   "seat": "assembler"
   },
   "expect": {
    "eq": {
@@ -3809,11 +3809,11 @@
  },
  {
   "id": "HUB-273",
-  "seat": "the-assembler",
+  "seat": "assembler",
   "kind": "fake_hub",
-  "description": "the-assembler: fake_hub",
+  "description": "assembler: fake_hub",
   "args": {
-   "seat": "the-assembler"
+   "seat": "assembler"
   },
   "expect": {
    "eq": {

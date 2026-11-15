@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 import pytest
 
-from quest_ai_runner.the_world.tools.web_search.web_search_backends import (
+from quest_ai_runner.world.tools.web_search.web_search_backends import (
     BraveBackend, FallbackSearchBackend, GeminiGroundingBackend, ProviderNativeBackend, SearchBackendError, SearchHit, SearchResponse,
     SearxngBackend, SerperBackend, TavilyBackend, select_search_backend)
 
@@ -495,7 +495,7 @@ def test_shipped_hosted_apis_are_data_entries_run_by_one_backend():
 def test_a_search_api_described_in_a_file_is_selected_with_no_code(tmp_path):
     import json
     from esoi import selection
-    from quest_ai_runner.the_world.tools.web_search.web_search_backends import select_search_backend
+    from quest_ai_runner.world.tools.web_search.web_search_backends import select_search_backend
     spec = [{"name": "acmesearch", "method": "GET", "url": "https://search.invalid/v2", "key_env": ["ACME_KEY"],
              "headers": {"Authorization": "Token {key}"}, "send": "params",
              "payload": {"term": "{query}", "limit": "{max_results}"}, "results_path": "data.items",
@@ -525,7 +525,7 @@ def test_a_search_api_described_in_a_file_is_selected_with_no_code(tmp_path):
 
 
 def test_a_bad_apis_file_registers_nothing_and_does_not_raise(tmp_path):
-    from quest_ai_runner.the_world.tools.web_search.web_search_backends import register_file_specs
+    from quest_ai_runner.world.tools.web_search.web_search_backends import register_file_specs
     path = tmp_path / "apis.json"
     path.write_text("not json")
     assert register_file_specs({"QAR_WEB_SEARCH_APIS_FILE": str(path)}) == []

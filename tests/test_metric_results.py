@@ -9,9 +9,9 @@ import os
 import pytest
 from esoi import MAX_METRICS, SOURCE_NOT_APPLICABLE, SOURCE_RECORDED, FileMetricLedger
 
-from quest_ai_runner.the_intelligence.mind.response_writer import answer_explanation
-from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
-from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import metric_ledger_from_env
+from quest_ai_runner.intelligence.mind.response_writer import answer_explanation
+from quest_ai_runner.world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.intelligence.critical_thinking.metric_translation.tools_metric_results import metric_ledger_from_env
 
 PAYLOAD_KEYS = {"solution_id", "metric_id", "name", "milestone", "before", "after", "delta", "source", "reason",
                 "disagrees"}
@@ -89,7 +89,7 @@ def test_the_tool_is_a_standing_deep_operation_and_never_a_chat_one(registry):
 
 
 def test_a_worker_calls_it_from_the_shell_with_a_run_id(tmp_path, monkeypatch, capsys):
-    from quest_ai_runner.the_consciousness.terminal.__main__ import main
+    from quest_ai_runner.consciousness.terminal.__main__ import main
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("QAR_STANDARD_TOOLS", "1")   # the test suite turns the standard tools off unless asked
     monkeypatch.setenv("QAR_METRIC_LEDGER_DIR", str(tmp_path / "ledger"))
@@ -107,7 +107,7 @@ def test_a_worker_calls_it_from_the_shell_with_a_run_id(tmp_path, monkeypatch, c
 
 def test_a_quest_metric_is_named_from_the_quest_records_when_no_repository_holds_it(tmp_path, monkeypatch):
     """A result recorded against a quest's own metric (an ``esr_`` record) carries its name, so a screen never shows the id."""
-    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
+    from quest_ai_runner.intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
     monkeypatch.chdir(tmp_path)
     seen = []
 
@@ -122,7 +122,7 @@ def test_a_quest_metric_is_named_from_the_quest_records_when_no_repository_holds
 
 
 def test_a_failed_quest_lookup_still_keeps_the_result(tmp_path, monkeypatch):
-    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
+    from quest_ai_runner.intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
     monkeypatch.chdir(tmp_path)
     assert tmr.quest_metric_names({}, "quest_1", "esr_m1") == {}            # no Quest credentials: nothing is asked
     assert tmr.quest_metric_names({"QUEST_BASE_URL": "x", "QUEST_API_KEY": "y"}, None, "esr_m1") == {}
@@ -132,8 +132,8 @@ def test_a_failed_quest_lookup_still_keeps_the_result(tmp_path, monkeypatch):
 
 def test_every_place_that_asks_for_a_metric_says_which_one(registry):
     """The rule that the metric is the changed solution's, not a downstream outcome, reaches the worker three ways."""
-    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import CLOSING, NUDGE_BRIEF
-    from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.tools_metric_results import WHICH_METRIC
+    from quest_ai_runner.intelligence.critical_thinking.metric_translation.goal_metrics import CLOSING, NUDGE_BRIEF
+    from quest_ai_runner.intelligence.critical_thinking.metric_translation.tools_metric_results import WHICH_METRIC
     assert "solution of THIS task's quest specification" in WHICH_METRIC and "defining one" in WHICH_METRIC
     assert WHICH_METRIC in CLOSING and WHICH_METRIC in NUDGE_BRIEF
     assert WHICH_METRIC in registry.get("record_metric_result").when_to_use

@@ -10,8 +10,8 @@ import logging
 
 import pytest
 
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
-from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import (
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.quest_api_card_repository import (
     BULK_MAX_CARDS, NullCardCache, QuestApiCardRepository, QuestApiCardVectorStore)
 from tests.quest_card_backend_fake import FakeCardBackend
 
@@ -46,7 +46,7 @@ def test_load_all_returns_the_mapping_the_protocol_requires(backend):
 
 
 def test_older_mapping_reply_shape_is_still_accepted():
-    from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import _cards_by_id
+    from quest_ai_runner.body.internal_context.card_store.quest_api_card_repository import _cards_by_id
     assert _cards_by_id({"k": {"name": "No id"}}) == {"k": {"name": "No id", "id": "k"}}
     assert _cards_by_id({"cards": "junk"}) == {}
     assert _cards_by_id(["not a card"]) == {}
@@ -168,7 +168,7 @@ def test_a_later_refresh_fetches_only_what_changed_then_a_deletion_forces_one_fu
 
 
 def test_a_new_session_starts_from_the_stored_listing_and_downloads_only_what_changed(backend, tmp_path):
-    from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
+    from quest_ai_runner.body.internal_context.card_store.card_cache_file import FileCardCache
     for i in range(3):
         backend.put(f"c{i}", {"name": f"Card {i}"})
     assert len(make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()) == 3      # the first session pages everything
@@ -191,7 +191,7 @@ def test_a_new_session_starts_from_the_stored_listing_and_downloads_only_what_ch
 
 
 def test_a_new_session_is_told_what_was_deleted_and_does_not_page_everything(backend, tmp_path):
-    from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
+    from quest_ai_runner.body.internal_context.card_store.card_cache_file import FileCardCache
     for i in range(4):
         backend.put(f"c{i}", {"name": f"Card {i}"})
     make_repo(backend, cache=FileCardCache(str(tmp_path))).load_all()

@@ -98,7 +98,7 @@ Safeguards in the loop:
 
 ### Searching the scientific literature
 
-`search_scientific_literature` (`core/tools_science.py`) is a read-only standard tool over `hubofhubs.the_world.science.openalex` (an
+`search_scientific_literature` (`core/tools_science.py`) is a read-only standard tool over `hubofhubs.world.science.openalex` (an
 implementation of the hub's `the-science` seat; design, sources and limits in the hub's `docs/explanation/science-search.md`). Arguments: `query`
 (required), `year_from`, `year_to`, `open_access_only`, `most_cited`, `limit`. Its result lists each work with title, authors, year,
 journal, DOI (and its link), citation count and abstract, says "No DOI listed" for a work without one, and states that only the listed
@@ -117,7 +117,7 @@ that it cannot search research papers and names no paper, author or DOI from mem
 `end_to_end` E2E-SCI-01 (configured, fake OpenAlex transport) and E2E-SCI-02 (not configured).
 
 A consumer building its own `RunnerConfig` can instead pass a ready `ToolRegistry` as
-`RunnerConfig.tool_registry` (from `quest_ai_runner.the_world.tools.tools`); that wins over the env.
+`RunnerConfig.tool_registry` (from `quest_ai_runner.world.tools.tools`); that wins over the env.
 
 A broken tools file never stops a lane: it is logged and skipped. Check what a lane would see with:
 

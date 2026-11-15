@@ -2,7 +2,7 @@
 
 ## The idea
 
-The engine (the five signals, the safe-default parse and `RunOverseer`) lives in the hub package as a helper of Delegation (`hubofhubs.the_intelligence.mind.delegation.overseer.risk`); it is no arm of the Nervous System, which sends one risk signal and does not route, and the digest builder is the Nervous System's `digest` module. `core/overseer.py` keeps the prompt (`OVERSEER_PROMPT`, the consent rules and their wording) and its prompt spec, builds `RunOverseer` once at import with that prompt passed in as data (`render`), and keeps `build_digest`, `oversee`, `OverseerSignal` and `OVERSEE_TOOL` at their import path. QAR's Nervous System arm (`overseer`, in `nervous_system/area.py`) returns the hub's `RiskSignal` from the same consultation. The call site, `core/orchestrator_oversee.py`, is unchanged.
+The engine (the five signals, the safe-default parse and `RunOverseer`) lives in the hub package as a helper of Delegation (`hubofhubs.intelligence.mind.delegation.overseer.risk`); it is no arm of the Nervous System, which sends one risk signal and does not route, and the digest builder is the Nervous System's `digest` module. `core/overseer.py` keeps the prompt (`OVERSEER_PROMPT`, the consent rules and their wording) and its prompt spec, builds `RunOverseer` once at import with that prompt passed in as data (`render`), and keeps `build_digest`, `oversee`, `OverseerSignal` and `OVERSEE_TOOL` at their import path. QAR's Nervous System arm (`overseer`, in `nervous_system/area.py`) returns the hub's `RiskSignal` from the same consultation. The call site, `core/orchestrator_oversee.py`, is unchanged.
 
 A high-quality model, reading and writing very few tokens, watches the run the way a person's
 awareness watches their own body walk: almost always silent, occasionally sending one small signal
@@ -225,7 +225,7 @@ are documented with real, reproducible numbers rather than estimates.
 ## Enabling it
 
 ```python
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.body.configuration.config import RunnerConfig, build_orchestrator
 
 cfg = RunnerConfig(...)
 orch = build_orchestrator(cfg)

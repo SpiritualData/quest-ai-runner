@@ -5,7 +5,7 @@ from hubofhubs.api import Card
 from hubofhubs.api import LocalCardStore  # noqa: F401 (declares the in-memory card-store arm)
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.subconscious.interface import CardRecall
+from quest_ai_runner.intelligence.subconscious.interface import CardRecall
 
 AREA_IDS = ("the-subconscious", "card-store")
 
@@ -39,6 +39,6 @@ def test_the_arm_recalls_the_cards_of_the_store_it_is_handed():
     assert [card.id for card in memory.recall("book outline")] == ["goal-1"]
     assert memory.recall("nothing like this") == []
     prepared = memory.prepare("book outline")
-    assert [card.id for card in prepared["cards"]] == ["goal-1"] and {step["solution"] for step in prepared["steps"]} == {"the-intuition", "context-retriever"}
+    assert [card.id for card in prepared["cards"]] == ["goal-1"] and {step["solution"] for step in prepared["steps"]} == {"intuition", "context-retriever"}
     assembled = memory.assemble("book outline")
     assert assembled.card_ids == ["goal-1"] and "Finish the book outline" in assembled.context_view

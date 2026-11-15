@@ -3,9 +3,9 @@ import logging
 
 import pytest
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
 
 @pytest.mark.parametrize("status,shown", [(404, False), (403, False), (500, True)])

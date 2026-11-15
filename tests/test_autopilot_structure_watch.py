@@ -2,8 +2,8 @@
 import json
 from datetime import datetime, timezone
 
-from quest_ai_runner.the_intelligence.proactivity import autopilot_structure_watch as binding
-from quest_ai_runner.the_intelligence.proactivity.autopilot_routines import RoutinePass
+from quest_ai_runner.intelligence.proactivity import autopilot_structure_watch as binding
+from quest_ai_runner.intelligence.proactivity.autopilot_routines import RoutinePass
 
 NOW = "2026-11-10T09:00:00Z"
 
@@ -55,7 +55,7 @@ def test_a_quests_records_map_to_the_hubs_digest_shape():
 
 
 def test_an_item_is_a_decision_request_and_no_record_is_edited():
-    from hubofhubs.the_body.internal_context.run_store.runs import RunStore
+    from hubofhubs.body.internal_context.run_store.runs import RunStore
     c, ask = Client(), ask_for("experiments:e1")
     out = binding.watch_quest(c, "q1", now=NOW, store=RunStore(""), ask=ask)
     assert out["called"] and out["filed"] == 1 and len(c.decisions) == 1 and c.edits == []
@@ -63,7 +63,7 @@ def test_an_item_is_a_decision_request_and_no_record_is_edited():
 
 
 def test_an_item_is_asked_of_the_quests_owner_never_the_runners_own_account_and_not_filed_when_no_person_owns_it():
-    from hubofhubs.the_body.internal_context.run_store.runs import RunStore
+    from hubofhubs.body.internal_context.run_store.runs import RunStore
     c = Client()
     binding.watch_quest(c, "q1", now=NOW, store=RunStore(""), ask=ask_for("experiments:e1"))
     assert c.decisions[0][1]["assignee_user_id"] == "u1"
@@ -74,7 +74,7 @@ def test_an_item_is_asked_of_the_quests_owner_never_the_runners_own_account_and_
 
 
 def test_no_call_when_nothing_changed_since_the_last_run_and_none_in_a_dry_run():
-    from hubofhubs.the_body.internal_context.run_store.runs import RunStore
+    from hubofhubs.body.internal_context.run_store.runs import RunStore
     c, ask, store = Client(), ask_for("experiments:e1"), RunStore("")
     binding.watch_quest(c, "q1", now=NOW, store=store, ask=ask)
     again = binding.watch_quest(c, "q1", now="2026-11-10T10:00:00Z", store=store, ask=ask)
@@ -83,7 +83,7 @@ def test_no_call_when_nothing_changed_since_the_last_run_and_none_in_a_dry_run()
 
 
 def test_a_routine_run_calls_the_watch_once_and_a_run_at_its_ceiling_makes_no_call():
-    from hubofhubs.the_body.internal_context.run_store.runs import RunStore
+    from hubofhubs.body.internal_context.run_store.runs import RunStore
     c, ask = Client(), ask_for("experiments:e1")
     out = binding.watch_quest(c, "q1", now=NOW, store=RunStore(""), ask=ask, ceilings={"spent_usd": 9.0, "ceiling_usd": 10.0})
     assert out["called"] is False and out["reason"] == "ceiling" and ask.calls == []
@@ -133,8 +133,8 @@ def test_the_built_watch_asks_by_role_tier_reads_the_calls_usage_and_makes_no_ca
 
 
 def test_the_poller_passes_the_watch_to_both_passes_and_the_config_switch_turns_it_off():
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
     from .conftest import StubProvider, StubRetrieval
     def poller(**kw):
         cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1", retrieval=StubRetrieval({}), model_provider=StubProvider(decisions=[]), **kw)
@@ -146,7 +146,7 @@ def test_the_poller_passes_the_watch_to_both_passes_and_the_config_switch_turns_
 
 def test_a_login_only_lane_resolves_best_to_the_hubs_best_choice_and_a_lane_with_none_fails_with_the_reason():
     from hubofhubs.api import claude_cli
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     login = claude_cli.ClaudeCliProvider()
     top = ModelRegistry(login).top_models()
     assert top["best"] != top["quality"] and "fable" in top["best"] and ModelRegistry(login).resolve_role("structure-watch") == top["best"]

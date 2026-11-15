@@ -8,16 +8,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue as cue
-from quest_ai_runner.the_intelligence.mind.response_writer import act_status
-from quest_ai_runner.the_intelligence.mind.response_writer import orchestrator_turn_messages as messages
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_cue as cue
+from quest_ai_runner.intelligence.mind.response_writer import act_status
+from quest_ai_runner.intelligence.mind.response_writer import orchestrator_turn_messages as messages
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 @pytest.fixture(autouse=True)
 def cheap_model(monkeypatch):
     """The turn's one cheap model call, answered offline: the milestone judgment picks the first candidate listed, any other question is answered NONE."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
 
     def fake(self, prompt):
         found = re.search(r"^(esr_\w+):", prompt, re.M) if "These are milestones of the quest" in prompt else None
@@ -81,8 +81,8 @@ def answer_for(prompt):
 
 
 def test_the_planners_source_read_is_taken_out_so_the_source_is_read_once():
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     calls, reads = [], []
     provider = StubProvider([{"action": "tool", "user_intent": "act", "rationale": "r", "tool_calls": [{"name": "read_metric_source", "args": {}}]}])
@@ -94,9 +94,9 @@ def test_the_planners_source_read_is_taken_out_so_the_source_is_read_once():
 
 def test_the_first_message_never_carries_the_planners_fact_text_even_when_the_plan_still_reads():
     from hubofhubs.api import EVENT_INTERIM
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
     leak = "CUE FACTS: milestone 'P3', solution esr_c, metric source cov_source. Code reads it via read_metric_source"
     provider = StubProvider([{"action": "tool", "user_intent": "act", "rationale": "r", "facts_read": [leak],

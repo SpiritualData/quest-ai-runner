@@ -2,7 +2,7 @@
 
 Run: python3 -m pytest tests/test_doctor_stale_console_script.py -q -p no:cacheprovider
 """
-from quest_ai_runner.the_consciousness.terminal import cli_doctor
+from quest_ai_runner.consciousness.terminal import cli_doctor
 
 
 def write_script(directory, module, name):
@@ -12,7 +12,7 @@ def write_script(directory, module, name):
 
 
 def test_healthy_script_reports_no_problem(tmp_path):
-    write_script(tmp_path, "quest_ai_runner.the_consciousness.terminal.cli", "main")
+    write_script(tmp_path, "quest_ai_runner.consciousness.terminal.cli", "main")
     assert cli_doctor.stale_console_script_problems(tmp_path) == []
 
 
@@ -25,13 +25,13 @@ def test_script_importing_a_removed_module_prints_the_fix(tmp_path):
 
 
 def test_script_importing_a_removed_name_is_stale(tmp_path):
-    write_script(tmp_path, "quest_ai_runner.the_consciousness.terminal.cli", "main_that_was_renamed")
+    write_script(tmp_path, "quest_ai_runner.consciousness.terminal.cli", "main_that_was_renamed")
     assert cli_doctor.stale_console_script_problems(tmp_path)
 
 
 def test_doctor_exits_one_and_names_the_script_when_stale(monkeypatch, capsys, tmp_path):
     import argparse, logging
-    from quest_ai_runner.the_self.assembler import hub_requirements
+    from quest_ai_runner.self.assembler import hub_requirements
     monkeypatch.setattr(hub_requirements, "selected_entries", lambda assembler=None: ([], {}))
     monkeypatch.setattr(cli_doctor, "stale_console_script_problems", lambda script_dir=None: ["installed script x is stale; fix: pip install -e . --no-deps"])
     args = argparse.Namespace(json=False, lock=str(tmp_path / "none.json"), note_quest=None, state=None)

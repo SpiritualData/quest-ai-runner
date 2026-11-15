@@ -2,8 +2,8 @@
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.the_body.internal_context.quest import quest_ask_cards
-from quest_ai_runner.the_intelligence.critical_thinking import critical_data_pass
+from quest_ai_runner.body.internal_context.quest import quest_ask_cards
+from quest_ai_runner.intelligence.critical_thinking import critical_data_pass
 
 QUEST = "quest_x1"
 SOURCE = quest_ask_cards.asks_card_id(QUEST)

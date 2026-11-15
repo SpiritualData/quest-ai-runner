@@ -24,11 +24,11 @@ import pytest
 
 from hubofhubs.api import FastEditRunner
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_world.tools.file_editing.files_writer import FilesWriter
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_deep_runner_ladder
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, PlanDecision
+from quest_ai_runner.world.tools.file_editing.files_writer import FilesWriter
+from quest_ai_runner.body.configuration.config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_deep_runner_ladder
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, PlanDecision
 
 from .conftest import StubProvider, StubRetrieval
 

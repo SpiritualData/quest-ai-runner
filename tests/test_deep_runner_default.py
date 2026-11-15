@@ -26,9 +26,9 @@ import os
 
 import pytest
 
-from quest_ai_runner.the_body.configuration.config import (
+from quest_ai_runner.body.configuration.config import (
     _AUTO_DEEP_RUNNER, RunnerConfig, build_orchestrator, derive_capabilities, resolve_deep_runner)
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
 from tests.conftest import StubDeepRunner, StubProvider, StubRetrieval
 
 

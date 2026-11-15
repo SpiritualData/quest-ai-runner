@@ -4,7 +4,7 @@ resolvers, coercion of consumer callables) and the production renderer ``render_
 the hub's ``hubofhubs.api.build_resolver_registry``. The fakes are the consumer's
 file text and scripted resolvers. Zero model calls, zero network."""
 from hubofhubs.api import build_resolver_registry, render_card_content_blocks
-from quest_ai_runner.the_body.internal_context.card_store import file_context_store  # noqa: F401  (the live store that wires this registry)
+from quest_ai_runner.body.internal_context.card_store import file_context_store  # noqa: F401  (the live store that wires this registry)
 
 
 def scripted(spec):

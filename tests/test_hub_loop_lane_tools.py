@@ -1,8 +1,8 @@
 """The hub loop binding hands the loop the lane's own operations as tools and gives its commands the lane's environment. Scripted completion, a fake registry."""
 from __future__ import annotations
 
-from quest_ai_runner.the_world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner, argument_shape, lane_tools
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner, argument_shape, lane_tools
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
 
 
 class Script:

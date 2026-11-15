@@ -1,5 +1,5 @@
 """Download accounting in the Quest client transport: ids collapse, bytes add up, a report is due on the interval."""
-from quest_ai_runner.the_body.internal_context.quest.client import quest_client_transport as t
+from quest_ai_runner.body.internal_context.quest.client import quest_client_transport as t
 
 
 def test_endpoint_key_collapses_ids_and_drops_the_query():
@@ -22,7 +22,7 @@ def test_report_names_the_biggest_endpoint_once_per_interval():
 def test_task_count_reads_ask_the_server_to_filter_and_still_filter_the_rows():
     """The budget count must not download every finished task: created_after/task_kind/source go to the server, and an older
     server that ignores them (answers a superset) gives the same answer."""
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     c = QuestClient("http://x", "qsk_test", team_id="team_1")
     seen = {}
@@ -39,7 +39,7 @@ def test_task_count_reads_ask_the_server_to_filter_and_still_filter_the_rows():
 
 
 def test_slim_task_lists_ask_the_server_to_leave_out_progress_and_result():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     c = QuestClient("http://x", "qsk_test", team_id="team_1")
     seen = []
@@ -51,7 +51,7 @@ def test_slim_task_lists_ask_the_server_to_leave_out_progress_and_result():
 
 def test_an_unchanged_task_list_is_answered_from_the_kept_copy():
     """The server says unchanged and sends no rows; the client returns what it kept, and a changed list replaces it."""
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     c = QuestClient("http://x", "qsk_test", team_id="team_1")
     asked = []
@@ -70,7 +70,7 @@ def test_an_unchanged_task_list_is_answered_from_the_kept_copy():
 
 
 def test_a_server_without_etags_is_used_as_before():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     c = QuestClient("http://x", "qsk_test", team_id="team_1")
     c._request = lambda method, path, **kw: {"tasks": [{"task_id": "a"}]}

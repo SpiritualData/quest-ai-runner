@@ -8,7 +8,7 @@ itself (``uncached_embedder``), so the run never writes the shared text-hash cac
 from context_selection.embedder import uncached_embedder
 from hubofhubs.api import card_embed_text
 from esoi import spec_search
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.unified_search import solutions_and_problems_with_links
+from quest_ai_runner.intelligence.subconscious.context_retriever.unified_search import solutions_and_problems_with_links
 from context_selection.store_cost import store_charged
 
 

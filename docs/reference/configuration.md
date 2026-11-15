@@ -8,257 +8,259 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-249 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+251 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for vendor-model-caller. | `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` | `README.md`, `.env.example`, `docs/how-to/acp-deep-runner.md` +6 |
-| `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `the_body/configuration/config_core_settings.py`, `the_world/tools/delegated_agent_sessions/claude_live_models.py` | - |
-| `DEEPSEEK_API_KEY` | DeepSeek API key; declared by the hub for vendor-model-caller. | `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md` |
-| `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
-| `GOOGLE_API_KEY` | Gemini API key; declared by the hub for vendor-model-caller. | `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` | `.env.example`, `docs/how-to/web-search.md` |
-| `HF_HUB_OFFLINE` | Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls. | `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
-| `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `the_consciousness/terminal/cli.py` | - |
-| `OPENAI_API_KEY` | Fills the 'api_key' option of vendor-model-caller:openai; declared by the hub. | `the_body/internal_context/card_store/qdrant_embedders.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` | `.env.example` |
-| `OPENALEX_API_KEY` | OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers. | `the_world/science/tools_science.py` | `docs/how-to/tools.md` |
-| `OPENALEX_MAILTO` | Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's). | `the_world/science/tools_science.py` | `docs/how-to/tools.md` |
-| `QAR_ACP_AGENT_COMMAND` |  | `the_body/configuration/acp_deep_runner_config.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/acp-deep-runner.md` |
-| `QAR_ACP_NODE_PATH` |  | `the_body/configuration/acp_deep_runner_config.py` | `docs/how-to/acp-deep-runner.md` |
-| `QAR_ANSWER_TIMEOUT` |  | `the_body/configuration/cli_config.py` | `.env.example` |
-| `QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD` | Monthly prepaid Anthropic credit in USD that the hub tier selector counts as cost-lowering when it ranks measured arms; unset or 0 counts no credit. The hub ships no allowance, this is the deployment's own. | `the_world/model_plumbing/vendor_model_caller/providers.py` | - |
-| `QAR_ANTHROPIC_CREDIT_VALUE` | What an Anthropic credit is worth if not used here, 0 to 1 (lower when it expires unused); unset counts it at face value (1), the reading that never understates cost. | `the_world/model_plumbing/vendor_model_caller/providers.py` | - |
-| `QAR_ANTHROPIC_THINKING` |  | `the_self/assembler/hub.py` | `.env.example` |
-| `QAR_ANTICIPATION` |  | `the_body/configuration/cli_config.py` | `docs/README.md`, `docs/explanation/anticipation.md` |
-| `QAR_ANTICIPATION_LLM` |  | `the_body/configuration/cli_config.py` | `docs/explanation/anticipation.md` |
-| `QAR_ASYNC_CARD_UPDATE` | Default on; 0/false/off disables updating cards from a deep run's edits in the background. | `the_body/configuration/cli_config.py` | - |
-| `QAR_AUTOPILOT_ADOPT_RECURRING` | 1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass. | `the_body/configuration/cli_config.py` | - |
-| `QAR_AUTOPILOT_PASS_TIME` | Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time. | `the_body/configuration/cli_config.py` | - |
-| `QAR_AUTOPILOT_STRUCTURE_WATCH` | 0/false/off/no turns the structure watch off (RunnerConfig.autopilot_structure_watch): the one small best-tier call per autopilot or routine run of a quest. | `the_body/configuration/cli_config.py` | - |
-| `QAR_BOOTSTRAP_EMAIL_USER` | Quest user id the bootstrap report email is sent to. | `the_consciousness/terminal/cli_context.py` | - |
-| `QAR_BOOTSTRAP_MAX_CARDS` | Hard cap on cards created in ONE bootstrap pass (unset = no cap). | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap). | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_BOOTSTRAP_MAX_FILES` | Stop the bootstrap walk after this many files (unset = no limit). | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_BOOTSTRAP_TIER` | Model tier used for bootstrap topic extraction (default balanced). | `the_consciousness/terminal/cli_context.py` | - |
-| `QAR_BOOTSTRAP_WORKERS` | Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only. | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_CALL_LOG_PATH` | Path of the JSON-lines call log where the runner persists every model call it makes, tagged with its prompt spec id (default: next to the usage file); production.py reads it to report average and maximum seconds, tokens and dollars per call. Read in quest_ai_runner/the_world/model_plumbing/spend/usage.py. | `the_consciousness/terminal/cli_spend.py`, `the_world/model_plumbing/spend/usage.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_CANDIDATE_CASES_DIR` | A private folder outside any repository (default unset: nothing is recorded). When set, a turn that ended with an unmet goal, an empty reply or work pushed back to the person appends one JSON line to <dir>/poorly_answered_inputs/<case id>.jsonl, in the format of the evaluation output log, as a candidate case for a person to prioritise. | `the_consciousness/feedback_learning/candidate_cases.py` | - |
-| `QAR_CARDS_BACKEND` |  | `the_body/configuration/config_assembler.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `the_body/configuration/config_context_index.py` | - |
-| `QAR_CARDS_SCOPE` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_CARD_MOUNT` |  | `the_body/configuration/card_store_settings.py` | `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
-| `QAR_CARD_SHAPE_MIN_FILES` | A batch naming fewer distinct files than this is not judged by the two card-shape limits (default 50). | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_CHANNEL_ACK_AFTER_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_ALLOWED_SENDERS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_NAME` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_PROGRESS_MIN_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_PROVIDER` |  | `the_body/configuration/cli_config.py`, `the_self/assembler/hub_requirements.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_STATE_PATH` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHANNEL_TURN_TIMEOUT_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_CHAT_HISTORY_DIR` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/interactive_session.py`, `the_intelligence/higher_mind/long_term_memory/chat_conversations.py` | `docs/how-to/chat.md` |
-| `QAR_CHAT_LOG_FILE` | File the terminal chat writes its full diagnostic log to (default: logs/chat.log beside the saved conversations). | `the_intelligence/higher_mind/long_term_memory/chat_conversations.py` | `docs/how-to/chat.md` |
-| `QAR_CLAUDE_LIVE_MODELS` | 0 turns off the lookup of live Claude model ids (tests, air-gapped hosts). | `the_world/tools/delegated_agent_sessions/claude_live_models.py` | - |
-| `QAR_CLAUDE_PATH` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/deployment.md` +1 |
-| `QAR_CLAUDE_SESSIONS_DIR` | Directory of Claude Code session files indexed as conversation context. | `the_body/configuration/cli_config.py`, `the_body/configuration/config_assembler.py` | - |
-| `QAR_CLI_EFFORT` | Reasoning effort passed to the Claude CLI provider (low, medium, high; empty = CLI default). | `the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py` | - |
-| `QAR_CLI_HAIKU_THINKING_TOKENS` | Thinking-token cap for Haiku completions through the CLI provider (unset = CLI default). | `the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py` | - |
-| `QAR_CLI_PLAN_THINKING_TOKENS` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_CONFIG_FILE` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_body/internal_context/card_store/card_store_tidy.py` +1 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
-| `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `the_body/configuration/config_core_settings.py`, `the_consciousness/request_intake/lane.py` | `.env.example`, `docs/explanation/context-assembly.md` |
-| `QAR_CONTEXT_CARDS_DIR` |  | `the_consciousness/terminal/cli_cards.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/cli_context.py` | `.env.example`, `docs/explanation/context-assembly.md` |
-| `QAR_CONTEXT_POLL_SECONDS` |  | `the_body/configuration/cli_config.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_CONTEXT_PREAMBLE` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_CONTEXT_PREAMBLE_FILE` |  | `the_body/configuration/cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/writing-a-consumer.md`, `docs/tutorials/tutorial-your-first-lane.md` |
-| `QAR_CONTEXT_UPDATES` |  | `the_body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
-| `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
-| `QAR_CONTEXT_UPDATES_STATE_PATH` |  | `the_body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
-| `QAR_CONVERSATION_SEARCH` | false/0/off disables searching past conversations as context. | `the_body/configuration/cli_config.py` | - |
-| `QAR_CORPUS_ROOT` | Fills the 'root' option of file-editing:files; declared by the hub. | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_consciousness/terminal/cli_cards.py` +4 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
-| `QAR_DAILY_TOKEN_LIMIT` |  | `the_world/model_plumbing/spend/usage.py` | `.env.example` |
-| `QAR_DAILY_USAGE_PATH` |  | `the_consciousness/terminal/interactive_session_status.py`, `the_world/model_plumbing/spend/usage.py` | `.env.example` |
-| `QAR_DECISION_ASSIGNEE` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py` | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/adapters.md` +2 |
-| `QAR_DECISION_ASSIGNEES` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DECISION_DEFAULT_DEADLINE_HOURS` |  | `the_body/configuration/cli_config.py`, `the_body/internal_context/quest/client/quest_client_support.py` | `docs/how-to/adapters.md`, `docs/reference/quest-api-contract.md` |
-| `QAR_DEEP_AUTO_MODEL` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_CHROME` |  | `the_body/configuration/config_core_settings.py` | - |
-| `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS` | 1 adds --exclude-dynamic-system-prompt-sections to the deep worker launch, which moves per-machine text out of the cached prefix; unset leaves the launch as it was. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_INSTRUCTIONS_FILES` |  | `the_body/configuration/config_core_settings.py`, `the_self/integrity/prompts/standing_instructions.py` | `.env.example`, `docs/how-to/acp-deep-runner.md` |
-| `QAR_DEEP_LAUNCH_PROFILE` | Names a bundle of deep worker launch settings (today only lean_guarded: fewer built-in tools with web kept, user settings kept, no ambient MCP servers, per-machine prompt text out of the cached prefix); unset or unknown leaves the launch as it was. A QAR_DEEP_* name set beside it overrides the profile's field. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | - |
-| `QAR_DEEP_MAX_BUDGET_USD` | A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MAX_TURNS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MODELS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MODEL_HARD` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MODEL_NORMAL` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_MODEL_SIMPLE` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_DEEP_REVIEW_INTERVAL_SECONDS` |  | `the_body/configuration/config_core_settings.py`, `the_intelligence/mind/delegation/goal_runner_contract.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_SETTING_SOURCES` | Adds --setting-sources to the deep worker launch: a comma-separated list of user, project, local, or none to load none; unset adds no flag. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_STRICT_MCP` | 1 adds --strict-mcp-config to the deep worker launch, so only the servers of the lane's mcp config load; unset leaves the launch as it was. CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_TIMEOUT_SECONDS` |  | `the_body/configuration/config_core_settings.py`, `the_intelligence/mind/delegation/goal_runner_contract.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
-| `QAR_DEEP_WORKING_DIR` |  | `the_body/configuration/config.py`, `the_body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
-| `QAR_DEEP_WORK_SKILL` | The skill (by name) a milestone deliverable's deep worker carries out on the deliverable's solution; the lane that runs the work reads it from its skills root (QAR_SKILLS_ROOT). Unset, the plain brief runs. | `the_intelligence/critical_thinking/esoi_application/milestone_facts.py` | - |
-| `QAR_DISCOVERY_TEAM_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_DRY_RUN_DEEP` | Set to real to keep the real deep worker in a dry run (QAR_DRY_RUN_WRITES=1): it runs with the same environment, so every tool process it starts is in the dry run too and a Quest write it asks for is refused and recorded. Used to replay a queued task the way the lane would. Unset, the worker is the stub. | `the_world/tools/dry_run_writes.py` | - |
-| `QAR_DRY_RUN_RECORD_FILE` | A JSON-lines file every process of one dry run appends its refused tool writes to (the tool and its whole arguments), so a replay that started a deep worker can read what the worker's own tool processes would have written. Unset, nothing is appended. | `the_world/tools/dry_run_writes.py` | - |
-| `QAR_DRY_RUN_SCRATCH` | Folder a dry run (QAR_DRY_RUN_WRITES=1) redirects file writes into; default a new folder under the system temp folder. | `the_world/tools/dry_run_writes.py` | - |
-| `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (the_world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `the_world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md`, `docs/how-to/tools.md` |
-| `QAR_EMBEDDER_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py`, `the_body/internal_context/card_store/qdrant_embedders.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
-| `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
-| `QAR_ENV_ID` |  | `the_body/configuration/cli_config.py`, `the_body/internal_context/card_store/quest_api_card_repository.py` | `.env.example`, `docs/how-to/context-card-stores.md` |
-| `QAR_EXCLUDED_MODELS` |  | `the_world/model_plumbing/vendor_model_caller/providers.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_EXPLAIN_ANSWER` |  | `the_body/configuration/cli_config.py` | `docs/explanation/answer-explanation.md` |
-| `QAR_EXPLAIN_TIER` |  | `the_body/configuration/cli_config.py` | `docs/explanation/answer-explanation.md` |
-| `QAR_FALLBACK_MODELS` | Ordered, comma separated model ids the router asks next, on any vendor, when a model has no credit, is over quota, times out or is down. Unset: one model per other configured vendor. | `the_world/model_plumbing/vendor_model_caller/providers.py` | - |
-| `QAR_FEEDBACK_LEDGER` |  | `the_body/configuration/cli_config.py` | `docs/explanation/feedback-ledger.md` |
-| `QAR_FEEDBACK_LEDGER_PATH` |  | `the_body/configuration/cli_config.py` | `docs/explanation/feedback-ledger.md` |
-| `QAR_FILES_ALLOW_DOT` |  | `the_world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_DENY` |  | `the_world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_GOOGLE_CREDENTIALS` | serve-files: path to a Google service account key; turns on the read-only link operation for pasted Google Drive, Docs, Sheets and Slides links. | `the_world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS` | serve-files: comma separated email domains whose people may be impersonated (domain-wide delegation) so a link opens as the person who asked. | `the_world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_GOOGLE_IMPERSONATE_SCOPE` | serve-files: OAuth scope used when impersonating (default: the full Drive scope that delegation grants; reads stay read-only because the server only issues GET and export calls). | `the_world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_GOOGLE_SA_FALLBACK` | serve-files: 1 lets the service account itself read links for people who cannot be impersonated or have no access. Off by default, because the service account sees more than any one person. | `the_world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_GOOGLE_SA_SCOPE` | serve-files: OAuth scope for direct service account reads (default drive.readonly). | `the_world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_HOST` |  | `the_world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_PORT` |  | `the_world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_ROOT` |  | `the_world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILES_TOKEN` |  | `the_world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
-| `QAR_FILE_BACKUP_DIR` |  | `the_world/tools/file_editing/files_writer.py` | `docs/how-to/fast-edit-runner.md` |
-| `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `the_body/configuration/card_store_settings.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_GOAL_MAX_ATTEMPTS` | Max attempts of the goal loop (OrchestratorConfig.goal_max_attempts). | `the_body/configuration/cli_config.py` | - |
-| `QAR_GOAL_TOKEN_BUDGET` | Token budget of the goal loop (OrchestratorConfig.goal_token_budget). | `the_body/configuration/cli_config.py` | - |
-| `QAR_GREP_BUDGET_SECONDS` | Wall-clock budget for one corpus grep (default 20). | `the_world/tools/file_reading/files_adapter.py` | `docs/how-to/file-server.md` |
-| `QAR_GREP_MAX_FILES` | Most files one grep opens (default 20000). | `the_world/tools/file_reading/files_adapter.py`, `the_world/tools/file_reading/files_search_worker.py`, `the_world/tools/file_reading/files_server.py` | - |
-| `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` |  | `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/guidance-cards.md` |
-| `QAR_INTENT_JUDGE_TIMEOUT_SECONDS` | Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_INTERIM_REPLIES` |  | `the_consciousness/terminal/textual_ui_trail.py` | `docs/how-to/chat.md` |
-| `QAR_LANE_USER_ID` |  | `the_body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
-| `QAR_LINK_GUARD` |  | `the_body/configuration/cli_config.py` | `docs/explanation/link-guard.md`, `docs/how-to/tools.md` |
-| `QAR_LINK_POLICY_FILE` |  | `the_body/configuration/cli_config.py`, `the_body/configuration/config_core_settings.py` | `.env.example`, `docs/explanation/link-guard.md` |
-| `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `the_body/configuration/card_store_settings.py` | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
-| `QAR_MAX_CARDS_PER_FILE` | The most cards a batch to write or upload may hold per distinct file it names (default 0.25; 0 = no rule). A batch over it is refused whole, with a notice. | `the_body/configuration/card_store_settings.py` | `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md` |
-| `QAR_MAX_LOAD_PER_CORE` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_MAX_MEMORY_PERCENT` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_MAX_PARALLEL` |  | `the_body/configuration/card_store_settings.py`, `the_body/configuration/cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md` |
-| `QAR_MAX_SINGLE_FILE_CARD_SHARE` | The largest share of a batch's cards that may pin a single file (default 0.6; 0 = no rule). A batch over it is refused whole, with a notice. | `the_body/configuration/card_store_settings.py` | `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md` |
-| `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest one reading of a metric may take before and after a deep goal (default 15); an offline arm is stopped at that limit, and a reading that has not finished gives no value, with a note on the row. | `the_body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
-| `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `the_intelligence/critical_thinking/metric_translation/tools_metric_results.py` | `docs/explanation/metric-results.md` |
-| `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `the_body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
-| `QAR_METRIC_SOURCES` | JSON map {source name: {command, label, timeout_seconds}} of the read-only commands that give a metric its current value; set from the metric_sources tables of the config file, which is where to write it. Unset offers no read_metric_source tool. | `the_body/configuration/config_environment.py`, `the_intelligence/critical_thinking/esoi_application/tools_metric_source.py` | - |
-| `QAR_MILESTONE_WRITER_TIER` | Model tier a milestone progress turn writes its deliverable on (default fast, overriding OrchestratorConfig.milestone_writer_tier); a measured arm, while the structured judgments stay on the cheap tier. | `the_intelligence/critical_thinking/esoi_application/milestone_facts.py` | - |
-| `QAR_MIN_FREE_MEMORY_MB` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_MODEL_BACKEND` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/cli_chat.py`, `the_consciousness/terminal/textual_ui_helpers.py` +1 | `.env.example`, `docs/how-to/adapters.md` |
-| `QAR_MODEL_FAST` |  | `the_consciousness/terminal/cli_context.py` | `docs/how-to/adapters.md` |
-| `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_NOTE_FLOOR_FRESH_MINUTES` | A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_NOTE_FLOOR_RELEVANCE_GATED` | 0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_OPENAI_EMBEDDING_MODEL` | OpenAI embedding model id used by the OpenAI embedder. | `the_body/internal_context/card_store/qdrant_embedders.py` | - |
-| `QAR_OPENCLAW_ARGS` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_OPENCLAW_CALL_TIMEOUT` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_OPENCLAW_COMMAND` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_OPENCLAW_CWD` |  | `the_body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
-| `QAR_OPENCLAW_TOKEN_FILE` | Fills the 'token_file' option of intake-sources:openclaw; declared by the hub. | `the_body/configuration/cli_config.py`, `the_world/tools/connected_system_operations/openclaw_channel.py` | `.env.example`, `docs/how-to/live-channels.md` |
-| `QAR_ORG_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_OVERSEER` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
-| `QAR_OVERSEER_MAX_SIGNALS` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
-| `QAR_OVERSEER_TIER` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
-| `QAR_PLANNER_MODEL` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_PLANNER_PROMPT_PROFILE` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_PLANNER_REACH_JUDGE` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_PLANNER_REACH_JUDGE_TIER` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_PLANNER_TIER` |  | `the_body/configuration/cli_config.py`, `the_world/model_plumbing/spend/pricing.py` | `.env.example` |
-| `QAR_POLL_INTERVAL` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_PRUNE_DEAD_CARDS` | Default on; 0/false/no keeps cards whose source folder disappeared. | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_QDRANT_API_KEY` | Qdrant API key (falls back to QAR_VECTOR_QDRANT_API_KEY). | `the_body/configuration/config_context_index.py` | - |
-| `QAR_QDRANT_URL` | Qdrant server URL for the card/vector index (falls back to QAR_VECTOR_QDRANT_URL, then QDRANT_URL). | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py` | - |
-| `QAR_QUEST_API_KEY` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_QUEST_API_URL` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_QUEST_AUTO_MATCH` |  | `the_consciousness/terminal/interactive_session.py` | `docs/how-to/chat.md` |
-| `QAR_QUEST_FOLDER_MAP` |  | `the_body/configuration/cli_config.py` | `docs/tutorials/tutorial-your-first-lane.md` |
-| `QAR_QUEST_FOLDER_SYNC_DIRECTION` |  | `the_body/configuration/cli_config.py` | `docs/tutorials/tutorial-your-first-lane.md` |
-| `QAR_QUEST_JUDGE_TIMEOUT_SECONDS` | Budget for the quest-selection judgment (default 8). CoreSettings.quest_judge_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_QUEST_READ_DEADLINE_SECONDS` | Longest one Quest GET may take in total across its attempts and pauses (default 45, under the 60 second tool timeout). No retry starts past it, and each attempt's timeout is cut to what is left. | `the_body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_QUEST_READ_RETRIES` | Retries the Quest client makes for a GET after a transport error, 429 or 5xx, with exponential backoff and jitter (default 2, at most 5, 0 turns retry off). A 4xx other than 429 is never retried. | `the_body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_QUEST_RETRY_MAX_DELAY_SECONDS` | Longest the Quest client waits between retries (default 30). A Retry-After longer than this is reported to the caller instead of waited out. | `the_body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_QUEST_SCOPE_MODE` | `fence` (default): an item learned on another quest is hidden from a turn. `affinity`: it stays visible, ranks below the turn's own quest, and its rendered line says which quest it came from; only audience kinds still fence. CoreSettings `quest_scope_mode`. | `the_body/configuration/config_core_settings.py` | - |
-| `QAR_QUEST_TIMEOUT_SECONDS` | Socket timeout in seconds for one Quest API request (default 30). The long-poll wait channel keeps its own longer timeout. | `the_body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_QUEST_WRITE_RETRY` | Whether the Quest client retries a write that carries an Idempotency-Key: auto (the default) retries only if the backend lists idempotency-key under capabilities on GET /api/health, on forces it, off forbids it. Without server support a retried write could create a duplicate, so a write is attempted once. | `the_body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_READ_OP_TIMEOUT_SECONDS` | Per-operation budget for one mid-loop read (default 60). CoreSettings.read_op_timeout_seconds. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_READ_REACH_SUMMARY` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_READ_REACH_SUMMARY_FILE` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_RECENT_CONTEXT` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/context-assembly.md` |
-| `QAR_RECENT_CONTEXT_GLOBAL` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/context-assembly.md` |
-| `QAR_RECENT_CONTEXT_MAX_CARDS` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/explanation/context-assembly.md` |
-| `QAR_RECIPES` |  | `the_intelligence/mind/planner/recipes.py` | `docs/explanation/recipes.md` |
-| `QAR_RECIPES_DIR` |  | `the_intelligence/mind/planner/recipes.py` | `docs/explanation/recipes.md` |
-| `QAR_RECIPES_MIN_SCORE` |  | `the_intelligence/mind/planner/recipes.py` | `docs/explanation/recipes.md` |
-| `QAR_RECONCILE_HANDOFF` | 0 turns off the AI handoff judgment during goal reconcile (default on). | `the_consciousness/terminal/cli_quest.py` | - |
-| `QAR_REFRESH_MIN_INTERVAL_SECONDS` | Shortest gap between two startup context refreshes (default 1800). | `the_body/configuration/config_context_index.py` | - |
-| `QAR_REP_NAME` |  | `the_consciousness/terminal/cli_chat.py` | `docs/how-to/chat.md` |
-| `QAR_REP_PERSONA_FILE` |  | `the_consciousness/terminal/cli_chat.py` | `docs/how-to/chat.md` |
-| `QAR_REP_SYNC_DIRECTION` | pull, push or both: sets RunnerConfig.rep_sync_direction. | `the_body/configuration/cli_config.py` | - |
-| `QAR_REQUESTER_USER_ID` | Set by the runner in the environment of every process it spawns for a user (Claude Code deep worker, ACP agent, command tool): the id of the Quest user the work is for (the chat turn's user, or a queued task's creator). Unset when unknown. Read it in your own hooks and tools to limit what that user's AI may do. | `the_intelligence/mind/delegation/requester.py` | `docs/how-to/tools.md` |
-| `QAR_RESOURCE_CHECK_INTERVAL` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_RESOURCE_RESUME_MARGIN` |  | `the_body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
-| `QAR_REUSE_NESTED_CARDS` |  | `the_body/internal_context/card_store/file_context_store.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_RUNNER_ENV_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_RUNNER_LABEL` |  | `the_body/configuration/cli_config.py` | `.env.example` |
-| `QAR_SCIENCE_DAILY_LIMIT` | Real scholarly searches one process may make per UTC day (default 300, 0 for no cap). OpenAlex bills about $1 per 1,000 searches against a $1 a day free allowance. | `the_world/science/tools_science.py` | `docs/how-to/tools.md` |
-| `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `the_consciousness/terminal/interactive_session_commands.py`, `the_world/tools/delegated_agent_sessions/hub_loop_runner.py` | - |
-| `QAR_SKILLS_ROOT` | The folder holding the skills this lane's deep worker may be asked to carry out (one folder per skill with its SKILL.md), such as the skill a milestone deliverable's work names; also the root of the representatives' skill folders. | `the_consciousness/request_intake/executor.py` | - |
-| `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `the_body/configuration/walk_settings.py`, `the_world/tools/file_reading/files_search_worker.py`, `the_world/tools/file_reading/files_server.py` | - |
-| `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `the_body/configuration/card_store_settings.py` | - |
-| `QAR_SOLUTION_CONSIDERATION_MIN_SCORE` | The records-index score a solution needs for a pass in a deep run (default 0: the hub gate's DEFAULT_MIN_SCORE, fixed from its relevance cases). CoreSettings.solution_consideration_min_score. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
-| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `the_consciousness/terminal/__main__.py`, `the_intelligence/critical_thinking/esoi_application/repo_specs.py` | `docs/explanation/metric-results.md`, `docs/explanation/spec-selection.md` |
-| `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `the_consciousness/terminal/cli_quest.py` | - |
-| `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `the_consciousness/terminal/cli_quest.py` | - |
-| `QAR_STANDARD_TOOLS` |  | `the_world/tools/tools.py` | `docs/how-to/tools.md` |
-| `QAR_STARTUP_REQUIREMENTS_CHECK` |  | `the_consciousness/terminal/interactive_session.py` | - |
-| `QAR_STATE_PATH` |  | `the_consciousness/request_intake/lane.py`, `the_consciousness/terminal/cli_poll.py`, `the_consciousness/terminal/interactive_session_persist.py` +1 | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` |
-| `QAR_TASK_DIRECT_DEEP` |  | `the_body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
-| `QAR_TEAM_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_TEAM_QUEST_ID` | Quest the bootstrap report is posted to. | `the_intelligence/subconscious/cards_from_files/bootstrap_reporter.py` | - |
-| `QAR_TOOLS_FILE` |  | `the_world/tools/tools.py` | `docs/how-to/tools.md` |
-| `QAR_TOOL_LEDGER_DIR` |  | `the_world/tools/tools.py` | `docs/how-to/tools.md` |
-| `QAR_TOOL_QUEST_ID` |  | `the_consciousness/terminal/__main__.py`, `the_world/tools/tools.py` | `docs/how-to/tools.md` |
-| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `the_consciousness/terminal/__main__.py`, `the_intelligence/mind/delegation/goal_runner_contract.py`, `the_world/tools/tools.py` | `docs/explanation/hub-of-hubs.md`, `docs/explanation/metric-results.md`, `docs/how-to/tools.md` |
-| `QAR_TOOL_TASK_ID` |  | `the_consciousness/terminal/__main__.py`, `the_world/tools/tools.py` | `docs/how-to/tools.md` |
-| `QAR_TRAIL_DIR` | Folder where each deep run records the files it read and changed, per working folder and goal, so the next run on that goal is handed them (default ~/.quest-ai-runner/trails). | `the_intelligence/mind/delegation/exploration_trail.py` | - |
-| `QAR_USER_ID` |  | `the_body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_VECTOR_BACKEND` |  | `the_body/configuration/config_assembler.py`, `the_consciousness/request_intake/lane.py` | `docs/explanation/vector-context.md` |
-| `QAR_VECTOR_MAX_SEED_ITEMS` | Cards one vector seed pass may embed (0 lifts the bound). | `the_intelligence/subconscious/context_retriever/vector_context_assembler.py` | - |
-| `QAR_VECTOR_QDRANT_API_KEY` | Older name for QAR_QDRANT_API_KEY. | `the_body/configuration/config_context_index.py` | - |
-| `QAR_VECTOR_QDRANT_URL` | Older name for QAR_QDRANT_URL. | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py` | - |
-| `QAR_VECTOR_SPACE` |  | `the_body/configuration/config_assembler.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_VECTOR_UNATTRIBUTED` |  | `the_body/internal_context/card_store/card_store_fence.py` | `docs/how-to/context-card-stores.md` |
-| `QAR_VERIFY_CONTEXT_MAX_CHARS` | Character cap on the context layer handed to goal verification (default 24000). CoreSettings.verify_context_max_chars. | `the_body/configuration/config_core_settings.py` | `.env.example` |
-| `QAR_VERIFY_TIER` |  | `the_body/configuration/cli_config.py` | `.env.example` |
-| `QAR_WAIT_CHANNEL` |  | `the_body/configuration/cli_config.py` | `docs/reference/quest-api-contract.md` |
-| `QAR_WAIT_TIMEOUT_SECONDS` | Seconds each long-poll GET asks the backend to wait (sets RunnerConfig.wait_timeout_seconds). | `the_body/configuration/cli_config.py` | - |
-| `QAR_WEB_CACHE_DIR` |  | `the_world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `the_world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `the_world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_PAGE_TTL_SECONDS` |  | `the_world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `the_world/tools/web_search/web_search_backends.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_BACKEND` |  | `the_world/tools/web_search/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `the_world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_MODEL` |  | `the_world/tools/web_search/web_research.py`, `the_world/tools/web_search/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `the_world/tools/web_search/web_search_backends.py` | `docs/how-to/web-search.md` |
-| `QAR_WEB_SEARCH_TTL_SECONDS` |  | `the_world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
-| `QDRANT_URL` | Plain Qdrant URL, the last fallback after QAR_QDRANT_URL. | `the_body/configuration/config_assembler.py` | - |
-| `QUEST_API_KEY` | Quest API key; declared by the hub for card-store, quest-body. | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_body/configuration/config_resolvers.py` +5 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
-| `QUEST_API_URL` | Fills the 'base_url' option of card-store:quest-api-cards, quest-body:quest_client; declared by the hub. | `the_body/configuration/config_resolvers.py`, `the_body/internal_context/quest/client/quest_client.py`, `the_consciousness/terminal/send_bootstrap_report.py` +2 | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md` +1 |
-| `QUEST_BASE_URL` | Fills the 'base_url' option of card-store:quest-api-cards, quest-body:quest_client; declared by the hub. | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_body/configuration/config_resolvers.py` +5 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
-| `QUEST_CLAIM_TEAMS` | Comma-separated team ids an owner-scoped lane may claim tasks from (RunnerConfig.claim_teams). | `the_body/configuration/cli_config.py` | - |
-| `QUEST_ORG_ID` |  | `the_body/configuration/cli_config.py` | `.env.example`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
-| `QUEST_TEAM_ID` | Fills the 'team_id' option of quest-body:quest_client; declared by the hub. | `the_body/configuration/cli_config.py`, `the_body/configuration/config_environment.py`, `the_body/configuration/config_resolvers.py` +2 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +5 |
-| `QUEST_TEAM_IDS` |  | `the_body/configuration/cli_config.py`, `the_consciousness/terminal/interactive_session_quests.py` | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` +1 |
-| `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `the_body/configuration/config_assembler.py`, `the_body/configuration/config_context_index.py` | - |
-| `VOYAGE_MODEL` |  | `the_body/internal_context/card_store/qdrant_embedders.py` | `docs/explanation/vector-context.md` |
-| `VTE_VERSION` | Set by VTE terminals; the terminal UI reads it to pick key handling. Never set by hand. | `the_consciousness/terminal/textual_ui_widgets.py` | - |
-| `WEB_SEARCH_ENABLED` |  | `the_body/configuration/config_orchestrator.py` | `.env.example`, `docs/how-to/web-search.md` |
-| `WEB_SEARCH_MAX_RESULTS` |  | `the_body/configuration/config_orchestrator.py` | `.env.example`, `docs/how-to/web-search.md` |
-| `WEB_SEARCH_TIER` |  | `the_body/configuration/config_orchestrator.py` | `.env.example` |
-| `XDG_STATE_HOME` |  | `the_consciousness/request_intake/lane_supervisor.py` | `docs/how-to/deployment.md` |
+| `ANTHROPIC_API_KEY` | Anthropic API key; declared by the hub for vendor-model-caller. | `consciousness/terminal/cli_chat.py`, `consciousness/terminal/textual_ui_helpers.py` | `README.md`, `.env.example`, `docs/how-to/acp-deep-runner.md` +6 |
+| `CLAUDE_CONFIG_DIR` | Claude Code's own config directory; session transcripts are looked up under its projects/ folder first (default ~/.claude). Core reads it through CoreSettings.claude_config_dir. | `body/configuration/config_core_settings.py`, `world/tools/delegated_agent_sessions/claude_live_models.py` | - |
+| `DEEPSEEK_API_KEY` | DeepSeek API key; declared by the hub for vendor-model-caller. | `body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md` |
+| `FASTEMBED_CACHE_PATH` | Folder for the local embedding model the spec search uses when fastembed is installed (default /tmp/fastembed_cache). | `intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
+| `GOOGLE_API_KEY` | Gemini API key; declared by the hub for vendor-model-caller. | `consciousness/terminal/cli_chat.py`, `consciousness/terminal/textual_ui_helpers.py` | `.env.example`, `docs/how-to/web-search.md` |
+| `HF_HUB_OFFLINE` | Set to 1 by the spec search (unless already set) so a cached embedding model loads without network calls. | `intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
+| `HF_HUB_VERBOSITY` | Hugging Face hub log level; the CLI sets it to error (unless already set) so its unauthenticated-request warning never reaches the chat. | `consciousness/terminal/cli.py` | - |
+| `OPENAI_API_KEY` | Fills the 'api_key' option of vendor-model-caller:openai; declared by the hub. | `body/internal_context/card_store/qdrant_embedders.py`, `consciousness/terminal/cli_chat.py`, `consciousness/terminal/textual_ui_helpers.py` | `.env.example` |
+| `OPENALEX_API_KEY` | OpenAlex API key (free; the account owner activates it from an emailed link). Set it and the standard tool search_scientific_literature is offered; unset (the default) the tool is absent and the planner is told it cannot search research papers. | `world/science/tools_science.py` | `docs/how-to/tools.md` |
+| `OPENALEX_MAILTO` | Contact address sent to OpenAlex with each scholarly search (optional, a courtesy; use a team address, not a person's). | `world/science/tools_science.py` | `docs/how-to/tools.md` |
+| `QAR_ACP_AGENT_COMMAND` |  | `body/configuration/acp_deep_runner_config.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/acp-deep-runner.md` |
+| `QAR_ACP_NODE_PATH` |  | `body/configuration/acp_deep_runner_config.py` | `docs/how-to/acp-deep-runner.md` |
+| `QAR_ANSWER_TIMEOUT` |  | `body/configuration/cli_config.py` | `.env.example` |
+| `QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD` | Monthly prepaid Anthropic credit in USD that the hub tier selector counts as cost-lowering when it ranks measured arms; unset or 0 counts no credit. The hub ships no allowance, this is the deployment's own. | `world/model_plumbing/vendor_model_caller/providers.py` | - |
+| `QAR_ANTHROPIC_CREDIT_VALUE` | What an Anthropic credit is worth if not used here, 0 to 1 (lower when it expires unused); unset counts it at face value (1), the reading that never understates cost. | `world/model_plumbing/vendor_model_caller/providers.py` | - |
+| `QAR_ANTHROPIC_THINKING` |  | `self/assembler/hub.py` | `.env.example` |
+| `QAR_ANTICIPATION` |  | `body/configuration/cli_config.py` | `docs/README.md`, `docs/explanation/anticipation.md` |
+| `QAR_ANTICIPATION_LLM` |  | `body/configuration/cli_config.py` | `docs/explanation/anticipation.md` |
+| `QAR_ASYNC_CARD_UPDATE` | Default on; 0/false/off disables updating cards from a deep run's edits in the background. | `body/configuration/cli_config.py` | - |
+| `QAR_AUTOPILOT_ADOPT_RECURRING` | 1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass. | `body/configuration/cli_config.py` | - |
+| `QAR_AUTOPILOT_PASS_TIME` | Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time. | `body/configuration/cli_config.py` | - |
+| `QAR_AUTOPILOT_STRUCTURE_WATCH` | 0/false/off/no turns the structure watch off (RunnerConfig.autopilot_structure_watch): the one small best-tier call per autopilot or routine run of a quest. | `body/configuration/cli_config.py` | - |
+| `QAR_BOOTSTRAP_EMAIL_USER` | Quest user id the bootstrap report email is sent to. | `consciousness/terminal/cli_context.py` | - |
+| `QAR_BOOTSTRAP_MAX_CARDS` | Hard cap on cards created in ONE bootstrap pass (unset = no cap). | `body/configuration/card_store_settings.py` | - |
+| `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap). | `body/configuration/card_store_settings.py` | - |
+| `QAR_BOOTSTRAP_MAX_FILES` | Stop the bootstrap walk after this many files (unset = no limit). | `body/configuration/card_store_settings.py` | - |
+| `QAR_BOOTSTRAP_TIER` | Model tier used for bootstrap topic extraction (default balanced). | `consciousness/terminal/cli_context.py` | - |
+| `QAR_BOOTSTRAP_WORKERS` | Parallel bootstrap workers; overrides QAR_MAX_PARALLEL for bootstrap only. | `body/configuration/card_store_settings.py` | - |
+| `QAR_CALL_LOG_PATH` | Path of the JSON-lines call log where the runner persists every model call it makes, tagged with its prompt spec id (default: next to the usage file); production.py reads it to report average and maximum seconds, tokens and dollars per call. Read in quest_ai_runner/world/model_plumbing/spend/usage.py. | `consciousness/terminal/cli_spend.py`, `world/model_plumbing/spend/usage.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_CANDIDATE_CASES_DIR` | A private folder outside any repository (default unset: nothing is recorded). When set, a turn that ended with an unmet goal, an empty reply or work pushed back to the person appends one JSON line to <dir>/poorly_answered_inputs/<case id>.jsonl, in the format of the evaluation output log, as a candidate case for a person to prioritise. | `consciousness/feedback_learning/candidate_cases.py` | - |
+| `QAR_CARDS_BACKEND` |  | `body/configuration/config_assembler.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_CARDS_COLLECTION` | Qdrant collection the cards live in (default quest_ai_cards). | `body/configuration/config_context_index.py` | - |
+| `QAR_CARDS_SCOPE` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_CARD_MOUNT` |  | `body/configuration/card_store_settings.py` | `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
+| `QAR_CARD_SHAPE_MIN_FILES` | A batch naming fewer distinct files than this is not judged by the two card-shape limits (default 50). | `body/configuration/card_store_settings.py` | - |
+| `QAR_CHANNEL_ACK_AFTER_SECONDS` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_ALLOWED_SENDERS` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_NAME` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_PROGRESS_MIN_SECONDS` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_PROVIDER` |  | `body/configuration/cli_config.py`, `self/assembler/hub_requirements.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_STATE_PATH` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHANNEL_TURN_TIMEOUT_SECONDS` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_CHAT_HISTORY_DIR` |  | `body/configuration/cli_config.py`, `consciousness/terminal/interactive_session.py`, `intelligence/higher_mind/long_term_memory/chat_conversations.py` | `docs/how-to/chat.md` |
+| `QAR_CHAT_LOG_FILE` | File the terminal chat writes its full diagnostic log to (default: logs/chat.log beside the saved conversations). | `intelligence/higher_mind/long_term_memory/chat_conversations.py` | `docs/how-to/chat.md` |
+| `QAR_CLAUDE_LIVE_MODELS` | 0 turns off the lookup of live Claude model ids (tests, air-gapped hosts). | `world/tools/delegated_agent_sessions/claude_live_models.py` | - |
+| `QAR_CLAUDE_PATH` |  | `body/configuration/cli_config.py`, `body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/deployment.md` +1 |
+| `QAR_CLAUDE_SESSIONS_DIR` | Directory of Claude Code session files indexed as conversation context. | `body/configuration/cli_config.py`, `body/configuration/config_assembler.py` | - |
+| `QAR_CLI_EFFORT` | Reasoning effort passed to the Claude CLI provider (low, medium, high; empty = CLI default). | `world/model_plumbing/vendor_model_caller/claude_cli_provider.py` | - |
+| `QAR_CLI_HAIKU_THINKING_TOKENS` | Thinking-token cap for Haiku completions through the CLI provider (unset = CLI default). | `world/model_plumbing/vendor_model_caller/claude_cli_provider.py` | - |
+| `QAR_CLI_PLAN_THINKING_TOKENS` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_CONFIG_FILE` |  | `body/configuration/cli_config.py`, `body/configuration/config_environment.py`, `body/internal_context/card_store/card_store_tidy.py` +2 | `docs/how-to/chat.md`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
+| `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` | Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds. | `body/configuration/config_core_settings.py`, `consciousness/request_intake/lane.py` | `.env.example`, `docs/explanation/context-assembly.md` |
+| `QAR_CONTEXT_CARDS_DIR` |  | `consciousness/terminal/cli_cards.py`, `consciousness/terminal/cli_chat.py`, `consciousness/terminal/cli_context.py` | `.env.example`, `docs/explanation/context-assembly.md` |
+| `QAR_CONTEXT_POLL_SECONDS` |  | `body/configuration/cli_config.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_CONTEXT_PREAMBLE` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_CONTEXT_PREAMBLE_FILE` |  | `body/configuration/cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/writing-a-consumer.md`, `docs/tutorials/tutorial-your-first-lane.md` |
+| `QAR_CONTEXT_UPDATES` |  | `body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
+| `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS` |  | `body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
+| `QAR_CONTEXT_UPDATES_STATE_PATH` |  | `body/configuration/cli_config.py` | `docs/how-to/context-updates.md` |
+| `QAR_CONVERSATION_SEARCH` | false/0/off disables searching past conversations as context. | `body/configuration/cli_config.py` | - |
+| `QAR_CORPUS_ROOT` | Fills the 'root' option of file-editing:files; declared by the hub. | `body/configuration/cli_config.py`, `body/configuration/config_environment.py`, `consciousness/terminal/cli_cards.py` +4 | `README.md`, `.env.example`, `docs/explanation/recipes.md` +6 |
+| `QAR_DAILY_TOKEN_LIMIT` |  | `world/model_plumbing/spend/usage.py` | `.env.example` |
+| `QAR_DAILY_USAGE_PATH` |  | `consciousness/terminal/interactive_session_status.py`, `world/model_plumbing/spend/usage.py` | `.env.example` |
+| `QAR_DECISION_ASSIGNEE` |  | `body/configuration/cli_config.py`, `body/configuration/config_environment.py` | `.env.example`, `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/adapters.md` +2 |
+| `QAR_DECISION_ASSIGNEES` |  | `body/configuration/cli_config.py`, `body/configuration/config_environment.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DECISION_DEFAULT_DEADLINE_HOURS` |  | `body/configuration/cli_config.py`, `body/internal_context/quest/client/quest_client_support.py` | `docs/how-to/adapters.md`, `docs/reference/quest-api-contract.md` |
+| `QAR_DEEP_AUTO_MODEL` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_CHROME` |  | `body/configuration/config_core_settings.py` | - |
+| `QAR_DEEP_EXCLUDE_DYNAMIC_SECTIONS` | 1 adds --exclude-dynamic-system-prompt-sections to the deep worker launch, which moves per-machine text out of the cached prefix; unset leaves the launch as it was. CoreSettings.deep_launch. | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_INSTRUCTIONS_FILES` |  | `body/configuration/config_core_settings.py`, `self/integrity/prompts/standing_instructions.py` | `.env.example`, `docs/how-to/acp-deep-runner.md` |
+| `QAR_DEEP_LAUNCH_PROFILE` | Names a bundle of deep worker launch settings (today only lean_guarded: fewer built-in tools with web kept, user settings kept, no ambient MCP servers, per-machine prompt text out of the cached prefix); unset or unknown leaves the launch as it was. A QAR_DEEP_* name set beside it overrides the profile's field. CoreSettings.deep_launch. | `body/configuration/config_core_settings.py` | - |
+| `QAR_DEEP_MAX_BUDGET_USD` | A positive number adds --max-budget-usd to the deep worker launch as its spend ceiling; unset adds none. CoreSettings.deep_launch. | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MAX_TURNS` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MODELS` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MODEL_HARD` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MODEL_NORMAL` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_MODEL_SIMPLE` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_PROMPT_TOKEN_BUDGET` | Token budget for one deep prompt, capped at the model's window. CoreSettings.deep_prompt_token_budget. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_DEEP_REVIEW_INTERVAL_SECONDS` |  | `body/configuration/config_core_settings.py`, `intelligence/mind/delegation/goal_runner_contract.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_SETTING_SOURCES` | Adds --setting-sources to the deep worker launch: a comma-separated list of user, project, local, or none to load none; unset adds no flag. CoreSettings.deep_launch. | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_STRICT_MCP` | 1 adds --strict-mcp-config to the deep worker launch, so only the servers of the lane's mcp config load; unset leaves the launch as it was. CoreSettings.deep_launch. | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_TIMEOUT_SECONDS` |  | `body/configuration/config_core_settings.py`, `intelligence/mind/delegation/goal_runner_contract.py` | `.env.example`, `docs/how-to/acp-deep-runner.md`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_TOOLS` | Adds --tools to the deep worker launch: a comma-separated list of the only built-in tools the worker gets, or none for no tools; unset adds no flag (the CLI default tool set). CoreSettings.deep_launch. | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/writing-a-consumer.md` |
+| `QAR_DEEP_WORKING_DIR` |  | `body/configuration/config.py`, `body/configuration/config_resolvers.py` | `.env.example`, `docs/how-to/adapters.md`, `docs/how-to/corpus-playbooks.md` +3 |
+| `QAR_DEEP_WORK_SKILL` | The skill (by name) a milestone deliverable's deep worker carries out on the deliverable's solution; the lane that runs the work reads it from its skills root (QAR_SKILLS_ROOT). Unset, the plain brief runs. | `intelligence/critical_thinking/esoi_application/milestone_facts.py` | - |
+| `QAR_DEFAULT_REP` |  | `consciousness/terminal/interactive_session_persona.py` | - |
+| `QAR_DISCOVERY_TEAM_ID` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_DRY_RUN_DEEP` | Set to real to keep the real deep worker in a dry run (QAR_DRY_RUN_WRITES=1): it runs with the same environment, so every tool process it starts is in the dry run too and a Quest write it asks for is refused and recorded. Used to replay a queued task the way the lane would. Unset, the worker is the stub. | `world/tools/dry_run_writes.py` | - |
+| `QAR_DRY_RUN_RECORD_FILE` | A JSON-lines file every process of one dry run appends its refused tool writes to (the tool and its whole arguments), so a replay that started a deep worker can read what the worker's own tool processes would have written. Unset, nothing is appended. | `world/tools/dry_run_writes.py` | - |
+| `QAR_DRY_RUN_SCRATCH` | Folder a dry run (QAR_DRY_RUN_WRITES=1) redirects file writes into; default a new folder under the system temp folder. | `world/tools/dry_run_writes.py` | - |
+| `QAR_DRY_RUN_WRITES` | Set to 1 to run the real brain with every state change recorded and not made: Quest writes are answered with a stand-in, tools that mutate and the deep worker are stubbed, and other outward requests, file writes and processes are refused (world/tools/dry_run_writes.py). Unset (the default) changes nothing. | `world/tools/dry_run_writes.py` | `docs/how-to/run-a-priority-dataset.md`, `docs/how-to/tools.md` |
+| `QAR_EMBEDDER_BACKEND` |  | `body/configuration/config_assembler.py`, `body/configuration/config_context_index.py`, `body/internal_context/card_store/qdrant_embedders.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_EMBED_BATCH` | Texts per embedding request (positive integer; shipped default in qdrant_vector_store). | `body/internal_context/card_store/qdrant_embedders.py` | - |
+| `QAR_EMBED_MAX_CHARS` | Characters of one text sent to the embedder before it is cut. | `body/internal_context/card_store/qdrant_embedders.py` | - |
+| `QAR_ENV_ID` |  | `body/configuration/cli_config.py`, `body/internal_context/card_store/quest_api_card_repository.py` | `.env.example`, `docs/how-to/context-card-stores.md` |
+| `QAR_EXCLUDED_MODELS` |  | `world/model_plumbing/vendor_model_caller/providers.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_EXPLAIN_ANSWER` |  | `body/configuration/cli_config.py` | `docs/explanation/answer-explanation.md` |
+| `QAR_EXPLAIN_TIER` |  | `body/configuration/cli_config.py` | `docs/explanation/answer-explanation.md` |
+| `QAR_FALLBACK_MODELS` | Ordered, comma separated model ids the router asks next, on any vendor, when a model has no credit, is over quota, times out or is down. Unset: one model per other configured vendor. | `world/model_plumbing/vendor_model_caller/providers.py` | - |
+| `QAR_FEEDBACK_LEDGER` |  | `body/configuration/cli_config.py` | `docs/explanation/feedback-ledger.md` |
+| `QAR_FEEDBACK_LEDGER_PATH` |  | `body/configuration/cli_config.py` | `docs/explanation/feedback-ledger.md` |
+| `QAR_FILES_ALLOW_DOT` |  | `world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_DENY` |  | `world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_GOOGLE_CREDENTIALS` | serve-files: path to a Google service account key; turns on the read-only link operation for pasted Google Drive, Docs, Sheets and Slides links. | `world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_GOOGLE_IMPERSONATE_DOMAINS` | serve-files: comma separated email domains whose people may be impersonated (domain-wide delegation) so a link opens as the person who asked. | `world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_GOOGLE_IMPERSONATE_SCOPE` | serve-files: OAuth scope used when impersonating (default: the full Drive scope that delegation grants; reads stay read-only because the server only issues GET and export calls). | `world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_GOOGLE_SA_FALLBACK` | serve-files: 1 lets the service account itself read links for people who cannot be impersonated or have no access. Off by default, because the service account sees more than any one person. | `world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_GOOGLE_SA_SCOPE` | serve-files: OAuth scope for direct service account reads (default drive.readonly). | `world/tools/web_search/google_link_reader.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_HOST` |  | `world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_PORT` |  | `world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_ROOT` |  | `world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
+| `QAR_FILES_TOKEN` |  | `world/tools/file_reading/cli_serve_files.py` | `docs/how-to/file-server.md` |
+| `QAR_FILE_BACKUP_DIR` |  | `world/tools/file_editing/files_writer.py` | `docs/how-to/fast-edit-runner.md` |
+| `QAR_FOLDER_REVIEW` | 0 turns off the LLM folder-relevance review during bootstrap. | `body/configuration/card_store_settings.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_GOAL_MAX_ATTEMPTS` | Max attempts of the goal loop (OrchestratorConfig.goal_max_attempts). | `body/configuration/cli_config.py` | - |
+| `QAR_GOAL_TOKEN_BUDGET` | Token budget of the goal loop (OrchestratorConfig.goal_token_budget). | `body/configuration/cli_config.py` | - |
+| `QAR_GREP_BUDGET_SECONDS` | Wall-clock budget for one corpus grep (default 20). | `world/tools/file_reading/files_adapter.py` | `docs/how-to/file-server.md` |
+| `QAR_GREP_MAX_FILES` | Most files one grep opens (default 20000). | `world/tools/file_reading/files_adapter.py`, `world/tools/file_reading/files_search_worker.py`, `world/tools/file_reading/files_server.py` | - |
+| `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` |  | `body/configuration/config_core_settings.py` | `.env.example`, `docs/how-to/guidance-cards.md` |
+| `QAR_INTENT_JUDGE_TIMEOUT_SECONDS` | Budget for the intent-directive judgment call (default 8). CoreSettings.intent_judge_timeout_seconds. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_INTERIM_REPLIES` |  | `consciousness/terminal/textual_ui_trail.py` | `docs/how-to/chat.md` |
+| `QAR_LANE_USER_ID` |  | `body/configuration/cli_config.py` | `docs/how-to/writing-a-consumer.md` |
+| `QAR_LINK_GUARD` |  | `body/configuration/cli_config.py` | `docs/explanation/link-guard.md`, `docs/how-to/tools.md` |
+| `QAR_LINK_POLICY_FILE` |  | `body/configuration/cli_config.py`, `body/configuration/config_core_settings.py` | `.env.example`, `docs/explanation/link-guard.md` |
+| `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `body/configuration/card_store_settings.py` | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
+| `QAR_MAX_CARDS_PER_FILE` | The most cards a batch to write or upload may hold per distinct file it names (default 0.25; 0 = no rule). A batch over it is refused whole, with a notice. | `body/configuration/card_store_settings.py` | `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md` |
+| `QAR_MAX_LOAD_PER_CORE` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_MAX_MEMORY_PERCENT` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_MAX_PARALLEL` |  | `body/configuration/card_store_settings.py`, `body/configuration/cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md` |
+| `QAR_MAX_SINGLE_FILE_CARD_SHARE` | The largest share of a batch's cards that may pin a single file (default 0.6; 0 = no rule). A batch over it is refused whole, with a notice. | `body/configuration/card_store_settings.py` | `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md` |
+| `QAR_METRIC_ARM_TIMEOUT_SECONDS` | Longest one reading of a metric may take before and after a deep goal (default 15); an offline arm is stopped at that limit, and a reading that has not finished gives no value, with a note on the row. | `body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
+| `QAR_METRIC_LEDGER_DIR` | Folder where each deep run's metric results are kept, one file per run, shared by the runner and the worker's shell commands (default: a folder in the system temp directory). | `intelligence/critical_thinking/metric_translation/tools_metric_results.py` | `docs/explanation/metric-results.md` |
+| `QAR_METRIC_METERS` | Which meters read a metric's value around a deep goal, comma-separated and tried in order: recorded_row, offline_arm (default both; used only by the iterate-by-spec arms that measure). | `body/configuration/config_core_settings.py` | `docs/explanation/metric-results.md` |
+| `QAR_METRIC_SOURCES` | JSON map {source name: {command, label, timeout_seconds}} of the read-only commands that give a metric its current value; set from the metric_sources tables of the config file, which is where to write it. Unset offers no read_metric_source tool. | `body/configuration/config_environment.py`, `intelligence/critical_thinking/esoi_application/tools_metric_source.py` | - |
+| `QAR_MILESTONE_WRITER_TIER` | Model tier a milestone progress turn writes its deliverable on (default fast, overriding OrchestratorConfig.milestone_writer_tier); a measured arm, while the structured judgments stay on the cheap tier. | `intelligence/critical_thinking/esoi_application/milestone_facts.py` | - |
+| `QAR_MIN_FREE_MEMORY_MB` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_MODEL_BACKEND` |  | `body/configuration/cli_config.py`, `consciousness/terminal/cli_chat.py`, `consciousness/terminal/textual_ui_helpers.py` +1 | `.env.example`, `docs/how-to/adapters.md` |
+| `QAR_MODEL_FAST` |  | `consciousness/terminal/cli_context.py` | `docs/how-to/adapters.md` |
+| `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_NOTE_FLOOR_FRESH_MINUTES` | A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_NOTE_FLOOR_RELEVANCE_GATED` | 0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_OPENAI_EMBEDDING_MODEL` | OpenAI embedding model id used by the OpenAI embedder. | `body/internal_context/card_store/qdrant_embedders.py` | - |
+| `QAR_OPENCLAW_ARGS` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_OPENCLAW_CALL_TIMEOUT` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_OPENCLAW_COMMAND` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_OPENCLAW_CWD` |  | `body/configuration/cli_config.py` | `docs/how-to/live-channels.md` |
+| `QAR_OPENCLAW_TOKEN_FILE` | Fills the 'token_file' option of intake-sources:openclaw; declared by the hub. | `body/configuration/cli_config.py`, `world/tools/connected_system_operations/openclaw_channel.py` | `.env.example`, `docs/how-to/live-channels.md` |
+| `QAR_ORG_ID` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_OVERSEER` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
+| `QAR_OVERSEER_MAX_SIGNALS` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
+| `QAR_OVERSEER_TIER` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/explanation/overseer.md` |
+| `QAR_PLANNER_MODEL` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_PLANNER_PROMPT_PROFILE` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_PLANNER_REACH_JUDGE` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_PLANNER_REACH_JUDGE_TIER` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_PLANNER_TIER` |  | `body/configuration/cli_config.py`, `world/model_plumbing/spend/pricing.py` | `.env.example` |
+| `QAR_POLL_INTERVAL` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_PRUNE_DEAD_CARDS` | Default on; 0/false/no keeps cards whose source folder disappeared. | `body/configuration/card_store_settings.py` | - |
+| `QAR_QDRANT_API_KEY` | Qdrant API key (falls back to QAR_VECTOR_QDRANT_API_KEY). | `body/configuration/config_context_index.py` | - |
+| `QAR_QDRANT_URL` | Qdrant server URL for the card/vector index (falls back to QAR_VECTOR_QDRANT_URL, then QDRANT_URL). | `body/configuration/config_assembler.py`, `body/configuration/config_context_index.py` | - |
+| `QAR_QUEST_API_KEY` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_QUEST_API_URL` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_QUEST_AUTO_MATCH` |  | `consciousness/terminal/interactive_session.py` | `docs/how-to/chat.md` |
+| `QAR_QUEST_FOLDER_MAP` |  | `body/configuration/cli_config.py` | `docs/tutorials/tutorial-your-first-lane.md` |
+| `QAR_QUEST_FOLDER_SYNC_DIRECTION` |  | `body/configuration/cli_config.py` | `docs/tutorials/tutorial-your-first-lane.md` |
+| `QAR_QUEST_JUDGE_TIMEOUT_SECONDS` | Budget for the quest-selection judgment (default 8). CoreSettings.quest_judge_timeout_seconds. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_QUEST_READ_DEADLINE_SECONDS` | Longest one Quest GET may take in total across its attempts and pauses (default 45, under the 60 second tool timeout). No retry starts past it, and each attempt's timeout is cut to what is left. | `body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_QUEST_READ_RETRIES` | Retries the Quest client makes for a GET after a transport error, 429 or 5xx, with exponential backoff and jitter (default 2, at most 5, 0 turns retry off). A 4xx other than 429 is never retried. | `body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_QUEST_RETRY_MAX_DELAY_SECONDS` | Longest the Quest client waits between retries (default 30). A Retry-After longer than this is reported to the caller instead of waited out. | `body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_QUEST_SCOPE_MODE` | `fence` (default): an item learned on another quest is hidden from a turn. `affinity`: it stays visible, ranks below the turn's own quest, and its rendered line says which quest it came from; only audience kinds still fence. CoreSettings `quest_scope_mode`. | `body/configuration/config_core_settings.py` | - |
+| `QAR_QUEST_TIMEOUT_SECONDS` | Socket timeout in seconds for one Quest API request (default 30). The long-poll wait channel keeps its own longer timeout. | `body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_QUEST_WRITE_RETRY` | Whether the Quest client retries a write that carries an Idempotency-Key: auto (the default) retries only if the backend lists idempotency-key under capabilities on GET /api/health, on forces it, off forbids it. Without server support a retried write could create a duplicate, so a write is attempted once. | `body/internal_context/quest/client/quest_client_transport.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_READ_OP_TIMEOUT_SECONDS` | Per-operation budget for one mid-loop read (default 60). CoreSettings.read_op_timeout_seconds. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_READ_REACH_SUMMARY` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_READ_REACH_SUMMARY_FILE` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_RECENT_CONTEXT` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/explanation/context-assembly.md` |
+| `QAR_RECENT_CONTEXT_GLOBAL` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/explanation/context-assembly.md` |
+| `QAR_RECENT_CONTEXT_MAX_CARDS` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/explanation/context-assembly.md` |
+| `QAR_RECIPES` |  | `intelligence/mind/planner/recipes.py` | `docs/explanation/recipes.md` |
+| `QAR_RECIPES_DIR` |  | `intelligence/mind/planner/recipes.py` | `docs/explanation/recipes.md` |
+| `QAR_RECIPES_MIN_SCORE` |  | `intelligence/mind/planner/recipes.py` | `docs/explanation/recipes.md` |
+| `QAR_RECONCILE_HANDOFF` | 0 turns off the AI handoff judgment during goal reconcile (default on). | `consciousness/terminal/cli_quest.py` | - |
+| `QAR_REFRESH_MIN_INTERVAL_SECONDS` | Shortest gap between two startup context refreshes (default 1800). | `body/configuration/config_context_index.py` | - |
+| `QAR_REP_NAME` |  | `consciousness/terminal/cli_chat.py` | `docs/how-to/chat.md` |
+| `QAR_REP_PERSONA_FILE` |  | `consciousness/terminal/cli_chat.py` | `docs/how-to/chat.md` |
+| `QAR_REP_SYNC_DIRECTION` | pull, push or both: sets RunnerConfig.rep_sync_direction. | `body/configuration/cli_config.py` | - |
+| `QAR_REQUESTER_USER_ID` | Set by the runner in the environment of every process it spawns for a user (Claude Code deep worker, ACP agent, command tool): the id of the Quest user the work is for (the chat turn's user, or a queued task's creator). Unset when unknown. Read it in your own hooks and tools to limit what that user's AI may do. | `intelligence/mind/delegation/requester.py` | `docs/how-to/tools.md` |
+| `QAR_RESOURCE_CHECK_INTERVAL` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_RESOURCE_RESUME_MARGIN` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
+| `QAR_REUSE_NESTED_CARDS` |  | `body/internal_context/card_store/file_context_store.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_RUNNER_ENV_ID` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_RUNNER_LABEL` |  | `body/configuration/cli_config.py` | `.env.example` |
+| `QAR_SCIENCE_DAILY_LIMIT` | Real scholarly searches one process may make per UTC day (default 300, 0 for no cap). OpenAlex bills about $1 per 1,000 searches against a $1 a day free allowance. | `world/science/tools_science.py` | `docs/how-to/tools.md` |
+| `QAR_SCREEN` |  | `consciousness/terminal/cli_chat.py` | - |
+| `QAR_SKILLS_DIR` | Local skills directory (wins over corpus_root/.claude/skills and cwd/.claude/skills). | `consciousness/terminal/interactive_session_commands.py`, `world/tools/delegated_agent_sessions/hub_loop_runner.py` | - |
+| `QAR_SKILLS_ROOT` | The folder holding the skills this lane's deep worker may be asked to carry out (one folder per skill with its SKILL.md), such as the skill a milestone deliverable's work names; also the root of the representatives' skill folders. | `consciousness/request_intake/executor.py` | - |
+| `QAR_SKIP_DIRS` | Comma-separated directory names to never index or search, added to the built-in list. | `body/configuration/walk_settings.py`, `world/tools/file_reading/files_search_worker.py`, `world/tools/file_reading/files_server.py` | - |
+| `QAR_SKIP_NESTED_REPOS` | 0 indexes directories that carry their own .git (default skips them). | `body/configuration/card_store_settings.py` | - |
+| `QAR_SOLUTION_CONSIDERATION_MIN_SCORE` | The records-index score a solution needs for a pass in a deep run (default 0: the hub gate's DEFAULT_MIN_SCORE, fixed from its relevance cases). CoreSettings.solution_consideration_min_score. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_SPEC_CACHE` | Folder for the cached specification index, rebuilt when a record file changes (default ~/.cache/quest-ai-runner/spec_index). | `intelligence/critical_thinking/esoi_application/repo_specs.py` | - |
+| `QAR_SPEC_ROOT` | Repository whose ESOI specifications a run searches (a folder holding esoi.toml); default is the nearest esoi.toml above the working folder. Set it to point a run at another repository; with none found no spec tool is offered. | `consciousness/terminal/__main__.py`, `intelligence/critical_thinking/esoi_application/repo_specs.py` | `docs/explanation/metric-results.md`, `docs/explanation/spec-selection.md` |
+| `QAR_STALL_NOTIFY_TEAM_ID` | Team to notify when a reconciled goal stalls. | `consciousness/terminal/cli_quest.py` | - |
+| `QAR_STALL_NOTIFY_USER_ID` | User to notify when a reconciled goal stalls. | `consciousness/terminal/cli_quest.py` | - |
+| `QAR_STANDARD_TOOLS` |  | `world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_STARTUP_REQUIREMENTS_CHECK` |  | `consciousness/terminal/interactive_session.py` | - |
+| `QAR_STATE_PATH` |  | `consciousness/request_intake/lane.py`, `consciousness/terminal/cli_poll.py`, `consciousness/terminal/interactive_session_persist.py` +1 | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` |
+| `QAR_TASK_DIRECT_DEEP` |  | `body/configuration/cli_config.py` | `docs/explanation/cheap-model-routing.md` |
+| `QAR_TEAM_ID` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_TEAM_QUEST_ID` | Quest the bootstrap report is posted to. | `intelligence/subconscious/cards_from_files/bootstrap_reporter.py` | - |
+| `QAR_TOOLS_FILE` |  | `world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_TOOL_LEDGER_DIR` |  | `world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_TOOL_QUEST_ID` |  | `consciousness/terminal/__main__.py`, `world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_TOOL_RUN_ID` | This run's id for tools that record against the run (record_metric_result); the same as --run on the tool command. | `consciousness/terminal/__main__.py`, `intelligence/mind/delegation/goal_runner_contract.py`, `world/tools/tools.py` | `docs/explanation/hub-of-hubs.md`, `docs/explanation/metric-results.md`, `docs/how-to/tools.md` |
+| `QAR_TOOL_TASK_ID` |  | `consciousness/terminal/__main__.py`, `world/tools/tools.py` | `docs/how-to/tools.md` |
+| `QAR_TRAIL_DIR` | Folder where each deep run records the files it read and changed, per working folder and goal, so the next run on that goal is handed them (default ~/.quest-ai-runner/trails). | `intelligence/mind/delegation/exploration_trail.py` | - |
+| `QAR_USER_ID` |  | `body/internal_context/card_store/quest_api_card_repository.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_VECTOR_BACKEND` |  | `body/configuration/config_assembler.py`, `consciousness/request_intake/lane.py` | `docs/explanation/vector-context.md` |
+| `QAR_VECTOR_MAX_SEED_ITEMS` | Cards one vector seed pass may embed (0 lifts the bound). | `intelligence/subconscious/context_retriever/vector_context_assembler.py` | - |
+| `QAR_VECTOR_QDRANT_API_KEY` | Older name for QAR_QDRANT_API_KEY. | `body/configuration/config_context_index.py` | - |
+| `QAR_VECTOR_QDRANT_URL` | Older name for QAR_QDRANT_URL. | `body/configuration/config_assembler.py`, `body/configuration/config_context_index.py` | - |
+| `QAR_VECTOR_SPACE` |  | `body/configuration/config_assembler.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_VECTOR_UNATTRIBUTED` |  | `body/internal_context/card_store/card_store_fence.py` | `docs/how-to/context-card-stores.md` |
+| `QAR_VERIFY_CONTEXT_MAX_CHARS` | Character cap on the context layer handed to goal verification (default 24000). CoreSettings.verify_context_max_chars. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_VERIFY_TIER` |  | `body/configuration/cli_config.py` | `.env.example` |
+| `QAR_WAIT_CHANNEL` |  | `body/configuration/cli_config.py` | `docs/reference/quest-api-contract.md` |
+| `QAR_WAIT_TIMEOUT_SECONDS` | Seconds each long-poll GET asks the backend to wait (sets RunnerConfig.wait_timeout_seconds). | `body/configuration/cli_config.py` | - |
+| `QAR_WEB_CACHE_DIR` |  | `world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_FULL_TOKEN_BUDGET` |  | `world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_TOKEN_BUDGET` |  | `world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_PAGE_TTL_SECONDS` |  | `world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_APIS_FILE` | Path of a JSON file describing extra hosted search APIs as data (endpoint, key variable, request, result fields); each entry becomes a search backend selectable by QAR_WEB_SEARCH_BACKEND with no code. Shape: adapters/web_search_apis.py. | `world/tools/web_search/web_search_backends.py` | `docs/explanation/hub-of-hubs.md`, `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_BACKEND` |  | `world/tools/web_search/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_DAILY_LIMIT` |  | `world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_MODEL` |  | `world/tools/web_search/web_research.py`, `world/tools/web_search/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_PROVIDER_MODEL` |  | `world/tools/web_search/web_search_backends.py` | `docs/how-to/web-search.md` |
+| `QAR_WEB_SEARCH_TTL_SECONDS` |  | `world/tools/web_search/web_research.py` | `docs/how-to/web-search.md` |
+| `QDRANT_URL` | Plain Qdrant URL, the last fallback after QAR_QDRANT_URL. | `body/configuration/config_assembler.py` | - |
+| `QUEST_API_KEY` | Quest API key; declared by the hub for card-store, quest-body. | `body/configuration/cli_config.py`, `body/configuration/config_environment.py`, `body/configuration/config_resolvers.py` +5 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +9 |
+| `QUEST_API_URL` | Fills the 'base_url' option of card-store:quest-api-cards, quest-body:quest_client; declared by the hub. | `body/configuration/config_resolvers.py`, `body/internal_context/quest/client/quest_client.py`, `consciousness/terminal/send_bootstrap_report.py` +2 | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/a-lane-is-a-config-file.md` +1 |
+| `QUEST_BASE_URL` | Fills the 'base_url' option of card-store:quest-api-cards, quest-body:quest_client; declared by the hub. | `body/configuration/cli_config.py`, `body/configuration/config_environment.py`, `body/configuration/config_resolvers.py` +5 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +7 |
+| `QUEST_CLAIM_TEAMS` | Comma-separated team ids an owner-scoped lane may claim tasks from (RunnerConfig.claim_teams). | `body/configuration/cli_config.py` | - |
+| `QUEST_ORG_ID` |  | `body/configuration/cli_config.py` | `.env.example`, `docs/how-to/context-card-stores.md`, `docs/how-to/deployment.md` +2 |
+| `QUEST_TEAM_ID` | Fills the 'team_id' option of quest-body:quest_client; declared by the hub. | `body/configuration/cli_config.py`, `body/configuration/config_environment.py`, `body/configuration/config_resolvers.py` +2 | `README.md`, `.env.example`, `docs/how-to/a-lane-is-a-config-file.md` +5 |
+| `QUEST_TEAM_IDS` |  | `body/configuration/cli_config.py`, `consciousness/terminal/interactive_session_quests.py` | `.env.example`, `docs/how-to/chat.md`, `docs/how-to/deployment.md` +1 |
+| `VOYAGE_EMBEDDING_SIZE` | Vector size of the Voyage embedder (default 1024). | `body/configuration/config_assembler.py`, `body/configuration/config_context_index.py` | - |
+| `VOYAGE_MODEL` |  | `body/internal_context/card_store/qdrant_embedders.py` | `docs/explanation/vector-context.md` |
+| `VTE_VERSION` | Set by VTE terminals; the terminal UI reads it to pick key handling. Never set by hand. | `consciousness/terminal/textual_ui_widgets.py` | - |
+| `WEB_SEARCH_ENABLED` |  | `body/configuration/config_orchestrator.py` | `.env.example`, `docs/how-to/web-search.md` |
+| `WEB_SEARCH_MAX_RESULTS` |  | `body/configuration/config_orchestrator.py` | `.env.example`, `docs/how-to/web-search.md` |
+| `WEB_SEARCH_TIER` |  | `body/configuration/config_orchestrator.py` | `.env.example` |
+| `XDG_STATE_HOME` |  | `consciousness/request_intake/lane_supervisor.py` | `docs/how-to/deployment.md` |

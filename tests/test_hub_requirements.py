@@ -14,9 +14,9 @@ from pathlib import Path
 import pytest
 from esoi import requirements
 
-from quest_ai_runner.the_consciousness.terminal import cli_doctor
-from quest_ai_runner.the_self.assembler import hub_lock_health, hub_requirements
-from quest_ai_runner.the_self.assembler.hub_requirements import Report
+from quest_ai_runner.consciousness.terminal import cli_doctor
+from quest_ai_runner.self.assembler import hub_lock_health, hub_requirements
+from quest_ai_runner.self.assembler.hub_requirements import Report
 
 ROOT = Path(__file__).resolve().parent.parent
 SECRET = "not-a-real-key-value-123"
@@ -73,7 +73,7 @@ def test_startup_notice_never_raises(monkeypatch):
 
 
 def test_session_hands_the_notice_to_the_startup_notifier(monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal import interactive_session
+    from quest_ai_runner.consciousness.terminal import interactive_session
     monkeypatch.setattr(hub_requirements, "startup_notice", lambda *a, **k: "1 required setup item(s) unmet; run `quest-ai-runner doctor` for the fix.")
     assert "doctor" in interactive_session._hub_requirements_notice()
     shown = []

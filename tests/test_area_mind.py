@@ -3,8 +3,8 @@ import pytest
 from esoi import Pending
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.mind.interface import StepReasoning
-from quest_ai_runner.the_intelligence.mind.response_writer.interim_policy import EXAMPLE_STATE
+from quest_ai_runner.intelligence.mind.interface import StepReasoning
+from quest_ai_runner.intelligence.mind.response_writer.interim_policy import EXAMPLE_STATE
 from tests.conftest import StubProvider
 
 AREA_IDS = ("the-mind", "vendor-model-caller", "model-tier-chooser", "context-intake", "quest-self",

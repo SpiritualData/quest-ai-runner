@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.the_consciousness.representatives.rep_sync import (
+from quest_ai_runner.consciousness.representatives.rep_sync import (
     RepSyncError, parse_skill_file, pull_rep_to_skill, push_skill_to_rep, render_skill_file, sync_rep)
 
 
@@ -260,7 +260,7 @@ def test_sync_rep_unknown_direction_raises():
 # --- QuestClient AI-profile endpoint shaping (no network) -----------------------
 
 def test_quest_client_ai_profile_endpoints_shape_requests():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     calls = []
 
@@ -282,7 +282,7 @@ def test_quest_client_ai_profile_endpoints_shape_requests():
 
 
 def test_quest_client_ai_profile_requires_team_id():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestNotConfigured
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient, QuestNotConfigured
 
     c = QuestClient("http://x", "qsk_test")   # no team_id
     with pytest.raises(QuestNotConfigured):
@@ -304,8 +304,8 @@ def _profile_aware_mock_client(profile_client):
 
 
 def test_poller_pulls_rep_skill_before_running_when_resolver_set():
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -327,8 +327,8 @@ def test_poller_pulls_rep_skill_before_running_when_resolver_set():
 
 
 def test_poller_no_resolver_does_not_sync():
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -346,8 +346,8 @@ def test_poller_no_resolver_does_not_sync():
 
 def test_poller_rep_sync_failure_never_breaks_the_task():
     """A sync that raises (resolver/profile/file error) must not stop the task from running."""
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -408,7 +408,7 @@ def test_render_strips_markers_from_persona_and_learned_notes():
 
 
 def test_replace_between_refuses_body_containing_its_own_markers():
-    from quest_ai_runner.the_body.intake_sources._managed_sections import ManagedSectionError, replace_between
+    from quest_ai_runner.body.intake_sources._managed_sections import ManagedSectionError, replace_between
     with pytest.raises(ManagedSectionError):
         replace_between("", PERSONA_BLOCK_START, PERSONA_BLOCK_END,
                         f"x {PERSONA_BLOCK_END} y")

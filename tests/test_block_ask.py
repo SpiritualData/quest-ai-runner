@@ -8,10 +8,10 @@ import json
 import urllib.error
 import urllib.request
 
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import create_decision_spec
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
-from quest_ai_runner.the_world.tools.tools import ToolContext
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import create_decision_spec
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.world.tools.tools import ToolContext
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 from .fake_quest_transport import FakeResponse
 
@@ -126,9 +126,9 @@ def test_the_primary_team_is_used_when_the_owner_is_on_none_of_the_teams(monkeyp
 
 from types import SimpleNamespace
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestDecisionSink
-from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import block_type_of, blocked_goal_of
-from quest_ai_runner.the_intelligence.mind.response_writer import orchestrator_turn_messages as messages
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestDecisionSink
+from quest_ai_runner.consciousness.judgment_calls.ask_policy import block_type_of, blocked_goal_of
+from quest_ai_runner.intelligence.mind.response_writer import orchestrator_turn_messages as messages
 
 
 def stuck_turn(meta, verdict=None, **verdict_fields):
@@ -259,8 +259,8 @@ def test_a_sink_ask_filed_as_a_block_carries_the_full_question_conversation_reci
     """The block route used to get only a 300-character reason, and the goal's team and owner were read twice per ask (once to pick
     the assignee, once to file): the person got a cut question with no link back to the conversation waiting on it."""
     from datetime import datetime, timedelta, timezone
-    from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestDecisionSink
+    from quest_ai_runner.body.internal_context.adapters_values import Escalation
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestDecisionSink
     seen = routed(monkeypatch, base_routes(STATE, (200, BLOCK)))
     question = "Which store account should the run use?\nA) The main login\nB) A new one\n" + "Context. " * 60
     due = datetime(2030, 1, 2, 9, tzinfo=timezone.utc)
@@ -280,7 +280,7 @@ def test_a_sink_ask_filed_as_a_block_carries_the_full_question_conversation_reci
 
 
 def test_a_block_is_filed_only_for_the_goal_owner_the_ask_resolved_to():
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import blocked_ask
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import blocked_ask
 
     class Client:
         def __init__(self):

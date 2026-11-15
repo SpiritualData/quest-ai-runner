@@ -47,10 +47,10 @@ def test_the_hub_arm_against_the_same_23_requirements(capsys):
 
 
 def test_the_binding_builds_the_hub_terminal_with_the_hub_arm_and_this_packages_words(tmp_path):
-    from quest_ai_runner.the_consciousness.terminal.hub_terminal import HubTerminal
+    from quest_ai_runner.consciousness.terminal.hub_terminal import HubTerminal
     screen = HubTerminal().build(folder=str(tmp_path), person="Assistant", environ={"PATH": "/usr/bin"}, plain=True)
     assert screen.person == "Assistant" and screen.command == "quest-ai-runner chat --screen hub"
     assert hasattr(screen.arm, "attend") and screen.names == ("native", "stream", "loop")
     from hubofhubs.api import strings
-    import quest_ai_runner.the_consciousness.terminal.terminal_words  # noqa: F401
+    import quest_ai_runner.consciousness.terminal.terminal_words  # noqa: F401
     assert strings.say("workTrace.group.records") == "From your Quest"

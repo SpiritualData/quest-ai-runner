@@ -17,10 +17,10 @@ persona, decision routing) to the generic library. Everything flows through a si
 ```python
 import os
 
-from hubofhubs.the_world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
-from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
-from quest_ai_runner.the_body.configuration.config import RunnerConfig
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from hubofhubs.world.model_plumbing.vendor_model_caller.anthropic import AnthropicProvider
+from quest_ai_runner.world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.body.configuration.config import RunnerConfig
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
 def build_config() -> RunnerConfig:
     corpus = os.getenv("QAR_CORPUS_ROOT")
@@ -70,7 +70,7 @@ def build_config() -> RunnerConfig:
 | `context_preamble` | org/persona doctrine prepended to every deep-run brief, **without** having to build a `SubprocessConfig` by hand, read by the auto-built default `deep_runner` (see below). An explicit `deep_runner` instance's own `context_preamble` still wins |
 | `discovery_team_id` | a separate team scope for task DISCOVERY only (heartbeat/escalation keep using `team_id`). `None` (default) falls back to `team_id`; `""` means owner-scoped discovery (a personal/single-user lane whose tasks carry no `team_id`) |
 | `rep_sync_resolver` | OPT-IN: map a task to `(user_id, skill_dir)` to run it AS that AI rep (off by default) |
-| `personas` | a declarative alternative to writing `rep_sync_resolver` by hand, see [personas.md](personas.md) and [`runner/personas.py`](../../quest_ai_runner/the_consciousness/representatives/personas.py). An explicit `rep_sync_resolver` always wins over this |
+| `personas` | a declarative alternative to writing `rep_sync_resolver` by hand, see [personas.md](personas.md) and [`runner/personas.py`](../../quest_ai_runner/consciousness/representatives/personas.py). An explicit `rep_sync_resolver` always wins over this |
 | `rep_sync_direction` | `"pull"` (default) / `"push"` / `"both"`: controls Quest <-> skill-file sync for reps |
 | `default_assignee_user_id` | who human-only decisions route to by default |
 | `lane_user_id` | the Quest user id this lane's API key authenticates AS (env `QAR_LANE_USER_ID`). Work the lane creates on a quest somebody ELSE owns is assigned to this account, so the lane owns it and can discover it (discovery is owner-scoped, and a goal-linked task otherwise belongs to the quest's owner). Configured, not discovered: an API key cannot ask the backend who it is |
@@ -124,7 +124,7 @@ genuinely must not execute, e.g. a read-only chat surface.
 
 A deep run starts on the **cheapest tier measured good enough for deep work**, and moves up only when a person asked for more or the
 work fell short for a stated reason. The rule is the hub's (`hubofhubs.api.role_tiers`: `task_choice`, `escalate`, `sub_agent_choice`);
-Quest AI Runner binds it in `the_world/model_plumbing/model_tier_chooser/deep_model_selection.py` and resolves the tier it returns to a model
+Quest AI Runner binds it in `world/model_plumbing/model_tier_chooser/deep_model_selection.py` and resolves the tier it returns to a model
 through the registry, so no model name is written in code. `Orchestrator.deep_model_plan` decides, in this order, and the first one present wins.
 A request is one of two things, and the difference is whether the run may still move up:
 
@@ -219,8 +219,8 @@ when a key isn't provisioned yet, so cron/systemd don't error-spam.
 ## Build and run
 
 ```python
-from quest_ai_runner.the_body.configuration.config import build_orchestrator   # in-process brain
-from quest_ai_runner.the_consciousness.request_intake.poller import Poller         # executor lane
+from quest_ai_runner.body.configuration.config import build_orchestrator   # in-process brain
+from quest_ai_runner.consciousness.request_intake.poller import Poller         # executor lane
 
 orch = build_orchestrator(cfg)        # for in-process chat: orch.run(message)
 Poller(cfg, state_path="qar_state.json").run_forever()   # for the executor lane
@@ -233,7 +233,7 @@ The four lines above are still exactly what an executor lane does, but you shoul
 by hand: that is generic, and it is now in the library:
 
 ```python
-from quest_ai_runner.the_consciousness.request_intake.lane import run_lane
+from quest_ai_runner.consciousness.request_intake.lane import run_lane
 
 def main(argv=None) -> int:
     return run_lane(argv, prog="my-lane", description="My team's lane", lane_label="my-lane",
@@ -308,8 +308,8 @@ Your provider can wrap any SDK. Because the library's `core` never imports a pro
 you can add your own logging, analytics, or cost-triage inside the adapter without touching the
 brain. **The core ships with zero non-stdlib dependencies and never imports your LLM wrapper.**
 The vendor providers (`AnthropicProvider`, `GeminiProvider`, `OpenAIProvider`, `DeepSeekProvider`) and the `MultiProvider` router
-are the hub's (`hubofhubs.the_world.model_plumbing.vendor_model_caller`, per-vendor extras, settings as arguments); `quest_ai_runner/the_world/model_plumbing/vendor_model_caller/providers.py` builds them from the
-environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is the hub's `claude_cli` arm (`hubofhubs.the_world.model_plumbing.vendor_model_caller.claude_cli`); `quest_ai_runner/adapters/` binds QAR's usage limit and settings to it.
+are the hub's (`hubofhubs.world.model_plumbing.vendor_model_caller`, per-vendor extras, settings as arguments); `quest_ai_runner/world/model_plumbing/vendor_model_caller/providers.py` builds them from the
+environment. `ClaudeCliProvider` (drives the local `claude` CLI headless and keyless) is the hub's `claude_cli` arm (`hubofhubs.world.model_plumbing.vendor_model_caller.claude_cli`); `quest_ai_runner/adapters/` binds QAR's usage limit and settings to it.
 
 A minimal wrapper example:
 
@@ -351,7 +351,7 @@ DEFAULT_FALLBACK_TOP = {
 To override the fallback map for custom or internal model ids, pass `fallback=` at construction:
 
 ```python
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 registry = ModelRegistry(
     provider=my_provider,
@@ -366,7 +366,7 @@ registry = ModelRegistry(
 Or construct the `Orchestrator` directly with a custom registry:
 
 ```python
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
 
 orch = Orchestrator(retrieval=..., provider=my_provider, registry=registry)
 ```
@@ -512,7 +512,7 @@ immediately. That thread is **owned**, not fire-and-forget: it walks the corpus 
 ## Which tier each model call runs on
 
 Every model call names a role of the hub's role table (`hubofhubs.api.role_tiers`, `role_tiers.csv`), and the table gives the tier; `CALL_ROLES`
-in `the_world/model_plumbing/model_tier_chooser/call_roles.py` says which role each Quest AI Runner call is, and
+in `world/model_plumbing/model_tier_chooser/call_roles.py` says which role each Quest AI Runner call is, and
 `ModelRegistry.resolve_role(call, requested)` returns the model. No call site names a tier and no code names a model.
 
 The rule for the table: **a role sits above fast only by the owner's policy or by a measured result.** Each row carries its evidence mark,

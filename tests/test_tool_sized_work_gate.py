@@ -1,9 +1,9 @@
 """A deep run is for files, code, long research or many steps. A change to the person's Quest records that a registered tool performs is planned as
 tool steps: the planner's structured deep_target and the tool set decide, never a word of the request (hard rule #3)."""
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_world.tools import tool_guards
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.tools import tool_guards
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -61,7 +61,7 @@ def test_a_code_or_file_job_is_asked_once_and_still_escalates_when_the_planner_i
 
 
 def test_guard_facts():
-    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+    from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
     plan = normalize_decision(deep(), OrchestratorConfig())
     assert tool_guards.deep_is_tool_sized(plan, registry())
     assert not tool_guards.deep_is_tool_sized(plan, None)
@@ -110,7 +110,7 @@ def overseer_provider(plans, signal="escalate_deep"):
 
 
 def test_escalation_route_from_structured_facts():
-    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+    from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
     route = tool_guards.escalation_route
     plan = lambda target, **extra: normalize_decision({**answered(), "deep_target": target, **extra}, OrchestratorConfig())
     assert route(plan("draft_in_chat"), "act", registry(), False, False) == "inline"

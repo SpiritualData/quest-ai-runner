@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import json
 
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_investigations import (
+from quest_ai_runner.body.hands.quest_operations.tools_quest_investigations import (
     find_earlier_investigations_spec, investigate_for_quest_spec, mark_investigation_item_spec)
-from quest_ai_runner.the_world.science import investigate
-from quest_ai_runner.the_world.tools.tools import STANDARD_TOOL_BUILDERS, ToolContext
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.world.science import investigate
+from quest_ai_runner.world.tools.tools import STANDARD_TOOL_BUILDERS, ToolContext
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 WHOLE, FUEL = "quest_x", "sol_fuel"
 SOLUTIONS = [{"id": WHOLE, "name": "Run a marathon", "parent_id": None}, {"id": FUEL, "name": "Fuel for long runs", "parent_id": WHOLE}]
@@ -199,14 +199,14 @@ def test_marking_a_finding_records_what_it_changed_or_why_not():
 
 
 def test_a_quick_investigation_without_a_synthesis_reports_its_graded_findings():
-    from quest_ai_runner.the_world.science import investigate
+    from quest_ai_runner.world.science import investigate
     text = investigate.summary_text({"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
                                      "items": [{"claim": "Five minutes a day is the usual start", "grade": "C", "source": "https://example.org/a"}]})
     assert "Five minutes a day is the usual start (1 source; https://example.org/a)" in text and "nothing was settled" not in text
 
 
 def test_a_search_only_web_member_still_reads_a_page_through_the_research_adapter(monkeypatch):
-    from quest_ai_runner.the_world.tools.web_search import area, web_research
+    from quest_ai_runner.world.tools.web_search import area, web_research
 
     class SearchOnly:
         def describe(self):

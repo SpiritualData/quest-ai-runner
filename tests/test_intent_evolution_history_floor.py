@@ -1,6 +1,6 @@
 """The no-model floor arm of Intent Evolution: restraint, what worked, or one experiment."""
-from quest_ai_runner.the_consciousness.intent_evolution.history_floor import HistoryFloor
-from quest_ai_runner.the_consciousness.intent_evolution.interface import IntentEvolving
+from quest_ai_runner.consciousness.intent_evolution.history_floor import HistoryFloor
+from quest_ai_runner.consciousness.intent_evolution.interface import IntentEvolving
 
 
 def test_arm_is_an_intent_evolving():

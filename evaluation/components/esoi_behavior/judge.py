@@ -57,7 +57,7 @@ def build_judge(meter, provider_class=None):
     """``judge(case, reply) -> (passed, reason)``, every call counted by ``meter``. ``provider_class`` defaults to
     the claude CLI provider."""
     if provider_class is None:
-        from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider as provider_class
+        from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider as provider_class
     provider = meter.wrap(provider_class())
     model = judge_model()
 

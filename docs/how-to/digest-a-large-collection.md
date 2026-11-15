@@ -20,7 +20,7 @@ No arm is named: the selected arm answers. `choose-the-context` hands a request 
 
 `run` builds the arm with the model seat the lane already has (`provided={"vendor-model-caller": ...}` supplies another); every cap has a default and
 `meta` overrides only what differs (`max_analyses`, `window_chars`, `concurrency`, `direct_chars` and the rest of `DEFAULTS` in
-`quest_ai_runner/the_intelligence/subconscious/digest_by_need.py`). The answer is the hub's `AssembledContext`:
+`quest_ai_runner/intelligence/subconscious/digest_by_need.py`). The answer is the hub's `AssembledContext`:
 
 | Field | What it holds |
 |---|---|

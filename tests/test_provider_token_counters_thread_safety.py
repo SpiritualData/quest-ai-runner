@@ -15,7 +15,7 @@ reset-accumulate-read sequence is unaffected by the others.
 import threading
 import time
 
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
 from hubofhubs.api import MultiProvider
 from hubofhubs.api import ScopedThreadPoolExecutor
 from hubofhubs.api import ModelProviderBase

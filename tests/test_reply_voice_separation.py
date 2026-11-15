@@ -16,9 +16,9 @@ from typing import Any, Dict, List
 
 from hubofhubs.api import ProgressEvent
 from hubofhubs.api import EVENT_UNDERSTANDING
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, _grounding_block
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import restates_meaningfully
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import REPLY_VOICE_SYSTEM, Orchestrator, _grounding_block
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import restates_meaningfully
 
 from .conftest import StubProvider, StubRetrieval
 

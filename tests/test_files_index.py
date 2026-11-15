@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from quest_ai_runner.the_world.tools.file_reading.files_server import NOT_ALLOWED, FileOperations
-from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
+from quest_ai_runner.world.tools.file_reading.files_server import NOT_ALLOWED, FileOperations
+from quest_ai_runner.world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter
 
 
 @pytest.fixture()

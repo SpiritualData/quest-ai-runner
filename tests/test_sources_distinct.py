@@ -1,5 +1,5 @@
 """The same source title twice is one source: in the count, the named titles and the panel's list."""
-from quest_ai_runner.the_consciousness.terminal.textual_ui_helpers import (
+from quest_ai_runner.consciousness.terminal.textual_ui_helpers import (
     _build_future_context_text, _build_shallow_context_bullets, context_block_lines, source_count)
 
 CARDS = [{"title": "Quest AI Runner", "score": 0.9}, {"title": "Quest AI Runner", "score": 0.8}]

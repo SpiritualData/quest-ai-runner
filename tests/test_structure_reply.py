@@ -3,12 +3,12 @@ hold (never a made-up value, and a held metric is never replaced), at most one o
 closing paragraph of a framed or compared reply is appended by code and never loses the reply."""
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.mind.orchestrator_types import OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
-from quest_ai_runner.the_intelligence.mind.response_writer import structure_reply as module
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import sentences
-from quest_ai_runner.the_intelligence.mind.response_writer.structure_reply import finish_structure, handle_offer, open_offer_for, settle_offer, snapshot_sentence, solution_choice, structure_reply, tail_prompt
+from quest_ai_runner.intelligence.mind.orchestrator_types import OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.intelligence.mind.response_writer import structure_reply as module
+from quest_ai_runner.intelligence.mind.response_writer.reply_standards import sentences
+from quest_ai_runner.intelligence.mind.response_writer.structure_reply import finish_structure, handle_offer, open_offer_for, settle_offer, snapshot_sentence, solution_choice, structure_reply, tail_prompt
 
 RECORDS = {"problems": {"p": {"name": "A problem"}}, "ideals": {"i": {"name": "An ideal"}}}
 HELD = dict(RECORDS, solutions={"s": {"name": "A solution", "problem_ids": ["p"], "ideal_ids": ["i"], "milestones": "1. A target"}},

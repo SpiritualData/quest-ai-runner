@@ -6,7 +6,7 @@ from pathlib import Path
 
 import common
 from hubofhubs.api import WebCache
-from quest_ai_runner.the_world.tools.web_search.web_research import WebResearchAdapter
+from quest_ai_runner.world.tools.web_search.web_research import WebResearchAdapter
 
 _TOOL = None
 

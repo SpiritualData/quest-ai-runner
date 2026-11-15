@@ -2,8 +2,8 @@
 the terminal never calls such an answer met."""
 from types import SimpleNamespace
 
-from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import OUTCOME_UNMET, closing_text, turn_outcome
-from quest_ai_runner.the_self.role_understanding import terms
+from quest_ai_runner.consciousness.terminal.textual_ui_outcome import OUTCOME_UNMET, closing_text, turn_outcome
+from quest_ai_runner.self.role_understanding import terms
 
 
 def test_qar_is_placed_from_the_glossary_without_a_search(tmp_path):

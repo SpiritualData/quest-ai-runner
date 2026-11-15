@@ -1,6 +1,6 @@
 # Web search
 
-`WebResearchAdapter` (`quest_ai_runner/the_world/tools/web_search/web_research.py`) gives the orchestrator fast,
+`WebResearchAdapter` (`quest_ai_runner/world/tools/web_search/web_research.py`) gives the orchestrator fast,
 token-efficient access to the live web, the same way ChatGPT/Perplexity-style assistants stay
 cheap: **snippet-first search, full-page reads only on request, everything cached.**
 
@@ -108,7 +108,7 @@ grounded prompts/month free, then ~$14/1k.
 
 ## Cache
 
-`WebCache` (`hubofhubs.the_world.tools.web_search.cache`) is a thread-safe in-memory LRU with an optional on-disk tier
+`WebCache` (`hubofhubs.world.tools.web_search.cache`) is a thread-safe in-memory LRU with an optional on-disk tier
 (one JSON file per key, atomic writes, pruned by age once the disk tier grows past
 `max_disk_entries`). Search results and fetched page text are cached separately:
 
@@ -180,7 +180,7 @@ grounded calls.
 
 ## Extracting pages: built-in vs. `trafilatura`
 
-`extract_main_text` (`hubofhubs.the_world.tools.web_search.page_extract`) tries `trafilatura` first if it happens to
+`extract_main_text` (`hubofhubs.world.tools.web_search.page_extract`) tries `trafilatura` first if it happens to
 be installed (it is an OPTIONAL dependency, never required), falling back to a small stdlib
 `html.parser`-based extractor that drops `script`/`style`/`nav`/`header`/`footer`/`aside`/`form`/
 `iframe` and anything whose `class`/`id` looks like navigation/ads/cookie-banner/etc., and
@@ -231,7 +231,7 @@ the same way `select_search_backend`'s "auto" mode does.
 
 A hosted search API that returns JSON needs no class. Describe it in a JSON list and point `QAR_WEB_SEARCH_APIS_FILE` at the
 file; each entry names the endpoint, the environment variable that holds the key, what to send, where the results are in the
-reply and which fields are the title, link, snippet and date (the field list is in `hubofhubs/the_world/tools/web_search/apis.py`,
+reply and which fields are the title, link, snippet and date (the field list is in `hubofhubs/world/tools/web_search/apis.py`,
 where Serper, Brave and Tavily are written the same way). Then `QAR_WEB_SEARCH_BACKEND=<name>` selects it, or it joins the
 automatic fallback chain after the built-in ones when its key is set.
 

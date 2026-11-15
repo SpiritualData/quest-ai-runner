@@ -7,7 +7,7 @@ import json
 from typing import Any, Dict, List
 
 from hubofhubs.api import EVENT_MILESTONE, DeepResult
-from quest_ai_runner.the_consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
+from quest_ai_runner.consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
 
 from .test_incremental_replies import build, run
 from .test_done_evidence import LOOKUP, Provider, Runner
@@ -83,7 +83,7 @@ def test_a_reply_that_is_the_one_clarifying_question_is_terminal_one_message_no_
 
 def test_the_verifiers_asks_person_flag_on_a_remark_is_terminal_but_an_order_is_still_pursued():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.critical_thinking.unmet_goal import turn_awaits_person
+    from quest_ai_runner.intelligence.critical_thinking.unmet_goal import turn_awaits_person
     asked = SimpleNamespace(plan=SimpleNamespace(asks_first=False, reply_shape=None), _last_verdict={"met": False, "asks_person": True}, turn_user_intent="inform")
     ordered = SimpleNamespace(plan=SimpleNamespace(asks_first=False, reply_shape=None), _last_verdict={"met": False, "asks_person": True}, turn_user_intent="act")
     unmet = SimpleNamespace(plan=SimpleNamespace(asks_first=False, reply_shape=None), _last_verdict=dict(ASKS_TO_PASTE), turn_user_intent="ask")

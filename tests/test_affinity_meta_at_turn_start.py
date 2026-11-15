@@ -1,5 +1,5 @@
 """In affinity quest-scope mode the turn-start assembly hands every arm the turn's quest tags as soft ``affinity_tags``, not as a fence."""
-from quest_ai_runner.the_intelligence.higher_mind.objectives import scope_tags as tags
+from quest_ai_runner.intelligence.higher_mind.objectives import scope_tags as tags
 
 
 def test_affinity_mode_moves_the_selected_quest_from_the_fence_to_the_rank(monkeypatch):
@@ -13,5 +13,5 @@ def test_affinity_mode_moves_the_selected_quest_from_the_fence_to_the_rank(monke
 
 def test_the_turn_start_call_applies_it():
     import inspect
-    from quest_ai_runner.the_intelligence.mind.context_intake import orchestrator_run_begin as begin
+    from quest_ai_runner.intelligence.mind.context_intake import orchestrator_run_begin as begin
     assert "affinity_meta(_ctx_meta)" in inspect.getsource(begin)

@@ -1,6 +1,6 @@
 """Fake providers shared by the model-provider solutions. Nothing here touches a network or a model."""
 from hubofhubs.api import ModelProviderBase
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import next_lower_tier
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import next_lower_tier
 
 
 class Named(ModelProviderBase):

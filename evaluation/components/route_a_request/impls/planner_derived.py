@@ -3,7 +3,7 @@ Paid: one planning call per request; stage it with ``--sample N`` and ``--max-ca
 import os
 
 import offline_orchestrator
-from quest_ai_runner.the_intelligence.mind.request_router.planner_derived import report_of
+from quest_ai_runner.intelligence.mind.request_router.planner_derived import report_of
 from hubofhubs.api import route_from_report
 
 

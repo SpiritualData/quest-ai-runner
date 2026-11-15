@@ -21,8 +21,8 @@ sys.path.insert(0, str(COMPONENTS))
 
 from hand_off_a_goal import arms  # noqa: E402
 from place_on_a_quest import account  # noqa: E402
-from quest_ai_runner.the_intelligence.higher_mind.objectives import goal_handoff, quest_judge  # noqa: E402
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import render_prompt  # noqa: E402
+from quest_ai_runner.intelligence.higher_mind.objectives import goal_handoff, quest_judge  # noqa: E402
+from quest_ai_runner.self.integrity.prompts.prompt_specs import render_prompt  # noqa: E402
 
 RANK_FORMAT = ('\nAnswer with one JSON object only: {"results": [{"item": <message number>, "quest_id": "<quest id, or empty for none>"}]}')
 

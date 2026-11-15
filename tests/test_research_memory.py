@@ -2,8 +2,8 @@
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.the_body.internal_context.adapters_values import Observation
-from quest_ai_runner.the_world.science.research_memory import RecordedWebResearch, ResearchMemory, hub_row
+from quest_ai_runner.body.internal_context.adapters_values import Observation
+from quest_ai_runner.world.science.research_memory import RecordedWebResearch, ResearchMemory, hub_row
 
 QUEST = "quest_a"
 SOLUTIONS = [{"id": QUEST, "name": "The whole quest"}, {"id": "strategy_1", "name": "Sleep"}]
@@ -106,7 +106,7 @@ def test_other_adapter_members_pass_through_and_a_failed_read_means_no_memory():
 
 
 def test_the_tool_says_what_became_of_the_findings_as_knowledge():
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_investigations import knowledge_note
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_investigations import knowledge_note
     assert knowledge_note({}) == ""
     assert "1 finding(s) were added" in knowledge_note({"knowledge": [{"status": "applied"}, {"status": "unchanged"}]})
     held = knowledge_note({"knowledge": [{"status": "proposed", "reason": "Autopilot is off for this quest"}]})

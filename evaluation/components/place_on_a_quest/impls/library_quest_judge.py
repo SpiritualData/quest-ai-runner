@@ -5,7 +5,7 @@ import json
 
 import live_arm
 from place_on_a_quest import account
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_judge import select_quest
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_judge import select_quest
 
 PAID = True
 

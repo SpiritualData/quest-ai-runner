@@ -1,7 +1,7 @@
 """The past-activity gate: a message naming someone is searched for what they asked the AI before the question back. Offline."""
 from datetime import date
 
-from quest_ai_runner.the_world.tools import tool_guards
+from quest_ai_runner.world.tools import tool_guards
 
 FRIDAY = date(2026, 11, 6)
 OP = "find_ai_activity"

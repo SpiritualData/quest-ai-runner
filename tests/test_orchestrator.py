@@ -1,12 +1,12 @@
 """Core loop: plan -> read -> re-plan -> answer, plus deep / confirm / cap fallback."""
 from typing import Any, Dict, List
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import (
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.context_intake.planner_context import (
     _render_gathered, _render_gathered_for_planner, _summarize_observation)
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.call_roles import tier_for_call
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
 
@@ -99,7 +99,7 @@ def test_deep_fanout_runs_subtasks_in_parallel():
     assert res.kind == "deep"
     assert len(res.deep_results) == 2
     assert {c["goal"] for c in runner.calls} == {"A", "B"}
-    from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
     assert not any(CONTINUE_AFTER_DECISION_NOTE in (d.output or "") for d in res.deep_results), \
         "a fan-out where nothing parks must stay byte-for-byte unaffected"
 
@@ -126,7 +126,7 @@ def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
     # race, the AGGREGATED reply must carry exactly ONE ask (the first subtask, by order), never
     # both -- this is checked at aggregation, not by timing.
     from hubofhubs.api import DeepResult
-    from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
@@ -172,7 +172,7 @@ def test_fan_out_names_a_sibling_stopped_before_it_ran_as_not_done_yet():
     # subgoal parked first) left an empty result that the aggregation silently filtered out, so the
     # reply read as if that part were handled. It must be NAMED as not done yet, by its own goal.
     from hubofhubs.api import DeepResult
-    from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE, NOT_STARTED_AFTER_DECISION_NOTE
+    from quest_ai_runner.intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE, NOT_STARTED_AFTER_DECISION_NOTE
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "Add the venue goal", "brief": "a"},
@@ -202,8 +202,8 @@ def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
     # ``max_parallel=1`` makes the order deterministic: the landed subtask runs and finishes before
     # the parking one is dispatched at all.
     from hubofhubs.api import DeepResult
-    from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
-    from quest_ai_runner.the_intelligence.mind.orchestrator import unconfirmed_no_change_text
+    from quest_ai_runner.intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.intelligence.mind.orchestrator import unconfirmed_no_change_text
     provider = StubProvider(decisions=[
         {"action": "deep", "deep_subtasks": [
             {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
@@ -250,7 +250,7 @@ def test_fan_out_drops_only_the_extra_asks_not_the_finished_work():
 def test_a_single_goal_turn_that_parks_is_unaffected():
     # The aggregation filter and the stop-event are both gated on ``multi``: a plain single-goal
     # deep run that parks must come back exactly as before, with no continuation sentence added.
-    from quest_ai_runner.the_intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
+    from quest_ai_runner.intelligence.mind.orchestrator_constants import CONTINUE_AFTER_DECISION_NOTE
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
     ])
@@ -446,7 +446,7 @@ def test_unexecuted_work_classifier_catches_inability_confessions():
     # Caught live (2026-07-19 reliability battery): a write-a-file task was answered with an
     # explicit inability confession + a plan for "the system" to run, and reported done. The
     # classifier missed both shapes; they must register as unexecuted work.
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _answer_describes_unexecuted_work as describes
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_text import _answer_describes_unexecuted_work as describes
 
     assert describes(
         "I cannot execute this task in the read-and-answer step -- I can't run commands or "
@@ -492,8 +492,8 @@ def test_discovery_listing_is_not_answer_grounding_content():
     # A capability MENU (list_operations and friends) must inform the planner but NEVER be presented
     # to the answer LLM as content to answer from — otherwise the model answers from the menu ("I
     # have these operations, shall I run discovery?") instead of gathering real material.
-    from quest_ai_runner.the_intelligence.mind.orchestrator import _grounding_block
-    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import _render_gathered
+    from quest_ai_runner.intelligence.mind.orchestrator import _grounding_block
+    from quest_ai_runner.intelligence.mind.context_intake.planner_context import _render_gathered
 
     discovery = {"kind": "query", "locator": "list_operations", "discovery": True,
                  "text": "OPERATION: discover_goals — list goals"}
@@ -523,8 +523,8 @@ def test_specificity_gate_is_woven_into_planner_deep_and_grounding():
     # subject's docs ("atom evaluation") just because both share a category word. The discipline
     # lives in context_doctrine.SPECIFICITY_GATE and must reach every layer that can ground an
     # answer: the planner prompt, the deep doctrine, and the answer-time grounding block.
-    from quest_ai_runner.the_intelligence.mind.context_intake import context_doctrine as cd
-    from quest_ai_runner.the_intelligence.mind.orchestrator import PLANNER_PROMPT, _grounding_block
+    from quest_ai_runner.intelligence.mind.context_intake import context_doctrine as cd
+    from quest_ai_runner.intelligence.mind.orchestrator import PLANNER_PROMPT, _grounding_block
 
     # The gate states the primary discipline (match the specific referent, not its category) and
     # explicitly subordinates recency to it (product owner: relevance/specificity first, time only backup).
@@ -550,8 +550,8 @@ def test_evidence_gate_is_woven_into_deep_and_grounding():
     # or subject ("you tend to...", "a recurring theme is...") with no specific instance behind it.
     # The discipline lives in context_doctrine.EVIDENCE_GATE and must reach both the deep doctrine
     # and the answer-time grounding block (where the ungrounded claim was actually produced).
-    from quest_ai_runner.the_intelligence.mind.context_intake import context_doctrine as cd
-    from quest_ai_runner.the_intelligence.mind.orchestrator import _grounding_block
+    from quest_ai_runner.intelligence.mind.context_intake import context_doctrine as cd
+    from quest_ai_runner.intelligence.mind.orchestrator import _grounding_block
 
     gate = cd.EVIDENCE_GATE
     assert "named instance" in gate.lower() or "NAMED instance" in gate
@@ -569,7 +569,7 @@ def test_evidence_gate_is_woven_into_deep_and_grounding():
     # The grounding-context header no longer blankly forbids quoting: it must still let the model
     # name/quote the person's OWN words when that is the evidence for a claim, while still hiding
     # the retrieval mechanism itself (never "I read" / "the context I was given").
-    from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
+    from quest_ai_runner.intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
     header = grounding_context_layer("some context")
     assert "own words" in header
 
@@ -681,7 +681,7 @@ def test_answer_goal_verifier_none_exhausted_accepts():
 def test_verify_goal_prompt_rejects_future_intent():
     # The VERIFY_GOAL_PROMPT must explicitly instruct the verifier that future-intent language
     # ("Let me check", "I'm pulling up", etc.) is met=false.
-    from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import VERIFY_GOAL_PROMPT
+    from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import VERIFY_GOAL_PROMPT
     assert "Let me check" in VERIFY_GOAL_PROMPT
     assert "pulling" in VERIFY_GOAL_PROMPT  # "I'm pulling up" may wrap
     assert "Future intent is NOT a result" in VERIFY_GOAL_PROMPT
@@ -788,7 +788,7 @@ def test_deep_loop_stops_at_token_budget():
 def test_planner_list_output_does_not_crash():
     # A provider can return a LIST instead of a dict (multiple tool calls / a JSON array). The
     # planner must coerce it rather than raise 'list' object has no attribute 'get' and fall over.
-    from quest_ai_runner.the_intelligence.mind.orchestrator import normalize_decision, OrchestratorConfig
+    from quest_ai_runner.intelligence.mind.orchestrator import normalize_decision, OrchestratorConfig
     cfg = OrchestratorConfig()
     assert normalize_decision([{"action": "deep", "goal": "g", "rationale": "r"}], cfg).action == "deep"
     assert normalize_decision(["weird"], cfg).action == "answer"   # no dict in list -> safe default
@@ -805,7 +805,7 @@ def test_input_inbox_auto_drains_into_deep_run():
     # for the very decision that chooses "deep") rather than literally inside the deep run's own
     # brief text. A message that instead arrives WHILE the deep loop is already retrying still
     # folds into the deep brief via :5403, unaffected (see test_deep_run_folds_in_new_user_messages).
-    from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+    from quest_ai_runner.intelligence.mind.delegation.inbox import InMemoryInbox
     inbox = InMemoryInbox()
     inbox.push("conv1", "also handle nulls")
     provider = StubProvider(decisions=[
@@ -1265,7 +1265,7 @@ def test_model_hint_overrides_planner_tier_on_answer():
     res = _orch(provider, retrieval).run("q", model_hint="opus")
     assert res.kind == "answer"
     # The model passed to provider.answer must be the registry's "opus" resolution.
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_opus = registry.resolve_tier("opus")
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
@@ -1283,7 +1283,7 @@ def test_model_hint_does_not_touch_planner_calls():
     retrieval = StubRetrieval({"f.md": "x"})
     res = _orch(provider, retrieval).run("q", model_hint="opus")
     assert res.kind == "answer"
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_planner = registry.resolve_tier("balanced")  # OrchestratorConfig.planner_tier default
     # plan_models[0] is the PLANNER call — the one the hint must not touch. Later plan calls are
@@ -1298,7 +1298,7 @@ def test_model_hint_absent_leaves_planner_tier_unchanged():
         {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
     ])
     retrieval = StubRetrieval({"f.md": "x"})
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     # A reply a person reads never runs below balanced (the hub's role table, 31ca9cc7), so the planner's
     # "haiku" request is raised to the balanced tier for the answer call.
@@ -1336,7 +1336,7 @@ def test_model_hint_unknown_value_degrades_gracefully():
     # "xyzzy" is not a known tier — resolve_tier falls back to "sonnet".
     res = _orch(provider, retrieval).run("q", model_hint="xyzzy")
     assert res.kind == "answer"
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_fallback = registry.resolve_tier("xyzzy")  # == sonnet fallback
     # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
@@ -1444,7 +1444,7 @@ def test_instant_ack_emits_narration_flagged_partial():
     beat into the streamed-answer buffer and the immediate response never shows. Regression for the
     narration/ack key mismatch.
     """
-    from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL
+    from quest_ai_runner.intelligence.mind.orchestrator import EVENT_PARTIAL
 
     provider = StubProvider(decisions=[
         {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
@@ -1469,7 +1469,7 @@ def test_narrator_first_beat_emits_from_background_without_flush():
     background thread; flush_first() is only an ordering join. Proven by asserting the beat is
     already in the sink once begin()'s background future completes, before flush_first() is called.
     """
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Narrator, _Emitter, Mode, EVENT_PARTIAL
+    from quest_ai_runner.intelligence.mind.orchestrator import Narrator, _Emitter, Mode, EVENT_PARTIAL
 
     events = []
 
@@ -1500,7 +1500,7 @@ def test_narration_rationale_instructions_demand_grounding_discipline():
     is complete. Step 0 (nothing read yet) must name what it's about to check, not what it expects;
     re-plan beats must speak only to what GATHERED shows and voice unconfirmed hunches as hunches.
     """
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import _RATIONALE_INSTRUCTION_NARRATE, _RATIONALE_INSTRUCTION_NARRATE_REPLAN
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import _RATIONALE_INSTRUCTION_NARRATE, _RATIONALE_INSTRUCTION_NARRATE_REPLAN
 
     # Step 0: must forbid stating expected findings/conclusions before any read.
     assert "never what you expect to find or conclude" in _RATIONALE_INSTRUCTION_NARRATE
@@ -1616,7 +1616,7 @@ class _SlowRetrieval:
         self.files = files
 
     def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None):
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
         if rel_path == "slow.md":
             self._time.sleep(self.delay)
         if rel_path not in self.files:
@@ -1624,11 +1624,11 @@ class _SlowRetrieval:
         return Observation(kind="read", rel_path=rel_path, locator="head", text=self.files[rel_path])
 
     def grep(self, pattern, *, scope=None, max_hits=None):
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
         return Observation(kind="grep", pattern=pattern, hits=[])
 
     def query(self, spec):
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
         return Observation(kind="error", error="query unsupported in stub")
 
 
@@ -1668,7 +1668,7 @@ class _FlakyOnceRetrieval:
         self.calls: Dict[str, int] = {}
 
     def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None):
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
         n = self.calls[rel_path] = self.calls.get(rel_path, 0) + 1
         if rel_path == "flaky.md" and n == 1:
             self._time.sleep(self.delay)
@@ -1677,11 +1677,11 @@ class _FlakyOnceRetrieval:
         return Observation(kind="read", rel_path=rel_path, locator="head", text=self.files[rel_path])
 
     def grep(self, pattern, *, scope=None, max_hits=None):
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
         return Observation(kind="grep", pattern=pattern, hits=[])
 
     def query(self, spec):
-        from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+        from quest_ai_runner.body.internal_context.adapters_values import Observation
         return Observation(kind="error", error="query unsupported in stub")
 
 
@@ -1708,7 +1708,7 @@ def test_a_read_that_times_out_once_succeeds_on_retry(monkeypatch):
 
 def test_read_op_timeout_default_is_generous(monkeypatch):
     # No env override -> the documented default (60s), not some accidental tiny value.
-    from quest_ai_runner.the_intelligence.mind.orchestrator import read_op_timeout_seconds
+    from quest_ai_runner.intelligence.mind.orchestrator import read_op_timeout_seconds
     monkeypatch.delenv("QAR_READ_OP_TIMEOUT_SECONDS", raising=False)
     assert read_op_timeout_seconds() == 60.0
     monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "12.5")
@@ -1726,7 +1726,7 @@ def test_context_assembly_timeout_is_loud_and_recoverable(monkeypatch, caplog):
     import time as time_module
 
     from hubofhubs.api import AssembledContext
-    from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_CONTEXT
+    from quest_ai_runner.intelligence.mind.orchestrator import EVENT_CONTEXT
 
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "0.05")
 
@@ -1758,7 +1758,7 @@ def test_context_assembly_timeout_is_loud_and_recoverable(monkeypatch, caplog):
 
 
 def test_context_assembly_timeout_default_is_fifteen_seconds(monkeypatch):
-    from quest_ai_runner.the_intelligence.mind.orchestrator import context_assembly_timeout_seconds
+    from quest_ai_runner.intelligence.mind.orchestrator import context_assembly_timeout_seconds
     monkeypatch.delenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", raising=False)
     assert context_assembly_timeout_seconds() == 30.0
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "2.5")
@@ -1775,7 +1775,7 @@ def test_context_assembly_partial_result_is_used_and_loud(monkeypatch, caplog):
     import logging
 
     from hubofhubs.api import AssembledContext
-    from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_CONTEXT
+    from quest_ai_runner.intelligence.mind.orchestrator import EVENT_CONTEXT
 
     class PartialAssembler:
         def assemble(self, task_text, *, meta=None):
@@ -1891,7 +1891,7 @@ def test_empty_partial_assembly_is_not_reported_as_used(caplog):
     import logging
 
     from hubofhubs.api import AssembledContext
-    from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_CONTEXT
+    from quest_ai_runner.intelligence.mind.orchestrator import EVENT_CONTEXT
 
     class EmptyPartialAssembler:
         def assemble(self, task_text, *, meta=None):
@@ -1933,7 +1933,7 @@ def test_deferred_deep_wording_matches_configuration():
     QUEUED (deferred_deep_queued=True): the consumer wired a runner that enqueues the work as a
     background task; the doctrine and schema must say the work is queued in the background and
     the user is told when it finishes, and never claim it runs in the same turn."""
-    from quest_ai_runner.the_intelligence.mind import orchestrator as orch_mod
+    from quest_ai_runner.intelligence.mind import orchestrator as orch_mod
 
     # Inline semantics: same-turn, no queue.
     inline = orch_mod.DEFERRED_DEEP_INLINE_SEMANTICS
@@ -1969,7 +1969,7 @@ def test_deferred_deep_wording_matches_configuration():
 def test_planner_prompt_carries_the_configured_deferred_semantics():
     """The rendered planner prompt carries the semantics sentence matching the configuration:
     inline (default) says same-turn; queued says background + report-back. Both truthful."""
-    from quest_ai_runner.the_intelligence.mind import orchestrator as orch_mod
+    from quest_ai_runner.intelligence.mind import orchestrator as orch_mod
 
     # Default (inline) configuration.
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
@@ -2180,7 +2180,7 @@ def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_do
     say its work landed may feed that synthesis; this one is reported in its own words through
     ``unconfirmed_no_change_text``, and no regeneration rewrites it."""
     from hubofhubs.api import DeepResult
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import UNCONFIRMED_NO_CHANGE_LEAD
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_text import UNCONFIRMED_NO_CHANGE_LEAD
     failed_text = "The goal could not be added: the quest was not found."
     provider = StubProvider(
         decisions=[{"action": "answer", "rationale": "answer then make the change",
@@ -2404,7 +2404,7 @@ def test_honest_enqueue_has_a_deterministic_floor_when_the_rewrite_call_fails():
     fall back to the pre-deep draft, which under queued doctrine may already claim the work is
     queued. The correction must not depend on a model call: a plain not-queued sentence is
     appended deterministically."""
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import NOT_QUEUED_NOTE
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import NOT_QUEUED_NOTE
 
     class _RegenFailsProvider(StubProvider):
         """Answers normally until the honest-enqueue regeneration, then goes down."""
@@ -2477,8 +2477,8 @@ def test_render_planner_prompt_fills_every_slot_by_default():
     """FINDING 5b: PLANNER_PROMPT gained a mandatory {deferred_deep_semantics} slot, so a raw
     .format() by an external consumer now raises KeyError. render_planner_prompt is the
     non-breaking path: pass what you have, defaults fill the rest."""
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEFERRED_DEEP_INLINE_SEMANTICS, DEFERRED_DEEP_QUEUED_SEMANTICS
-    from quest_ai_runner.the_intelligence.mind.orchestrator import render_planner_prompt
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import DEFERRED_DEEP_INLINE_SEMANTICS, DEFERRED_DEEP_QUEUED_SEMANTICS
+    from quest_ai_runner.intelligence.mind.orchestrator import render_planner_prompt
 
     rendered = render_planner_prompt(user_message="what is the price?")
     assert "what is the price?" in rendered
@@ -2500,7 +2500,7 @@ def test_narrator_prior_narration_suppresses_repeated_ack():
     in EARLIER turns of the same conversation, only of _said (this turn). Seeding prior_narration
     with a line already spoken must let the repeat-detector catch and suppress an ack that repeats
     it, not just repeats within a single turn."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
+    from quest_ai_runner.intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
 
     events = []
 
@@ -2528,7 +2528,7 @@ def test_narrator_prior_narration_shown_in_ack_prompt():
     """The ack prompt must show prior-turn narration as its own explicit 'said in earlier turns, do
     not repeat this shape' block, distinct from this-turn's _said list, so the model itself (not
     just the word-overlap backstop) has a real chance to vary or go quiet."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Mode, Narrator, _Emitter
+    from quest_ai_runner.intelligence.mind.orchestrator import Mode, Narrator, _Emitter
 
     seen_prompts = []
 
@@ -2560,7 +2560,7 @@ def test_orchestrator_result_narration_said_round_trips_into_next_turn():
     said, and feeding it back in as the next run's prior_narration suppresses a would-be-identical
     repeat ack -- the exact pattern a voice consumer uses so the ack stops reopening every turn with
     its own recent generic line."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL
+    from quest_ai_runner.intelligence.mind.orchestrator import EVENT_PARTIAL
 
     provider = StubProvider(decisions=[
         {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},

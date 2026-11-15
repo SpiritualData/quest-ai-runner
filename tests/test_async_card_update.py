@@ -16,13 +16,13 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import AssembledContext
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import DEEP_FUTURE_CONTEXT_INSTRUCTION
-from quest_ai_runner.the_intelligence.mind.orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY
-from quest_ai_runner.the_intelligence.mind.orchestrator import (
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import DEEP_FUTURE_CONTEXT_INSTRUCTION
+from quest_ai_runner.intelligence.mind.orchestrator_constants import DEFAULT_CARD_MERGE_SIMILARITY
+from quest_ai_runner.intelligence.mind.orchestrator import (
     FUTURE_CONTEXT_DELIMITER, Orchestrator, OrchestratorConfig, _strip_future_context)
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, _parse_future_context, card_update_store
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import _normalize_card_edits, _proposed_card_text
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_text import _future_context_for_display, _parse_future_context, card_update_store
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import _normalize_card_edits, _proposed_card_text
 
 from .conftest import StubRetrieval
 
@@ -565,8 +565,8 @@ def test_normalize_card_edits_rejects_junk():
 import ast
 
 from hubofhubs.api import FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
-from quest_ai_runner.the_intelligence.mind.orchestrator import DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import deep_future_context, future_context_channel, normalize_future_context
+from quest_ai_runner.intelligence.mind.orchestrator import DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_text import deep_future_context, future_context_channel, normalize_future_context
 
 # What a code-generating deep runner produces: a payload that must parse as Python, and NOTHING else.
 _GENERATED_CODE = (

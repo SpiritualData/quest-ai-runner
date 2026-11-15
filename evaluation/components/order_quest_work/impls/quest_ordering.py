@@ -1,5 +1,5 @@
 """CURRENT: Quest's arm of the hub's Prioritization, run as the autopilot runs it. Zero model calls."""
-from quest_ai_runner.the_consciousness.prioritization.quest_ordering import QuestOrdering
+from quest_ai_runner.consciousness.prioritization.quest_ordering import QuestOrdering
 
 
 def build(meter):  # noqa: ARG001

@@ -12,11 +12,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_consciousness.terminal import textual_ui_control, textual_ui_deep
+from quest_ai_runner.consciousness.terminal import textual_ui_control, textual_ui_deep
 from hubofhubs.api import ProgressEvent
-from quest_ai_runner.the_consciousness.terminal.session_contract import TurnSession
-from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import result_items
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.consciousness.terminal.session_contract import TurnSession
+from quest_ai_runner.consciousness.terminal.textual_ui_outcome import result_items
+from quest_ai_runner.intelligence.mind.delegation.inbox import InMemoryInbox
 
 from .test_goal_runner_stream import make_claude, make_runner
 from .test_terminal_run_control import KEY, make_control, run_in_thread

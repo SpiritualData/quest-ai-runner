@@ -1,5 +1,5 @@
 """Offline tests: a phrase a spoken turn quotes from the assistant's previous reply, mis-heard, is tied to the word of that reply."""
-from quest_ai_runner.the_intelligence.mind.context_intake import quoted_phrase
+from quest_ai_runner.intelligence.mind.context_intake import quoted_phrase
 
 PREVIOUS = "The release is not out yet. I do not have a record of that access being added since, so treat the blocker as open."
 MESSAGE = "What do you mean by that axis? What is missing for the flow?"

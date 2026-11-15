@@ -2,7 +2,7 @@
 package = "quest_ai_runner"
 # QAR mirrors the hub's five containers. They depend on one another in every direction (Joshua's rule: a container is a part of the mind, not a layer),
 # so they share one rank; the folder a module sits in says what it is for, and the solution's records sit beside it.
-layers = [["the_self", "the_body", "the_intelligence", "the_world", "the_consciousness"]]
+layers = [["self", "body", "intelligence", "world", "consciousness"]]
 other_layers = ["prompts", "docs", "evaluation", "examples", "scripts", "tests"]
 max_lines = 1500
 # Where the maintainers keep the skill that defines the intent template; absent elsewhere, then S27 is skipped
@@ -213,25 +213,25 @@ enabled = true
 # Floors are measurements of `python3 -m esoi.structure.structure_check.coherence`, never set above one. Each container or area implementation
 # uses every root of its intent, so a host edge with no code behind it lowers its intent's precision until the composition types that seat.
 # Intents not listed show strong evidence on every edge. Edges without strong evidence, by intent:
-#   the_body: quest-body to quest-account-truth and to intake-sources (quest_client is a function that builds the client, it composes nothing).
-#   the_consciousness: quest-representatives to quest-requests (a third module imports both); quest-consciousness to intent-evolution (no module yet).
-#   the_world: quest-world to model-plumbing (the flow asks through the hub's ModelPlumbing seat, which no module of the solution names).
+#   body: quest-body to quest-account-truth and to intake-sources (quest_client is a function that builds the client, it composes nothing).
+#   consciousness: quest-representatives to quest-requests (a third module imports both); quest-consciousness to intent-evolution (no module yet).
+#   world: quest-world to model-plumbing (the flow asks through the hub's ModelPlumbing seat, which no module of the solution names).
 #   internal_context: quest-context to its four members (the code that holds them is the card store's modules and the poller, which name none of them in a seat).
-#   request_intake: quest-requests to its three members (the poller reaches them through the area line in the_consciousness/ways_in.py).
+#   request_intake: quest-requests to its three members (the poller reaches them through the area line in consciousness/ways_in.py).
 #   mind: the-mind to show-progress (the sinks are chosen by the terminal, not by a seat of the loop).
 #   subconscious: the-subconscious to cards-from-files (the recency window takes the card store only).
 #   model_plumbing: model-plumbing to vendor-model-caller (a third module imports both).
 #   tools: the-tools to its five members (a claim judge composes none of them in code).
 #   context_retriever: choose-the-context to index-by-meaning and to spec-selection.
-[rules.S38.floors.the_body]
+[rules.S38.floors.body]
 precision = 0.333
 coverage = 1.0
 
-[rules.S38.floors.the_consciousness]
+[rules.S38.floors.consciousness]
 precision = 0.833
 coverage = 0.857
 
-[rules.S38.floors.the_world]
+[rules.S38.floors.world]
 precision = 0.667
 coverage = 1.0
 

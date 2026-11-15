@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
 
 from .test_done_evidence import LOOKUP, Provider, build
 

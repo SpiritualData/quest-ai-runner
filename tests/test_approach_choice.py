@@ -1,7 +1,7 @@
 """The approach block and its implementation records, with a stub decide (no model call)."""
 import json
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.approach_choice import approach_block
+from quest_ai_runner.intelligence.critical_thinking.esoi_application.approach_choice import approach_block
 
 PROPOSALS = {"way already recorded": {"name": "Direct draft", "how": "Write it straight away.", "disadvantage": "Misses edge cases."},
              "hardest to meet": {"name": "Reuse the template", "how": "Adapt the existing template.", "disadvantage": "Inherits its limits."},

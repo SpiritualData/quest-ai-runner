@@ -16,11 +16,11 @@ from typing import Any, Dict, List
 
 import pytest
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import (
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import (
     DECIDE_TOOL, PLANNER_PROMPT, Orchestrator, OrchestratorConfig, decide_tool_for, normalize_decision)
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROMPT_COMPACT
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import USER_INTENTS, normalize_user_intent
+from quest_ai_runner.intelligence.mind.planner.planner_prompt import PLANNER_PROMPT_COMPACT
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decide_tool import USER_INTENTS, normalize_user_intent
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

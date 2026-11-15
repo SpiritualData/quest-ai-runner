@@ -17,7 +17,7 @@ interactive Claude Code session.
 
 ## 2. What exists today (read from code)
 
-**Claude Code session resume (deep runs).** The hub stream runner (`hubofhubs/the_world/tools/delegated_agent_sessions/stream_runner.py`) launches
+**Claude Code session resume (deep runs).** The hub stream runner (`hubofhubs/world/tools/delegated_agent_sessions/stream_runner.py`) launches
 `--session-id <new>` or `--resume <id>`; a pause is an interrupt ending the run as `DeepResult.paused` with its
 `session_id`. Turn-limit continuation is in `deep-run-continuation.md`. A task may carry `resume_session_id`; resume is best
 effort (an unknown id exits 1 and the runner starts cold), and `session_replay_tokens` skips a resume that would overflow
@@ -30,12 +30,12 @@ pruned session, or an answer turn (no session) gets nothing.
 **Context engine.** `core/recent_context.py` (`FileRecentContextStore`: scopes `conv:`, `quest:`, `global`; 8 turns and 24
 cards per conversation; 14-day prune; lexical relevance gate; item usage memory) is used at every entry point and per
 subgoal on the task path. `core/turn_context_store.py` makes past turns into cards. `TurnCardCache`
-(`hubofhubs/the_intelligence/mind/delegation/overseer/turn.py`) caches assembly for one turn and dies with it. History is lossless and relevance-selected.
+(`hubofhubs/intelligence/mind/delegation/overseer/turn.py`) caches assembly for one turn and dies with it. History is lossless and relevance-selected.
 This remembers WHAT WAS DISCUSSED; it holds no plan, partial output or tool results.
 
 **Stream reconnect, events, caches.** Backend `stream_registry.py` (`InFlightStreamRegistry`, keyed by conversation, user,
 message hash, short TTL) re-attaches a retry to a running stream: a dropped socket, not a return an hour later. Trail events
-come from `core/work_trace.py` (`TurnTrace`), are projected by `hubofhubs/the_consciousness/ai_session_experience/terminal_experience/trace.py` (`project`: bounded text, URLs to
+come from `core/work_trace.py` (`TurnTrace`), are projected by `hubofhubs/consciousness/ai_session_experience/terminal_experience/trace.py` (`project`: bounded text, URLs to
 domains, `viewer_may_see_titles`) and persisted by the backend; interims and asks are built behind a flag. The terminal's
 `_DeepRunTracker` (`interactive_session_tracker.py`) is an in-memory view model only. Caches: hub `WebCache` (LRU 512
 entries, per-entry TTL, disk tier: entry-count bounded, no byte budget, no user namespace), `CachedDbAdapter`, the hub

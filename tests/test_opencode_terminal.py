@@ -4,9 +4,9 @@ from __future__ import annotations
 import threading
 from types import SimpleNamespace
 
-from quest_ai_runner.the_consciousness.terminal import cli_chat
-from quest_ai_runner.the_consciousness.terminal.opencode_terminal import AUTO, Owner, QuestCommands, QuestSessionHarness
-from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.consciousness.terminal import cli_chat
+from quest_ai_runner.consciousness.terminal.opencode_terminal import AUTO, Owner, QuestCommands, QuestSessionHarness
+from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
 
 
 class Inbox:
@@ -181,7 +181,7 @@ def test_the_screen_follows_the_hub_selected_terminal_and_the_switch_keeps_the_t
 
 def test_python_warnings_go_to_a_file_not_the_terminal(capsys):
     import warnings
-    from quest_ai_runner.the_consciousness.terminal.cli_chat import keep_warnings_off_the_screen
+    from quest_ai_runner.consciousness.terminal.cli_chat import keep_warnings_off_the_screen
     saved = warnings.showwarning
     try:
         path = keep_warnings_off_the_screen()

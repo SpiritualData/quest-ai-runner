@@ -15,9 +15,9 @@ import pytest
 from esoi import spec_index
 from esoi.optimization.keep_metric_record import spec_slice
 from hubofhubs.api import Mode
-from quest_ai_runner.the_intelligence.critical_thinking.goal_iteration import SliceAndWriteback
-from quest_ai_runner.the_intelligence.mind.orchestrator import PlanDecision
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn import _Emitter
+from quest_ai_runner.intelligence.critical_thinking.goal_iteration import SliceAndWriteback
+from quest_ai_runner.intelligence.mind.orchestrator import PlanDecision
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn import _Emitter
 
 from .test_goal_metrics_flow import GREETING, TASK, FixedMeter, Timeline, Worker, orchestrate, repo, world  # noqa: F401
 

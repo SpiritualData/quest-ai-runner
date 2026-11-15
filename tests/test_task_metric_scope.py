@@ -2,9 +2,9 @@
 
 Offline: the quest specification is a stub, no network and no model.
 """
-from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import task_metric_scope as scope
-from quest_ai_runner.the_intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
-from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.intelligence.critical_thinking.metric_translation import task_metric_scope as scope
+from quest_ai_runner.intelligence.critical_thinking.metric_translation import tools_metric_results as tmr
+from quest_ai_runner.world.tools.tools import ToolContext, build_tool_registry
 
 SYSTEM_METRIC = "metric-answer-a-turn"
 SYSTEM_SOLUTION = "quest-self"

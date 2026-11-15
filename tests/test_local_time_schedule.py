@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from quest_ai_runner.the_consciousness.request_intake.poller import tasks_due_now
+from quest_ai_runner.consciousness.request_intake.poller import tasks_due_now
 
 from .test_context_request_fast_lane import _poller_with_assembler
 from .test_runner import MockQuestClient

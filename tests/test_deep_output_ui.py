@@ -17,8 +17,8 @@ from rich.text import Text
 
 from hubofhubs.api import EVENT_MILESTONE
 from esoi import NOT_RECORDED_LINE, render_line
-from quest_ai_runner.the_consciousness.terminal.interactive_session import _DeepRunTracker
-from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal, DeepDetailPanel
+from quest_ai_runner.consciousness.terminal.interactive_session import _DeepRunTracker
+from quest_ai_runner.consciousness.terminal.textual_ui import QuestAITerminal, DeepDetailPanel
 
 
 # --- helpers ---------------------------------------------------------------

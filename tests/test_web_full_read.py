@@ -5,12 +5,12 @@ from typing import Any, Dict, Optional
 
 from hubofhubs.api import WebCache
 from hubofhubs.api import paginate_text
-from quest_ai_runner.the_world.tools.web_search.web_research import WebResearchAdapter, build_web_research_from_env
-from quest_ai_runner.the_world.tools.web_search.web_search_backends import SearchResponse
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS
-from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import describe_read_spec, read_spec_key
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS
-from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import (
+from quest_ai_runner.world.tools.web_search.web_research import WebResearchAdapter, build_web_research_from_env
+from quest_ai_runner.world.tools.web_search.web_search_backends import SearchResponse
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import VERIFY_WEB_EVIDENCE_MAX_CHARS
+from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import describe_read_spec, read_spec_key
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import VERIFY_WEB_PAGE_EVIDENCE_MAX_CHARS
+from quest_ai_runner.intelligence.mind.context_intake.planner_context import (
     PLANNER_LINKS_HEAD, PLANNER_WEB_HEAD, PLANNER_WEB_PAGE_VIEW_CHARS, _render_gathered, _render_gathered_for_planner)
 
 from .conftest import StubProvider
@@ -167,7 +167,7 @@ def test_repeat_guard_treats_each_part_as_a_different_read():
 
 
 def test_schema_and_prompts_expose_full_and_part():
-    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import _WEB_READ_SPEC_FIELDS
+    from quest_ai_runner.intelligence.mind.planner.orchestrator_decide_tool import _WEB_READ_SPEC_FIELDS
     assert {"full", "part"} <= set(_WEB_READ_SPEC_FIELDS)
     assert '"full": true' in PLANNER_WEB_HEAD
     assert "summarize" in PLANNER_WEB_HEAD

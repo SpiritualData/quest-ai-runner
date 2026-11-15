@@ -26,12 +26,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE
-from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, PLANNER_DECISION_RUBRIC
-from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import provider_call_accepts_tier
-from quest_ai_runner.the_intelligence.mind.planner.planner_cascade import (
+from quest_ai_runner.self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE
+from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, PLANNER_DECISION_RUBRIC
+from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import provider_call_accepts_tier
+from quest_ai_runner.intelligence.mind.planner.planner_cascade import (
     WEB_REVIEW_NOTE, apply_review, build_review_digest, describe_decision, escalation_spec, should_escalate, truncate_keep_both_ends,
     user_goal_fallback)
 
@@ -156,7 +156,7 @@ def test_build_review_digest_includes_the_message():
 
 
 # Captured by running quest-ai-runner's core/planner_cascade.py AT ITS COMMIT PARENT TO bf609a8
-# (`git show bf609a8^:quest_ai_runner/the_intelligence/mind/planner/planner_cascade.py`), where build_review_digest() had
+# (`git show bf609a8^:quest_ai_runner/intelligence/mind/planner/planner_cascade.py`), where build_review_digest() had
 # no web_configured parameter at all, calling it with the exact same request/decision/rubric this
 # test uses. This is the real pin: comparing the default call against an explicit
 # web_configured=False call, both through the NEW code (what this test used to do), proves

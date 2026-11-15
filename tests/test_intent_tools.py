@@ -8,11 +8,11 @@ import json
 
 import pytest
 
-from quest_ai_runner.the_body.hands.quest_operations import tools_quest_intents as intents
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_intents import refusal_of
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+from quest_ai_runner.body.hands.quest_operations import tools_quest_intents as intents
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.body.internal_context.quest.client.quest_client_intents import refusal_of
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import QuestApiError
 
 CREDS = {"QUEST_BASE_URL": "https://quest.example", "QUEST_API_KEY": "key"}
 
@@ -391,6 +391,6 @@ def test_create_sub_intent_passes_reveal_and_rejects_unknown_levels():
 
 
 def test_apply_spec_edit_says_solutions_are_kept_in_priority_order():
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_intents import apply_spec_edit_spec
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_intents import apply_spec_edit_spec
     text = apply_spec_edit_spec({}).description
     assert "priority order for the intent" in text and "sub-intent" in text and "fields.before" in text and "—" not in text

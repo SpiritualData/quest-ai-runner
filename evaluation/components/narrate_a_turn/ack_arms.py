@@ -105,8 +105,8 @@ def select(arms: Dict[str, Any], n: int) -> str:
 
 if __name__ == "__main__":      # python ack_arms.py CASES.json  (a JSON list of replay case records)
     import sys
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
     provider = ClaudeCliProvider(claude_path="claude", timeout_seconds=180)
     model = ModelRegistry(provider).resolve_tier("fast")
     records = json.load(open(sys.argv[1]))

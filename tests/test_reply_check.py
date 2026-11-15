@@ -2,7 +2,7 @@
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.critical_thinking.decision_check import reply_views as V
+from quest_ai_runner.intelligence.critical_thinking.decision_check import reply_views as V
 
 REPLY = "I read the plan. I added the weekly task to the quest. The deadline is on the plan."
 EXECUTED = "Changes made this turn:\n- tool create_note: a note on the plan"
@@ -59,7 +59,7 @@ def test_the_check_is_off_by_default_and_a_failing_model_sends_the_reply_as_it_w
 
 
 def test_a_failed_chat_evaluation_case_becomes_a_mistake_of_the_view_its_recorded_facts_name():
-    from quest_ai_runner.the_intelligence.critical_thinking.decision_check.mistake_sources import eval_failure_mistakes
+    from quest_ai_runner.intelligence.critical_thinking.decision_check.mistake_sources import eval_failure_mistakes
     rows = [{"case_id": "A", "passed": False, "reply": "Total is 300.", "reason": "figures never read", "unsupported_figures": ["300"], "reads_seen": [{"text": "revenue page"}]},
             {"case_id": "B", "passed": False, "reply": "Nothing changed.", "reason": "it did change", "unexpected_writes": ["goal added"], "changes": ["goal added x"]},
             {"case_id": "C", "passed": False, "reply": "Rude.", "reason": "tone"},

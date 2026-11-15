@@ -21,12 +21,12 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hubofhubs.api import DeepResult, Mode, ProgressEvent
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-from quest_ai_runner.the_intelligence.mind.delegation import resume_request
-from quest_ai_runner.the_intelligence.mind.delegation.run_facts import RunFacts, end_facts, stop_decision_of
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.intelligence.mind.delegation import resume_request
+from quest_ai_runner.intelligence.mind.delegation.run_facts import RunFacts, end_facts, stop_decision_of
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -405,7 +405,7 @@ def test_a_resume_with_no_handle_is_not_claimed_and_an_ordinary_task_is_untouche
 
 def test_a_turn_with_no_deep_run_that_ran_out_of_attempts_reports_the_end_reason_and_what_is_left():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_report_data
+    from quest_ai_runner.intelligence.mind.delegation.run_facts import end_report_data
     verdict = {"met": False, "reason": "The note was not added to the quest.", "next_action": ""}
     stopped = SimpleNamespace(deep_results=[], goal_verdict=verdict)
     assert end_report_data(stopped) == {"end_reason": "attempt_cap", "left": "The note was not added to the quest."}

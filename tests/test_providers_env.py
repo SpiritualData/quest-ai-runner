@@ -1,7 +1,7 @@
 """QAR's wiring of the hub's providers: which environment variable feeds which argument, and that a missing key names its variable."""
 import pytest
 
-from quest_ai_runner.the_self.assembler.hub import make_provider
+from quest_ai_runner.self.assembler.hub import make_provider
 
 
 def test_each_vendor_key_variable_feeds_its_provider_and_empty_means_unset():
@@ -39,7 +39,7 @@ def test_a_missing_key_names_the_variable_to_set(name, variable, monkeypatch):
 
 
 def test_the_credit_rows_come_from_the_two_credit_variables_and_nothing_set_means_none():
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import credits_from_environment
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import credits_from_environment
     assert credits_from_environment({}) == [] and credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "not a number"}) == []
     assert credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "0"}) == []
     [row] = credits_from_environment({"QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD": "150"})
@@ -50,8 +50,8 @@ def test_the_credit_rows_come_from_the_two_credit_variables_and_nothing_set_mean
 
 def test_the_environment_credit_reaches_the_tier_selector_the_way_the_hub_counts_it(monkeypatch):
     from hubofhubs.api import tiers
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import model_registry
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import credits_from_environment
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser import model_registry
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import credits_from_environment
     monkeypatch.setenv("QAR_ANTHROPIC_CREDIT_ALLOWANCE_USD", "200")
     monkeypatch.setenv("QAR_ANTHROPIC_CREDIT_VALUE", "0.5")
     assert model_registry.credit_source is credits_from_environment or model_registry.credit_source() == credits_from_environment()
@@ -66,9 +66,9 @@ def test_the_vendors_are_the_hubs_own_arms_built_by_the_hub_assembly_and_the_rou
     from hubofhubs.api import AnthropicProvider
     from hubofhubs.api import DeepSeekProvider
     from hubofhubs.api import MultiProvider
-    from quest_ai_runner.the_body.configuration import config_orchestrator
-    from quest_ai_runner.the_self.assembler import hub
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.body.configuration import config_orchestrator
+    from quest_ai_runner.self.assembler import hub
+    from quest_ai_runner.body.configuration.config import RunnerConfig
 
     anthropic = hub.make_provider("anthropic", {"ANTHROPIC_API_KEY": "k", "QAR_ANTHROPIC_THINKING": "1"})
     assert type(anthropic) is AnthropicProvider and anthropic.thinking is True and anthropic.env_name == "ANTHROPIC_API_KEY"

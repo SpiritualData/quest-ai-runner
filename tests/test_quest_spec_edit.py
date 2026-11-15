@@ -2,7 +2,7 @@
 (no network, no model)."""
 from typing import Any, Dict, List
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit import QuestSpecEdit
+from quest_ai_runner.intelligence.critical_thinking.esoi_application.quest_spec_edit import QuestSpecEdit
 
 QUEST = "quest-1"
 
@@ -118,7 +118,7 @@ def test_a_missing_record_and_an_empty_key_are_refused_by_the_hub_edit():
 
 
 def test_the_client_sends_before_in_the_body_only_when_given():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_intents import IntentsMixin
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_intents import IntentsMixin
     sent = []
 
     class Client(IntentsMixin):

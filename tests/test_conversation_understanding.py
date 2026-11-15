@@ -17,13 +17,13 @@ Covers:
 import json
 
 from hubofhubs.api import compact_message
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
+from quest_ai_runner.intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
 from hubofhubs.api import ConversationContext
 from hubofhubs.api import ProgressEvent
 from hubofhubs.api import EVENT_UNDERSTANDING, Mode
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
 

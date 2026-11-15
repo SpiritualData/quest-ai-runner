@@ -32,7 +32,7 @@ from typing import Any, Dict, List
 import pytest
 
 from hubofhubs.api import FilesystemCardRepository
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_store_growth import world  # noqa: E402
@@ -309,7 +309,7 @@ def test_the_store_write_path_refuses_it_and_the_callers_that_promise_not_to_rai
 
 
 def test_the_quest_backend_repository_refuses_it_too_and_so_does_a_bulk_upload():
-    from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
+    from quest_ai_runner.body.internal_context.card_store.quest_api_card_repository import QuestApiCardRepository
     from tests.quest_card_backend_fake import FakeCardBackend
     backend = FakeCardBackend()
     try:

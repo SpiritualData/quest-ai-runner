@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import solution_consideration
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import solution_consideration
 
 HUB = Path(__file__).resolve().parents[2] / "ai-hub-of-hubs-structure"
 GRAPHIFY = "Switch Cards From Files to the Graphify arm."

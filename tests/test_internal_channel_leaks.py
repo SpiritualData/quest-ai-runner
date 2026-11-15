@@ -22,11 +22,11 @@ from typing import Any, List
 
 from hubofhubs.api import ProgressEvent
 from hubofhubs.api import EVENT_CONTEXT, EVENT_UNDERSTANDING
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import GOAL_CONDITION_SYSTEM
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, _project_card_metadata_for_event, _project_sources_for_event
-from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import _safe_event_title
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_small_talk
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import GOAL_CONDITION_SYSTEM
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, _project_card_metadata_for_event, _project_sources_for_event
+from quest_ai_runner.intelligence.mind.context_intake.orchestrator_events import _safe_event_title
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import is_small_talk
 
 from .conftest import StubProvider, StubRetrieval
 

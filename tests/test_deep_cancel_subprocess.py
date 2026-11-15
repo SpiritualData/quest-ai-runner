@@ -23,13 +23,13 @@ from typing import List, Optional
 
 import pytest
 
-from quest_ai_runner.the_intelligence.mind.delegation import goal_runner_contract
+from quest_ai_runner.intelligence.mind.delegation import goal_runner_contract
 from hubofhubs.api import DeepResult, ProgressEvent
 from hubofhubs.api import EVENT_EXEC
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner_contract import kill_process_group
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.intelligence.mind.delegation.goal_runner_contract import kill_process_group
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -85,7 +85,7 @@ def runner_for(tmp_path: Path, ignore: tuple = (), grace: float = 0.4) -> Subpro
 @pytest.fixture(autouse=True)
 def quick_poll(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "fake-home"))
-    monkeypatch.setattr("hubofhubs.the_world.tools.delegated_agent_sessions.subprocess_runner.CANCEL_POLL_SECONDS", 0.1)
+    monkeypatch.setattr("hubofhubs.world.tools.delegated_agent_sessions.subprocess_runner.CANCEL_POLL_SECONDS", 0.1)
 
 
 def cancel_once_started(tmp_path: Path):

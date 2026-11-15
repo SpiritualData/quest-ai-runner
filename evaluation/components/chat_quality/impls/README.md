@@ -4,6 +4,21 @@ Breadcrumb: [Top](../../../../esoi/README.md) > impls
 
 Part of [Quest AI Runner](../../../../esoi/README.md)
 
+### Top implementations of Quest Self
+
+| # | Implementation | Result | Cost per pass | In use |
+|---|---|---|---|---|
+| 1 | Offline metric validity check (`reference_replies`) | 100% (331 of 331 cases) | free |  |
+| 2 | Planner-only route check on the chat dataset (`planner_route`) | 94% (94 of 100 cases) | $0.0007 |  |
+| 3 | Live chat on a disposable world (`dev_quest_chat`) | 80% (24 of 30 cases) | 1.2 calls |  |
+
+The one in use is chosen at the deciding stage of the cascade (see the leaderboard), which can differ from the latest run ranked here.
+
+3 more compared; the full list is in the results log.
+
+**How it is scored:** Passing chat turns per dollar. share of realistic chat turns that pass their rubric (grounded facts, right handling, exact changes), and cost per passing turn
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
+
 ## Implementations
 
 | Implementation | Handle | Purpose | Code | Selected |

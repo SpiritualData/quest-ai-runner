@@ -2,9 +2,9 @@
 that can only edit files, and prefers the governed-operations rung over the full agent.
 """
 from hubofhubs.api import WRITE_SURFACE_AGENT, WRITE_SURFACE_FILES, WRITE_SURFACE_OPERATIONS
-from quest_ai_runner.the_intelligence.mind.orchestrator import (
+from quest_ai_runner.intelligence.mind.orchestrator import (
     QUEST_DATA_WRITE_SURFACE_INSTRUCTION, OrchestratorConfig, apply_quest_data_ladder_guard, normalize_decision)
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import ladder_for_quest_data
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import ladder_for_quest_data
 
 
 class Rung:

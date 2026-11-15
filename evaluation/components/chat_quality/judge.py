@@ -737,7 +737,7 @@ def formula_score(case, v):
 
 
 def claude_provider():
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
     return ClaudeCliProvider(claude_path=DEV_ENV.get("QAR_CLAUDE_PATH") or "claude",
                              timeout_seconds=420)
 
@@ -856,7 +856,7 @@ def item_majority(case, verdict, evidence, changes, truth, provider, pre=None, s
     if not item_judge.on() or not verdict.get("rubric"):
         return verdict
     try:
-        from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+        from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
         model = ModelRegistry(provider).resolve_tier("fast")
         return item_judge.refine(case, verdict, evidence, changes, truth,
                                  lambda prompt: provider.answer([{"role": "user", "content": prompt}], model=model), pre=pre, state=state)

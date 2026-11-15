@@ -71,8 +71,8 @@ def attach_files(case, orchestrator):
         return None
     import tempfile
     from pathlib import Path
-    from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
-    from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+    from quest_ai_runner.world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+    from quest_ai_runner.world.tools.file_reading.files_adapter import FilesAdapter
     root = Path(tempfile.mkdtemp(prefix="e2e_files_"))
     for rel, text in files.items():
         target = root / rel
@@ -162,8 +162,8 @@ class BulkProvider(IdealPlanner):
 def run_bulk(case, meter, capped_only=False):
     """One bulk-analysis case through the real orchestrator with the done-evidence feature on, a ``BulkRunner`` as the deep worker
     and a sink that keeps every event. Folds the usual record plus the facts the bulk expectations read."""
-    from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
+    from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+    from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorConfig
     import scripted_brain
     world = new_world(case)
     spec = world.bulk.spec

@@ -2,7 +2,7 @@
 with routes untried, and only the decision ends it (stop_met when placed, ask when every route was tried)."""
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.critical_thinking import names_pass
+from quest_ai_runner.intelligence.critical_thinking import names_pass
 
 
 def run(terms, deep=None, wider_places=False, monkeypatch=None):

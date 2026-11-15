@@ -3,9 +3,9 @@
 ``normalize_verdict`` / ``verdict_block``, the quest judge's ``rank_quests`` and the sufficiency gate's
 ``collect_abridged_items`` / ``unfetched_abridged`` are the live functions. Zero model calls."""
 from hubofhubs.api import sufficiency
-from quest_ai_runner.the_intelligence.mind.delegation import overseer
-from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_judge
-from quest_ai_runner.the_intelligence.mind.planner import reach_judge
+from quest_ai_runner.intelligence.mind.delegation import overseer
+from quest_ai_runner.intelligence.higher_mind.objectives import quest_judge
+from quest_ai_runner.intelligence.mind.planner import reach_judge
 
 
 class ScriptedProvider:

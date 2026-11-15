@@ -4,11 +4,11 @@
 * ``refers_to_attachment``: the message speaks of a photo or file and the turn holds no attachment object, so the reply says nothing
   arrived (a line the code writes) and nothing is queued or done on values nobody read.
 """
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import NO_ATTACHMENT_LINE
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.intelligence.mind.planner.planner_prompt import NO_ATTACHMENT_LINE
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 from .conftest import StubProvider, StubRetrieval
 

@@ -1,5 +1,5 @@
 """A quest read hands a model a bounded set of goals: open ones soonest first, done ones represented, the rest counted and described (never all 536)."""
-from quest_ai_runner.the_body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
+from quest_ai_runner.body.internal_context.quest.quest_retrieval_adapter import QuestRetrievalAdapter
 
 
 def goals(total=536):

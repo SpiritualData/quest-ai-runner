@@ -19,7 +19,7 @@ import gc
 import pytest
 from typing import Any, Dict, List
 
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_filter import consolidate_context, filter_cards_by_relevance
+from quest_ai_runner.intelligence.subconscious.context_retriever.card_filter import consolidate_context, filter_cards_by_relevance
 from hubofhubs.api import card_selection as card_selection_module
 
 

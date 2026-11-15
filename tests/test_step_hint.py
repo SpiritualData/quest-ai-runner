@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import MultiProvider
 from hubofhubs.api import STEP_PLAN, STEP_REPLY, STEP_VERIFY
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubProvider, StubRetrieval
 

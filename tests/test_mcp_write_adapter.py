@@ -27,7 +27,7 @@ import pytest
 
 from hubofhubs.api import MCPServerSpec, MCPToolResult
 from hubofhubs.api import OperationWriter, WriteResult
-from quest_ai_runner.the_world.tools.connected_system_operations.mcp_write_adapter import MCPWriteAdapter
+from quest_ai_runner.world.tools.connected_system_operations.mcp_write_adapter import MCPWriteAdapter
 
 
 # ---------------------------------------------------------------------------------------------
@@ -249,7 +249,7 @@ BANNED_REAL_NAMES = (
 
 
 def test_no_real_vendor_name_hardcoded_in_adapter_source():
-    src_path = Path(__file__).resolve().parents[1] / "quest_ai_runner" / "the_world" / "tools" / "connected_system_operations" / "mcp_write_adapter.py"
+    src_path = Path(__file__).resolve().parents[1] / "quest_ai_runner" / "world" / "tools" / "connected_system_operations" / "mcp_write_adapter.py"
     text = src_path.read_text(encoding="utf-8").lower()
     hits = [name for name in BANNED_REAL_NAMES if name in text]
     assert not hits, f"real vendor/org name(s) hardcoded in mcp_write_adapter.py: {hits}"

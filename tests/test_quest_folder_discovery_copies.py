@@ -1,5 +1,5 @@
 """A QUEST_SYNC.md inside a folder of unedited copies belongs to another quest and is never a working folder."""
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import discover_quest_folders
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_index import discover_quest_folders
 
 
 def test_a_copy_of_a_sync_file_under_originals_is_not_discovered(tmp_path):

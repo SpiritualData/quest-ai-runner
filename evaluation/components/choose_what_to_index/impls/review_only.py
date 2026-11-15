@@ -6,8 +6,8 @@ excluded (fail-open). The deterministic safeguards (nested repositories, fuzzy d
 from pathlib import Path
 
 from hubofhubs.api import folder_review
-from quest_ai_runner.the_body.configuration.card_store_settings import STORE_DIR_NAME, folder_review_enabled, skip_nested_repos
-from quest_ai_runner.the_intelligence.subconscious.cards_from_files.context_risk_gate import FolderGate
+from quest_ai_runner.body.configuration.card_store_settings import STORE_DIR_NAME, folder_review_enabled, skip_nested_repos
+from quest_ai_runner.intelligence.subconscious.cards_from_files.context_risk_gate import FolderGate
 
 
 def build(meter):  # noqa: ARG001

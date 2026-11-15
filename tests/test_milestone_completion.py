@@ -4,7 +4,7 @@ import datetime
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion as mc
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion as mc
 
 RECORD = {"quest_id": "q-1", "milestone_id": "sol-1", "milestone_metric_id": "met-1", "title": "M1 Tutorials published deliverables", "item": "tutorial scripts",
           "requirements": ["Has an opening", "Ends with a call to action"], "before": 0, "total": 6, "measure_name": "Tutorial scripts meeting the rubric",
@@ -58,7 +58,7 @@ def test_a_deliverable_the_worker_already_kept_is_measured_not_added_twice_and_n
 
 
 def test_the_task_executor_measures_a_finished_milestone_task_and_adds_the_line_to_its_result():
-    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
     registry = Registry()
     holder = SimpleNamespace(_orch=SimpleNamespace(tools=registry, cheap_decision=scorer))
     result = SimpleNamespace(text="Done.", deep_results=[SimpleNamespace(output="DELIVERABLE:\nOpening line. Call to action: go.")])
@@ -126,7 +126,7 @@ def test_the_requirement_each_part_failed_is_recorded_in_the_kept_body_and_read_
     assert first["after"] == 1 and first["unmet"] == [{"part": 2, "requirements": ["Ends with a call to action"]}]
     assert "Not yet meeting the rubric:\n- Part 2: Ends with a call to action" in first["body"]
     assert first["body"].index("Not yet meeting") < first["body"].index("--- Part 1 ---")          # in the overview, so it is never counted as a part
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_progress as mp
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_progress as mp
     assert len(mp.kept_parts(kept)) == 2 and NO_END.format(n=2) in mp.kept_parts(kept)[1] and "Not yet" not in "".join(mp.kept_parts(kept))
     assert mc.unmet_of(kept) == {2: ["Ends with a call to action"]} and mc.unmet_of("Overview:\nNothing failed.") == {}
     assert mc.unmet_section([]) == "" and mc.unmet_of("x" + mc.unmet_section(first["unmet"])) == {2: ["Ends with a call to action"]}

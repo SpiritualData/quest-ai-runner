@@ -3,7 +3,7 @@ while it works. Scripted events, no model."""
 from __future__ import annotations
 
 from hubofhubs.api import ProgressEvent
-from quest_ai_runner.the_consciousness.terminal.session_contract import RunSupport, TurnSession, support_of, unsupported_line
+from quest_ai_runner.consciousness.terminal.session_contract import RunSupport, TurnSession, support_of, unsupported_line
 
 from .test_terminal_calm_output import RecordingLog, run_app
 
@@ -70,7 +70,7 @@ def test_support_is_read_from_how_the_runner_is_built_and_a_missing_control_gets
 
 
 def test_the_real_hub_loop_binding_reports_the_contract_and_takes_a_control():
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner
+    from quest_ai_runner.world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner
     assert support_of(HubLoopRunner(root=".", complete=lambda s, p: "ok")) == RunSupport(stop=True, steer=True, pause=True, helpers=True)
 
 

@@ -11,7 +11,7 @@ plain-string calls, are tested with the providers in the hub (``tests/test_model
 All offline: no network and no API key.
 """
 from hubofhubs.api import render_card_content_blocks
-from quest_ai_runner.the_self.integrity.prompts.prompt_layers import PromptLayers, compose_layers, turn_prompt_head
+from quest_ai_runner.self.integrity.prompts.prompt_layers import PromptLayers, compose_layers, turn_prompt_head
 
 
 # --------------------------------------------------------------------------- #

@@ -423,9 +423,9 @@
   "id": "API-039",
   "area": "name",
   "kind": "name",
-  "description": "hubofhubs.the_world.tools.file_editing.editblock.apply_edit is public",
+  "description": "hubofhubs.world.tools.file_editing.editblock.apply_edit is public",
   "args": {
-   "module": "hubofhubs.the_world.tools.file_editing.editblock",
+   "module": "hubofhubs.world.tools.file_editing.editblock",
    "name": "apply_edit"
   },
   "expect": {
@@ -438,9 +438,9 @@
   "id": "API-040",
   "area": "name",
   "kind": "name",
-  "description": "hubofhubs.the_world.tools.file_editing.editblock.find_original_update_blocks is public",
+  "description": "hubofhubs.world.tools.file_editing.editblock.find_original_update_blocks is public",
   "args": {
-   "module": "hubofhubs.the_world.tools.file_editing.editblock",
+   "module": "hubofhubs.world.tools.file_editing.editblock",
    "name": "find_original_update_blocks"
   },
   "expect": {
@@ -453,9 +453,9 @@
   "id": "API-041",
   "area": "name",
   "kind": "name",
-  "description": "hubofhubs.the_world.tools.file_editing.editblock.find_whole_file_blocks is public",
+  "description": "hubofhubs.world.tools.file_editing.editblock.find_whole_file_blocks is public",
   "args": {
-   "module": "hubofhubs.the_world.tools.file_editing.editblock",
+   "module": "hubofhubs.world.tools.file_editing.editblock",
    "name": "find_whole_file_blocks"
   },
   "expect": {
@@ -995,9 +995,9 @@
   "id": "API-090",
   "area": "offline_import",
   "kind": "offline_import",
-  "description": "hubofhubs.the_world.tools.file_editing.editblock imports with every socket call refusing",
+  "description": "hubofhubs.world.tools.file_editing.editblock imports with every socket call refusing",
   "args": {
-   "module": "hubofhubs.the_world.tools.file_editing.editblock"
+   "module": "hubofhubs.world.tools.file_editing.editblock"
   },
   "expect": {
    "eq": {

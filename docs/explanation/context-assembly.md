@@ -193,7 +193,7 @@ description or summary, each content item's `why` and note text, keywords), so t
   digest. It is a function of the origin alone (`origin_store`, `origin_id`, `origin_root`), so a card
   that reaches a store by two routes (straight from its store, or through a store between) is one id,
   an id never grows by hop, and a store never imports a card whose origin is itself, whichever way it
-  came back and whatever happened to its `imported_from` on the way (`hubofhubs.the_body.internal_context.card_store.card_origin`). Copies
+  came back and whatever happened to its `imported_from` on the way (`hubofhubs.body.internal_context.card_store.card_origin`). Copies
   made before origins were kept were `<namespace>--<id in the store it was read from>`, which stacked a
   prefix per hop; they are no longer offered, so the next refresh moves them out
   (`_quarantine/superseded-import/`).
@@ -317,7 +317,7 @@ should go and get the rest. Two things had gone wrong, and only one of them was 
 summary and full content **rendered identically** in the context view, so nothing told it which was
 which; and nothing checked the plan it returned.
 
-Both are closed in `hubofhubs.the_intelligence.critical_thinking.goal_completion.sufficiency` (the hub), keyed on data the item declares about
+Both are closed in `hubofhubs.intelligence.critical_thinking.goal_completion.sufficiency` (the hub), keyed on data the item declares about
 itself, never on words the model wrote (hard rule #3). A content item whose stored text is an
 abridged stand-in says so on its locator, and names the read spec that fetches the real thing:
 
@@ -338,7 +338,7 @@ Then:
 - a plan that would terminate in `answer` while one of those fetches has **not run this turn** is
   turned into one `read` step that runs it, and the loop re-plans with the full text in GATHERED
   (`OrchestratorConfig.full_read_before_answer`, on by default). "Has it run" is judged against the
-  read specs that actually executed, the same way `hubofhubs.the_body.internal_context.run_store.execution_record.ExecutionRecord` judges an answer's
+  read specs that actually executed, the same way `hubofhubs.body.internal_context.run_store.execution_record.ExecutionRecord` judges an answer's
   completion claims against what actually executed. It fires at most **once** per turn.
 
 Inert unless an item declares `full_ref`: no declaration means nothing to fetch, no notice, and a
@@ -355,7 +355,7 @@ lands on the right card at all.
 ### Card assignment: the independent-recall test
 
 Every message needs a `card_thread` decision: continue the current topic card, switch to a known
-one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/the_intelligence/mind/context_intake/context_doctrine.py`; read
+one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/intelligence/mind/context_intake/context_doctrine.py`; read
 that constant for the exact, current prompt text). The gate used to say "match on meaning, not
 shared words," which is true but untestable, and it let one specific failure mode through
 repeatedly: a **sub-decision inside a plan** (a price, a timeline, a vendor pick, a channel) often
@@ -505,7 +505,7 @@ Measured on this repo (`quest-ai-runner`) as the corpus, no API key, no model ca
   `poller.py` / `executor.py`; "fix the orchestrator planner loop" routes to the core module. The
   task lands on the right files before any grep.
 - **Staleness over time:** editing a pinned file flips that card to stale on the next `assemble()`
-  (`stale=['quest_ai_runner/the_intelligence/mind/orchestrator.py']`), deterministically, 0 LLM calls.
+  (`stale=['quest_ai_runner/intelligence/mind/orchestrator.py']`), deterministically, 0 LLM calls.
 
 So the differentiating properties are concrete: instant grounding on a fresh repo, deterministic
 freshness, and a context map that compounds as tasks run, all without spending a token to maintain it.
@@ -550,7 +550,7 @@ whole history of unrelated topics on every single turn.
 
 ### The solution: turn cards + the same hybrid retrieval stack
 
-`quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store.TurnContextStore` stores conversation turns as JSON
+`quest_ai_runner.intelligence.higher_mind.long_term_memory.turn_context_store.TurnContextStore` stores conversation turns as JSON
 card files (under `.quest-context/turns/` by default) using the SAME card format as
 `FileContextStore`. It is a full `ContextAssembler` implementation: its `record()` writes a card
 after each turn, and its `assemble()` retrieves relevant past turns by IDF keyword overlap --
@@ -599,16 +599,16 @@ def _last_transcript(self) -> str:
 
 ### CompositeContextAssembler
 
-`hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler.CompositeContextAssembler` wraps multiple
+`hubofhubs.intelligence.subconscious.context_retriever.assemblers.composite_assembler.CompositeContextAssembler` wraps multiple
 `ContextAssembler` instances into one. It calls each on `assemble()` (concatenating non-empty
 `context_view` strings with a double newline separator), merges `card_ids` and `stale` lists,
 and calls each on `record()` best-effort (never raises). This is how turn cards compose with
 file cards or any other assembler:
 
 ```python
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
-from hubofhubs.the_intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
+from hubofhubs.intelligence.subconscious.context_retriever.assemblers.composite_assembler import CompositeContextAssembler
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 file_store = FileContextStore(cards_dir=".quest-context/cards")
 turn_store = TurnContextStore(turns_dir=".quest-context/turns")
@@ -804,7 +804,7 @@ wait rather than a silent one:
   subgoals each still assemble for their own focus.
 - A search the turn has stopped waiting for keeps running, because its index is what makes the next
   turn fast. It does not starve the rest of the process: past the soft deadline the keyword index
-  build calls a `Pacer` (`hubofhubs.the_body.internal_context.card_store.background_pacing`), a real 2 ms pause after each 30 ms of work.
+  build calls a `Pacer` (`hubofhubs.body.internal_context.card_store.background_pacing`), a real 2 ms pause after each 30 ms of work.
   The prewarm and the vector seed export use the same pacer. (`time.sleep(0)` does not work: with a
   busy thread beside it, a thread's 3,000 blocking calls took 7.4 s with `sleep(0)` every 200 items
   and 8.1 s without, against 35 ms with the pause.)
@@ -868,7 +868,7 @@ user_message --> STEP 1: Understand input --> goal_condition --> STEP 2: select 
                   (pulls conversation context, only as needed)   (assemble + retrieval off the goal)
 ```
 
-**`ConversationStore` (a storage-agnostic adapter, `hubofhubs.the_body.internal_context.context`).** Conversation history lives in
+**`ConversationStore` (a storage-agnostic adapter, `hubofhubs.body.internal_context.context`).** Conversation history lives in
 different places for different consumers (local Claude session JSON under `~/.claude/sessions`; a
 Mongo collection in a server). The store hides that behind two methods, both of which NEVER raise:
 - `current_slice(conv_id, query, *, recent_turns=4, max_chars)`: a relevant slice of THE current

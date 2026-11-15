@@ -1,10 +1,10 @@
 """Quest's side of Resolve a Reference, offline: people and goals are tied to a phrase only when exactly one is meant, a look-alike is an abstain, and a match never licenses a write."""
 import json
 
-from quest_ai_runner.the_body.hands.quest_operations import goal_links
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import resolve_member
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
-from quest_ai_runner.the_intelligence.mind.reference_resolver import quest_references as refs
+from quest_ai_runner.body.hands.quest_operations import goal_links
+from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import resolve_member
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
+from quest_ai_runner.intelligence.mind.reference_resolver import quest_references as refs
 
 MEMBERS = [{"user_id": "u1", "name": "Ann Lee", "email": "ann.lee@example.org"}, {"user_id": "u2", "name": "Joanne Park", "email": "jp@example.org"},
            {"user_id": "u3", "name": "Ann Marie Ortiz", "email": "amo@example.org"}, {"user_id": "u4", "name": "Dev Rao", "email": "dev@example.org"}]

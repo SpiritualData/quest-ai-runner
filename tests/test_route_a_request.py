@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from hubofhubs.api import route_from_report
-from quest_ai_runner.the_intelligence.mind.request_router.planner_derived import report_of
+from quest_ai_runner.intelligence.mind.request_router.planner_derived import report_of
 
 
 def plan(**fields):

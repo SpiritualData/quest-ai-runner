@@ -34,7 +34,7 @@ Everything about this is gated on one thing: whether you handed the library a `F
 
 ```python
 from quest_ai_runner.adapters.__init__ import FilesWriter
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.body.configuration.config import RunnerConfig, build_orchestrator
 
 cfg = RunnerConfig(
     retrieval=...,
@@ -203,7 +203,7 @@ override a choice someone already made explicitly:
 ## Configuration
 
 ```python
-from hubofhubs.the_world.tools.file_editing.fast_edit import FastEditConfig, FastEditRunner
+from hubofhubs.world.tools.file_editing.fast_edit import FastEditConfig, FastEditRunner
 from quest_ai_runner.adapters.__init__ import FilesWriter
 
 FilesWriter(
@@ -230,14 +230,14 @@ When the orchestrator pins a model for the attempt (the deep model ladder), that
 
 To wire a non-default config, construct the runner yourself and put it in the ladder via
 `RunnerConfig.deep_runner` plus your own composition, or subclass/replace
-`config.resolve_fast_edit_runner`. The runner itself is the hub's (`hubofhubs.the_world.tools.file_editing.fast_edit`, registered there as
+`config.resolve_fast_edit_runner`. The runner itself is the hub's (`hubofhubs.world.tools.file_editing.fast_edit`, registered there as
 the `file-editing` arm `fast_edit`); QAR keeps the wiring that hands it a writer and a tier resolver.
 
 ---
 
 ## Vendored code and attribution
 
-The SEARCH/REPLACE parsing and matching in `hubofhubs/the_world/tools/file_editing/editblock.py` (the hub repository) is a
+The SEARCH/REPLACE parsing and matching in `hubofhubs/world/tools/file_editing/editblock.py` (the hub repository) is a
 **modified copy** of code from [Aider](https://github.com/Aider-AI/aider), Apache-2.0, taken from
 `aider/coders/editblock_coder.py` and `aider/coders/wholefile_coder.py` at commit `5dc9490b`
 (2026-05-22) and vendored on 2026-08-13 and moved to the hub on 2026-10-30. The hub is also Apache-2.0, so there is no license

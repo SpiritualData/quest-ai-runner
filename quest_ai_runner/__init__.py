@@ -3,21 +3,21 @@
 Generic, no consumer-specific logic. Three consumers:
   * Quest's own backend / a cockpit import ``quest_ai_runner.core`` IN-PROCESS for chat.
   * Integrating orgs / a personal lane run ``quest_ai_runner.runner`` (the Poller).
-Consumers supply everything specific via ``quest_ai_runner.the_body.configuration.config.RunnerConfig``.
+Consumers supply everything specific via ``quest_ai_runner.body.configuration.config.RunnerConfig``.
 """
 from typing import TYPE_CHECKING, Optional
 
-from quest_ai_runner.the_self.assembler.hub_path import ensure_hub
+from quest_ai_runner.self.assembler.hub_path import ensure_hub
 
 ensure_hub()   # before anything imports hubofhubs: an environment built before it was required still starts
 
-from quest_ai_runner.the_body.configuration import config
-from quest_ai_runner.the_body.host import resources  # noqa: E402
-from quest_ai_runner.the_intelligence.mind.delegation import goal_runner
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import model_registry
-from quest_ai_runner.the_world.tools import tools as core_tools  # noqa: E402
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model as _cli_model
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import quest_client_from_env as _quest_client_from_env
+from quest_ai_runner.body.configuration import config
+from quest_ai_runner.body.host import resources  # noqa: E402
+from quest_ai_runner.intelligence.mind.delegation import goal_runner
+from quest_ai_runner.world.model_plumbing.model_tier_chooser import model_registry
+from quest_ai_runner.world.tools import tools as core_tools  # noqa: E402
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model as _cli_model
+from quest_ai_runner.body.internal_context.quest.client.quest_client import quest_client_from_env as _quest_client_from_env
 
 # ``core`` may not import ``adapters`` or ``runner``, so the one place that sees all of them wires in
 # what core needs: the Claude Code model translator for the deep worker's model gate
@@ -25,31 +25,31 @@ from quest_ai_runner.the_body.internal_context.quest.client.quest_client import 
 goal_runner.set_cli_model_translator(_cli_model)
 core_tools.set_quest_client_factory(_quest_client_from_env)
 # the work trace judges whether a reply draws on a record by words rare in general English, a table that lives with the context adapters.
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.personal_lexicon import word_idf as _word_idf, MAX_IDF as _MAX_IDF  # noqa: E402
-from quest_ai_runner.the_intelligence.mind.response_writer import work_trace as _work_trace  # noqa: E402
+from quest_ai_runner.intelligence.subconscious.context_retriever.personal_lexicon import word_idf as _word_idf, MAX_IDF as _MAX_IDF  # noqa: E402
+from quest_ai_runner.intelligence.mind.response_writer import work_trace as _work_trace  # noqa: E402
 _work_trace.set_word_rarity(lambda word: _word_idf(word) >= _MAX_IDF)
 # core reads no environment: the prepaid credit the tier selector counts comes from the environment through providers.py.
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import credits_from_environment as _credits_from_environment  # noqa: E402
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import credits_from_environment as _credits_from_environment  # noqa: E402
 
 model_registry.set_credit_source(_credits_from_environment)
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import excluded_models_from_environment as _excluded_models_from_environment  # noqa: E402
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import excluded_models_from_environment as _excluded_models_from_environment  # noqa: E402
 
 model_registry.set_excluded_source(_excluded_models_from_environment)
 # core reads no environment variable (S13): its tunables arrive as ``core.runtime_settings`` values,
 # resolved by the config layer from the live environment unless a RunnerConfig pins its own.
-from quest_ai_runner.the_body.configuration.config_core_settings import install_environment_backed_core as _install_core_env  # noqa: E402
+from quest_ai_runner.body.configuration.config_core_settings import install_environment_backed_core as _install_core_env  # noqa: E402
 
 _install_core_env()
 
 # QAR is Quest's connector to the hub of hubs (``hubofhubs``, a required dependency): the one startup registration of the
-# parts QAR owns, under names QAR owns, where the hub has a seat for them (quest_ai_runner/the_self/assembler/hub.py).
-from quest_ai_runner.the_self.assembler import hub as _hub  # noqa: E402
-from quest_ai_runner.the_self.assembler.hub import register_with_hub as _register_with_hub  # noqa: E402
+# parts QAR owns, under names QAR owns, where the hub has a seat for them (quest_ai_runner/self/assembler/hub.py).
+from quest_ai_runner.self.assembler import hub as _hub  # noqa: E402
+from quest_ai_runner.self.assembler.hub import register_with_hub as _register_with_hub  # noqa: E402
 
 _register_with_hub()
 
 if TYPE_CHECKING:  # pragma: no cover — typing only
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.body.configuration.config import RunnerConfig
 
 __version__ = "0.7.2"
 __all__ = ["config", "resources",
@@ -106,7 +106,7 @@ def load_client(config_path: Optional[str] = None, *, timeout: float = 30.0):
         quest-ai-runner quest whoami
         quest-ai-runner quest get_task task_123
     """
-    from quest_ai_runner.the_body.configuration.config import load_quest_client
+    from quest_ai_runner.body.configuration.config import load_quest_client
 
     return load_quest_client(config_path, timeout=timeout)
 
@@ -115,7 +115,7 @@ def load_config(config_path: Optional[str] = None) -> "RunnerConfig":
     """Build a ``RunnerConfig`` from a TOML file layered under the environment.
 
     THE front door for a consumer: a lane is ``load_config()`` plus
-    ``quest_ai_runner.the_consciousness.request_intake.lane.run_lane`` (see ``docs/tutorials/tutorial-your-first-lane.md``). Every
+    ``quest_ai_runner.consciousness.request_intake.lane.run_lane`` (see ``docs/tutorials/tutorial-your-first-lane.md``). Every
     field a file can set is listed in ``docs/how-to/writing-a-consumer.md``; an environment variable
     always wins over the same field in the file.
 
@@ -127,6 +127,6 @@ def load_config(config_path: Optional[str] = None) -> "RunnerConfig":
     because it also builds the CLI's own adapter stack; that private name stays as an alias for
     in-repo callers, but nothing outside this package should import it.
     """
-    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env  # local: cli imports config, so this cannot be top-level
+    from quest_ai_runner.consciousness.terminal.cli import _config_from_env  # local: cli imports config, so this cannot be top-level
 
     return _config_from_env(config_path)

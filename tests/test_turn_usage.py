@@ -2,7 +2,7 @@
 import dataclasses
 from types import SimpleNamespace
 
-from quest_ai_runner.the_consciousness.terminal.turn_usage import on_subscription, turn_usage
+from quest_ai_runner.consciousness.terminal.turn_usage import on_subscription, turn_usage
 
 
 @dataclasses.dataclass

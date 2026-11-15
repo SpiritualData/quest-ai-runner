@@ -30,9 +30,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import usage_limit
+from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
 
 WEEKLY_DATED = "You've hit your weekly limit · resets Sep 26, 1pm (America/Los_Angeles)"
 WEEKLY = "You've hit your weekly limit · resets 1pm (America/Los_Angeles)"
@@ -159,7 +159,7 @@ def test_seen_since_only_reports_limits_from_this_run():
 # --- the provider --------------------------------------------------------------------------------
 
 def test_provider_raises_typed_limit_and_then_stops_spawning(monkeypatch):
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
 
     calls = []
 
@@ -196,7 +196,7 @@ def fake_claude(tmp_path, envelope: dict, code: int) -> str:
 
 
 def test_deep_run_refused_on_the_limit_keeps_its_session(tmp_path):
-    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     binary = fake_claude(tmp_path, {"type": "result", "is_error": True, "result": WEEKLY}, 1)
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir=str(tmp_path), claude_path=binary))
@@ -211,7 +211,7 @@ def test_deep_run_refused_on_the_limit_keeps_its_session(tmp_path):
 
 
 def test_an_ordinary_failure_is_not_a_usage_limit(tmp_path):
-    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
+    from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     binary = fake_claude(tmp_path, {"type": "result", "is_error": True,
                                     "result": "API Error: 500 internal"}, 1)
@@ -254,7 +254,7 @@ class FixedOrchestrator:
 
 
 def execute(orch, task=None):
-    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
 
     client = RecordingClient()
     executor = TaskExecutor(client, orch)
@@ -306,7 +306,7 @@ def test_an_ordinary_failure_is_still_reported_failed():
 
 
 def test_a_failed_requeue_write_is_reported_failed_not_left_in_progress():
-    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
 
     class NoRequeue(RecordingClient):
         def requeue_for_usage_limit(self, *a, **k):
@@ -341,8 +341,8 @@ class PauseClient:
 
 
 def pause_poller(tmp_path, client):
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
     from tests.conftest import StubProvider, StubRetrieval
 
     cfg = RunnerConfig(quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
@@ -377,7 +377,7 @@ def test_a_task_released_by_its_owner_goes_through_the_pause(tmp_path):
 
 
 def test_start_at_tasks_are_due_whatever_the_runner_clock(tmp_path):
-    from quest_ai_runner.the_consciousness.request_intake.poller import tasks_due_now
+    from quest_ai_runner.consciousness.request_intake.poller import tasks_due_now
 
     task = {"task_id": "t", "scheduled_date": "2999-01-01", "scheduled_time": "09:00",
             "start_at": "2026-09-25T16:00:00Z"}
@@ -386,7 +386,7 @@ def test_start_at_tasks_are_due_whatever_the_runner_clock(tmp_path):
 
 
 def test_an_older_backend_gets_a_plain_requeue_and_the_lane_pause_holds_it():
-    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
 
     class OldBackend(RecordingClient):
         def requeue_for_usage_limit(self, *a, **k):

@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 from hubofhubs.api import DeepResult, ProgressEvent
 
-from quest_ai_runner.the_body.internal_context.run_store.executor_reporting import ReportingMixin
-from quest_ai_runner.the_consciousness.request_intake.executor_support import _model_used_note, run_description
-from quest_ai_runner.the_intelligence.mind.delegation.run_facts import end_report_data
-from quest_ai_runner.the_intelligence.mind.response_writer.answer_explanation import REPORT_STYLE_PERSON
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
+from quest_ai_runner.body.internal_context.run_store.executor_reporting import ReportingMixin
+from quest_ai_runner.consciousness.request_intake.executor_support import _model_used_note, run_description
+from quest_ai_runner.intelligence.mind.delegation.run_facts import end_report_data
+from quest_ai_runner.intelligence.mind.response_writer.answer_explanation import REPORT_STYLE_PERSON
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome
 
 
 def test_what_a_run_is_doing_is_a_plain_line_never_a_command_or_a_host():
@@ -59,7 +59,7 @@ def test_the_model_that_ran_the_work_is_in_the_run_record_not_in_the_report():
     d = DeepResult(met=True, model="sonnet", resolved_model="claude-x")
     assert "Completed with model" in _model_used_note([d])      # still produced, for the task's own stream
     import inspect
-    from quest_ai_runner.the_body.internal_context.run_store import executor_reporting
+    from quest_ai_runner.body.internal_context.run_store import executor_reporting
     assert "done_report += _model_used_note" not in inspect.getsource(executor_reporting)
 
 

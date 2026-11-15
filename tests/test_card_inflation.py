@@ -24,10 +24,10 @@ from unittest.mock import MagicMock
 
 from hubofhubs.api import QUARANTINE_DIR_NAME, FilesystemCardRepository
 from hubofhubs.api import folder_review
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 from hubofhubs.api import apply_card_ceilings, card_folder_key, card_is_too_thin, card_preference_key, collapse_cards_by_file_set, path_is_data_file
 from hubofhubs.api import drop_verdicts_under_final_exclusions, final_exclusion_covering, verdict_is_final, verdict_is_pinned, is_excluded_folder
-from quest_ai_runner.the_body.configuration.walk_settings import STORE_DIR_NAME, effective_skip_dirs
+from quest_ai_runner.body.configuration.walk_settings import STORE_DIR_NAME, effective_skip_dirs
 
 
 def topic_provider(topics):
@@ -422,15 +422,15 @@ class TestCardCeilings:
         # DEBUG, not WARNING: dropping a second card for a folder is the expected outcome (fca3b8d).
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
-        with caplog.at_level(logging.DEBUG, logger="hubofhubs.the_body.internal_context.card_store.context_bootstrap_support"):
+        with caplog.at_level(logging.DEBUG, logger="hubofhubs.body.internal_context.card_store.context_bootstrap_support"):
             apply_card_ceilings(cards, [], per_folder=1)   # the rule under test: one card per folder
-        logged = [r for r in caplog.records if r.name == "hubofhubs.the_body.internal_context.card_store.context_bootstrap_support"]
+        logged = [r for r in caplog.records if r.name == "hubofhubs.body.internal_context.card_store.context_bootstrap_support"]
         assert logged, "a ceiling nobody can see is indistinguishable from a bug"
         assert "folder" in logged[0].getMessage()
         assert not [r for r in logged if r.levelno >= logging.WARNING], "expected behavior is not warning noise"
 
     def test_the_per_folder_knob_raises_or_removes_the_limit(self, monkeypatch):
-        from quest_ai_runner.the_body.configuration.card_store_settings import max_cards_per_folder
+        from quest_ai_runner.body.configuration.card_store_settings import max_cards_per_folder
         cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(7)]
         monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "3")
         assert len(apply_card_ceilings(cards, [], per_folder=max_cards_per_folder())) == 3

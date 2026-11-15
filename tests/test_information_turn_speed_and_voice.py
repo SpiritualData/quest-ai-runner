@@ -7,14 +7,14 @@ from hubofhubs.api import AssembledContext, Mode
 
 from .conftest import StubProvider, StubRetrieval
 from .test_answer_explanation import RecordingSink
-from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import parse_goal_condition_reply, take_needs_records
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import (
+from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import parse_goal_condition_reply, take_needs_records
+from quest_ai_runner.intelligence.mind.response_writer.reply_standards import (
     copied_first_person, measure, repair, standard_for, unrelated_sentences)
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.cached_context_assembler import CachedContextAssembler
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.rep_context_assembler import RepContextAssembler
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.subconscious.context_retriever.cached_context_assembler import CachedContextAssembler
+from quest_ai_runner.intelligence.subconscious.context_retriever.rep_context_assembler import RepContextAssembler
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 NOTE = "Two email campaigns are ready and awaiting my preview before they go out."
 
@@ -154,7 +154,7 @@ def test_the_rep_profile_is_read_while_the_inner_assembler_works():
 
 
 def test_an_information_or_spoken_reply_is_rewritten_once_and_the_other_arm_keeps_the_configured_rounds():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import repair_limit
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import repair_limit
     info = standard_for(PlanDecision(action="answer", user_intent="ask"))
     one_step = standard_for(PlanDecision(action="answer", reply_shape="one_step"))
     assert repair_limit(OrchestratorConfig(), info) == 1 and repair_limit(OrchestratorConfig(), one_step) == 2
@@ -162,9 +162,9 @@ def test_an_information_or_spoken_reply_is_rewritten_once_and_the_other_arm_keep
 
 
 def test_a_question_is_never_routed_to_a_deep_run_and_an_order_report_is_held_to_two_sentences():
-    from quest_ai_runner.the_world.tools import tool_guards
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_SETTLED
-    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import take_information_only
+    from quest_ai_runner.world.tools import tool_guards
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import SHAPE_SETTLED
+    from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import take_information_only
     assert tool_guards.escalation_route(PlanDecision(action="deep"), "ask", None, False, False) == tool_guards.ROUTE_INLINE
     assert tool_guards.escalation_route(PlanDecision(action="deep"), None, None, False, False) == tool_guards.ROUTE_DEEP
     assert standard_for(PlanDecision(action="answer", user_intent="act")).shape == SHAPE_SETTLED
@@ -203,7 +203,7 @@ def test_a_question_that_only_asks_to_be_told_is_assembled_on_the_cheap_path_fir
 
 
 def test_a_tool_catalog_search_is_not_evidence_for_the_information_turn_cap():
-    from quest_ai_runner.the_intelligence.mind.context_intake.planner_context import answer_evidence
+    from quest_ai_runner.intelligence.mind.context_intake.planner_context import answer_evidence
     menu = {"kind": "query", "locator": "tools(read goals)", "text": "TOOLS MATCHING YOUR SEARCH"}
     ops = {"kind": "query", "locator": "list_operations", "text": "menu", "discovery": True}
     read = {"kind": "query", "locator": "tool:list_quest_goals", "text": "595 matching goals"}
@@ -212,7 +212,7 @@ def test_a_tool_catalog_search_is_not_evidence_for_the_information_turn_cap():
 
 def test_a_version_that_names_a_persons_existing_goal_is_reported_under_that_goals_title_and_the_rest_are_created():
     from .test_milestone_cue import A_EXISTING, B_NEW, alt_answer, alt_registry, same_post_of
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import alternatives_flow
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import alternatives_flow
     rows = [{"id": "p1", "title": "Push post A", "text": "a person's goal", "spec_solution_id": None, "completed": False},
             {"id": "x1", "title": "Budget decision recorded", "text": "other", "spec_solution_id": None, "completed": False}]
     calls = []

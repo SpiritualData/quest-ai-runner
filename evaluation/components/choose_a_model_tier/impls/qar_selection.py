@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 
 from hubofhubs.api import outage as provider_outage
 from hubofhubs.api import resolve_model_name
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import normalize_difficulty, plan_start
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry, is_vision_capable, next_lower_tier
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.usage_limit import detect_usage_limit
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import normalize_difficulty, plan_start
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry, is_vision_capable, next_lower_tier
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.usage_limit import detect_usage_limit
 
 
 class ListingProvider:

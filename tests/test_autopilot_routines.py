@@ -10,10 +10,10 @@ What these tests pin, all against fakes (no network, no model):
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass
-from quest_ai_runner.the_intelligence.proactivity.autopilot_purpose_learning import learning_purpose
-from quest_ai_runner.the_intelligence.proactivity.autopilot_routines import RoutinePass, RoutinePurpose, compose_routine_text
-from quest_ai_runner.the_intelligence.proactivity.poller_routines import RoutinesMixin
+from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot_purpose_learning import learning_purpose
+from quest_ai_runner.intelligence.proactivity.autopilot_routines import RoutinePass, RoutinePurpose, compose_routine_text
+from quest_ai_runner.intelligence.proactivity.poller_routines import RoutinesMixin
 
 from .test_autopilot import FakeAutopilotClient, _quest
 
@@ -212,7 +212,7 @@ def test_the_poller_runs_a_due_routine_through_the_registered_learning_purpose(m
     quest = quest_with([LEARNING])
     client = MergingClient([quest])
     purposes = {"learning": learning_purpose(lambda day: DUE)}
-    monkeypatch.setattr("quest_ai_runner.the_intelligence.proactivity.autopilot_routines.PURPOSES", purposes)
+    monkeypatch.setattr("quest_ai_runner.intelligence.proactivity.autopilot_routines.PURPOSES", purposes)
     lane = LaneStub(client, snapshot_of(quest), SUNDAY_0630_PT)
     lane.run_due_routines()
     assert [t["title"] for t in client.created_tasks] == ["Routine: learning"]
@@ -221,12 +221,12 @@ def test_the_poller_runs_a_due_routine_through_the_registered_learning_purpose(m
 
 
 def test_a_hub_due_entry_becomes_an_item_carrying_its_request():
-    from quest_ai_runner.the_intelligence.proactivity.autopilot_purpose_learning import item_of
+    from quest_ai_runner.intelligence.proactivity.autopilot_purpose_learning import item_of
     entry = {"kind": "new-tools-sweep", "id": "new-tools", "question": "Which tools?", "request": "Sweep for new tools since 2026-11-11"}
     assert item_of(entry)["id"] == "new-tools" and item_of(entry)["what"] == "Sweep for new tools since 2026-11-11"
 
 
 def test_the_default_learning_ask_is_the_hub_due_list_not_only_stale_areas(monkeypatch):
-    import quest_ai_runner.the_intelligence.proactivity.autopilot_purpose_learning as module
+    import quest_ai_runner.intelligence.proactivity.autopilot_purpose_learning as module
     monkeypatch.setattr(module, "hub_due", lambda day: [{"kind": "new-tools-sweep", "id": "new-tools", "request": "Sweep " + day}])
     assert [i["what"] for i in module.learning_due("2026-11-12")] == ["Sweep 2026-11-12"]

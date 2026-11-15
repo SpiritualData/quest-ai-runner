@@ -5,10 +5,10 @@ import time
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_investigations import investigate_for_quest_spec
-from quest_ai_runner.the_world.science.research_memory import ResearchMemory
-from quest_ai_runner.the_world.science.turn_research import TurnResearch, observed_from, outcome_of, wanted
-from quest_ai_runner.the_world.tools.tools import ToolContext
+from quest_ai_runner.body.hands.quest_operations.tools_quest_investigations import investigate_for_quest_spec
+from quest_ai_runner.world.science.research_memory import ResearchMemory
+from quest_ai_runner.world.science.turn_research import TurnResearch, observed_from, outcome_of, wanted
+from quest_ai_runner.world.tools.tools import ToolContext
 
 QUEST, FUEL = "quest_a", "strategy_fuel"
 SOLUTIONS = [{"id": QUEST, "name": "The whole quest"}, {"id": FUEL, "name": "Fuel"}]

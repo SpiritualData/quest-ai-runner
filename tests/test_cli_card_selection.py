@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from quest_ai_runner.the_consciousness.terminal import cli, cli_context
+from quest_ai_runner.consciousness.terminal import cli, cli_context
 from hubofhubs.api import AssembledContext
 
 
@@ -66,7 +66,7 @@ def test_card_store_assemble_failure_is_logged_not_silent(tmp_path, monkeypatch,
         def assemble(self, text):
             raise RuntimeError("corrupt card file")
 
-    monkeypatch.setattr("quest_ai_runner.the_body.internal_context.card_store.file_context_store.FileContextStore",
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.card_store.file_context_store.FileContextStore",
                         _ExplodingStore)
 
     with caplog.at_level(logging.WARNING, logger="quest-ai-runner"):

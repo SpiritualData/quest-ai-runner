@@ -16,7 +16,7 @@ the time.
 
 ## How the writes are blocked
 
-`QAR_DRY_RUN_WRITES=1` (set by the arm; read by `the_world/tools/dry_run_writes.py`) closes the process. With it unset, nothing changes.
+`QAR_DRY_RUN_WRITES=1` (set by the arm; read by `world/tools/dry_run_writes.py`) closes the process. With it unset, nothing changes.
 
 - **Quest client**: any request that is not a GET, HEAD or OPTIONS is answered with a stand-in success and recorded, never sent.
 - **Tools**: a tool whose spec has `mutates` true is recorded with its arguments and reports done; a read tool runs and is counted.

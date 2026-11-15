@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import VectorHit
 from hubofhubs.api import VectorStoreBase
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """CURRENT: the arm over a stubbed model. A body is read window by window for the need, the second read is served by the cache. Zero spend."""
 from evaluation.components.digest_by_need.fixtures import StubModel, groups_for
-from quest_ai_runner.the_intelligence.subconscious.digest_by_need import DigestByNeed
-from quest_ai_runner.the_intelligence.subconscious.digest_sources import MemoryDigestCache
+from quest_ai_runner.intelligence.subconscious.digest_by_need import DigestByNeed
+from quest_ai_runner.intelligence.subconscious.digest_sources import MemoryDigestCache
 
 
 def build(meter):  # noqa: ARG001

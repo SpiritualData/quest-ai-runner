@@ -1,9 +1,9 @@
 """``solution_agents_loop``: the sub-agents of a task are the solutions of the task's own quest, read from Quest per run. Offline: a stub client stands in for Quest."""
 from __future__ import annotations
 
-from quest_ai_runner.the_world.tools.delegated_agent_sessions.solution_agents_loop_runner import (
+from quest_ai_runner.world.tools.delegated_agent_sessions.solution_agents_loop_runner import (
     SolutionAgentsLoopRunner, quest_of, quest_solution_rows, solution_specs)
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig
 
 SPEC = {"records": [
     {"type": "problem", "recordId": "p1", "fields": {"problem": "x"}},
@@ -81,8 +81,8 @@ def test_a_brief_with_no_quest_reads_nothing():
 def test_the_run_names_its_quest_as_data(monkeypatch):
     """``run_goal`` takes ``quest_id``; ``prepare`` reads it first and the brief's sentence only when it is absent; the deep run offers it to this runner alone."""
     import inspect
-    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
-    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import run_goal_accepts_quest_id
+    from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
+    from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import run_goal_accepts_quest_id
     assert run_goal_accepts_quest_id(make_runner(SPEC)) and not run_goal_accepts_quest_id(SubprocessGoalRunner(SubprocessConfig(working_dir="/w")))
 
     class Loose:

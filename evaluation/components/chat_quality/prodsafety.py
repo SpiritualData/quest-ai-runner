@@ -49,7 +49,7 @@ class TurnSafety:
         changes = PC.diff_fingerprints(self.before, after, own_conv=own_conv)
         changes, concurrent = PC.split_concurrent(changes, executed)
         try:
-            from quest_ai_runner.the_world.tools import dry_run_writes
+            from quest_ai_runner.world.tools import dry_run_writes
             titles = set(dry_run_writes.RECORDER.call_titles)
             blocked = list(dry_run_writes.RECORDER.unexpected)
         except Exception:  # noqa: BLE001

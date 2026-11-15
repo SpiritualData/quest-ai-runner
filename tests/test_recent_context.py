@@ -14,7 +14,7 @@ import datetime
 import hashlib
 import json
 
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import (
+from quest_ai_runner.intelligence.higher_mind.long_term_memory.recent_context import (
     FileRecentContextStore, _informative_terms, build_item_usage_hint, conv_scope_key, filter_relevant, quest_scope_key, render_recent_cards)
 
 

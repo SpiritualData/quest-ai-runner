@@ -8,15 +8,15 @@ import pytest
 
 from hubofhubs.api import ExecutionRecord
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
-from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_answer_tail, tool_receipts_that_ran
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import (
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.intelligence.mind.context_intake.orchestrator_events import grounding_answer_tail, tool_receipts_that_ran
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import (
     add_quest_note_spec, create_decision_spec, create_goal_spec, update_outcome_progress_spec)
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import (
+from quest_ai_runner.body.hands.quest_operations.tools_quest_standard import (
     add_measurable_outcome_spec, add_quest_strategy_spec, create_quest_goal_spec, file_email_draft_spec, quest_field_tool_spec)
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus, classify_payload, record_worked, write_status_of
+from quest_ai_runner.world.tools.tools_status import ToolStatus, classify_payload, record_worked, write_status_of
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -413,7 +413,7 @@ def test_create_goal_tool_in_ops_maps_noop_and_unknown():
 def shell_with_tool(tmp_path, monkeypatch, status):
     """A custom tool that answers with ``status``, reachable through ``python -m quest_ai_runner tools``."""
     (tmp_path / f"status_tool_{status}.py").write_text(
-        "from quest_ai_runner.the_world.tools.tools import ToolResult\n"
+        "from quest_ai_runner.world.tools.tools import ToolResult\n"
         f"def run(args, ctx):\n    return ToolResult(ok=False, status={status!r}, text='it said {status}')\n")
     (tmp_path / "tools.toml").write_text(
         f'[[tool]]\nname = "do_it"\ndescription = "Do it."\nwhen_to_use = "Testing."\nwhen_not_to_use = "Never."\n'
@@ -427,7 +427,7 @@ def shell_with_tool(tmp_path, monkeypatch, status):
                                          ("refused", 1), ("failed", 1), ("unknown", 1)])
 def test_the_tools_command_exits_zero_for_applied_noop_and_held_and_prints_the_status(tmp_path, monkeypatch, capsys, status, code):
     """A deep worker reads a non-zero exit as a broken command and retries it; a write held for approval is not that."""
-    from quest_ai_runner.the_consciousness.terminal.__main__ import main
+    from quest_ai_runner.consciousness.terminal.__main__ import main
     shell_with_tool(tmp_path, monkeypatch, status)
     assert main(["call", "do_it"]) == code
     out = capsys.readouterr()
@@ -449,7 +449,7 @@ def test_the_tool_ledger_records_a_held_write_as_ok(tmp_path, status, ok):
 
 def test_a_custom_tool_that_returns_a_client_write_directly_keeps_its_status_and_data():
     """A WriteResult is not a dict or a string: it used to become its repr, marked applied even when it was held."""
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import WriteResult
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_support import WriteResult
     held = WriteResult({"decision_id": "dec_1"}, ToolStatus.HELD, id="dec_1", detail="Waiting for the owner to approve.")
     applied = WriteResult({"id": "g1", "title": "T"}, ToolStatus.APPLIED, id="g1")
     registry = ToolRegistry([ToolSpec(name="held_one", description="d", mutates=True, handler=lambda a, c: held),

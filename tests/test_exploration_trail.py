@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 from hubofhubs.api import session as hub
 
-from quest_ai_runner.the_intelligence.mind.delegation import exploration_trail as et
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_index import folder_map
-from quest_ai_runner.the_intelligence.mind.delegation.prompt_budget import split_preamble
+from quest_ai_runner.intelligence.mind.delegation import exploration_trail as et
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_index import folder_map
+from quest_ai_runner.intelligence.mind.delegation.prompt_budget import split_preamble
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ def test_goal_key_falls_back_to_the_folder():
 
 
 def test_a_trail_is_kept_and_read_by_solution_first_then_by_the_wider_scope(tmp_path):
-    from quest_ai_runner.the_intelligence.mind.delegation import exploration_trail as et
+    from quest_ai_runner.intelligence.mind.delegation import exploration_trail as et
 
     class Store:
         def __init__(self):

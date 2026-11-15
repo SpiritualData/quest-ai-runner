@@ -3,7 +3,7 @@ stand in for the network and the model only; every decision between them is made
 from datetime import datetime, timedelta, timezone
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_body.internal_context.adapters_values import Escalation, Observation
+from quest_ai_runner.body.internal_context.adapters_values import Escalation, Observation
 
 
 def iso(moment):

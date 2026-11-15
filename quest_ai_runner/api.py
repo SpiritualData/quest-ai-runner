@@ -10,130 +10,130 @@ prefixed, and nothing here probes a runner or a provider for what it can do: the
 from quest_ai_runner import run
 
 # Front door: one line for any solution (``run("<id>", input)`` or ``run(Interface)``), the hub's and QAR's own
-from quest_ai_runner.the_self.assembler.resolve import names, register, resolve
+from quest_ai_runner.self.assembler.resolve import names, register, resolve
 
-# Request intake (the_consciousness/request_intake): queued tasks, the lane's poller and the bridge to async code
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
-from quest_ai_runner.the_consciousness.request_intake.poller import Poller
-from quest_ai_runner.the_consciousness.request_intake.async_bridge import run_coro_sync, run_detached
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
+# Request intake (consciousness/request_intake): queued tasks, the lane's poller and the bridge to async code
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.consciousness.request_intake.poller import Poller
+from quest_ai_runner.consciousness.request_intake.async_bridge import run_coro_sync, run_detached
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
 
 # Judgment calls: the human escalation channel and the staged-plan hand-off a host implements
-from quest_ai_runner.the_self.interface import EscalationSinkBase
-from quest_ai_runner.the_consciousness.judgment_calls.interface import StagedPlanRunner
+from quest_ai_runner.self.interface import EscalationSinkBase
+from quest_ai_runner.consciousness.judgment_calls.interface import StagedPlanRunner
 
 # Representatives and Feedback learning: the verbatim feedback ledger and its states
-from quest_ai_runner.the_consciousness.feedback_learning.feedback_ledger import (
+from quest_ai_runner.consciousness.feedback_learning.feedback_ledger import (
     ACCEPTED, AWAITING_ACCEPTANCE, AWAITING_ANSWER, BLOCKED, DECLINED, DONE, FeedbackItem, FeedbackLedger, IN_FORCE, IN_PROGRESS, KIND_CONTEXT,
     KIND_QUESTION, KIND_REQUEST, KIND_STANDING, KIND_UNKNOWN, NEEDS_REAPPLYING, NOTED, OPEN, OPEN_STATES, PARTIALLY_APPLIED, SUPERSEDED,
     guidance_writer_for, open_items_block, record_run_account)
 
 # ESOI Application (esoi-application): the name of the arm that edits a quest's own specification through Quest (a host selects it with ``arms`` and passes its Quest client in ``options``)
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.quest_spec_edit import QUEST_SPEC_RECORDS
+from quest_ai_runner.intelligence.critical_thinking.esoi_application.quest_spec_edit import QUEST_SPEC_RECORDS
 
-# Quest account access (the_body/internal_context/quest): the Quest API as the system's own data
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestApiError
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import DECISION_KIND_RE
-from quest_ai_runner.the_body.intake_sources.context_sources_quest import MAX_AWAITING_ACTION
-from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
-from quest_ai_runner.the_body.internal_context.interface import OwnUpdates
+# Quest account access (body/internal_context/quest): the Quest API as the system's own data
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient, QuestApiError
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import DECISION_KIND_RE
+from quest_ai_runner.body.intake_sources.context_sources_quest import MAX_AWAITING_ACTION
+from quest_ai_runner.body.internal_context.adapters_values import Escalation
+from quest_ai_runner.body.internal_context.interface import OwnUpdates
 
 # Internal Context: the retrieval sources a host composes
-from quest_ai_runner.the_body.internal_context.quest.cached_db_adapter import CachedDbAdapter
-from quest_ai_runner.the_world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
-from quest_ai_runner.the_world.tools.connected_system_operations.google_chat_adapter import service_account_token_provider
-from quest_ai_runner.the_world.tools.connected_system_operations.google_drive_adapter import DEFAULT_DRIVE_SCOPES, GoogleDriveAdapter, parse_drive_url
-from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
-from quest_ai_runner.the_world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter, MAX_RESPONSE_BYTES
+from quest_ai_runner.body.internal_context.quest.cached_db_adapter import CachedDbAdapter
+from quest_ai_runner.world.tools.connected_system_operations.composite_retrieval_adapter import CompositeRetrievalAdapter
+from quest_ai_runner.world.tools.connected_system_operations.google_chat_adapter import service_account_token_provider
+from quest_ai_runner.world.tools.connected_system_operations.google_drive_adapter import DEFAULT_DRIVE_SCOPES, GoogleDriveAdapter, parse_drive_url
+from quest_ai_runner.world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.world.tools.file_reading.remote_files_adapter import RemoteFilesAdapter, MAX_RESPONSE_BYTES
 
 # Card Store: where cards live and how they are scoped and embedded
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
-from quest_ai_runner.the_body.internal_context.card_store.qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore, scope_point_id
-from quest_ai_runner.the_body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore, make_voyage_embedder, voyage_embedder_id
-from quest_ai_runner.the_body.internal_context.card_store.quest_api_card_repository import (
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore, scope_point_id
+from quest_ai_runner.body.internal_context.card_store.qdrant_vector_store import QdrantVectorStore, make_voyage_embedder, voyage_embedder_id
+from quest_ai_runner.body.internal_context.card_store.quest_api_card_repository import (
     QuestApiCardRepository, quest_card_settings_from_env, select_card_scope)
-from quest_ai_runner.the_body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
+from quest_ai_runner.body.internal_context.card_store.vector_scopes import CARD_SEED_SCOPE
 
 # Context Retriever (context-retriever): the assemblers and the personal lexicon behind them
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
-from quest_ai_runner.the_body.configuration.config import resolve_context_assembler
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.card_learning import turn_teaches_new_facts
-from quest_ai_runner.the_intelligence.subconscious.context_retriever.personal_lexicon import (
+from quest_ai_runner.intelligence.subconscious.context_retriever.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.intelligence.subconscious.context_retriever.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.intelligence.subconscious.context_retriever.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.body.configuration.config import resolve_context_assembler
+from quest_ai_runner.intelligence.subconscious.context_retriever.card_learning import turn_teaches_new_facts
+from quest_ai_runner.intelligence.subconscious.context_retriever.personal_lexicon import (
     CombinedBackground, CorpusBackground, LanguageBaseline, LexiconTerm, build_personal_lexicon, lexicon_term_strings, terms_within_budget)
 
 # Digest Records For A Need (digest-records-for-a-need): the records a need is read from by the selected arm; a host builds them, ``run`` reads them
-from quest_ai_runner.the_intelligence.subconscious.digest_sources import SourceGroup as DigestSourceGroup, Unit as DigestUnit
+from quest_ai_runner.intelligence.subconscious.digest_sources import SourceGroup as DigestSourceGroup, Unit as DigestUnit
 
 # Intuition (persist-predictions): the anticipation engine's learner, patterns and predictions
-from quest_ai_runner.the_intelligence.subconscious.intuition.anticipation import (
+from quest_ai_runner.intelligence.subconscious.intuition.anticipation import (
     Anticipator, CONF_FLOOR, Pattern, Prediction, assemble_with_scope_tags, bundle_is_cross_quest_mixed, bundle_scope_tags, chips_for_now,
     extract_features, parse_refresh_response, pattern_from_dict, prediction_from_dict)
 
 # Long-Term Memory (recall-recent-context): the scoped recent-context store
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.recent_context import (
+from quest_ai_runner.intelligence.higher_mind.long_term_memory.recent_context import (
     FileRecentContextStore, GLOBAL_SCOPE_KEY, conv_scope_key, quest_scope_key)
 
 # Objectives (hold-the-intents): quests and goals as live objectives
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_field_instructions import ITEM_INSTRUCTIONS, field_instructions_text
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_judge import JUDGE_WINDOW, clip_text
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_field_instructions import ITEM_INSTRUCTIONS, field_instructions_text
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_judge import JUDGE_WINDOW, clip_text
 # Place on a quest: the host hands the function that places a message on one of the person's quests (its standard function) to the orchestrator as ``quest_placement``
-from quest_ai_runner.the_intelligence.higher_mind.objectives.place_on_a_quest.quest_placement import HostFunction
+from quest_ai_runner.intelligence.higher_mind.objectives.place_on_a_quest.quest_placement import HostFunction
 
 # Guidance: use-case instructions a host supplies
-from quest_ai_runner.the_intelligence.higher_mind.guidance.interface import GuidanceCard
-from quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager import GuidanceCardManager
-from quest_ai_runner.the_self.interface import GuidanceProviderBase
+from quest_ai_runner.intelligence.higher_mind.guidance.interface import GuidanceCard
+from quest_ai_runner.intelligence.higher_mind.guidance.guidance_card_manager import GuidanceCardManager
+from quest_ai_runner.self.interface import GuidanceProviderBase
 
 # Mind: the orchestrator loop, its configuration and its result
-from quest_ai_runner.the_intelligence.mind.orchestrator import (
+from quest_ai_runner.intelligence.mind.orchestrator import (
     Orchestrator, OrchestratorConfig, OrchestratorResult, DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION, DEFERRED_RUNNER_KEY, MODE_RELEASE_PROMPT,
     MODE_RELEASE_TOOL, QUEST_DATA_WRITE_SURFACE_INSTRUCTION, apply_quest_data_ladder_guard, unconfirmed_no_change_text)
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import (
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_text import (
     card_update_store, deep_future_context, future_context_channel, normalize_future_context)
-from quest_ai_runner.the_body.configuration.config import RunnerConfig
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
-from quest_ai_runner.the_intelligence.mind.planner.recipes import RecipeStore
+from quest_ai_runner.body.configuration.config import RunnerConfig
+from quest_ai_runner.intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.intelligence.mind.planner.recipes import RecipeStore
 
 # Response Quality: what a reply may and may not carry
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.scaffolding import (
+from quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding import (
     FUTURE_CONTEXT_DELIMITER, sanitize_user_text, strip_future_context)
 
 # Prompts: the layered prompt a host composes
-from quest_ai_runner.the_self.integrity.prompts.prompt_layers import compose_layers
+from quest_ai_runner.self.integrity.prompts.prompt_layers import compose_layers
 
 # Model Plumbing: tiers and the Claude Code provider
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry, TIERS, LEGACY_TIER_ALIASES
-from quest_ai_runner.the_intelligence.mind.delegation.work_model import TIER_WORDS, RUNNABLE_MODELS
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry, TIERS, LEGACY_TIER_ALIASES
+from quest_ai_runner.intelligence.mind.delegation.work_model import TIER_WORDS, RUNNABLE_MODELS
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
 
 # Tools and Web Search: the tool registry and the web readers
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 # The milestone flow's tools over a host's own Quest client, and the shapes a host's client and metric reader return
-from quest_ai_runner.the_body.hands.quest_operations.tools_milestone_flow import milestone_flow_tools
+from quest_ai_runner.body.hands.quest_operations.tools_milestone_flow import milestone_flow_tools
 # The workflow tools over a host's own Quest client (list first; create reports an existing workflow as already there)
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import add_quest_note_spec, create_quest_workflow_spec, find_quest_spec, list_quest_workflows_spec
+from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import add_quest_note_spec, create_quest_workflow_spec, find_quest_spec, list_quest_workflows_spec
 # The investigation tools over a host's own Quest client (look into a question through the hub's Learning solution and record it on the quest)
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_investigations import (
+from quest_ai_runner.body.hands.quest_operations.tools_quest_investigations import (
     find_earlier_investigations_spec, investigate_for_quest_spec, mark_investigation_item_spec)
-from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application.tools_metric_source import MetricSourceError, checked_reading
-from quest_ai_runner.the_world.tools.web_search.private_link_web import PrivateLinkWebResearch
-from quest_ai_runner.the_world.science.research_memory import RecordedWebResearch, ResearchMemory, choose_solution
-from quest_ai_runner.the_world.tools.web_search.web_research import build_web_research_from_env
+from quest_ai_runner.world.tools.placeholder_guard import placeholder_reason
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import QuestWriteError, WriteResult
+from quest_ai_runner.intelligence.critical_thinking.esoi_application.tools_metric_source import MetricSourceError, checked_reading
+from quest_ai_runner.world.tools.web_search.private_link_web import PrivateLinkWebResearch
+from quest_ai_runner.world.science.research_memory import RecordedWebResearch, ResearchMemory, choose_solution
+from quest_ai_runner.world.tools.web_search.web_research import build_web_research_from_env
 
 # Proactivity (gate-an-autopilot-pass): the markers autopilot tasks carry, read back by the host
-from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import (
+from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS, BUNDLED_DEFAULT_QUEST_INSTRUCTIONS, PROPOSAL_TEXT_PREFIX)
 
 # Proactivity (quest-ai-latest): whether Quest AI should take a new look at a quest now and what to look into first
-from quest_ai_runner.the_intelligence.proactivity.quest_ai_latest import KIND_ORDER as QUEST_AI_LATEST_KIND_ORDER, next_look as quest_ai_latest_next_look
+from quest_ai_runner.intelligence.proactivity.quest_ai_latest import KIND_ORDER as QUEST_AI_LATEST_KIND_ORDER, next_look as quest_ai_latest_next_look
 
 # Investigate (the shared finding writer): what a finding rests on, in plain words, the one wording every place that shows a finding uses
-from quest_ai_runner.the_world.science.investigate import evidence_line, finding_evidence
+from quest_ai_runner.world.science.investigate import evidence_line, finding_evidence
 
 __all__ = [
     "evidence_line",

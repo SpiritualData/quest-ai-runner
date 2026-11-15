@@ -1,7 +1,7 @@
 """Offline tests for runner/plan_reconcile.py: the pure planner, no Quest calls."""
 import datetime as dt
 
-from quest_ai_runner.the_intelligence.higher_mind.objectives.plan_reconcile import (
+from quest_ai_runner.intelligence.higher_mind.objectives.plan_reconcile import (
     ask_key, classify_asks, iso_week_key, plan_actions, plan_handoffs, reconcile_quest, validate_decision, validate_handoff)
 
 TODAY = dt.date(2026, 10, 14)  # a Wednesday in ISO week 2026_W42

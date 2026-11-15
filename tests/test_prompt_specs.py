@@ -12,8 +12,8 @@ import pytest
 from esoi import intents
 
 import quest_ai_runner
-from quest_ai_runner.the_self.integrity.prompts import prompt_specs
-from quest_ai_runner.the_self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE, PromptSpec, render_prompt
+from quest_ai_runner.self.integrity.prompts import prompt_specs
+from quest_ai_runner.self.integrity.prompts.prompt_specs import NO_EM_DASH_RULE, US_SPELLING_RULE, PromptSpec, render_prompt
 
 REPO = Path(__file__).resolve().parent.parent
 PACKAGE = REPO / "quest_ai_runner"
@@ -25,9 +25,9 @@ MODEL_FUNCTIONS = {"answer_with_reasoning", "plan_with_step", "call_judge", "ask
 SPEC_REFERENCES = {"render_prompt", "get_spec", "ask_judge"}
 # Provider transport and tool-use plumbing: they carry a caller's prompt, they do not own one.
 TRANSPORT = {
-    "the_world/model_plumbing/vendor_model_caller/claude_cli_provider.py",
-    "the_world/tools/web_search/web_search_backends.py", "the_world/tools/web_search/provider_web_search_adapter.py",
-    "the_world/tools/web_search/web_research.py",
+    "world/model_plumbing/vendor_model_caller/claude_cli_provider.py",
+    "world/tools/web_search/web_search_backends.py", "world/tools/web_search/provider_web_search_adapter.py",
+    "world/tools/web_search/web_research.py",
 }
 
 

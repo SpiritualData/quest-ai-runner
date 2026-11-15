@@ -1,6 +1,6 @@
 """PRODUCTION ARM, WRITES BLOCKED (live model, real lane configuration and data): each case is one fresh chat turn through the
 orchestrator a lane builds, in this process, with the lane's own configuration, context sources, preamble, personas and Quest account,
-while ``QAR_DRY_RUN_WRITES=1`` (``the_world/tools/dry_run_writes.py``) records every state change instead of making it.
+while ``QAR_DRY_RUN_WRITES=1`` (``world/tools/dry_run_writes.py``) records every state change instead of making it.
 
 Setup (all outside this repository): ``QAR_PROD_LANE_ENV_FILE`` names the lane's environment file (``KEY=VALUE`` lines, applied over the
 process environment, as the lane's service unit does) and ``QAR_CONFIG_FILE`` its TOML. ``QAR_PROD_LANE_DIR`` is the folder the lane runs in.
@@ -152,9 +152,9 @@ def build_arm(meter, bounded):
     os.environ.setdefault("QAR_CHAT_HISTORY_DIR", tempfile.mkdtemp(prefix="qar-prod-readonly-chats-"))
     if os.environ.get("QAR_PROD_LANE_DIR"):
         os.chdir(os.environ["QAR_PROD_LANE_DIR"])
-    from quest_ai_runner.the_world.tools import dry_run_writes as dry
+    from quest_ai_runner.world.tools import dry_run_writes as dry
     dry.install()
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
     state_client = QuestClient(os.environ.get("QUEST_BASE_URL", ""), os.environ.get("QUEST_API_KEY", ""), team_id=(os.environ.get("QUEST_TEAM_ID") or ""))
     environment = ENVIRONMENT_BOUNDED if bounded else ENVIRONMENT
     import prodchat as PC
@@ -180,9 +180,9 @@ def build_arm(meter, bounded):
     import prod_probes as P
     rules = P.load_rules(os.environ.get("QAR_PROD_CASE_RULES_FILE"))
     J.OTHER_ACCOUNT_DATA.update(built=True, section="")      # the dev-account listing is for the dev world; production has no seeded data
-    from quest_ai_runner.the_body.configuration.cli_config import _config_from_env
-    from quest_ai_runner.the_consciousness.terminal.interactive_session import InteractiveSession
-    from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
+    from quest_ai_runner.body.configuration.cli_config import _config_from_env
+    from quest_ai_runner.consciousness.terminal.interactive_session import InteractiveSession
+    from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
     cfg = _config_from_env(os.environ["QAR_CONFIG_FILE"])
     if (rules.get("_arm") or {}).get("measure_every_request"):      # the metric of a change is read before and after by code (critical-thinking: every_request_measured)
         cfg.selections = {**(cfg.selections or {}), "critical-thinking": "every_request_measured"}

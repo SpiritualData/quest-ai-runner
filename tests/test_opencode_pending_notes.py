@@ -1,9 +1,9 @@
 """A note typed during a run that the worker took but never confirmed reaches the next attempt, and is shown as taken up (so no extra run starts for it)."""
 from types import SimpleNamespace
 
-from quest_ai_runner.the_consciousness.terminal.opencode_terminal import Turn
-from quest_ai_runner.the_consciousness.terminal.textual_ui_control import TerminalRunControl
-from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+from quest_ai_runner.consciousness.terminal.opencode_terminal import Turn
+from quest_ai_runner.consciousness.terminal.textual_ui_control import TerminalRunControl
+from quest_ai_runner.intelligence.mind.delegation.inbox import InMemoryInbox
 
 
 def make_turn():
@@ -28,7 +28,7 @@ def test_a_note_the_worker_took_but_never_confirmed_goes_to_the_next_attempt_onc
 
 
 def test_an_interface_with_only_an_inbox_gets_a_control_that_carries_unconfirmed_notes():
-    from quest_ai_runner.the_intelligence.mind.delegation.inbox_control import PendingNotes
+    from quest_ai_runner.intelligence.mind.delegation.inbox_control import PendingNotes
     inbox = InMemoryInbox()
     notes = PendingNotes(lambda: inbox.drain("c"))
     control = notes.run_control()
@@ -44,7 +44,7 @@ def test_an_interface_with_only_an_inbox_gets_a_control_that_carries_unconfirmed
 
 
 def test_a_goal_not_met_always_says_why_in_one_short_sentence():
-    from quest_ai_runner.the_consciousness.terminal.opencode_terminal import Turn
+    from quest_ai_runner.consciousness.terminal.opencode_terminal import Turn
     worker = SimpleNamespace(stalled="", error="Goal not yet met: the build never produced an installable app. More detail follows.")
     assert Turn.unmet_reason(SimpleNamespace(deep_results=[worker]), "stopped") == "the build never produced an installable app"
     assert Turn.unmet_reason(SimpleNamespace(deep_results=[], goal_verdict={"met": False, "reason": "no files were changed"}), "unmet") == "no files were changed"

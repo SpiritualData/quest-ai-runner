@@ -1,12 +1,12 @@
 """create_quest_goal's owner and link arguments, the ensure-one goal tool (created, updated in place, unchanged), the spec read and edit tools,
 and the dry-run allowlist naming them. A fake Quest client stands in for the API."""
-from quest_ai_runner.the_body.hands.quest_operations import tools_quest_goals as goals
-from quest_ai_runner.the_body.hands.quest_operations import tools_quest_intents as intents
-from quest_ai_runner.the_body.hands.quest_operations import tools_quest_standard as standard
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import WriteResult
-from quest_ai_runner.the_world.tools import dry_run_writes as dry
-from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.body.hands.quest_operations import tools_quest_goals as goals
+from quest_ai_runner.body.hands.quest_operations import tools_quest_intents as intents
+from quest_ai_runner.body.hands.quest_operations import tools_quest_standard as standard
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import WriteResult
+from quest_ai_runner.world.tools import dry_run_writes as dry
+from quest_ai_runner.world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
 MEMBERS = [{"user_id": "u1", "name": "Ann Example", "email": "ann@example.invalid"},
@@ -160,7 +160,7 @@ def test_the_ensure_tool_takes_the_arguments_the_planner_sends_for_a_next_step()
 
 def test_periods_are_normalised():
     import datetime
-    from quest_ai_runner.the_body.hands.quest_operations import goal_links
+    from quest_ai_runner.body.hands.quest_operations import goal_links
     day = datetime.date(2026, 11, 6)
     assert goal_links.normalize_period("week", day) == "2026_W45" and goal_links.normalize_period(None, day) == "2026_W45"
     assert goal_links.normalize_period("2026_W46", day) == "2026_W46" and goal_links.normalize_period("this month", day) == "2026_11"

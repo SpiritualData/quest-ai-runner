@@ -20,7 +20,7 @@ metric-translation,metric-draft-a-metric
 context-intake,metric-assemble-a-prompt
 goal-completion,metric-judge-a-decision
 response-quality,metric-guard-a-reply
-the-intuition,metric-persist-predictions
+intuition,metric-persist-predictions
 long-term-memory,metric-remember-conversations
 guidance,metric-ground-in-intent
 prioritization,metric-order-quest-work

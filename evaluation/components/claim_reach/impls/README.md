@@ -4,6 +4,18 @@ Breadcrumb: [Top](../../../../esoi/README.md) > impls
 
 Part of [Quest AI Runner](../../../../esoi/README.md)
 
+### Top implementations of Tools
+
+| # | Implementation | Result | Cost per pass | In use |
+|---|---|---|---|---|
+| 1 | Scripted ideal decisions, no model call (offline) (`scripted_ideal`) | 100% (12 of 12 cases) | free |  |
+| 2 | Rules only, no model (floor) (`rules_only`) | 83% (10 of 12 cases) | free |  |
+
+The one in use is chosen at the deciding stage of the cascade (see the leaderboard), which can differ from the latest run ranked here.
+
+**How it is scored:** Combined world score. Measures which configuration should do the AI's work in the world, combining several things into one score.
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
+
 ## Implementations
 
 | Implementation | Handle | Purpose | Code | Selected |

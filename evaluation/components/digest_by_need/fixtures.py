@@ -4,7 +4,7 @@ import json
 import re
 import threading
 
-from quest_ai_runner.the_intelligence.subconscious.digest_sources import SourceGroup, Unit
+from quest_ai_runner.intelligence.subconscious.digest_sources import SourceGroup, Unit
 
 PADDING = "Written at the end of a long day with plenty of other words around it to make the record a realistic length for a journal."
 

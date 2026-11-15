@@ -19,7 +19,7 @@ def command_line(entry, argv):
     if entry == "qar":
         if CONSOLE.exists():
             return [str(CONSOLE), *argv]
-        return [sys.executable, "-c", "import sys; from quest_ai_runner.the_consciousness.terminal.cli import main; sys.exit(main(sys.argv[1:]))", *argv]
+        return [sys.executable, "-c", "import sys; from quest_ai_runner.consciousness.terminal.cli import main; sys.exit(main(sys.argv[1:]))", *argv]
     if entry == "tools":
         return [sys.executable, "-m", "quest_ai_runner.tools", *argv]
     raise ValueError(entry)

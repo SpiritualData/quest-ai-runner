@@ -4,10 +4,10 @@ functions (``reinforce_or_create``, ``chips_for_now``, ``match_actual``, ``updat
 calls, zero network."""
 from datetime import datetime
 
-from quest_ai_runner.the_intelligence.subconscious.intuition import anticipation as ant
+from quest_ai_runner.intelligence.subconscious.intuition import anticipation as ant
 from hubofhubs.api import links_in_message
 from hubofhubs.api import LinkGuard, LinkPolicy
-from quest_ai_runner.the_intelligence.mind.planner.recipes import RecipeStore
+from quest_ai_runner.intelligence.mind.planner.recipes import RecipeStore
 
 
 def build(meter):  # noqa: ARG001

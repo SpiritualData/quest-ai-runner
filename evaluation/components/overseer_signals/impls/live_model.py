@@ -6,7 +6,7 @@ PAID = True
 import os
 
 import offline_orchestrator
-from quest_ai_runner.the_intelligence.mind.delegation.overseer import oversee
+from quest_ai_runner.intelligence.mind.delegation.overseer import oversee
 
 
 def build(meter):

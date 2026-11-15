@@ -1,7 +1,7 @@
 """Link provenance: a link or file address in a reply stays only if the turn held it or its host is trusted. Offline, no model."""
 from __future__ import annotations
 
-from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import strip_unseen_links
+from quest_ai_runner.intelligence.critical_thinking.response_quality.link_provenance_pass import strip_unseen_links
 
 CONTEXT = ("Readable file sources (read-only): team server.\n"
            "File: reports/launch-summary.md. Address (already checked): https://files.example.test/reports/launch-summary.md\n")
@@ -63,8 +63,8 @@ def test_text_without_links_is_unchanged():
 
 
 def test_the_orchestrator_removes_an_invented_address_even_with_no_link_policy():
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -82,8 +82,8 @@ def test_the_orchestrator_removes_an_invented_address_even_with_no_link_policy()
 
 
 def test_the_switch_leaves_the_reply_untouched():
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
     from .conftest import StubProvider, StubRetrieval
 
@@ -99,7 +99,7 @@ def test_the_switch_leaves_the_reply_untouched():
 
 def test_removed_address_leaves_no_doubled_stop_or_dangling_lead_in():
     """Measured 2026-11-11: a how-to reply ending "from here. <address>." read "from here.." and "Read more: <address>." left "Read more:."."""
-    from quest_ai_runner.the_intelligence.critical_thinking.response_quality.link_provenance_pass import strip_unseen_links
+    from quest_ai_runner.intelligence.critical_thinking.response_quality.link_provenance_pass import strip_unseen_links
     assert strip_unseen_links("I can't send one from here. https://x.org/a.", "")[0] == "I can't send one from here."
     assert strip_unseen_links("Open it.\n\nRead more: https://x.org/a.\n", "")[0].strip() == "Open it."
     assert strip_unseen_links("I can't confirm that button, see https://x.org/a.", "")[0] == "I can't confirm that button."

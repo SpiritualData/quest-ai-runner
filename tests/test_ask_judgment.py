@@ -18,16 +18,16 @@ from typing import Any, Dict, List
 import hubofhubs
 import pytest
 
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import create_decision_spec
-from quest_ai_runner.the_body.internal_context.adapters_values import Escalation
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient, QuestDecisionSink
-from quest_ai_runner.the_consciousness.judgment_calls.ask_policy import (
+from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import create_decision_spec
+from quest_ai_runner.body.internal_context.adapters_values import Escalation
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient, QuestDecisionSink
+from quest_ai_runner.consciousness.judgment_calls.ask_policy import (
     ASK_BLOCKS_GUIDANCE, ASK_WAITS_GUIDANCE, Assignee, file_ask, timing_guidance)
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
-from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_deep_run import ask_ownership_note
-from quest_ai_runner.the_self.integrity.prompts.auxiliary_prompts import DEEP_ASK_OWNERSHIP_NOTE, STANDING_ASK_NOTE
-from quest_ai_runner.the_world.tools.tools import ToolContext
-from quest_ai_runner.the_world.tools.tools_status import ToolStatus
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.intelligence.mind.delegation.orchestrator_deep_run import ask_ownership_note
+from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import DEEP_ASK_OWNERSHIP_NOTE, STANDING_ASK_NOTE
+from quest_ai_runner.world.tools.tools import ToolContext
+from quest_ai_runner.world.tools.tools_status import ToolStatus
 
 
 # ---- (1) the closing note of a deep brief --------------------------------------------------------------------------------------

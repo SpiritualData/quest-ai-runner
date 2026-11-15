@@ -17,10 +17,10 @@ The links pinned here, end to end:
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import locator_label, mark_items_used, normalize_content, rank_content_by_recency_relevance, render_block_lines, tokenize
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, PlanDecision
 
 from .conftest import StubRetrieval
 

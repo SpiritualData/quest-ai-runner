@@ -7,8 +7,8 @@ import threading
 import pytest
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.subconscious.digest_by_need import DEFAULTS, DigestByNeed, windows_of
-from quest_ai_runner.the_intelligence.subconscious.digest_sources import MemoryDigestCache, SourceGroup, Unit
+from quest_ai_runner.intelligence.subconscious.digest_by_need import DEFAULTS, DigestByNeed, windows_of
+from quest_ai_runner.intelligence.subconscious.digest_sources import MemoryDigestCache, SourceGroup, Unit
 
 ENTRIES = 60
 PADDING = "Written at the end of a long day with plenty of other words around it to make the record a realistic length for a journal."
@@ -154,7 +154,7 @@ def test_the_one_line_entry_reaches_the_arm_with_the_stubbed_model():
 
 
 def test_the_entry_needs_no_arm_name_the_selected_arm_answers():
-    from quest_ai_runner.the_self.assembler.resolve import chosen_name
+    from quest_ai_runner.self.assembler.resolve import chosen_name
     assert chosen_name("digest-records-for-a-need") == "digest_by_need"
 
 

@@ -1,7 +1,7 @@
 """model_registry bucketing — tier -> live top model id."""
 import pytest
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import (
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import (
     DEFAULT_FALLBACK_TOP, ModelRegistry, bucket_top, is_vision_capable)
 
 

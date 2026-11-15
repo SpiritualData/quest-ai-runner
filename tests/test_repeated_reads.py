@@ -16,9 +16,9 @@ Fully offline: scripted planner decisions and an in-memory retrieval stub.
 """
 from typing import Any, Dict, List
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import read_spec_key, split_repeated_reads
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import read_spec_key, split_repeated_reads
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -99,7 +99,7 @@ def test_a_failed_read_stays_retryable():
         def read_section(self, rel_path, **kw):
             self.read_calls.append(rel_path)
             if len(self.read_calls) == 1:
-                from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+                from quest_ai_runner.body.internal_context.adapters_values import Observation
                 return Observation(kind="error", rel_path=rel_path, error="timed out")
             return super().read_section(rel_path, **kw)
     provider = StubProvider([READ_NOTES, READ_NOTES, {"action": "answer", "rationale": "ok"}])
@@ -146,7 +146,7 @@ def test_notes_are_not_in_the_returned_gathered():
 
 
 def test_a_planner_note_on_an_observation_reaches_the_planner_only():
-    from quest_ai_runner.the_body.internal_context.adapters_values import Observation
+    from quest_ai_runner.body.internal_context.adapters_values import Observation
 
     class NotingRetrieval(StubRetrieval):
         def query(self, spec):
@@ -168,7 +168,7 @@ def test_a_planner_note_on_an_observation_reaches_the_planner_only():
 def test_a_discovery_key_beside_a_query_is_split_so_the_query_runs():
     """Recorded ACC-008 step 1: the planner sent discovery and the Customer Interviews query in one spec, and only
     the discovery ran."""
-    from quest_ai_runner.the_intelligence.mind.delegation.orchestrator_capabilities import split_mixed_reads
+    from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import split_mixed_reads
     recorded = {"query": {"collection": "collections", "find": "customer interviews"},
                 "topic_terms": ["scent"], "content_kind": "conversations", "list_sources": True}
     out = split_mixed_reads([recorded, {"grep": "x"}, {"list_operations": True}])

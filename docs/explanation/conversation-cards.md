@@ -16,7 +16,7 @@ Convert conversations to cards that FileContextStore can index:
 
 ```python
 from hubofhubs.api import ConversationCardBuilder
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 # Build cards from all conversations in corpus/conversations/
 builder = ConversationCardBuilder(
@@ -101,8 +101,8 @@ print(f"Generated {len(cards_written)} cards")
 ### 2. Integrate with FileContextStore
 
 ```python
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.configuration.config import RunnerConfig, build_orchestrator
 
 # Create a store that indexes both file docs AND conversation cards
 context_store = FileContextStore(

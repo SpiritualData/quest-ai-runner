@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
 def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch):
     from hubofhubs.api import BOOTSTRAP_WORKERS_DEFAULT
-    from quest_ai_runner.the_body.configuration.card_store_settings import bootstrap_workers as _bootstrap_workers
+    from quest_ai_runner.body.configuration.card_store_settings import bootstrap_workers as _bootstrap_workers
 
     # Each worker holds one model call open, and for the subprocess-backed (keyless) provider that
     # is a child PROCESS. A deployment that has declared how many concurrent model calls its box

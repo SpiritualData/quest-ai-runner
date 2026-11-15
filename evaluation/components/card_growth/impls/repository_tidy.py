@@ -11,7 +11,7 @@ from pathlib import Path
 from card_growth.backend_fake import BackendShapedRepository
 from card_growth.score import indexed
 from hubofhubs.api import card_store_tidy as tidy
-from quest_ai_runner.the_body.internal_context.card_store.card_store_tidy import repository_tidy
+from quest_ai_runner.body.internal_context.card_store.card_store_tidy import repository_tidy
 
 
 def build(meter):  # noqa: ARG001

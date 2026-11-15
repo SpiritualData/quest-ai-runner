@@ -1,7 +1,7 @@
 """The ``create_quest_workflow`` tool: people resolved by name, the wire body, refusals reported
 honestly, and that it is a registered write."""
-from quest_ai_runner.the_body.hands.quest_operations import tools_quest_ops as ops
-from quest_ai_runner.the_world.tools.tools import ToolContext, build_tool_registry
+from quest_ai_runner.body.hands.quest_operations import tools_quest_ops as ops
+from quest_ai_runner.world.tools.tools import ToolContext, build_tool_registry
 
 CREDS = {"QUEST_BASE_URL": "https://example.invalid", "QUEST_API_KEY": "key"}
 MEMBERS = [{"user_id": "u1", "name": "Ann Example", "email": "ann@example.invalid"},
@@ -102,7 +102,7 @@ def test_a_weekly_monday_step_with_the_shapes_the_planner_sends_is_created():
 
 
 def test_a_tool_that_raises_on_argument_shape_reports_a_plain_message():
-    from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolSpec
+    from quest_ai_runner.world.tools.tools import ToolRegistry, ToolSpec
     def boom(args, ctx):
         raise TypeError("'int' object is not iterable")
     registry = ToolRegistry([ToolSpec(name="t", description="d", mutates=False, handler=boom)])
@@ -149,12 +149,12 @@ def test_a_repeat_creates_nothing_the_second_time_and_a_step_with_no_weekday_sti
 
 
 def test_the_planner_is_told_a_missing_optional_detail_never_blocks_a_create_request():
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import DEEP_ACTION
     assert "A MISSING OPTIONAL DETAIL NEVER BLOCKS" in DEEP_ACTION and "one or two short" in DEEP_ACTION and "change the call" in DEEP_ACTION
 
 
 def test_the_planner_and_the_tool_say_the_named_owner_not_the_requester_owns_a_recurring_thing():
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import DEEP_ACTION
     assert "THE OWNER OF A RECURRING THING IS THE PERSON THE RECORDS NAME" in DEEP_ACTION and "Never change the owner of something that already exists" in DEEP_ACTION
     spec = ops.create_quest_workflow_spec(CREDS, client_factory=lambda: FakeClient())
     assert "assign a step to the owner the quest's records name" in spec.when_to_use
@@ -189,8 +189,8 @@ def test_repeat_words_for_each_shape_and_none_only_when_there_is_no_repeat():
 
 
 def test_a_status_line_is_never_a_question_and_the_planner_is_told_so():
-    from quest_ai_runner.the_intelligence.mind.response_writer import act_status
+    from quest_ai_runner.intelligence.mind.response_writer import act_status
     texts = act_status.status_texts(None, [], "Should I set it to repeat weekly?", evidence="Should I set it to repeat weekly?", found="I looked at quest workflows.")
     assert "?" not in texts["text"] and texts["status"] == "I looked at quest workflows."
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import DEEP_ACTION
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import DEEP_ACTION
     assert 'repeats: weekly on Thursday' in DEEP_ACTION and 'never "Should I...?"' in DEEP_ACTION

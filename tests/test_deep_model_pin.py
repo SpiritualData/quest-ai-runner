@@ -22,8 +22,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -110,7 +110,7 @@ def test_a_per_task_TIER_still_resolves_through_the_registry():
     _orch(provider, runner).run("build X", model_hint="best")
 
     # A tier is the person's start tier (not a pin): the run starts on the model the tier resolves to, named by the ladder's rung for it.
-    from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import cli_safe_model
+    from quest_ai_runner.intelligence.mind.delegation.goal_runner import cli_safe_model
     resolved = ModelRegistry(provider).resolve_tier("best")
     assert [cli_safe_model(c["model"]) for c in runner.calls] == [cli_safe_model(resolved)]
     assert "fable" not in (runner.calls[0]["model"] or "")
@@ -188,6 +188,6 @@ def test_a_typed_request_for_a_model_the_worker_cannot_run_is_ignored():
 
 
 def test_the_planner_decision_carries_the_request():
-    from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
+    from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
     plan = normalize_decision(_typed("  Opus  "), OrchestratorConfig())
     assert plan.deep_model_request == "Opus"

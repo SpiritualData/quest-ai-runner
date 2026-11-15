@@ -4,8 +4,8 @@ import threading
 import time
 
 from hubofhubs.api import ack_stage, is_ack, STAGE_MODEL, STAGE_PLACEHOLDER
-from quest_ai_runner.the_intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
-from quest_ai_runner.the_intelligence.mind.response_writer import orchestrator_turn as turn
+from quest_ai_runner.intelligence.mind.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
+from quest_ai_runner.intelligence.mind.response_writer import orchestrator_turn as turn
 
 
 class Sink:
@@ -117,6 +117,6 @@ def test_a_provider_refusal_is_a_counted_failure_not_a_line():
 
 def test_the_ack_is_written_at_the_fast_tier_on_every_live_user_turn():
     import inspect
-    from quest_ai_runner.the_intelligence.mind.context_intake import orchestrator_run_begin as begin
+    from quest_ai_runner.intelligence.mind.context_intake import orchestrator_run_begin as begin
     source = inspect.getsource(begin)
     assert 'resolve_tier("fast")' in source and "quick_ack_early" in source and "cheap_information_turns" not in source.split("narrator = Narrator(")[1].split("rs.narrator = narrator")[0]

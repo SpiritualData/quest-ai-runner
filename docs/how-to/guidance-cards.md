@@ -194,9 +194,9 @@ the Quest loader if Quest is configured. Drop markdown into `./.quest-guidance` 
 To control it, supply your own:
 
 ```python
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, build_orchestrator
-from quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_card_manager import GuidanceCardManager
-from quest_ai_runner.the_intelligence.higher_mind.guidance.guidance_provider import UniversalGuidanceProvider
+from quest_ai_runner.body.configuration.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.intelligence.higher_mind.guidance.guidance_card_manager import GuidanceCardManager
+from quest_ai_runner.intelligence.higher_mind.guidance.guidance_provider import UniversalGuidanceProvider
 
 cfg = RunnerConfig(
     retrieval=...,

@@ -9,5 +9,5 @@
 
 ## Where to go next
 
-- Owning intent: [Quest Requests](../../../../quest_ai_runner/the_consciousness/request_intake/README.md)
+- Owning intent: [Quest Requests](../../../../quest_ai_runner/consciousness/request_intake/README.md)
 - Repository: [top README](../../../../README.md)

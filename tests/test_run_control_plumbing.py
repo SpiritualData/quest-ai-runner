@@ -8,10 +8,10 @@
 from typing import Any, Dict, List
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 from hubofhubs.api import ControlMessage, RunControl
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
 
 from .conftest import StubProvider, StubRetrieval
 from .test_runner import MockQuestClient

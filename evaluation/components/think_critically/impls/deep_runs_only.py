@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import common  # noqa: F401
 from esoi import AFTER, BEFORE
 from esoi import SpecSlice
-from quest_ai_runner.the_intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics
+from quest_ai_runner.intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics
 
 
 class MemoryLedger:

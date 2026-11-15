@@ -53,7 +53,7 @@ dependencies = [
     # changes in every consumer at once, at each release.
     "esoi @ git+https://github.com/JoshuaMathias/evolvable-structure.git@v0.7.0#subdirectory=implementations/python",
     # The hub of hubs: the registry of AI-intelligence hubs, the seats (Protocols) and the assembly that wires them. QAR is
-    # Quest's connector and the production consumer: quest_ai_runner/the_self/assembler/hub.py imports it at startup and registers QAR's parts.
+    # Quest's connector and the production consumer: quest_ai_runner/self/assembler/hub.py imports it at startup and registers QAR's parts.
     # Required, not an extra, and pinned to the release tag v0.7.4, the same tag in every consumer (pushed to the hub's remote before QAR's tag).
     # QAR imports the hub only through `hubofhubs.api` and `hubofhubs.run`. Its own dependency is `esoi` (bare), met by the esoi line above.
     # Dev and tests may use the sibling checkout `../ai-hub-of-hubs-structure` on the path (pytest `pythonpath` below) instead of installing it.
@@ -124,14 +124,14 @@ Issues = "https://github.com/SpiritualData/quest-ai-runner/issues"
 Changelog = "https://github.com/SpiritualData/quest-ai-runner/blob/main/CHANGELOG.md"
 
 [project.scripts]
-quest-ai-runner = "quest_ai_runner.the_consciousness.terminal.cli:main"
+quest-ai-runner = "quest_ai_runner.consciousness.terminal.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["quest_ai_runner*"]
 
 [tool.setuptools.package-data]
-quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "the_intelligence/higher_mind/objectives/quest_field_guidance.yaml", "the_self/role_understanding/glossary.csv"]
+quest_ai_runner = ["prompts/*.md", "esoi_selection.json", "intelligence/higher_mind/objectives/quest_field_guidance.yaml", "self/role_understanding/glossary.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evaluation/components"]

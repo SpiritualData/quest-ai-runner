@@ -2,9 +2,9 @@
 configured vendor can answer. Offline, fake providers, no model call (``fallback_models`` is the hub router's ordered failover list)."""
 import pytest
 
-from quest_ai_runner.the_body.configuration import config_orchestrator
-from quest_ai_runner.the_body.configuration.config import RunnerConfig
-from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.providers import failover_models, routed
+from quest_ai_runner.body.configuration import config_orchestrator
+from quest_ai_runner.body.configuration.config import RunnerConfig
+from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import failover_models, routed
 
 
 class FakeVendor:

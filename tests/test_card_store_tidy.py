@@ -17,7 +17,7 @@ import pytest
 
 from hubofhubs.api import card_store_tidy as tidy
 from hubofhubs.api import FilesystemCardRepository
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "evaluation" / "components"))
 from card_growth.backend_fake import BackendShapedRepository  # noqa: E402
@@ -315,7 +315,7 @@ def test_a_backend_store_at_its_limit_gives_the_notice(tmp_path):
 
 
 def test_the_setting_is_read_from_a_lane_file(tmp_path):
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
+    from quest_ai_runner.body.configuration.config import RunnerConfig
     path = tmp_path / "qar.toml"
     path.write_text('card_tidy = "apply"\n', encoding="utf-8")
     assert RunnerConfig.from_file(str(path)).card_tidy == "apply"
@@ -328,7 +328,7 @@ def test_the_setting_is_read_from_a_lane_file(tmp_path):
 
 def test_the_command_tidies_a_backend_store_and_undoes_it(tmp_path, monkeypatch, capsys):
     import argparse
-    from quest_ai_runner.the_consciousness.terminal import cli_cards
+    from quest_ai_runner.consciousness.terminal import cli_cards
     repo = backend_with(inflated_cards())
     cards_dir = tmp_path / "cards"
     backend_store(tmp_path, repo)                       # stamps the lane's origin on the cards
@@ -357,7 +357,7 @@ def run_tidy(cli_cards, **kw):
 
 
 def test_the_flag_shows_in_help_with_the_trade(capsys):
-    from quest_ai_runner.the_consciousness.terminal import cli_parser
+    from quest_ai_runner.consciousness.terminal import cli_parser
     with pytest.raises(SystemExit):
         cli_parser._build_parser().parse_args(["cards", "tidy", "--help"])
     text = " ".join(capsys.readouterr().out.split())
@@ -365,7 +365,7 @@ def test_the_flag_shows_in_help_with_the_trade(capsys):
 
 
 def test_merge_topics_joins_a_distinct_topic_onto_its_keeper_and_undo_restores_it(tmp_path, monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal import cli_cards
+    from quest_ai_runner.consciousness.terminal import cli_cards
     review(tmp_path)
     repo = backend_with(inflated_cards())
     backend_store(tmp_path, repo)
@@ -388,7 +388,7 @@ def test_merge_topics_joins_a_distinct_topic_onto_its_keeper_and_undo_restores_i
 
 
 def test_merge_topics_on_a_local_folder_and_undo_restores_the_files_byte_for_byte(tmp_path, monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal import cli_cards
+    from quest_ai_runner.consciousness.terminal import cli_cards
     cards_dir = tmp_path / "cards"
     review(cards_dir)
     for c in inflated_cards():
@@ -512,7 +512,7 @@ def test_a_failed_check_names_each_card_and_why_and_the_manifest_keeps_them(tmp_
 
 
 def test_the_command_prints_how_many_checks_failed(tmp_path, monkeypatch, capsys):
-    from quest_ai_runner.the_consciousness.terminal import cli_cards
+    from quest_ai_runner.consciousness.terminal import cli_cards
     repo = LateListing(keep=("vendored-lib",))
     for c in inflated_cards():
         repo.seed(c["id"], c)

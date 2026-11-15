@@ -1,13 +1,13 @@
 """Situation standards at the answer checkpoint: the measurements, the code-built repair rounds and the last-resort repair."""
 from typing import Any, Dict, List
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import normalize_decision
-from quest_ai_runner.the_intelligence.mind.delegation.overseer import OVERSEER_PROMPT
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import PLANNER_PROFILES
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import REPLY_SHAPES, STANDARDS, measure, repair, standard_for
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decide_tool import DECIDE_TOOL
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import normalize_decision
+from quest_ai_runner.intelligence.mind.delegation.overseer import OVERSEER_PROMPT
+from quest_ai_runner.intelligence.mind.planner.planner_prompt import PLANNER_PROFILES
+from quest_ai_runner.intelligence.mind.response_writer.reply_standards import REPLY_SHAPES, STANDARDS, measure, repair, standard_for
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -149,7 +149,7 @@ def test_an_iso_timestamp_in_the_evidence_supports_that_day_and_not_the_day_befo
 
 def test_a_wrong_days_from_today_count_is_a_violation_and_the_right_one_is_not():
     from hubofhubs.api import day_count_errors
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import STANDARDS, SHAPE_DEFAULT, measure
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import STANDARDS, SHAPE_DEFAULT, measure
     evidence = "Current date: 2026-11-01 (Sunday). The in-laws arrive 20 Nov."
     wrong = "If they arrive a week early, on 13 Nov, that leaves you 10 days from today instead of 19."
     assert day_count_errors(wrong, evidence) == ["12 days from today to 13 Nov, not 10"]
@@ -243,13 +243,13 @@ def test_a_judge_outage_keeps_the_reply():
 
 
 def test_the_found_constraint_standard_is_generic_and_has_no_em_dash():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import FOUND_CONSTRAINT_STANDARD, found_constraint_hint
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import FOUND_CONSTRAINT_STANDARD, found_constraint_hint
     assert "—" not in FOUND_CONSTRAINT_STANDARD and "—" not in found_constraint_hint("a", "b")
     assert "Friday" not in FOUND_CONSTRAINT_STANDARD.replace("(for example 'Friday will not work: <fact>')", "")
 
 
 def test_the_head_for_a_reply_the_model_did_not_write_is_built_from_the_verdict_fields_only():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import found_constraint_head
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import found_constraint_head
     assert found_constraint_head("The tutor only teaches Tuesday and Thursday evenings", "Friday will not work") == \
         "Friday will not work. The tutor only teaches Tuesday and Thursday evenings."
     assert found_constraint_head("", "") == ""
@@ -264,7 +264,7 @@ def test_a_reply_that_states_the_conflict_but_still_offers_the_request_is_also_r
 def test_the_judge_runs_only_on_turns_whose_context_held_the_persons_records():
     provider, _ = run_constraint([STATES], {"conflict": True, "states_it_first": False}, records=False)
     assert provider.constraint_calls == 0 and not steered(provider)
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import constraint_violated, turn_holds_records
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import constraint_violated, turn_holds_records
     assert turn_holds_records([{"adapter": "records", "items": ["x"]}]) and not turn_holds_records([{"adapter": "records", "items": []}, {"adapter": "recent", "items": ["y"]}], [])
     assert not constraint_violated({"conflict": False, "leaves_request_open": True})
     assert not constraint_violated({"conflict": True, "states_it_first": True, "leaves_request_open": False})
@@ -282,14 +282,14 @@ def test_a_found_conflict_queues_nothing_even_when_the_planner_forgot_act_declin
 
 
 def test_the_ask_carries_the_conflict_in_the_question_that_is_shown_and_filed():
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import file_blocked_ask
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import file_blocked_ask
     seen = {}
 
     class Orch:
         escalation = None
         def _concise_decision_summary(self, q):
             return q
-    import quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages as m
+    import quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages as m
     orig = m.file_ask
     m.file_ask = lambda *a, **k: seen.update(k) or type("O", (), {"filed": False, "decision_id": "", "assignee": None})()
     try:
@@ -302,7 +302,7 @@ def test_the_ask_carries_the_conflict_in_the_question_that_is_shown_and_filed():
 
 
 def test_ask_path_runs_the_found_constraint_judge_once_and_stores_the_head():
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import ensure_found_constraint_head
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import ensure_found_constraint_head
 
     class FakeOrch:
         calls = 0
@@ -319,7 +319,7 @@ def test_ask_path_runs_the_found_constraint_judge_once_and_stores_the_head():
 
 
 def test_ask_path_leaves_the_question_alone_without_a_conflict():
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_turn_messages import ensure_found_constraint_head
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import ensure_found_constraint_head
 
     class FakeOrch:
         def found_constraint_verdict(self, request, records, reply):
@@ -396,8 +396,8 @@ def test_a_corrected_reply_is_written_on_the_reply_roles_model_which_is_never_be
     """Since the role table (31ca9cc7) a reply a person reads is never below balanced, so a correction keeps the reply's own model: nothing to move up from.
     The old "one tier up from fast" rule had no fast reply left to apply to."""
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
-    from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_answering import AnsweringMixin
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_run_answer import RunAnswerMixin
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_answering import AnsweringMixin
     registry = ModelRegistry(StubProvider([]))
     host = SimpleNamespace(registry=registry)
     answer = lambda hint: AnsweringMixin._answer_model(host, SimpleNamespace(model_tier="fast"), hint=hint)
@@ -411,7 +411,7 @@ def test_a_corrected_reply_is_written_on_the_reply_roles_model_which_is_never_be
 
 
 def test_the_handoff_directive_tells_the_writer_to_answer_what_the_records_settle_now():
-    from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import HANDOFF_ANSWER_NOW_DIRECTIVE
+    from quest_ai_runner.intelligence.mind.planner.planner_prompt import HANDOFF_ANSWER_NOW_DIRECTIVE
     assert "queued" in HANDOFF_ANSWER_NOW_DIRECTIVE and "now" in HANDOFF_ANSWER_NOW_DIRECTIVE and "—" not in HANDOFF_ANSWER_NOW_DIRECTIVE
 
 
@@ -446,7 +446,7 @@ def test_a_length_breach_the_rewrites_did_not_fix_drops_the_sentence_the_questio
 
 
 def test_a_date_stated_beside_a_figure_must_be_the_date_the_records_give_that_figure():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import EvidenceIndex, unsupported_values
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import EvidenceIndex, unsupported_values
     evidence = "Current state:\nAs of 5 October 2026:\n- Paid subscribers: 0.\n\nThe next review is on 5 November."
     index = EvidenceIndex.of(evidence)
     assert unsupported_values("There are 0 paid subscribers as of 5 October.", index) == []
@@ -455,7 +455,7 @@ def test_a_date_stated_beside_a_figure_must_be_the_date_the_records_give_that_fi
 
 
 def test_a_repair_never_leaves_a_reference_whose_antecedent_it_removed():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import drop_orphans, orphaned_sentences
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import drop_orphans, orphaned_sentences
     before = "The release needs write access to the store, which 1,000 testers confirmed. I have no record of that access being added since. The next review is Monday."
     after = "I have no record of that access being added since. The next review is Monday."
     assert orphaned_sentences(before, after) == ["I have no record of that access being added since."]
@@ -468,7 +468,7 @@ def test_a_repair_never_leaves_a_reference_whose_antecedent_it_removed():
 def test_an_unsupported_figure_is_rewritten_once_by_the_writer_and_only_cut_when_the_rewrite_still_states_it():
     from types import SimpleNamespace
     from hubofhubs.api import evidence_of
-    from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import without_unsupported
+    from quest_ai_runner.intelligence.mind.response_writer.unsupported_rewrite import without_unsupported
     evidence = evidence_of([{"text": "The release is blocked on store access."}], "", "status?")
     text = "Store access was confirmed by 1,000 testers in a survey of the team. I have no record of that access being added since. The next review is Monday."
     seen = []
@@ -482,7 +482,7 @@ def test_an_unsupported_figure_is_rewritten_once_by_the_writer_and_only_cut_when
 
 
 def test_a_listener_counts_figures_not_the_years_of_dates_ratios_or_breakdowns():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import figures_said, without_dates
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import figures_said, without_dates
     assert "2026" not in without_dates("Sales stood at 4 as of 7 November 2026, and 5 as of March 3, 2026.")
     assert figures_said("Sales stood at 4 as of 7 November 2026.") == 1
     assert figures_said("Sign-ups are at 50% (5 of 10, read 6 November), against a target of 100.") == 2
@@ -490,7 +490,7 @@ def test_a_listener_counts_figures_not_the_years_of_dates_ratios_or_breakdowns()
 
 
 def test_a_length_repair_that_loses_a_quoted_name_or_an_address_is_caught():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import lost_pointers, pointed_items
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import lost_pointers, pointed_items
     draft = 'It is already set. The "Weekly check-in: Friday review" workflow is on the quest, see https://example.org/q/1.'
     held = pointed_items(draft)
     assert "Weekly check-in: Friday review" in held and len(held) == 2
@@ -511,7 +511,7 @@ def test_a_length_repair_keeps_the_answer_and_never_keeps_only_the_last_sentence
 
 def test_a_drafted_text_the_reply_hands_over_is_not_counted_or_cut_by_a_length_repair():
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import deliverable_texts, drafted_blocks, prose_count
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import deliverable_texts, drafted_blocks, prose_count
     letter = "Subject: Sign-up is open\n\nHi,\n\nWe are opening sign-ups in December. Please pass this on.\n\nThank you,\nThe team"
     draft = "I updated the next step in place. Joey owns it. The step is due Sunday.\n\n" + letter + "\n\nThe metric is unchanged until the step is done."
     assert drafted_blocks(draft) == [letter]
@@ -526,7 +526,7 @@ def test_a_drafted_text_the_reply_hands_over_is_not_counted_or_cut_by_a_length_r
 def test_a_kept_drafts_own_questions_are_not_the_replys_questions_and_survive_the_repair():
     """The live shape: a milestone step kept a list of neutral interview questions; they were counted as the reply asking four questions and cut."""
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import deliverable_texts
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import deliverable_texts
     kept = "1) What problem would you want a mentor program to solve?\n2) What would make you commit time to it?\n3) What would you need from us first?"
     reply = "I updated the next step in place. Sam owns it. The step is due Sunday.\n\n" + kept + "\n\nThe count is unchanged until an interview is filed."
     rs = SimpleNamespace(cue_resolved=SimpleNamespace(draft=kept), plan=None)
@@ -539,7 +539,7 @@ def test_a_kept_drafts_own_questions_are_not_the_replys_questions_and_survive_th
 
 
 def test_a_sentence_left_pointing_at_a_removed_one_goes_with_it_but_a_definite_description_stays():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import drop_orphans
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import drop_orphans
     before = "The store release is not out. A signing key is missing. The quest's own check shows the same figure. Nothing newer is recorded."
     after = "The store release is not out. The quest's own check shows the same figure. Nothing newer is recorded."
     assert drop_orphans(before, after) == "The store release is not out. Nothing newer is recorded."
@@ -548,7 +548,7 @@ def test_a_sentence_left_pointing_at_a_removed_one_goes_with_it_but_a_definite_d
 def test_the_figure_pass_holds_a_reply_to_everything_the_writer_was_shown_not_a_cut_of_it():
     """A figure deep in a long read or far into the context is still a figure the turn held: the cut evidence once took whole true sentences out."""
     from types import SimpleNamespace
-    from quest_ai_runner.the_intelligence.mind.response_writer.unsupported_rewrite import figure_evidence, without_unsupported
+    from quest_ai_runner.intelligence.mind.response_writer.unsupported_rewrite import figure_evidence, without_unsupported
     long_read = "filler " * 1000 + "Sign-ups created a first quest: 5 of 10."
     rs = SimpleNamespace(user_message="status?", transcript="", context_view="context " * 1500 + "Paid users: 0 as of 7 November.",
                          gathered=[{"locator": "quest details", "text": long_read}], _gen_answer=lambda steer: "")
@@ -557,7 +557,7 @@ def test_the_figure_pass_holds_a_reply_to_everything_the_writer_was_shown_not_a_
 
 
 def test_a_number_inside_a_listed_goals_own_name_is_not_a_reading_dated_by_the_plan_day_but_a_bare_reading_still_is():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import EvidenceIndex, misdated_figures
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import EvidenceIndex, misdated_figures
     ev = EvidenceIndex.of("- Run 10 customer interviews (due 2026-11-08; 3 days overdue)\nThe days of this period: Wednesday 2026-11-11, Thursday 2026-11-12.\n\n"
                           "Paid subscribers: 4 (as of 2026-11-07)")
     assert misdated_figures("Thursday 12 November: Run 10 customer interviews (3 days overdue).", ev) == []
@@ -565,7 +565,7 @@ def test_a_number_inside_a_listed_goals_own_name_is_not_a_reading_dated_by_the_p
 
 
 def test_first_person_words_inside_quotation_marks_are_a_name_not_the_assistants_voice():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import copied_first_person
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import copied_first_person
     evidence = ["The quest: i want to become self reliant. Note: i want to sell the car."]
     assert copied_first_person('Your quest "i want to become self reliant" has 8 overdue goals.', evidence) == []
     assert copied_first_person("Next, i want to sell the car.", evidence) == ["i want to"]

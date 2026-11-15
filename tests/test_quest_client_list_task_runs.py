@@ -1,6 +1,6 @@
 """``QuestClient.list_task_runs`` reads one task's runs (newest first) from the paged runs route and never raises."""
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient, QuestNotConfigured
-from quest_ai_runner.the_consciousness.terminal.cli_quest import _quest_method_is_read_only
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError, QuestClient, QuestNotConfigured
+from quest_ai_runner.consciousness.terminal.cli_quest import _quest_method_is_read_only
 
 
 def _client(response=None, error=None):

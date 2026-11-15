@@ -22,7 +22,7 @@ from types import SimpleNamespace
 from rich.text import Text
 
 from hubofhubs.api import EVENT_CONTEXT
-from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.consciousness.terminal.textual_ui import QuestAITerminal
 
 SIZE = (80, 24)
 

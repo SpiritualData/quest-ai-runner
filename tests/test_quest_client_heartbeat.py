@@ -9,7 +9,7 @@ choice and guards the pre-existing team-scoped behavior against regression.
 """
 import pytest
 
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestNotConfigured, QuestClient
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError, QuestNotConfigured, QuestClient
 
 # The runner reports the Claude models its deep worker can run on every heartbeat.
 RUNNABLE_AVAILABLE_MODELS = [{"provider": "anthropic", "model": m} for m in ("haiku", "sonnet", "opus", "fable")]
@@ -103,7 +103,7 @@ def test_heartbeat_reports_the_tool_listing_when_the_client_has_one():
 
 def test_tool_registry_public_listing_is_serializable_and_hides_handlers():
     import json
-    from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolSpec
+    from quest_ai_runner.world.tools.tools import ToolRegistry, ToolSpec
     registry = ToolRegistry([ToolSpec(
         name="zeta", description="Z", handler=lambda a, c: "x", when_to_use="always", mutates=False,
         parameters={"type": "object", "properties": {"q": {"type": "string", "flag": "--q"}}, "required": ["q"]},
@@ -119,8 +119,8 @@ def test_tool_registry_public_listing_is_serializable_and_hides_handlers():
 
 def test_poller_heartbeat_is_throttled_until_something_changes():
     """The backend counts an environment live for 45 minutes after a beat, so one per scan (8 teams x 128 KB) was waste."""
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient
@@ -142,7 +142,7 @@ def test_poller_heartbeat_is_throttled_until_something_changes():
 
 
 def test_keepalive_heartbeat_leaves_the_models_and_tools_listing_out():
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     c = QuestClient("http://x", "qsk_test", team_id="team_1")
     c.available_tools = [{"name": "t", "parameters": {"big": "schema"}}]
@@ -155,8 +155,8 @@ def test_keepalive_heartbeat_leaves_the_models_and_tools_listing_out():
 
 
 def test_poller_sends_the_listing_on_the_first_beat_and_a_keepalive_after():
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_consciousness.request_intake.poller import Poller
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.consciousness.request_intake.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
     from .test_runner import MockQuestClient

@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from quest_ai_runner.the_intelligence.higher_mind.objectives import quest_field_instructions as qfi
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_field_instructions import (
+from quest_ai_runner.intelligence.higher_mind.objectives import quest_field_instructions as qfi
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_field_instructions import (
     GUIDANCE_PATH, ITEM_INSTRUCTIONS, QUEST_FIELD_INSTRUCTIONS, UNIVERSAL_RULES, field_instructions_text, render_compact_block, render_markdown,
     what_a_quest_is)
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_standard import (
+from quest_ai_runner.body.hands.quest_operations.tools_quest_standard import (
     QUEST_FIELD_TOOLS, add_measurable_outcome_spec, add_quest_strategy_spec, create_quest_goal_spec, create_quest_habit_spec,
     quest_field_tool_spec)
 

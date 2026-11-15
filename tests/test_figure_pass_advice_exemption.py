@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 from hubofhubs.api import strip_unsupported
 
-from quest_ai_runner.the_intelligence.mind.orchestrator_run_loop import figures_exempt
-from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_ADVICE
+from quest_ai_runner.intelligence.mind.orchestrator_run_loop import figures_exempt
+from quest_ai_runner.intelligence.mind.response_writer.reply_standards import SHAPE_ADVICE
 
 
 def turn(sources=None, gathered=None, shape=SHAPE_ADVICE):

@@ -13,9 +13,9 @@ These tests pin the contract quest-backend and the cockpit import:
 from hubofhubs.api import ProgressEvent
 from hubofhubs.api import (
     EVENT_DECISION, EVENT_DONE, EVENT_MILESTONE, EVENT_PLAN, EVENT_READ, EVENT_REPLAN, EVENT_RESULT, EVENT_STATUS, SURFACING_EVENTS, Mode)
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import MilestoneSink, StreamSink
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.consciousness.terminal.adapters_sinks import MilestoneSink, StreamSink
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 

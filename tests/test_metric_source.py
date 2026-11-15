@@ -6,9 +6,9 @@ import sys
 
 import pytest
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_cue as cue
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import tools_metric_source as source_tool
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec, build_tool_registry
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_cue as cue
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import tools_metric_source as source_tool
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec, build_tool_registry
 
 NOW = datetime.datetime(2026, 11, 4, 18, 0, tzinfo=datetime.timezone.utc)
 PRINTS = 'import json;print(json.dumps({"value": 7, "as_of": "2026-11-03", "source": "A funnel report", "detail": {"stages": 2}}))'
@@ -56,8 +56,8 @@ def test_an_unknown_name_lists_what_is_configured():
 
 
 def test_the_lane_config_file_maps_a_source_name_to_a_command(tmp_path, monkeypatch):
-    from quest_ai_runner.the_body.configuration.config import RunnerConfig
-    from quest_ai_runner.the_body.configuration.config_environment import apply_config_environment
+    from quest_ai_runner.body.configuration.config import RunnerConfig
+    from quest_ai_runner.body.configuration.config_environment import apply_config_environment
     monkeypatch.delenv(source_tool.ENV_VAR, raising=False)
     path = tmp_path / "lane.toml"
     path.write_text('[metric_sources.funnel]\ncommand = ["python3", "-I", "/somewhere/read.py"]\nlabel = "A funnel report"\ntimeout_seconds = 30\n')
@@ -68,7 +68,7 @@ def test_the_lane_config_file_maps_a_source_name_to_a_command(tmp_path, monkeypa
 
 
 def test_a_dry_run_lets_only_the_configured_command_start(monkeypatch):
-    from quest_ai_runner.the_world.tools import dry_run_writes
+    from quest_ai_runner.world.tools import dry_run_writes
     monkeypatch.setenv(dry_run_writes.ENV, "1")
     monkeypatch.setitem(dry_run_writes.STATE, "read_commands", set())
     with pytest.raises(dry_run_writes.DryRunBlocked):

@@ -1,7 +1,7 @@
 """Offline tests: the quest's key measure is read live through the top metric's declared source for a question about where the quest stands."""
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_reading
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import status_reading
 
 TABLES = {
     "solutions": {"top": {"name": "Plan", "solution_ids": ["child"], "authoritative_metric_id": "m_top"}, "child": {"name": "Step"}},
@@ -47,7 +47,7 @@ def test_nothing_is_added_when_there_is_no_source_no_tool_or_no_reading():
 
 
 def test_the_intake_reading_is_not_a_tool_result_the_planner_produced():
-    from quest_ai_runner.the_world.tools import tool_guards
+    from quest_ai_runner.world.tools import tool_guards
     got = status_reading.observation(Registry(), "q1")
     assert got["intake"] is True and got["by_code"] is True
     assert tool_guards.tool_result_by_planner([got]) is False                  # the records gate still owes a read

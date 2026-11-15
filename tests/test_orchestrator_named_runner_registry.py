@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import DeepResult, ProgressEvent
 from hubofhubs.api import EVENT_EXEC
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator
 
 from .conftest import StubProvider, StubRetrieval
 from .test_guard import GuardProvider

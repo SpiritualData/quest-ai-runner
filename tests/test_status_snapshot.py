@@ -8,10 +8,10 @@ from hubofhubs.api import Mode
 
 from .conftest import StubProvider, StubRetrieval
 from .test_answer_explanation import RecordingSink
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import parse_goal_condition_reply, take_status_flags
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import status_snapshot
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import parse_goal_condition_reply, take_status_flags
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 TABLES = {"solutions": {"s_top": {"name": "Plan", "solution_ids": ["s_a"], "authoritative_metric_id": "m"}, "s_a": {"name": "First"}, "s_b": {"name": "Second"}},
           "metrics": {"m": {"name": "Paid subscribers", "solution_ids": ["s_top"], "source": "paid"}}}
@@ -100,7 +100,7 @@ def run_status(analyser, message, quest_id="q1", placement=None):
 
 
 def _tools():
-    from quest_ai_runner.the_world.tools.tools import ToolResult, ToolRegistry, ToolSpec
+    from quest_ai_runner.world.tools.tools import ToolResult, ToolRegistry, ToolSpec
     registry = Registry()
 
     def make(name):
@@ -317,7 +317,7 @@ def test_the_goals_at_a_glance_count_done_open_and_overdue_and_list_overdue_befo
 
 
 def test_a_plan_my_week_turn_is_answered_from_the_planning_snapshot_with_the_plan_standard_and_no_planner_loop():
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN, STANDARDS
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import SHAPE_PLAN, STANDARDS
     provider, res = run_status('Lay out the week.\n{"plans_period": true}', "Plan my week for this quest")
     assert res.kind == "answer" and provider.planner_calls == 0
     assert any("PLANNING SNAPSHOT" in o.get("text", "") for o in res.gathered)
@@ -327,7 +327,7 @@ def test_a_plan_my_week_turn_is_answered_from_the_planning_snapshot_with_the_pla
 
 def test_a_plan_snapshot_holds_the_days_of_the_period_so_day_labels_pass_the_date_check_and_a_date_outside_it_does_not():
     from datetime import date
-    from quest_ai_runner.the_intelligence.mind.response_writer.reply_standards import SHAPE_PLAN, STANDARDS, measure
+    from quest_ai_runner.intelligence.mind.response_writer.reply_standards import SHAPE_PLAN, STANDARDS, measure
     rows = [{"id": "a", "title": "Book the plumber", "due": "2026-11-01", "completed": False}, {"id": "b", "title": "Buy tiles", "due": "2026-11-15", "completed": False}]
     draft = "- **Thu 12 Nov:** Book the plumber.\n- **Sun 15 Nov:** Buy tiles.\n- **Fri 20 Nov:** Paint."
     assert measure(draft, STANDARDS[SHAPE_PLAN], status_snapshot.overview(rows, date(2026, 11, 11), plan=True)).unsupported == ["20 Nov"]

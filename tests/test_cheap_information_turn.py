@@ -10,11 +10,11 @@ from hubofhubs.api import OVERSEE_TOOL, Mode, with_retrieve_depth
 
 from .conftest import StubProvider, StubRetrieval
 from .test_answer_explanation import RecordingSink, SAMPLE_EXPLANATION, ExplainingProvider, orch
-from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
-from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorConfig
-from quest_ai_runner.the_intelligence.mind.planner.orchestrator_decisions import is_information_turn
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolSpec
+from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
+from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorConfig
+from quest_ai_runner.intelligence.mind.planner.orchestrator_decisions import is_information_turn
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry, ToolSpec
 
 
 def test_an_information_turn_is_decided_from_the_planners_structured_fields():

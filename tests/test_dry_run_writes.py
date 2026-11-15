@@ -6,8 +6,8 @@ import urllib.request
 
 import pytest
 
-from quest_ai_runner.the_world.tools import dry_run_writes as dry
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.world.tools import dry_run_writes as dry
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry, ToolResult, ToolSpec
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def test_unset_changes_nothing(monkeypatch):
 
 
 def blocked(method, path, body=None):
-    from quest_ai_runner.the_body.internal_context.quest.client.quest_client_support import QuestApiError
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_support import QuestApiError
     with pytest.raises(QuestApiError) as caught:
         dry.quest_exchange(method, path, body)
     return caught.value

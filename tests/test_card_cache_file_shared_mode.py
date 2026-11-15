@@ -2,7 +2,7 @@
 import os
 import stat
 
-from quest_ai_runner.the_body.internal_context.card_store.card_cache_file import FileCardCache
+from quest_ai_runner.body.internal_context.card_store.card_cache_file import FileCardCache
 
 
 def test_the_cache_file_follows_the_umask_not_mkstemp(tmp_path):

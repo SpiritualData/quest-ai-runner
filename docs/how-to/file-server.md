@@ -128,7 +128,7 @@ is never put in the shared web cache.
 
 ```python
 from quest_ai_runner.adapters.__init__ import CompositeRetrievalAdapter, RemoteFilesAdapter
-from quest_ai_runner.the_world.tools.file_reading.files_adapter import FilesAdapter
+from quest_ai_runner.world.tools.file_reading.files_adapter import FilesAdapter
 
 remote = RemoteFilesAdapter(alias="server", base_url="https://files.example.org/prefix",
                             token=token, description="the team's file server")

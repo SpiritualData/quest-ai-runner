@@ -16,8 +16,8 @@ Offline, no network.
 """
 import logging
 
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -32,7 +32,7 @@ def _orch(provider, **kw):
 # --- cli.py env wiring -------------------------------------------------------------------------
 
 def test_qar_deep_models_env_builds_explicit_ladder(monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.consciousness.terminal.cli import _config_from_env
 
     monkeypatch.setenv("QAR_DEEP_MODELS", "claude-sonnet-4-6, claude-opus-4-8")
     cfg = _config_from_env()
@@ -40,7 +40,7 @@ def test_qar_deep_models_env_builds_explicit_ladder(monkeypatch):
 
 
 def test_qar_deep_models_unset_leaves_ladder_none(monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.consciousness.terminal.cli import _config_from_env
 
     monkeypatch.delenv("QAR_DEEP_MODELS", raising=False)
     cfg = _config_from_env()

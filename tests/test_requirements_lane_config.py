@@ -6,9 +6,9 @@ import os
 
 import pytest
 
-from quest_ai_runner.the_body.configuration import config_environment
-from quest_ai_runner.the_body.configuration.config import RunnerConfig
-from quest_ai_runner.the_self.assembler.hub_requirements import requirements_report
+from quest_ai_runner.body.configuration import config_environment
+from quest_ai_runner.body.configuration.config import RunnerConfig
+from quest_ai_runner.self.assembler.hub_requirements import requirements_report
 
 NAMES = ("QAR_CORPUS_ROOT", "QUEST_BASE_URL", "QUEST_API_KEY", "QUEST_TEAM_ID", "QAR_CONFIG_FILE")
 

@@ -11,8 +11,8 @@ import pytest
 pytest.importorskip("esoi.spec_index")
 from esoi import spec_index  # noqa: E402
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import repo_specs, tools_repo_specs  # noqa: E402
-from quest_ai_runner.the_world.tools.tools import ToolContext, ToolRegistry, build_tool_registry  # noqa: E402
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import repo_specs, tools_repo_specs  # noqa: E402
+from quest_ai_runner.world.tools.tools import ToolContext, ToolRegistry, build_tool_registry  # noqa: E402
 
 from .records_copy import copy_records  # noqa: E402
 

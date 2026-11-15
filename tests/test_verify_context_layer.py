@@ -28,9 +28,9 @@ from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import AssembledContext
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, truncate_verify_context, verify_context_max_chars
-from quest_ai_runner.the_intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, truncate_verify_context, verify_context_max_chars
+from quest_ai_runner.intelligence.mind.context_intake.orchestrator_events import grounding_context_layer
 
 from .conftest import StubProvider, StubRetrieval
 

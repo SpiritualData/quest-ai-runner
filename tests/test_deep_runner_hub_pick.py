@@ -13,9 +13,9 @@ import pytest
 
 import hubofhubs.api as hub_api
 from hubofhubs.api import ArmChoice, OpencodeRunner
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_deep_runner
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
-from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.body.configuration.config import RunnerConfig, resolve_deep_runner
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessGoalRunner
+from quest_ai_runner.world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
 from tests.conftest import StubProvider, StubRetrieval
 
 
@@ -88,7 +88,7 @@ def test_an_explicit_choice_wins(programs, picks):
 
 def test_the_hubs_own_loop_runs_only_when_named(programs):
     from hubofhubs.api import choose_agent_arm
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner
+    from quest_ai_runner.world.tools.delegated_agent_sessions.hub_loop_runner import HubLoopRunner
     runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "hub_loop"}))
     assert type(runner) is HubLoopRunner
     assert runner.goal_settings().escalation_marker                 # QAR's settings, not the hub's empty defaults
@@ -97,8 +97,8 @@ def test_the_hubs_own_loop_runs_only_when_named(programs):
 
 
 def test_the_hubs_own_loop_is_handed_the_web_through_the_lanes_search_backend(monkeypatch):
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
-    from quest_ai_runner.the_world.tools.web_search import web_research
+    from quest_ai_runner.world.tools.delegated_agent_sessions import hub_loop_runner
+    from quest_ai_runner.world.tools.web_search import web_research
 
     class Research:
         def search(self, query):
@@ -115,8 +115,8 @@ def test_the_hubs_own_loop_is_handed_the_web_through_the_lanes_search_backend(mo
 
 
 def test_with_no_search_backend_the_loop_searches_through_the_claude_code_login(monkeypatch):
-    from quest_ai_runner.the_world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
+    from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import ClaudeCliProvider
+    from quest_ai_runner.world.tools.delegated_agent_sessions import hub_loop_runner
     asked = []
 
     def web_search(self, query, *, model="", max_results=5, instruction=None):
@@ -131,7 +131,7 @@ def test_with_no_search_backend_the_loop_searches_through_the_claude_code_login(
 
 
 def test_the_hubs_own_loop_is_handed_the_lanes_skills(tmp_path):
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import hub_loop_runner
+    from quest_ai_runner.world.tools.delegated_agent_sessions import hub_loop_runner
     assert hub_loop_runner.skill_tools({"QAR_SKILLS_DIR": str(tmp_path / "none")}) == {}
     (tmp_path / "send-mail").mkdir()
     (tmp_path / "send-mail" / "SKILL.md").write_text("---\nname: send-mail\ndescription: How to send a mail.\n---\nUse the wrapper.\n")
@@ -149,7 +149,7 @@ def test_no_eligible_arm_or_missing_program_falls_back_to_the_default(programs, 
 
 
 def test_the_hubs_hard_work_pick_no_longer_moves_the_start_and_sub_agents_follow_the_hubs_tier(programs, picks, monkeypatch):
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import deep_model_selection as selection
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser import deep_model_selection as selection
     table, _ = picks
     table[frozenset({"anthropic"})] = arm("stream_json_goal_runner", "anthropic")
     hard = arm("subprocess_goal_runner", "anthropic", tier="best")
@@ -167,7 +167,7 @@ def test_the_hubs_hard_work_pick_no_longer_moves_the_start_and_sub_agents_follow
 
 def test_the_native_tool_loop_runs_only_when_named(programs, tmp_path, monkeypatch):
     from hubofhubs.api import NativeToolLoopRunner, choose_agent_arm
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+    from quest_ai_runner.world.tools.delegated_agent_sessions import native_loop_runner
     skills = tmp_path / "skills" / "demo"
     skills.mkdir(parents=True)
     (skills / "SKILL.md").write_text("description: a demo\n")
@@ -179,7 +179,7 @@ def test_the_native_tool_loop_runs_only_when_named(programs, tmp_path, monkeypat
 
 
 def test_the_native_tool_loop_note_is_empty_without_a_skills_folder(tmp_path):
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+    from quest_ai_runner.world.tools.delegated_agent_sessions import native_loop_runner
     assert native_loop_runner.skills_note({"QAR_SKILLS_DIR": str(tmp_path / "none"), "HOME": str(tmp_path / "nohome")}) == ""
 
 
@@ -193,7 +193,7 @@ def make_skills(tmp_path, monkeypatch):
 
 def test_the_hubs_solution_agents_pick_builds_the_binding_with_the_skills_folder(programs, picks, tmp_path, monkeypatch):
     from hubofhubs.api import SolutionAgentsNativeRunner
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import solution_agents_loop_runner
+    from quest_ai_runner.world.tools.delegated_agent_sessions import solution_agents_loop_runner
     folder = make_skills(tmp_path, monkeypatch)
     table, asked = picks
     table[frozenset({"anthropic"})] = arm("solution_agents_native_runner", "anthropic", tier="balanced")
@@ -204,7 +204,7 @@ def test_the_hubs_solution_agents_pick_builds_the_binding_with_the_skills_folder
 
 
 def test_the_solution_agents_loop_runs_when_named(programs, tmp_path, monkeypatch):
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import solution_agents_loop_runner
+    from quest_ai_runner.world.tools.delegated_agent_sessions import solution_agents_loop_runner
     folder = make_skills(tmp_path, monkeypatch)
     runner = resolve_deep_runner(cfg(selections={"delegated-agent-sessions": "solution_agents_loop"}))
     assert type(runner) is solution_agents_loop_runner.SolutionAgentsLoopRunner
@@ -214,7 +214,7 @@ def test_the_solution_agents_loop_runs_when_named(programs, tmp_path, monkeypatc
 
 def test_the_hubs_tier_reaches_the_native_loop_binding(programs, picks):
     """``NativeLoopRunner`` names only ``**arguments``; the pick's provider, tier and model translator must still reach the hub class behind it."""
-    from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+    from quest_ai_runner.world.tools.delegated_agent_sessions import native_loop_runner
     table, _ = picks
     table[frozenset({"anthropic"})] = arm("native_tool_loop_runner", "anthropic", tier="balanced")
     runner = resolve_deep_runner(cfg())

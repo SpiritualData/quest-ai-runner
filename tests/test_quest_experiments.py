@@ -7,15 +7,15 @@ verbatim copy of what the personal account's quests return today.
 """
 import pytest
 
-from quest_ai_runner.the_intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
-from quest_ai_runner.the_intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
-from quest_ai_runner.the_intelligence.proactivity.autopilot_personas import default_quest_instructions_for
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestClient
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_experiments import (
+from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
+from quest_ai_runner.intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+from quest_ai_runner.intelligence.proactivity.autopilot_personas import default_quest_instructions_for
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_experiments import (
     EXPERIMENT_PROPOSAL_KIND, EXPERIMENTS_END, EXPERIMENTS_START, experiments_brief_section, fetch_experiments, has_experiment, proposal_is_open,
     render_experiments_block, render_experiments_brief)
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_sync import pull_quest_to_folder, render_sync_file
-from quest_ai_runner.the_intelligence.higher_mind.objectives.quest_folder_zones import ensure_folder_zones
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_sync import pull_quest_to_folder, render_sync_file
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_zones import ensure_folder_zones
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 from .test_quest_folder_sync import QUEST_ID, MockQuestFolderClient
@@ -378,8 +378,8 @@ def test_an_older_row_with_no_focus_fields_reads_as_before():
 
 
 def test_update_tool_refuses_to_reopen_what_a_running_experiment_holds_fixed_and_sets_the_thought_aside():
-    from quest_ai_runner.the_body.hands.quest_operations.tools_quest_experiments import update_quest_experiment_spec
-    from quest_ai_runner.the_world.tools.tools import ToolContext
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_experiments import update_quest_experiment_spec
+    from quest_ai_runner.world.tools.tools import ToolContext
 
     calls = []
 

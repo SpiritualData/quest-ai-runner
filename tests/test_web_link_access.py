@@ -14,8 +14,8 @@ from hubofhubs.api import research as wr
 from hubofhubs.api import WebCache
 from hubofhubs.api import link_access_ALL_REASONS as ALL_REASONS, REASON_MESSAGES, extract_pdf_text, link_not_read_error, rewrite_for_export
 from hubofhubs.api import FetchedPage, PageFetchError, UnsupportedContentTypeError, default_page_fetcher
-from quest_ai_runner.the_world.tools.web_search.web_research import WebResearchAdapter
-from quest_ai_runner.the_intelligence.mind import orchestrator as orch
+from quest_ai_runner.world.tools.web_search.web_research import WebResearchAdapter
+from quest_ai_runner.intelligence.mind import orchestrator as orch
 
 ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
 
@@ -478,7 +478,7 @@ def test_one_consistent_link_rule_across_the_prompt():
     # The two older rules now defer to it instead of contradicting it.
     import inspect
     # The prompt text lives in planner_prompt.py; the loop in orchestrator.py.
-    from quest_ai_runner.the_intelligence.mind.planner import planner_prompt
+    from quest_ai_runner.intelligence.mind.planner import planner_prompt
     src = inspect.getsource(orch) + inspect.getsource(planner_prompt)
     assert "A bare pasted file or quoted text with no" in src
     assert "A bare pasted link, file" not in src

@@ -5,7 +5,7 @@ import pathlib
 import pytest
 
 import quest_ai_runner
-from quest_ai_runner.the_self.assembler import hub
+from quest_ai_runner.self.assembler import hub
 
 PACKAGE = pathlib.Path(quest_ai_runner.__file__).parent
 INTERFACES = sorted(".".join(("quest_ai_runner", *path.relative_to(PACKAGE).with_suffix("").parts)) for path in PACKAGE.rglob("interface.py"))
@@ -26,4 +26,4 @@ def test_autopilot_is_the_hubs_proactivity_and_prioritization():
     assert isinstance(due, (list, tuple))
     ranked = quest_ai_runner.run("prioritization", {"person": "", "request": "what is the latest Rust version?"}, environ={})
     assert set(ranked) >= {"ordered", "held"}
-    from quest_ai_runner.the_body.intake_sources.interface import ContextFeeding
+    from quest_ai_runner.body.intake_sources.interface import ContextFeeding

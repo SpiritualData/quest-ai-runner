@@ -10,8 +10,8 @@ from types import SimpleNamespace
 from hubofhubs.api import ProgressEvent
 from hubofhubs.api import EVENT_DECISION, EVENT_INTERIM, EVENT_RESULT, EVENT_WORK_TRACE
 
-from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult
-from quest_ai_runner.the_consciousness.terminal.textual_ui import QuestAITerminal
+from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
+from quest_ai_runner.consciousness.terminal.textual_ui import QuestAITerminal
 
 
 class FakeClient:

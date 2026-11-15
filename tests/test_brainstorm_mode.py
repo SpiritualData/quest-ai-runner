@@ -14,9 +14,9 @@ import time
 from typing import Any, Dict, List
 
 from hubofhubs.api import EVENT_MODE_SIGNAL, Mode
-from quest_ai_runner.the_consciousness.terminal.adapters_sinks import StreamSink
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import (
+from quest_ai_runner.consciousness.terminal.adapters_sinks import StreamSink
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import (
     BRAINSTORM_HELD_WORK_ACK_NOTE, BRAINSTORM_NO_ACTION_ACK_NOTE, MODE_RELEASE_TOOL, Orchestrator, OrchestratorConfig, normalize_decision)
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
@@ -790,10 +790,10 @@ def test_understanding_clarify_in_a_live_chat_is_asked_in_the_reply_and_files_no
 
 def test_brainstorm_latch_is_introspectable_from_the_packages_own_modules():
     """The old ``quest_ai_runner.core`` namespace is gone (the package mirrors the hub): each name lives in the module of its role."""
-    import quest_ai_runner.the_intelligence.mind.orchestrator as core
+    import quest_ai_runner.intelligence.mind.orchestrator as core
     from hubofhubs.api import EVENT_MODE_SIGNAL
-    from quest_ai_runner.the_intelligence.mind.planner import planner_prompt
-    from quest_ai_runner.the_self.integrity.prompts import auxiliary_prompts
+    from quest_ai_runner.intelligence.mind.planner import planner_prompt
+    from quest_ai_runner.self.integrity.prompts import auxiliary_prompts
 
     assert hasattr(core.Orchestrator, "judge_brainstorm_release")
     fields = core.OrchestratorConfig.__dataclass_fields__

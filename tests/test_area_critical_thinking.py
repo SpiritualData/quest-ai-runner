@@ -3,8 +3,8 @@ import pytest
 from esoi import Pending, targets
 
 import quest_ai_runner
-from quest_ai_runner.the_intelligence.critical_thinking.area import hold_case
-from quest_ai_runner.the_intelligence.critical_thinking.interface import MetricHolding
+from quest_ai_runner.intelligence.critical_thinking.area import hold_case
+from quest_ai_runner.intelligence.critical_thinking.interface import MetricHolding
 
 AREA_IDS = ("critical-thinking", "esoi-application", "run-applies-esoi", "context-retriever", "goal-completion", "response-quality", "guidance",
             "delegated-agent-sessions", "detect-a-stalled-run", "metric-translation", "quest-autopilot")

@@ -12,8 +12,8 @@ import pytest
 
 from hubofhubs.api import card_store_identity as ident
 from hubofhubs.api import FilesystemCardRepository
-from quest_ai_runner.the_body.internal_context.card_store.card_store_upload import plan_upload
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.card_store_upload import plan_upload
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 
 class SharedRepo:
@@ -241,7 +241,7 @@ def test_local_file_mode_is_unchanged(tmp_path):
 
 def test_turn_and_conversation_cards_carry_the_origin(tmp_path):
     from hubofhubs.api import ConversationCardBuilder
-    from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
+    from quest_ai_runner.intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
     turns = tmp_path / "turns"
     TurnContextStore(turns_dir=str(turns), origin="st_o").record("hello there friend", {"response": "hi"})
     cards = [json.loads(p.read_text()) for p in turns.glob("*.json")]

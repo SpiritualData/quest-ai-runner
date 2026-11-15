@@ -1,5 +1,5 @@
 """PRODUCTION ARM, BOUNDED WRITES (live model, real lane configuration and data): the same turn as ``prod_qar_readonly``, but the writes a case's
-``effect`` allows are made for real and every other state change stays blocked and recorded (``the_world/tools/dry_run_writes.py``).
+``effect`` allows are made for real and every other state change stays blocked and recorded (``world/tools/dry_run_writes.py``).
 
 A case that asks for an action names it in ``effect`` (``{"allow": [{"tool": "<tool>", "args": {...}}, {"method": "POST", "path": "<regex>"}]}``)
 and how to tell it happened in ``state_check`` (``{"read": "<GET path>", "list_key": "...", "match": {"field": "text"}, "expect": 1}``). The arm

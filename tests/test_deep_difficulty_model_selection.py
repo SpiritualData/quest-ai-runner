@@ -21,12 +21,12 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hubofhubs.api import DeepResult, role_tiers
-from quest_ai_runner.the_body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, normalize_decision
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser import deep_model_selection as selection
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.deep_model_selection import (
+from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, normalize_decision
+from quest_ai_runner.world.model_plumbing.model_tier_chooser import deep_model_selection as selection
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import (
     choice_of, escalate_choice, normalize_difficulty, plan_start, sub_agent_environment, install_sub_agent_model)
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 from .conftest import StubRetrieval
 from .test_per_goal_context_iteration import ScriptedProvider
@@ -301,7 +301,7 @@ def test_an_escalation_is_not_sticky_across_tasks_and_is_never_written_to_the_ta
 
 def test_the_tier_rule_never_writes_a_deep_run_model_anywhere():
     import inspect
-    from quest_ai_runner.the_intelligence.mind.delegation import orchestrator_deep_models
+    from quest_ai_runner.intelligence.mind.delegation import orchestrator_deep_models
     assert "deep_run_model" not in inspect.getsource(selection).replace("``deep_run_model``", "")
     assert "update_task" not in inspect.getsource(orchestrator_deep_models)
 
@@ -356,7 +356,7 @@ def test_sub_agents_default_to_the_hubs_sub_agent_choice_unless_the_operator_set
 # --- env wiring --------------------------------------------------------------------------------
 
 def test_env_wiring(monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.consciousness.terminal.cli import _config_from_env
 
     monkeypatch.setenv("QAR_DEEP_AUTO_MODEL", "off")
     monkeypatch.setenv("QAR_DEEP_MODEL_HARD", "opus")
@@ -367,7 +367,7 @@ def test_env_wiring(monkeypatch):
 
 
 def test_with_no_operator_variable_set_nothing_overrides_the_hub_rule(monkeypatch):
-    from quest_ai_runner.the_consciousness.terminal.cli import _config_from_env
+    from quest_ai_runner.consciousness.terminal.cli import _config_from_env
 
     for var in ("QAR_DEEP_AUTO_MODEL", "QAR_DEEP_MODEL_SIMPLE", "QAR_DEEP_MODEL_NORMAL", "QAR_DEEP_MODEL_HARD", "QAR_DEEP_MODELS"):
         monkeypatch.delenv(var, raising=False)

@@ -4,9 +4,9 @@ refusal in words. Offline: Quest is a dictionary, the sources are tiny python pr
 import json
 import sys
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import autopilot_esoi as esoi
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import metric_refresh as refresh
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import tools_metric_source as source_tool
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import autopilot_esoi as esoi
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import metric_refresh as refresh
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import tools_metric_source as source_tool
 
 PRINTS = 'import json;print(json.dumps({"value": 5, "as_of": "2026-11-06", "source": "Billing report"}))'
 LINE = "Current value: 5 (as of 2026-11-06, from Billing report)"

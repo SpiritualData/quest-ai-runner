@@ -3,7 +3,7 @@
 
 A card store is meant to hold hundreds of cards for a corpus of tens of thousands of files. Two
 real stores reached 8,557 and 32,070. The bootstrap gates in
-``quest_ai_runner/the_body/internal_context/card_store/file_context_store.py`` stop that happening again; this tool cleans up
+``quest_ai_runner/body/internal_context/card_store/file_context_store.py`` stop that happening again; this tool cleans up
 what already happened, for the ways it happened:
 
   item-id         a card stored under a vector point id (``card:<id>``), a second card next to the one the
@@ -91,7 +91,7 @@ from hubofhubs.api import (
     card_paths, fold_card, card_store_hygiene_jaccard as jaccard, join_onto, keeper_rank, Move, move_to, name_match_score, name_tokens, plan_stray,
     protection_reason as is_protected, read_card, render_health_report, settle_move, card_store_hygiene_store_id_of as store_id_of)
 from hubofhubs.api import StoreLock  # noqa: E402
-from quest_ai_runner.the_body.configuration.card_store_settings import max_cards_per_folder, skip_dirs_from_env  # noqa: E402
+from quest_ai_runner.body.configuration.card_store_settings import max_cards_per_folder, skip_dirs_from_env  # noqa: E402
 from hubofhubs.api import in_quarantine  # noqa: E402
 from hubofhubs.api import (
     card_store_tidy_plan_ALL_REASONS as ALL_REASONS, DEFAULT_REASONS, excluded_prefixes_from_review, plan_cards, strip_prefix, under_any_prefix)

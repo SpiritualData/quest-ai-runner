@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
-from quest_ai_runner.the_body.internal_context.card_store.file_context_store import FileContextStore
+from quest_ai_runner.body.internal_context.card_store.file_context_store import FileContextStore
 
 
 def _provider(topics: List[Dict[str, Any]]) -> MagicMock:
@@ -94,7 +94,7 @@ def test_turn_freshness_check_spawns_no_git_and_still_sees_changes(tmp_path, mon
                              confidence_threshold=0.0)
     store.bootstrap(root=str(repo), provider=_provider(TOPIC))
 
-    import quest_ai_runner.the_body.internal_context.card_store.file_context_store as fcs
+    import quest_ai_runner.body.internal_context.card_store.file_context_store as fcs
 
     def no_subprocess(*a, **k):
         raise AssertionError("assemble() spawned a subprocess for a freshness check")
@@ -152,8 +152,8 @@ def test_reasoning_hint_reaches_only_providers_that_take_it():
 
 
 def test_startup_refresh_is_skipped_when_the_store_was_refreshed_recently(tmp_path, monkeypatch):
-    from quest_ai_runner.the_body.configuration import config as cfgmod
-    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import TFDFIDF_VERSION, write_bootstrap_meta
+    from quest_ai_runner.body.configuration import config as cfgmod
+    from quest_ai_runner.body.internal_context.card_store.file_context_store import TFDFIDF_VERSION, write_bootstrap_meta
 
     cards = tmp_path / "cards"
     cards.mkdir()
@@ -262,8 +262,8 @@ def test_two_processes_starting_together_refresh_the_same_folder_once(tmp_path, 
     afterwards so a later refresh can run."""
     import threading
 
-    from quest_ai_runner.the_body.configuration import config as cfgmod
-    from quest_ai_runner.the_body.internal_context.card_store.file_context_store import TFDFIDF_VERSION, write_bootstrap_meta
+    from quest_ai_runner.body.configuration import config as cfgmod
+    from quest_ai_runner.body.internal_context.card_store.file_context_store import TFDFIDF_VERSION, write_bootstrap_meta
 
     cards = tmp_path / "cards"
     cards.mkdir()

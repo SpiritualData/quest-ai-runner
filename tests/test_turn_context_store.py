@@ -1,6 +1,6 @@
 """Offline tests for TurnContextStore and CompositeContextAssembler."""
 import pytest
-from quest_ai_runner.the_intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
+from quest_ai_runner.intelligence.higher_mind.long_term_memory.turn_context_store import TurnContextStore
 from hubofhubs.api import CompositeContextAssembler
 from hubofhubs.api import AssembledContext
 

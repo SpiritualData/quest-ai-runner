@@ -217,7 +217,7 @@ def main(argv=None) -> int:
         with open(args.task, encoding="utf-8") as handle:
             task = json.load(handle)
         if args.env_file:
-            from quest_ai_runner.the_consciousness.request_intake.lane import load_env_file
+            from quest_ai_runner.consciousness.request_intake.lane import load_env_file
             load_env_file(args.env_file)
         # Quest is reached only through the read forwarder: the runner and the worker get its address, and the real host is refused at the proxy.
         real_quest = (os.environ.get("QUEST_BASE_URL") or "").strip()
@@ -233,9 +233,9 @@ def main(argv=None) -> int:
             os.environ.pop(name, None)
         os.chdir(scratch)
         from quest_ai_runner import load_config
-        from quest_ai_runner.the_consciousness.request_intake.poller import Poller
-        from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
-        from quest_ai_runner.the_world.tools import dry_run_writes
+        from quest_ai_runner.consciousness.request_intake.poller import Poller
+        from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion
+        from quest_ai_runner.world.tools import dry_run_writes
         dry_run_writes.install()
         cfg = load_config(args.config)
         cfg.quest_folder_map = None          # the worker works in the scratch folder, never in a goal's mapped folder

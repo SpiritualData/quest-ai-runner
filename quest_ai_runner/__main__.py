@@ -11,10 +11,10 @@ import importlib
 import sys
 
 COMMANDS = {
-    "cli": "quest_ai_runner.the_consciousness.terminal.cli",
-    "tools": "quest_ai_runner.the_consciousness.terminal.__main__",
-    "lane": "quest_ai_runner.the_consciousness.request_intake.lane_supervisor",
-    "requirements": "quest_ai_runner.the_self.assembler.hub_requirements",
+    "cli": "quest_ai_runner.consciousness.terminal.cli",
+    "tools": "quest_ai_runner.consciousness.terminal.__main__",
+    "lane": "quest_ai_runner.consciousness.request_intake.lane_supervisor",
+    "requirements": "quest_ai_runner.self.assembler.hub_requirements",
 }
 
 

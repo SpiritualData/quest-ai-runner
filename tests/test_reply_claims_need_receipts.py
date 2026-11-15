@@ -6,9 +6,9 @@ the receipts.
 """
 from typing import Any, Dict
 
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_world.tools.tools import ToolRegistry, ToolResult, ToolSpec
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.world.tools.tools import ToolRegistry, ToolResult, ToolSpec
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -52,8 +52,8 @@ RECORD = {"question": "How long does daily qigong need to be to notice a change 
 
 
 def test_the_research_note_is_composed_from_the_record_and_is_short_and_readable():
-    from quest_ai_runner.the_world.science.investigate import research_note
-    from quest_ai_runner.the_world.tools.placeholder_guard import placeholder_reason
+    from quest_ai_runner.world.science.investigate import research_note
+    from quest_ai_runner.world.tools.placeholder_guard import placeholder_reason
     note = research_note(RECORD)
     assert note.startswith("Research note: How long does daily qigong need to be to notice a change in focus?")
     assert "How sure:" not in note and "(1 source, read in full; nccih.nih.gov)" in note and "Not established: a validated minimum number of minutes" in note
@@ -82,7 +82,7 @@ def test_a_note_the_planner_writes_after_researching_is_replaced_by_the_composed
 
 
 def test_the_review_s_generic_synthesis_lines_never_become_the_findings():
-    from quest_ai_runner.the_world.science.investigate import research_note
+    from quest_ai_runner.world.science.investigate import research_note
     record = {**RECORD, "synthesis": {"known": ["Supported by a graded source: a.com, b.com"], "unknown": ["Not established: licence of a.com", "licence of b.com", "a validated minimum"]}}
     note = research_note(record)
     assert "Supported by a graded source" not in note and "licence" not in note and "Not established: a validated minimum" in note
@@ -90,7 +90,7 @@ def test_the_review_s_generic_synthesis_lines_never_become_the_findings():
 
 
 def test_the_same_finding_from_several_sites_is_one_finding_and_the_reply_is_composed_from_the_note():
-    from quest_ai_runner.the_world.science.investigate import research_note, research_reply
+    from quest_ai_runner.world.science.investigate import research_note, research_reply
     items = [{"claim": "Five minutes a day is enough to start.", "grade": "C", "source": f"https://s{n}.example/a", "verified": "snippet"} for n in range(3)]
     note = research_note({**RECORD, "items": items + RECORD["items"]})
     assert note.count("Five minutes a day is enough to start.") == 1
@@ -104,7 +104,7 @@ def test_a_research_turn_with_its_note_saved_and_a_reply_composed_from_it_ends_v
     saved = []
     record = {"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
               "items": [{"claim": "Ten minutes a day is the usual advice.", "grade": "C", "source": "https://example.org/a", "verified": "opened"}]}
-    from quest_ai_runner.the_world.science.investigate import research_note
+    from quest_ai_runner.world.science.investigate import research_note
     investigate = ToolSpec(name="investigate_for_quest", handler=lambda a, c: ToolResult(ok=True, data={**record, "note_text": research_note(record)}, text="Looked into: How long?"),
                            description="d", when_to_use="w", parameters={"type": "object"}, mutates=True)
     note = ToolSpec(name="add_quest_note", handler=lambda a, c: (saved.append(a["text"]), ToolResult(ok=True, text="Added a note to quest q1."))[1],
@@ -131,7 +131,7 @@ def test_a_research_turn_with_its_note_saved_and_a_reply_composed_from_it_ends_v
 
 
 def test_a_note_says_the_hosts_written_findings_and_never_a_snippet():
-    from quest_ai_runner.the_world.science.investigate import research_note, summary_text
+    from quest_ai_runner.world.science.investigate import research_note, summary_text
     record = {"question": "How long?", "best_grade": "C", "queries": [{}], "synthesis": {"known": [], "unknown": []},
               "items": [{"item_id": "i1", "claim": "Ten minutes a day can boost mood The key is consistency, with research indicating...", "grade": "C", "source": "https://a.example/x", "verified": "opened"},
                         {"item_id": "i2", "claim": "no timeline given", "grade": "D", "source": "https://b.example/y", "verified": "snippet"}],

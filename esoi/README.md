@@ -31,11 +31,11 @@ flowchart LR
 
 This intent is implemented by the sub-intents and solutions below it; each shows whether it goes deeper.
 
-- [Quest Body](../quest_ai_runner/the_body/README.md) (sub-intent): Quest is the AI's body.
-- [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md) (sub-intent): The AI acts for each person the way that person would want.
-- [Intelligence](../quest_ai_runner/the_intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
-- [Quest Self](../quest_ai_runner/the_self/README.md) (sub-intent): Each Quest user meets one whole assistant.
-- [World](../quest_ai_runner/the_world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.
+- [Quest Body](../quest_ai_runner/body/README.md) (sub-intent): Quest is the AI's body.
+- [Quest Consciousness](../quest_ai_runner/consciousness/README.md) (sub-intent): The AI acts for each person the way that person would want.
+- [Intelligence](../quest_ai_runner/intelligence/README.md) (sub-intent): Each request is understood against what the person is working toward.
+- [Quest Self](../quest_ai_runner/self/README.md) (sub-intent): Each Quest user meets one whole assistant.
+- [World](../quest_ai_runner/world/README.md) (sub-intent): What lies beyond a person's Quest reaches the AI through one measured path.
 
 ## Solutions at a glance
 
@@ -86,11 +86,11 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 ## Where to go next
 
-- Sub-intent: [Quest Body](../quest_ai_runner/the_body/README.md)
-- Sub-intent: [Quest Consciousness](../quest_ai_runner/the_consciousness/README.md)
-- Sub-intent: [Intelligence](../quest_ai_runner/the_intelligence/README.md)
-- Sub-intent: [Quest Self](../quest_ai_runner/the_self/README.md)
-- Sub-intent: [World](../quest_ai_runner/the_world/README.md)
+- Sub-intent: [Quest Body](../quest_ai_runner/body/README.md)
+- Sub-intent: [Quest Consciousness](../quest_ai_runner/consciousness/README.md)
+- Sub-intent: [Intelligence](../quest_ai_runner/intelligence/README.md)
+- Sub-intent: [Quest Self](../quest_ai_runner/self/README.md)
+- Sub-intent: [World](../quest_ai_runner/world/README.md)
 - Repository: [top README](../README.md)
 - Records beside the code: [quest_ai_runner](../quest_ai_runner/README.md), [evaluation/components/chat_quality/impls](../evaluation/components/chat_quality/impls/README.md), [evaluation/components/choose_a_model_tier/impls](../evaluation/components/choose_a_model_tier/impls/README.md), [evaluation/components/claim_reach/impls](../evaluation/components/claim_reach/impls/README.md), [evaluation/components/deep_run/impls](../evaluation/components/deep_run/impls/README.md), [evaluation/components/deep_runner/impls](../evaluation/components/deep_runner/impls/README.md), [evaluation/components/evolve_by_metric/impls](../evaluation/components/evolve_by_metric/impls/README.md), [evaluation/components/hand_off_a_goal/impls](../evaluation/components/hand_off_a_goal/impls/README.md), [evaluation/components/hub_of_hubs/impls](../evaluation/components/hub_of_hubs/impls/README.md), [evaluation/components/know_the_world/impls](../evaluation/components/know_the_world/impls/README.md), [evaluation/components/model_providers/impls](../evaluation/components/model_providers/impls/README.md), [evaluation/components/overseer_signals/impls](../evaluation/components/overseer_signals/impls/README.md), [evaluation/components/quest_ops/impls](../evaluation/components/quest_ops/impls/README.md), [evaluation/components/talk_over_a_channel/impls](../evaluation/components/talk_over_a_channel/impls/README.md), [evaluation/components/track_usage_and_cost/impls](../evaluation/components/track_usage_and_cost/impls/README.md), [evaluation/components/write_files/impls](../evaluation/components/write_files/impls/README.md), [evaluation/components/write_through_mcp/impls](../evaluation/components/write_through_mcp/impls/README.md)
 - Records: [intent.csv](intent.csv), [metrics.csv](metrics.csv)
@@ -130,16 +130,16 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Per-consumer worker | `quest-self:per-consumer-worker` |  |  |
 | Agent framework with Quest glue | `quest-self:agent-framework-with-quest-glue` |  |  |
 | Deep runner only | `quest-self:deep-runner-only` |  |  |
-| quest-ai-runner library | `quest-self:library` | [quest_ai_runner/the_self/respond.py](../quest_ai_runner/the_self/respond.py) | [the_self](../quest_ai_runner/the_self/README.md) |
-| Quest HTTP client from the environment | `quest-body:quest_client` | [quest_ai_runner/the_body/area_body.py](../quest_ai_runner/the_body/area_body.py) | [the_body](../quest_ai_runner/the_body/README.md) |
-| Composition | `quest-consciousness:composition` | [quest_ai_runner/the_consciousness/flow.py](../quest_ai_runner/the_consciousness/flow.py) | [the_consciousness](../quest_ai_runner/the_consciousness/README.md) |
-| Composition | `quest-intelligence:composition` | [quest_ai_runner/the_intelligence/flow.py](../quest_ai_runner/the_intelligence/flow.py) | [the_intelligence](../quest_ai_runner/the_intelligence/README.md) |
-| Composition | `quest-world:composition` | [quest_ai_runner/the_world/flow.py](../quest_ai_runner/the_world/flow.py) | [the_world](../quest_ai_runner/the_world/README.md) |
-| QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | [quest_ai_runner/the_intelligence/mind/orchestrator.py](../quest_ai_runner/the_intelligence/mind/orchestrator.py) |  |
+| quest-ai-runner library | `quest-self:library` | [quest_ai_runner/self/respond.py](../quest_ai_runner/self/respond.py) | [self](../quest_ai_runner/self/README.md) |
+| Quest HTTP client from the environment | `quest-body:quest_client` | [quest_ai_runner/body/area_body.py](../quest_ai_runner/body/area_body.py) | [body](../quest_ai_runner/body/README.md) |
+| Composition | `quest-consciousness:composition` | [quest_ai_runner/consciousness/flow.py](../quest_ai_runner/consciousness/flow.py) | [consciousness](../quest_ai_runner/consciousness/README.md) |
+| Composition | `quest-intelligence:composition` | [quest_ai_runner/intelligence/flow.py](../quest_ai_runner/intelligence/flow.py) | [intelligence](../quest_ai_runner/intelligence/README.md) |
+| Composition | `quest-world:composition` | [quest_ai_runner/world/flow.py](../quest_ai_runner/world/flow.py) | [world](../quest_ai_runner/world/README.md) |
+| QAR as shipped, live on the subscription (today) | `quest-self:qar_live` | [quest_ai_runner/intelligence/mind/orchestrator.py](../quest_ai_runner/intelligence/mind/orchestrator.py) |  |
 | Scripted ideal planner (offline) | `quest-self:reference_script` |  |  |
 | Rules only, no model (floor) | `quest-self:rules_only` |  |  |
-| One turn of the orchestrator over the model | `quest-self:orchestrator_turn` | [quest_ai_runner/the_intelligence/mind/area_mind.py](../quest_ai_runner/the_intelligence/mind/area_mind.py) |  |
-| The shipped path as one call | `quest-self:shipped_path` | [quest_ai_runner/the_intelligence/mind/area_mind.py](../quest_ai_runner/the_intelligence/mind/area_mind.py) |  |
+| One turn of the orchestrator over the model | `quest-self:orchestrator_turn` | [quest_ai_runner/intelligence/mind/area_mind.py](../quest_ai_runner/intelligence/mind/area_mind.py) |  |
+| The shipped path as one call | `quest-self:shipped_path` | [quest_ai_runner/intelligence/mind/area_mind.py](../quest_ai_runner/intelligence/mind/area_mind.py) |  |
 | Live chat on a disposable world | `quest-self:dev_quest_chat` | [evaluation/components/chat_quality/impls/dev_quest_chat.py](../evaluation/components/chat_quality/impls/dev_quest_chat.py) |  |
 | Offline metric validity check | `quest-self:reference_replies` | [evaluation/components/chat_quality/impls/reference_replies.py](../evaluation/components/chat_quality/impls/reference_replies.py) |  |
 | Planner-only route check on the chat dataset | `quest-self:planner_route` | [evaluation/components/chat_quality/impls/planner_route.py](../evaluation/components/chat_quality/impls/planner_route.py) |  |

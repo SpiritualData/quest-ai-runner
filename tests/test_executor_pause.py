@@ -25,13 +25,13 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_intelligence.mind.delegation.goal_runner import SubprocessConfig
-from quest_ai_runner.the_world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
-from quest_ai_runner.the_consciousness.request_intake import executor as executor_module
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
-from quest_ai_runner.the_body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.intelligence.mind.delegation.goal_runner import SubprocessConfig
+from quest_ai_runner.world.tools.delegated_agent_sessions.goal_runner_stream import StreamJsonGoalRunner
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig, OrchestratorResult
+from quest_ai_runner.consciousness.request_intake import executor as executor_module
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError, QuestClient
 
 from .conftest import StubProvider, StubRetrieval
 from .test_goal_runner_stream import make_claude, read_log
@@ -316,7 +316,7 @@ def test_pause_then_resume_continues_the_same_claude_session(tmp_path, monkeypat
 
 
 def test_a_milestone_work_task_runs_as_a_caller_deep_run_of_its_kind_with_the_lanes_skill(tmp_path, monkeypatch):
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_completion
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_completion
     (tmp_path / "method-x").mkdir()
     (tmp_path / "method-x" / "SKILL.md").write_text("# Method X")
     monkeypatch.setenv("QAR_SKILLS_ROOT", str(tmp_path))

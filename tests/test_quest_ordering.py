@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 
 import quest_ai_runner
-from quest_ai_runner.the_body.intake_sources.quest_events import OLDEST, QuestEvents, SOURCE
-from quest_ai_runner.the_consciousness.prioritization.quest_ordering import QuestOrdering
+from quest_ai_runner.body.intake_sources.quest_events import OLDEST, QuestEvents, SOURCE
+from quest_ai_runner.consciousness.prioritization.quest_ordering import QuestOrdering
 
 CASES = json.loads((Path(__file__).resolve().parent.parent / "evaluation" / "components" / "order_quest_work" / "cases.json").read_text())
 NOW = "2026-07-12T09:00:00Z"
@@ -62,7 +62,7 @@ def test_quest_events_are_the_asks_as_events_at_the_time_they_were_made():
 
 
 def test_dispatch_puts_a_start_now_task_first_then_a_task_someone_waits_on_then_the_oldest():
-    from quest_ai_runner.the_intelligence.proactivity.poller_schedule import dispatch_order
+    from quest_ai_runner.intelligence.proactivity.poller_schedule import dispatch_order
     tasks = [{"id": "new", "created_at": "2026-07-12T08:00:00Z"}, {"id": "old", "created_at": "2026-07-01T08:00:00Z"},
              {"id": "waiting", "real_time": True, "created_at": "2026-07-11T08:00:00Z"}, {"id": "now", "start_requested_at": "2026-07-12T08:30:00Z", "created_at": "2026-07-12T08:10:00Z"}]
     assert [t["id"] for t in dispatch_order(tasks)] == ["now", "waiting", "old", "new"]
@@ -71,7 +71,7 @@ def test_dispatch_puts_a_start_now_task_first_then_a_task_someone_waits_on_then_
 
 def test_the_ladder_lists_goals_nearest_deadline_first_through_prioritization():
     from datetime import datetime, timezone
-    from quest_ai_runner.the_intelligence.proactivity.autopilot_periods import current_goal_ladder
+    from quest_ai_runner.intelligence.proactivity.autopilot_periods import current_goal_ladder
     payload = {"period_groups": [{"time_scope": "month", "period": "2026_07", "goals": [{"id": "late", "name": "late", "deadline": "2026-07-30"}, {"id": "none", "name": "none"},
                                                                                          {"id": "soon", "name": "soon", "deadline": "2026-07-14"}]}]}
     rung = current_goal_ladder(payload, datetime(2026, 7, 12, 9, tzinfo=timezone.utc))[0]
@@ -80,7 +80,7 @@ def test_the_ladder_lists_goals_nearest_deadline_first_through_prioritization():
 
 def test_asks_for_you_come_overdue_first_then_by_deadline_and_the_undated_newest_first():
     from datetime import datetime, timezone
-    from quest_ai_runner.the_intelligence.proactivity.quest_asks_brief import waiting_in_order
+    from quest_ai_runner.intelligence.proactivity.quest_asks_brief import waiting_in_order
     rows = [{"summary": "old", "created_at": "2026-07-01T08:00:00Z"}, {"summary": "soon", "created_at": "2026-07-02T08:00:00Z", "deadline": "2026-07-13T09:00:00Z"},
             {"summary": "new", "created_at": "2026-07-11T08:00:00Z"}, {"summary": "overdue", "created_at": "2026-07-03T08:00:00Z", "deadline": "2026-07-11T09:00:00Z"}]
     got = waiting_in_order(rows, datetime(2026, 7, 12, 9, tzinfo=timezone.utc))
@@ -105,7 +105,7 @@ def test_the_generic_rules_are_the_hubs_met_milestones_and_the_batch_limit_come_
 
 
 def test_a_period_goal_is_the_milestone_of_its_solution_and_what_the_person_said_about_the_solution_counts_for_it():
-    from quest_ai_runner.the_consciousness.prioritization.quest_ordering import as_milestone
+    from quest_ai_runner.consciousness.prioritization.quest_ordering import as_milestone
     assert as_milestone({"id": "g", "solution_id": "s1"})["solution"] == "s1" and "solution" not in as_milestone({"id": "g"})
     goals = [{"id": "g1", "kind": "goal", "horizon": "week", "solution_id": "s1"}, {"id": "g2", "kind": "goal", "horizon": "year", "solution_id": "s2"}]
     answer = QuestOrdering().prioritize(candidates=goals, stated={"order": ["s2"]}, now=NOW, subject="goals")

@@ -2,7 +2,7 @@
 import json
 from types import SimpleNamespace
 
-from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import milestone_rubric
+from quest_ai_runner.intelligence.critical_thinking.esoi_application import milestone_rubric
 
 FULL = {"name": "tutorial scripts", "purpose": "Short spoken scripts that teach one task each.", "approach": "Write one script per task from the product's own steps.",
         "problem": {"what": "New users cannot start without a guide", "who": "New users", "why": "They leave in the first week"},

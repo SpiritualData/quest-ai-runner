@@ -13,12 +13,12 @@ from __future__ import annotations
 import pytest
 
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_body.configuration import config_resolvers
-from quest_ai_runner.the_body.configuration.config import RunnerConfig, resolve_deep_runner
-from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
-from quest_ai_runner.the_intelligence.mind.orchestrator import OrchestratorResult, PlanDecision
-from quest_ai_runner.the_intelligence.mind.response_writer.orchestrator_text import mark_ceiling_stop
-from quest_ai_runner.the_world.tools.delegated_agent_sessions import native_loop_runner
+from quest_ai_runner.body.configuration import config_resolvers
+from quest_ai_runner.body.configuration.config import RunnerConfig, resolve_deep_runner
+from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult, PlanDecision
+from quest_ai_runner.intelligence.mind.response_writer.orchestrator_text import mark_ceiling_stop
+from quest_ai_runner.world.tools.delegated_agent_sessions import native_loop_runner
 from tests.conftest import StubProvider, StubRetrieval
 from tests.test_fast_edit_ladder import RecordingRunner, _orch
 

@@ -4,7 +4,7 @@ from esoi import Pending, targets
 
 import quest_ai_runner
 from esoi.runtime.assemble_by_name.assembly_config import AssemblyConfig
-from quest_ai_runner.the_consciousness.request_intake.interface import InboundBatch, OutboundReply, SendResult
+from quest_ai_runner.consciousness.request_intake.interface import InboundBatch, OutboundReply, SendResult
 from tests.conftest import StubProvider
 
 AREA_IDS = ("quest-requests", "take-in-the-world", "planner", "intake-sources", "receive-input-mid-run", "feed-context-sources",
@@ -85,7 +85,7 @@ def test_the_reply_is_handed_to_the_channel():
 
 
 def test_input_that_arrives_mid_run_and_an_attachment_are_handed_to_their_members():
-    from quest_ai_runner.the_intelligence.mind.delegation.inbox import InMemoryInbox
+    from quest_ai_runner.intelligence.mind.delegation.inbox import InMemoryInbox
     provider = ScriptedModel([])
     inbox = InMemoryInbox()
     area = area_over(provider, **{"receive-input-mid-run": inbox})

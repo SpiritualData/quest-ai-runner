@@ -2,10 +2,10 @@
 import json
 
 from hubofhubs.api import session as hub_session
-from quest_ai_runner.the_intelligence.mind.delegation import goal_runner
+from quest_ai_runner.intelligence.mind.delegation import goal_runner
 from hubofhubs.api import DeepResult
-from quest_ai_runner.the_consciousness.terminal.interactive_session import _model_display
-from quest_ai_runner.the_consciousness.request_intake.executor_support import _model_used_note
+from quest_ai_runner.consciousness.terminal.interactive_session import _model_display
+from quest_ai_runner.consciousness.request_intake.executor_support import _model_used_note
 
 
 def write_session(tmp_path, records):

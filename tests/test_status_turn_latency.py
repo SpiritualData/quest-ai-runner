@@ -12,10 +12,10 @@ from hubofhubs.api import Mode
 from .conftest import StubRetrieval
 from .test_answer_explanation import RecordingSink
 from .test_status_snapshot import Registry, StatusProvider, _tools
-from quest_ai_runner.the_body.hands.quest_operations.tools_quest_ops import reachable_quest_rows
-from quest_ai_runner.the_consciousness.terminal import opencode_terminal
-from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import reachable_quest_rows
+from quest_ai_runner.consciousness.terminal import opencode_terminal
+from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
 
 
 def test_the_understanding_is_said_before_the_status_snapshot_is_read():
@@ -80,7 +80,7 @@ def test_a_wait_gets_a_row_naming_the_last_status_and_the_next_event_closes_it(m
 
 def test_the_goals_of_a_big_quest_are_read_in_one_call_not_one_full_read_per_page():
     """The goal tool re-reads the whole quest for every page, so a 536-goal quest read in pages cost six full reads (about 29 s on prod). One call returns them all."""
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import status_snapshot
     calls = []
 
     class One:
@@ -95,7 +95,7 @@ def test_the_goals_of_a_big_quest_are_read_in_one_call_not_one_full_read_per_pag
 
 
 def test_a_goal_read_that_failed_is_not_read_and_an_empty_one_is_no_goals():
-    from quest_ai_runner.the_intelligence.critical_thinking.esoi_application import status_snapshot
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application import status_snapshot
 
     class Failing:
         def get(self, name):

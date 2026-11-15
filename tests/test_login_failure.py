@@ -12,9 +12,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from hubofhubs.api import AuthenticationError
-from quest_ai_runner.the_body.configuration.config_context_index import index_paused_note
-from quest_ai_runner.the_consciousness.terminal.textual_ui_outcome import provider_error_lines
-from quest_ai_runner.the_intelligence.subconscious.cards_from_files import context_topic_cards as topic_cards
+from quest_ai_runner.body.configuration.config_context_index import index_paused_note
+from quest_ai_runner.consciousness.terminal.textual_ui_outcome import provider_error_lines
+from quest_ai_runner.intelligence.subconscious.cards_from_files import context_topic_cards as topic_cards
 
 
 class DiscoversThenFails:
@@ -102,7 +102,7 @@ class Raises:
 
 
 def test_a_queued_task_whose_run_raises_it_is_held_to_retry_not_failed():
-    from quest_ai_runner.the_consciousness.request_intake.executor import TaskExecutor
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
     client = RecordingClient()
     outcome = TaskExecutor(client, Raises(AuthenticationError("Failed to authenticate"))).execute(
         {"task_id": "atask_7", "text": "draft the summary", "resume_session_id": "sess-1"})
@@ -116,8 +116,8 @@ def test_a_queued_task_whose_run_raises_it_is_held_to_retry_not_failed():
 
 def test_a_turn_whose_planner_hits_an_invalid_login_ends_with_the_typed_error_after_one_attempt():
     """The planner's failure used to fall back to a grounded answer, whose own call failed the same way and logged a second error. Now the turn ends once."""
-    from quest_ai_runner.the_intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
-    from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+    from quest_ai_runner.intelligence.mind.orchestrator import Orchestrator, OrchestratorConfig
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     from .conftest import StubProvider, StubRetrieval
 
     class LoginProvider(StubProvider):

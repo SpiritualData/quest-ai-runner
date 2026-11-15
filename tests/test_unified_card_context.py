@@ -13,9 +13,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from typing import Any, Dict, List, Optional
 
 from hubofhubs.api import AssembledContext
-from quest_ai_runner.the_world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
-from quest_ai_runner.the_intelligence.mind.orchestrator import DECIDE_TOOL, Orchestrator, PLANNER_PROMPT, TurnCardCache
-from quest_ai_runner.the_intelligence.mind.planner.planner_prompt import MODEL_TIER_BLOCK
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
+from quest_ai_runner.intelligence.mind.orchestrator import DECIDE_TOOL, Orchestrator, PLANNER_PROMPT, TurnCardCache
+from quest_ai_runner.intelligence.mind.planner.planner_prompt import MODEL_TIER_BLOCK
 
 from .conftest import StubProvider, StubRetrieval
 
