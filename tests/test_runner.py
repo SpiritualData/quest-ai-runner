@@ -1525,7 +1525,7 @@ def test_report_progress_posts_to_right_path_and_body(monkeypatch):
     out = client.report_progress("t1", "exec", text="ran step 2", output="raw")
 
     assert out == {"ok": True}
-    assert captured["url"] == "http://quest.example/api/assistant-tasks/t1/progress"
+    assert captured["url"] == "http://quest.example/api/assistant-tasks/t1/progress?slim=true"  # slim: the reply is never read
     assert captured["method"] == "POST"
     # Only the supplied non-None fields are sent; no data key when omitted.
     assert json.loads(captured["body"]) == {"kind": "exec", "text": "ran step 2", "output": "raw"}
@@ -1887,7 +1887,7 @@ def test_is_task_cancelled_true_for_status_cancelled():
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     class _FakeGetTaskClient(QuestClient):
-        def get_task(self, task_id):
+        def get_task(self, task_id, **_kw):
             return {"id": task_id, "status": "cancelled"}
 
     client = _FakeGetTaskClient("http://quest.example", "qsk_test")
@@ -1898,7 +1898,7 @@ def test_is_task_cancelled_true_for_cancel_requested_flag():
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     class _FakeGetTaskClient(QuestClient):
-        def get_task(self, task_id):
+        def get_task(self, task_id, **_kw):
             return {"id": task_id, "status": "in_progress", "cancel_requested": True}
 
     client = _FakeGetTaskClient("http://quest.example", "qsk_test")
@@ -1909,7 +1909,7 @@ def test_is_task_cancelled_false_when_neither_signal_set():
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     class _FakeGetTaskClient(QuestClient):
-        def get_task(self, task_id):
+        def get_task(self, task_id, **_kw):
             return {"id": task_id, "status": "in_progress", "cancel_requested": False}
 
     client = _FakeGetTaskClient("http://quest.example", "qsk_test")
@@ -1922,7 +1922,7 @@ def test_is_task_cancelled_false_on_api_error():
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     class _BoomGetTaskClient(QuestClient):
-        def get_task(self, task_id):
+        def get_task(self, task_id, **_kw):
             raise RuntimeError("network boom")
 
     client = _BoomGetTaskClient("http://quest.example", "qsk_test")
@@ -1935,7 +1935,7 @@ def test_is_task_cancelled_false_when_task_not_found():
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     class _MissingTaskClient(QuestClient):
-        def get_task(self, task_id):
+        def get_task(self, task_id, **_kw):
             return {}
 
     client = _MissingTaskClient("http://quest.example", "qsk_test")
@@ -2112,3 +2112,32 @@ def test_monitor_says_which_model_the_worker_runs_on_once_while_it_runs(tmp_path
     thread.join(timeout=2)
     said = [e for e in events if e.type == EVENT_STATUS and "deep_run_model_live" in (e.data or {})]
     assert [e.text for e in said] == ["Running on claude-opus-5-5"]
+
+
+def test_cancel_and_pause_checks_ask_for_the_slim_task():
+    """A run checks cancel/pause many times; each must ask for the control fields only, because a long
+    run's progress log is megabytes (~1 GB in an hour on 2026-11-14)."""
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+
+    seen = []
+
+    class _C(QuestClient):
+        def get_task(self, task_id, **kw):
+            seen.append(kw)
+            return {"id": task_id, "status": "in_progress", "pause_requested": True}
+
+    c = _C("http://quest.example", "qsk_test")
+    assert c.is_task_cancelled("t1") is False
+    assert c.is_task_pause_requested("t1") is True
+    assert seen == [{"slim": True}, {"slim": True}]
+
+
+def test_get_task_slim_sends_the_flag_and_default_does_not(monkeypatch):
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+
+    urls = []
+    c = QuestClient("http://quest.example", "qsk_test")
+    monkeypatch.setattr(c, "_request", lambda method, path, **kw: urls.append((path, kw.get("params"))) or {})
+    c.get_task("t1")
+    c.get_task("t1", slim=True)
+    assert urls == [("/api/assistant-tasks/t1", None), ("/api/assistant-tasks/t1", {"slim": "true"})]

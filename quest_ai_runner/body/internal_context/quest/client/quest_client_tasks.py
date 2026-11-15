@@ -166,9 +166,14 @@ class TasksMixin:
             log.info("wait_for_interactive unavailable (%s) -- the fast lane will retry", e)
             return None
 
-    def get_task(self, task_id: str) -> Dict[str, Any]:
+    def get_task(self, task_id: str, *, slim: bool = False) -> Dict[str, Any]:
+        """GET one task. ``slim=True`` leaves out its progress log and result (control fields
+        only): a run's cancel/pause checks fire many times per run and a long run's log is
+        megabytes, so a whole-task read each time was ~1 GB in one hour on 2026-11-14. An older
+        backend ignores the flag and sends the whole task, which is still correct."""
         try:
-            return self._request("GET", f"/api/assistant-tasks/{task_id}") or {}
+            params = {"slim": "true"} if slim else None
+            return self._request("GET", f"/api/assistant-tasks/{task_id}", params=params) or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("get_task failed for %s: %s", task_id, e)
             return {}
@@ -204,7 +209,7 @@ class TasksMixin:
         a transient API hiccup can never be mistaken for a cancellation and kill a legitimate run.
         """
         try:
-            task = self.get_task(task_id) or {}
+            task = self.get_task(task_id, slim=True) or {}
             if str(task.get("status") or "").strip().lower() == "cancelled":
                 return True
             return bool(task.get("cancel_requested"))
@@ -219,7 +224,7 @@ class TasksMixin:
         same reason as ``is_task_cancelled``: a failed read must never pause a healthy run. A task
         whose backend has no such field simply reads False."""
         try:
-            return bool((self.get_task(task_id) or {}).get("pause_requested"))
+            return bool((self.get_task(task_id, slim=True) or {}).get("pause_requested"))
         except Exception:  # noqa: BLE001 -- fail-open
             log.warning("is_task_pause_requested check failed for %s", task_id, exc_info=True)
             return False
@@ -478,7 +483,8 @@ class TasksMixin:
             body["data"] = data
         try:
             return self._request(
-                "POST", f"/api/assistant-tasks/{task_id}/progress", body=body) or {}
+                "POST", f"/api/assistant-tasks/{task_id}/progress", body=body,
+                params={"slim": "true"}) or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("progress post for task %s (%s) failed: %s", task_id, kind, e)
             return {}
