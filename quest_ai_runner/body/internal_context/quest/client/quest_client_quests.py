@@ -122,12 +122,34 @@ class QuestsMixin:
         """DELETE /api/teams/{team_id}/members/{user_id} — team or org admin: remove one membership. The
         account, its org membership and its history stay. The team owner cannot be removed. Side effects:
         the person loses access to the team's quests, and their open goals on those quests go back to
-        unassigned (their AI handling on them ends). Quests keep their original owner record. No email is
+        unassigned (their AI handling on them ends). Quests keep their original owner record; use
+        ``offboard_team_member`` to hand their work to someone instead. No email is
         sent. Idempotent: ``data["ok"]`` is False when there was no such membership. Raises ``QuestWriteError``
         on a refusal.
         """
         self._require()
         return self._write("DELETE", f"/api/teams/{team_id}/members/{user_id}", label="Removing the team member")
+
+    def offboard_team_member(self, team_id: str, user_id: str, *, mode: str = "remove",
+                             receiver_user_id: Optional[str] = None, dry_run: bool = False,
+                             rep_action: str = "disable") -> WriteResult:
+        """POST /api/teams/{team_id}/members/{user_id}/offboard: hand a leaving member's work to a receiver,
+        then take them off the team. ``mode`` ``remove`` (team admin) leaves this team only; ``archive``
+        (organization admin) leaves the organization, and ``rep_action`` (``disable``, ``reassign`` or
+        ``delete``) settles their AI representatives. Moved to the receiver: open goals, queued AI tasks,
+        open asks, workflow steps, assignment-manager roles and quests the person owns for the team.
+        ``receiver_user_id`` defaults to the team manager (the owner, else the earliest-joined admin); it must
+        be an active member of the team. ``dry_run=True`` returns exactly what would move and changes nothing;
+        a repeat after success changes nothing. ``data`` holds ``receiver``, ``teams`` (per category
+        ``{count, ids}``), ``totals`` and ``member_removed``. Sends no email. Raises ``QuestWriteError`` on a
+        refusal (not an admin, owner, invalid receiver).
+        """
+        self._require()
+        body: Dict[str, Any] = {"mode": mode, "dry_run": dry_run, "rep_action": rep_action}
+        if receiver_user_id:
+            body["receiver_user_id"] = receiver_user_id
+        return self._write("POST", f"/api/teams/{team_id}/members/{user_id}/offboard", body=body,
+                           label="Offboarding the team member")
 
     def list_teams(self) -> List[Dict[str, Any]]:
         """GET /api/teams — every team the authenticated account is a member of.
