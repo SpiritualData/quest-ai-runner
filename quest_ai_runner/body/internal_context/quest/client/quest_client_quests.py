@@ -110,6 +110,25 @@ class QuestsMixin:
             body["user_id"] = user_id
         return self._write("POST", f"/api/teams/{team_id}/members", body=body, label="Adding the team member")
 
+    def list_team_members(self, team_id: str) -> List[Dict[str, Any]]:
+        """GET /api/teams/{team_id}/members — the team's roster, one row per member: ``user_id``, ``role``,
+        ``display_name``, ``email``, ``joined_at``. Team members only. Raises ``QuestApiError`` on a refusal.
+        """
+        self._require()
+        resp = self._request("GET", f"/api/teams/{team_id}/members")
+        return list(resp.get("members") or []) if isinstance(resp, dict) else list(resp or [])
+
+    def remove_team_member(self, team_id: str, user_id: str) -> WriteResult:
+        """DELETE /api/teams/{team_id}/members/{user_id} — team or org admin: remove one membership. The
+        account, its org membership and its history stay. The team owner cannot be removed. Side effects:
+        the person loses access to the team's quests, and their open goals on those quests go back to
+        unassigned (their AI handling on them ends). Quests keep their original owner record. No email is
+        sent. Idempotent: ``data["ok"]`` is False when there was no such membership. Raises ``QuestWriteError``
+        on a refusal.
+        """
+        self._require()
+        return self._write("DELETE", f"/api/teams/{team_id}/members/{user_id}", label="Removing the team member")
+
     def list_teams(self) -> List[Dict[str, Any]]:
         """GET /api/teams — every team the authenticated account is a member of.
 
