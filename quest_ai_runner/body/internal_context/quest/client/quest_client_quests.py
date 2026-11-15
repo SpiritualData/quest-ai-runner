@@ -997,6 +997,14 @@ class QuestsMixin:
         or None, reason}``; each goal appears once and every autopilot id must be one of the quest's (else 400)."""
         return self._write("PUT", f"/api/quests/{quest_id}/autopilots/routing/{day}", body={"routes": list(routes)}, label="Recording today's goal routing")
 
+    def request_autopilot_run(self, quest_id: str) -> WriteResult:
+        """POST /api/quests/{quest_id}/autopilot/run — "Run now": ask the quest's autopilot to make its next pass at once.
+
+        Stamps a pending request; the runner picks it up on its next poll and executes the same pass the schedule would, so the
+        pass is not run by this call. Refused (409) when the autopilot mode is off. Raises ``QuestWriteError`` on a refusal."""
+        self._require()
+        return self._write("POST", f"/api/quests/{quest_id}/autopilot/run", body={}, label="Requesting the autopilot run")
+
     def update_quest_autopilot(self, quest_id: str,
                               fields: Dict[str, Any]) -> WriteResult:
         """PATCH a quest's autopilot settings -- ``PATCH /api/quests/{quest_id}/autopilot``.
