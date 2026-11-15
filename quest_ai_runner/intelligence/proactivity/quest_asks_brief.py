@@ -48,6 +48,13 @@ MIN_NOTE_ROOM = 60
 
 HEADER = ("WHAT YOU ASKED. What people asked of you on this quest, and what is already waiting on "
           "them. Work the open asks first; the key in front of each is what update_ask needs.")
+#: Said with the open asks, whatever the quest's own instructions say, so a quest with its own brief
+#: still closes out what this run acted on. An ask left open is picked up again by the next run.
+CLOSE_OUT_RULE = ("Before you finish this run, call update_ask on every ask you acted on or answered: "
+                  "done when you finished it (the person then accepts it), in progress or blocked when it is "
+                  "not finished, awaiting_answer with a question when you need the person again, and declined "
+                  "or noted with the reason when it will not be done. An ask you did not reach stays as it is. "
+                  "Never finish a run with an ask you acted on still open.")
 
 
 def fetch_asks(client: Any, quest_id: str) -> Optional[List[Dict[str, Any]]]:
@@ -224,10 +231,12 @@ def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
         entries = ["\n".join([ask_entry(r, when)] + note_lines(r, answers, run_notes)) for r in shown]
         if len(owed) > MAX_OPEN_ASKS:
             entries.append(f"- +{len(owed) - MAX_OPEN_ASKS} more")
-        lines += ["", "Open asks:"] + entries
+        # Near the top, not the end: the section is cut from its end when it runs long, and this rule must survive.
+        lines += ["", CLOSE_OUT_RULE, "", "Open asks:"] + entries
         if any(str(r.get("state") or "") == AWAITING_ANSWER for r in owed):
-            lines.append("Awaiting answer means your question is open in the person's Asks for You: "
-                         "do not work that ask or ask again until it is answered.")
+            lines.append("Awaiting answer with no answer below means your question is open in the person's "
+                         "Asks for You: do not work that ask or ask again until it is answered. Once they "
+                         "answer, their note is the latest word: act on it.")
         if any(last_person_note(r) is not None for r in shown):
             lines.append("Their answer or note is the latest word on that ask: act on it first.")
         if any(str(r.get("kind") or KIND_UNKNOWN) == KIND_UNKNOWN for r in owed):

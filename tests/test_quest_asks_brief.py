@@ -261,3 +261,36 @@ def test_the_awaiting_answer_text_points_at_asks_for_you():
     assert "question" in spec.parameters["properties"]
     decision = ops.create_decision_spec({}, client_factory=lambda: None)
     assert "update_ask" in decision.when_not_to_use
+
+
+DONE_ONLY_RULE = {"key": "k_rule2", "state": "in force", "kind": "standing", "text": "Always cc Dana"}
+
+
+def test_the_close_out_rule_is_said_before_the_open_asks_and_survives_a_long_ledger():
+    from quest_ai_runner.intelligence.proactivity.quest_asks_brief import CLOSE_OUT_RULE, ASKS_BRIEF_MAX_CHARS
+    long_rows = [dict(ASKS[0], key=f"k_long_{i}", text="Send the board the Q3 numbers " * 12) for i in range(30)]
+    text = asks_brief_section(long_rows + [WAITING, ANSWERED], now=NOW)
+    assert CLOSE_OUT_RULE in text
+    assert text.index(CLOSE_OUT_RULE) < text.index("Open asks:")
+    assert len(text) <= ASKS_BRIEF_MAX_CHARS
+    assert "update_ask on every ask you acted on or answered" in text
+    assert CLOSE_OUT_RULE not in asks_brief_section([DONE_ONLY_RULE], now=NOW)
+
+
+def test_an_answer_to_a_question_the_ai_raised_is_shown_and_the_rule_is_not_to_wait_on_it():
+    text = asks_brief_section([WAITING], now=NOW)
+    assert "do not work that ask or ask again until it is answered" in text
+    answered = dict(WAITING, history=WAITING["history"] + [entry("awaiting answer", "person", "Austin")])
+    text = asks_brief_section([answered], now=NOW)
+    assert "Their note: Austin" in text or "Their answer: Austin" in text
+    assert "Once they answer, their note is the latest word" in text
+
+
+def test_a_person_reply_on_an_existing_ask_starts_a_reactive_pass_and_an_old_one_does_not():
+    from quest_ai_runner.intelligence.proactivity.quest_schedule import new_ask_since
+    old_ask = {"key": "k_q", "author": "Zee", "occurred_at": "2026-10-01T09:00:00Z",
+               "history": [{"at": "2026-10-01T09:00:00Z", "by": "run", "state": "awaiting answer", "note": "Which city?"},
+                           {"at": "2026-10-16T10:00:00Z", "by": "person", "state": "awaiting answer", "note": "Austin"}]}
+    assert new_ask_since([old_ask], "2026-10-15T12:00:00Z", NOW) is True
+    assert new_ask_since([old_ask], "2026-10-16T12:00:00Z", NOW) is False
+    assert new_ask_since([old_ask], None, NOW) is True

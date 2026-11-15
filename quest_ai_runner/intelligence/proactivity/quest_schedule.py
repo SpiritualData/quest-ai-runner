@@ -6,7 +6,7 @@ schedules (``autopilot.cadence``, ``last_pass_at``, ``run_requested_at``, ``run_
 mean as events (``quest_events.QuestEvents``, an adapter of Intake Sources).
 """
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import quest_ai_runner
 from hubofhubs.api import WINDOW_DAYS, Window, attach_events
@@ -39,10 +39,25 @@ def run_pending(autopilot_cfg: Mapping[str, Any]) -> bool:
     return due_trigger(autopilot_cfg) == REQUESTED
 
 
+def answer_rows(asks: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Each note a PERSON wrote on an ask, as a row dated when they wrote it. An answer to a question the AI
+    raised (or a reply under an ask it is working) adds history to an existing ask, not a new ask row, so
+    without these rows a reactive quest would never run the pass that acts on the answer."""
+    rows: List[Dict[str, Any]] = []
+    for ask in asks:
+        for entry in ask.get("history") or []:
+            if isinstance(entry, Mapping) and entry.get("by") == "person" and str(entry.get("note") or "").strip():
+                rows.append({"text": str(entry.get("note")), "author": str(ask.get("author") or ""),
+                             "occurred_at": entry.get("at") or ask.get("occurred_at")})
+    return rows
+
+
 def new_ask_since(asks: Sequence[Mapping[str, Any]], last_pass_at: Optional[str], now: Optional[datetime] = None) -> bool:
-    """Whether any of the quest's ``asks`` landed after its last pass (every ask counts when it has never passed): the event a reactive quest waits for."""
+    """Whether any of the quest's ``asks`` landed after its last pass, or a person answered or replied on one after it
+    (every ask counts when it has never passed): the event a reactive quest waits for."""
     schedule = {"name": REACTIVE, "request": "autopilot pass", "event_source": SOURCE, "last_run": last_pass_at or ""}
-    events = QuestEvents(asks).pull(SOURCE, limit=len(asks))
+    rows = [dict(ask) for ask in asks] + answer_rows(asks)
+    events = QuestEvents(rows).pull(SOURCE, limit=len(rows))
     return bool(due(attach_events([schedule], events), now))
 
 
