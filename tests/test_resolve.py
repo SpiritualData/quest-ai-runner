@@ -183,6 +183,13 @@ def test_the_shipped_snapshot_matches_the_records():
     assert shipped == snapshot, "run: esoi select --snapshot quest_ai_runner/esoi_selection.json"
 
 
+def test_the_planner_default_resolves_to_its_route_implementation():
+    """The default of the planner was once rewritten to an interface name (``MessageRouting``). That passes the snapshot-matches-records
+    test, because both carry the same wrong value, and fails the first request that resolves the planner (a server error on every chat turn)."""
+    from quest_ai_runner.intelligence.mind.planner.message_routing import PlannerRoute
+    assert resolve("planner") is PlannerRoute
+
+
 def test_an_installed_copy_without_the_records_still_has_its_defaults(tmp_path):
     """A package installed elsewhere (quest-backend installs QAR) has no esoi/ records: the snapshot beside the
     package gives the defaults and the module of each implementation, and the folders around an installed package are

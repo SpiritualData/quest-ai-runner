@@ -523,7 +523,12 @@
   }
  },
  "planner": {
-  "default": "messagerouting",
+  "default": "planner_route",
+  "evidence": {
+   "detail": "beaten by single_prompt: qar_planner is better than keyword_rules (two-sided exact McNemar test, Holm-adjusted p=0.00549, 14 of 54 cases disagree; one of 3 looks, alpha 0.0167); qar_planner leads pre_route_then_planner (pre_route_then_planner 0.889 against qar_planner 0.907; best guess, not yet significant, two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=1, pre_route_then_planner passed 48 of 54, qar_planner 49 of 54); best guess, not yet significant: single_prompt leads qar_planner (single_prompt 0.963 against qar_planner 0.907; two-sided exact Fisher test on the pass counts (no per-case rows), Holm-adjusted p=0.875, single_prompt passed 52 of 54, qar_planner 49 of 54); more cases would settle it",
+   "p": 0.005493,
+   "verdict": "LOSS"
+  },
   "modules": {
    "planner_route": "quest_ai_runner.intelligence.mind.planner.message_routing"
   }
