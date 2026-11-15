@@ -549,7 +549,7 @@ class RunnerConfig:
     # only consulted when the quest does not state one, which includes deployments whose backend
     # predates that field. ``None`` means "no consumer opinion", i.e. off.
     autopilot_adopt_recurring: Optional[bool] = None
-    # The hub's structure watch: once per autopilot or routine run of a quest, one small best-tier call over the quest's goals, experiments and investigations (none when they did not change since
+    # The hub's structure watch: once per autopilot run of a quest, one small best-tier call over the quest's goals, experiments and investigations (none when they did not change since
     # that quest's last watch). Every item is a decision request on the quest and no record is ever edited. On by default; False turns it off for this lane.
     autopilot_structure_watch: bool = True
     # {quest_id: {"file": path, "label": "what the items are"}}: a file (relative paths are under

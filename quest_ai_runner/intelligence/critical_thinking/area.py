@@ -177,18 +177,19 @@ class CappedModelDraft:
 
 @implementation("quest-autopilot", "live_pass")
 class LivePass:
-    """The production autopilot pass run for one quest against the Quest account: the budget, cadence, run-now, reactive, roster-day and
-    backpressure gates decide, and the outcome is either a skip with its reason or a pass to the work stage."""
+    """The production autopilot run planned for one run task against the Quest account: the extra-run allowance, backpressure, the plan's cap and the
+    pauses decide, and the outcome is either a skip with its reason or a run to the work stage."""
     REQUIRES = ()     # the seat it is handed
 
     def __init__(self, quest: QuestOperations) -> None:
         self.quest = quest
 
-    def gate(self, quest_id: str, now: str = "") -> Mapping[str, Any]:
+    def gate(self, quest_id: str, now: str = "", autopilot_id: str = "") -> Mapping[str, Any]:
         clock = (lambda: datetime.fromisoformat(now.replace("Z", "+00:00"))) if now else datetime.now
-        result = AutopilotPass(self.quest, team_id=getattr(self.quest, "team_id", "") or None, now=clock).run({"text": "pass", "goal_id": quest_id})
-        if result.skipped:
-            return {"outcome": "skipped", "text": result.skipped[0]["reason"]}
+        plan = AutopilotPass(self.quest, team_id=getattr(self.quest, "team_id", "") or None, now=clock).run(
+            {"text": "run", "goal_id": quest_id, "task_kind": "autopilot_run", "autopilot_id": autopilot_id})
+        if plan.status == "skipped":
+            return {"outcome": "skipped", "text": plan.reason}
         return {"outcome": "ran", "text": ""}
 
 
@@ -252,8 +253,8 @@ class DeepRunsOnly:
     def draft(self, task_text: str, card: Mapping[str, Any], context_view: str = "") -> Any:
         return self.drafts.draft(task_text, card, context_view)
 
-    def gate(self, quest_id: str, now: str = "") -> Mapping[str, Any]:
-        return self.gates.gate(quest_id, now)
+    def gate(self, quest_id: str, now: str = "", autopilot_id: str = "") -> Mapping[str, Any]:
+        return self.gates.gate(quest_id, now, autopilot_id)
 
 
 @implementation("critical-thinking", "every_request_measured")

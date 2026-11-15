@@ -1,4 +1,4 @@
-"""Poller timing helpers: claim cooldown, quest-pass recurrence, series liveness and due-now checks.
+"""Poller timing helpers: claim cooldown, dispatch order and due-now checks.
 
 Split out of ``poller.py`` by definition; that module re-exports every name here.
 """
@@ -12,8 +12,6 @@ from datetime import date, datetime, time, timedelta, timezone
 import quest_ai_runner
 from hubofhubs.api import WINDOW_DAYS, ordered_ids
 
-from quest_ai_runner.intelligence.proactivity.autopilot import _parse_dt
-from quest_ai_runner.intelligence.proactivity.quest_schedule import roster_days, run_pending
 from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone, today_in_zone
 
 
@@ -23,103 +21,6 @@ log = logging.getLogger("quest-ai-runner.poller")
 # How long dispatch leaves a task alone after its claim fails (see ``_submit_to_pool``).
 CLAIM_RETRY_COOLDOWN_SECONDS = 600.0
 MINUTES_PER_DAY = 1440
-
-
-def _quest_pass_days(autopilot_cfg: Dict[str, Any]) -> Optional[List[str]]:
-    """The weekdays this quest's own pass series should ever fire on (``Mon``..``Sun``), or ``None`` for every day.
-
-    The roster's days are the hub's ``window`` days (``quest_schedule.roster_days``), the same days the gate asks the hub's Proactivity about, so the series
-    never fires on a day the gate would skip: no "nothing to do" occurrence is created only to report a skip (see ``_create_quest_pass``).
-    """
-    days = roster_days(autopilot_cfg)
-    return [day.title() for day in days] if days else None
-
-
-def _next_allowed_date(start: date, allowed_days: List[str]) -> date:
-    """The first date on/after ``start`` whose weekday is in ``allowed_days`` (``Mon``..``Sun``, matching Python's Monday=0..Sunday=6 ``date.weekday()``)."""
-    allowed_idx = {WINDOW_DAYS.index(d.lower()[:3]) for d in allowed_days if d.lower()[:3] in WINDOW_DAYS}
-    for offset in range(7):
-        candidate = start + timedelta(days=offset)
-        if candidate.weekday() in allowed_idx:
-            return candidate
-    return start  # unreachable: allowed_days is never empty when this is called
-
-
-def _quest_pass_recurrence(entry: Dict[str, Any], expected_time: str) -> Dict[str, Any]:
-    """The ``recurrence`` a quest's own pass series should carry: ``weekly`` restricted to the
-    roster's on-duty days when ``_quest_pass_days`` finds a restriction, else the unrestricted
-    ``daily`` every quest had before the day rule existed. This is the one place that decides the
-    SHAPE of the series, used both to create it and to retune it, so the two can never disagree.
-    """
-    allowed_days = _quest_pass_days(entry)
-    if allowed_days:
-        return {"frequency": "weekly", "days": allowed_days, "time": expected_time}
-    return {"frequency": "daily", "time": expected_time}
-
-
-# A generic multi-day window, comfortably wider than a daily cadence so a live weekly (or
-# monthly) foreign series is never misread as dead just because nothing has touched it in the
-# last day or two -- see ``_foreign_series_looks_alive``.
-_FOREIGN_SERIES_STALE_AFTER_DAYS = 3
-
-
-def _foreign_series_looks_alive(occ: Dict[str, Any], entry: Dict[str, Any],
-                                now: datetime) -> bool:
-    """Whether a foreign-owned SERIES occurrence still looks like a LIVE pass (True) rather than a
-    genuinely stale/abandoned one (False).
-
-    This is the test ``_ensure_one_quest_pass`` uses to decide whether creating our own competing
-    series would duplicate a series another account's lane is actually servicing, or would be the
-    only thing standing between this quest and never getting an autopilot pass again. Neither
-    extreme is safe as a blanket rule: always ignoring a foreign series (the old behaviour)
-    resurrects the ORIGINAL bug this method's docstring already names -- a quest whose foreign
-    pass is permanently dead (created before passes carried ``assignee_user_id``, or that
-    account's lane is gone for good) never gets a pass again, silently, until a human clears it in
-    the app. Never creating our own when ANY foreign series exists brings back the duplicate-series
-    bug this heuristic exists to fix -- two lanes each maintaining their own series for the same
-    quest.
-
-    Primary signal: ``scheduled_date``, read in the quest's own zone (matching
-    ``_expected_quest_occurrence``'s date arithmetic). A series occurrence dated today or later
-    means SOME lane is advancing it on schedule -- alive. One dated in the past means nothing has
-    advanced it past its own due date, which is exactly what an abandoned lane looks like.
-
-    Fallback when ``scheduled_date`` is missing or unparseable: ``updated_at`` recency (via
-    ``autopilot._parse_dt``, the one existing way this repo parses a stored ISO timestamp) against
-    ``_FOREIGN_SERIES_STALE_AFTER_DAYS``.
-
-    Both fields missing/unparseable default to ALIVE -- the conservative choice. Being cautious
-    about NOT creating a duplicate costs nothing here: the loud per-scan foreign-occurrence warning
-    already logged by the caller is what tells a human to go clear a genuinely dead one; this
-    heuristic only decides whether THIS lane also creates a second series in the meantime.
-    """
-    zone = entry.get("run_timezone")
-    scheduled = str(occ.get("scheduled_date") or "").strip()
-    if scheduled:
-        try:
-            scheduled_date = date.fromisoformat(scheduled)
-        except ValueError:
-            scheduled_date = None
-        if scheduled_date is not None:
-            return scheduled_date >= today_in_zone(zone, now)
-    updated = _parse_dt(occ.get("updated_at"))
-    if updated is None:
-        return True
-    age = now_in_zone(zone, now) - now_in_zone(zone, updated)
-    return age.days < _FOREIGN_SERIES_STALE_AFTER_DAYS
-
-
-def _run_request_signature(quest_id: str, entry: Dict[str, Any]) -> str:
-    """The dedup key for ONE pending "Run now" on one quest, or ``""`` when none is pending.
-
-    Keyed on the request's own ``run_requested_at`` instant, so pressing the button again is a
-    different request and gets its own pass, while the SAME press can only ever be served once.
-    Stored in the lane's ordinary ``StateStore``, the same place a task's signature lives, so it
-    survives a restart and needs no new storage.
-    """
-    if not quest_id or not run_pending(entry):
-        return ""
-    return f"autopilot-run-request:{quest_id}:{entry.get('run_requested_at')}"
 
 
 # What a task is to the dispatcher, first first: a task a person pressed "Start now" on, then a task a person is waiting on, then any other.

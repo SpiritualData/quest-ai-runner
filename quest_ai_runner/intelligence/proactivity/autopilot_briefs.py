@@ -385,6 +385,8 @@ def compose_batch_text(quest_outcome: str,
                        default_quest_instructions: Optional[str] = None,
                        default_persona_instructions: Optional[str] = None,
                        goal_ladder: Optional[List[Dict[str, Any]]] = None,
+                       routed_goals: Optional[List[str]] = None,
+                       source_text: Optional[str] = None,
                        experiments: Optional[str] = None,
                        asked: Optional[str] = None,
                        intent_frame: Optional[str] = None,
@@ -444,6 +446,9 @@ def compose_batch_text(quest_outcome: str,
     rather than work to do. It is THE ONLY WAY A GOAL REACHES A RUN: no goal is ever composed as
     an assignment here. Absent or empty, this emits nothing and composes byte-identically to before
     the parameter existed.
+
+    ``routed_goals`` are the goal lines the day's routing assigned to this autopilot (``autopilot_routing``); ``source_text`` is a work source's block
+    (``autopilot_sources.source_section``). Absent or empty, each emits nothing.
 
     ``context_updates`` (from ``UpdateEngine.collect(...).as_prompt_block()``, see
     ``runner/context_updates.py``) is what has changed on channels OTHER than the two above since
@@ -557,6 +562,11 @@ def compose_batch_text(quest_outcome: str,
         # here is some more work", which is the misreading the framing above spends its words
         # preventing.
         add("goal frame", _render_goal_ladder(goal_ladder), prompt_budget.PRIORITY_GOALS)
+    if routed_goals:
+        # Goals the person's plan hands to THIS autopilot's rep. Unlike the ladder above they ARE this run's work, and only this autopilot is
+        # given them (a goal is worked by one autopilot per day, the earliest in list order that shares the rep).
+        add("routed goals", "Goals routed to you today (each fits this autopilot's scope, and no other autopilot works them today; work them in this run, and say in your result what moved on each):\n"
+            + "\n".join(f"- {line}" for line in routed_goals), prompt_budget.PRIORITY_GOALS)
     if asked:
         add("what you asked", asked, prompt_budget.PRIORITY_STANDING, whole=True)
     if experiments:
@@ -605,6 +615,9 @@ def compose_batch_text(quest_outcome: str,
         add("last run", last_run, prompt_budget.PRIORITY_HISTORY)
     if previous:
         add("previous period", _summarize_previous(previous), prompt_budget.PRIORITY_HISTORY)
+    if source_text:
+        # A source run's bounds, rules and what is due: required, and before the general rules, which it narrows.
+        require(source_text.strip())
     if esoi_readiness:
         # Required, not optional: it is the choice the rule below asks for, already made by code.
         require(esoi_readiness.strip())

@@ -7,7 +7,34 @@ from __future__ import annotations
 import threading
 from typing import Any, Dict, List
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+# The first line of every composed run brief. A suggested run is parked with its brief and runs as composed once a person approves it, so the
+# executor tells a composed run from a fresh one by this line, a fixed sentence the runner itself wrote (never model output).
+RUN_BRIEF_HEADER = "Autopilot run brief, composed by Quest AI Runner."
+
+
+@dataclass
+class RunPlan:
+    """What the executor does with one ``autopilot_run`` task: ``skipped`` (close it, saying ``reason``), ``suggested`` (park it as suggested
+    with ``text``, the composed brief) or ``act`` (run the deep agent on ``text``). ``notes_sink`` collects the pass's bookkeeping warnings."""
+    quest_id: str
+    autopilot_id: str
+    dry_run: bool = False
+    status: str = "skipped"
+    reason: str = ""
+    text: str = ""
+    title: str = ""
+    notes_sink: "AutopilotResult" = None   # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.notes_sink is None:
+            self.notes_sink = AutopilotResult(ran_at=datetime.now(timezone.utc), dry_run=self.dry_run)
+
+    def skip(self, reason: str) -> "RunPlan":
+        self.status, self.reason, self.text = "skipped", reason, ""
+        return self
 
 
 @dataclass
@@ -101,24 +128,24 @@ class AutopilotResult:
             lines.append(_count_line(len(self.skipped), "Nothing started on one quest:",
                                      "Nothing started on {n} quests:"))
             for s in self.skipped:
-                lines.append(f"  - {s.get('quest_label') or s.get('quest_id')}: {s.get('reason')}")
+                lines.append(f"  - {_who(s)}: {s.get('reason')}")
         if self.errors:
             if lines:
                 lines.append("")
             lines.append(_count_line(len(self.errors), "One quest hit an error:",
                                      "{n} quests hit an error:"))
             for e in self.errors:
-                lines.append(f"  - {e.get('quest_label') or e.get('quest_id')}: {e.get('error')}")
+                lines.append(f"  - {_who(e)}: {e.get('error')}")
         if self.bookkeeping_warnings:
             if lines:
                 lines.append("")
             lines.append(
-                f"WARNING: autopilot bookkeeping did not persist on "
-                f"{len(self.bookkeeping_warnings)} quest(s). The cadence gate reads "
-                f"last_pass_at, so until this is fixed those quests are considered due on EVERY "
-                f"pass (the per-quest cadence cannot hold them back):")
+                f"WARNING: autopilot bookkeeping did not persist for "
+                f"{len(self.bookkeeping_warnings)} autopilot(s). The schedule reads "
+                f"each autopilot's last_pass_at, so until this is fixed they are considered due on EVERY "
+                f"pass (the cadence cannot hold them back):")
             for w in self.bookkeeping_warnings:
-                label = w.get("quest_label") or w.get("quest_id")
+                label = _who(w)
                 lines.append(f"  - {label}: {w.get('detail')}")
         if not lines:
             lines.append("No quest has autopilot switched on, so this pass had nothing to work on.")
@@ -137,7 +164,11 @@ class AutopilotResult:
             if p.get("kind") == "goal_proposal":
                 lines.append(f"  - Propose a goal on {label}: {p.get('title')}")
                 continue
-            line = (f"  - Work on {label} as {p.get('persona_label') or 'the assistant'} "
+            who = f" ({p.get('autopilot_name')})" if p.get("autopilot_name") else ""
+            if p.get("kind") in ("gated", "prompt_only"):
+                lines.append(f"  - Run{who} on {label}: {p.get('detail')}")
+                continue
+            line = (f"  - Work on {label}{who} as {p.get('persona_label') or 'the assistant'} "
                     f"({p.get('scope')})")
             # Adoption CLOSES the user's own recurring tasks, so a report that omitted it
             # would hide the most consequential thing the pass does.
@@ -151,7 +182,7 @@ class AutopilotResult:
                 line += f", working {instructions_from}"
             lines.append(line)
         for s in self.skipped:
-            lines.append(f"  - Skip {s.get('quest_label') or s.get('quest_id')}: {s.get('reason')}")
+            lines.append(f"  - Skip {_who(s)}: {s.get('reason')}")
         for e in self.errors:
             lines.append(f"  - Error on {e.get('quest_label') or e.get('quest_id')}: {e.get('error')}")
         if not (self.proposals or self.skipped or self.errors):
@@ -165,6 +196,13 @@ def _count_line(n: int, one: str, many: str) -> str:
     A person reading "Created 1 task(s)" is reading a template that was never finished.
     """
     return one if n == 1 else many.format(n=n)
+
+
+def _who(item: Dict[str, Any]) -> str:
+    """A row's quest, and the autopilot it concerns when it names one: ``<quest> (<autopilot>)``."""
+    label = str(item.get("quest_label") or item.get("quest_id") or "")
+    name = str(item.get("autopilot_name") or "").strip()
+    return f"{label} ({name})" if name else label
 
 
 def _quest_label(quest: Dict[str, Any], quest_id: str) -> str:
@@ -199,6 +237,9 @@ def _describe_created(item: Dict[str, Any]) -> str:
     # own outcome, so naming the quest again gave "Next step toward: <outcome> (on <outcome>)".
     if quest_label and quest_label.lower() not in title.lower():
         line += f" (on {quest_label})"
+    name = str(item.get("autopilot_name") or "").strip()
+    if name and name.lower() not in title.lower():
+        line += f" [{name}]"
     persona = str(item.get("persona_label") or "").strip()
     if persona:
         line += f", as {persona}"

@@ -11,7 +11,8 @@ composes byte-identically to what it composed before any of this existed.
 from datetime import datetime, timedelta, timezone
 
 from quest_ai_runner.body.configuration.config import RunnerConfig
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
+from .autopilot_effective import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot import compose_batch_text
 from quest_ai_runner.body.intake_sources.managed_blocks import BLOCK_START
 from quest_ai_runner.body.intake_sources.context_updates import ContextUpdate, UpdateEngine, Watermarks, build_update_engine
 from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
@@ -114,26 +115,8 @@ def test_the_watermark_moves_only_once_a_batch_carrying_the_material_was_created
     assert marks.get("q1", "quest_notes") == NOW
 
 
-def test_a_dry_run_reads_the_persons_note_without_consuming_it():
-    client = _one_quest_client([_note("The method chapter has to come first")])
-    marks = Watermarks(None)
-    _pass_with(client, _engine(client, marks)).run({"text": "dry-run"})
-    assert not client.created_tasks
-    assert marks.get("q1", "quest_notes") is None
 
 
-def test_a_pass_that_creates_nothing_leaves_the_note_for_the_next_one():
-    """Today's budget was spent before this pass ran: the note was never handed to a run, so the
-    next pass must still offer it."""
-    client = _one_quest_client([_note("The method chapter has to come first")])
-    client.tasks.append({"id": "t0", "task_kind": "autopilot_work", "goal_id": "other",
-                         "status": "done", "created_at": "2026-09-09T01:00:00Z"})
-    marks = Watermarks(None)
-    result = _pass_with(client, _engine(client, marks), daily_budget=1).run(
-        {"text": "autopilot pass"})
-    assert result.created_task_ids == []
-    assert not client.created_tasks
-    assert marks.get("q1", "quest_notes") is None
 
 
 def test_an_unanswered_note_is_still_offered_on_the_next_pass():

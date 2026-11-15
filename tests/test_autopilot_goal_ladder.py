@@ -20,7 +20,8 @@ These tests pin the parts that are product decisions rather than implementation 
 from datetime import datetime, timezone
 
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import DEFAULT_LADDER_PER_SCOPE
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text, current_goal_ladder, current_scope_label
+from .autopilot_effective import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot import compose_batch_text, current_goal_ladder, current_scope_label
 
 from .test_autopilot import NOW, FakeAutopilotClient, _goal, _goals_payload, _now, _quest
 

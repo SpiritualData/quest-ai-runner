@@ -36,6 +36,12 @@ AUTOPILOT_PASS_KIND = "autopilot"
 AUTOPILOT_WORK_KIND = "autopilot_work"
 
 
+# An AUTOMATIC EXTRA run is one nobody scheduled and nobody pressed "Run now" for: a run a reply reopened, a catch-up. Its ``occurrence_key`` starts with
+# one of these. Only extras are bounded: at most this many per autopilot a day, and within the team's daily budget.
+EXTRA_RUN_KEY_PREFIXES = ("reply:", "extra:")
+MAX_EXTRA_RUNS_PER_AUTOPILOT = 3
+
+
 # The ``source`` stamped on autopilot-created tasks. The Quest API validates source against a
 # CLOSED enum and 400s anything else (create_task raises, by design). The enum has since gained
 # "autopilot", but "chat" is kept here because it is accepted by BOTH the current and older

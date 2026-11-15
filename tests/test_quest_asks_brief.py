@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from quest_ai_runner.body.hands.quest_operations import tools_quest_ops as ops
 from quest_ai_runner.world.tools.tools import ToolContext
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass
+from .autopilot_effective import AutopilotPass
 from quest_ai_runner.intelligence.proactivity.autopilot_briefs import compose_batch_text
 from quest_ai_runner.intelligence.proactivity.quest_asks_brief import asks_brief_section, fetch_asks
 from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient

@@ -1,16 +1,16 @@
-"""The ``learning`` routine purpose: keep the hub's registry of the best existing implementations and public evidence current.
+"""The ``learning`` work source: keep the hub's registry of the best existing implementations and public evidence current.
 
 What is due is the hub's Learning solution (its ``due_investigations``: stale areas, past-revisit investigations, experiments to reevaluate and the daily sweep
 for new tools outside every area; ``quest_ai_runner.run("learning", <date>)`` runs only its entry, ``stale_areas``): this module only asks it, turns its answer into
 items, and states the standing rules of the work. Each review is a small systematic review under the hub's knowledge search standard; where
-the repository, the registry and the standard live is the routine's own instructions (consumer config), never this file.
+the repository, the registry and the standard live is the autopilot's own instructions (consumer config), never this file.
 """
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Callable, List, Mapping, Optional, Sequence
 
-from quest_ai_runner.intelligence.proactivity.autopilot_routines import RoutinePurpose, register_purpose
+from quest_ai_runner.intelligence.proactivity.autopilot_sources import WorkSource, register_source
 
 LEARNING_SCOPE = ("keep the hub's registry of the best existing implementations and public evidence current, running each search as a small "
                   "systematic review under the hub's knowledge search standard.")
@@ -44,10 +44,10 @@ def learning_due(today: str, ask: Optional[Callable[[str], Any]] = None) -> List
     return [item_of(entry) for entry in (answer or [])]
 
 
-def learning_purpose(ask: Optional[Callable[[str], Any]] = None) -> RoutinePurpose:
+def learning_purpose(ask: Optional[Callable[[str], Any]] = None) -> WorkSource:
     def due_items(now: datetime) -> Sequence[Mapping[str, Any]]:
         return learning_due(now.date().isoformat(), ask)
-    return RoutinePurpose("learning", LEARNING_SCOPE, LEARNING_RULES, due_items)
+    return WorkSource("learning", LEARNING_SCOPE, LEARNING_RULES, due_items)
 
 
-register_purpose(learning_purpose())
+register_source(learning_purpose())

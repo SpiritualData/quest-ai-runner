@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 
 from quest_ai_runner.intelligence.proactivity import autopilot_structure_watch as binding
-from quest_ai_runner.intelligence.proactivity.autopilot_routines import RoutinePass
+from .autopilot_effective import AutopilotPass
 
 NOW = "2026-11-10T09:00:00Z"
 
@@ -82,14 +82,14 @@ def test_no_call_when_nothing_changed_since_the_last_run_and_none_in_a_dry_run()
     assert binding.watch_quest(c, "q1", now=NOW, store=store, ask=ask, dry_run=True)["reason"] == "off" and len(ask.calls) == 1
 
 
-def test_a_routine_run_calls_the_watch_once_and_a_run_at_its_ceiling_makes_no_call():
+def test_a_run_at_its_ceiling_makes_no_watch_call_and_the_pass_holds_the_watch():
     from hubofhubs.body.internal_context.run_store.runs import RunStore
     c, ask = Client(), ask_for("experiments:e1")
     out = binding.watch_quest(c, "q1", now=NOW, store=RunStore(""), ask=ask, ceilings={"spent_usd": 9.0, "ceiling_usd": 10.0})
     assert out["called"] is False and out["reason"] == "ceiling" and ask.calls == []
     seen = []
-    routine = RoutinePass(c, structure_watch=lambda quest_id, dry: seen.append((quest_id, dry)))
-    assert routine._structure_watch is not None and seen == []
+    run = AutopilotPass(c, structure_watch=lambda quest_id, dry: seen.append((quest_id, dry)))
+    assert run._structure_watch is not None and seen == []
 
 
 class Provider:

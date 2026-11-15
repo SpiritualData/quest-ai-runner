@@ -564,7 +564,8 @@
   },
   "modules": {
    "autopilot_gates": "quest_ai_runner.intelligence.proactivity.autopilot_gates",
-   "autopilot_routines": "quest_ai_runner.intelligence.proactivity.autopilot_routines",
+   "autopilot_routing": "quest_ai_runner.intelligence.proactivity.autopilot_routing",
+   "autopilot_sources": "quest_ai_runner.intelligence.proactivity.autopilot_sources",
    "live_pass": "quest_ai_runner.intelligence.critical_thinking.area",
    "quest_ai_latest": "quest_ai_runner.intelligence.proactivity.quest_ai_latest",
    "structure_watch_binding": "quest_ai_runner.intelligence.proactivity.autopilot_structure_watch"

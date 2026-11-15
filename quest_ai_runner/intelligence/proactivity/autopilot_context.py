@@ -10,7 +10,6 @@ from datetime import timezone
 from quest_ai_runner.intelligence.mind.context_intake.reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
 from quest_ai_runner.intelligence.higher_mind.guidance.insights import InsightsContext, collect_quest_insights
 from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_sync import publish_next_steps, read_next_steps
-from quest_ai_runner.intelligence.proactivity.autopilot_personas import PERSONA_HELD, persona_entries_on_duty, resolve_task_persona
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, DEFAULT_ASSISTANT_REP_ID, _FINISHED_TASK_STATUSES, _MAX_PREVIOUS_TASKS, _SCOPE_ORDER, log)
 from quest_ai_runner.intelligence.proactivity.autopilot_periods import (
@@ -129,7 +128,7 @@ class PassContextMixin:
                          ", ".join(cached.checked_periods) or "no period")
         return cached
 
-    def _insights(self, autopilot_cfg: Dict[str, Any], quest_id: str = "") -> InsightsContext:
+    def _insights(self, last_pass_at: Any, quest_id: str = "") -> InsightsContext:
         """The latest unacted insights ASSIGNED to this quest since its last pass.
 
         Quest-scoped by construction: the read asks the backend for this quest's insights only
@@ -137,7 +136,7 @@ class PassContextMixin:
         reaches this quest's brief. The per-pass cache is keyed by quest id, so two quests in one
         pass each get their own set and never share one. A quest with no id gets no insights.
 
-        ``since`` is the ``last_pass_at`` this pass is about to overwrite, the pass's own record of
+        ``since`` is the autopilot's own ``last_pass_at`` that this pass is about to overwrite, its record of
         when it last looked at this quest. A quest that has never had a pass (no ``last_pass_at``,
         or an unparsable one) sees the whole default window rather than nothing.
 
@@ -147,7 +146,7 @@ class PassContextMixin:
         qid = str(quest_id or "").strip()
         if not qid:
             return InsightsContext()
-        since = _parse_dt(autopilot_cfg.get("last_pass_at"))
+        since = _parse_dt(last_pass_at)
         key = (qid, since)
         cached = self._insights_cache.get(key)
         if cached is None:
@@ -170,67 +169,12 @@ class PassContextMixin:
             return bool(self._adopt_recurring_default)
         return _truthy(stated)
 
-    def _batches_for_pass(self, autopilot_cfg: Dict[str, Any], adopted: List[Dict[str, Any]]
-                          ) -> List[Tuple[Optional[str], List[Dict[str, Any]]]]:
-        """This pass's batches for one quest: ``[(persona, adopted tasks for them), ...]``.
-
-        ONE PER CHARACTER ON DUTY TODAY, in the roster's own on-duty order (day-restricted entries
-        before unrestricted ones). Being on duty is the whole condition, because every character on
-        duty now has a brief to work to at both levels: what the person wrote there, or the
-        built-in default for it. An ``instructions_only`` entry is included like any other -- the flag only keeps that
-        character out of the routing that hands an UNASSIGNED recurring task to somebody.
-
-        A quest with NO roster gets exactly ONE batch, for whoever the consumer's fallback resolver
-        names, or for the plain assistant when it names nobody. A quest rostered to
-        DEFAULT_ASSISTANT_REP_ID gets that same batch by the ordinary route, which is the point of
-        that marker: it makes the fallback a roster entry, so it can carry days and a brief like
-        any other. The caller resolves the marker to the fallback (``_batch_persona``) before the
-        batch is created. That is the unconfigured quest, and
-        it still does its default briefs rather than nothing. (An empty on-duty list can only mean
-        an empty roster here: ``_gate_quest``'s day rule has already skipped a quest whose roster
-        names people but puts none of them on duty today.)
-
-        Adopted tasks are then filed into the batch of whoever ``resolve_task_persona`` names, so
-        an unassigned occurrence rides along with the character already working the quest instead
-        of spawning a second run for the same character, and one naming somebody else gets its own
-        batch. Anything the day rule holds is skipped here rather than re-routed: the caller has
-        already held and reported it, and this is the belt to that braces, so a held task can never
-        become a batch keyed on a marker that names no character.
-        """
-        now = self._quest_now(autopilot_cfg)  # the roster's day, in the quest's own zone
-        merged: Dict[Optional[str], List[Dict[str, Any]]] = {}
-        order: List[Optional[str]] = []
-
-        def slot(persona: Optional[str]) -> List[Dict[str, Any]]:
-            if persona not in merged:
-                merged[persona] = []
-                order.append(persona)
-            return merged[persona]
-
-        on_duty = persona_entries_on_duty(autopilot_cfg, now)
-        for entry in on_duty:
-            rep_id = entry.get("rep_id")
-            if rep_id:
-                slot(str(rep_id))
-        if not on_duty:
-            slot(self._fallback_persona())
-        for task in adopted:
-            persona = resolve_task_persona(task, autopilot_cfg, now, self._persona_resolver)
-            if persona is PERSONA_HELD:
-                continue
-            slot(str(persona) if persona else None).append(task)
-        return [(persona, merged[persona]) for persona in order]
-
-    def _batch_persona(self, persona: Optional[str]) -> Optional[str]:
-        """The character a batch actually runs as, given the roster key it was slotted under.
-
-        Only DEFAULT_ASSISTANT_REP_ID is translated: it is the person having written down the
-        fallback this quest would have had anyway, so it resolves to exactly that and to nothing
-        else. Every other key is a real rep_id and passes through.
-        """
-        if persona == DEFAULT_ASSISTANT_REP_ID:
-            return self._fallback_persona()
-        return persona
+    def _unit_persona(self, unit: Dict[str, Any]) -> Optional[str]:
+        """The character an autopilot runs as: its rep, else the consumer's fallback (the plain assistant when it names nobody)."""
+        rep = str(unit.get("rep_id") or "")
+        if rep and rep != DEFAULT_ASSISTANT_REP_ID:
+            return rep
+        return self._fallback_persona()
 
     def _fallback_persona(self) -> Optional[str]:
         """The consumer's own answer to "who is this quest's character", or None.

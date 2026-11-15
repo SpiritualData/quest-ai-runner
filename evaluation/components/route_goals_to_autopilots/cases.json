@@ -1,0 +1,405 @@
+[
+ {
+  "id": "GRT-001",
+  "kind": "routing",
+  "area": "each goal goes to the autopilot the judge names",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false
+    },
+    {
+     "id": "g2",
+     "name": "Find sources for chapter three",
+     "ai_help": true,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-w",
+    "g2": "ap-r"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {
+     "g1": "ap-w",
+     "g2": "ap-r"
+    }
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-002",
+  "kind": "routing",
+  "area": "a goal the judge gives to nobody is left alone",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false
+    },
+    {
+     "id": "g2",
+     "name": "Fix the plumbing",
+     "ai_help": true,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-w",
+    "g2": null
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {
+     "g1": "ap-w"
+    }
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-003",
+  "kind": "routing",
+  "area": "a goal named for an autopilot that is not on duty today is left alone",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-w"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {}
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-004",
+  "kind": "routing",
+  "area": "a goal not marked for AI help is never judged or assigned",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": false,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-w"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {}
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-005",
+  "kind": "routing",
+  "area": "a completed goal is never assigned",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": true
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-w"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {}
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-006",
+  "kind": "routing",
+  "area": "a goal a rep holds stays with an on-duty autopilot of that rep",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false,
+     "ai_handling": "rep",
+     "ai_handling_rep_id": "rep_1"
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources.",
+     "rep_id": "rep_1"
+    }
+   ],
+   "judge": {
+    "g1": "ap-w"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {
+     "g1": "ap-r"
+    }
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-007",
+  "kind": "routing",
+  "area": "a goal a rep holds is left alone when no autopilot of that rep is on duty",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false,
+     "ai_handling": "rep",
+     "ai_handling_rep_id": "rep_9"
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-w"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {}
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "GRT-008",
+  "kind": "routing",
+  "area": "an answer naming an unknown autopilot assigns nothing",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": "ap-zzz"
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {}
+   }
+  },
+  "heldout": true
+ },
+ {
+  "id": "GRT-009",
+  "kind": "routing",
+  "area": "a failed judgment leaves the goals alone",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": "FAIL"
+  },
+  "expect": {
+   "eq": {
+    "assignments": {}
+   }
+  },
+  "heldout": false
+ },
+ {
+  "id": "GRT-010",
+  "kind": "routing",
+  "area": "a goal belongs to one autopilot even when the judge answers twice",
+  "args": {
+   "goals": [
+    {
+     "id": "g1",
+     "name": "Draft chapter three",
+     "ai_help": true,
+     "completed": false
+    }
+   ],
+   "duty": [
+    {
+     "id": "ap-w",
+     "name": "Writer",
+     "purpose": "Writes the book.",
+     "instructions": "Draft and edit chapters."
+    },
+    {
+     "id": "ap-r",
+     "name": "Researcher",
+     "purpose": "Finds sources.",
+     "instructions": "Research and cite sources."
+    }
+   ],
+   "judge": {
+    "g1": [
+     "ap-w",
+     "ap-r"
+    ]
+   }
+  },
+  "expect": {
+   "eq": {
+    "assignments": {
+     "g1": "ap-w"
+    }
+   }
+  },
+  "heldout": true
+ }
+]

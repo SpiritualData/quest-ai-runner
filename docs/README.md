@@ -61,7 +61,7 @@ Steps for a task you already know you want to do.
   watermarks, the receipt a run writes about what it actually used, and `quest-ai-runner context
   <quest_id>` (`collect_quest_context`), the read that answers "what is this quest's context right
   now" without running anything that consumes it.
-- **[Single-purpose autopilots](how-to/single-purpose-autopilots.md)**: a second autopilot on a quest that does one kind of work on its own schedule and gate, never goals or planning.
+- **[Named autopilots](how-to/named-autopilots.md)**: what the Quest AI Runner does with a quest's named autopilots: one scheduled run per task, goals routed by scope, suggest or act, the extra-run allowance and one run per folder.
 - **[Deployment](how-to/deployment.md)**: run the poller under cron or systemd.
 - **[Corpus playbooks](how-to/corpus-playbooks.md)**: distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.

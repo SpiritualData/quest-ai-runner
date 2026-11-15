@@ -44,42 +44,10 @@ def test_no_instructions_is_byte_identical_to_before_the_parameter_existed():
 
 # --- the always-work rule (AutopilotPass) ---------------------------------------------------------
 
-def test_instructions_only_creates_exactly_one_batch_task_carrying_the_instructions():
-    q1 = _quest("q1", mode="act")
-    q1["autopilot"]["instructions"] = "Produce a short daily brief and send it."
-    # No goals at all for this quest -- goals are not what makes a pass work.
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
-    passer = AutopilotPass(client, team_id="team1", daily_budget=3, now=_now)
-    result = passer.run({"text": "pass"})
-    assert len(result.created_task_ids) == 1
-    created_text = client.created_tasks[0]["text"]
-    assert "Produce a short daily brief and send it." in created_text
 
 
-def test_instructions_only_consumes_exactly_one_budget_unit():
-    q1 = _quest("q1", mode="act")
-    q1["autopilot"]["instructions"] = "Do the first quest's daily thing."
-    q2 = _quest("q2", mode="act")
-    q2["autopilot"]["instructions"] = "Do the second quest's daily thing."
-    client = FakeAutopilotClient(quests=[q1, q2], goals_by_quest={})
-    passer = AutopilotPass(client, team_id="team1", daily_budget=1, now=_now)
-    result = passer.run({"text": "pass"})
-    assert len(result.created_task_ids) == 1
-    assert any(s["quest_id"] == "q2" and "budget" in s["reason"] for s in result.skipped)
 
 
-def test_the_quests_instructions_ride_into_a_batch_that_also_has_a_goal_ladder():
-    """The two are not alternatives. The brief says what to produce; the ladder says what that has
-    to add up to, and a quest with both carries both."""
-    q1 = _quest("q1", mode="act")
-    q1["autopilot"]["instructions"] = "Produce a short daily brief and send it."
-    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", "Draft chapter three")]))}
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
-    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
-    text = client.created_tasks[0]["text"]
-    assert "Produce a short daily brief and send it." in text
-    assert "- Draft chapter three" in text
-    assert "Goal: Draft chapter three" not in text
 
 
 # --- title fallback: adopted title -> persona brief -> quest brief -> "Autopilot run" -----------
@@ -110,42 +78,12 @@ def test_batch_title_is_autopilot_run_when_the_person_wrote_no_brief_at_all():
 
 # --- truncation ------------------------------------------------------------------------------
 
-def test_over_cap_instructions_are_truncated_and_a_warning_is_logged(caplog):
-    q1 = _quest("q1", mode="act")
-    q1["autopilot"]["instructions"] = "x" * (MAX_INSTRUCTIONS_CHARS + 100)
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
-    passer = AutopilotPass(client, team_id="team1", now=_now)
-    with caplog.at_level("WARNING"):
-        result = passer.run({"text": "pass"})
-    assert len(result.created_task_ids) == 1
-    created_text = client.created_tasks[0]["text"]
-    assert ("x" * MAX_INSTRUCTIONS_CHARS) in created_text
-    assert ("x" * (MAX_INSTRUCTIONS_CHARS + 1)) not in created_text
-    assert f"truncated from {MAX_INSTRUCTIONS_CHARS + 100} to {MAX_INSTRUCTIONS_CHARS}" in caplog.text
 
 
-def test_exactly_at_cap_instructions_are_not_touched():
-    q1 = _quest("q1", mode="act")
-    q1["autopilot"]["instructions"] = "z" * MAX_INSTRUCTIONS_CHARS
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
-    passer = AutopilotPass(client, team_id="team1", now=_now)
-    result = passer.run({"text": "pass"})
-    assert len(result.created_task_ids) == 1
-    assert ("z" * MAX_INSTRUCTIONS_CHARS) in client.created_tasks[0]["text"]
 
 
 # --- the goal-proposal path is not reached by a quest that carries instructions -------------------
 
-def test_instructions_set_with_plan_and_work_produces_no_goal_proposal():
-    q1 = _quest("q1", mode="act", planning="plan_and_work")
-    q1["autopilot"]["instructions"] = "Produce a short update, no proposals needed."
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
-    passer = AutopilotPass(client, team_id="team1", now=_now)
-    result = passer.run({"text": "pass"})
-    assert len(result.created_task_ids) == 1
-    created_text = client.created_tasks[0]["text"]
-    assert not created_text.startswith(PROPOSAL_TEXT_PREFIX)
-    assert not any(c.get("kind") == "goal_proposal" for c in result.created)
 
 
 # --- the default briefs require one Solution, a before/after metric report, and filling thin specs --
@@ -226,28 +164,3 @@ def test_batch_title_names_the_autopilot_and_the_solution_it_iterates():
                         persona_label="Mary") == "Email the morning brief"
 
 
-def test_a_pass_titles_its_task_after_the_solution_the_specification_picked():
-    """End to end: the persona brief opens with its machine line, the specification names the Solution, and the task the pass
-    files is titled with the autopilot's name and that Solution's name, never with the record id."""
-    from .test_autopilot import _defaulted_quest
-
-    class SpecClient(FakeAutopilotClient):
-        def get_spec(self, kind, quest_id):
-            return {"records": [
-                {"type": "solution", "recordId": "esr_3d63298c8f4c",
-                 "fields": {"name": "Weekly grant pipeline", "milestones": "M1 five applications", "metric_ids": ["esr_m1aaaaaa"]}},
-                {"type": "metric", "recordId": "esr_m1aaaaaa", "fieldMeta": {"record": {"at": "2026-10-20T00:00:00+00:00"}},
-                 "fields": {"name": "Applications sent", "record": "3 (2026-10-20)", "solution_ids": []}}]}
-
-        def get_ai_profile(self, rep_id, *, team_id=None):
-            return {"display_name": "Mary"}
-
-    q1 = _defaulted_quest()
-    q1["autopilot"]["personas"] = [
-        {"rep_id": "rep_a", "instructions": "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c\nWork the grants."}]
-    client = SpecClient(quests=[q1], goals_by_quest={})
-    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
-    created = client.created_tasks[0]
-    assert created["title"] == "Mary: improve Weekly grant pipeline"
-    assert "esr_" not in created["title"]
-    assert "Iterate this Solution: Weekly grant pipeline" in created["text"]

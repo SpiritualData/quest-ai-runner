@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text, current_scope_label
+from .autopilot_effective import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot import compose_batch_text, current_scope_label
 from quest_ai_runner.intelligence.proactivity.autopilot_periods import previous_period_bounds, previous_period_key, select_period_goals
 
 from .test_autopilot import FakeAutopilotClient, _goal, _goals_payload, _now, _quest
@@ -48,32 +49,8 @@ def test_recurring_tasks_are_left_alone_unless_the_quest_opts_in():
     assert "adopted task" not in client.created_tasks[0]["text"]
 
 
-def test_opted_in_quest_folds_the_recurring_task_into_the_batch_and_closes_it():
-    q1 = _quest("q1", adopt_recurring=True)
-    client = FakeAutopilotClient(
-        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
-        tasks=[_recurring("r1", text="Email the morning brief")])
-    result = _passer(client).run({"text": "pass"})
-    assert len(result.created_task_ids) == 1             # ONE run, not two
-    created = client.created_tasks[0]
-    assert "Email the morning brief" in created["text"]
-    assert "adopted task r1" in created["text"]
-    # the original occurrence is closed, pointing at the batch that took it over
-    assert client.task_updates[0][0] == "r1"
-    assert client.task_updates[0][1]["status"] == "done"
-    assert created["id"] in client.task_updates[0][1]["result"]
 
 
-def test_consumer_default_turns_adoption_on_when_the_quest_states_nothing():
-    """``adopt_recurring`` is a newer field, so a backend that predates it stores nothing and every
-    quest reads as off. Without a consumer-level default there would be no way to enable the
-    behavior at all until that backend ships."""
-    q1 = _quest("q1")                                    # quest says nothing
-    client = FakeAutopilotClient(
-        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
-        tasks=[_recurring("r1")])
-    _passer(client, adopt_recurring_default=True).run({"text": "pass"})
-    assert client.task_updates[0][0] == "r1"
 
 
 def test_an_explicit_quest_setting_beats_the_consumer_default():
@@ -142,17 +119,6 @@ def test_adopted_task_alone_still_produces_a_batch_when_no_goal_is_eligible():
 
 # --- persona routing of adopted tasks ----------------------------------------------------------
 
-def test_an_adopted_task_keeps_its_own_persona_and_gets_its_own_batch():
-    q1 = _quest("q1", adopt_recurring=True,
-                personas=[{"rep_id": "rep_bailey"}])
-    client = FakeAutopilotClient(
-        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
-        tasks=[_recurring("r1", rep="rep_batman")])
-    result = _passer(client).run({"text": "pass"})
-    assert len(result.created_task_ids) == 2
-    by_rep = {t.get("assignee_rep_id"): t for t in client.created_tasks}
-    assert "adopted task r1" in by_rep["rep_batman"]["text"]
-    assert "adopted task r1" not in by_rep["rep_bailey"]["text"]
 
 
 def test_an_unassigned_adopted_task_rides_along_with_todays_persona():
@@ -170,30 +136,8 @@ def test_an_unassigned_adopted_task_rides_along_with_todays_persona():
 
 # --- failure direction --------------------------------------------------------------------------
 
-def test_a_failed_close_duplicates_work_rather_than_losing_it():
-    q1 = _quest("q1", adopt_recurring=True)
-    client = FakeAutopilotClient(
-        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
-        tasks=[_recurring("r1")])
-    client.update_task_error = RuntimeError("500")
-    result = _passer(client).run({"text": "pass"})
-    assert len(result.created_task_ids) == 1             # the batch still exists
-    assert result.bookkeeping_warnings                    # and the failure is reported, not silent
-    assert "duplicated work, not missing work" in result.bookkeeping_warnings[0]["detail"]
 
 
-def test_dry_run_adopts_nothing():
-    q1 = _quest("q1", adopt_recurring=True)
-    client = FakeAutopilotClient(
-        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
-        tasks=[_recurring("r1")])
-    result = _passer(client).run({"text": "autopilot dry-run"})
-    assert client.created_tasks == []
-    assert client.task_updates == []
-    assert result.proposals[0]["adopted_task_ids"] == ["r1"]
-    # and the report SAYS so: adoption closes the user's own tasks, so a summary that omitted it
-    # would hide the most consequential thing the pass does.
-    assert "adopting and closing recurring task(s) ['r1']" in result.summary_text()
 
 
 # --- previous-period context ---------------------------------------------------------------------
@@ -304,26 +248,8 @@ def test_an_unresolvable_name_degrades_to_the_id_rather_than_failing():
     assert "Act as rep_unknown." in client.created_tasks[0]["text"]
 
 
-def test_the_task_is_titled_after_the_work_not_the_persona():
-    """Without an explicit title the server derives one from the first line of the text, which is
-    the persona line, so every autopilot task in the list is named after its persona. The title
-    comes from the brief the run works to, which is what the run will actually produce."""
-    q1 = _quest("q1", personas=[{"rep_id": "rep_09d3",
-                                 "instructions": "Rewrite the ranking formula"}])
-    client = _NamingClient(
-        quests=[q1],
-        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
-    _passer(client).run({"text": "pass"})
-    assert client.created_tasks[0]["title"] == "Rewrite the ranking formula"
 
 
-def test_an_adoption_batch_is_titled_after_the_task_it_took_over():
-    q1 = _quest("q1", adopt_recurring=True, personas=[{"rep_id": "rep_09d3"}])
-    client = _NamingClient(
-        quests=[q1], goals_by_quest={},
-        tasks=[_recurring("r1", text="Email the morning brief")])
-    _passer(client).run({"text": "pass"})
-    assert client.created_tasks[0]["title"] == "Email the morning brief"
 
 
 def test_the_period_is_not_presented_as_this_runs_workload():

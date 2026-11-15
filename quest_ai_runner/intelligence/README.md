@@ -48,7 +48,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Mind | `the-mind` | `quest_ai_runner.run("the-mind", ...)` | Rebuilt prompt per step with a referenced context (today) (`rebuilt_per_step`) | Step continuity at cost over multi-step requests |
 | Critical Thinking | `critical-thinking` | `quest_ai_runner.run("critical-thinking", ...)` | Code-enforced before and after on deep runs only (today) (`deep_runs_only`) | Requests held to their ESOI metric by code |
 | Nervous System | `nervous-system` | `quest_ai_runner.run("nervous-system", 'delete the old backup folder')` | Digest-driven overseer (`overseer`) | Overseer digest evidence and signal correctness on labelled scenarios |
-| Quest Autopilot | `quest-autopilot` | `quest_ai_runner.run("quest-autopilot", 'quest-id')` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
+| Quest Autopilot | `quest-autopilot` | `quest_ai_runner.run("quest-autopilot", 'quest-id')` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot run gate correctness, Autopilot goal routing correctness |
 | Quest Intents | `quest-intents` | `quest_ai_runner.run("quest-intents", ...)` | Separate stores read at the start of a request (today) (`separate_stores`) | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | Proactivity | `proactivity` | no entry declared | none selected | none yet |
 
@@ -69,9 +69,9 @@ Result is the share of the metric's cases an implementation passes (its balanced
 
 | # | Implementation | Result | Cost per pass | In use |
 |---|---|---|---|---|
-| 1 | Scripted-client gate evaluation arm (`live_pass`) | 100% (33 of 33 cases) | free | selected |
+| 1 | Scripted-client gate evaluation arm (`live_pass`) | 100% (12 of 12 cases) | free | selected |
 
-**How it is scored:** Autopilot gate decision correctness. labelled gate cases (budget, cadence in the quest zone, Run now, reactive, roster day, backpressure) run through the production AutopilotPass for one quest with a scripted Quest client and a pinned clock, a share held out, zero model calls; a baseline with elapsed-time cadence and no roster fails them Read in this direction: maximise correct run and skip decisions against the person's settings; eliminate runs past the daily budget or on a day nobody was rostered; minimise spend before the decision.
+**How it is scored:** Autopilot run gate correctness. labelled run cases (scheduled runs, Run now, automatic extra runs against the per-autopilot and team allowance, per-autopilot backpressure, the plan's cap, a paused quest, a disabled autopilot) run through the production AutopilotPass for one quest with a scripted Quest client and a pinned clock, a share held out, zero model calls; a baseline that counts every run against the budget fails them Read in this direction: maximise correct run and skip decisions against the person's settings; eliminate runs that starve a later autopilot or that stack on an unfinished run of the same autopilot; minimise spend before the decision.
 Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
 ## Solutions from a library
@@ -144,7 +144,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 | Mind | `the-mind` | Rebuilt prompt per step with a referenced context (today) (`rebuilt_per_step`) | Step continuity at cost over multi-step requests |
 | Critical Thinking | `critical-thinking` | Code-enforced before and after on deep runs only (today) (`deep_runs_only`) | Requests held to their ESOI metric by code |
 | Nervous System | `nervous-system` | Digest-driven overseer (`overseer`) | Overseer digest evidence and signal correctness on labelled scenarios |
-| Quest Autopilot | `quest-autopilot` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot gate decision correctness |
+| Quest Autopilot | `quest-autopilot` | Scripted-client gate evaluation arm (`live_pass`) | Autopilot run gate correctness, Autopilot goal routing correctness |
 | Quest Intents | `quest-intents` | Separate stores read at the start of a request (today) (`separate_stores`) | Representative long-view carry-through across assigned quests, with nothing outside its branch |
 | Proactivity | `proactivity` | none selected | none yet |
 
@@ -176,7 +176,8 @@ Result is the share of the metric's cases an implementation passes (its balanced
 | Standing instruction alone (floor) | `critical-thinking:instruction_only` | [quest_ai_runner/self/integrity/prompts/standing_instructions.py](../self/integrity/prompts/standing_instructions.py) |  |
 | Digest-driven overseer | `nervous-system:overseer` | [quest_ai_runner/intelligence/nervous_system/area.py](nervous_system/area.py) |  |
 | Eligibility gate mixin | `quest-autopilot:autopilot_gates` | [quest_ai_runner/intelligence/proactivity/autopilot_gates.py](proactivity/autopilot_gates.py) |  |
-| Single-purpose routines | `quest-autopilot:autopilot_routines` | [quest_ai_runner/intelligence/proactivity/autopilot_routines.py](proactivity/autopilot_routines.py) |  |
+| Work sources | `quest-autopilot:autopilot_sources` | [quest_ai_runner/intelligence/proactivity/autopilot_sources.py](proactivity/autopilot_sources.py) |  |
+| Goal routing by scope | `quest-autopilot:autopilot_routing` | [quest_ai_runner/intelligence/proactivity/autopilot_routing.py](proactivity/autopilot_routing.py) |  |
 | Structure watch binding | `quest-autopilot:structure_watch_binding` | [quest_ai_runner/intelligence/proactivity/autopilot_structure_watch.py](proactivity/autopilot_structure_watch.py) |  |
 | Quest AI latest look (no autopilot) | `quest-autopilot:quest_ai_latest` | [quest_ai_runner/intelligence/proactivity/quest_ai_latest.py](proactivity/quest_ai_latest.py) |  |
 

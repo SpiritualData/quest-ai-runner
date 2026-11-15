@@ -34,10 +34,11 @@ if TYPE_CHECKING:  # typing only
     from quest_ai_runner.body.configuration.config import RunnerConfig
 
 from quest_ai_runner.intelligence.higher_mind.objectives.goal_handoff import make_judge
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, _parse_dt
+from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot_periods import _parse_dt
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import AUTOPILOT_WORK_KIND
+from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND
 from quest_ai_runner.intelligence.proactivity.autopilot_structure_watch import build_structure_watch
-from quest_ai_runner.intelligence.proactivity.poller_routines import RoutinesMixin
 from quest_ai_runner.body.intake_sources.context_updates import build_update_engine
 
 
@@ -92,7 +93,7 @@ __all__ = ["Poller", "StateStore"]
 
 
 
-class Poller(PassesMixin, RoutinesMixin, SyncMixin):
+class Poller(PassesMixin, SyncMixin):
     def __init__(self, config: RunnerConfig, *, state_path: Optional[str] = None,
                  client: Optional[QuestClient] = None,
                  resource_guard: Optional[ResourceGuard] = None,
@@ -159,7 +160,7 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         # every pass it runs, because the engine caches the user-scoped reads (reflections,
         # captures) for its lifetime -- a fresh engine per quest would re-read them per quest.
         self._update_engine = build_update_engine(config, self.client, state_path=state_path)
-        # The hub's structure watch, one per poller, shared by the autopilot pass and the routine pass (None when the lane switched it off or holds no model provider).
+        # The hub's structure watch, one per poller, shared by every autopilot pass (None when the lane switched it off or holds no model provider).
         self._structure_watch = build_structure_watch(
             self.client, config.model_provider, str(Path(state_path).with_name(Path(state_path).stem + "_structure_watch")) if state_path else "",
             enabled=config.autopilot_structure_watch, now=self._now)
@@ -206,6 +207,9 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         self._inflight: set = set()
         # Ids of the autopilot work runs in flight, for ``max_concurrent_autopilot_tasks``.
         self._inflight_autopilot: set = set()
+        # ``{task id: folder key}`` of the autopilot runs in flight: at most ONE per quest folder (or per quest, when it has no folder) at a time, because
+        # two deep runs editing one synced folder at once corrupt each other's work. ``QAR_MAX_PARALLEL`` stays the process cap.
+        self._inflight_folders: Dict[str, str] = {}
         # task_id -> monotonic time before which dispatch skips it: a task whose claim failed
         # (another account owns it, so the PATCH 404s) must not keep taking a worker slot.
         self._claim_cooldown: Dict[str, float] = {}
@@ -246,8 +250,6 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
         # so it runs before the resource/token gates that hold back task PICKUP.
         self._ensure_autopilot_pass()
-        # Named single-purpose autopilots (routines) that are due: one work task each, nothing else (poller_routines).
-        self.run_due_routines()
         # Monthly bootstrap report (opt-in): send a report if the corpus is ready and a month
         # has passed since the last report, or if this is the first report. Like folder sync,
         # this is light bookkeeping not gated by resource/token limits.
@@ -376,14 +378,30 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         places = [i for i, t in enumerate(tasks) if self._is_autopilot_work(t)]
         if len(places) < 2:
             return tasks
-        queued = sorted((tasks[i] for i in places), key=lambda t: str(t.get("updated_at") or t.get("created_at") or ""))
+        # Oldest first, then QUESTS TAKEN IN TURN: the first run of each quest, then the second of each, so one busy quest cannot hold the others back.
+        oldest = sorted((tasks[i] for i in places), key=lambda t: str(t.get("updated_at") or t.get("created_at") or ""))
+        rounds: Dict[str, int] = {}
+        keyed = []
+        for t in oldest:
+            quest = str(t.get("goal_id") or "")
+            keyed.append((rounds.get(quest, 0), len(keyed), t))
+            rounds[quest] = rounds.get(quest, 0) + 1
+        queued = [t for _round, _order, t in sorted(keyed, key=lambda row: (row[0], row[1]))]
         ordered = list(tasks)
         for place, task in zip(places, queued):
             ordered[place] = task
         return ordered
 
     def _is_autopilot_work(self, task: Dict[str, Any]) -> bool:
-        return str(task.get("task_kind") or "") == AUTOPILOT_WORK_KIND
+        return str(task.get("task_kind") or "") in (AUTOPILOT_WORK_KIND, AUTOPILOT_RUN_KIND)
+
+    def _is_autopilot_run(self, task: Dict[str, Any]) -> bool:
+        return str(task.get("task_kind") or "") == AUTOPILOT_RUN_KIND
+
+    def _autopilot_folder_key(self, task: Dict[str, Any]) -> str:
+        """What one autopilot run at a time is serialized on: the quest's synced folder, else the quest itself."""
+        quest = str(task.get("goal_id") or task.get("quest_id") or "")
+        return str((self.cfg.quest_folder_map or {}).get(quest) or quest)
 
     def _log_autopilot_wait(self, task_id: str, running: int, limit: int) -> None:
         if task_id != getattr(self, "_last_autopilot_wait_log", None):     # once per task, not per tick
@@ -621,14 +639,19 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
             return True
         limit = int(getattr(self.cfg, "max_concurrent_autopilot_tasks", 0) or 0)
         autopilot = limit > 0 and task is not None and self._is_autopilot_work(task)
+        folder = self._autopilot_folder_key(task) if task is not None and self._is_autopilot_run(task) else ""
         with self._inflight_lock:
             if task_id in self._inflight:
                 return False
+            if folder and folder in self._inflight_folders.values():
+                return False          # one autopilot run per quest folder at a time: it stays queued and unseen, a later tick starts it
             running = len(self._inflight_autopilot)
             if not (autopilot and running >= limit):
                 self._inflight.add(task_id)
                 if autopilot:
                     self._inflight_autopilot.add(task_id)
+                if folder:
+                    self._inflight_folders[task_id] = folder
                 return True
         self._log_autopilot_wait(task_id, running, limit)
         return False
@@ -639,6 +662,7 @@ class Poller(PassesMixin, RoutinesMixin, SyncMixin):
         with self._inflight_lock:
             self._inflight.discard(task_id)
             self._inflight_autopilot.discard(task_id)
+            self._inflight_folders.pop(task_id, None)
 
     def _handle_one_guarded(self, task: Dict[str, Any]) -> Optional[str]:
         """Wrap ``_handle_one`` with the in-process claim guard (see ``_claim_slot``).

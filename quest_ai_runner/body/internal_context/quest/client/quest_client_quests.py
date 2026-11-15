@@ -860,6 +860,29 @@ class QuestsMixin:
             log.warning("get_quest_autopilot failed for quest %s: %s", quest_id, e)
             return {}
 
+    def list_autopilots(self, quest_id: str) -> Dict[str, Any]:
+        """GET /api/quests/{quest_id}/autopilots -- ``{autopilots: [...], limits, shared}``: the quest's named autopilots (each stores every setting it
+        uses, in list order, with a read-only ``status``) and the quest-level fields they share. ``{}`` when the read fails."""
+        try:
+            return self._request("GET", f"/api/quests/{quest_id}/autopilots") or {}
+        except Exception as e:  # noqa: BLE001 -- the caller treats an unreadable list as no autopilot to run
+            log.warning("list_autopilots failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def get_autopilot_routing(self, quest_id: str, day: str) -> Dict[str, Any]:
+        """GET /api/quests/{quest_id}/autopilots/routing/{day} -- the day's record of which autopilot works which goal and why (``{routes: [...]}``,
+        empty when none was written). ``day`` is the quest-zone date, YYYY-MM-DD. ``{}`` when the read fails."""
+        try:
+            return self._request("GET", f"/api/quests/{quest_id}/autopilots/routing/{day}") or {}
+        except Exception as e:  # noqa: BLE001 -- an unreadable record means the day is judged again
+            log.warning("get_autopilot_routing failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def put_autopilot_routing(self, quest_id: str, day: str, routes: List[Dict[str, Any]]) -> WriteResult:
+        """PUT /api/quests/{quest_id}/autopilots/routing/{day} -- replace the day's routing record. Each route is ``{goal_id, goal_title, autopilot_id
+        or None, reason}``; each goal appears once and every autopilot id must be one of the quest's (else 400)."""
+        return self._write("PUT", f"/api/quests/{quest_id}/autopilots/routing/{day}", body={"routes": list(routes)}, label="Recording today's goal routing")
+
     def update_quest_autopilot(self, quest_id: str,
                               fields: Dict[str, Any]) -> WriteResult:
         """PATCH a quest's autopilot settings -- ``PATCH /api/quests/{quest_id}/autopilot``.
@@ -882,9 +905,8 @@ class QuestsMixin:
         ``autopilot.email.reply_address``; it cannot be predicted in advance, only read back from
         here. ``extra="forbid"`` means an unrecognized key now returns a 422, not a silent no-op --
         the caller must still VERIFY the echoed settings for anything it cares landed (see
-        ``runner.autopilot._update_pass_bookkeeping``, which reads them back and reports loudly
-        when a field it wrote did not stick, rather than letting the cadence gate silently never
-        advance).
+        the runner no longer writes bookkeeping). The quest's NAMED autopilots are read with ``list_autopilots`` and written
+        through the backend's per-autopilot routes, never this one.
 
         ``instructions`` and each persona's ``instructions`` are standing instructions for work that
         repeats with nobody present, so write them to the hub's standing work standard (a metric the

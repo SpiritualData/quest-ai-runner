@@ -2,7 +2,8 @@
 read once per quest, placed before the goal ladder, absent for a person with no intents, and cut before the
 request tier when the brief is over budget."""
 from quest_ai_runner.intelligence.mind.delegation import prompt_budget
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
+from .autopilot_effective import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot import compose_batch_text
 from quest_ai_runner.intelligence.proactivity.autopilot_briefs import INTENT_FRAME_PREAMBLE
 
 from .test_autopilot import FakeAutopilotClient, _now, _quest

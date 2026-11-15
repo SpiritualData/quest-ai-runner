@@ -7,7 +7,8 @@ verbatim copy of what the personal account's quests return today.
 """
 import pytest
 
-from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass, compose_batch_text
+from .autopilot_effective import AutopilotPass
+from quest_ai_runner.intelligence.proactivity.autopilot import compose_batch_text
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
 from quest_ai_runner.intelligence.proactivity.autopilot_personas import default_quest_instructions_for
 from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient

@@ -19,8 +19,11 @@ class ContextViewMixin:
                             conv_id: Optional[str] = None,
                             rep_id: Optional[str] = None,
                             related_goal_id: Optional[str] = None,
-                            with_updates: bool = True) -> str:
+                            with_updates: bool = True,
+                            autopilot_id: str = "") -> str:
         """Fetch goal + quest metadata + notes + conversation history from the Quest API.
+
+        ``autopilot_id`` is the named autopilot the task is work for (from its text), so the email contract follows that autopilot's own email settings.
 
         ``with_updates`` is whether the context engine (when one is wired) is asked for what
         changed on this quest; a caller whose task text already carries the engine's block passes
@@ -71,7 +74,7 @@ class ContextViewMixin:
             return "\n".join(parts)
         # Not inside the ``if quest_id`` below: a task created against a quest carries that
         # quest's id in goal_id and leaves quest_id null, and those are exactly the runs that mail.
-        self._append_email_contract(parts, goal_id, quest_id, rep_id)
+        self._append_email_contract(parts, goal_id, quest_id, rep_id, autopilot_id)
         self._append_folder_zones_contract(parts, goal_id, quest_id)
         # Fetch quest metadata if available
         quest: Dict[str, Any] = {}
@@ -171,7 +174,8 @@ class ContextViewMixin:
 
     def _append_email_contract(self, parts: List[str], goal_id: Optional[str],
                                quest_id: Optional[str],
-                               rep_id: Optional[str] = None) -> None:
+                               rep_id: Optional[str] = None,
+                               autopilot_id: str = "") -> None:
         """Add the email contract when (and only when) this quest actually mails its work.
 
         Both ids are tried, quest_id first and goal_id second, because a task created against a
@@ -183,17 +187,17 @@ class ContextViewMixin:
         A ``get_quest`` on an id that is a goal rather than a quest returns {} and falls through,
         so trying both is safe as well as necessary.
         """
-        mailing = self._mailing_quest_id(goal_id, quest_id)
+        mailing = self._mailing_quest_id(goal_id, quest_id, autopilot_id)
         if mailing:
             # The id that actually carries the settings, so the printed command names the quest
             # whose recipients the mail will go to.
             parts.append(email_contract(mailing, rep_id))
 
     def _mailing_quest_id(self, goal_id: Optional[str],
-                          quest_id: Optional[str]) -> Optional[str]:
+                          quest_id: Optional[str], autopilot_id: str = "") -> Optional[str]:
         """The id of the quest whose results are mailed automatically, or None when email is off
         (or the quest cannot be read). quest_id first, then goal_id, for the reason
-        ``_append_email_contract`` gives."""
+        ``_append_email_contract`` gives. A task for a named autopilot follows that autopilot's resolved ``email`` (the quest's when it inherits)."""
         get_quest = getattr(self._client, "get_quest", None)
         if not callable(get_quest):
             return None
@@ -204,7 +208,11 @@ class ContextViewMixin:
                 quest = get_quest(candidate) or {}
             except Exception:  # noqa: BLE001 — never let a context extra break a run
                 continue
-            settings = ((quest.get("autopilot") or {}).get("email") or {})
+            cfg = quest.get("autopilot") or {}
+            settings = cfg.get("email") or {}
+            unit = next((e for e in cfg.get("effective_autopilots") or [] if autopilot_id and e.get("id") == autopilot_id), None)
+            if unit is not None and isinstance(unit.get("email"), dict):
+                settings = unit["email"]
             if settings.get("enabled"):
                 return candidate
         return None

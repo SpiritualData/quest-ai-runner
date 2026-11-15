@@ -9,15 +9,14 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from datetime import date, timedelta
 
-from quest_ai_runner.intelligence.proactivity.autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES
+from quest_ai_runner.intelligence.proactivity.autopilot_defaults import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES
 from quest_ai_runner.intelligence.proactivity.autopilot_pending import pending_work_for
-from quest_ai_runner.intelligence.proactivity.quest_schedule import REQUESTED, due_trigger
+from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND
 from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError
 from quest_ai_runner.intelligence.subconscious.cards_from_files.bootstrap_reporter import (
     check_should_send_monthly_report, generate_bootstrap_report, get_corpus_stats, mark_report_sent)
 from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone, today_in_zone
-from quest_ai_runner.intelligence.proactivity.poller_schedule import (
-    _foreign_series_looks_alive, _next_allowed_date, _quest_pass_days, _quest_pass_recurrence, _run_request_signature, log)
+from quest_ai_runner.intelligence.proactivity.poller_schedule import log
 
 
 class PassesMixin:
@@ -203,13 +202,7 @@ class PassesMixin:
                 "last_pass_at": autopilot_cfg.get("last_pass_at"),
                 "run_requested_at": autopilot_cfg.get("run_requested_at"),
                 "has_instructions": bool(autopilot_cfg["has_instructions"]) if "has_instructions" in autopilot_cfg else bool(instructions),
-                # The quest's single-purpose autopilots and their last passes (see ``poller_routines``).
-                "routines": autopilot_cfg.get("routines") or [],
-                "routine_runs": autopilot_cfg.get("routine_runs") or {},
                 "env_id": autopilot_cfg.get("env_id"),
-                # The roster, so the schedule can skip days the day rule would gate anyway (see
-                # ``_quest_pass_days``). Not read anywhere else in the snapshot today.
-                "personas": autopilot_cfg.get("personas") or [],
                 # Pending work the lane's config names for this quest (0 when none): the schedule
                 # reads it through the same ``due_trigger`` the pass's own gate does.
                 "pending_work": (lambda p: p.count if p else 0)(pending_work_for(
@@ -253,58 +246,13 @@ class PassesMixin:
         comparison for them: an ``assistant_task`` carries no timezone of its own, and inventing
         one for a non-pass task is a separate feature, out of scope here.
         """
-        if str(task.get("task_kind") or "").strip().lower() != AUTOPILOT_PASS_KIND:
+        if str(task.get("task_kind") or "").strip().lower() not in (AUTOPILOT_PASS_KIND, AUTOPILOT_RUN_KIND):
             return None
         quest_id = str(task.get("goal_id") or "").strip()
         if not quest_id:
             return None
         entry = self._quest_schedule_snapshot().get(quest_id)
         return (entry or {}).get("run_timezone") or None
-
-    def _expected_quest_occurrence(self, entry: Dict[str, Any], *,
-                                   honour_run_request: bool = True) -> Tuple[str, str]:
-        """The catch-up formula (autopilot spec A3): ``today_in_tz`` if the quest's cadence is
-        due, else tomorrow -- computed from the exact SAME question the pass's own gate asks the hub's
-        Proactivity (``quest_schedule.due_trigger``), so the schedule and the gate can never disagree. A late run therefore
-        never consumes the next day's occurrence (the corrected date comes from the clock and
-        ``last_pass_at``, never from the previous occurrence's own date) and never produces two
-        briefs (once a pass has run today, this returns tomorrow, and the gate's own question is a second,
-        independent guard inside the pass).
-
-        A pending "Run now" request (the ``requested`` trigger) overrides both halves: the date is today,
-        and the time is pulled back to the current local time when ``run_time`` is still ahead of
-        it, so the occurrence is due the moment the runner next looks instead of at a run_time
-        that may be hours away (or already gone, which needs no pulling back). This is the whole
-        of "run now" on the schedule side -- the same series, the same occurrence, moved. A "Run
-        now" is a person's explicit request THIS moment, so it is not rolled past an excluded day
-        the way the ordinary cadence path below is -- the day rule still gates it once the pass
-        actually runs (nothing overrides that), so it is reported as a skip like any other, never
-        silently dropped.
-
-        Off a roster day nobody is rostered for, the ordinary (non-"Run now") date is rolled
-        forward to the next day the roster would actually let something happen -- see
-        ``_quest_pass_days``. Without this, a quest whose roster excludes a day still got a same-
-        day occurrence created and then immediately skipped once it ran, which is exactly the
-        no-op noise this schedule exists to avoid creating in the first place.
-
-        ``honour_run_request=False`` is the caller saying THIS request has already been served, so
-        only the ordinary cadence path applies. That is not an optimisation, it is the bound on
-        this whole method: see ``_ensure_one_quest_pass``, which owns the decision.
-
-        Returns ``(expected_date "YYYY-MM-DD", expected_time "HH:MM")``.
-        """
-        zone = entry.get("run_timezone")
-        run_time = entry.get("run_time") or "00:00"
-        now = self._now()
-        today = today_in_zone(zone, now)
-        trigger = due_trigger(entry, now, zone, int(entry.get("pending_work") or 0), honour_run_request=honour_run_request)
-        if trigger == REQUESTED:
-            return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
-        expected_date = today if trigger else today + timedelta(days=1)
-        allowed_days = _quest_pass_days(entry)
-        if allowed_days:
-            expected_date = _next_allowed_date(expected_date, allowed_days)
-        return expected_date.isoformat(), run_time
 
     def _list_pass_tasks(self, *, team_id: Optional[str] = None,
                          goal_id: Optional[str] = None,
@@ -441,41 +389,6 @@ class PassesMixin:
                 log.warning("autopilot: could not ensure quest %s's own pass (%s) — will retry "
                             "next scan", quest_id, e)
 
-    @staticmethod
-    def _split_pass_occurrences(
-            occurrences: List[Dict[str, Any]]
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Split a quest's open pass occurrences into ``(series, catch_ups)`` on the one fact that
-        actually tells them apart: a SERIES occurrence carries a ``recurrence``, a one-off
-        CATCH-UP carries none.
-
-        That test is structural rather than a label because the backend's spawner is structural:
-        it copies ``recurrence`` onto the next occurrence, so anything holding one is a link in a
-        repeating chain, and anything holding none is a single task that ends when it ends.
-
-        INCIDENT (2026-09-05) -- what happens without the split. Every open task of the pass kind
-        was grouped by ``goal_id`` alone, so a one-off pass created by hand to unblock a stuck
-        "Run now" was counted as one of the quest's series occurrences. Three consequences, in
-        order: the quest was reported as having "2 open pass occurrences"; ``_retune_quest_pass``
-        then stamped a daily ``recurrence`` onto that one-off (it writes a recurrence whenever the
-        current one differs from expected, and "absent" differs), converting it into a SECOND
-        series; and when it completed, the backend spawned its own next occurrence, leaving the
-        quest with two passes a day and an orphan chain that would have kept going. The structural
-        rule that follows, and the whole reason this function exists: a catch-up is never retuned
-        and never counted as the quest's pass, so it can never acquire a recurrence and can never
-        become a series.
-        """
-        series: List[Dict[str, Any]] = []
-        catch_ups: List[Dict[str, Any]] = []
-        for occ in occurrences:
-            recurrence = occ.get("recurrence")
-            # Free text ("daily") and the structured object are both real recurrences; an empty
-            # string is how a retirement CLEARS one, so it counts as none.
-            present = (bool(recurrence.strip()) if isinstance(recurrence, str)
-                       else bool(recurrence))
-            (series if present else catch_ups).append(occ)
-        return series, catch_ups
-
     def _unwritable_pass_occurrences(
             self, occurrences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """The occurrences this lane can SEE but can never write to, because another account owns
@@ -500,296 +413,20 @@ class PassesMixin:
 
     def _ensure_one_quest_pass(self, quest_id: str, entry: Dict[str, Any],
                                occurrences: List[Dict[str, Any]]) -> None:
-        """Bring ONE quest's pass into line: its series exists and holds the expected schedule,
-        and a pending "Run now" the series cannot absorb gets a one-off catch-up instead.
+        """Retire what is left of ONE quest's old pass series. Nothing here creates a pass any more.
 
-        An occurrence owned by ANOTHER account is INERT and is excluded from every decision here.
-        It cannot run: task discovery is scoped to the caller's own ``user_id``
-        (quest-backend ``assistant_task_storage.list_assistant_tasks`` builds
-        ``query = {"user_id": ...}`` and only narrows from there), and no lane authenticates as
-        that owner. It cannot be retuned, retired or cancelled either, because the task PATCH is
-        owner-scoped and 404s. So it is a dead row, and counting it as proof that the quest's pass
-        exists is what leaves the quest with NO runnable pass at all, forever, silently.
-
-        It is still logged every scan, because a human can clear it in the app and the ids are what
-        they need.
-
-        When this lane has no writable series of its own, a foreign SERIES occurrence still gets
-        one narrow say: if it ``_foreign_series_looks_alive`` (see that function), this lane holds
-        off creating a competing series of its own, on the theory that another account's lane is
-        actually servicing this quest right now. A foreign series that looks stale/abandoned does
-        NOT hold anything off -- this lane creates its own exactly as if the foreign occurrence
-        were not there, which is the fix for the failure mode this method used to accept
-        unconditionally: a quest whose foreign pass is permanently dead (created before passes
-        carried ``assignee_user_id``, or that account's lane is gone for good) would otherwise
-        never get a pass again, silently, until a human clears it in the app.
-
-        Only the SERIES occurrences steer anything here (the duplicate warning, the retune, and
-        the create-when-missing all count those alone). The catch-ups are read for exactly one
-        purpose: to know whether a pending request already has a pass on the way, since a request
-        stays pending until a pass stamps ``last_pass_at`` and every scan in between would
-        otherwise create another one.
+        Autopilots run on the backend's schedule now: its scheduler queues one ``autopilot_run`` task per run and this lane only executes it, so a
+        recurring pass task (``task_kind == "autopilot"``) has no work left to do and every one still open is retired, catch-ups included. Only the ones
+        this lane owns: an occurrence owned by another account is a 404 per scan and no outcome (it is logged for a human to clear).
         """
-        mode = str(entry.get("mode") or "off")
         foreign = self._unwritable_pass_occurrences(occurrences)
         if foreign:
-            log.warning("autopilot: quest %s has %d open pass occurrence(s) owned by another "
-                        "account (%s) -- this lane can neither run nor cancel them (an "
-                        "owner-scoped PATCH 404s), and nothing can run them, so they are ignored "
-                        "for liveness and this lane keeps its own pass. Clear them in the app when "
-                        "convenient; passes created from now on are assigned to this lane's own "
-                        "account.",
-                        quest_id, len(foreign),
-                        [o.get("id") or o.get("task_id") for o in foreign])
+            log.warning("autopilot: quest %s has %d open pass occurrence(s) owned by another account (%s) -- this lane cannot cancel them "
+                        "(an owner-scoped PATCH 404s); clear them in the app when convenient",
+                        quest_id, len(foreign), [o.get("id") or o.get("task_id") for o in foreign])
         writable = [o for o in occurrences if o not in foreign]
-
-        if mode not in ("suggest", "act"):
-            # Retire EVERYTHING open for this quest, catch-ups included: mode off means no pass of
-            # any shape should still be waiting to run. Only the ones this lane owns, though: the
-            # rest would be a 404 per occurrence per scan and no outcome.
-            if writable:
-                self._retire_quest_pass(quest_id, writable, "mode off")
-            return
-
-        # WRITABLE only: a foreign-owned occurrence is inert (see this method's docstring), so it
-        # neither stands in for the series nor counts toward the duplicate warning.
-        series, catch_ups = self._split_pass_occurrences(writable)
-        if len(series) > 1:
-            # A quest has exactly ONE pass series. Every extra one is a full second pass a day --
-            # its own batch, its own deep runs, its own mail -- so it is retired, not merely
-            # tolerated. INCIDENT (2026-09-25): this branch used to warn and act on the earliest
-            # only, leaving the others alive; three live series on the dissertation quest all went
-            # due at 06:30, two ran concurrently, and the person got four briefs.
-            #
-            # Kept: the earliest scheduled_date, oldest created_at on a tie (the long-standing one).
-            # An extra that is RUNNING right now is left to finish, since cancelling mid-run would
-            # abandon work already under way; its terminal status spawns a next occurrence, which
-            # is queued and is retired by the next scan.
-            ordered = sorted(series, key=lambda o: (str(o.get("scheduled_date") or ""),
-                                                    str(o.get("created_at") or "")))
-            keep, extras = ordered[0], ordered[1:]
-            retirable = [o for o in extras
-                         if str(o.get("status", "")).strip().lower() != "in_progress"]
-            log.warning("autopilot: quest %s has %d open pass occurrences (%s) -- keeping %s and "
-                        "retiring %d duplicate series", quest_id, len(series),
-                        [o.get("id") or o.get("task_id") for o in series],
-                        keep.get("id") or keep.get("task_id"), len(retirable))
-            if retirable:
-                self._retire_quest_pass(quest_id, retirable, "duplicate series")
-            series = [keep]
-
-        # A pending "Run now" is honoured exactly ONCE, and this is the only place that decides it.
-        #
-        # INCIDENT (2026-09-21, 410 passes on one quest in 19 hours). a Run now request's contract
-        # (``quest_schedule.run_pending``) is that the request clears itself: "a finished pass stamps last_pass_at, which makes the
-        # request older and therefore spent... there is no state that can be left stuck ON (a pass
-        # that runs forever)". That is false for every path where the pass runs and SKIPS: a
-        # gate-skipped quest returns before ``_update_pass_bookkeeping`` ever runs (see
-        # ``AutopilotPass.run``), so nothing stamps ``last_pass_at`` and the request stays pending.
-        # A "Run now" pressed on a day the quest's roster excludes therefore spun a closed loop:
-        # ``_expected_quest_occurrence`` returned TODAY at the current minute, the created pass was
-        # due on sight, it ran, the day rule skipped it, it closed leaving no open series, and the
-        # next scan two minutes later created another one. Nothing bounded it but the calendar.
-        #
-        # One press means one pass. Serving it once is what makes that true no matter WHY the pass
-        # it produced did not stamp anything, which is the part that matters: the stuck-ON state
-        # above was only the first way to reach a loop that had no bound of its own. After the
-        # request is spent the quest falls back to the ordinary cadence path, which is already
-        # bounded, because ``_quest_pass_days`` rolls an excluded day forward to one the roster
-        # actually allows, so the occurrence it creates is not due on sight.
-        #
-        # The person still sees the outcome: the pass is a real task with a real result saying why
-        # it did nothing. A request that produced a pass has been answered, even by a skip.
-        run_request_sig = _run_request_signature(quest_id, entry)
-        honour_run_request = bool(run_request_sig) and not self.state.seen(run_request_sig)
-        expected_date, expected_time = self._expected_quest_occurrence(
-            entry, honour_run_request=honour_run_request)
-        if not series:
-            # An open catch-up is not a series and must not suppress this: the quest would be left
-            # with one run and no producer once that run closed. A foreign SERIES occurrence is
-            # different: if it still looks alive, another account's lane appears to already be
-            # servicing this quest, and creating our own here is exactly the duplicate-series bug
-            # this heuristic exists to prevent (see _foreign_series_looks_alive).
-            foreign_series, _ = self._split_pass_occurrences(foreign)
-            alive_foreign = [o for o in foreign_series
-                             if _foreign_series_looks_alive(o, entry, self._now())]
-            if alive_foreign:
-                log.warning(
-                    "autopilot: quest %s has no pass of its own, but a foreign-owned series (%s) "
-                    "still looks live (not overdue, or recently updated) -- this quest's "
-                    "autopilot appears to already be served by another account's live lane, not "
-                    "creating a second series. If that lane ever stops, a human needs to "
-                    "clear/reassign the stale pass in the app before this lane will create its "
-                    "own.",
-                    quest_id, [o.get("id") or o.get("task_id") for o in alive_foreign])
-                return
-            self._create_quest_pass(quest_id, entry, expected_date, expected_time)
-            self._spend_run_request(quest_id, run_request_sig, honour_run_request)
-            return
-        if series[0] in foreign:
-            # Alive, so nothing to create; unwritable, so nothing to retune. Already logged above.
-            return
-        outcome = self._retune_quest_pass(quest_id, entry, series[0], expected_date, expected_time)
-        if outcome == "date_conflict" and honour_run_request and not catch_ups:
-            self._create_quest_catchup_pass(quest_id, entry)
-        self._spend_run_request(quest_id, run_request_sig, honour_run_request)
-
-    def _spend_run_request(self, quest_id: str, signature: str, honoured: bool) -> None:
-        """Record that this quest's pending "Run now" has been served, so it is never served twice.
-
-        Called only from the branches that actually acted on it (created the pass, or moved the
-        series' occurrence onto today), never from the ones that returned without writing anything,
-        so a request held off by a live foreign series is still pending when that lane goes away.
-        """
-        if not honoured or not signature:
-            return
-        self.state.mark(signature)
-        log.info("autopilot: quest %s's pending run request has been served by a pass; it will "
-                 "not be served again (press Run now again for another)", quest_id)
-
-    def _create_quest_pass(self, quest_id: str, entry: Dict[str, Any], expected_date: str,
-                           expected_time: str) -> None:
-        env_id = entry.get("env_id") or self.cfg.env_id or None
-        recurrence = _quest_pass_recurrence(entry, expected_time)
-        created = self.client.create_task(
-            "Autopilot pass for this quest: work its current-scope goals and its standing "
-            "instructions.",
-            title="Autopilot pass",
-            # THE QUEST'S team, not the lane's home team. A lane can discover from several teams
-            # (RunnerConfig.team_ids), and a pass filed on the wrong team is a pass the quest's
-            # own people cannot see, pause or audit. The snapshot recorded which team each quest
-            # was listed under; the home team is only the fallback for an entry that somehow has
-            # none. On a single-team lane the two are the same value.
-            team_id=entry.get("team_id") or self.cfg.team_id,
-            goal_id=quest_id,
-            source="chat",
-            task_kind=AUTOPILOT_PASS_KIND,
-            recurrence=recurrence,
-            scheduled_date=expected_date,
-            scheduled_time=expected_time,
-            env_id=env_id,
-            # The lane that ensures this pass exists is the lane that runs it. Without this the
-            # backend makes the QUEST'S OWNER the executor, and since discovery is owner-scoped,
-            # a pass on a human-owned quest would sit queued forever, invisible to every lane
-            # (see RunnerConfig.lane_user_id). None keeps the old default-executor behaviour.
-            assignee_user_id=self.cfg.lane_user_id or None,
-        ) or {}
-        log.info("autopilot: created quest %s's own pass (%s at %s %s, first occurrence %s)",
-                 quest_id, recurrence["frequency"], expected_time,
-                 entry.get("run_timezone") or "runner-local", expected_date)
-
-    def _create_quest_catchup_pass(self, quest_id: str, entry: Dict[str, Any]) -> None:
-        """A ONE-OFF pass for a pending "Run now" that the quest's series cannot absorb.
-
-        WHY THIS EXISTS (incident, 2026-09-05). "Run now" stamps ``run_requested_at``, and the
-        schedule side of honouring it is ``_expected_quest_occurrence`` returning TODAY so the
-        series' open occurrence moves onto today. That works right up until today's slot is
-        already taken: the backend holds a unique index on (series, scheduled_date), so a quest
-        whose pass already ran this morning cannot have a SECOND occurrence of the same series
-        dated today. The PATCH came back 409, the retune logged the conflict and gave up, and the
-        request was simply never honoured -- the run slipped to the series' next occurrence
-        tomorrow, or further on a roster where nobody is on duty tomorrow. That is precisely the
-        case the button exists for, so silently slipping it is the whole bug.
-
-        The two obvious implementations are both wrong. Moving the series onto today fights the
-        index and loses, every time, for as long as the request stays pending. Running the pass
-        inline from the poller would make the one run the person explicitly asked for the one run
-        nobody can see, pause, or audit. So the request gets a REAL task like every other pass:
-        same ``task_kind``, same quest, same env, scheduled for now in the quest's own zone, and
-        explicitly NO recurrence. That respects the index instead of fighting it and leaves the
-        series' own schedule exactly where it was.
-
-        Not creating a second one is the caller's job, and it is what ``_split_pass_occurrences``
-        buys it: a pending request stays pending until a pass stamps ``last_pass_at``, so without
-        that check every scan in between would add another catch-up.
-        """
-        zone = entry.get("run_timezone")
-        now_local = now_in_zone(zone, self._now())
-        env_id = entry.get("env_id") or self.cfg.env_id or None
-        self.client.create_task(
-            "Autopilot pass for this quest (requested run): work its current-scope goals and its "
-            "standing instructions.",
-            title="Autopilot pass (requested)",
-            # Same rule as the series pass: the QUEST'S own team (see ``_create_quest_pass``).
-            team_id=entry.get("team_id") or self.cfg.team_id,
-            goal_id=quest_id,
-            source="chat",
-            task_kind=AUTOPILOT_PASS_KIND,
-            # No ``recurrence`` argument at all, deliberately: that absence is the ONLY thing
-            # keeping this a one-off rather than a second daily series, both for the backend's
-            # spawner and for ``_split_pass_occurrences`` on the next scan.
-            scheduled_date=now_local.date().isoformat(),
-            scheduled_time=now_local.strftime("%H:%M"),
-            env_id=env_id,
-            # Same reason as the series pass: this lane has to be the executor or discovery never
-            # returns the task it just created (see RunnerConfig.lane_user_id).
-            assignee_user_id=self.cfg.lane_user_id or None,
-        )
-        log.info("autopilot: quest %s's series cannot move onto today, so its pending run request "
-                 "gets a one-off catch-up pass (no recurrence) at %s %s", quest_id,
-                 now_local.strftime("%H:%M"), entry.get("run_timezone") or "runner-local")
-
-    def _retune_quest_pass(self, quest_id: str, entry: Dict[str, Any],
-                           occurrence: Dict[str, Any], expected_date: str,
-                           expected_time: str) -> str:
-        """PATCH the quest's open occurrence to ``expected_date``/``expected_time``/the roster's
-        current recurrence shape when any of those differ from what it currently holds -- zero
-        writes when they already match (the steady state must stay quiet). This is what makes a
-        changed ``run_time`` (or a roster edit that adds/removes a day) take effect (the spawner
-        inherits ``recurrence`` from the task document, so without this a change would never reach
-        a future occurrence) AND what corrects the backend's UTC-dated spawn (A3).
-
-        Only ever call this on a SERIES occurrence. Retuning a one-off catch-up would stamp a
-        daily ``recurrence`` on it (an absent recurrence differs from the expected one, so it goes
-        into the diffs) and quietly promote it into a second series, which is exactly what
-        happened on 2026-09-05. ``_split_pass_occurrences`` is what keeps that call from being
-        made.
-
-        Returns what the caller has to branch on: ``"ok"`` when the occurrence now holds the
-        expected schedule (written, or already matching -- both are success), ``"date_conflict"``
-        when the backend refused the move because that date is already taken (409), and
-        ``"failed"`` for anything else. A bare boolean would not do the job: only the date
-        conflict has a second course of action open to it (a one-off catch-up for a pending run),
-        while any other failure is simply the next scan's retry, and collapsing the two would turn
-        a transient API error into a stream of catch-up tasks.
-        """
-        task_id = str(occurrence.get("id") or occurrence.get("task_id") or "")
-        current_date = str(occurrence.get("scheduled_date") or "")
-        current_time = str(occurrence.get("scheduled_time") or "")
-        current_recurrence = occurrence.get("recurrence")
-        if not isinstance(current_recurrence, dict):
-            current_recurrence = {}
-        expected_recurrence = _quest_pass_recurrence(entry, expected_time)
-
-        diffs: Dict[str, Any] = {}
-        if current_date != expected_date:
-            diffs["scheduled_date"] = expected_date
-        if current_time != expected_time:
-            diffs["scheduled_time"] = expected_time
-        if current_recurrence != expected_recurrence:
-            diffs["recurrence"] = expected_recurrence
-        if not diffs:
-            return "ok"  # steady state -- must stay quiet, no write
-
-        settings_changed = current_time != expected_time or current_recurrence != expected_recurrence
-        reason = "settings changed" if settings_changed else "spawn date corrected for timezone"
-        try:
-            self.client.update_task(task_id, diffs)
-            log.info("autopilot: retuned quest %s's pass %s %s -> %s %s (%s)",
-                     quest_id, current_date, current_time, expected_date, expected_time, reason)
-            return "ok"
-        except QuestApiError as e:
-            if e.status == 409:
-                log.warning("autopilot: could not retune quest %s's pass -- schedule conflict "
-                            "(%s); leaving the occurrence alone", quest_id, e)
-                return "date_conflict"
-            log.warning("autopilot: could not retune quest %s's pass (%s) -- will retry next "
-                        "scan", quest_id, e)
-            return "failed"
-        except Exception as e:  # noqa: BLE001 -- one quest's retune failure never blocks another
-            log.warning("autopilot: could not retune quest %s's pass (%s) -- will retry next scan",
-                        quest_id, e)
-            return "failed"
+        if writable:
+            self._retire_quest_pass(quest_id, writable, "autopilots run on the backend's schedule now")
 
     def _retire_quest_pass(self, quest_id: str, occurrences: List[Dict[str, Any]],
                            reason: str) -> None:

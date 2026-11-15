@@ -1,79 +1,33 @@
-"""Autopilot — the recurring "autopilot pass" task that scans opted-in quests and makes progress.
+"""Autopilot: the recurring pass task that makes a quest's NAMED autopilots do their work.
 
-Design of record: ``quest_autopilot_design.md`` (Part B). In one sentence: Autopilot is itself a
-recurring assistant task (``task_kind == "autopilot"``, routed by ``runner.executor`` before the
-normal deep-run path). Each pass:
+A quest holds any number of named autopilots, served resolved in ``autopilot.effective_autopilots`` (``autopilot_units.py``). Each one that runs
+(enabled, not paused by the plan, resolved mode not off) is its own pass unit with its own series, schedule, tier, environment, prompt and
+bookkeeping (``autopilot.autopilot_state[id]``). A pass task names its autopilot in its text, and a pass:
 
-  1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in
-     ``suggest``/``act``/``reactive``).
-  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, REACTIVE mode's own
-     "is there anything new to react to" check (see ``quest_schedule.new_ask_since``), the roster's day
-     rule (a quest whose roster names nobody for today does nothing at all today), and -- only
-     where the deployment opts into backpressure -- an open autopilot-created task or an
-     unresolved HOLD decision already sitting on the quest. By default neither of the last two
-     stops a pass: work continues and the unfinished thing is visible in context to be worked
-     around.
-  3. Reads the quest's goals ONCE and turns them into the GOAL LADDER (``current_goal_ladder``):
-     the person's current goals at EVERY horizon, day up to year, which every batch carries.
-     Goals are CONTEXT here and nothing else. No goal is selected, assigned, or turned into work:
-     what a run produces is what its persona's standing instructions say, and the ladder is what
-     that output has to add up to. The one thing still derived from the goals payload is the
-     quest's current SCOPE LABEL (``current_scope_label``), which decides which period review to
-     read, which previous period to summarize, and what period a proposed goal is filed under.
-  4. Decides WHO works the quest today, always INSIDE the day rule: a character works a quest only
-     on the days their own roster entry names, and nothing overrides that. EVERY character the
-     roster puts on duty today gets one batch (one budget unit). A quest with NO roster gets a
-     single batch for the plain assistant, or for whoever a consumer-injected fallback resolver
-     names. A roster entry flagged ``instructions_only`` is on duty and gets its batch like any
-     other; the flag only keeps that character out of the routing that hands an UNASSIGNED
-     recurring task to somebody, which is what lets a specialist share a roster with the character
-     who carries the quest's ordinary work.
-  5. Decides WHAT each batch is for, at TWO levels that default independently: the quest-wide
-     ``autopilot.instructions`` (how to work here and how to deliver, for everyone on the quest)
-     and the character's own roster ``instructions`` (what this character works on). Each slot
-     takes the person's text where they wrote it and the backend's read-only default otherwise
-     (``autopilot.default_quest_instructions`` / ``autopilot.default_persona_instructions``), so
-     both slots are always filled and both always ride into the prompt, layered quest-wide first
-     and character second. A character on duty therefore always has a specification instead of an
-     empty run, and writing one level never silences the other. Recurring tasks the quest opted
-     into adopting are folded into the batch of whoever they name.
-  6. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
-     act mode), or -- when planning allows and no batch was produced at all -- proposes the quest's
-     next goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
-     unanswered (a proposal is one question, and re-asking it every pass is how the same
-     suggestion ends up in the person's list every morning). The batch text carries the person's
-     OWN latest reflection
-     (``runner.reflections``: the daily plan's review of yesterday, plus the newest submitted
-     period review) and the insights assigned to THIS quest that they have not yet acted on since its
-     last pass (``runner.insights``, with the person's own category tags shown beside each one).
-     The reflection is read once per pass (user-scoped); the insights are read per quest, from the
-     quest's own route, and never shared between quests. Everything
-     else in that text is derived from rows the system recorded; those two are the parts the
-     person wrote, so they are what break ties about what actually matters today.
-  7. Updates the quest's ``autopilot.last_pass_at`` (and ``miss_streak`` when nothing was
-     produced) via the quest update route.
-  8. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES that quest's
-     canonical next-steps artifact (``quest_folder_sync.publish_next_steps``) with the conclusion
-     the pass just reached, and READS the existing artifact into the batch text first. That closes
-     a real gap: the pass and an attended session both have to answer "what is next for this
-     quest", and before this they answered it separately, from different material, with no way to
-     notice they had drifted apart.
+  1. Reads the quest and keeps the autopilots that run (a pass naming one runs only that one).
+  2. Gates each, cheapest first: a team-wide daily budget, the autopilot's own schedule (the hub's Proactivity, from its days or cadence, its last
+     pass and its "Run now" request), REACTIVE mode's own "is there anything new to react to" check, and, only where the deployment opts into
+     backpressure, an open autopilot-created task or an unresolved HOLD decision already sitting on the quest.
+  3. Runs each due autopilot as ONE work task, titled with its name and marked with its id:
+       * ``works_goals``: reads the quest once (goals as the GOAL LADDER, prior tasks, the plan of record, experiments, asks, the person's
+         reflection, insights and context updates) and composes the brief in two levels that default independently, the quest-wide
+         ``autopilot.instructions`` first and the autopilot's own after, the goals routed to its rep last. A goal is worked by one autopilot: the
+         earliest in list order that shares the rep. Recurring tasks the quest opted into adopting are folded into the autopilot of the rep they name.
+       * otherwise it works ONLY its prompt (the quest's outcome, the shared brief and its own instructions), reads no goals and never plans;
+         with a ``gate`` it is the old routine: the gate's own question may refuse the pass, which then stamps the occasion and creates nothing.
+  4. Stamps the autopilot's own ``autopilot_state[id]`` (``last_pass_at``, ``miss_streak``) and verifies it stuck; never the quest-level
+     ``last_pass_at`` of a stored autopilot.
+  5. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES its canonical next-steps artifact with the conclusion the pass
+     reached, and READS the existing artifact into the brief first.
 
-WHAT A PASS REPORTS is what it set in motion, in plain words: the work by name, the quest by its
-outcome, who it went to, and what is waiting on the person. Not "Created 1 task(s):
-atask_d2014273cff6" -- that names an internal id where the work's name belongs, and presents the
-scanner's own accounting as the outcome. The pass also stamps its OWN task id as ``parent_task_id``
-on everything it creates, which is the link a consumer uses to replace this summary with the work's
-actual output once that work finishes (quest-backend does this in
-``app/business/quests/autopilot_rollup.py``). So the pass row ends up holding the work itself,
-whether or not the quest mails anything, and the mail carries the same text.
+WHAT A PASS REPORTS is what it set in motion, in plain words: the work by name, the quest by its outcome, which autopilot, and what is waiting on
+the person. The pass also stamps its OWN task id as ``parent_task_id`` on everything it creates, which is the link a consumer uses to replace this
+summary with the work's actual output once that work finishes (quest-backend does this in ``app/business/quests/autopilot_rollup.py``).
 
-A DRY RUN (the pass task's own text contains "dry-run") reports what WOULD be created and creates
-nothing: no tasks, no goals, no bookkeeping writes.
+A DRY RUN (the pass task's own text contains "dry-run") reports what WOULD be created and creates nothing: no tasks, no goals, no bookkeeping writes.
 
-Per-quest failures are isolated: one quest's error never aborts the rest of the pass (recorded in
-the result instead), and every skipped quest is logged with its gate reason -- silent skips are
-exactly the failure mode the qar playbook bans.
+Per-quest and per-autopilot failures are isolated: one's error never aborts the rest of the pass (recorded in the result instead), and every
+skipped autopilot is logged with its gate reason, because silent skips are exactly the failure mode the qar playbook bans.
 """
 from __future__ import annotations
 
@@ -86,16 +40,20 @@ from quest_ai_runner.intelligence.higher_mind.guidance.insights import InsightsC
 from quest_ai_runner.intelligence.higher_mind.objectives.goal_handoff import preferences_text, run_goal_handoff
 from quest_ai_runner.intelligence.mind.context_intake.reflections import ReflectionContext
 
-from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (
-    AUTOPILOT_PASS_KIND, DEFAULT_TEAM_DAILY_BUDGET, MAX_INSTRUCTIONS_CHARS, OPEN_TASK_STATUSES, log)
-from quest_ai_runner.intelligence.proactivity.autopilot_periods import (
+from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (  # noqa: F401 -- the names below are re-exported for the poller and the tests
+    AUTOPILOT_PASS_KIND, DEFAULT_TEAM_DAILY_BUDGET, EXTRA_RUN_KEY_PREFIXES, MAX_EXTRA_RUNS_PER_AUTOPILOT, MAX_INSTRUCTIONS_CHARS,
+    OPEN_TASK_STATUSES, log)
+from quest_ai_runner.intelligence.proactivity.autopilot_periods import (  # noqa: F401
     _parse_dt, current_goal_ladder, current_scope_label)
+from quest_ai_runner.intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, next_steps_from_pass  # noqa: F401
 from quest_ai_runner.intelligence.proactivity.autopilot_personas import (
-    PERSONA_HELD, default_persona_instructions_for, default_quest_instructions_for, persona_entries_on_duty, persona_instructions_for,
-    resolve_persona, split_held_for_another_day)
-from quest_ai_runner.intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, next_steps_from_pass
-from quest_ai_runner.intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick, solution_title
-from quest_ai_runner.intelligence.proactivity.autopilot_result import AutopilotResult, _quest_label, _quest_pass_lock, _task_label
+    capped_instructions, default_persona_instructions_for, default_quest_instructions_for)
+from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone
+from quest_ai_runner.intelligence.proactivity.autopilot_routing import route_goals
+from quest_ai_runner.intelligence.proactivity.autopilot_units import label_of, on_duty, unit_named, units_of
+from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, source_section
+from quest_ai_runner.intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick
+from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_HEADER, AutopilotResult, RunPlan, _quest_label, _quest_pass_lock, _task_label
 from quest_ai_runner.intelligence.proactivity.autopilot_budget_ask import budget_stop_escalation
 from quest_ai_runner.intelligence.proactivity.autopilot_gates import GatesMixin
 from quest_ai_runner.intelligence.proactivity.autopilot_work import WorkMixin
@@ -217,136 +175,177 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # The id of the pass task currently being run, set in ``run`` and stamped onto everything
         # this pass creates (see _create_autopilot_task). None until a pass starts.
         self._pass_task_id: Optional[str] = None
+        # ``{(quest id, local date): routing rows}``: the day's goal routing, judged once per quest per day (see ``autopilot_routing``).
+        self._routing_cache: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
 
-    def _raise_budget_ask(self, quest_id: str, quest_label: str, batches: List[Any],
-                          position: int, budget_used: int) -> None:
-        """Tell the quest's owner, through the escalation sink, that the budget skipped runs.
-        Never raises: a failed ask must not fail the pass."""
-        if self._escalation is None:
+    # --- the run ---------------------------------------------------------------------------
+
+    def run(self, task: Dict[str, Any]) -> RunPlan:
+        """Plan ONE ``autopilot_run`` task (never concurrently with another run on the same quest, see ``_QUEST_PASS_LOCKS``).
+
+        The backend scheduled the run and queued this task, which carries its autopilot in the ``autopilot_id`` FIELD. The plan says what the executor
+        does with it: ``skipped`` (close it, with the reason), ``suggested`` (park it with the composed brief until a person approves) or ``act``
+        (run the deep agent on the composed brief, in the quest's folder). Nothing here creates a task: the run IS the task.
+        """
+        with _quest_pass_lock(str(task.get("goal_id") or "")):
+            return self._plan_run(task)
+
+    def _plan_run(self, task: Dict[str, Any]) -> RunPlan:
+        dry_run = "dry-run" in str(task.get("text") or task.get("title") or "").lower()
+        quest_id = str(task.get("goal_id") or task.get("quest_id") or "")
+        autopilot_id = str(task.get("autopilot_id") or "")
+        self._pass_task_id = str(task.get("id") or task.get("task_id") or "") or None
+        self.asks_cache = {}  # quest_id -> ask rows, read once per run (see ``quest_asks``)
+        plan = RunPlan(quest_id=quest_id, autopilot_id=autopilot_id, dry_run=dry_run)
+        if not quest_id or not autopilot_id:
+            return plan.skip("the run names no quest or no autopilot")
+        state = self._quest_state(quest_id)
+        autopilot_cfg = dict((state.get("autopilot") or {}) if state else {})
+        if state and state.get("archived"):
+            return plan.skip("the quest is archived")
+        # The list of autopilots has its own read (each autopilot stores every setting it uses, with a read-only ``status``), and with it the
+        # quest-level fields they share: the "About this quest" brief, the zone, the environment and whether the quest is paused.
+        reader = getattr(self._client, "list_autopilots", None)
+        listed = (reader(quest_id) or {}) if callable(reader) else {}
+        if listed.get("autopilots") is not None:
+            autopilot_cfg = {**autopilot_cfg, **dict(listed.get("shared") or {}), "autopilots": listed["autopilots"]}
+        unit = unit_named(autopilot_cfg, autopilot_id)
+        if unit is None or unit["id"] not in {u["id"] for u in units_of(autopilot_cfg)}:
+            return plan.skip(f"autopilot {autopilot_id} does not run (paused, past the plan's cap, removed, or its quest is paused)")
+        plan.title = label_of(unit)
+        quest = {"quest_id": quest_id, "outcome": state.get("outcome") or "", "autopilot": autopilot_cfg}
+        reason = self._gate_run(task, unit, quest_id)
+        if reason:
+            return plan.skip(reason)
+        if self._structure_watch is not None:
+            self._structure_watch(quest_id, dry_run)      # proposals only, through decision requests; never an edit
+        source_text = None
+        source_name = str(unit.get("source") or "").strip()
+        if source_name:
+            source = SOURCES.get(source_name)
+            if source is None:
+                return plan.skip(f"this runner has no work source named {source_name!r}")
+            items = list(source.due_items(self._now()))
+            if not items:
+                return plan.skip(f"nothing is due for {source.name}")
+            source_text = source_section(source, items)
+        ctx = None if source_name else self._read_quest_context(quest, quest_id, unit, dry_run)
+        assigned = self._assigned_goals(quest, quest_id, unit, ctx) if ctx else []
+        own = capped_instructions(unit.get("instructions"), f"autopilot {unit['id']}")
+        if not own and not assigned and not source_text:
+            return plan.skip("no goals relevant to this scope")
+        text = self._compose_run(quest, quest_id, unit, ctx, assigned, own, source_text)
+        plan.text = text
+        plan.status = "suggested" if str(unit.get("mode") or "suggest") != "act" else "act"
+        if ctx is not None and not dry_run:
+            if ctx["bundle"] is not None:
+                ctx["bundle"].remember_offer(self._pass_task_id or "")
+                if ctx["context_updates"]:
+                    ctx["bundle"].mark_seen()
+            if plan.status == "act":
+                self._refresh_next_steps(quest_id, ctx["current_goals"], ctx["adopted"], ctx["scope_label"], ctx["previous"], plan.notes_sink,
+                                         quest_label=_quest_label(quest, quest_id), reflection_note=ctx["reflection_note"], insights_note=ctx["insights_note"])
+            if ctx["adopted"] and self._pass_task_id:
+                self._close_adopted(ctx["adopted"], self._pass_task_id, quest_id, plan.notes_sink)
+        return plan
+
+    def _compose_run(self, quest: Dict[str, Any], quest_id: str, unit: Dict[str, Any], ctx: Optional[Dict[str, Any]],
+                     assigned: List[str], own: str, source_text: Optional[str]) -> str:
+        """The run's brief: ONE composition path for every autopilot. The quest's outcome and "About this quest", the autopilot's own words (named as
+        the person's), the goals routed to it, the goal frame, and for a source run the source's bounds and what is due."""
+        autopilot_cfg = quest.get("autopilot") or {}
+        quest_brief = capped_instructions(autopilot_cfg.get("instructions"), f"quest {quest_id}")
+        persona = self._unit_persona(unit)
+        ctx = ctx or {}
+        text = compose_batch_text(
+            str(quest.get("outcome") or ""), self._persona_label(persona), scope_label=ctx.get("scope_label"),
+            adopted_tasks=ctx.get("adopted"), next_steps=ctx.get("next_steps"), previous=ctx.get("previous"), last_run=ctx.get("last_run_text"),
+            reflection=ctx.get("reflection"), insights=(ctx.get("insights") if self._update_engine is not None else None),
+            context_updates=ctx.get("context_updates"), instructions=quest_brief, persona_instructions=own,
+            default_quest_instructions=None if source_text else default_quest_instructions_for(autopilot_cfg),
+            default_persona_instructions=None, goal_ladder=ctx.get("goal_ladder"), routed_goals=assigned or None,
+            experiments=(experiments_brief_section(ctx.get("experiments"), quest_id=quest_id, planning=str(unit.get("planning") or "work_only"),
+                                                   proposal_open=bool(ctx.get("proposal_open")), may_propose=True) or None) if ctx else None,
+            asked=ctx.get("asked"), intent_frame=ctx.get("intent_frame"), esoi_readiness=(readiness_and_pick(ctx.get("esoi_read"), own, unit.get("rep_id") or None)[0] if ctx else None),
+            source_text=source_text)
+        return f"{RUN_BRIEF_HEADER}\n\n{text}"
+
+    def _assigned_goals(self, quest: Dict[str, Any], quest_id: str, unit: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+        """The goal lines routed to THIS autopilot today: the day's one judgment across the autopilots on duty (``autopilot_routing``), made once per
+        quest per day and recorded on the quest (``PUT .../autopilots/routing/{day}``), so every run of that day, in this process or the next one after
+        a restart, reads the same record instead of judging again."""
+        autopilot_cfg = quest.get("autopilot") or {}
+        zone = autopilot_cfg.get("run_timezone")
+        today = now_in_zone(zone, self._now()).date().isoformat()
+        key = (quest_id, today)
+        if key not in self._routing_cache:
+            rows = self._recorded_routing(quest_id, today)
+            if rows is None:
+                duty = [u for u in units_of(autopilot_cfg) if on_duty(u, self._now(), zone)]
+                rows = route_goals(ctx["goals_payload"], duty, self._judge, self._now())
+                self._record_routing(quest_id, today, rows)
+            self._routing_cache[key] = rows
+        return [row["line"] for row in self._routing_cache[key] if row.get("autopilot_id") == unit["id"]]
+
+    def _recorded_routing(self, quest_id: str, day: str) -> Optional[List[Dict[str, Any]]]:
+        """Today's routing as already recorded on the quest (rows with their goal line), or None when none was written (or it cannot be read)."""
+        reader = getattr(self._client, "get_autopilot_routing", None)
+        if not callable(reader):
+            return None
+        try:
+            routes = (reader(quest_id, day) or {}).get("routes") or []
+        except Exception:  # noqa: BLE001 -- an unreadable record means the day is judged again
+            return None
+        return [{**r, "line": str(r.get("goal_title") or r.get("goal_id") or "")} for r in routes] or None
+
+    def _record_routing(self, quest_id: str, day: str, rows: List[Dict[str, Any]]) -> None:
+        """Write the day's routing (each goal once, with its one-line reason) where the person can read it. Best effort: a failed write never fails a run."""
+        writer = getattr(self._client, "put_autopilot_routing", None)
+        if not callable(writer) or not rows:
             return
         try:
-            skipped = [self._persona_label(self._batch_persona(p)) or "the default assistant"
-                       for p, _tasks in batches[position:]]
-            self._escalation.escalate(budget_stop_escalation(
-                quest_id=quest_id, quest_label=quest_label, skipped=skipped, needed=len(batches),
-                budget=self._daily_budget, used=budget_used, today=self._now()))
-        except Exception:  # noqa: BLE001 -- visibility is best effort
-            log.warning("autopilot: could not raise the budget ask for quest %s", quest_id, exc_info=True)
+            writer(quest_id, day, [{k: r[k] for k in ("goal_id", "goal_title", "autopilot_id", "reason")} for r in rows])
+        except Exception:  # noqa: BLE001
+            log.warning("autopilot: could not record the goal routing for quest %s", quest_id, exc_info=True)
 
-    # --- the pass --------------------------------------------------------------------------
+    def _gate_run(self, task: Dict[str, Any], unit: Dict[str, Any], quest_id: str) -> Optional[str]:
+        """The run's gates, cheapest first. Returns a skip reason, or None when the run goes ahead.
 
-    def run(self, task: Dict[str, Any]) -> AutopilotResult:
-        """Run one pass, never concurrently with another pass on the same quest (see
-        ``_QUEST_PASS_LOCKS``)."""
-        with _quest_pass_lock(str(task.get("goal_id") or "")):
-            return self._run_pass(task)
+        WHEN is the backend's (it only queues a run that is due, and only when ``only_when_new`` finds something new); what is left here is what the
+        runner alone can see: the daily allowance for AUTOMATIC EXTRA runs (a run a reply reopened, a catch-up), at most 3 per autopilot a day and the
+        team's budget, never a scheduled run and never "Run now"; and, only where the deployment opts into backpressure, an unfinished earlier run of
+        THIS autopilot or an unresolved HOLD decision on the quest.
+        """
+        key = str(task.get("occurrence_key") or "")
+        if key.startswith(EXTRA_RUN_KEY_PREFIXES):
+            used = self._extra_runs_today(quest_id, unit["id"], str(task.get("id") or task.get("task_id") or ""))
+            if used["autopilot"] >= MAX_EXTRA_RUNS_PER_AUTOPILOT:
+                return f"{MAX_EXTRA_RUNS_PER_AUTOPILOT} extra runs of this autopilot already happened today"
+            if used["team"] >= self._daily_budget:
+                return f"today's budget of {self._daily_budget} extra autopilot run(s) is used up"
+        if self._backpressure and self._has_backpressure(quest_id, unit["id"], str(task.get("id") or task.get("task_id") or "")):
+            return "backpressure: an earlier run of this autopilot is still open"
+        if self._backpressure and self._has_open_hold_decision(quest_id):
+            return "an open HOLD decision is pending on this quest"
+        return None
 
-    def _run_pass(self, task: Dict[str, Any]) -> AutopilotResult:
-        text = str(task.get("text") or task.get("title") or "")
-        dry_run = "dry-run" in text.lower()
-        result = AutopilotResult(ran_at=self._now(), dry_run=dry_run)
-        # The pass task's OWN id, stamped onto everything this pass creates as ``parent_task_id``.
-        # That link is what lets a consumer answer "what did autopilot actually do" with the work
-        # itself rather than with a list of ids: the created task's result can be rolled back onto
-        # the pass row that made it. Without it, the two rows are unrelated as far as the data is
-        # concerned, and the pass can only ever report its own bookkeeping.
-        self._pass_task_id = str(task.get("id") or task.get("task_id") or "") or None
-        self.asks_cache = {}  # quest_id -> ask rows, read once per pass (see ``quest_asks``)
-        # A per-quest pass (the hybrid schedule, quest_autopilot_design.md's autopilot spec
-        # section A) carries its quest's id in ``goal_id`` -- the team pass carries none. Scope
-        # this run to exactly that one quest instead of scanning the whole team.
-        only_quest_id = str(task.get("goal_id") or "") or None
-
-        quests = self._eligible_quests(only_quest_id)
-        # THE DAILY BUDGET IS PER TEAM, not per lane, and that is a deliberate decision rather
-        # than a detail of the implementation. A lane serving three teams is an efficiency of
-        # deployment: it must not silently divide each team's daily allowance by three, which is
-        # what one shared counter would do -- every team would go quiet earlier than its own
-        # setting says, with nothing anywhere to explain why. So the counter is keyed by the
-        # quest's own team, and each team's denominator is read from its own task list, once,
-        # the first time a quest on it is reached. On a single-team lane there is exactly one key
-        # and exactly one count call, as before.
-        budget_by_team: Dict[str, int] = {}
-
-        for quest in quests:
-            quest_id = str(quest.get("quest_id") or quest.get("id") or "")
-            if not quest_id:
-                continue
-            label = _quest_label(quest, quest_id)
-            if self._structure_watch is not None:
-                self._structure_watch(quest_id, dry_run)      # proposals only, through decision requests; never an edit
-            team = self._team_for(quest_id)
-            if team not in budget_by_team:
-                budget_by_team[team] = (
-                    0 if dry_run else self._count_autopilot_tasks_today(team_id=team))
-            budget_used = budget_by_team[team]
-            try:
-                if budget_used >= self._daily_budget:
-                    self._skip(result, quest_id, label,
-                              f"today's budget of {self._daily_budget} autopilot task(s) is used up")
-                    continue
-                pending = self._pending_work(quest_id)
-                gate_reason = self._gate_quest(quest, quest_id, pending)
-                if gate_reason:
-                    self._skip(result, quest_id, label, gate_reason)
-                    continue
-                if pending and pending.count > 0:
-                    result.pending_work.append({
-                        "quest_id": quest_id, "quest_label": label,
-                        "count": pending.count, "label": pending.label})
-                budget_used = self._run_one_quest(quest, quest_id, dry_run, budget_used, result)
-                budget_by_team[team] = budget_used
-            except Exception as e:  # noqa: BLE001 -- one quest's failure never aborts the pass
-                log.error("autopilot: quest %s pass failed: %s", quest_id, e, exc_info=True)
-                result.errors.append({"quest_id": quest_id, "quest_label": label,
-                                      "error": f"{type(e).__name__}: {e}"})
-        return result
-
-    def _run_one_quest(self, quest: Dict[str, Any], quest_id: str, dry_run: bool,
-                       budget_used: int, result: AutopilotResult) -> int:
+    def _read_quest_context(self, quest: Dict[str, Any], quest_id: str, unit: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
+        """Everything the quest-reading autopilots share, read ONCE per pass: goals, prior tasks, the plan of record, experiments, the ledger of asks."""
         autopilot_cfg = quest.get("autopilot") or {}
-        mode = str(autopilot_cfg.get("mode") or "off")
-        planning = str(autopilot_cfg.get("planning") or "work_only")
-
-        # Standing instructions: read once, near the top, defensively truncated at the same cap
-        # the backend enforces on write (values written before the cap existed are the only way
-        # this ever fires in practice). Never logged verbatim -- it is the person's private
-        # content and can run to 12 KB.
-        instructions = str(autopilot_cfg.get("instructions") or "").strip()
-        if len(instructions) > MAX_INSTRUCTIONS_CHARS:
-            log.warning("autopilot: quest %s instructions truncated from %d to %d characters",
-                       quest_id, len(instructions), MAX_INSTRUCTIONS_CHARS)
-            instructions = instructions[:MAX_INSTRUCTIONS_CHARS]
-        if instructions:
-            log.info("autopilot: quest %s has standing instructions (%d chars)",
-                     quest_id, len(instructions))
-        # The floor under each instruction level, read once and independently: the quest-wide one
-        # fills the quest slot when this quest wrote nothing, the persona one fills each
-        # character's slot when that character has nothing of their own. The backend serves the
-        # authoritative texts on the quest payload; these degrade to the bundled copies against an
-        # older one.
-        default_quest_instructions = default_quest_instructions_for(autopilot_cfg)
-        default_persona_instructions = default_persona_instructions_for(autopilot_cfg)
-
+        modes = {str(unit.get("mode") or "suggest")}
+        planning_any = str(unit.get("planning") or "work_only") == "plan_and_work"
         goals_payload = self._client.list_quest_goals(
             quest_id, team_id=self._team_for(quest_id) or None) or {}
-        # Which period this quest is planning in. A LABEL only: it decides which period review to
-        # read, what "the previous period" means here, and what period a proposed goal is filed
-        # under. It selects no work, because goals are not work.
+        # Which period this quest is planning in. A LABEL only: it decides which period review to read, what "the previous period" means here, and
+        # what period a proposed goal is filed under. It selects no work, because goals are not work.
         scope_label = current_scope_label(goals_payload, self._now())
-        # THE ONLY WAY GOALS REACH A RUN: the person's current goals at every horizon, built from
-        # the payload already fetched (no extra call) and carried into EVERY batch below. Nothing
-        # here is this run's assignment; it is the picture the run's output has to add up to, and
-        # a run working standing instructions is exactly the run that would otherwise know nothing
-        # about what the person is aiming at.
+        # The person's current goals at every horizon, built from the payload already fetched. Orientation for the run, never its assignment: the
+        # goals routed to an autopilot's rep are the separate ``routed_goal_lines``.
         goal_ladder = current_goal_ladder(goals_payload, self._now())
-        # The finest current horizon's goals, for the quest's next-steps artifact below. That
-        # artifact answers "what is next for this quest", and the person's own goals at the scope
-        # the quest is working in are that answer, restated rather than re-derived.
         current_goals = list(goal_ladder[0]["goals"]) if goal_ladder else []
 
         # Human-assigned goals the assignee's AI rep could handle (best-effort, act mode only).
-        if self._judge is not None and mode == "act" and not dry_run:
+        if self._judge is not None and "act" in modes and not dry_run:
             try:
                 run_goal_handoff(self._client, self._judge, goals_payload,
                                  team_id=self._team_for(quest_id) or None,
@@ -356,36 +355,11 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             except Exception:  # noqa: BLE001
                 log.info("autopilot: goal handoff failed for quest %s", quest_id, exc_info=True)
 
-        # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in:
-        # taking over a task someone scheduled themselves is a real change in who executes it.
-        adopted = (self._due_recurring_tasks(quest_id)
-                   if self._adopts_recurring(autopilot_cfg) else [])
-        # An adopted task becomes a batch for whoever it names, so it is under the day rule too.
-        # Held means simply NOT adopted: the occurrence stays queued and runs as the person
-        # scheduled it, which is the same direction ``_close_adopted`` fails in (duplicated work
-        # is recoverable, lost work is not).
-        adopted, held_adopted = split_held_for_another_day(adopted, autopilot_cfg, self._now())
-        if held_adopted:
-            log.info("autopilot: quest %s -- leaving %d recurring task(s) %s unadopted: their "
-                     "character is not rostered for %s",
-                     quest_id, len(held_adopted),
-                     [str(t.get("id") or t.get("task_id") or "?") for t in held_adopted],
-                     self._now().strftime("%A"))
-        # Fetched ONCE and shared by both consumers below. Before this, ``_previous_period_summary``
-        # called ``list_tasks(goal_id=quest_id)`` (a task's ``goal_id`` holds the QUEST id, a
-        # historical misnomer this is not the place to fix) entirely on its own; adding a second
-        # consumer that needs the identical list is not a reason to add a second identical call.
-        # Approach (a) of the two considered: fetch here and hand the list to both
-        # ``_previous_period_summary`` (bounded to the previous calendar period) and
-        # ``_last_run_output`` (no period window, most-recent-only), rather than (b) one method
-        # doing both jobs and returning a pair. (a) keeps each method answering the ONE question
-        # its name says it answers, testable and readable on its own, and the two questions
-        # genuinely have different selection rules (a window vs. a pure recency-with-rollup-
-        # preference rule) that read worse interleaved in one body than side by side as two
-        # top-level calls. Best-effort exactly as before: a failed read degrades BOTH consumers
-        # the same way ``_previous_period_summary`` alone used to degrade on its own failed read
-        # (goals-only previous, and now also no last-run block) rather than losing anything or
-        # aborting the pass.
+        # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in: taking over a task someone scheduled themselves is a
+        # real change in who executes it. Which autopilot takes each is ``_adopt_into_units``; one nobody running now can take stays queued.
+        adopted = self._due_recurring_tasks(quest_id) if self._adopts_recurring(autopilot_cfg) else []
+        adopted = [t for t in adopted if not t.get("assignee_rep_id") or str(t.get("assignee_rep_id")) == str(unit.get("rep_id") or "")]
+        # Fetched ONCE and shared by both consumers below (the previous period and the last run's output). Best-effort: a failed read degrades both.
         try:
             quest_tasks: Optional[List[Dict[str, Any]]] = self._client.list_tasks(
                 team_id=self._team_for(quest_id) or None, goal_id=quest_id) or []
@@ -393,220 +367,46 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             log.info("autopilot: could not read prior tasks for quest %s", quest_id, exc_info=True)
             quest_tasks = None
         previous = self._previous_period_summary(quest_id, goals_payload, scope_label, quest_tasks)
-        # The previous run's own output, independent of any period boundary -- see
-        # ``select_last_run_output`` for why a period-scoped view alone cannot see it (a
-        # week/month/quarter/year-scoped quest's own last run sits inside its CURRENT period, and
-        # an unscoped quest gets no previous-period view at all). May mutate ``previous`` in place
-        # to drop a duplicate stub; see ``_last_run_output``'s own docstring.
+        # The previous run's own output, independent of any period boundary (see ``select_last_run_output``).
         last_run_text = self._last_run_output(quest_tasks or [], previous)
-        # The standing artifact, read BEFORE this pass overwrites it: whatever the last refresh
-        # concluded (possibly an attended session's, more recent than any pass) rides into the
-        # batch as the plan of record.
+        # The standing artifact, read BEFORE this pass overwrites it.
         standing_next_steps = self._read_next_steps(quest_id)
-        # The quest's experiments, read ONCE per quest (None = could not be read, which renders as
-        # no section at all, never as "no experiments"). Whether a proposal is already waiting is
-        # asked only when it can matter: the quest has no experiment and may plan.
+        # The quest's experiments, read ONCE (None = could not be read, which renders as no section at all, never as "no experiments").
         quest_experiments = fetch_experiments(self._client, quest_id)
         experiment_proposal_open = (
             quest_experiments is not None and not has_experiment(quest_experiments)
-            and planning == "plan_and_work" and proposal_is_open(self._client, quest_id))
-        # Why the quest exists, read ONCE per quest from the server (no model call there; empty for an
-        # unsorted quest or a person with no intents, so those cost nothing). A client that cannot ask
-        # or a failed read gives no section, never a guess.
+            and planning_any and proposal_is_open(self._client, quest_id))
+        # Why the quest exists, read ONCE per quest from the server (no model call there).
         intent_frame_text = self.read_intent_frame(quest_id)
-        # Read once per quest per pass, and only for a real run: a dry run must not refresh a specification. The Solution
-        # is then chosen per character (``readiness_for``), among the ones the specification links to that character.
+        # Read once per quest per pass, and only for a real run: a dry run must not refresh a specification.
         esoi_read = None if dry_run else read_readiness(self._client, quest_id)
-        # One batch per pass may be the one that proposes; a second character's batch is told a
-        # proposal is already being handled instead of raising a duplicate.
-        experiment_proposal_offered = False
-        # What people asked of the AI on this quest (and what already waits on a person), read ONCE
-        # per quest and rendered per batch. An unreadable ledger renders as no section.
+        # What people asked of the AI on this quest (and what already waits on a person), read ONCE per quest and rendered per batch.
         asked_text = asks_brief_section(self.quest_asks(quest_id),
                                         fetch_open_decisions(self._client, quest_id)) or None
         quest_label = _quest_label(quest, quest_id)
-        context_bundle: Optional[ContextUpdates] = None
+        bundle: Optional[ContextUpdates] = None
         context_updates_text: Optional[str] = None
+        reflection_text = insights_text = None
+        reflection_note = insights_note = ""
         if self._update_engine is not None:
-            # ONE read of everything the person said, through the engine. The reflection and the
-            # captures come back as SLOTTED updates: they render through the composer's own two
-            # slots below (ref-tagged, so the receipt accounts for them) and are excluded from the
-            # general block, which carries everything else -- notes, document comments, folder
-            # edits. Before this, the pass read the two slots itself AND the engine delivered them
-            # again in the block, so every brief carried the reflection twice.
-            context_bundle = self._update_engine.collect(
+            # ONE read of everything the person said, through the engine. The reflection and the captures come back as SLOTTED updates that render
+            # through the composer's own two slots (ref-tagged, so the receipt accounts for them); the general block carries everything else.
+            bundle = self._update_engine.collect(
                 quest, card_id=quest_id, card_kind="quest", card_label=quest_label,
                 options={"reflections": {"periods": self._reflection_periods(scope_label)}})
-            reflection_text = context_bundle.slot_text("reflection") or None
-            insights_text = context_bundle.slot_text("insights") or None
-            reflection_note = context_bundle.slot_summary("reflection")
-            insights_note = context_bundle.slot_summary("insights")
-            context_updates_text = context_bundle.as_prompt_block(
-                exclude_slots=("reflection", "insights")) or None
+            reflection_text = bundle.slot_text("reflection") or None
+            insights_text = bundle.slot_text("insights") or None
+            reflection_note = bundle.slot_summary("reflection")
+            insights_note = bundle.slot_summary("insights")
+            context_updates_text = bundle.as_prompt_block(exclude_slots=("reflection", "insights")) or None
         else:
-            # No engine: the two slots are read directly, exactly as before the engine existed.
-            # What the person themselves last wrote about their work (user-scoped, cached for the
-            # pass), and what they captured since this quest's own last pass.
+            # No engine: the reflection is read directly (the captures are read per autopilot, since each has its own last pass).
             reflections = self._reflections(scope_label)
             reflection_text = reflections.as_text() or None
-            insights = self._insights(autopilot_cfg, quest_id)
-            insights_text = insights.as_text() or None
-            reflection_note, insights_note = reflections.one_line(), insights.one_line()
-
-        produced = False
-        # Whether a batch CARRYING this pass's context updates was actually created. Separate from
-        # ``produced`` on purpose: a dry run, a goal proposal and a budget-starved pass all leave
-        # ``produced`` in a state that says nothing about whether the person's comment reached a
-        # run, and the watermark may only move when it did (see ``ContextUpdates.mark_seen``).
-        context_delivered = False
-        # THE ALWAYS-WORK RULE, and it is now unconditional for a quest that reaches this point.
-        # Every character on duty has an effective brief at BOTH levels -- what the person wrote
-        # for that level, or the built-in default for it -- so every character on duty gets ONE
-        # batch per due pass. A quest with three unrestricted personas therefore produces three
-        # batches a pass, and the only thing that bounds that is the team's daily budget, which is
-        # checked per batch inside the loop.
-        #
-        # A quest with NO roster at all gets a single plain-assistant batch on the two defaults, so
-        # a quest somebody switched autopilot on for and then configured no further still does
-        # something useful instead of going quiet.
-        #
-        # The consequence for the goal-proposal ``elif`` below is that it no longer fires: with a
-        # default brief there is no such thing as a due pass with nothing to work. See the comment
-        # there for why the path is kept rather than deleted.
-        batches = self._batches_for_pass(autopilot_cfg, adopted)
-        if batches:
-            for position, (persona, tasks) in enumerate(batches):
-                if budget_used >= self._daily_budget:
-                    self._skip(result, quest_id, quest_label,
-                               f"today's budget of {self._daily_budget} autopilot task(s) ran out "
-                               f"part-way through this quest")
-                    if not dry_run:
-                        self._raise_budget_ask(quest_id, quest_label, batches, position, budget_used)
-                    break
-                # Resolved per BATCH, from the whole roster rather than today's on-duty entries.
-                # Every character routed a batch is on duty today (the day rule guarantees it),
-                # but their instructions can sit on a DIFFERENT entry than the one that put them
-                # on duty -- a day-restricted entry carrying the brief plus a catch-all, say -- so
-                # reading the whole roster is what makes which entry irrelevant.
-                persona_instructions = persona_instructions_for(autopilot_cfg, persona)
-                # The roster's own rep id, kept before the marker is resolved below: it is what the specification's
-                # autopilot Implementation records name, so it is what finds this character's Solutions.
-                roster_rep_id = persona
-                # The roster key is not always a character. A quest rostered to the built-in
-                # default assistant carries DEFAULT_ASSISTANT_REP_ID, which is read for its days
-                # and its instructions above (both of which are the person's own words) and then
-                # resolved HERE to whoever the consumer's fallback names, or to nobody. Everything
-                # downstream -- the task's persona, its label, a dry run's report -- must see that
-                # resolved value, never the marker, or the pass would file work against a rep that
-                # does not exist.
-                persona = self._batch_persona(persona)
-                # Titled from what the PERSON wrote, composed from what actually governs the run.
-                # A default is identical on every unconfigured quest, so titling from one would
-                # name every task and every mail subject after the same built-in first line.
-                # The Solution this character's run iterates, picked ONCE and used twice: its block rides in
-                # the brief, and its name titles the task, so the list says what the run is doing instead of
-                # showing the brief's machine line ("SOLUTIONS YOU ITERATE: esr_...").
-                esoi_text, esoi_solution = readiness_and_pick(esoi_read, persona_instructions, roster_rep_id)
-                title = _batch_title(tasks, instructions=instructions,
-                                     persona_instructions=persona_instructions,
-                                     solution_name=solution_title(esoi_solution),
-                                     persona_label=self._persona_label(persona) if persona else None)
-                if dry_run:
-                    result.proposals.append({
-                        "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
-                        "persona": persona, "persona_label": self._persona_label(persona),
-                        "scope": scope_label,
-                        "adopted_task_ids": [t.get("id") or t.get("task_id") for t in tasks],
-                        # Which brief is driving this batch. A dry run is read by someone checking
-                        # that the right character was picked for the right job, and "standing
-                        # instructions" alone does not say whose -- which is the only question a
-                        # two-character roster raises.
-                        "instructions_from": self.instructions_source(
-                            persona, persona_instructions, instructions),
-                    })
-                    produced = True
-                    # A dry-run still SIMULATES budget consumption (one unit per batch that
-                    # WOULD be created), so the report honestly shows a later quest going quiet
-                    # once the budget is exhausted -- exactly what a real pass would do.
-                    budget_used += 1
-                    continue
-                experiments_text = experiments_brief_section(
-                    quest_experiments, quest_id=quest_id, planning=planning,
-                    proposal_open=experiment_proposal_open,
-                    may_propose=not experiment_proposal_offered) or None
-                task_id = self._create_batch_task(quest, quest_id, persona, mode,
-                                                  title=title,
-                                                  scope_label=scope_label, adopted_tasks=tasks,
-                                                  next_steps=standing_next_steps,
-                                                  previous=previous,
-                                                  last_run=last_run_text,
-                                                  reflection=reflection_text,
-                                                  insights=insights_text,
-                                                  context_updates=context_updates_text,
-                                                  instructions=instructions,
-                                                  persona_instructions=persona_instructions,
-                                                  default_quest_instructions=(
-                                                      default_quest_instructions),
-                                                  default_persona_instructions=(
-                                                      default_persona_instructions),
-                                                  goal_ladder=goal_ladder,
-                                                  experiments=experiments_text,
-                                                  asked=asked_text,
-                                                  intent_frame=intent_frame_text,
-                                                  esoi_readiness=esoi_text)
-                if task_id:
-                    experiment_proposal_offered = True
-                    result.created.append({
-                        "task_id": task_id, "kind": "work_batch", "quest_id": quest_id,
-                        "quest_label": quest_label, "title": title,
-                        "persona_label": self._persona_label(persona),
-                        "awaiting_approval": mode != "act",
-                        "adopted_titles": [_task_label(t) for t in tasks],
-                    })
-                    budget_used += 1
-                    produced = True
-                    if context_bundle is not None:
-                        # So the run's receipt can close what it accounts for (see
-                        # ``ContextUpdates.remember_offer``).
-                        context_bundle.remember_offer(task_id)
-                    if context_updates_text:
-                        context_delivered = True
-                    self._close_adopted(tasks, task_id, quest_id, result)
-            # The receipt for the person: what they wrote has now been handed to a real run, so
-            # the next pass will not offer it again. Only here -- never at collection time, never
-            # on a dry run, and never merely because the engine was asked.
-            if context_delivered and context_bundle is not None and not dry_run:
-                context_bundle.mark_seen()
-            if produced and not dry_run:
-                self._refresh_next_steps(quest_id, current_goals, adopted, scope_label, previous,
-                                         result, quest_label=quest_label,
-                                         reflection_note=reflection_note,
-                                         insights_note=insights_note)
-        # The goal-proposal path, kept and unchanged, and NOT currently reachable from here: a due
-        # pass always has at least one character with an effective brief, so ``batches`` is never
-        # empty by the time this runs. It stays because it is a real product surface rather than
-        # dead scaffolding -- quest-backend renders these proposals and re-declares
-        # ``PROPOSAL_TEXT_PREFIX`` against this module's constant -- and because the condition that
-        # makes it unreachable is the DEFAULT BRIEF, which is exactly the kind of thing a
-        # deployment may switch off later. Its own helpers are still covered directly by tests.
-        elif planning == "plan_and_work":
-            if budget_used < self._daily_budget:
-                skipped_because = self._handle_proposal(quest, quest_id, quest_label, mode,
-                                                        dry_run, result,
-                                                        scope_label=scope_label)
-                if skipped_because:
-                    # Nothing was created, so nothing is spent and nothing is claimed. The person
-                    # still hears why the quest was quiet, in one line, instead of getting the
-                    # same proposal again.
-                    self._skip(result, quest_id, quest_label, skipped_because)
-                else:
-                    produced = True
-                    budget_used += 1
-            else:
-                self._skip(result, quest_id, quest_label,
-                           f"today's budget of {self._daily_budget} autopilot task(s) ran out "
-                           f"part-way through this quest")
-
-        if not dry_run:
-            self._update_pass_bookkeeping(quest_id, quest_label, autopilot_cfg, produced, result)
-        return budget_used
+            reflection_note = reflections.one_line()
+        return {"goals_payload": goals_payload, "scope_label": scope_label, "goal_ladder": goal_ladder, "current_goals": current_goals,
+                "adopted": adopted, "previous": previous, "last_run_text": last_run_text, "next_steps": standing_next_steps,
+                "experiments": quest_experiments, "proposal_open": experiment_proposal_open, "intent_frame": intent_frame_text,
+                "esoi_read": esoi_read, "asked": asked_text, "bundle": bundle, "context_updates": context_updates_text,
+                "reflection": reflection_text, "insights": insights_text, "reflection_note": reflection_note, "insights_note": insights_note,
+                "proposal_offered": False}

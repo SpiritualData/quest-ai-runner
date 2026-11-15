@@ -1,6 +1,5 @@
 rule,path,reason
 S4,tests/test_anticipation.py,Test file grouped by subject; splits with anticipation.py when that module is next restructured
-S4,tests/test_autopilot.py,"Test file grouped by subject; autopilot behaviour already has per-topic test_autopilot_*.py files, migrate cases there as they are touched"
 S4,tests/test_context_assembler.py,Test file grouped by subject; split by assembler when the store is next touched
 S4,tests/test_orchestrator.py,"Test file grouped by subject; per-role files (test_orchestrator_*.py) exist, move cases there as they are touched"
 S4,tests/test_runner.py,Test file grouped by subject; split by poller/executor role when next touched

@@ -39,8 +39,9 @@ from quest_ai_runner.intelligence.mind.delegation.work_model import DeepModelAsk
 
 from quest_ai_runner.consciousness.request_intake.executor_contracts import (
     AUTOMATIC_DELIVERY_NOTE, CANCEL_CHECK_INTERVAL_SECONDS, RESULT_IS_THE_WORK_CONTRACT, earlier_run_block, log)
+from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_HEADER
 from quest_ai_runner.consciousness.request_intake.executor_support import (
-    ExecutionOutcome, MESSAGE_CLAIM_INTERVAL_SECONDS, RUN_CONTROL_POLL_SECONDS, _TaskProgressSink, _autopilot_composed_text, _is_autopilot_pass,
+    ExecutionOutcome, MESSAGE_CLAIM_INTERVAL_SECONDS, RUN_CONTROL_POLL_SECONDS, _TaskProgressSink, _autopilot_composed_text, _is_autopilot_pass, _is_autopilot_run,
     _run_accepts, across_pass_resume, task_scope_tags, terminal_session_id)
 from quest_ai_runner.consciousness.request_intake.executor_context import ContextViewMixin
 from quest_ai_runner.intelligence.mind.delegation.executor_followup import FollowUpMixin
@@ -308,7 +309,16 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # work for this task (it scans opted-in quests and creates/suggests other tasks as a side
         # effect), so it is routed BEFORE any of the context/orchestrator machinery below runs.
         if _is_autopilot_pass(task):
-            return self._execute_autopilot(task, task_id)
+            return self._execute_retired_pass(task, task_id)
+        if _is_autopilot_run(task) and not str(task.get("text") or "").lstrip().startswith(RUN_BRIEF_HEADER):
+            # A run as the backend queued it: plan it. Skipped closes it, suggested parks it with its brief (a person's approval runs it as
+            # composed, which is the branch below), and act continues into the ordinary deep run with the composed brief as its text.
+            plan = self._plan_autopilot_run(task, task_id)
+            if plan is None:
+                return ExecutionOutcome(task_id, "failed", "the autopilot run could not be planned")
+            if plan.status != "act":
+                return ExecutionOutcome(task_id, "done", plan.reason or plan.status)
+            task = {**task, "text": plan.text}
         # A metric draft is ONE light turn over assembled data, never a deep run (see ``runner/metric_draft.py``).
         if is_metric_draft(task):
             return self._execute_metric_draft(task, task_id)
@@ -442,12 +452,13 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         if _role:
             text = f"{text}\n\n{_role}"
         composed_by_autopilot = _autopilot_composed_text(task)
-        if (goal_id or quest_id) and self._mailing_quest_id(goal_id, quest_id):
+        autopilot_id = str(task.get("autopilot_id") or "")
+        if (goal_id or quest_id) and self._mailing_quest_id(goal_id, quest_id, autopilot_id):
             text = f"{text}\n\n{AUTOMATIC_DELIVERY_NOTE}"
         context_view = self._build_context_view(
             goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"),
             related_goal_id=related_goal_id,
-            with_updates=not composed_by_autopilot)
+            with_updates=not composed_by_autopilot, autopilot_id=autopilot_id)
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
@@ -753,28 +764,46 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         self._safe(lambda: self._client.report_done(task_id, drafted["text"]))
         return ExecutionOutcome(task_id, "done", drafted["text"], decision_id=drafted.get("decision_id"))
 
-    # --- autopilot pass routing (handler == "autopilot") ----------------------
+    # --- autopilot runs (task_kind == "autopilot_run") ------------------------
 
-    def _execute_autopilot(self, task: Dict[str, Any], task_id: str) -> ExecutionOutcome:
-        """Run the wired ``AutopilotPass`` for a ``handler == "autopilot"`` task and report its
-        outcome through the normal progress/report calls (a plain 'done' unless the pass itself
-        cannot run at all). ``AutopilotPass.run`` already isolates each quest's own failures into
-        the result (see ``runner.autopilot``), so nothing here needs a per-quest try/except; this
-        method's own try/except only guards against the pass failing to run at all."""
-        self._report_progress(task_id, "started", text="Started an autopilot pass.")
+    def _plan_autopilot_run(self, task: Dict[str, Any], task_id: str):
+        """Plan the run with the wired ``AutopilotPass`` and apply what is not a deep run: a skipped run is closed with its reason, a suggested one is
+        parked as ``suggested`` with its composed brief. Returns the plan (``None`` when the pass could not plan at all, which fails the task)."""
+        self._report_progress(task_id, "started", text="Started an autopilot run.")
         if self._autopilot is None:
             msg = "autopilot is not configured on this runner (no AutopilotPass wired)"
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
-            return ExecutionOutcome(task_id, "failed", msg)
+            return None
         try:
-            result = self._autopilot.run(task)
-            summary = result.summary_text()
-            self._report_progress(task_id, "done", text="Done.", output=summary)
-            self._safe(lambda: self._client.report_done(task_id, summary))
-            return ExecutionOutcome(task_id, "done", summary)
-        except Exception as e:  # noqa: BLE001 — the pass itself must never crash the poller
-            msg = f"autopilot pass error: {type(e).__name__}: {e}"
+            plan = self._autopilot.run(task)
+            if plan.dry_run and plan.status != "skipped":
+                self._report_progress(task_id, "done", text="Dry run.", output=plan.text)
+                self._safe(lambda: self._client.report_done(task_id, f"Dry run: this run would work on the brief below.\n\n{plan.text}"))
+                plan.status = "dry"
+            elif plan.status == "skipped":
+                self._report_progress(task_id, "done", text=f"Skipped: {plan.reason}")
+                self._close_skipped(task_id, plan.reason)
+            elif plan.status == "suggested":
+                self._safe(lambda: self._client.update_task(task_id, {"status": "suggested", "text": plan.text}))
+                self._report_progress(task_id, "done", text="Waiting for your approval.")
+            return plan
+        except Exception as e:  # noqa: BLE001 -- planning must never crash the poller
+            msg = f"autopilot run error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
-            return ExecutionOutcome(task_id, "failed", msg)
+            return None
+
+    def _close_skipped(self, task_id: str, reason: str) -> None:
+        """Close a run as ``skipped`` with its reason; a backend that does not know the status yet gets a plain done with the reason as the result."""
+        try:
+            self._client.update_task(task_id, {"status": "skipped", "skip_reason": reason[:300]})
+        except Exception:  # noqa: BLE001 -- the reason must still reach the person
+            self._safe(lambda: self._client.report_done(task_id, f"Skipped: {reason}"))
+
+    def _execute_retired_pass(self, task: Dict[str, Any], task_id: str) -> ExecutionOutcome:
+        """A pass task from before named autopilots: the backend schedules runs now, so it is closed with that said and nothing else happens."""
+        text = "Skipped: this pass is retired. Autopilots run on their own schedules now."
+        self._report_progress(task_id, "done", text=text)
+        self._safe(lambda: self._client.report_done(task_id, text))
+        return ExecutionOutcome(task_id, "done", text)

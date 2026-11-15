@@ -102,7 +102,7 @@ def provider_ask(provider: Any, call: str = "structure-watch") -> Callable[..., 
 
 
 def build_structure_watch(client: Any, provider: Any, folder: str, *, enabled: bool = True, now: Optional[Callable[[], Any]] = None) -> Optional[Callable[[str, bool], Any]]:
-    """The ``watch(quest_id, dry_run)`` an autopilot or routine pass is given, or None when the lane switched it off or holds no model provider. Each quest keeps its own record of the last
+    """The ``watch(quest_id, dry_run)`` an autopilot run is given, or None when the lane switched it off or holds no model provider. Each quest keeps its own record of the last
     watch under ``folder`` (so a quest whose records did not change since its last run makes no call); the watch never raises."""
     if not enabled or provider is None or client is None:
         return None

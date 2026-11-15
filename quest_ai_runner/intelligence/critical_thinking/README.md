@@ -93,14 +93,14 @@ Result is the share of the metric's cases an implementation passes (its balanced
 - Stop-or-continue verdict accuracy with false stops counted apart (`metric-detect-a-stalled-run`): leader `rule_floor`, 3 of 3 cases
 - Judge deterministic-half correctness with a scripted provider (`metric-judge-a-decision`): leader `qar_judges`, 61 of 61 cases
 - Reply guard correctness over link, recipe and anticipation cases (`metric-guard-a-reply`): leader `qar_guards`, 54 of 54 cases
-- Autopilot gate decision correctness (`metric-gate-an-autopilot-pass`): leader `live_pass`, 33 of 33 cases
+- Autopilot run gate correctness (`metric-gate-an-autopilot-pass`): leader `live_pass`, 12 of 12 cases
 - Intent-grounded pass rate (`metric-ground-in-intent`): leader `frame_line`, 3 of 3 cases
 - First-pass acceptance and exploration before the first edit (`metric-iterate-by-spec`): leader `single_attempt`, 8 of 9 cases
 - Runs that leave a durable, attributed record of what they changed (`metric-track-runs-on-records`)
 - Drafted metrics accepted per unit of cost (`metric-draft-a-metric`): leader `capped_model_draft`, 10 of 10 cases
+- Autopilot goal routing correctness (`metric-quest-autopilot-goal-routing`): leader `offline_routing`, 10 of 10 cases
 - Specification selection pass rate (`metric-spec-selection`): leader `lexical_vector_gated`, 70 of 76 cases
-- Work classification: the deliverable filed under the right solution (`metric-work-classification`)
-- and 2 more: all 12 are in [metrics](#metrics) of the full record below
+- and 3 more: all 13 are in [metrics](#metrics) of the full record below
 
 ## Where to go next
 
@@ -154,11 +154,12 @@ Result is the share of the metric's cases an implementation passes (its balanced
 - Stop-or-continue verdict accuracy with false stops counted apart (`metric-detect-a-stalled-run`): `esoi run deep_review --impl live_reviewer`
 - Judge deterministic-half correctness with a scripted provider (`metric-judge-a-decision`): `esoi run judges --impl qar_judges; esoi run judge_live_decisions --impl live_judges`
 - Reply guard correctness over link, recipe and anticipation cases (`metric-guard-a-reply`): `esoi run reply_guards --impl qar_guards`
-- Autopilot gate decision correctness (`metric-gate-an-autopilot-pass`): `esoi run gate_an_autopilot_pass --impl live_pass`
+- Autopilot run gate correctness (`metric-gate-an-autopilot-pass`): `esoi run gate_an_autopilot_pass --impl live_pass`
 - Intent-grounded pass rate (`metric-ground-in-intent`): `esoi run intent_grounding --impl frame_line`
 - First-pass acceptance and exploration before the first edit (`metric-iterate-by-spec`): `esoi run task_replay --impl slice_and_writeback`
 - Runs that leave a durable, attributed record of what they changed (`metric-track-runs-on-records`): `esoi run record_tracking`
 - Drafted metrics accepted per unit of cost (`metric-draft-a-metric`): `esoi run draft_a_metric --impl capped_model_draft`
+- Autopilot goal routing correctness (`metric-quest-autopilot-goal-routing`): `esoi run route_goals_to_autopilots --impl offline_routing`
 - Specification selection pass rate (`metric-spec-selection`): `esoi run spec_selection --impl lexical_vector_gated; esoi run spec_selection --impl lexical_vector_llm; esoi run spec_selection --impl lexical_vector; esoi run spec_selection --impl lexical_only`
 - Work classification: the deliverable filed under the right solution (`metric-work-classification`): `python evaluation/components/chat_quality/work_parts.py --records <records folder> --dataset <private dataset folder>`
 - ESOI application: the deliverable meets its solution's own rubric (`metric-work-esoi-application`): `python evaluation/components/chat_quality/work_parts.py --records <records folder> --dataset <private dataset folder>`

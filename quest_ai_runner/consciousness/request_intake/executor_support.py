@@ -63,6 +63,14 @@ def _is_autopilot_pass(task: Dict[str, Any]) -> bool:
     return str(task.get("handler") or "").strip().lower() == AUTOPILOT_PASS_KIND
 
 
+# A run of a NAMED AUTOPILOT: the backend's scheduler queues one task per run (``autopilot_id`` is a field of the task) and the runner executes it.
+AUTOPILOT_RUN_KIND = "autopilot_run"
+
+
+def _is_autopilot_run(task: Dict[str, Any]) -> bool:
+    return str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_RUN_KIND
+
+
 # The value the autopilot pass stamps on every batch/goal-proposal task it creates (see
 # ``runner.autopilot``). Duplicated locally for the same reason as ``AUTOPILOT_PASS_KIND`` above:
 # this module must not import ``runner.autopilot``, which is a consumer of this executor, not a
@@ -84,7 +92,7 @@ def _autopilot_composed_text(task: Dict[str, Any]) -> bool:
     progress paths, so it reliably reflects what actually composed the text, unlike scanning that
     text for a marker string which anyone's task can happen to contain.
     """
-    return str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_WORK_KIND
+    return str(task.get("task_kind") or "").strip().lower() in (AUTOPILOT_WORK_KIND, AUTOPILOT_RUN_KIND)
 
 
 def task_scope_tags(task: Dict[str, Any]) -> List[str]:
