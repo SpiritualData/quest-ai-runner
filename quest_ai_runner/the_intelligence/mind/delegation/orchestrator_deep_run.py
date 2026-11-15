@@ -295,6 +295,13 @@ class DeepRunMixin:
         # stays aligned with the whole instead of optimizing its piece in isolation.
         overall_goal = (plan.goal or "").strip() or user_message
         multi = count_tasks(subtasks) > 1
+        # An interface that only pushes to the inbox has no control channel of its own: one is built from its pending-input callable, so a note typed during an attempt reaches
+        # the live worker, and one the worker took without confirming goes to the next attempt (a fan-out takes notes between attempts only, as before).
+        notes = None
+        if pending_inputs is not None and run_control is None and not multi:
+            from quest_ai_runner.the_intelligence.mind.delegation.inbox_control import PendingNotes
+            notes = PendingNotes(pending_inputs, cancel_check)
+            run_control, pending_inputs = notes.run_control(), notes.between_attempts
         # How many goals this call runs in all (a sequential group counts each of its tasks): the
         # turn-start assembly can stand in for a goal only when there is exactly one.
         goal_count = count_tasks(subtasks)
@@ -1237,7 +1244,7 @@ class DeepRunMixin:
                     output_text = _strip_future_context(res.output).strip()
                     if output_text:
                         emit.emit(ProgressEvent(type=EVENT_MILESTONE,
-                                               text=f"Worker output:\n{output_text[:600]}",
+                                               text=f"Worker output:\n{output_text}",
                                                data={"attempt": attempt}))
                     else:
                         emit.emit(ProgressEvent(type=EVENT_MILESTONE,

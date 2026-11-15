@@ -279,7 +279,7 @@ class Turn:
         if inbox is not None:
             self.control = TerminalRunControl(inbox, key, cancel_check=cancel.is_set, on_seen=self.taken_up)
             extra["run_control"] = self.control.run_control()
-            pending = lambda: inbox.drain(key)  # noqa: E731
+            pending = self.pending_notes
         stream = s._orch.run_stream(goal, transcript=s._last_transcript(), quest_id=s.bound_quest_id(), rep_preamble=preamble, model_hint=model_hint, pending_inputs=pending,
                                     conv_id=s._conv_id, context_meta=grounding, cancel_check=cancel.is_set, **extra)
         final = None
@@ -401,6 +401,14 @@ class Turn:
             if open_:
                 self.sink(Step(at=self.at(), step_id=f"run-{run_id}", kind="note", label="", state="done"))
                 self.runs[run_id] = False
+
+    def pending_notes(self) -> List[str]:
+        """What the person typed that the next attempt has not been given: notes the last worker took but never confirmed, then anything still in the inbox. Each is shown as taken up, so the bridge does not also start it as a run of its own."""
+        texts = list(self.control.reclaim_unconfirmed()) if self.control is not None else []
+        texts += [t for t in self.session._orch.input_inbox.drain(self.harness.inbox_key) if t and t.strip()]
+        if texts:
+            self.taken_up(texts)
+        return texts
 
     def taken_up(self, texts: List[str]) -> None:
         """The live worker confirmed it has the person's notes: the hub says each as taken up."""

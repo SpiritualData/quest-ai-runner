@@ -39,3 +39,12 @@ def test_an_unmeasured_run_keeps_the_attempt_count_as_its_budget():
     runner = RecordingRunner(results(10, tokens=0))
     build(provider, runner, deep_goal_max_iterations=2, deep_goal_token_budget=300_000).run("what is the job status?")
     assert len(runner.calls) == 2
+
+
+def test_the_whole_output_of_an_attempt_that_fell_short_is_shown():
+    long_output = " ".join(f"word{n}" for n in range(400))          # well past 600 characters
+    provider = ScriptedProvider(plans=[PLAN], verdicts=not_met(1) + [{"met": True}])
+    runner = RecordingRunner([DeepResult(met=True, output=long_output, tokens=1000, observations=["changed a.txt"]), DeepResult(met=True, output="done", tokens=1000, observations=["changed b.txt"])])
+    events = list(build(provider, runner, deep_goal_max_iterations=2, deep_goal_token_budget=300_000).run_stream("what is the job status?"))
+    shown = [getattr(e, "text", "") or (e.get("text", "") if isinstance(e, dict) else "") for e in events]
+    assert any(long_output in text for text in shown)

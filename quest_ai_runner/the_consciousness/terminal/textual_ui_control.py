@@ -136,6 +136,13 @@ class TerminalRunControl:
                 out.append(text)
         return out
 
+    def reclaim_unconfirmed(self) -> List[str]:
+        """The messages the finished worker took and never confirmed, handed back once, in the order typed, for the next attempt to carry. Called between attempts only, when no worker is live."""
+        with self._lock:
+            texts = [text for _id, text in sorted(self._unconfirmed.items(), key=lambda kv: int(kv[0].rsplit("-", 1)[1]))]
+            self._unconfirmed.clear()
+        return texts
+
     def put_back(self, texts: List[str]) -> None:
         """Return ``texts`` to the FRONT of the inbox, ahead of anything typed since."""
         if not texts:
