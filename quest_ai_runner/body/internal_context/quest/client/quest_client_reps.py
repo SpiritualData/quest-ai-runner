@@ -74,6 +74,16 @@ class RepsMixin:
             body["owner_user_id"] = owner_user_id
         return self._write("POST", "/api/reps", body=body, label="Creating the rep")
 
+    def update_rep(self, rep_id: str, fields: Dict[str, Any]) -> WriteResult:
+        """PATCH /api/reps/{rep_id} — change a rep's ``display_name``, ``persona``, ``area`` or other
+        profile fields. Send only what changes. The name is what recipients see on the rep's mail
+        (subject prefix, sender name, signature), so rename a rep here rather than around it.
+        Allowed to the rep's owner or creator, or an admin of its team; raises ``QuestWriteError``
+        on a refusal.
+        """
+        self._require()
+        return self._write("PATCH", f"/api/reps/{rep_id}", body=dict(fields), label="Updating the rep")
+
     # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
 
     def get_ai_profile(self, user_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
