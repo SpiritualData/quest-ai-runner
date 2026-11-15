@@ -8,7 +8,7 @@ list cannot drift from the code. Configuration enters through `RunnerConfig` (se
 A variable that is also a `RunnerConfig` field or a config-file key follows the rule in that
 document: the environment wins over the file.
 
-258 variables. "Read in" lists the modules that name the variable; "Explained in" lists
+260 variables. "Read in" lists the modules that name the variable; "Explained in" lists
 the docs and `.env.example` that describe what it does.
 
 | Variable | What it does | Read in | Explained in |
@@ -35,7 +35,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_AUTOPILOT_ADOPT_RECURRING` | 1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass. | `body/configuration/cli_config.py` | - |
 | `QAR_AUTOPILOT_PASS_TIME` | Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time. | `body/configuration/cli_config.py` | - |
 | `QAR_AUTOPILOT_STRUCTURE_WATCH` | 0/false/off/no turns the structure watch off (RunnerConfig.autopilot_structure_watch): the one small best-tier call per autopilot or routine run of a quest. | `body/configuration/cli_config.py` | - |
-| `QAR_BEST_REQUIRES_USER_REQUEST` | 1 (default): the best tier runs only when a person explicitly asked for it; any other request for best resolves to quality. 0 lifts the rule. | `world/model_plumbing/spend/llm_budget.py` | - |
+| `QAR_BEST_REQUIRES_USER_REQUEST` | 1 (default): the best tier runs only when a person explicitly asked for it or inside the structure watch; any other request for best resolves to quality. 0 lifts the rule. | `world/model_plumbing/spend/llm_budget.py` | - |
 | `QAR_BOOTSTRAP_EMAIL_USER` | Quest user id the bootstrap report email is sent to. | `consciousness/terminal/cli_context.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS` | Hard cap on cards created in ONE bootstrap pass (unset = no cap). | `body/configuration/card_store_settings.py` | - |
 | `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` | Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap). | `body/configuration/card_store_settings.py` | - |
@@ -144,8 +144,9 @@ the docs and `.env.example` that describe what it does.
 | `QAR_LINK_POLICY_FILE` |  | `body/configuration/cli_config.py`, `body/configuration/config_core_settings.py` | `.env.example`, `docs/explanation/link-guard.md` |
 | `QAR_MAX_CARDS` | Most cards one local card store holds (default 1000; 0 or unlimited = no limit). At the limit a new topic or imported card is not written and a notice says what fills the store and how to change the limit; a card learned from a run or written for a quest moves the coldest derived card to _quarantine/limit instead. | `body/configuration/card_store_settings.py` | `.env.example`, `docs/explanation/context-assembly.md`, `docs/how-to/context-card-stores.md` |
 | `QAR_MAX_CARDS_PER_FILE` | The most cards a batch to write or upload may hold per distinct file it names (default 0.25; 0 = no rule). A batch over it is refused whole, with a notice. | `body/configuration/card_store_settings.py` | `docs/how-to/keep-quest-ai-runner-current-with-the-hub.md` |
-| `QAR_MAX_LLM_CALLS_PER_HOUR` | Model calls the whole process may make in any rolling hour, in or out of a job, before LlmBudgetExceeded is raised (default 600; 0 or off disables). | `world/model_plumbing/spend/llm_budget.py` | - |
-| `QAR_MAX_LLM_CALLS_PER_JOB` | Model calls one named job (context index, digests) may make before LlmBudgetExceeded is raised (default 200; 0 or off disables). After 20 calls in a job, requests above the balanced tier run on balanced. | `world/model_plumbing/spend/llm_budget.py` | - |
+| `QAR_KEYLESS` | 1: the process never uses an API key; a model call served by an API vendor is refused with KeyedCallRefused and only the Claude Code login path runs (default 0). | `world/model_plumbing/spend/llm_budget.py` | - |
+| `QAR_MAX_LLM_CALLS_PER_HOUR` | Model calls the whole process may make in any rolling hour, in or out of a job, before the hub call guard raises CallBudgetExceeded (default 600; 0 or off disables). | `world/model_plumbing/spend/llm_budget.py` | - |
+| `QAR_MAX_LLM_CALLS_PER_JOB` | Model calls one named job (context index, digests) may make before the hub call guard raises CallBudgetExceeded (default 200; 0 or off disables). After 20 calls in a job, requests above the balanced tier run on balanced. | `world/model_plumbing/spend/llm_budget.py` | - |
 | `QAR_MAX_LOAD_PER_CORE` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MAX_MEMORY_PERCENT` |  | `body/host/resources.py` | `.env.example`, `docs/how-to/deployment.md` |
 | `QAR_MAX_PARALLEL` |  | `body/configuration/card_store_settings.py`, `body/configuration/cli_config.py` | `docs/how-to/a-lane-is-a-config-file.md`, `docs/how-to/named-autopilots.md` |
@@ -159,6 +160,7 @@ the docs and `.env.example` that describe what it does.
 | `QAR_MODEL_BACKEND` |  | `body/configuration/cli_config.py`, `consciousness/terminal/cli_chat.py`, `consciousness/terminal/textual_ui_helpers.py` +1 | `.env.example`, `docs/how-to/adapters.md` |
 | `QAR_MODEL_FAST` |  | `consciousness/terminal/cli_context.py` | `docs/how-to/adapters.md` |
 | `QAR_MODE_RELEASE_TIMEOUT_SECONDS` | Budget for the brainstorm-release judgment (default 8; a timeout holds the latch). CoreSettings.mode_release_timeout_seconds. | `body/configuration/config_core_settings.py` | `.env.example` |
+| `QAR_NEVER_MODELS` | Comma list of words; a model id containing one is refused with ModelNotAllowed, except the best tier's model when a person asked for best (default none). | `world/model_plumbing/spend/llm_budget.py` | - |
 | `QAR_NOTE_FLOOR_FRESH_MINUTES` | A note learned within this many minutes bypasses the floor's relevance gate (default 5). CoreSettings.note_floor_fresh_minutes. | `body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_NOTE_FLOOR_RELEVANCE_GATED` | 0/false/no/off restores the unconditional always-recent notes floor (default gated). CoreSettings.note_floor_relevance_gated. | `body/configuration/config_core_settings.py` | `.env.example` |
 | `QAR_OPENAI_EMBEDDING_MODEL` | OpenAI embedding model id used by the OpenAI embedder. | `body/internal_context/card_store/qdrant_embedders.py` | - |

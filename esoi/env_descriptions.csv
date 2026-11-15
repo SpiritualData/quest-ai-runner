@@ -7,7 +7,7 @@ QAR_ASYNC_CARD_UPDATE,Default on; 0/false/off disables updating cards from a dee
 QAR_AUTOPILOT_ADOPT_RECURRING,1/true sets RunnerConfig.autopilot_adopt_recurring: a recurring task is adopted as the quest's pass.
 QAR_AUTOPILOT_STRUCTURE_WATCH,0/false/off/no turns the structure watch off (RunnerConfig.autopilot_structure_watch): the one small best-tier call per autopilot or routine run of a quest.
 QAR_AUTOPILOT_PASS_TIME,Default daily local time (HH:MM) of the autopilot pass; sets RunnerConfig.autopilot_pass_time.
-QAR_BEST_REQUIRES_USER_REQUEST,1 (default): the best tier runs only when a person explicitly asked for it; any other request for best resolves to quality. 0 lifts the rule.
+QAR_BEST_REQUIRES_USER_REQUEST,1 (default): the best tier runs only when a person explicitly asked for it or inside the structure watch; any other request for best resolves to quality. 0 lifts the rule.
 QAR_BOOTSTRAP_EMAIL_USER,Quest user id the bootstrap report email is sent to.
 QAR_BOOTSTRAP_MAX_CARDS,Hard cap on cards created in ONE bootstrap pass (unset = no cap).
 QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER,Cards allowed per folder in bootstrap (default 1; 0 = no per-folder cap).
@@ -25,8 +25,10 @@ QAR_INDEX_LLM_MAX_CARDS,Context index pass over a store already holding more car
 QAR_INDEX_LLM_MAX_FILES,Context index pass with more unanalysed files than this skips every model stage and writes a marker (default 3000; 0 means no rule).
 QAR_INDEX_MAX_NEW_FILES_PER_RUN,New files one context index pass sends to topic discovery; the rest carry over to the next pass (default 300; 0 means no cap).
 QAR_INDEX_MAX_STALE_CARDS_PER_RUN,Stale cards one context index pass regenerates with the model; the rest carry over to the next pass (default 100; 0 means no cap).
-QAR_MAX_LLM_CALLS_PER_HOUR,"Model calls the whole process may make in any rolling hour, in or out of a job, before LlmBudgetExceeded is raised (default 600; 0 or off disables)."
-QAR_MAX_LLM_CALLS_PER_JOB,"Model calls one named job (context index, digests) may make before LlmBudgetExceeded is raised (default 200; 0 or off disables). After 20 calls in a job, requests above the balanced tier run on balanced."
+QAR_KEYLESS,"1: the process never uses an API key; a model call served by an API vendor is refused with KeyedCallRefused and only the Claude Code login path runs (default 0)."
+QAR_NEVER_MODELS,"Comma list of words; a model id containing one is refused with ModelNotAllowed, except the best tier's model when a person asked for best (default none)."
+QAR_MAX_LLM_CALLS_PER_HOUR,"Model calls the whole process may make in any rolling hour, in or out of a job, before the hub call guard raises CallBudgetExceeded (default 600; 0 or off disables)."
+QAR_MAX_LLM_CALLS_PER_JOB,"Model calls one named job (context index, digests) may make before the hub call guard raises CallBudgetExceeded (default 200; 0 or off disables). After 20 calls in a job, requests above the balanced tier run on balanced."
 QAR_SKILLS_ROOT,"The folder holding the skills this lane's deep worker may be asked to carry out (one folder per skill with its SKILL.md), such as the skill a milestone deliverable's work names; also the root of the representatives' skill folders."
 QAR_SOLUTION_CONSIDERATION_MIN_SCORE,"The records-index score a solution needs for a pass in a deep run (default 0: the hub gate's DEFAULT_MIN_SCORE, fixed from its relevance cases). CoreSettings.solution_consideration_min_score."
 QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS,Wall-clock budget for turn-start context assembly (default 30). CoreSettings.context_assembly_timeout_seconds.

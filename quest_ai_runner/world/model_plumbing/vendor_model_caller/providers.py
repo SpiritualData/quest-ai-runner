@@ -80,29 +80,18 @@ def credits_from_environment(env: Optional[Mapping[str, str]] = None) -> list:
 
 
 
-class BudgetedMultiProvider(MultiProvider):
-    """The hub's router with QAR's call budget (``spend/llm_budget.py``): every routed call is counted against the job and hourly budgets
-    (``LlmBudgetExceeded`` past a limit), steps down to the balanced tier after 20 calls in a job, and a ``best`` request with no person's
-    request behind it runs on the quality tier."""
-
-    def routed(self, model: str, call: Any) -> Any:
-        job = llm_budget.count_call()
-        if self.registry is not None:
-            model = llm_budget.settle_model(model, self.tier_of, self.registry.resolve_tier, job)
-        return super().routed(model, call)
-
-
 @implementation("vendor-model-caller", "multi_provider")
 def routed(primary: Any = None, providers: Optional[Dict[str, Any]] = None, usage_tracker: Any = None, registry: Any = None,
            fallback_models: Sequence[str] = ()) -> MultiProvider:
     """The hub's router with QAR's prefix table, the daily-limit message that names the variable to raise, spend tagging by the registered
     prompt spec each call was rendered from (``justify-model-calls``: ``PromptSpec.render`` tags the call, ``spec_of`` reads the tag),
-    and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``). With no
+    the process-wide call guard (``spend/llm_budget.py``: call budgets, best only on a person's request, never-models, keyless), and the ordered ``fallback_models`` that keep a turn answered when one vendor cannot (see ``failover_models``). With no
     ``primary`` the router is built over the hub's default ``vendor-model-caller`` arm, the Claude Code subscription (``claude``)."""
     if primary is None:
         primary = ClaudeCliProvider()
-    return BudgetedMultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES,
-                         limit_message=limit_message(usage_tracker), spec_of=active_spec, fallback_models=fallback_models)
+    llm_budget.register_api_providers(name for name, p in (providers or {}).items() if not isinstance(p, ClaudeCliProvider))
+    return MultiProvider(primary, providers, usage_tracker, registry, prefixes=MODEL_PREFIXES, limit_message=limit_message(usage_tracker),
+                         spec_of=active_spec, fallback_models=fallback_models, call_guard=llm_budget.guard())
 
 
 routed.REQUIRES = (needs.CLAUDE_BINARY,)

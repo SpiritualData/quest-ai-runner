@@ -1,154 +1,91 @@
-"""The call budget (per job, per hour), the step-down by volume, best-only-on-request, and the context index volume guard."""
+"""QAR's settings for the hub's call guard (env adapter, wiring, the structure watch's role) and the context index volume guard.
+The counting, step-down and best rules are the hub's and are tested there."""
 import json
 from types import SimpleNamespace
 
 import pytest
+from hubofhubs.api import CallGuard, KeyedCallRefused, ModelNotAllowed
 
 from quest_ai_runner.world.model_plumbing.spend import llm_budget as lb
 from quest_ai_runner.world.model_plumbing.model_tier_chooser.call_roles import STRUCTURE_WATCH_CALL, tier_for_call
-from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import BudgetedMultiProvider
+from quest_ai_runner.world.model_plumbing.vendor_model_caller import providers as prov
 from quest_ai_runner.intelligence.subconscious.cards_from_files import index_llm_guard as guard
 
 TOP = {"fast": "m-haiku", "balanced": "m-sonnet", "quality": "m-opus", "best": "m-fable"}
 
 
-class Registry:
-    def top_models(self):
-        return dict(TOP)
-
-    def resolve_tier(self, tier):
-        return TOP[tier]
-
-    def lower_tier(self, tier):
-        return None
-
-
-class Inner:
-    tokens_in = tokens_out = 0
-
-    def __init__(self):
-        self.models = []
-
-    def answer(self, messages, *, model, **kw):
-        self.models.append(model)
-        return "ok"
-
-
-def make():
-    inner = Inner()
-    return BudgetedMultiProvider(inner, {}, None, Registry()), inner
-
-
-@pytest.fixture(autouse=True)
-def clean(monkeypatch):
-    lb.reset_for_tests()
-    for name in ("QAR_MAX_LLM_CALLS_PER_JOB", "QAR_MAX_LLM_CALLS_PER_HOUR", "QAR_BEST_REQUIRES_USER_REQUEST"):
-        monkeypatch.delenv(name, raising=False)
-    yield
-    lb.reset_for_tests()
-
-
-def ask(provider, model):
-    return provider.answer([{"role": "user", "content": "x"}], model=model)
-
-
 def test_defaults():
-    assert lb.max_calls_per_job() == 200 and lb.max_calls_per_hour() == 600 and lb.best_requires_user_request()
+    limits = lb.limits_from_environment({})
+    assert (limits.max_per_job, limits.max_per_hour, limits.best_requires_person, limits.keyless, limits.never_models) == (200, 600, True, False, ())
 
 
-def test_job_budget_exceeded_raises_and_logs_once(monkeypatch, caplog):
-    monkeypatch.setenv("QAR_MAX_LLM_CALLS_PER_JOB", "3")
-    provider, inner = make()
-    with lb.llm_job("context-index"), caplog.at_level("ERROR"):
-        for _ in range(3):
-            ask(provider, "m-haiku")
-        for _ in range(2):
-            with pytest.raises(lb.LlmBudgetExceeded):
-                ask(provider, "m-haiku")
-    assert len(inner.models) == 3
-    lines = [r for r in caplog.records if "context-index" in r.getMessage()]
-    assert len(lines) == 1 and "3" in lines[0].getMessage()
+def test_env_names_map_to_limits():
+    limits = lb.limits_from_environment({"QAR_MAX_LLM_CALLS_PER_JOB": "5", "QAR_MAX_LLM_CALLS_PER_HOUR": "off", "QAR_BEST_REQUIRES_USER_REQUEST": "0",
+                                         "QAR_KEYLESS": "1", "QAR_NEVER_MODELS": "opus, fable"})
+    assert (limits.max_per_job, limits.max_per_hour, limits.best_requires_person, limits.keyless) == (5, None, False, True)
+    assert limits.never_models == ("opus", "fable")
+    assert lb.limits_from_environment({"QAR_MAX_LLM_CALLS_PER_JOB": "junk"}).max_per_job == 200
 
 
-def test_hourly_budget_counts_calls_outside_any_job(monkeypatch):
-    monkeypatch.setenv("QAR_MAX_LLM_CALLS_PER_HOUR", "2")
-    provider, inner = make()
-    ask(provider, "m-haiku")
-    ask(provider, "m-haiku")
-    with pytest.raises(lb.LlmBudgetExceeded):
-        ask(provider, "m-haiku")
-    assert len(inner.models) == 2
+def test_a_multi_provider_built_by_qar_carries_the_one_process_guard():
+    class Api:
+        pass
+    router = prov.routed(providers={"anthropic": Api()})
+    assert isinstance(router.call_guard, CallGuard) and router.call_guard is lb.guard()
+    assert prov.routed().call_guard is router.call_guard
 
 
-def test_hour_window_slides():
-    lb.count_call(now=1000.0)
-    assert len(lb._HOUR_CALLS) == 1
-    lb.count_call(now=1000.0 + lb.HOUR + 1)
-    assert len(lb._HOUR_CALLS) == 1
+def test_uses_key_is_true_for_an_api_vendor_and_false_for_the_cli_path():
+    lb.register_api_providers(["anthropic"])
+    assert lb.uses_key("claude-sonnet-4") is True
+    assert lb.uses_key("something-else") is False
 
 
-def test_step_down_after_20_calls_in_a_job_and_fast_stays_fast(caplog):
-    provider, inner = make()
-    with lb.llm_job("digest"), caplog.at_level("WARNING"):
-        for _ in range(20):
-            ask(provider, "m-opus")
-        assert inner.models[-1] == "m-opus"           # the first 20 are untouched
-        ask(provider, "m-opus")
-        ask(provider, "m-fable")
-        ask(provider, "m-haiku")
-    assert inner.models[20:] == ["m-sonnet", "m-sonnet", "m-haiku"]
-    assert len([r for r in caplog.records if "now run on" in r.getMessage()]) == 1
+def test_keyless_and_never_models_reach_the_guard_through_the_adapter():
+    lb.register_api_providers(["anthropic"])
+    keyless = CallGuard(lb.limits_from_environment({"QAR_KEYLESS": "1"}), uses_key=lb.uses_key)
+    with pytest.raises(KeyedCallRefused):
+        keyless.admit("claude-sonnet-4")
+    never = CallGuard(lb.limits_from_environment({"QAR_NEVER_MODELS": "opus"}), uses_key=lb.uses_key)
+    with pytest.raises(ModelNotAllowed):
+        never.admit("claude-opus-9")
 
 
-def test_a_call_outside_a_job_is_not_stepped_down():
-    provider, inner = make()
-    for _ in range(25):
-        ask(provider, "m-opus")
-    assert set(inner.models) == {"m-opus"}
+def test_mark_user_requested_best_lets_best_run_for_the_context():
+    g = lb.guard()
+    token = g.person_best.set(False)
+    try:
+        assert not g.best_allowed()
+        lb.mark_user_requested_best()
+        assert g.best_allowed()
+    finally:
+        g.person_best.reset(token)
 
 
-def test_best_without_a_request_runs_on_quality_and_with_one_stays_best():
-    provider, inner = make()
-    ask(provider, "m-fable")
-    assert inner.models == ["m-opus"]
-    lb.mark_user_requested_best()
-    ask(provider, "m-fable")
-    assert inner.models[-1] == "m-fable"
+def test_tier_for_call_marks_a_persons_best():
+    g = lb.guard()
+    token = g.person_best.set(False)
+    try:
+        assert tier_for_call("answer.response", "best") == "best" and g.best_allowed()
+    finally:
+        g.person_best.reset(token)
 
 
-def test_best_rule_can_be_lifted(monkeypatch):
-    monkeypatch.setenv("QAR_BEST_REQUIRES_USER_REQUEST", "0")
-    provider, inner = make()
-    ask(provider, "m-fable")
-    assert inner.models == ["m-fable"]
-
-
-def test_tier_for_call_best_needs_a_person():
-    assert tier_for_call("answer.response", "best") == "best" and lb.user_requested_best()
-    lb.reset_for_tests()
-    assert tier_for_call(STRUCTURE_WATCH_CALL) != "best"
-    assert tier_for_call("answer.response") != "best"
-
-
-def test_structure_watch_no_longer_asks_for_best():
+def test_structure_watch_asks_for_best_inside_its_role():
     from quest_ai_runner.intelligence.proactivity.autopilot_structure_watch import provider_ask
     seen = {}
 
-    class Provider:
-        tokens_in = tokens_out = cost_usd = 0
+    from hubofhubs.api import claude_cli
 
+    class Provider(claude_cli.ClaudeCliProvider):      # a login lane: the hub names its best model
         def answer(self, messages, *, model, **kw):
-            seen["model"] = model
+            seen["role"] = lb.guard().call_role.get()
+            seen["allowed"] = lb.guard().best_allowed()
             return "{}"
 
-        def list_models(self):
-            return list(TOP.values())
-
-        providers = {}
-
     provider_ask(Provider())("prompt", "best", 100)
-    assert seen["model"] != TOP["best"]
-    assert tier_for_call(STRUCTURE_WATCH_CALL) == "quality"
+    assert seen["role"] == "structure-watch" and seen["allowed"] is True
+    assert lb.guard().call_role.get() == ""
 
 
 # ---- context index volume guard ----

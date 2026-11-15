@@ -149,16 +149,10 @@ def test_a_login_only_lane_resolves_best_to_the_hubs_best_choice_and_a_lane_with
     from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import ModelRegistry
     login = claude_cli.ClaudeCliProvider()
     top = ModelRegistry(login).top_models()
-    assert top["best"] != top["quality"] and "fable" in top["best"] and ModelRegistry(login).resolve_role("structure-watch") != top["best"]   # automation never gets best
-    from quest_ai_runner.world.model_plumbing.spend import llm_budget
-    import os
-    os.environ["QAR_BEST_REQUIRES_USER_REQUEST"] = "0"      # with the rule lifted the old reason still holds
+    assert top["best"] != top["quality"] and "fable" in top["best"] and ModelRegistry(login).resolve_role("structure-watch") == top["best"]
+    ask = binding.provider_ask(Provider())      # a provider that is no login and holds no key: the hub names no model for it
     try:
-        ask = binding.provider_ask(Provider())      # a provider that is no login and holds no key: the hub names no model for it
-        try:
-            ask("x", "best", 500)
-            raise AssertionError("expected the reason")
-        except RuntimeError as error:
-            assert "no model is chosen for the best tier" in str(error)
-    finally:
-        del os.environ["QAR_BEST_REQUIRES_USER_REQUEST"]
+        ask("x", "best", 500)
+        raise AssertionError("expected the reason")
+    except RuntimeError as error:
+        assert "no model is chosen for the best tier" in str(error)
