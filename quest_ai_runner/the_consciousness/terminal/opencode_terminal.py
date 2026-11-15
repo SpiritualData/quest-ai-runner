@@ -658,6 +658,22 @@ class OpencodeTerminal:
         """How the resume command starts (the hub adds ``--resume <id>``): the Textual screen's own words, with this screen named so the same conversation opens here."""
         return " ".join([COMMAND_PREFIX] + ([rep] if rep else []) + ["--screen opencode"])
 
+    RESUME_REPLAY_TURNS = 10      # the same tail the Textual screen shows; the AI has all of them as context
+
+    @staticmethod
+    def earlier_turns(conv: Any) -> List[Tuple[str, str]]:
+        """The last turns of a resumed conversation as (person's message, what the AI said), the reply as the turn showed it when that was saved, else the note the model reads back."""
+        history = list(getattr(conv, "history", None) or [])
+        meta = getattr(conv, "meta", None) or {}
+        shown = meta.get("shown") if isinstance(meta.get("shown"), list) else []
+        first = max(len(history) - OpencodeTerminal.RESUME_REPLAY_TURNS, 0)
+        turns = []
+        for offset, (person, reply) in enumerate(history[first:]):
+            index = first + offset
+            on_screen = shown[index] if index < len(shown) and isinstance(shown[index], str) else ""
+            turns.append((str(person or ""), on_screen or str(reply or "")))
+        return turns
+
     @staticmethod
     def announce(owner: Owner, bridge: Any) -> None:
         """When the session is built: the startup notices it collected, and a line saying a resumed conversation's turns are the AI's context."""
@@ -668,7 +684,10 @@ class OpencodeTerminal:
             return
         owner.announced = True
         lines = [line for line in (getattr(session, "_startup_notices", None) or []) if not owner.is_progress(line)]
-        if getattr(session, "resumed", None) is not None:
+        resumed = getattr(session, "resumed", None)
+        if resumed is not None:
+            bridge.earlier(OpencodeTerminal.earlier_turns(resumed))
+        if resumed is not None:
             lines.append(f"Continuing a saved conversation of {len(session._session_history)} turns; the AI has them as context.")
         bridge.say(lines)
 
