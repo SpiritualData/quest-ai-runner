@@ -37,6 +37,62 @@ class QuestsMixin:
 
     # --- quest and goal browsing (for interactive chat context selection) ------
 
+    def list_org_people(self, org_id: str, *, include_archived: bool = False,
+                        limit: int = 500) -> List[Dict[str, Any]]:
+        """GET /api/orgs/{org_id}/people — the org's people directory (explicit members plus users
+        matching the org's domains). Archived people are left out unless ``include_archived``; each
+        archived row carries ``archived: True``. Raises ``QuestApiError`` on a refusal, because a
+        caller deciding who counts as an active member must not treat a failed read as "nobody".
+        """
+        self._require()
+        resp = self._request("GET", f"/api/orgs/{org_id}/people",
+                             params={"limit": limit, "include_archived": str(include_archived).lower()})
+        return list(resp.get("people") or resp.get("items") or []) if isinstance(resp, dict) else list(resp or [])
+
+    def add_org_person(self, org_id: str, email: str, *, display_name: str = "",
+                       team_ids: Optional[List[str]] = None, role: str = "member") -> WriteResult:
+        """POST /api/orgs/{org_id}/people — org admin: add a person by email, creating a placeholder account
+        if none exists yet, and join them to the org and to ``team_ids`` (teams of this org). The email must
+        be on one of the org's own email domains. Idempotent for an existing person: memberships are filled
+        in, no role is changed and nothing is mailed. Only a newly created account gets ONE invitation email
+        (sent by the server to that address); ``data`` carries ``created``, ``inviteSent`` and ``inviteError``.
+        Raises ``QuestWriteError`` on a refusal (archived person, address owned by an outside account...).
+        """
+        self._require()
+        body: Dict[str, Any] = {"email": email, "displayName": display_name, "teamIds": list(team_ids or []),
+                                "role": role}
+        return self._write("POST", f"/api/orgs/{org_id}/people", body=body, label="Adding the person")
+
+    def add_org_member(self, org_id: str, *, user_identifier: Optional[str] = None,
+                       user_id: Optional[str] = None, role: str = "member") -> WriteResult:
+        """POST /api/orgs/{org_id}/members — org admin: add or PROMOTE/DEMOTE an explicit org member who
+        already has an account (``user_identifier`` is an email or username, else ``user_id``). ``role`` is
+        ``admin`` or ``member``; an existing member's role is overwritten with it, so pass the current role
+        or skip existing members. Sends no email. Raises ``QuestWriteError`` on a refusal (no such account...).
+        """
+        self._require()
+        body: Dict[str, Any] = {"role": role}
+        if user_identifier:
+            body["user_identifier"] = user_identifier
+        if user_id:
+            body["user_id"] = user_id
+        return self._write("POST", f"/api/orgs/{org_id}/members", body=body, label="Adding the org member")
+
+    def add_team_member(self, team_id: str, *, user_identifier: Optional[str] = None,
+                        user_id: Optional[str] = None, role: str = "member") -> WriteResult:
+        """POST /api/teams/{team_id}/members — team or org admin: add an existing account to a team directly
+        (no invitation to accept). ``role`` is ``admin`` or ``member``. Idempotent: an existing membership is
+        left as it is. Sends no email. An archived person is refused until restored. Raises ``QuestWriteError``
+        on a refusal.
+        """
+        self._require()
+        body: Dict[str, Any] = {"role": role}
+        if user_identifier:
+            body["user_identifier"] = user_identifier
+        if user_id:
+            body["user_id"] = user_id
+        return self._write("POST", f"/api/teams/{team_id}/members", body=body, label="Adding the team member")
+
     def list_teams(self) -> List[Dict[str, Any]]:
         """GET /api/teams — every team the authenticated account is a member of.
 
