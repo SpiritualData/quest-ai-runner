@@ -410,10 +410,27 @@ def left_out(readings, tier, weights, names, unserved=0.0):
     return "The headline leaves out " + ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + "."
 
 
+def whole_set_rows(rows):
+    """``(rows of every sub-metric in definition order, ids read here)``. A run of part of the set (only the cases that
+    failed last time, or a chosen few) must still report the whole metric: each ideal's weight is split over all the
+    sub-metrics that serve it, so weights taken over the part alone would name served ideals as unserved and overstate
+    the floor. A sub-metric the run left out is read here from the recorded rows, which costs nothing. Rows that are
+    not all sub-metrics of the definitions (a fixture) are returned as given."""
+    given = {r["id"]: r for r in rows if r.get("reading")}
+    definitions = load_definitions()
+    known = [d["id"] for d in definitions]
+    if not given or not set(given) <= set(known) or set(given) == set(known):
+        return rows, []
+    filled = [d["id"] for d in definitions if d["id"] not in given]
+    return [given.get(d["id"]) or {"id": d["id"], "area": d.get("area", ""), "reading": read(d["args"])}
+            for d in definitions], filled
+
+
 def report(rows):
     """The human report: floor and measured weight first, then headline and ceiling, for the QUICK and FULL
     tiers, with a sentence naming what the headline leaves out, a table per sub-metric,
     and what is not measured with the command and estimated cost that would measure it."""
+    rows, filled = whole_set_rows(rows)
     readings = {r["id"]: r["reading"] for r in rows if r.get("reading")}
     if not readings:
         return "no sub-metric could be read"
@@ -422,6 +439,9 @@ def report(rows):
     lines = ["", "QAR overall (metric-qar-overall, the authoritative metric of do-grounded-work), from recorded rows only; nothing was re-run.",
              f"Read at commit {head()} on {datetime.date.today().isoformat()}. A row counts only when it is current against "
              "that commit; a stale or missing arm is unmeasured, never a pass."]
+    if filled:
+        lines.append(f"This run read only part of the set; {', '.join(filled)} are read here from the recorded rows, so the "
+                     "weights and the floor are those of the whole metric.")
     names = {r["id"]: r.get("area", "") for r in rows}
     for tier, label in (("cheap", "QUICK (cheap tiers)"), ("full", "FULL (whole input sets, live models where paid)")):
         c = combine(readings, tier)

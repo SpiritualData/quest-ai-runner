@@ -141,6 +141,23 @@ def test_report_leads_with_the_floor_and_names_what_the_headline_leaves_out(fixt
     assert "The headline leaves out S1 Half measured (0.250 of its weight 0.500)." in text
 
 
+def test_a_run_of_part_of_the_set_reports_the_whole_metric(monkeypatch):
+    definitions = combine.load_definitions()
+    blank = {"rule": "pass_rate", "rule_text": "", "cheap_only": False, "same_tiers": False,
+             "tiers": {t: {"arms": [], "measured": 0.0, "floor": 0.0, "value": None} for t in combine.TIERS}}
+    monkeypatch.setattr(combine, "read", lambda args: blank)
+    part = [{"id": definitions[0]["id"], "area": definitions[0].get("area", ""), "reading": blank}]
+    rows, filled = combine.whole_set_rows(part)
+    assert [r["id"] for r in rows] == [d["id"] for d in definitions] and filled == [d["id"] for d in definitions[1:]]
+    text = combine.report(part)
+    assert "no sub-metric" not in text.split("Weights per ideal")[1], "a part of the set must not name a served ideal as unserved"
+    assert "Weight of ideals no sub-metric serves" not in text
+    whole = [{"id": d["id"], "area": "", "reading": blank} for d in definitions]
+    assert combine.whole_set_rows(whole) == (whole, [])
+    fixture = [{"id": "S1", "area": "", "reading": blank}]
+    assert combine.whole_set_rows(fixture) == (fixture, [])
+
+
 # ---------------------------------------------------------------- freshness follows the declared dependencies
 
 @pytest.fixture
