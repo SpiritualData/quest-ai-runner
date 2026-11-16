@@ -537,10 +537,7 @@ class QuestsMixin:
         return self._write("POST", "/api/planning/habits", body=body, label="Creating the habit")
 
     def update_habit(self, habit_id: str, *, assigned_to_user_ids: Optional[List[str]] = None, **changes: Any) -> WriteResult:
-        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``time`` alone replaces an older ``times`` list.
-
-        ``assigned_to_user_ids`` is sent only when given: ``None`` leaves who the habit is for unchanged, an empty list
-        makes it everyone's, a list names exactly those members (``assign_habit`` is the call that only does this). Raises like ``create_habit``."""
+        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``time`` alone replaces an older ``times`` list; ``assigned_to_user_ids`` is sent only when given (``None`` leaves who the habit is for unchanged, an empty list makes it everyone's, a list names exactly those members; ``assign_habit`` only does this). Raises like ``create_habit``."""
         body: Dict[str, Any] = dict(changes)
         if assigned_to_user_ids is not None:
             body["assigned_to_user_ids"] = [str(i) for i in assigned_to_user_ids]
