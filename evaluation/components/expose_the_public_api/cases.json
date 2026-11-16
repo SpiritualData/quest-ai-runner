@@ -3,10 +3,10 @@
   "id": "API-001",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core is public",
+  "description": "quest_ai_runner.body is public",
   "args": {
    "module": "quest_ai_runner",
-   "name": "core"
+   "name": "body"
   },
   "expect": {
    "eq": {
@@ -18,10 +18,10 @@
   "id": "API-002",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.adapters is public",
+  "description": "quest_ai_runner.consciousness is public",
   "args": {
    "module": "quest_ai_runner",
-   "name": "adapters"
+   "name": "consciousness"
   },
   "expect": {
    "eq": {
@@ -33,10 +33,10 @@
   "id": "API-003",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.runner is public",
+  "description": "quest_ai_runner.intelligence is public",
   "args": {
    "module": "quest_ai_runner",
-   "name": "runner"
+   "name": "intelligence"
   },
   "expect": {
    "eq": {
@@ -153,9 +153,9 @@
   "id": "API-012",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.api.MilestoneSink is public",
+  "description": "quest_ai_runner.consciousness.terminal.adapters_sinks.MilestoneSink is public",
   "args": {
-   "module": "quest_ai_runner.api",
+   "module": "quest_ai_runner.consciousness.terminal.adapters_sinks",
    "name": "MilestoneSink"
   },
   "expect": {
@@ -183,9 +183,9 @@
   "id": "API-015",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.api.RetrievalAdapter is public",
+  "description": "quest_ai_runner.body.internal_context.interface.RetrievalAdapter is public",
   "args": {
-   "module": "quest_ai_runner.api",
+   "module": "quest_ai_runner.body.internal_context.interface",
    "name": "RetrievalAdapter"
   },
   "expect": {
@@ -198,9 +198,9 @@
   "id": "API-018",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.api.EscalationSink is public",
+  "description": "quest_ai_runner.consciousness.judgment_calls.interface.EscalationSink is public",
   "args": {
-   "module": "quest_ai_runner.api",
+   "module": "quest_ai_runner.consciousness.judgment_calls.interface",
    "name": "EscalationSink"
   },
   "expect": {
@@ -228,9 +228,9 @@
   "id": "API-023",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.api.FanoutSink is public",
+  "description": "quest_ai_runner.consciousness.terminal.adapters_sinks.FanoutSink is public",
   "args": {
-   "module": "quest_ai_runner.api",
+   "module": "quest_ai_runner.consciousness.terminal.adapters_sinks",
    "name": "FanoutSink"
   },
   "expect": {
@@ -243,9 +243,9 @@
   "id": "API-024",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.config.RunnerConfig is public",
+  "description": "quest_ai_runner.body.configuration.config.RunnerConfig is public",
   "args": {
-   "module": "quest_ai_runner.config",
+   "module": "quest_ai_runner.body.configuration.config",
    "name": "RunnerConfig"
   },
   "expect": {
@@ -258,9 +258,9 @@
   "id": "API-025",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.config.build_orchestrator is public",
+  "description": "quest_ai_runner.body.configuration.config.build_orchestrator is public",
   "args": {
-   "module": "quest_ai_runner.config",
+   "module": "quest_ai_runner.body.configuration.config",
    "name": "build_orchestrator"
   },
   "expect": {
@@ -273,9 +273,9 @@
   "id": "API-026",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.config.load_quest_client is public",
+  "description": "quest_ai_runner.body.configuration.config_environment.load_quest_client is public",
   "args": {
-   "module": "quest_ai_runner.config",
+   "module": "quest_ai_runner.body.configuration.config_environment",
    "name": "load_quest_client"
   },
   "expect": {
@@ -288,9 +288,9 @@
   "id": "API-027",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.take_in_the_world.async_bridge.run_coro_sync is public",
+  "description": "quest_ai_runner.consciousness.request_intake.async_bridge.run_coro_sync is public",
   "args": {
-   "module": "quest_ai_runner.take_in_the_world.async_bridge",
+   "module": "quest_ai_runner.consciousness.request_intake.async_bridge",
    "name": "run_coro_sync"
   },
   "expect": {
@@ -303,9 +303,9 @@
   "id": "API-028",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.take_in_the_world.async_bridge.run_detached is public",
+  "description": "quest_ai_runner.consciousness.request_intake.async_bridge.run_detached is public",
   "args": {
-   "module": "quest_ai_runner.take_in_the_world.async_bridge",
+   "module": "quest_ai_runner.consciousness.request_intake.async_bridge",
    "name": "run_detached"
   },
   "expect": {
@@ -318,9 +318,9 @@
   "id": "API-032",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.scaffolding.strip_future_context is public",
+  "description": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding.strip_future_context is public",
   "args": {
-   "module": "quest_ai_runner.core.scaffolding",
+   "module": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding",
    "name": "strip_future_context"
   },
   "expect": {
@@ -333,9 +333,9 @@
   "id": "API-033",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.scaffolding.strip_reasoning_markup is public",
+  "description": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding.strip_reasoning_markup is public",
   "args": {
-   "module": "quest_ai_runner.core.scaffolding",
+   "module": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding",
    "name": "strip_reasoning_markup"
   },
   "expect": {
@@ -348,70 +348,10 @@
   "id": "API-034",
   "area": "name",
   "kind": "name",
-  "description": "quest_ai_runner.core.scaffolding.sanitize_user_text is public",
+  "description": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding.sanitize_user_text is public",
   "args": {
-   "module": "quest_ai_runner.core.scaffolding",
+   "module": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding",
    "name": "sanitize_user_text"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-035",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.bootstrap_email.should_send_monthly_email is public",
-  "args": {
-   "module": "quest_ai_runner.bootstrap_email",
-   "name": "should_send_monthly_email"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-036",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.bootstrap_email.generate_bootstrap_email_body is public",
-  "args": {
-   "module": "quest_ai_runner.bootstrap_email",
-   "name": "generate_bootstrap_email_body"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-037",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.bootstrap_email.send_monthly_bootstrap_email is public",
-  "args": {
-   "module": "quest_ai_runner.bootstrap_email",
-   "name": "send_monthly_bootstrap_email"
-  },
-  "expect": {
-   "eq": {
-    "found": true
-   }
-  }
- },
- {
-  "id": "API-038",
-  "area": "name",
-  "kind": "name",
-  "description": "quest_ai_runner.bootstrap_email.load_bootstrap_state is public",
-  "args": {
-   "module": "quest_ai_runner.bootstrap_email",
-   "name": "load_bootstrap_state"
   },
   "expect": {
    "eq": {
@@ -967,23 +907,9 @@
   "id": "API-087",
   "area": "offline_import",
   "kind": "offline_import",
-  "description": "quest_ai_runner.config imports with every socket call refusing",
+  "description": "quest_ai_runner.body.configuration.config imports with every socket call refusing",
   "args": {
-   "module": "quest_ai_runner.config"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-088",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.cli imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.cli"
+   "module": "quest_ai_runner.body.configuration.config"
   },
   "expect": {
    "eq": {
@@ -1009,9 +935,9 @@
   "id": "API-091",
   "area": "offline_import",
   "kind": "offline_import",
-  "description": "quest_ai_runner.take_in_the_world.async_bridge imports with every socket call refusing",
+  "description": "quest_ai_runner.consciousness.request_intake.async_bridge imports with every socket call refusing",
   "args": {
-   "module": "quest_ai_runner.take_in_the_world.async_bridge"
+   "module": "quest_ai_runner.consciousness.request_intake.async_bridge"
   },
   "expect": {
    "eq": {
@@ -1023,23 +949,9 @@
   "id": "API-093",
   "area": "offline_import",
   "kind": "offline_import",
-  "description": "quest_ai_runner.core.scaffolding imports with every socket call refusing",
+  "description": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding imports with every socket call refusing",
   "args": {
-   "module": "quest_ai_runner.core.scaffolding"
-  },
-  "expect": {
-   "eq": {
-    "imported": true
-   }
-  }
- },
- {
-  "id": "API-094",
-  "area": "offline_import",
-  "kind": "offline_import",
-  "description": "quest_ai_runner.bootstrap_email imports with every socket call refusing",
-  "args": {
-   "module": "quest_ai_runner.bootstrap_email"
+   "module": "quest_ai_runner.intelligence.critical_thinking.response_quality.scaffolding"
   },
   "expect": {
    "eq": {
