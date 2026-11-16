@@ -50,7 +50,8 @@ def build_runner(meter, model):
     from quest_ai_runner.world.model_plumbing.vendor_model_caller.claude_cli_provider import cli_model
 
     binary = shutil.which("claude") or str(Path("~/.local/bin/claude").expanduser())
-    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDECODE")}
+    from hubofhubs.api import subscription_env
+    env = subscription_env(os.environ)
     workdir = Path(tempfile.gettempdir()) / "qar-cli-completion"  # empty: no CLAUDE.md above it
     workdir.mkdir(parents=True, exist_ok=True)
 

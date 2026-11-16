@@ -817,8 +817,9 @@ def judge_cli_version():
     """``claude --version`` once per process ("" when it cannot be read). Never raises."""
     if "value" not in JUDGE_CLI_VERSION:
         try:
+            from hubofhubs.api import subscription_env
             out = subprocess.run([DEV_ENV.get("QAR_CLAUDE_PATH") or "claude", "--version"],
-                                 capture_output=True, text=True, timeout=30)
+                                 capture_output=True, text=True, timeout=30, env=subscription_env(os.environ))
             JUDGE_CLI_VERSION["value"] = (out.stdout or "").strip()
         except Exception:  # noqa: BLE001
             JUDGE_CLI_VERSION["value"] = ""
