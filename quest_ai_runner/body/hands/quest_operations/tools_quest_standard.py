@@ -144,8 +144,7 @@ def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
 #
 # GOVERNANCE IS THE BACKEND'S. Every field write carries ``actor="ai"`` and the structured
 # ``userRequested`` verdict, and Quest's AI field-write gate decides: a write the person did not ask
-# for, or any write on a quest whose autopilot is off, becomes an ask for the owner instead of an
-# edit, which these tools report as NOT applied. Goals and habits are new items rather than the
+# for becomes an ask for the owner instead of an edit (the quest's autopilot setting does not decide it), which these tools report as NOT applied. Goals and habits are new items rather than the
 # person's own words, so the backend does not gate them; these tools refuse to create one the
 # person did not ask for and say to suggest it instead.
 
@@ -528,15 +527,12 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
             strategies = [s for s in (quest.get("strategies") or []) if isinstance(s, dict)]
             accepted = [s for s in strategies if s.get("accepted") is True] or strategies
             strategy_id = str((accepted[0] if accepted else {}).get("id") or "")
-        if not strategy_id:
-            return ToolResult(ok=False, text=(f"Nothing was created: quest {quest_id} has no "
-                                              f"strategy to put the habit under. Add a strategy "
-                                              f"first (add_quest_strategy)."))
         fields = {k: args[k] for k in ("description", "days", "time", "duration", "start_date",
                                        "linked_goal_id", "assigned_to_user_ids")
                   if args.get(k) not in (None, "", [])}
         try:
-            habit = client.create_habit(quest_id, strategy_id, name,
+            # A quest with no strategies still takes a habit: with no strategy id Quest lists it as uncategorized.
+            habit = client.create_habit(quest_id, strategy_id or None, name,
                                         frequency=str(args.get("frequency") or "daily"), **fields)
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was created")
@@ -550,7 +546,7 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
         name="create_quest_habit",
         handler=handler,
         description=_with_standard("Create one recurring habit on a quest, under one of its "
-                                   "strategies.", "habit"),
+                                   "strategies when it has any.", "habit"),
         when_to_use="The user asked to add a habit or routine to their quest. " + _NEVER_CODE,
         when_not_to_use=("Logging that a habit was done today (that is a habit entry, not a new "
                          "habit). A one-off action (use create_quest_goal). A habit the user did "
@@ -571,7 +567,7 @@ def create_quest_habit_spec(env: Mapping[str, str], client_factory=None) -> Tool
                 "description": {"type": "string", "description": "Optional detail."},
                 "strategy_id": {"type": "string",
                                 "description": "Strategy it serves (defaults to the quest's first "
-                                               "accepted strategy)."},
+                                               "accepted strategy; a quest with none still takes the habit)."},
                 "linked_goal_id": {"type": "string",
                                    "description": "Goal its entries count toward."},
                 "start_date": {"type": "string", "description": "YYYY-MM-DD (default today)."},

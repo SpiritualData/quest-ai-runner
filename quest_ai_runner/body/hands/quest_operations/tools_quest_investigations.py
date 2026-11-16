@@ -49,7 +49,7 @@ INVESTIGATE_ARGS = {
 
 def knowledge_note(made: Mapping[str, Any]) -> str:
     """What became of the findings as knowledge of the strategy they inform, in plain words, from the statuses Quest answered (never guessed): added, already there, or not
-    added with the reason Quest gave (autopilot off, a person's own text, the whole quest). Empty when Quest answered nothing."""
+    added with the reason Quest gave (a person's own text, the whole quest). Empty when Quest answered nothing."""
     answers = [a for a in made.get("knowledge") or [] if isinstance(a, Mapping)]
     if not answers:
         return ""

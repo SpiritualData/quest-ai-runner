@@ -510,12 +510,14 @@ class QuestsMixin:
         return self._write("POST", f"/api/quests/{quest_id}/strategies/add", body=body,
                            label="Adding the strategy")
 
-    def create_habit(self, quest_id: str, strategy_id: str, name: str, *,
+    def create_habit(self, quest_id: str, strategy_id: Optional[str], name: str, *,
                      frequency: str = "daily", start_date: Optional[str] = None,
                      assigned_to_user_ids: Optional[List[str]] = None,
                      **fields: Any) -> WriteResult:
-        """POST /api/planning/habits -- create one habit under a quest strategy.
+        """POST /api/planning/habits -- create one habit on a quest, under one of its strategies when it has any.
 
+        ``strategy_id`` is optional: pass ``None`` (or ``""``) for a quest with no strategies, or for a habit that serves
+        none, and Quest lists the habit as uncategorized. A strategy that is named must exist on the quest (else 404).
         ``fields`` passes the endpoint's optional keys through in snake_case (``description``,
         ``days``, ``time``, ``duration``, ``linked_goal_id`` ...); ``start_date`` defaults to today.
         ``assigned_to_user_ids`` is sent as ``assigned_to_user_ids`` only when given (``None`` leaves
@@ -523,13 +525,63 @@ class QuestsMixin:
         "habit added" must know it was.
         """
         from datetime import date
-        body: Dict[str, Any] = {"quest_id": quest_id, "strategy_id": strategy_id, "name": name,
+        body: Dict[str, Any] = {"quest_id": quest_id, "name": name,
                                 "frequency": frequency,
                                 "start_date": start_date or date.today().isoformat()}
+        if (strategy_id or "").strip():
+            body["strategy_id"] = strategy_id
         body.update({k: v for k, v in fields.items() if v is not None})
         if assigned_to_user_ids is not None:
             body["assigned_to_user_ids"] = [str(i) for i in assigned_to_user_ids]
         return self._write("POST", "/api/planning/habits", body=body, label="Creating the habit")
+
+    def update_habit(self, habit_id: str, **changes: Any) -> WriteResult:
+        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``time`` alone replaces an older ``times`` list. Raises like ``create_habit``."""
+        return self._write("PUT", f"/api/planning/habits/{habit_id}", body=changes, label="Changing the habit")
+
+    def resume_habit(self, habit_id: str) -> WriteResult:
+        """POST /api/planning/habits/{habit_id}/resume: turn a paused or disabled habit back on (its pause record is cleared). Raises like ``create_habit``."""
+        return self._write("POST", f"/api/planning/habits/{habit_id}/resume", label="Turning the habit on")
+
+    def disable_habit(self, habit_id: str) -> WriteResult:
+        """PUT /api/planning/habits/{habit_id} with ``enabled`` false: turn a habit off without deleting it (``resume_habit`` turns it on again). Raises like ``create_habit``."""
+        return self._write("PUT", f"/api/planning/habits/{habit_id}", body={"enabled": False}, label="Turning the habit off")
+
+    # --- the strategy map of the quest creation flow (/api/quests/{quest_id}/strategy-map) ---
+
+    def get_strategy_map(self, quest_id: str) -> Dict[str, Any]:
+        """GET /api/quests/{quest_id}/strategy-map: the quest's solutions with their ideals, application questions, answers, the person's own strategies and the coverage. Raises ``QuestApiError`` (never an empty map for a failed read)."""
+        return self._request("GET", f"/api/quests/{quest_id}/strategy-map") or {}
+
+    def set_solution_answer(self, quest_id: str, solution_id: str, text: str, certainty: str, *, drafted_by: str = "person") -> WriteResult:
+        """PUT .../strategy-map/solutions/{solution_id}/answer: save the answer to a solution's application question (``certainty``: decided | comparing | unsure; ``drafted_by`` "ai" only for an AI draft accepted unchanged). Raises like ``create_habit``."""
+        return self._write("PUT", f"/api/quests/{quest_id}/strategy-map/solutions/{solution_id}/answer",
+                           body={"text": text, "certainty": certainty, "draftedBy": drafted_by}, label="Saving the answer")
+
+    def set_solution_picks(self, quest_id: str, solution_id: str, names: List[str]) -> WriteResult:
+        """PUT .../strategy-map/solutions/{solution_id}/picks: keep the names of the suggested implementations picked so far (an empty list clears them). Raises like ``create_habit``."""
+        return self._write("PUT", f"/api/quests/{quest_id}/strategy-map/solutions/{solution_id}/picks", body={"names": list(names)},
+                           label="Keeping the picks")
+
+    def set_solution_reviewed(self, quest_id: str, solution_id: str, reviewed: bool = True) -> WriteResult:
+        """PUT .../strategy-map/solutions/{solution_id}/reviewed: store whether this solution is finished in the walkthrough. Raises like ``create_habit``."""
+        return self._write("PUT", f"/api/quests/{quest_id}/strategy-map/solutions/{solution_id}/reviewed", body={"reviewed": bool(reviewed)},
+                           label="Marking the solution reviewed")
+
+    def create_map_strategy(self, quest_id: str, solution_id: str, name: str, *, description: str = "",
+                            ideal_ids: Optional[List[str]] = None, uses_solution_ids: Optional[List[str]] = None) -> WriteResult:
+        """POST .../strategy-map/strategies: add one of the person's own strategies (an implementation) under a solution, serving the ideals given. Raises like ``create_habit``."""
+        body: Dict[str, Any] = {"solutionId": solution_id, "name": name, "description": description, "idealIds": list(ideal_ids or []),
+                                "usesSolutionIds": list(uses_solution_ids or [])}
+        return self._write("POST", f"/api/quests/{quest_id}/strategy-map/strategies", body=body, label="Adding the strategy to the map")
+
+    def update_map_strategy(self, quest_id: str, strategy_id: str, **changes: Any) -> WriteResult:
+        """PATCH .../strategy-map/strategies/{strategy_id}: change only the keys given (``name``, ``description``, ``advantages``, ``disadvantages``, ``ideal_ids``, ``solution_id`` to move it). Raises like ``create_habit``."""
+        return self._write("PATCH", f"/api/quests/{quest_id}/strategy-map/strategies/{strategy_id}", body=changes, label="Changing the map strategy")
+
+    def delete_map_strategy(self, quest_id: str, strategy_id: str) -> WriteResult:
+        """DELETE .../strategy-map/strategies/{strategy_id}: archive one of the person's own map strategies (never a spec example). Raises like ``create_habit``."""
+        return self._write("DELETE", f"/api/quests/{quest_id}/strategy-map/strategies/{strategy_id}", label="Removing the map strategy")
 
     def list_experiments(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET /api/quests/{quest_id}/research-questions: the quest's experiments.
@@ -544,7 +596,8 @@ class QuestsMixin:
     def create_experiment(self, quest_id: str, question: str, **fields: Any) -> WriteResult:
         """POST /api/quests/{quest_id}/research-questions: create one experiment.
 
-        ``fields`` are the endpoint's optional keys: ``context``, ``hypotheses`` (``[{statement, sub_question_id?}]``),
+        ``fields`` are the endpoint's optional keys: ``context`` (short background, 4000 characters), ``protocol`` (the written procedure,
+        long free text with its own cap), ``hypotheses`` (``[{statement, sub_question_id?}]``),
         ``purpose``, ``sub_questions`` (``[{question, answer_method?}]``), ``assumptions`` (list of str),
         ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date``,
         ``conditions``, and the focused-attention keys ``research_question``, ``owner_user_ids``, ``reevaluate_time``, ``reevaluate_condition``,
@@ -559,10 +612,11 @@ class QuestsMixin:
                           **changes: Any) -> WriteResult:
         """PATCH /api/quests/{quest_id}/research-questions/{id}: change only the keys given.
 
-        Keys: ``question``, ``context``, ``hypotheses`` (``[{statement, sub_question_id?}]``), ``purpose``, ``sub_questions`` and
-        ``assumptions`` (each replaces the whole list), ``status``, ``conclusion``,
-        ``linked_goal_ids``, ``linked_collection_ids``, ``start_date``, ``end_date`` (``""`` clears
-        a date), ``conditions``. Raises like ``create_habit``.
+        Keys: ``question``, ``context``, ``protocol``, ``hypotheses`` (``[{statement, sub_question_id?}]``), ``purpose``, ``sub_questions`` and
+        ``assumptions`` (each replaces the whole list), ``phase`` (planned | running | reevaluating | ended: the one vocabulary, the words
+        Quest shows; ``status`` takes the same words, and the older open | experimenting | concluded are read as planned, running, ended), ``conclusion``,
+        ``linked_goal_ids``, ``linked_collection_ids`` (each must already be linked to this quest; Quest's refusal names the request
+        that links one), ``start_date``, ``end_date`` (``""`` clears a date), ``conditions``. Raises like ``create_habit``.
         """
         return self._write("PATCH", f"/api/quests/{quest_id}/research-questions/{research_question_id}",
                            body=changes, label="Changing the experiment")

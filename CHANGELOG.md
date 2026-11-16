@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Quest client, creation flow fixes (2026-11-15): a refused specification or intent write (`create_spec_record`, `edit_spec_record`, `archive_spec_record`, `reorder_solutions`, `refresh_spec`, the intent writes) is now a typed `WriteResult` with status refused, failed or unknown, falsy, still readable like the refusal body (`result.get("refused")`, `result["code"]`); before it was a plain dict, so `quest-ai-runner quest` printed it and exited 0. New methods: `get_strategy_map`, `set_solution_answer`, `set_solution_picks`, `set_solution_reviewed`, `create_map_strategy`, `update_map_strategy`, `delete_map_strategy`, `update_habit`, `resume_habit`, `disable_habit`. `create_habit` takes `None` for the strategy (a quest with no strategies still takes a habit), and the `create_quest_habit` tool no longer refuses such a quest. Docs follow Quest: a quest's autopilot setting never refuses a specification write, an experiment's `phase` words are the one vocabulary (`status` takes them too), and its long procedure goes in `protocol`. These need a Quest backend that carries the same changes.
+
 ## [0.7.6] - 2026-11-15
 
 Release run: carries everything since 0.7.5 (named autopilots, the model call budget and volume guards, the Quest client's org and team member methods, `request_autopilot_run`, `update_rep`, children run without API-billing credentials, ESOI planner record). The hub pin moves to v0.7.6, which exports `CallGuard`, `CallLimits` and `CallBudgetExceeded`.

@@ -21,7 +21,7 @@ QUEST_SPEC_RECORDS = "quest_spec_records"
 @implementation("esoi-application", "quest_spec_records", scope="quest_ai_runner")
 class QuestSpecEdit(RecordFieldEdit):
     """Applies a proposed edit to a quest's own specification records through Quest, so the edit is made where the person sees and edits it, under the
-    same access, autopilot, edited-by-a-person and approval rules as the specification editor. An edit Quest holds for the owner is reported as proposed."""
+    same access, edited-by-a-person and approval rules as the specification editor. An edit Quest holds for the owner is reported as proposed."""
     REQUIRES = ()     # the Quest client is a constructor argument, or built from base_url and api_key
 
     def __init__(self, client: Optional[Any] = None, base_url: str = "", api_key: str = "", team_id: str = "") -> None:

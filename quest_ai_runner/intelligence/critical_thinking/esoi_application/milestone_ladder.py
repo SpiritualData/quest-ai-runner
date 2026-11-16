@@ -180,8 +180,8 @@ def make_progress(cue: Any, registry: Any, decide: Callable[[str], str], groundi
             rubric_state = "reused from its solution"
         elif first is not None:
             # Defined once, with depth: what a good deliverable of this kind is, researched from the product's documents, cited sources and the done test,
-            # agreed by a second view, and kept on the deliverable's own solution record (else the milestone's) through ESOI Application (the same gate and
-            # autopilot rules as any spec edit), so every later turn reuses it instead of drifting.
+            # agreed by a second view, and kept on the deliverable's own solution record (else the milestone's) through ESOI Application (the same gate
+            # as any spec edit), so every later turn reuses it instead of drifting.
             researched, cited = researched_rubric(first, cue, research, decide) if first["kind"] == "deliverable" else ([], [])
             if researched:
                 pinned = [r for r in first["requirements"] if r == DECISION_REQUIREMENT]

@@ -246,12 +246,12 @@ def test_habit_tool_defaults_to_the_first_accepted_strategy_and_needs_the_users_
                              {"days": ["Mon", "Wed"]})]
 
 
-def test_habit_without_any_strategy_is_refused():
+def test_a_quest_with_no_strategies_still_takes_a_habit():
     client = FakeQuestClient(quest={"strategies": []})
     spec = create_quest_habit_spec({}, client_factory=factory(client))
     result = spec.handler({"quest_id": "q1", "name": "Run", "user_asked_for_this_field": True},
                           ToolContext())
-    assert not result.ok and "add_quest_strategy" in result.text
+    assert result.ok and client.calls == [("habit", "q1", None, "Run", "daily", {})]      # no strategy id: Quest lists it as uncategorized
 
 
 # --- the catalog ----------------------------------------------------------------------------------

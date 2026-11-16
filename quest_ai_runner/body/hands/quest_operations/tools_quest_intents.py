@@ -62,6 +62,12 @@ def subject_of(args: Mapping[str, Any], ctx: ToolContext):
     return subject_type, subject_id or None
 
 
+def answer_of(result: Any) -> Mapping[str, Any]:
+    """The plain answer of an intents write: the client returns a typed ``WriteResult`` whose ``data`` is the body (or the refusal); a client
+    that answers with the plain mapping is read as it is. The tool reads the answer's own flags (``refused``, ``pending``) for what to say."""
+    return getattr(result, "data", result)
+
+
 def refusal_result(result: Mapping[str, Any], what: str) -> ToolResult:
     """A write the server declined, or one that was sent and never answered (``outcomeUnknown``): the second is not a refusal."""
     if result.get("outcomeUnknown"):
@@ -205,8 +211,8 @@ def refresh_spec_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         if reason not in REFRESH_REASONS:
             return ToolResult(ok=False, text=f"reason must be one of {', '.join(REFRESH_REASONS)}.")
         client = factory()
-        result = client.refresh_spec(subject_type, subject_id, reason=reason, force=bool(args.get("force")),
-                                      **statement_kwargs(args))
+        result = answer_of(client.refresh_spec(subject_type, subject_id, reason=reason, force=bool(args.get("force")),
+                                               **statement_kwargs(args)))
         if result.get("refused"):
             return refusal_result(result, f"{subject_type} {subject_id}")
         if result.get("pending"):
@@ -264,7 +270,7 @@ def edit_spec_record_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
                     "Not changed: pass expected_revision (from get_spec), or the subject the record "
                     "belongs to so its revision can be read."))
             revision = row.get("revision")
-        result = client.edit_spec_record(record_id, fields, int(revision), **statement_kwargs(args))
+        result = answer_of(client.edit_spec_record(record_id, fields, int(revision), **statement_kwargs(args)))
         if result.get("refused"):
             return refusal_result(result, record_id)
         return ToolResult(ok=True, data=result, text=(
@@ -412,6 +418,7 @@ def place_quest_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
                                     implementation_id=str(args.get("implementation_id") or "").strip() or None,
                                     owner_type=str(args.get("owner_type") or "user"),
                                     owner_id=args.get("owner_id") or None, **statement_kwargs(args))
+        result = answer_of(result)
         if result.get("refused"):
             return refusal_result(result, quest_id)
         if result.get("pending") is True:
@@ -469,6 +476,7 @@ def create_sub_intent_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         result = client.create_sub_intent(record_id, name, opportunity, reveal=reveal,
                                           vision_statement=str(args.get("vision_statement") or "").strip(),
                                           **statement_kwargs(args))
+        result = answer_of(result)
         if result.get("refused"):
             return refusal_result(result, record_id)
         if result.get("pending") is True:
