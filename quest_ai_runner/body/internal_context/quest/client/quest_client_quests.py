@@ -520,8 +520,9 @@ class QuestsMixin:
         none, and Quest lists the habit as uncategorized. A strategy that is named must exist on the quest (else 404).
         ``fields`` passes the endpoint's optional keys through in snake_case (``description``,
         ``days``, ``time``, ``duration``, ``linked_goal_id`` ...); ``start_date`` defaults to today.
-        ``assigned_to_user_ids`` is sent as ``assigned_to_user_ids`` only when given (``None`` leaves
-        the habit unassigned). Returns a ``WriteResult`` or raises ``QuestWriteError`` like ``create_goal``: a caller that says
+        ``assigned_to_user_ids`` is sent as ``assigned_to_user_ids`` only when given: left out (``None``) the backend makes
+        the habit the creator's own on a quest with 2 or more people (and everyone's on a solo quest); an empty list means
+        everyone on the quest; a list of user ids names exactly those members. Returns a ``WriteResult`` or raises ``QuestWriteError`` like ``create_goal``: a caller that says
         "habit added" must know it was.
         """
         from datetime import date
@@ -535,9 +536,15 @@ class QuestsMixin:
             body["assigned_to_user_ids"] = [str(i) for i in assigned_to_user_ids]
         return self._write("POST", "/api/planning/habits", body=body, label="Creating the habit")
 
-    def update_habit(self, habit_id: str, **changes: Any) -> WriteResult:
-        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``time`` alone replaces an older ``times`` list. Raises like ``create_habit``."""
-        return self._write("PUT", f"/api/planning/habits/{habit_id}", body=changes, label="Changing the habit")
+    def update_habit(self, habit_id: str, *, assigned_to_user_ids: Optional[List[str]] = None, **changes: Any) -> WriteResult:
+        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``time`` alone replaces an older ``times`` list.
+
+        ``assigned_to_user_ids`` is sent only when given: ``None`` leaves who the habit is for unchanged, an empty list
+        makes it everyone's, a list names exactly those members (``assign_habit`` is the call that only does this). Raises like ``create_habit``."""
+        body: Dict[str, Any] = dict(changes)
+        if assigned_to_user_ids is not None:
+            body["assigned_to_user_ids"] = [str(i) for i in assigned_to_user_ids]
+        return self._write("PUT", f"/api/planning/habits/{habit_id}", body=body, label="Changing the habit")
 
     def resume_habit(self, habit_id: str) -> WriteResult:
         """POST /api/planning/habits/{habit_id}/resume: turn a paused or disabled habit back on (its pause record is cleared). Raises like ``create_habit``."""

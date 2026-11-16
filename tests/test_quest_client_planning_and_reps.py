@@ -294,3 +294,14 @@ def test_create_habit_sends_assignees_only_when_given():
     client.create_habit("quest_1", "strategy_1", "Walk", start_date="2026-11-12",
                         assigned_to_user_ids=[])
     assert captured["body"]["assigned_to_user_ids"] == []
+
+
+def test_update_habit_sends_assignees_only_when_given():
+    client, captured = client_capturing_call()
+    client.update_habit("habit_1", name="Walk")
+    assert captured["method"] == "PUT" and captured["path"] == "/api/planning/habits/habit_1"
+    assert captured["body"] == {"name": "Walk"}
+    client.update_habit("habit_1", assigned_to_user_ids=["user_a", "user_b"])
+    assert captured["body"] == {"assigned_to_user_ids": ["user_a", "user_b"]}
+    client.update_habit("habit_1", assigned_to_user_ids=[])
+    assert captured["body"] == {"assigned_to_user_ids": []}
