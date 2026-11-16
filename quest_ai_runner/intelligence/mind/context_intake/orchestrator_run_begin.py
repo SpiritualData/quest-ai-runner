@@ -21,7 +21,7 @@ from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
 from hubofhubs.api import CardThreadContext, CardThreadDecision, merge_candidates, render_thread_hint
 from quest_ai_runner.intelligence.mind.context_intake.context_doctrine import CACHED_HINT_GATE
 from hubofhubs.api import ExecutionRecord
-from quest_ai_runner.self.role_understanding.terms import ground as ground_names, view_block
+from quest_ai_runner.self.role_understanding.terms import ground as ground_names, person_words, view_block
 from quest_ai_runner.intelligence.mind.delegation.orchestrator_capabilities import (
     context_assembly_timeout_seconds, guidance_selection_timeout_seconds, record_context_assembly_timeout, with_assembly_deadline)
 from quest_ai_runner.intelligence.mind.orchestrator_constants import DEEP_GOAL_CONDENSE_CHARS, RECIPE_SKIP_GOAL_CONTEXT, log
@@ -112,7 +112,9 @@ class RunBeginMixin:
         # were never searched. A name nothing placed is kept on the run (``rs.terms``) and the goal check below cannot call the goal met while one is open.
         rs.terms = []
         try:
-            rs.terms = ground_names(rs.user_message, list(getattr(self.cfg, "private_path_roots", None) or []))
+            # Names are looked for in the person's own words only: a caller's wrapped lane instructions (STAY IN YOUR LANE, ONLY, do NOT ...)
+            # carry capital words that are not names the person used, and a bare acronym there was asked back to the client as a question.
+            rs.terms = ground_names(person_words(rs.user_message), list(getattr(self.cfg, "private_path_roots", None) or []))
             named = view_block(rs.terms)
             if named:
                 rs.context_view = (named + "\n\n" + rs.context_view) if rs.context_view else named

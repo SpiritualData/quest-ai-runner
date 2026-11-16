@@ -110,7 +110,7 @@ def iterate_on_names(orchestrator: Any, rs: SimpleNamespace, emit: Any, deep_sea
             roots = [f for f in folders if f] or [__import__("os").getcwd()]
             found = {}
             for root in roots[:3]:
-                for t in ground_terms(rs.user_message, root, names.glossary(), search=True, seconds=WIDER_SECONDS, levels_up=WIDER_LEVELS_UP, depth_down=WIDER_DEPTH_DOWN):
+                for t in ground_terms(names.person_words(rs.user_message), root, names.glossary(), search=True, seconds=WIDER_SECONDS, levels_up=WIDER_LEVELS_UP, depth_down=WIDER_DEPTH_DOWN):
                     if t["term"] not in found or (t["grounded"] and not found[t["term"]]["grounded"]):
                         found[t["term"]] = t
             rs.terms = list(found.values())

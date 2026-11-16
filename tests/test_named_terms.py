@@ -31,3 +31,15 @@ def test_an_answer_the_goal_check_found_short_is_not_shown_as_met():
     assert turn_outcome(short) == OUTCOME_UNMET and closing_text(OUTCOME_UNMET)[0] == "~ Goal not met"
     for verdict in (None, {"met": True}, {}):
         assert turn_outcome(SimpleNamespace(kind="answer", goal_verdict=verdict, deep_results=[], decision_id=None)) is None
+
+
+def test_a_wrapped_lane_instruction_is_not_searched_for_names_only_the_latest_message_is():
+    wrapped = ("You are the AI Representative in a team chat. STAY IN YOUR LANE, ONLY answer what is asked. do NOT invent names.\n"
+               "Recent thread:\nMentor: hello\n\nLatest message to you:\nWhat does ESOI mean for my practice?")
+    assert terms.person_words(wrapped) == "What does ESOI mean for my practice?"
+    assert [t["term"] for t in terms.ground(terms.person_words(wrapped), [])] == ["ESOI"]
+    assert terms.open_names(terms.ground(terms.person_words(wrapped), [])) == []
+
+
+def test_a_plain_message_with_no_marker_is_returned_unchanged():
+    assert terms.person_words("What does WVTQ stand for?") == "What does WVTQ stand for?"

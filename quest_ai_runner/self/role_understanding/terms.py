@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
@@ -24,6 +25,28 @@ def glossary() -> List[Dict[str, str]]:
             return [dict(row) for row in csv.DictReader(handle)]
     except OSError:
         return []
+
+
+_LATEST_MARKERS = (
+    re.compile(r"Latest message to you(?: from [^\n]*)?:\n"),
+)
+
+
+def person_words(message: str) -> str:
+    """The words the person actually wrote this turn, with any caller-wrapped instructions removed.
+
+    A team-chat or community-chat caller wraps the thread and its lane instructions (STAY IN YOUR LANE, ONLY, do NOT ...)
+    around the person's message and marks where the message starts ("Latest message to you:"). Capitalised words in those
+    instructions are not names the person used, so the text after the LAST marker is the only text names are looked for in.
+    A message with no marker is returned unchanged (it is already the person's own words)."""
+    text = message or ""
+    cut = -1
+    end = 0
+    for pattern in _LATEST_MARKERS:
+        for match in pattern.finditer(text):
+            if match.start() >= cut:
+                cut, end = match.start(), match.end()
+    return text[end:].strip() if cut >= 0 else text
 
 
 def ground(request: str, folders: Sequence[str] = ()) -> List[Dict[str, Any]]:
