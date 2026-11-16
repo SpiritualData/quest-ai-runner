@@ -10334,9 +10334,6 @@ chat_quality,planner_route,20daa5a2,,sample:100,WEB-C03,,1,1,22814,740,5.6,,
 chat_quality,dev_quest_chat,20daa5a2,,sample:3,IMP-028,,0,1,0,0,60.0,,
 chat_quality,dev_quest_chat,20daa5a2,,sample:3,REL-MUL-07,,0,1,0,0,49.7,,
 chat_quality,dev_quest_chat,20daa5a2,,sample:3,WEB-001,,1,1,0,0,46.8,,
-end_to_end,qar_live,c463e07f,,sample:3,E2E-GOAL-01,,1,9,73471,3016,46.4,,0.734
-end_to_end,qar_live,c463e07f,,sample:3,E2E-HAND-01,,1,3,25746,921,12.4,,0.897221
-end_to_end,qar_live,c463e07f,,sample:3,E2E-IMPL-02,,1,7,42689,1499,28.6,,0.809559
 think_critically,every_request_measured,abde0053,,,TCR-01,,1,0,0,0,0.0,,
 think_critically,every_request_measured,abde0053,,,TCR-02,,1,0,0,0,0.0,,
 think_critically,every_request_measured,abde0053,,,TCR-03,,0,0,0,0,0.0,,
@@ -10787,3 +10784,13 @@ gate_an_autopilot_pass,live_pass,00c04d4c,,,AGT-009,yes,1,0,0,0,0.0,,
 gate_an_autopilot_pass,live_pass,00c04d4c,,,AGT-010,,1,0,0,0,0.0,,
 gate_an_autopilot_pass,live_pass,00c04d4c,,,AGT-011,,1,0,0,0,0.0,,
 gate_an_autopilot_pass,live_pass,00c04d4c,,,AGT-012,yes,1,0,0,0,0.0,,
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-CONSENT-01,,1,3,29991,411,11.0,,0.8225
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-GOAL-01,,1,10,96605,2417,35.4,,0.7615
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-HAND-01,,1,10,90027,2122,34.9,,0.76275
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-IMPL-02,,1,8,55159,1161,25.4,,0.7865
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-JARVIS-01,,0,7,75888,1908,26.8,,0.083
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-MULTI-01,,0,20,330382,6073,70.9,,0.0
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-NOTE-01,,1,10,86821,1976,36.4,,0.759
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-OWN-02,,1,6,82118,1103,19.7,,0.80075
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-QUEST-16,,1,7,55831,767,19.8,,0.8005
+end_to_end,qar_live,54a9d1ae,,sample:10,E2E-QUEST-19,,1,7,72810,1267,23.6,,0.791
