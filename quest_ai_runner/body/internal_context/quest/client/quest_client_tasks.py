@@ -852,7 +852,8 @@ class TasksMixin:
                   source: Optional[str] = None,
                   task_kind: Optional[str] = None,
                   created_after: Optional[str] = None,
-                  slim: bool = False) -> List[Dict[str, Any]]:
+                  slim: bool = False,
+                  without_progress: bool = False) -> List[Dict[str, Any]]:
         """GET /api/assistant-tasks, for Autopilot's budget/backpressure math.
 
         SERVER-SIDE filters (the only ones the Quest API's list route actually implements):
@@ -882,7 +883,8 @@ class TasksMixin:
         ``list_tasks_or_none`` instead.
         """
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
-                                       source=source, task_kind=task_kind, created_after=created_after, slim=slim) or []
+                                       source=source, task_kind=task_kind, created_after=created_after, slim=slim,
+                                       without_progress=without_progress) or []
 
     def list_tasks_or_none(self, *, team_id: Optional[str] = None,
                            status: Optional[str] = None,
@@ -890,7 +892,8 @@ class TasksMixin:
                            source: Optional[str] = None,
                            task_kind: Optional[str] = None,
                            created_after: Optional[str] = None,
-                           slim: bool = False) -> Optional[List[Dict[str, Any]]]:
+                           slim: bool = False,
+                           without_progress: bool = False) -> Optional[List[Dict[str, Any]]]:
         """``list_tasks``, but a FAILED read is reported instead of swallowed.
 
         Same filters and the same owner-scoping contract as ``list_tasks`` (read its docstring
@@ -919,6 +922,10 @@ class TasksMixin:
             params["created_after"] = created_after
         if slim:
             params["slim"] = "true"       # no progress log or result text: a counting or liveness read does not use them
+        elif without_progress:
+            # The result stays, the progress log goes: a read for results (the last run's output) downloaded 3,064 KB for nine tasks
+            # on 2026-11-16, nearly all of it logs. An older server ignores this and sends the logs; they are dropped below either way.
+            params["without_progress"] = "true"
         if task_kind is not None:
             params["task_kind"] = task_kind
         if source is not None:
@@ -934,4 +941,6 @@ class TasksMixin:
             tasks = [t for t in tasks if t.get("source") == source]
         if task_kind is not None:
             tasks = [t for t in tasks if t.get("task_kind") == task_kind]
+        if without_progress and not slim:
+            tasks = [{k: v for k, v in t.items() if k != "progress"} for t in tasks]
         return tasks

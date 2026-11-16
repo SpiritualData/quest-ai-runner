@@ -361,7 +361,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # Fetched ONCE and shared by both consumers below (the previous period and the last run's output). Best-effort: a failed read degrades both.
         try:
             quest_tasks: Optional[List[Dict[str, Any]]] = self._client.list_tasks(
-                team_id=self._team_for(quest_id) or None, goal_id=quest_id) or []
+                team_id=self._team_for(quest_id) or None, goal_id=quest_id, without_progress=True) or []
         except Exception:  # noqa: BLE001 -- goals-only summary (no last-run block) beats no pass
             log.info("autopilot: could not read prior tasks for quest %s", quest_id, exc_info=True)
             quest_tasks = None

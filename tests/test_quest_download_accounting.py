@@ -49,6 +49,32 @@ def test_slim_task_lists_ask_the_server_to_leave_out_progress_and_result():
     assert seen[0]["slim"] == "true" and "slim" not in seen[1]       # opt-in: a caller that wants results still gets them
 
 
+def test_a_list_read_for_results_asks_the_server_to_leave_out_only_the_progress_logs():
+    """An autopilot pass reads a quest's tasks for their results. The progress logs were nearly all of a 3,064 KB reply for nine
+    tasks on 2026-11-16, so that read asks for the list without them; an older server that still sends them is cut down here."""
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+
+    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    seen = []
+    c._request = lambda method, path, **kw: seen.append(dict(kw["params"])) or {
+        "tasks": [{"id": "a", "result": "what the run produced", "progress": [{"text": "step"}] * 3}]}
+    got = c.list_tasks(goal_id="quest_1", without_progress=True)
+    assert seen[0]["without_progress"] == "true" and "slim" not in seen[0]
+    assert got == [{"id": "a", "result": "what the run produced"}]
+    c.list_tasks(goal_id="quest_2")
+    assert "without_progress" not in seen[1]                           # opt-in: a caller that reads the log still gets it
+
+
+def test_the_autopilot_pass_reads_prior_tasks_without_their_progress_logs():
+    import inspect
+
+    from quest_ai_runner.intelligence.proactivity import autopilot
+
+    source = inspect.getsource(autopilot)
+    read = source[source.index("quest_tasks: Optional[List[Dict[str, Any]]] = self._client.list_tasks("):]
+    assert "without_progress=True" in read[:read.index(") or []")]
+
+
 def test_an_unchanged_task_list_is_answered_from_the_kept_copy():
     """The server says unchanged and sends no rows; the client returns what it kept, and a changed list replaces it."""
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
