@@ -23,7 +23,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 
 | Implementation | Handle | Purpose | Code | Selected |
 |---|---|---|---|---|
-| The loop planner decides the route | `planner:planner_route` | The loop makes one planning call over the model and its decision is the route, returned as data; no tool runs and no worker starts. | [`quest_ai_runner/intelligence/mind/planner/message_routing.py`](message_routing.py) |  |
+| The loop planner decides the route | `planner:planner_route` | The loop makes one planning call over the model and its decision is the route, returned as data; no tool runs and no worker starts. | [`quest_ai_runner/intelligence/mind/planner/message_routing.py`](message_routing.py) | selected |
 
 ## Where to go next
 

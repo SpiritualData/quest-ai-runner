@@ -28,7 +28,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | Solution | Handle | Entry call | Selected implementation | Metric |
 |---|---|---|---|---|
 | Context Intake | `context-intake` | `quest_ai_runner.run("context-intake", 'What should I work on first this week?')` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count, Dashboard suggestion answers that are right and useful |
-| Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | `MessageRouting` | none yet |
+| Planner | `planner` | `quest_ai_runner.run("planner", 'Save a note that the launch moves to Friday.')` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
 | Quest Work Shown | `quest-work-shown` | `quest_ai_runner.run("quest-work-shown")` | The Trail (live line, one summary line, expandable groups) (`trail`) | Faithful explanations per unit of cost and time, What is shown of the AI's work is true, the same for everyone, and earns its place, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
 | Replay Known Operations | `replay-known-operations` | `quest_ai_runner.run("replay-known-operations", 'Add a note that the launch moves to Friday')` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
 | Reply In Steps | `reply-in-steps` | `quest_ai_runner.run("reply-in-steps")` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
@@ -123,7 +123,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 ## Solutions from a library
 
 - [Context Intake](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/intelligence/mind/README.md) (`context-intake`): The one intake of the Mind. Adopted from the library `hub`.
-- [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/intelligence/mind/README.md) (`planner`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Specializes the library `hub`.
+- [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/intelligence/mind/README.md) (`planner`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Adopted from the library `hub`.
 - [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/intelligence/mind/README.md) (`quest-work-shown`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
 - [Planner](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/intelligence/mind/README.md) (`replay-known-operations`): Breaks a request into pieces, each with the sub-goal it must meet and the worker category that fits it; on a replan it plans again only what failed. Specializes the library `hub`.
 - [Response Writer](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/intelligence/mind/README.md) (`reply-in-steps`): Outputs the plan, the request or the communication the Mind produced, in the form its reader needs and to the quality profile that applies. Specializes the library `hub`.
@@ -183,7 +183,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 | Solution | Handle | Selected | Metric |
 |---|---|---|---|
 | Context Intake | `context-intake` | The planner prompt written by the real loop (`planner_prompt`) | Prompt size against budget and duplicated-block count, Dashboard suggestion answers that are right and useful |
-| Planner | `planner` | `MessageRouting` | none yet |
+| Planner | `planner` | The loop planner decides the route (`planner_route`) | Routing correctness over the classification cases, Accuracy of core ML tasks over labelled cases |
 | Quest Work Shown | `quest-work-shown` | The Trail (live line, one summary line, expandable groups) (`trail`) | Faithful explanations per unit of cost and time, What is shown of the AI's work is true, the same for everyone, and earns its place, The terminal shows the AI's work with the hub's rules and words, and keeps no copy, Supported first beats within the time and cost the turn allows |
 | Replay Known Operations | `replay-known-operations` | The recipe store of the loop (`stored_recipes`) | Fast-path hit rate and parity with the planner-only path |
 | Reply In Steps | `reply-in-steps` | The structural gate of core/interim_policy.py (`gated`) | Interim messages and asks that are true, not repeated and only where a person is needed |
