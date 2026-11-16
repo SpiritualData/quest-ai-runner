@@ -627,3 +627,65 @@ class GoalsMixin:
         a caller acting on a person's behalf must have their explicit go-ahead before calling this.
         """
         return self._write("DELETE", f"/api/planning/goals/{goal_id}", label="Deleting the goal")
+
+    # --- off the plan: the undated backlog, abandoning, and a member's own Today ------------------
+
+    def move_goal_to_backlog(self, goal_id: str) -> WriteResult:
+        """PATCH /api/planning/goals/{goal_id}/backlog: park a goal with no date and no period.
+
+        The goal leaves every day, week, month, review and reminder and waits in the backlog until
+        ``schedule_goal_for_period`` (or a dated edit, such as ``schedule_goal``) brings it back.
+        Nothing is deleted. A completed goal is refused. Raises ``QuestWriteError`` on failure.
+        """
+        return self._write("PATCH", f"/api/planning/goals/{goal_id}/backlog", label="Moving the goal to the backlog")
+
+    def list_backlog_goals(self, *, quest_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/planning/goals/backlog: the goals the caller parked with no date, newest first.
+
+        ``quest_id`` narrows it to one quest. Each item carries ``id, name, description, questId,
+        questName, timeScope, backloggedAt, assignedToUserId``. Returns [] on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/planning/goals/backlog",
+                                 params={"quest_id": quest_id} if quest_id else None) or {}
+            goals = resp.get("goals") if isinstance(resp, dict) else None
+            return goals if isinstance(goals, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_backlog_goals failed (quest=%s): %s", quest_id, e)
+            return []
+
+    def schedule_goal_for_period(self, goal_id: str, *, level: str, period_start: str) -> WriteResult:
+        """POST /api/planning/goals/{goal_id}/schedule: give a goal a period, with or without a quest.
+
+        ``level`` is day, week, month, quarter or year and ``period_start`` is the first day of that
+        period ("YYYY-MM-DD"; for a day, the day itself). This is how a goal leaves the backlog. To
+        set a day and a time of day, use ``schedule_goal``. Raises ``QuestWriteError`` on failure.
+        """
+        if level not in ("day", "week", "month", "quarter", "year"):
+            raise QuestWriteError(f"Invalid level {level!r}: must be day, week, month, quarter or year.",
+                                  write_status=ToolStatus.REFUSED)
+        if not SCHEDULE_DAY_RE.match(period_start or ""):
+            raise QuestWriteError(f"Invalid period_start {period_start!r}: must be YYYY-MM-DD, e.g. '2026-10-26'.",
+                                  write_status=ToolStatus.REFUSED)
+        return self._write("POST", f"/api/planning/goals/{goal_id}/schedule",
+                           body={"level": level, "period_start": period_start}, label="Scheduling the goal")
+
+    def abandon_goal(self, goal_id: str) -> WriteResult:
+        """PATCH /api/planning/goals/{goal_id}/abandon: drop a goal the person decided not to do.
+
+        It leaves every current list and the quest's completion figure, and is kept for history.
+        To set a goal aside for later, use ``move_goal_to_backlog``. Raises ``QuestWriteError`` on failure.
+        """
+        return self._write("PATCH", f"/api/planning/goals/{goal_id}/abandon", label="Abandoning the goal")
+
+    def show_habit_on_my_today(self, habit_id: str, *, show: bool) -> WriteResult:
+        """PUT /api/planning/habits/{habit_id}/my-today: take a habit off the caller's own Today
+        and Schedule (``show=False``) or put it back.
+
+        For any member the habit is for, not only its owner, and it changes nothing for anyone
+        else: the way to stop seeing a shared habit without pausing or reassigning it. Raises
+        ``QuestWriteError`` on failure.
+        """
+        return self._write("PUT", f"/api/planning/habits/{habit_id}/my-today", body={"show": bool(show)},
+                           label="Showing the habit on Today" if show else "Hiding the habit from Today")
