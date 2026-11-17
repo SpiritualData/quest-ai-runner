@@ -277,3 +277,16 @@ def goal_period_for_scope(scope_label: str, now: datetime) -> str:
 
 def _weekday_abbrev(now: datetime) -> str:
     return now.strftime("%a")  # "Mon", "Tue", ...
+
+
+def task_lookback_start(scope: str, now: datetime) -> str:
+    """ISO start of the window of tasks a pass reads (the previous period's tasks and the last run's output).
+
+    The read used to take every task the quest ever had, with result text: about 7 MB a call (1.3 GB a day from one machine on 2026-11-16).
+    A task finished in the previous period was created at most a few weeks before it, so the window opens 30 days before that period
+    (never later than 30 days ago, so the last run's output is always inside).
+    """
+    bounds = previous_period_bounds((scope or "").split(":", 1)[0], now)
+    floor = now.astimezone(timezone.utc) - timedelta(days=30)
+    start = min(bounds[0] - timedelta(days=30), floor) if bounds else floor
+    return start.isoformat()
