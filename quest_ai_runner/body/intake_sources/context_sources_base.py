@@ -88,12 +88,16 @@ def _reply_channel(card: Dict[str, Any]) -> str:
     return "add a note on this quest"
 
 
-def _runs_delivered(request: "CollectRequest") -> List[datetime]:
+def _runs_delivered(request: "CollectRequest", autopilot_id: str = "") -> List[datetime]:
     """When runs on this card last delivered their results, newest last.
 
     Read through the shared per-engine cache, so one pass over many cards does not re-list a
     card's tasks per source. A client without ``list_tasks`` degrades to "no deliveries", which is
     exactly the behaviour that existed before answers could come from a result.
+
+    ``autopilot_id`` narrows the deliveries to that one autopilot's own runs (the task's
+    ``autopilot_id`` field): a note aimed at one autopilot is answered by that autopilot, and
+    another autopilot's run landing after it is not its answer.
     """
     lister = getattr(request.client, "list_tasks", None)
     if not callable(lister) or not request.card_id:
@@ -107,6 +111,8 @@ def _runs_delivered(request: "CollectRequest") -> List[datetime]:
             request.cache[key] = []
     out = []
     for t in request.cache[key]:
+        if autopilot_id and str(t.get("autopilot_id") or "") != autopilot_id:
+            continue
         if str(t.get("status") or "").strip().lower() not in DELIVERED_TASK_STATUSES:
             continue
         if not str(t.get("result") or "").strip():

@@ -34,8 +34,8 @@ def _now():
     return NOW
 
 
-def _iso(days_ago=0, hours_ago=0):
-    return (NOW - timedelta(days=days_ago, hours=hours_ago)).isoformat()
+def _iso(days_ago=0, hours_ago=0, minutes_ago=0):
+    return (NOW - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)).isoformat()
 
 
 class BareClient:
@@ -1154,6 +1154,102 @@ def test_on_a_quest_that_mails_the_answer_belongs_in_the_result():
     quiet = UpdateEngine(_NotesAndRuns(), always=("quest_notes",), now_fn=_now)
     note_only = quiet.collect(_quest(mails=False), card_id="q1").updates[0]
     assert note_only.how_to_respond == "add a note on this quest"
+
+
+# --- a note aimed at one autopilot ---------------------------------------------------------------
+
+class _AddressedNotes:
+    """A quest with notes for the quest at large, for autopilot ``ap_a``, and for ``ap_b``."""
+
+    def __init__(self, tasks=()):
+        self.tasks = list(tasks)
+
+    def list_quest_notes(self, quest_id):
+        return [
+            {"id": "wide", "text": "quest-wide: keep the survey going", "author_kind": "user",
+             "author_name": "the owner", "created_at": _iso(hours_ago=1)},
+            {"id": "for_a", "text": "for A: draft the summary today", "author_kind": "user",
+             "author_name": "the owner", "autopilot_id": "ap_a", "created_at": _iso(hours_ago=3)},
+            {"id": "for_b", "text": "for B: pause the outreach", "author_kind": "user",
+             "author_name": "the owner", "autopilot_id": "ap_b", "created_at": _iso(hours_ago=2)},
+            {"id": "null_wide", "text": "also quest-wide, null address", "author_kind": "user",
+             "author_name": "the owner", "autopilot_id": None, "created_at": _iso(hours_ago=4)},
+            {"id": "ai", "text": "AI summary", "author_kind": "ai", "autopilot_id": "ap_b",
+             "created_at": _iso(days_ago=3)},
+        ]
+
+    def list_tasks(self, **kwargs):
+        return list(self.tasks)
+
+
+def _notes_for(client, autopilot_id=None):
+    options = {"quest_notes": {"autopilot_id": autopilot_id}} if autopilot_id is not None else None
+    bundle = UpdateEngine(client, always=("quest_notes",), now_fn=_now).collect(
+        _quest(mails=False), card_id="q1", options=options)
+    return [u for u in bundle.updates if u.source == "quest_notes"]
+
+
+def test_an_autopilot_reads_the_quest_wide_notes_and_its_own_never_another_autopilots():
+    notes = _notes_for(_AddressedNotes(), autopilot_id="ap_a")
+
+    assert [u.item_id for u in notes] == ["for_a", "wide", "null_wide"]
+    assert notes[0].addressed and not notes[1].addressed and not notes[2].addressed
+    assert notes[0].kind == "note to this autopilot"
+    assert "TO THIS AUTOPILOT" in notes[0].title and "instruction for this run" in notes[0].title
+    assert notes[1].kind == "note" and "wrote on the quest" in notes[1].title
+    # The addressed note leads the block although a quest-wide note is newer.
+    block = UpdateEngine(_AddressedNotes(), always=("quest_notes",), now_fn=_now).collect(
+        _quest(mails=False), card_id="q1",
+        options={"quest_notes": {"autopilot_id": "ap_a"}}).as_prompt_block()
+    assert block.index("for A: draft the summary") < block.index("quest-wide: keep the survey")
+    assert "pause the outreach" not in block
+
+
+def test_with_no_autopilot_named_every_persons_note_is_read_as_before():
+    notes = _notes_for(_AddressedNotes())
+    assert sorted(u.item_id for u in notes) == ["for_a", "for_b", "null_wide", "wide"]
+    assert not any(u.addressed for u in notes)
+    assert all(u.kind == "note" for u in notes)
+
+    blank = _notes_for(_AddressedNotes(), autopilot_id="")
+    assert sorted(u.item_id for u in blank) == ["for_a", "for_b", "null_wide", "wide"]
+
+
+def test_an_addressed_note_stays_open_until_its_own_autopilot_delivers_after_it():
+    """Another autopilot's run landing after the note is not its answer; this one's is."""
+    other_ran = _AddressedNotes(tasks=[{"id": "t1", "status": "done", "result": "B did things",
+                                        "autopilot_id": "ap_b", "worked_at": _iso(minutes_ago=30)}])
+    notes = {u.item_id: u for u in _notes_for(other_ran, autopilot_id="ap_a")}
+    assert notes["for_a"].needs_response
+    # The quest-wide notes follow the existing rule: any run's delivery after them answers them.
+    assert "wide" not in notes and "null_wide" not in notes
+
+    own_ran = _AddressedNotes(tasks=[{"id": "t2", "status": "done", "result": "A drafted it",
+                                      "autopilot_id": "ap_a", "worked_at": _iso(minutes_ago=30)}])
+    bundle = UpdateEngine(own_ran, always=("quest_notes",), now_fn=_now).collect(
+        _quest(mails=False), card_id="q1", options={"quest_notes": {"autopilot_id": "ap_a"}})
+    assert [u for u in bundle.updates if u.source == "quest_notes"] == []
+    report = [r for r in bundle.reports if r.source == "quest_notes"][0]
+    assert "already answered" in report.explanation
+
+
+def test_addressed_notes_keep_the_age_and_count_caps():
+    from quest_ai_runner.body.intake_sources.context_update_types import MAX_OPEN_PER_SOURCE, OPEN_ITEM_MAX_AGE_DAYS
+
+    class Burst:
+        def list_quest_notes(self, quest_id):
+            rows = [{"id": f"n{i}", "text": f"for A number {i}", "author_kind": "user",
+                     "autopilot_id": "ap_a", "created_at": _iso(hours_ago=i)}
+                    for i in range(MAX_OPEN_PER_SOURCE + 3)]
+            rows.append({"id": "stale", "text": "for A, long ago", "author_kind": "user",
+                         "autopilot_id": "ap_a", "created_at": _iso(days_ago=OPEN_ITEM_MAX_AGE_DAYS + 1)})
+            return rows
+
+    notes = _notes_for(Burst(), autopilot_id="ap_a")
+    assert len(notes) == MAX_OPEN_PER_SOURCE
+    assert all(u.addressed for u in notes)
+    assert "stale" not in {u.item_id for u in notes}
+    assert {u.item_id for u in notes} == {f"n{i}" for i in range(MAX_OPEN_PER_SOURCE)}
 
 
 class _AnsweredComments:

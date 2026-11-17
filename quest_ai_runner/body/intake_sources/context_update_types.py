@@ -240,6 +240,10 @@ class ContextUpdate:
     url: str = ""
     how_to_respond: str = ""         # the channel back, in one imperative phrase
     needs_response: bool = False     # a question left open, as opposed to something to know
+    # Written TO the reader of this brief (a note a person aimed at this one autopilot), not to the
+    # card at large. The bundle puts these ahead of everything else, whatever their date, so the
+    # run reads its own instruction before the quest's general news.
+    addressed: bool = False
     # The body is the person's OWN WORDS rather than something this module composed, so it is
     # shown whole up to ``MAX_PERSON_BODY_CHARS`` instead of the short per-item cap.
     verbatim: bool = False

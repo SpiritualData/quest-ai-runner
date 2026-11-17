@@ -390,9 +390,11 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         if self._update_engine is not None:
             # ONE read of everything the person said, through the engine. The reflection and the captures come back as SLOTTED updates that render
             # through the composer's own two slots (ref-tagged, so the receipt accounts for them); the general block carries everything else.
+            # The notes read knows which autopilot this run is: a note aimed at another autopilot stays out, one aimed at this one leads the block.
             bundle = self._update_engine.collect(
                 quest, card_id=quest_id, card_kind="quest", card_label=quest_label,
-                options={"reflections": {"periods": self._reflection_periods(scope_label)}})
+                options={"reflections": {"periods": self._reflection_periods(scope_label)},
+                         "quest_notes": {"autopilot_id": str(unit.get("id") or "")}})
             reflection_text = bundle.slot_text("reflection") or None
             insights_text = bundle.slot_text("insights") or None
             reflection_note = bundle.slot_summary("reflection")

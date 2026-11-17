@@ -46,6 +46,15 @@ class QuestNotesSource(_BaseSource):
     "needs an answer" flag, so the run can see it was written and judge whether the note after it
     actually answered it. Not on a first look: with no delivery on record, "newer than the
     watermark" is just "recent", and the answered notes of the last two weeks are history.
+
+    A NOTE CAN BE AIMED AT ONE AUTOPILOT. A person's note may carry an ``autopilot_id`` (absent or
+    null means the quest at large, the behaviour above). When the caller says which autopilot it
+    is reading for (spec key ``autopilot_id``, passed by the autopilot run), a note aimed at a
+    DIFFERENT autopilot is left out entirely, a note aimed at this one is offered first and
+    labelled as addressed to it (``ContextUpdate.addressed``), and it stays open until THIS
+    autopilot's own run delivers a result after it: another autopilot's run landing in between is
+    not its answer. Assistant notes carry no address and are read as before. With no autopilot
+    named, nothing is filtered: a reader that does not know who it is sees every note.
     """
     name = "quest_notes"
     describes = "notes the person added to this quest that have no assistant reply yet"
@@ -59,10 +68,18 @@ class QuestNotesSource(_BaseSource):
             return []
         out: List[ContextUpdate] = []
         where = request.card_label or _card_label(request.card) or "this quest"
-        notes = lister(quest_id) or []
+        autopilot_id = str(request.opt("autopilot_id") or "").strip()
+        notes = self.for_autopilot(lister(quest_id) or [], autopilot_id)
         delivered = _runs_delivered(request)
         answer_here = _reply_channel(request.card)
         open_notes = self.open_notes(notes, delivered_at=delivered)
+        if autopilot_id:
+            # The addressed notes answer to this autopilot's own deliveries, the rest to any run's.
+            own_delivered = _runs_delivered(request, autopilot_id=autopilot_id)
+            addressed_open = [n for n in self.open_notes(notes, delivered_at=own_delivered)
+                              if _addressed_to(n, autopilot_id)]
+            open_notes = _by_time([n for n in open_notes if not _addressed_to(n, autopilot_id)]
+                                  + addressed_open)
         offered = _still_open(open_notes, request.now, lambda n: _as_utc(n.get("created_at")))
         open_ids = {id(n) for n in offered}
         persons = self.persons(notes)
@@ -86,16 +103,20 @@ class QuestNotesSource(_BaseSource):
                 is_open = tracked.is_open
             text = str(note.get("text") or "").strip()
             author = str(note.get("author_name") or "").strip()
-            title = f"{author or 'The person'} wrote on the quest"
+            addressed = bool(autopilot_id) and _addressed_to(note, autopilot_id)
+            wrote = (f"{author or 'The person'} wrote TO THIS AUTOPILOT: treat it as the "
+                     "instruction for this run" if addressed
+                     else f"{author or 'The person'} wrote on the quest")
+            title = wrote
             if not is_new:
                 title += " (still open from before)"
             elif not is_open:
                 title += " (an assistant has answered since; check that it answered THIS)"
             if tracked is not None and tracked.kind != KIND_UNKNOWN_SENTINEL:
-                title = f"{author or 'The person'} wrote on the quest ({tracked.status_line()})"
+                title = f"{wrote} ({tracked.status_line()})"
             out.append(ContextUpdate(
                 source=self.name,
-                kind="note",
+                kind="note to this autopilot" if addressed else "note",
                 item_id=str(note.get("id") or note.get("note_id") or ""),
                 title=title,
                 body=text,
@@ -106,9 +127,27 @@ class QuestNotesSource(_BaseSource):
                 location=where,
                 how_to_respond=answer_here,
                 needs_response=is_open,
+                addressed=addressed,
                 raw=dict(note or {}),
             ))
         return out
+
+    @staticmethod
+    def for_autopilot(notes: Sequence[Dict[str, Any]], autopilot_id: str) -> List[Dict[str, Any]]:
+        """The notes autopilot ``autopilot_id`` may read: every assistant note, every quest-wide
+        person note, and the person notes aimed at it. A person note aimed at another autopilot is
+        left out. With no ``autopilot_id`` every note is returned unchanged."""
+        if not autopilot_id:
+            return list(notes or [])
+        kept = []
+        for note in notes or []:
+            if not isinstance(note, dict):
+                continue
+            is_person = str(note.get("author_kind") or "").lower() == "user"
+            if is_person and _note_autopilot(note) not in ("", autopilot_id):
+                continue
+            kept.append(note)
+        return kept
 
     @staticmethod
     def persons(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -145,6 +184,17 @@ class QuestNotesSource(_BaseSource):
         """``open_notes`` bounded to the ones still worth offering (see ``_still_open``)."""
         return _still_open(cls.open_notes(notes, delivered_at), now,
                            lambda n: _as_utc(n.get("created_at")))
+
+
+def _note_autopilot(note: Dict[str, Any]) -> str:
+    """The autopilot a note is aimed at, or "" for a quest-wide note (field absent or null)."""
+    return str(note.get("autopilot_id") or "").strip()
+
+
+def _addressed_to(note: Dict[str, Any], autopilot_id: str) -> bool:
+    """Whether this person note is aimed at ``autopilot_id``."""
+    return (str(note.get("author_kind") or "").lower() == "user"
+            and bool(autopilot_id) and _note_autopilot(note) == autopilot_id)
 
 
 def _by_time(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:

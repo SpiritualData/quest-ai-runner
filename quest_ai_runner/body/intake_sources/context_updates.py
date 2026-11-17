@@ -458,11 +458,13 @@ class UpdateEngine:
         self._apply_relevance(bundle, card)
         self._add_owed(bundle, cid, card)
 
-        # Newest first, undated last: an undated row is almost always a standing item (a
-        # reflection, an open comment with no timestamp), and it should not displace today's news.
-        bundle.updates.sort(
-            key=lambda u: u.occurred_at or datetime.min.replace(tzinfo=timezone.utc),
-            reverse=True)
+        # Addressed to this reader first (``ContextUpdate.addressed``), then newest first, undated
+        # last: an undated row is almost always a standing item (a reflection, an open comment with
+        # no timestamp), and it should not displace today's news.
+        def order(u: ContextUpdate) -> Any:
+            return (bool(u.addressed), u.occurred_at or datetime.min.replace(tzinfo=timezone.utc))
+
+        bundle.updates.sort(key=order, reverse=True)
         # Things waiting on an answer are never the ones dropped by the cap.
         if len(bundle.updates) > self._max_updates:
             keep = [u for u in bundle.updates if u.needs_response][:self._max_updates]
@@ -471,8 +473,7 @@ class UpdateEngine:
                     break
                 if u not in keep:
                     keep.append(u)
-            keep.sort(key=lambda u: u.occurred_at or datetime.min.replace(tzinfo=timezone.utc),
-                      reverse=True)
+            keep.sort(key=order, reverse=True)
             bundle.updates = keep
         for i, update in enumerate(bundle.updates, 1):
             update.ref = f"U{i}"

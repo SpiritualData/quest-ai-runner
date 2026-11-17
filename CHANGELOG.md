@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+- Notes aimed at one autopilot (2026-11-16): a person's quest note may carry an `autopilot_id` (Quest backend; absent or null is quest-wide). An autopilot run's notes read (`quest_notes` spec key `autopilot_id`, set by the run) leaves out person notes aimed at another autopilot, puts the ones aimed at this autopilot first in the context updates block labelled as its instruction (`ContextUpdate.addressed`), and keeps such a note open until this autopilot's own run delivers a result after it. Assistant notes and quest-wide notes read as before; a reader that names no autopilot sees every note, as before.
+
 ## [0.7.7] - 2026-11-16
 
 Release run: carries the Quest client's habit assignees, the undated backlog and a member's own Today, and the creation flow fixes (typed refused writes, strategy-map and habit methods, a habit needs no strategy). Esoi and hub pins unchanged (v0.7.0, v0.7.6).
