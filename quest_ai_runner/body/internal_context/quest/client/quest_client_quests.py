@@ -1063,6 +1063,10 @@ class QuestsMixin:
         self._require()
         return self._write("POST", f"/api/quests/{quest_id}/autopilot/run", body={}, label="Requesting the autopilot run")
 
+    def update_autopilot(self, quest_id: str, autopilot_id: str, fields: Dict[str, Any]) -> WriteResult:
+        """PATCH /api/quests/{quest_id}/autopilots/{autopilot_id}: merge ``fields`` into one named autopilot. A file-sourced caller goes through ``seed_autopilot``, never here."""
+        return self._write("PATCH", f"/api/quests/{quest_id}/autopilots/{autopilot_id}", body=dict(fields), label="Updating the autopilot")
+
     def update_quest_autopilot(self, quest_id: str,
                               fields: Dict[str, Any]) -> WriteResult:
         """PATCH a quest's autopilot settings -- ``PATCH /api/quests/{quest_id}/autopilot``.

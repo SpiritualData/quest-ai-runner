@@ -38,3 +38,7 @@ A run task whose short text (200 characters or fewer; a long text is an autopilo
 ## Measuring
 
 `esoi run gate_an_autopilot_pass --impl live_pass` checks the run gates and `esoi run route_goals_to_autopilots --impl offline_routing` checks the routing code around the judge, both with no model call. How well a real judge reads scope is the same cases run with a model provider, by decision.
+
+## Seeding settings from files without overwriting a person
+
+The runner's poll passes never write an autopilot's settings; a person's edit in Quest is the truth. A script that keeps settings in files (a quest's prompts, a roster) calls `seed_autopilot` (a named autopilot) or `seed_quest_autopilot` (the quest-level fields) from `quest_ai_runner.body.internal_context.quest.autopilot_seed`, never the client's write methods directly. Per field, it writes only when Quest has the field unset, or still holds the value this ledger (`SeedLedger(path)`, hashes only) says the seeding wrote last, or when the file and Quest already agree. Any other difference is a conflict: one log line, listed in the returned `SeedReport.conflicts`, Quest's value kept. `force=True` (a `--force` flag on a script) overwrites on purpose. A script must show the report's conflicts to the person who ran it.
