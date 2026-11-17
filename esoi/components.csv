@@ -43,7 +43,7 @@ the-world-model-plumbing-model-tier-chooser,world,quest_ai_runner/world/model_pl
 the-world-model-plumbing-spend,world,quest_ai_runner/world/model_plumbing/spend/*.py,QAR's code for model plumbing / spend (the world),model-plumbing
 the-world-model-plumbing-vendor-model-caller,world,quest_ai_runner/world/model_plumbing/vendor_model_caller/*.py,QAR's code for model plumbing / vendor model caller (the world),vendor-model-caller
 the-world-science,world,quest_ai_runner/world/science/*.py,QAR's code for science (the world),quest-change-executor
-the-world-tools,world,quest_ai_runner/world/tools/*.py,QAR's code for tools (the world),quest-change-executor;write-through-mcp
+the-world-tools,world,quest_ai_runner/world/tools/*.py,QAR's code for tools (the world),quest-change-executor;write-through-mcp;write-in-names
 the-world-tools-connected-system-operations,world,quest_ai_runner/world/tools/connected_system_operations/*.py,QAR's code for tools / connected system operations (the world),quest-context;intake-sources;file-editing;quest-change-executor;write-through-mcp
 the-world-tools-delegated-agent-sessions,world,quest_ai_runner/world/tools/delegated_agent_sessions/*.py,QAR's code for tools / delegated agent sessions (the world),quest-requests;delegated-agent-sessions;vendor-model-caller
 the-world-tools-file-editing,world,quest_ai_runner/world/tools/file_editing/*.py,QAR's code for tools / file editing (the world),quest-context;intake-sources;file-editing;quest-change-executor

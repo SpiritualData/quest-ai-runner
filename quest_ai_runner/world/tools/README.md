@@ -18,6 +18,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - File Editing (solution with no page of its own, its implementations are in this intent's records)
 - Quest Change Executor (solution with no page of its own, its implementations are in this intent's records): Change a quest exactly as the person asked, once.
 - Detect A Stalled Run (solution with no page of its own, its implementations are in this intent's records): Tells a stuck run from a slow one by reading its live activity, so stuck work stops and slow work finishes.
+- Write In Names (solution with no page of its own, its implementations are in this intent's records): Keep machine keys out of every email, task, note, goal and ask a person reads.
 - [Write Through MCP](connected_system_operations/README.md) (solution with implementations): Carry out one named change on an external tool server, and only when an explicit allowlist permits that operation.
 
 ## Solutions at a glance
@@ -28,6 +29,7 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 | File Editing | `file-editing` | `quest_ai_runner.run("file-editing", 'NOTES.md')` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
 | Quest Change Executor | `quest-change-executor` | `quest_ai_runner.run("quest-change-executor", 'Add a goal to ship the launch note by Friday')` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
 | Detect A Stalled Run | `detect-a-stalled-run` | `quest_ai_runner.run("detect-a-stalled-run", ...)` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
+| Write In Names | `write-in-names` | no entry declared | Id and machine-header refusal (`readable_guard`) | Machine text refused over the outward-text cases |
 | Write Through MCP | `write-through-mcp` | `quest_ai_runner.run("write-through-mcp", ...)` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
 
 ### Top implementations of Delegated Agent Sessions
@@ -79,6 +81,13 @@ The one in use is chosen at the deciding stage of the cascade (see the leaderboa
 **How it is scored:** Stop-or-continue verdict accuracy with false stops counted apart. The verdict (stop or keep running) against hand-labelled live session logs, with false stops counted apart from missed stops: the production reviewer prompt and parser through one-shot claude -p at the review model, against a keyword-and-threshold rule floor Read in this direction: minimise false stops (killing a run that was making slow progress) with greater weight than missed stops; maximise stopping of runs that are idle without cause, blocked on a person, at a usage limit or repeating the same action.
 Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
 
+### Top implementations of Write In Names
+
+No implementation has a recorded result yet, so the choice is not backed by a measurement.
+
+**How it is scored:** Machine text refused over the outward-text cases. offline cases of texts one outward write would send: the 2026-11-16 subject (a header label and an id), a header on its own line, ids in a body, one id repeated, a persona id, and readable texts including links that carry ids.
+Result is the share of the metric's cases an implementation passes (its balanced score when it has one); cost per pass is dollars per passing case.
+
 ## Solutions from a library
 
 - [Delegated Agent Sessions](https://github.com/SpiritualData/ai-hub-of-hubs-structure/hubofhubs/world/tools/README.md) (`delegated-agent-sessions`): Hands open-ended work to an agent that runs in its own session and reports back. Adopted from the library `hub`.
@@ -92,17 +101,23 @@ Result is the share of the metric's cases an implementation passes (its balanced
 **Problems**
 
 - Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+- Unreadable Outward Text (`prob-unreadable-outward-text`): What an AI writes for people carries machine keys: a record id or a machine-read header line copied from its own instructions into an email subject, a task, a note or an ask.
 
 **Ideals**
 
 - Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+- Names, Not Keys (`ideal-names-not-keys`): Everything the AI writes for a person reads in that person's words: proper names of people, goals, quests, solutions and metrics, and links that open.
+
+## Metrics and their leaders
+
+- Machine text refused over the outward-text cases (`metric-write-in-names`): no result recorded
 
 ## Where to go next
 
 - Parent intent: [World](../README.md)
 - Repository: [top README](../../../README.md)
 - Records beside the code: [quest_ai_runner/world/tools/connected_system_operations](connected_system_operations/README.md), [quest_ai_runner/world/tools/delegated_agent_sessions](delegated_agent_sessions/README.md), [quest_ai_runner/world/tools/file_editing](file_editing/README.md), [quest_ai_runner/world/tools/web_search](web_search/README.md)
-- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv)
+- Records: [intent.csv](intent.csv), [problems.csv](problems.csv), [ideals.csv](ideals.csv), [solutions.csv](solutions.csv), [implementations.csv](implementations.csv), [metrics.csv](metrics.csv)
 
 ---
 
@@ -111,10 +126,12 @@ Result is the share of the metric's cases an implementation passes (its balanced
 ### Problems
 
 - Unrequested Or Partial Changes (`prob-unrequested-or-partial-changes`): A request to change a quest leads to changes that were not asked for, to only part of what was asked, or to the same change made twice.
+- Unreadable Outward Text (`prob-unreadable-outward-text`): What an AI writes for people carries machine keys: a record id or a machine-read header line copied from its own instructions into an email subject, a task, a note or an ask.
 
 ### Ideals
 
 - Exact Change (`ideal-exact-change`): The final state matches the request: everything asked, nothing else, once.
+- Names, Not Keys (`ideal-names-not-keys`): Everything the AI writes for a person reads in that person's words: proper names of people, goals, quests, solutions and metrics, and links that open.
 
 ### Solutions
 
@@ -124,6 +141,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 | File Editing | `file-editing` | Contained backed-up writer (`files`) | Write boundary and reversibility over the scratch-tree cases |
 | Quest Change Executor | `quest-change-executor` | Planner-only orchestration (`qar_orchestrator`) | Final quest state against the request over the quest operation cases |
 | Detect A Stalled Run | `detect-a-stalled-run` | Live model reviewer arm (`live_reviewer`) | Stop-or-continue verdict accuracy with false stops counted apart |
+| Write In Names | `write-in-names` | Id and machine-header refusal (`readable_guard`) | Machine text refused over the outward-text cases |
 | Write Through MCP | `write-through-mcp` | MCP operation writer (`mcp`) | Allowlist enforcement and exactly-once execution |
 
 ### Implementations
@@ -146,6 +164,10 @@ Result is the share of the metric's cases an implementation passes (its balanced
 | Hub's framed session with sub-agents of the task's quest solutions | `delegated-agent-sessions:solution_agents_loop` | [quest_ai_runner/world/tools/delegated_agent_sessions/solution_agents_loop_runner.py](delegated_agent_sessions/solution_agents_loop_runner.py) |  |
 | Contained backed-up writer | `file-editing:files` | [quest_ai_runner/world/tools/file_editing/files_writer.py](file_editing/files_writer.py) |  |
 | Claude Code login search | `web-search:claude_login` | [quest_ai_runner/world/tools/web_search/web_search_backends.py](web_search/web_search_backends.py) |  |
+
+### Metrics
+
+- Machine text refused over the outward-text cases (`metric-write-in-names`): `esoi run write_in_names --impl readable_guard`
 
 
 *Generated from the CSV files beside this page by `esoi readmes`. Edit the CSV files, not this page.*

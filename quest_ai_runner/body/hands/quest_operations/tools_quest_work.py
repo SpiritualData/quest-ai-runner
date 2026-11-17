@@ -79,6 +79,11 @@ def create_task_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         text = str(args.get("text") or "").strip()
         if not text:
             return ToolResult(ok=False, text="A task needs text: the work to do, in full.")
+        from quest_ai_runner.world.tools.readable_guard import refusal as readable_refusal
+        unreadable = readable_refusal("The task was not created", text, args.get("title"),
+                                      (args.get("new_goal") or {}).get("title") if isinstance(args.get("new_goal"), dict) else None)
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         client = factory()
         current = current_task_goal(client, ctx)
         quest_id = str(args.get("quest_id") or ctx.quest_id or current.get("quest_id") or "") or None

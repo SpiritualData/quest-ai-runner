@@ -146,6 +146,10 @@ def create_decision_spec(env: Mapping[str, str], client_factory=None) -> ToolSpe
         if not summary:
             return ToolResult(ok=False, text="Nothing was raised: summary is empty. Write what the "
                                              "person needs to answer, approve or do.")
+        from quest_ai_runner.world.tools.readable_guard import refusal as readable_refusal
+        unreadable = readable_refusal("Nothing was raised", summary, *[str(o) for o in (args.get("options") or [])])
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         quest_id = quest_id_of(args, ctx)
         client = factory()
         for row in (client.list_open_decisions_for_quest(quest_id) if quest_id else []):
@@ -646,6 +650,10 @@ def add_quest_note_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec
         placeholder = placeholder_reason(text)
         if placeholder:
             return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"The note was not saved: {placeholder}. Write the content itself.")
+        from quest_ai_runner.world.tools.readable_guard import refusal as readable_refusal
+        unreadable = readable_refusal("The note was not saved", text)
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         try:
             # One tool call is one logical write: the client gives it one Idempotency-Key for all its attempts.
             written = factory().add_quest_note(quest_id, text)

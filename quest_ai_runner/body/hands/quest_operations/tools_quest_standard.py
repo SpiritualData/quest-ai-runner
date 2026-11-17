@@ -15,6 +15,7 @@ from quest_ai_runner.world.tools.tools import (
     STANDARD_TOOL_BUILDERS, ToolContext, ToolResult, ToolSpec, quest_client_from_env, quest_credentials_present, result_of_write, write_failed)
 from quest_ai_runner.world.tools.tools_status import ToolStatus, decision_id_of
 from quest_ai_runner.body.hands.quest_operations import goal_links
+from quest_ai_runner.world.tools.readable_guard import refusal as readable_refusal
 
 
 def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
@@ -22,6 +23,9 @@ def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
     factory = client_factory or (lambda: quest_client_from_env(env))
 
     def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        unreadable = readable_refusal("The email was not sent", args.get("subject"), args.get("body"))
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         client = factory()
         result = client.send_quest_email(
             args["quest_id"], subject=args["subject"], body=args["body"],
@@ -82,6 +86,9 @@ def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
         recipient = str(args.get("to") or "").strip()
         if not recipient:
             return ToolResult(ok=False, text="No recipient was given, so no draft was filed.")
+        unreadable = readable_refusal("The draft was not filed", args.get("subject"), args.get("body"))
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         client = factory()
         result = client.create_email_draft(
             recipient=recipient, subject=args["subject"], body=args["body"],
@@ -376,6 +383,9 @@ def create_quest_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolS
         placeholder = next((r for r in (placeholder_reason(title), placeholder_reason(str(args.get("description") or "x"))) if r), None)
         if placeholder:
             return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"The goal was not created: {placeholder}. Write the goal itself.")
+        unreadable = readable_refusal("The goal was not created", title, args.get("description"))
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         if not args.get("user_asked_for_this_field"):
             return ToolResult(ok=False, text=(f"Not created: the user did not ask for the goal "
                                               f"{title!r}. Suggest it in your reply instead."))

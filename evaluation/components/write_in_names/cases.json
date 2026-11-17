@@ -1,0 +1,161 @@
+[
+ {
+  "id": "WN-001",
+  "kind": "outward",
+  "area": "seen_2026_11_16",
+  "args": {
+   "texts": [
+    "Quest subscribers: SOLUTIONS YOU ITERATE: esr_b451d0cb3cec",
+    "Hello"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": true,
+    "named": [
+     "SOLUTIONS YOU ITERATE:",
+     "esr_b451d0cb3cec"
+    ]
+   }
+  }
+ },
+ {
+  "id": "WN-002",
+  "kind": "outward",
+  "area": "header",
+  "args": {
+   "texts": [
+    "- **SOLUTIONS YOU ITERATE:** the welcome email"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": true,
+    "named": [
+     "SOLUTIONS YOU ITERATE:"
+    ]
+   }
+  }
+ },
+ {
+  "id": "WN-003",
+  "kind": "outward",
+  "area": "id_in_body",
+  "args": {
+   "texts": [
+    "Update for rep_3d63298c8f4c on quest_0bd34af0d0fa."
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": true,
+    "named": [
+     "rep_3d63298c8f4c",
+     "quest_0bd34af0d0fa"
+    ]
+   }
+  }
+ },
+ {
+  "id": "WN-004",
+  "kind": "outward",
+  "area": "id_once",
+  "args": {
+   "texts": [
+    "esr_b451d0cb3cec",
+    "again esr_b451d0cb3cec"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": true,
+    "named": [
+     "esr_b451d0cb3cec"
+    ]
+   }
+  }
+ },
+ {
+  "id": "WN-005",
+  "kind": "outward",
+  "area": "persona_id",
+  "args": {
+   "texts": [
+    "Written by rep-rep-4f2a9c"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": true,
+    "named": [
+     "rep-rep-4f2a9c"
+    ]
+   }
+  }
+ },
+ {
+  "id": "WN-006",
+  "kind": "outward",
+  "area": "names_only",
+  "args": {
+   "texts": [
+    "Quest subscribers: the welcome email",
+    "We finished the onboarding course."
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": false,
+    "named": []
+   }
+  }
+ },
+ {
+  "id": "WN-007",
+  "kind": "outward",
+  "area": "link_with_id",
+  "args": {
+   "texts": [
+    "Review it at https://app.example.org/quest/quest_0bd34af0d0fa/goal_3d63298c8f4c"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": false,
+    "named": []
+   }
+  }
+ },
+ {
+  "id": "WN-008",
+  "kind": "outward",
+  "area": "markdown_link",
+  "args": {
+   "texts": [
+    "[the quest](https://app.example.org/q/quest_0bd34af0d0fa) is ready"
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": false,
+    "named": []
+   }
+  }
+ },
+ {
+  "id": "WN-009",
+  "kind": "outward",
+  "area": "words_not_ids",
+  "args": {
+   "texts": [
+    "A quest_dashboard and a goal_list are not ids."
+   ]
+  },
+  "expect": {
+   "eq": {
+    "refused": false,
+    "named": []
+   }
+  }
+ }
+]

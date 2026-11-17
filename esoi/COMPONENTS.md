@@ -49,7 +49,7 @@ Edit the CSV, never this file. The rules are listed by `esoi rules`.
 | the-world-model-plumbing-spend | `the-world-model-plumbing-spend` | world | QAR's code for model plumbing / spend (the world) | model-plumbing |
 | the-world-model-plumbing-vendor-model-caller | `the-world-model-plumbing-vendor-model-caller` | world | QAR's code for model plumbing / vendor model caller (the world) | vendor-model-caller |
 | the-world-science | `the-world-science` | world | QAR's code for science (the world) | quest-change-executor |
-| the-world-tools | `the-world-tools` | world | QAR's code for tools (the world) | quest-change-executor, write-through-mcp |
+| the-world-tools | `the-world-tools` | world | QAR's code for tools (the world) | quest-change-executor, write-through-mcp, write-in-names |
 | the-world-tools-connected-system-operations | `the-world-tools-connected-system-operations` | world | QAR's code for tools / connected system operations (the world) | quest-context, intake-sources, file-editing, quest-change-executor, write-through-mcp |
 | the-world-tools-delegated-agent-sessions | `the-world-tools-delegated-agent-sessions` | world | QAR's code for tools / delegated agent sessions (the world) | quest-requests, delegated-agent-sessions, vendor-model-caller |
 | the-world-tools-file-editing | `the-world-tools-file-editing` | world | QAR's code for tools / file editing (the world) | quest-context, intake-sources, file-editing, quest-change-executor |

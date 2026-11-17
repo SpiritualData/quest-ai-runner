@@ -30,6 +30,10 @@ def create_or_update_quest_goal_spec(env: Mapping[str, str], client_factory=None
         placeholder = next((r for r in (placeholder_reason(title), placeholder_reason(str(args.get("description") or "x"))) if r), None)
         if placeholder:
             return ToolResult(ok=False, status=ToolStatus.REFUSED, text=f"The goal was not written: {placeholder}. Write the goal itself.")
+        from quest_ai_runner.world.tools.readable_guard import refusal as readable_refusal
+        unreadable = readable_refusal("The goal was not written", title, args.get("description"))
+        if unreadable:
+            return ToolResult(ok=False, status=ToolStatus.REFUSED, text=unreadable)
         if args.get("user_asked_for_this_field") is False:       # left out means the order gate decides; an explicit false is only an offer
             return ToolResult(ok=False, text=f"Not written: the user did not ask for the goal {title!r}. Suggest it in your reply instead.")
         try:

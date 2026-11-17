@@ -14,6 +14,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (
     AUTOPILOT_BRIEF_TOKEN_BUDGET, AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND, LAST_RUN_CUT_MARKER, LAST_RUN_OUTPUT_MAX_CHARS, PROPOSAL_TEXT_PREFIX,
     _LADDER_SCOPE_LABELS, _MD_TITLE_FURNITURE_RE, log)
 from quest_ai_runner.intelligence.proactivity.autopilot_periods import _parse_dt
+from quest_ai_runner.world.tools.readable_guard import READABLE_NAMES_RULE
 from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND
 
 
@@ -630,6 +631,7 @@ def compose_batch_text(quest_outcome: str,
     require(_SOLUTION_IMPROVEMENT_RULE)
     if STANDING_WORK_STANDARD:
         require(STANDING_WORK_STANDARD)
+    require(READABLE_NAMES_RULE)
     require(_CONFIRMATION_RULE)
     fit = prompt_budget.fit_sections(sections, AUTOPILOT_BRIEF_TOKEN_BUDGET)
     if fit.cuts:
