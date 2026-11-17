@@ -289,7 +289,7 @@ class ContextViewMixin:
         if not callable(list_tasks):
             return []
         try:
-            return list(list_tasks(goal_id=quest_id) or [])
+            return list(list_tasks(goal_id=quest_id, without_progress=True) or [])
         except Exception:  # noqa: BLE001 — history is context, never a reason to fail a run
             return []
 

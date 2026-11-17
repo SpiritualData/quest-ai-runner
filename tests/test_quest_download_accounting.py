@@ -103,3 +103,15 @@ def test_a_server_without_etags_is_used_as_before():
     assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
     assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
     assert c.__dict__.get("task_list_cache") == {}
+
+
+def test_the_run_history_read_leaves_out_progress_logs():
+    """The run history uses only status, dates, title and result. Its unfiltered read of a quest's tasks was one 59 MB reply,
+    sent twice, on the shared lane on 2026-11-16 (nearly all progress logs), so it asks for the list without them."""
+    import inspect
+
+    from quest_ai_runner.consciousness.request_intake import executor_context
+
+    source = inspect.getsource(executor_context)
+    read = source[source.index("def _fetch_run_history"):]
+    assert "without_progress=True" in read[:read.index("except Exception")]
