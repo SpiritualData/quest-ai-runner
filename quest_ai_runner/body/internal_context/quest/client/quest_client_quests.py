@@ -1063,6 +1063,11 @@ class QuestsMixin:
         self._require()
         return self._write("POST", f"/api/quests/{quest_id}/autopilot/run", body={}, label="Requesting the autopilot run")
 
+    def create_autopilot(self, quest_id: str, fields: Dict[str, Any]) -> WriteResult:
+        """POST /api/quests/{quest_id}/autopilots: add one named autopilot. ``fields`` needs ``name``; no ``id`` (the server mints it, returned as
+        ``{autopilot, limits}``). Refused above the plan's cap (402) and on an archived quest (409)."""
+        return self._write("POST", f"/api/quests/{quest_id}/autopilots", body=dict(fields), label="Adding the autopilot")
+
     def update_autopilot(self, quest_id: str, autopilot_id: str, fields: Dict[str, Any]) -> WriteResult:
         """PATCH /api/quests/{quest_id}/autopilots/{autopilot_id}: merge ``fields`` into one named autopilot. A file-sourced caller goes through ``seed_autopilot``, never here."""
         return self._write("PATCH", f"/api/quests/{quest_id}/autopilots/{autopilot_id}", body=dict(fields), label="Updating the autopilot")
