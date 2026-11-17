@@ -1198,6 +1198,13 @@ def test_the_batch_reads_the_standing_artifact_as_the_plan_of_record(tmp_path):
 
 
 
+def test_only_a_short_task_text_asks_for_a_dry_run_never_long_standing_instructions():
+    from quest_ai_runner.intelligence.proactivity.autopilot import is_dry_run_task
+    assert is_dry_run_task({"text": "dry-run pass"}) and is_dry_run_task({"text": "", "title": "Dry-run"})
+    assert not is_dry_run_task({"text": "Review the plan. " * 30 + "Never do a dry-run of anything.", "title": "Autopilot: N"})
+    assert not is_dry_run_task({"text": "Works the goals.", "title": "Autopilot: dry-run lover"})
+
+
 def test_a_dry_run_does_not_touch_the_artifact(tmp_path):
     client = _ContextEntryClient(
         quests=[_quest("q1")],

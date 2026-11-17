@@ -33,7 +33,7 @@ Write a `WorkSource` (scope, rules, the `due_items(now)` question, the allowed Q
 
 ## Checking one without writing anything
 
-A run task whose text contains `dry-run` reports the brief it WOULD work on and changes nothing.
+A run task whose short text (200 characters or fewer; a long text is an autopilot's standing instructions, used when its purpose is blank) contains `dry-run` reports the brief it WOULD work on and changes nothing.
 
 ## Measuring
 

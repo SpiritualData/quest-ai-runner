@@ -59,6 +59,18 @@ from quest_ai_runner.intelligence.proactivity.autopilot_context import PassConte
 
 log = logging.getLogger("quest-ai-runner.autopilot")
 
+DRY_RUN_TEXT_MAX = 200   # an autopilot's purpose is at most 200 characters; longer text is standing instructions, never a request
+
+
+def is_dry_run_task(task: Dict[str, Any]) -> bool:
+    """A dry run is asked for by a SHORT task text (or title) containing "dry-run". A run whose text is the autopilot's whole instructions (its
+    purpose was blank, so the backend used them) may mention "dry-run" in passing and must still run for real."""
+    text = str(task.get("text") or "").strip()
+    if text and len(text) <= DRY_RUN_TEXT_MAX:
+        return "dry-run" in text.lower()
+    return not text and "dry-run" in str(task.get("title") or "").lower()
+
+
 class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
     """Runs ONE autopilot pass against a Quest client. See the module docstring for the algorithm.
 
@@ -183,7 +195,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             return self._plan_run(task)
 
     def _plan_run(self, task: Dict[str, Any]) -> RunPlan:
-        dry_run = "dry-run" in str(task.get("text") or task.get("title") or "").lower()
+        dry_run = is_dry_run_task(task)
         quest_id = str(task.get("goal_id") or task.get("quest_id") or "")
         autopilot_id = str(task.get("autopilot_id") or "")
         self._pass_task_id = str(task.get("id") or task.get("task_id") or "") or None
