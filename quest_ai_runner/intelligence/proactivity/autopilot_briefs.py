@@ -658,11 +658,24 @@ def _strip_record_ids(line: str) -> str:
     return re.sub(r"\s{2,}", " ", _RECORD_ID_RE.sub("", line)).strip(" ,;:-(")
 
 
+AUTOPILOT_TITLE_PREFIX = "Autopilot: "
+TITLE_CAP = 80
+
+
+def _autopilot_title(text: str) -> str:
+    """``Autopilot: <text>`` within the 80 character cap, never doubling the prefix."""
+    text = text.strip()
+    if text.lower().startswith(AUTOPILOT_TITLE_PREFIX.lower()):
+        text = text[len(AUTOPILOT_TITLE_PREFIX):].strip()
+    return (AUTOPILOT_TITLE_PREFIX + text)[:TITLE_CAP].rstrip()
+
+
 def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                  instructions: Optional[str] = None,
                  persona_instructions: Optional[str] = None,
                  solution_name: Optional[str] = None,
-                 persona_label: Optional[str] = None) -> str:
+                 persona_label: Optional[str] = None,
+                 autopilot_name: Optional[str] = None) -> str:
     """A short label for the task list: what this batch is ABOUT.
 
     Without one the server derives a title from the first line of the text, which is the "Act as
@@ -684,7 +697,7 @@ def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
     The order is the same precedence the brief itself has. ``persona_instructions`` first, because
     a batch that exists because a character has their own standing job on this quest is about THAT
     job, and titling it after the quest's general brief would name work this run is not doing. Then
-    the quest-wide ``instructions``. Then the plain "Autopilot run", which is what a fully defaulted
+    the quest-wide ``instructions``. Then the plain "Autopilot: Run", which is what a fully defaulted
     quest gets: honest, and short enough that a person reading their list sees the quest's name
     doing the work instead.
 
@@ -701,10 +714,19 @@ def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
         lines = first.splitlines()
         if lines and lines[0].strip():
             return lines[0].strip()[:120]
+    name = _strip_record_ids(str(autopilot_name or "").strip())
+    if name:
+        return _autopilot_title(name)
+    return _autopilot_title(_unnamed_title(instructions, persona_instructions, solution_name, persona_label))
+
+
+def _unnamed_title(instructions: Optional[str], persona_instructions: Optional[str],
+                   solution_name: Optional[str], persona_label: Optional[str]) -> str:
+    """The title of a run with no named autopilot (a quest-level run), before its ``Autopilot: `` prefix."""
     solution = _strip_record_ids(str(solution_name or "").strip())
     if solution:
         who = _strip_record_ids(str(persona_label or "").strip())
-        return (f"{who}: improve {solution}" if who else f"Improve {solution}")[:80]
+        return f"{who}: improve {solution}" if who else f"Improve {solution}"
     for source in (persona_instructions, instructions):
         if not source:
             continue
@@ -714,8 +736,8 @@ def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                 continue
             stripped = _strip_record_ids(stripped)
             if stripped:
-                return stripped[:80]
-    return "Autopilot run"
+                return stripped
+    return "Run"
 
 
 def propose_next_goal(quest: Dict[str, Any]) -> Tuple[str, str]:

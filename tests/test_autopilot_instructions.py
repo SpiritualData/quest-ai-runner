@@ -53,18 +53,18 @@ def test_no_instructions_is_byte_identical_to_before_the_parameter_existed():
 # --- title fallback: adopted title -> persona brief -> quest brief -> "Autopilot run" -----------
 
 def test_batch_title_falls_back_to_the_instructions_first_line_stripped_of_markdown():
-    assert _batch_title([], instructions="# Daily Brief\nDetails follow.") == "Daily Brief"
-    assert _batch_title([], instructions="- bullet start\nmore") == "bullet start"
+    assert _batch_title([], instructions="# Daily Brief\nDetails follow.") == "Autopilot: Daily Brief"
+    assert _batch_title([], instructions="- bullet start\nmore") == "Autopilot: bullet start"
 
 
 def test_batch_title_falls_back_to_autopilot_run_when_no_line_has_real_content():
-    assert _batch_title([], instructions="   \n\n  ") == "Autopilot run"
-    assert _batch_title([], instructions="# \n- \n> ") == "Autopilot run"
+    assert _batch_title([], instructions="   \n\n  ") == "Autopilot: Run"
+    assert _batch_title([], instructions="# \n- \n> ") == "Autopilot: Run"
 
 
 def test_batch_title_from_instructions_is_capped_at_80_characters():
     title = _batch_title([], instructions="y" * 200)
-    assert title == "y" * 80
+    assert title == ("Autopilot: " + "y" * 80)[:80] and len(title) == 80
 
 
 def test_batch_title_is_autopilot_run_when_the_person_wrote_no_brief_at_all():
@@ -72,8 +72,8 @@ def test_batch_title_is_autopilot_run_when_the_person_wrote_no_brief_at_all():
     not written one, so titling from it would name every task on every such quest after the same
     built-in first line, in the list and in the subject of the mail the run sends. A title has to
     say what makes THIS run different, and "Autopilot run" at least does not claim otherwise."""
-    assert _batch_title([]) == "Autopilot run"
-    assert _batch_title([], instructions=None, persona_instructions=None) == "Autopilot run"
+    assert _batch_title([]) == "Autopilot: Run"
+    assert _batch_title([], instructions=None, persona_instructions=None) == "Autopilot: Run"
 
 
 # --- truncation ------------------------------------------------------------------------------
@@ -143,24 +143,38 @@ def test_custom_quest_instructions_still_get_the_before_after_metric_requirement
 
 def test_batch_title_skips_a_solutions_you_iterate_directive_line():
     brief = "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c\nYou are the lead of the onboarding flow."
-    assert _batch_title([], persona_instructions=brief) == "You are the lead of the onboarding flow."
+    assert _batch_title([], persona_instructions=brief) == "Autopilot: You are the lead of the onboarding flow."
 
 
 def test_batch_title_never_shows_a_raw_record_id():
-    assert _batch_title([], persona_instructions="SOLUTIONS YOU ITERATE: esr_3d63298c8f4c") == "Autopilot run"
+    assert _batch_title([], persona_instructions="SOLUTIONS YOU ITERATE: esr_3d63298c8f4c") == "Autopilot: Run"
     assert "esr_" not in _batch_title([], instructions="Review esr_3d63298c8f4c weekly")
 
 
 def test_batch_title_names_the_autopilot_and_the_solution_it_iterates():
     brief = "SOLUTIONS YOU ITERATE: esr_3d63298c8f4c\nYou are the lead of the onboarding flow."
     assert _batch_title([], persona_instructions=brief, solution_name="Onboarding emails",
-                        persona_label="Mary") == "Mary: improve Onboarding emails"
-    assert _batch_title([], solution_name="Onboarding emails") == "Improve Onboarding emails"
+                        persona_label="Mary") == "Autopilot: Mary: improve Onboarding emails"
+    assert _batch_title([], solution_name="Onboarding emails") == "Autopilot: Improve Onboarding emails"
     # An unresolved persona label is the raw rep id: never put it in a title.
     assert _batch_title([], solution_name="Onboarding emails",
-                        persona_label="rep_09d389aeb9ff") == "Improve Onboarding emails"
+                        persona_label="rep_09d389aeb9ff") == "Autopilot: Improve Onboarding emails"
     # A task the run took over still names the batch.
     assert _batch_title([{"title": "Email the morning brief"}], solution_name="Onboarding emails",
                         persona_label="Mary") == "Email the morning brief"
 
 
+
+
+def test_a_named_autopilots_title_is_autopilot_prefix_plus_its_exact_name():
+    name = "Outreach to prospective students"
+    assert _batch_title([], persona_instructions="# Something else", solution_name="Grants", persona_label="Mary",
+                        autopilot_name=name) == "Autopilot: Outreach to prospective students"
+    # Never a doubled prefix, never a record id, capped at 80.
+    assert _batch_title([], autopilot_name="Autopilot: " + name) == "Autopilot: Outreach to prospective students"
+    assert "esr_" not in _batch_title([], autopilot_name="Review esr_3d63298c8f4c")
+    assert len(_batch_title([], autopilot_name="n" * 200)) == 80
+
+
+def test_an_adopted_task_keeps_its_own_title_even_for_a_named_autopilot():
+    assert _batch_title([{"title": "Email the morning brief"}], autopilot_name="Outreach") == "Email the morning brief"
