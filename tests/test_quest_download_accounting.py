@@ -115,3 +115,29 @@ def test_the_run_history_read_leaves_out_progress_logs():
     source = inspect.getsource(executor_context)
     read = source[source.index("def _fetch_run_history"):]
     assert "without_progress=True" in read[:read.index("except Exception")]
+
+
+def test_recurring_adoption_and_handover_reads_are_slim():
+    """Reading the quest's queued tasks to adopt a recurring one, or to count handed-over ones, needs no progress log or result text."""
+    from quest_ai_runner.intelligence.proactivity.autopilot_context import PassContextMixin
+    from quest_ai_runner.body.hands.quest_operations import tools_quest_work as w
+    import inspect
+
+    seen = {}
+
+    class C:
+        def list_tasks(self, **kw):
+            seen.update(kw)
+            return []
+
+    class Probe(PassContextMixin):
+        _client = C()
+        def _team_for(self, q): return "team_1"
+        def _is_autopilot_authored(self, t): return False
+        def _now(self):
+            import datetime
+            return datetime.datetime.now()
+
+    Probe()._due_recurring_tasks("quest_1")
+    assert seen.get("slim") is True
+    assert "slim=True" in inspect.getsource(w).split("client.list_tasks(goal_id=quest_id")[1].split("\n")[0]

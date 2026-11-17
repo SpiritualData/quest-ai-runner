@@ -372,7 +372,7 @@ class PassContextMixin:
         """
         tasks = self._client.list_tasks(
             team_id=self._team_for(quest_id) or None, goal_id=quest_id,
-            status="queued") or []
+            status="queued", slim=True) or []   # adoption reads no progress log or result text (full rows were ~6-12 MB a call)
         today = self._now().date()
         due: List[Dict[str, Any]] = []
         for t in tasks:

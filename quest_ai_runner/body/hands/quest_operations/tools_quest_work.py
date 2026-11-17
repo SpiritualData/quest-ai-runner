@@ -227,7 +227,7 @@ def assign_goal_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
         carried = ""
         task_id_list = []
         try:
-            tasks = client.list_tasks(goal_id=quest_id) or []
+            tasks = client.list_tasks(goal_id=quest_id, slim=True) or []
             task_id_list = [t for t in tasks if t.get("related_goal_id") == goal_id
                             and str(t.get("assignee_user_id") or t.get("user_id") or "") == member
                             and t.get("status") in ("queued", "suggested")]
