@@ -1063,6 +1063,14 @@ class QuestsMixin:
         self._require()
         return self._write("POST", f"/api/quests/{quest_id}/autopilot/run", body={}, label="Requesting the autopilot run")
 
+    def run_autopilot_now(self, quest_id: str, autopilot_id: str) -> WriteResult:
+        """POST /api/quests/{quest_id}/autopilots/{autopilot_id}/run -- "Run now" for one named autopilot: queue its run at once.
+
+        Returns the queued task id. Refused (409) while the quest is archived or paused, the autopilot is paused, or the plan does not let it
+        run. Raises ``QuestWriteError`` on a refusal."""
+        self._require()
+        return self._write("POST", f"/api/quests/{quest_id}/autopilots/{autopilot_id}/run", body={}, label="Requesting the autopilot run")
+
     def create_autopilot(self, quest_id: str, fields: Dict[str, Any]) -> WriteResult:
         """POST /api/quests/{quest_id}/autopilots: add one named autopilot. ``fields`` needs ``name``; no ``id`` (the server mints it, returned as
         ``{autopilot, limits}``). Refused above the plan's cap (402) and on an archived quest (409)."""
