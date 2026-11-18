@@ -49,6 +49,40 @@ class QuestsMixin:
                              params={"limit": limit, "include_archived": str(include_archived).lower()})
         return list(resp.get("people") or resp.get("items") or []) if isinstance(resp, dict) else list(resp or [])
 
+    def list_org_reflection_notes(
+        self, org_id: str, *, member_user_ids: Optional[List[str]] = None,
+        start_date: Optional[str] = None, end_date: Optional[str] = None,
+        levels: Optional[List[str]] = None, summary: bool = False,
+        limit: int = 100, offset: int = 0,
+    ) -> Dict[str, Any]:
+        """GET /api/orgs/{org_id}/reflection-notes: what people wrote in their daily reflections and
+        period reviews, on the quests assigned to the org only (never a member's personal quests, never
+        AI-written notes). Org owners and admins see every member; anyone else sees only their own.
+
+        ``start_date`` and ``end_date`` are ISO dates (``YYYY-MM-DD``), both inclusive and either
+        optional, applied to the period each note is FOR (its ``source_date``, else its creation date),
+        so a review written late for an earlier period lands in that period. ``levels`` is a subset of
+        daily, weekly, monthly, quarterly, yearly. ``summary=True`` returns counts per member per level
+        (``{"members": [...], "total": n}``); otherwise ``{"notes": [...], "total": n, "limit", "offset"}``
+        with one row per note (note_id, quest_id, quest_title, author_user_id, author_name, level,
+        source_date, created_at, text), sorted by period then creation time; page with ``offset``.
+        Raises ``QuestApiError`` on a refusal, so a failed read is never mistaken for "nobody wrote".
+        """
+        self._require()
+        params: Dict[str, Any] = {"summary": str(bool(summary)).lower(), "limit": limit, "offset": offset}
+        if member_user_ids:
+            params["member_user_id"] = list(member_user_ids)
+        if levels:
+            params["level"] = list(levels)
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        resp = self._request("GET", f"/api/orgs/{org_id}/reflection-notes", params=params)
+        if isinstance(resp, dict) and isinstance(resp.get("data"), dict):
+            return resp["data"]
+        return resp if isinstance(resp, dict) else {}
+
     def list_orgs(self) -> List[Dict[str, Any]]:
         """GET /api/orgs — the organizations the authenticated account belongs to (explicit membership or
         email-domain match); each row carries ``org_id``, ``name`` and ``email_domains``. Raises
