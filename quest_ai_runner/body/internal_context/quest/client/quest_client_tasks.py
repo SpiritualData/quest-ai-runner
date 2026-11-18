@@ -7,11 +7,19 @@ from __future__ import annotations
 import urllib.request
 from typing import Any, Dict, List, Optional, Sequence
 from datetime import datetime, timezone
+import time as _time
 
 from quest_ai_runner.world.tools.tools_status import ToolStatus
 from quest_ai_runner.intelligence.mind.delegation.work_model import RUNNABLE_MODELS
 from quest_ai_runner.body.internal_context.quest.client.quest_client_support import (
     QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, _as_task_list, log)
+
+
+CONTROL_READ_WINDOW_SECONDS = 10.0   # a run's cancel and pause checks share one task read per window (was two reads every 2 s, ~100 KB each)
+
+
+def _control_now() -> float:
+    return _time.monotonic()
 
 
 class TasksMixin:
@@ -199,6 +207,19 @@ class TasksMixin:
         runs = resp.get("runs") if isinstance(resp, dict) else None
         return [r for r in runs if isinstance(r, dict)] if isinstance(runs, list) else []
 
+    def _control_read(self, task_id: str) -> Dict[str, Any]:
+        """The slim task for the cancel and pause checks, re-read at most once per window. A failed read is never cached."""
+        cache = self.__dict__.setdefault("_control_cache", {})
+        now = _control_now()
+        hit = cache.get(task_id)
+        if hit and now - hit[0] < CONTROL_READ_WINDOW_SECONDS:
+            return hit[1]
+        task = self.get_task(task_id, slim=True) or {}
+        if len(cache) > 50:
+            cache.clear()
+        cache[task_id] = (now, task)
+        return task
+
     def is_task_cancelled(self, task_id: str) -> bool:
         """True when the task has been cancelled mid-execution (a human hit "stop").
 
@@ -209,7 +230,7 @@ class TasksMixin:
         a transient API hiccup can never be mistaken for a cancellation and kill a legitimate run.
         """
         try:
-            task = self.get_task(task_id, slim=True) or {}
+            task = self._control_read(task_id)
             if str(task.get("status") or "").strip().lower() == "cancelled":
                 return True
             return bool(task.get("cancel_requested"))
@@ -224,7 +245,7 @@ class TasksMixin:
         same reason as ``is_task_cancelled``: a failed read must never pause a healthy run. A task
         whose backend has no such field simply reads False."""
         try:
-            return bool((self.get_task(task_id, slim=True) or {}).get("pause_requested"))
+            return bool(self._control_read(task_id).get("pause_requested"))
         except Exception:  # noqa: BLE001 -- fail-open
             log.warning("is_task_pause_requested check failed for %s", task_id, exc_info=True)
             return False
