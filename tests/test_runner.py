@@ -2129,7 +2129,7 @@ def test_cancel_and_pause_checks_ask_for_the_slim_task():
     c = _C("http://quest.example", "qsk_test")
     assert c.is_task_cancelled("t1") is False
     assert c.is_task_pause_requested("t1") is True
-    assert seen == [{"slim": True}, {"slim": True}]
+    assert seen == [{"slim": True}]   # one slim read serves both checks within the window
 
 
 def test_get_task_slim_sends_the_flag_and_default_does_not(monkeypatch):
