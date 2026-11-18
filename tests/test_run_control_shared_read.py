@@ -27,3 +27,15 @@ def test_cancel_seen_after_window(monkeypatch):
     clock[0] += 30
     c.get_task = lambda task_id, *, slim=False: {"status": "cancelled"}
     assert c.is_task_cancelled("atask_x") is True
+
+
+def test_failed_read_is_not_cached(monkeypatch):
+    """get_task swallows an API error into {}; that must not hide a cancel for the whole window."""
+    c = _Client()
+    clock = [100.0]
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_tasks._control_now", lambda: clock[0])
+    answers = [{}, {"status": "cancelled"}]
+    c.get_task = lambda task_id, *, slim=False: answers.pop(0)
+    assert c.is_task_cancelled("atask_x") is False
+    clock[0] += 1  # still inside the window
+    assert c.is_task_cancelled("atask_x") is True

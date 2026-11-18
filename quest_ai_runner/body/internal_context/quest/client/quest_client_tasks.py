@@ -215,6 +215,8 @@ class TasksMixin:
         if hit and now - hit[0] < CONTROL_READ_WINDOW_SECONDS:
             return hit[1]
         task = self.get_task(task_id, slim=True) or {}
+        if not task:
+            return task
         if len(cache) > 50:
             cache.clear()
         cache[task_id] = (now, task)
