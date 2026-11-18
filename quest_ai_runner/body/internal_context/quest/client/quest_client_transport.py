@@ -328,7 +328,14 @@ class TransportMixin:
                 self.exchange_state.last_headers = {str(k).lower(): str(v) for k, v in dict(getattr(resp, "headers", None) or {}).items()}
                 return int(getattr(resp, "status", 200) or 200), payload
         except urllib.error.HTTPError as e:
-            detail = e.read().decode(errors="replace")
+            err_raw = e.read()
+            if err_raw and str((e.headers or {}).get("Content-Encoding", "") if e.headers is not None else "").lower() == "gzip":
+                import gzip
+                try:
+                    err_raw = gzip.decompress(err_raw)
+                except (OSError, EOFError):
+                    pass  # not actually gzip: keep the bytes as sent
+            detail = err_raw.decode(errors="replace")
             retry_after = parse_retry_after((e.headers or {}).get("Retry-After") if e.headers is not None else None)
             code = error_code_of(detail)
             # A 409 coded idempotency_in_progress (it carries Retry-After too) is Quest saying a request with this

@@ -39,3 +39,25 @@ def test_request_asks_for_gzip_and_decodes_a_gzip_reply(monkeypatch):
 def test_a_plain_reply_from_a_server_that_does_not_compress_still_reads(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Resp(b'{"ok": true}', {}))
     assert _client()._request("GET", "/api/quests/me") == {"ok": True}
+
+
+def test_a_gzipped_error_reply_keeps_its_message_and_code(monkeypatch):
+    import email.message
+    import urllib.error
+
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_transport import QuestApiError
+
+    hdrs = email.message.Message()
+    hdrs["Content-Encoding"] = "gzip"
+    payload = gzip.compress(json.dumps({"detail": "nope"}).encode())
+
+    def fake(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", hdrs, io.BytesIO(payload))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    try:
+        _client()._request("GET", "/api/quests/me")
+    except QuestApiError as e:
+        assert "nope" in str(e) and e.status == 403
+    else:
+        raise AssertionError("expected QuestApiError")
