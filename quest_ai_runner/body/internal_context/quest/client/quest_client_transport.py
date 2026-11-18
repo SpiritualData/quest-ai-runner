@@ -307,12 +307,18 @@ class TransportMixin:
         req = urllib.request.Request(url, data=data, method=method)
         req.add_header("Authorization", f"Bearer {self.api_key}")
         req.add_header("Content-Type", "application/json")
+        # Ask for a compressed reply: urllib sends no Accept-Encoding, so every list read came down plain (an 11 MB task list, a 1.5 MB
+        # openapi file) while the server compresses JSON to a few percent. The download counter below counts the bytes on the wire.
+        req.add_header("Accept-Encoding", "gzip")
         if key:
             req.add_header(IDEMPOTENCY_HEADER, key)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()
                 line = record_download(method, path, len(raw), query_names=params.keys() if params else None)
+                if str((getattr(resp, "headers", None) or {}).get("Content-Encoding", "")).lower() == "gzip" and raw:
+                    import gzip
+                    raw = gzip.decompress(raw)
                 if line:
                     log.info("%s", line)
                 try:
