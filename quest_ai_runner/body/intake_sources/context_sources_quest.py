@@ -422,7 +422,10 @@ class DecisionsSource(_BaseSource):
             out.append(self._open_update(row, where))
         # Answered with "don't act yet" and not acted on since: owed action however old, so offered
         # on every look (first look included) until Quest marks it acted.
-        waiting = [r for r in settled if _awaits_ai_action(r)][:MAX_AWAITING_ACTION]
+        # Newest first (the same order Quest's own autopilot settlement assumes), so the cap never
+        # leaves the newest answers behind while older ones are offered.
+        waiting = sorted((r for r in settled if _awaits_ai_action(r)),
+                         key=lambda r: str(r.get("created_at") or ""), reverse=True)[:MAX_AWAITING_ACTION]
         for row in waiting:
             out.append(self._awaiting_action_update(row, where))
         if not request.first_look:
@@ -470,7 +473,9 @@ class DecisionsSource(_BaseSource):
                        "run; do not perform it yourself, plan around it")
         else:
             respond = ("act on this answer in this run, together with any other answers waiting "
-                       "on this quest; do not ask it again")
+                       "on this quest; do not ask it again. It leaves the person's waiting queue "
+                       "when this run finishes done; if it needs no action at all, say so in the "
+                       "result")
         return ContextUpdate(
             source="decisions",
             kind="answered ask, not yet acted on",

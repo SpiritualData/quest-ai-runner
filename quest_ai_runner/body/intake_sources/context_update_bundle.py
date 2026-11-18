@@ -267,6 +267,30 @@ class ContextUpdates:
                     log.warning("feedback ledger: could not record %s (%s)", u.item_id, e)
         self.relay_admitted()
 
+    def settle_answered_asks(self, task_id: Optional[str] = None) -> List[str]:
+        """After a run that was handed answered-but-unacted asks finished ``done``, tell Quest they
+        were acted on so they leave the person's "waiting for your AI" queue.
+
+        Only the ones this bundle offered as owed action (``kind`` "answered ask, not yet acted
+        on"); an approved ask with a prepared action is offered as ``needs_response=False`` and is
+        left for the person's button. Exact by id, idempotent, never raises. Returns the ids sent.
+        """
+        client = self.relay_client
+        mark = getattr(client, "mark_decisions_acted", None)
+        if not callable(mark):
+            return []
+        ids = [u.item_id for u in self.updates
+               if u.source == "decisions" and u.kind == "answered ask, not yet acted on"
+               and u.needs_response and u.item_id]
+        if not ids:
+            return []
+        try:
+            mark(ids, task_id)
+        except Exception as e:  # noqa: BLE001 -- the next run offers them again
+            log.warning("could not mark %d answered ask(s) acted on (%s)", len(ids), e)
+            return []
+        return ids
+
     def relay_admitted(self) -> None:
         """Post each admitted item from a ``relay_to_quest`` source onto the quest as a note.
 

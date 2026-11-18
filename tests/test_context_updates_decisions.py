@@ -229,3 +229,41 @@ def test_an_answer_the_ai_already_acted_on_is_ordinary_history():
 
     assert _rows(_engine(DecisionsClient([row]), watermarks=marks).collect(
         {"quest_id": "q1"}, card_id="q1")) == []
+
+
+class MarkingClient(DecisionsClient):
+    def __init__(self, rows):
+        super().__init__(rows)
+        self.marked = []
+
+    def mark_decisions_acted(self, ids, task_id=None):
+        self.marked.append((list(ids), task_id))
+
+
+def test_settling_marks_only_the_owed_answers_by_id_newest_first():
+    rows = [
+        _decision("old", status="resolved", resolution="decline", created_at=_iso(days_ago=9),
+                  resolved_at=_iso(days_ago=3), ai_action_status="pending"),
+        _decision("new", status="resolved", resolution="decline", created_at=_iso(days_ago=1),
+                  resolved_at=_iso(days_ago=0), ai_action_status="pending"),
+        _decision("parked", status="resolved", resolution="approve", created_at=_iso(days_ago=2),
+                  resolved_at=_iso(days_ago=1), ai_action_status="pending", ai_action_parked=True),
+        _decision("done", status="resolved", resolution="decline", ai_action_status="acted",
+                  resolved_at=_iso(days_ago=1)),
+        _decision("open1"),
+    ]
+    client = MarkingClient(rows)
+    bundle = _engine(client).collect({"quest_id": "q1"}, card_id="q1")
+    assert [u.item_id for u in _rows(bundle) if u.kind.startswith("answered")] == ["new", "parked", "old"]
+
+    sent = bundle.settle_answered_asks("t9")
+
+    assert sent == ["new", "old"]
+    assert client.marked == [(["new", "old"], "t9")]
+
+
+def test_settling_does_nothing_for_a_client_without_the_method():
+    bundle = _engine(DecisionsClient([_decision("a", status="resolved", resolution="decline",
+                                                ai_action_status="pending")])
+                     ).collect({"quest_id": "q1"}, card_id="q1")
+    assert bundle.settle_answered_asks("t") == []

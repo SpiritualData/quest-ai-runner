@@ -656,10 +656,15 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
         self.measure_milestone_work(text, result)
-        return self.report(task_id, result, conv_id, request_text=text,
-                           rep_preamble=rep_preamble,
-                           card_id=(task.get("card_id") or None),
-                           autopilot_composed=composed_by_autopilot)
+        outcome = self.report(task_id, result, conv_id, request_text=text,
+                              rep_preamble=rep_preamble,
+                              card_id=(task.get("card_id") or None),
+                              autopilot_composed=composed_by_autopilot)
+        # A run that finished done had the person's answered asks in front of it and was told to
+        # act on them: they are acted on, so they leave the "waiting for your AI" queue.
+        if outcome.status == "done" and self._context_bundle is not None:
+            self._safe(lambda: self._context_bundle.settle_answered_asks(task_id))
+        return outcome
 
     def measure_milestone_work(self, text: str, result: OrchestratorResult) -> None:
         """A task that is a milestone deliverable's background work (its brief carries the code-written work record) is measured and kept by code when

@@ -285,6 +285,19 @@ class DecisionsMixin:
         return self._write("POST", f"/api/teams/decisions/{decision_id}/resolve", body=body,
                            label="Resolving the ask")
 
+    def mark_decisions_acted(self, decision_ids: List[str], task_id: Optional[str] = None) -> WriteResult:
+        """POST /api/teams/decisions/mark-acted: say you acted on (or that nothing more is needed
+        for) answered asks waiting in the person's "waiting for your AI" queue, so they leave it.
+
+        Safe to repeat. An approved ask whose prepared action Quest has not run yet is skipped
+        (only the person's button runs that). The result's data is
+        ``{"acted": [ids], "skipped": [{"decision_id", "reason"}]}``."""
+        body: Dict[str, Any] = {"decision_ids": list(decision_ids)}
+        if task_id:
+            body["task_id"] = task_id
+        return self._write("POST", "/api/teams/decisions/mark-acted", body=body,
+                           label="Marking answered asks as acted on")
+
     def withdraw_decision(self, decision_id: str) -> WriteResult:
         """POST /api/teams/decisions/{id}/withdraw: take back an OPEN ask (the creator or the assignee may). Kept as history by Quest."""
         return self._write("POST", f"/api/teams/decisions/{decision_id}/withdraw", label="Withdrawing the ask")
