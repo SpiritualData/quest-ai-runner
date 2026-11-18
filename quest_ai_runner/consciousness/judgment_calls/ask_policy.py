@@ -148,7 +148,8 @@ class AskOutcome:
 
 def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options: Optional[List[str]], quest_id: Optional[str],
              conv_id: str, turn_id: str, asker_user_id: str, assignee: Assignee, summary: str,
-             blocked_goal_id: str = "", block_type: str = "", run_for_user_ids: Sequence[str] = ()) -> AskOutcome:
+             blocked_goal_id: str = "", block_type: str = "", run_for_user_ids: Sequence[str] = (),
+             stakes: Optional[str] = None, stakes_reason: Optional[str] = None) -> AskOutcome:
     """File ONE decision-request through the sink. ``decision_id`` is empty when it could not be filed; the caller then
     ends the turn as a final that says the question could not be filed, never as one that claims an ask exists."""
     if sink is None:
@@ -159,7 +160,7 @@ def file_ask(sink: Any, *, question: str, why_only_you: str, done: str, options:
             default_on_silence="hold", dedupe_key=ask_dedupe_key(turn_id, conv_id, question), conv_id=conv_id or None,
             notify_user_id=asker_user_id or None, options=list(options) if options else None,
             why_only_you=why_only_you or None, blocked_goal_id=blocked_goal_id or None, block_type=block_type or None,
-            run_for_user_ids=list(run_for_user_ids) or None))
+            run_for_user_ids=list(run_for_user_ids) or None, stakes=stakes, stakes_reason=stakes_reason))
     except Exception as e:  # noqa: BLE001 -- a failed filing must end the turn honestly, not break it
         log.warning("ask-on-block: the sink raised %s: %s", type(e).__name__, e)
         return AskOutcome(error=f"{type(e).__name__}: {e}")

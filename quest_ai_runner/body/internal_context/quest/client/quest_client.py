@@ -462,6 +462,8 @@ class QuestDecisionSink(EscalationSinkBase):
                 notify_user_id=escalation.notify_user_id,
                 options=escalation.options,
                 why_only_you=escalation.why_only_you,
+                stakes=escalation.stakes,
+                stakes_reason=escalation.stakes_reason,
             )
             # The API returns the created decision; surface its id (best-effort across field names).
             return str((res or {}).get("decision_id") or (res or {}).get("id") or "")

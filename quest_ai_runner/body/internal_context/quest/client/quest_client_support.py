@@ -167,6 +167,8 @@ class QuestPendingApproval(QuestApiError):
 # Quest's own validation for a decision's ``kind``: 1-64 chars, lowercase alnum/underscore/colon/
 # hyphen (e.g. "approve", "explicit:spend", "notice:prod-ops"). Checked client-side so a bad kind
 # degrades to "approve" instead of losing the whole escalation to a 422.
+# What an ask can have at stake (mirrors Quest's ask create route); anything else is left for Quest's own judge to name.
+ASK_STAKES = ("money", "deadline", "people", "unblocks", "other")
 DECISION_KIND_RE = re.compile(r"^[a-z0-9_:-]{1,64}$")
 
 

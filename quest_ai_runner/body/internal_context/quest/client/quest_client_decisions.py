@@ -11,6 +11,7 @@ from datetime import datetime
 from quest_ai_runner.intelligence.higher_mind.objectives.quest_experiments import EXPERIMENT_PROPOSAL_KIND
 from quest_ai_runner.world.tools.tools_status import ToolStatus
 from quest_ai_runner.body.internal_context.quest.client.quest_client_support import (
+    ASK_STAKES,
     DECISION_KIND_RE, QuestApiError, QuestNotConfigured, WriteResult, log)
 from quest_ai_runner.body.internal_context.quest.client.quest_client_transport import new_idempotency_key
 
@@ -93,7 +94,9 @@ class DecisionsMixin:
                         conv_id: Optional[str] = None,
                         notify_user_id: Optional[str] = None,
                         options: Optional[List[str]] = None,
-                        why_only_you: Optional[str] = None) -> WriteResult:
+                        why_only_you: Optional[str] = None,
+                        stakes: Optional[str] = None,
+                        stakes_reason: Optional[str] = None) -> WriteResult:
         """POST /api/teams/{team}/decisions: raise one ask for a person. A ``WriteResult`` (applied, with the ask's id; noop
         when an equal open experiment proposal already stood) or a raised ``QuestWriteError`` (refused: the person
         already answered this question, or Quest said no; failed; unknown: sent but not answered, so look at the
@@ -151,9 +154,11 @@ class DecisionsMixin:
             body["review_url"] = str(review_url)
         # Ask-on-block fields (all optional): one open ask per ``dedupe_key``, tied to a chat, told to one person.
         for field_name, value in (("dedupe_key", dedupe_key), ("conv_id", conv_id), ("notify_user_id", notify_user_id),
-                                  ("why_only_you", why_only_you)):
+                                  ("why_only_you", why_only_you), ("stakes_reason", (stakes_reason or "")[:200])):
             if value:
                 body[field_name] = str(value)
+        if stakes in ASK_STAKES:
+            body["stakes"] = stakes      # an unknown word is dropped, so Quest's own judge names it instead of a 422
         if options:
             body["options"] = [str(o) for o in options][:8]
         if executable:

@@ -33,4 +33,5 @@ def budget_stop_escalation(*, quest_id: str, quest_label: str, skipped: List[str
         summary=summary, kind="approve", quest_id=quest_id,
         dedupe_key=f"autopilot-budget:{quest_id}:{day}",
         why_only_you="Only the person who owns the quest or the runner can raise the daily budget.",
-        options=[f"Raise {BUDGET_SETTING}", "Leave it as it is"])
+        options=[f"Raise {BUDGET_SETTING}", "Leave it as it is"],
+        stakes="unblocks", stakes_reason="Autopilot tasks for the team stay held until the budget is raised.")

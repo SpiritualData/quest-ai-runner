@@ -55,6 +55,10 @@ class Escalation:
     # HOW MUCH RIDES ON THE ANSWER, for the hub's Judgment Calls (the sink consults it before filing): "high" only when nothing in the
     # run can proceed without the answer (the ask then blocks); left None, the hub reads it as medium (the ask waits while other work continues).
     severity: Optional[str] = None
+    # WHAT IS AT STAKE, named by whoever raises the ask (it knows): money, deadline, people, unblocks or other. Quest orders each person's
+    # asks by it in the order THEY chose, and a model only names it afterwards when this is left None, so naming it saves that call.
+    stakes: Optional[str] = None
+    stakes_reason: Optional[str] = None
 
 
 # A short relative form the planner can emit instead of computing a real timestamp itself:
