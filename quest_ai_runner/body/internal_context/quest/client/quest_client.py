@@ -83,13 +83,14 @@ from quest_ai_runner.body.internal_context.quest.client.quest_client_quests impo
 from quest_ai_runner.body.internal_context.quest.client.quest_client_context import ContextEntriesMixin
 from quest_ai_runner.body.internal_context.quest.client.quest_client_reps import RepsMixin
 from quest_ai_runner.body.internal_context.quest.client.quest_client_intents import IntentsMixin
+from quest_ai_runner.body.internal_context.quest.client.quest_client_scheduling import SchedulingMixin
 from quest_ai_runner.body.internal_context.quest.interface import QuestOperations
 
 
 
 
 class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, QuestsMixin, ContextEntriesMixin, RepsMixin,
-                  IntentsMixin):
+                  IntentsMixin, SchedulingMixin):
     """Thin urllib client for the Quest task + decision API. No third-party deps.
 
     The contract every method follows is in ``docs/reference/quest-api-contract.md`` ("Client contract"): a content write returns a
