@@ -37,6 +37,15 @@ class QuestsMixin:
 
     # --- quest and goal browsing (for interactive chat context selection) ------
 
+    def list_org_quests(self, org_id: str) -> List[Dict[str, Any]]:
+        """GET /api/orgs/{org_id}/quests — the quests assigned to the whole organization (not the ones co-owned by a single team; those
+        come from ``list_quests(team_id=...)``). Raises ``QuestApiError`` on a refusal."""
+        self._require()
+        resp = self._request("GET", f"/api/orgs/{org_id}/quests")
+        if isinstance(resp, dict):
+            resp = resp.get("quests") or resp.get("items") or []
+        return list(resp or [])
+
     def list_org_people(self, org_id: str, *, include_archived: bool = False,
                         limit: int = 500) -> List[Dict[str, Any]]:
         """GET /api/orgs/{org_id}/people — the org's people directory (explicit members plus users
