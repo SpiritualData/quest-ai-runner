@@ -60,7 +60,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_context import PassConte
 
 log = logging.getLogger("quest-ai-runner.autopilot")
 
-DRY_RUN_TEXT_MAX = 200   # an autopilot's purpose is at most 200 characters; longer text is standing instructions, never a request
+DRY_RUN_TEXT_MAX = 400   # an autopilot's purpose is at most 400 characters (the backend's AUTOPILOT_PURPOSE_MAX_CHARS); longer text is standing instructions, never a request
 
 
 def is_dry_run_task(task: Dict[str, Any]) -> bool:
