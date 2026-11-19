@@ -29,8 +29,9 @@ flowchart LR
 
 ## Running experiments
 
-1. `exp-free-arms-read-on-current-code` Free arms read on the current code: Do the free offline arms behind delegated tasks, exact changes, data kept in scope, engine reuse and the hub checks still pass on the current code, and should their rows be recorded so 83 percent of the quick weight stops reading as unmeasured? (reevaluate 2026-11-19)
-2. `exp-empty-read-answered-as-zero` An empty read is not an answer of zero: How should a turn answer when the read it planned returns nothing, so that it reads the collection itself or says what it could not read instead of answering zero or unavailable? (reevaluate 2026-11-23)
+1. `exp-free-arms-read-on-current-code` Free arms read on the current code: Do the free offline arms behind delegated tasks, exact changes, data kept in scope, engine reuse and the hub checks still pass on the current code, and should their rows be recorded so 83 percent of the quick weight stops reading as unmeasured? (reevaluate 2026-11-24)
+2. `exp-paraphrase-recall-in-scope` Recall that survives a paraphrase: Can conversation recall and warm-start context find the person's own earlier item when the new words are a paraphrase (mooring for dock lease, petrol for fuel) without pulling another person's item, on the free offline arms? (reevaluate 2026-11-26)
+3. `exp-empty-read-answered-as-zero` An empty read is not an answer of zero: How should a turn answer when the read it planned returns nothing, so that it reads the collection itself or says what it could not read instead of answering zero or unavailable? (reevaluate 2026-11-23)
 
 ## One level below
 
@@ -82,8 +83,8 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 - Overseer digest evidence and signal correctness on labelled scenarios (`metric-watch-a-run`): leader `digest_probe`, 16 of 16 cases
 - Parts selected by measurement (`QME7`): leader `structure_library`, 13 of 17 cases
 - Supported and calibrated answers to world questions (`metric-know-the-world`): leader `web_with_support_check`, 9 of 9 cases
-- Hub of hubs (`metric-hub-of-hubs`): leader `registry_scan`, 244 of 271 cases
-- Hub of hubs (`QME9`): leader `registry_scan`, 244 of 271 cases
+- Hub of hubs (`metric-hub-of-hubs`): leader `registry_scan`, 256 of 278 cases
+- Hub of hubs (`QME9`): leader `registry_scan`, 256 of 278 cases
 - Correct selection decisions over the evolve-by-metric cases (`metric-metric-earns-its-run`): leader `structure_library`, 13 of 17 cases
 - Intents whose solutions one paragraph and one diagram explain as the code builds them (`metric-solution-coherence`)
 - Task lifecycle correctness over offline cases (`metric-run-queued-tasks`): leader `qar_runner`, 43 of 43 cases
@@ -174,12 +175,13 @@ This intent is implemented by the sub-intents and solutions below it; each shows
 
 ### Experiments
 
-- `exp-free-arms-read-on-current-code` (running, from 2026-11-16, reevaluate 2026-11-19): Do the free offline arms behind delegated tasks, exact changes, data kept in scope, engine reuse and the hub checks still pass on the current code, and should their rows be recorded so 83 percent of the quick weight stops reading as unmeasured? Held fixed: zero model calls; a row is recorded only on a clean committed tree; paid arms stay under the hold on repeated paid evaluations.
+- `exp-free-arms-read-on-current-code` (running, from 2026-11-16, reevaluate 2026-11-24): Do the free offline arms behind delegated tasks, exact changes, data kept in scope, engine reuse and the hub checks still pass on the current code, and should their rows be recorded so 83 percent of the quick weight stops reading as unmeasured? Held fixed: zero model calls; a row is recorded only on a clean committed tree; paid arms stay under the hold on repeated paid evaluations.
 - `exp-empty-read-answered-as-zero` (running, from 2026-11-16, reevaluate 2026-11-23): How should a turn answer when the read it planned returns nothing, so that it reads the collection itself or says what it could not read instead of answering zero or unavailable? Held fixed: cheap tiers; the fix is generic, never keyed to a case.
 - `exp-current-rows-on-cheap-arms` (planned, from 2026-11-16, reevaluate 2026-11-23): What do the cheap chat and end to end arms read on the current code, on the staged ladder of 3 then 10 cases, each hand-read? Held fixed: staged ladder 1, 3, 10; a call cap on every run; clean committed tree.
 - `exp-ask-when-a-plan-needs-personal-facts` (planned, from 2026-11-16, reevaluate 2026-11-30): Does a small generic planner guidance make a turn ask first when a plan depends on facts the records do not hold, without over-confirming elsewhere? Held fixed: verified live on the named case and four guard cases before any commit.
 - `exp-labels-for-unlabelled-core-ml-cases` (planned, from 2026-11-16, reevaluate 2026-11-30): Which class of unlabelled core ML cases gains the most from a labelled set, one class per run? Held fixed: labelled rows are confirmed by the platform owner before they count.
 - `exp-sub-metrics-for-unserved-ideals` (ended, from 2026-11-16, reevaluate 2026-11-16): Which readings that are already recorded and free to read can serve as sub-metrics of the three ideals that hold 67 percent of the overall weight and have no sub-metric, so the floor can rise above one third? Held fixed: weights per ideal in the balance table; recorded rows only, nothing re-recorded to move the number.
+- `exp-paraphrase-recall-in-scope` (running, from 2026-11-19, reevaluate 2026-11-26): Can conversation recall and warm-start context find the person's own earlier item when the new words are a paraphrase (mooring for dock lease, petrol for fuel) without pulling another person's item, on the free offline arms? Held fixed: no paid model call; the fix is generic, never a synonym list keyed to a case; isolation cases still pass.
 
 ### Metrics
 

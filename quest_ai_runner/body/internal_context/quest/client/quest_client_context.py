@@ -304,6 +304,15 @@ class ContextEntriesMixin:
                         collection_id, page, e)
             return {}
 
+    def convert_collection_to_habit(self, collection_id: str, **schedule: Any) -> WriteResult:
+        """POST /api/data/collections/{id}/make-habit: make one of the caller's collections a habit, keeping every field and entry.
+        Optional ``schedule`` keys, sent as given: habitType, frequency, days, time, times, startDate, questId, markExistingDone (default true)."""
+        return self._write("POST", f"/api/data/collections/{collection_id}/make-habit", body=dict(schedule), label="Making the collection a habit")
+
+    def convert_habit_to_collection(self, collection_id: str) -> WriteResult:
+        """POST /api/data/collections/{id}/stop-habit: stop treating a habit as a habit; its entries stay and its completion field is archived."""
+        return self._write("POST", f"/api/data/collections/{collection_id}/stop-habit", body={}, label="Turning the habit back into a collection")
+
     def mark_insight_acted_on(self, entry_id: str, collection_id: str,
                               action_taken_description: str = "") -> WriteResult:
         """PATCH /api/data/insights/mark-acted-on — tick one insight's ``acted_on`` box.

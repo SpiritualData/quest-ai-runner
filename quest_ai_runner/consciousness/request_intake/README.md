@@ -76,7 +76,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 - Update-offering correctness over synthetic quest channels (`metric-feed-context-sources`): leader `quest_channels`, 20 of 20 cases
 - Exactly-once mid-run delivery per run, and how fast it is seen (`metric-receive-input-mid-run`): leader `in_memory`, 13 of 13 cases
 - Public surface conformance on fixture inputs (`metric-expose-the-public-api`): leader `live_surface`, 73 of 73 cases
-- Example runnability on an empty environment (`metric-learn-by-example`): leader `live_examples`, 29 of 37 cases
+- Example runnability on an empty environment (`metric-learn-by-example`): leader `live_examples`, 37 of 37 cases
 - Configuration precedence and validation correctness (`metric-configure-a-lane`): leader `qar_config`, 36 of 36 cases
 - Command-line parsing, refusal and output correctness (`metric-operate-from-a-terminal`): leader `cli_commands`, 42 of 42 cases
 - Documentation coverage and voice conformance (`metric-explain-qar`): leader `shipped_docs`, 466 of 469 cases

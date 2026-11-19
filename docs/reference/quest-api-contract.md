@@ -460,6 +460,15 @@ GET   /api/data/insights/by-quest?quest_id=Q&limit=10&include_acted=false   (lis
 
 PATCH /api/data/insights/mark-acted-on           (mark_insight_acted_on)
   body { "entry_id": "...", "collection_id": "...", "action_taken_description": "..." }
+
+POST  /api/data/collections/{id}/make-habit      (convert_collection_to_habit)
+  body { "habitType"?: "binary"|"timer"|"quantifiable", "frequency"?: "daily"|"weekly"|..., "days"?: [...],
+         "time"?: "HH:MM", "times"?: [...], "startDate"?: "YYYY-MM-DD", "questId"?: "...", "markExistingDone"?: true }
+  -> { "collection": { ...the habit... }, "entriesMarkedDone": N, "entriesDated": N }
+     (every field and entry is kept; 409 when it is already a habit; owner-only)
+POST  /api/data/collections/{id}/stop-habit      (convert_habit_to_collection)
+  body {}  -> { "collection": { ...the plain collection... } }
+     (entries stay, the completion field is archived; 409 when it is not a habit)
 ```
 
 Quest auto-creates one **Insights** collection per person: quick capture for the idea that arrives

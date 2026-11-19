@@ -15,7 +15,7 @@ Integrity keeps every part of the runner a specified solution whose best impleme
 - Principle-following pass rate under standing instructions (`metric-behave-by-esoi`): leader `standing_instructions`, 30 of 60 cases
 - Judge agreement with labelled reference replies (`metric-judge-esoi-behavior`): leader `model_judge`, 29 of 30 cases
 - Offline test collection (`metric-verify-offline`): leader `collect_by_file`, 29 of 29 cases
-- Secret detection and placeholder tolerance (`metric-keep-secrets-out`): leader `live_scanner`, 30 of 35 cases
+- Secret detection and placeholder tolerance (`metric-keep-secrets-out`): leader `live_scanner`, 35 of 35 cases
 - Right solution missed without the tag (`metric-tag-solutions`): leader `tag_list_with_check`, 13 of 13 cases
 
 ## Where to go next

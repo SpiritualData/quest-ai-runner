@@ -50,6 +50,8 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                POST  /api/teams/{id}/members/{uid}/context-prefs (add_context_pref)
                GET   /api/data/collections                    (list_collections)
                GET   /api/data/collections/{id}/entries        (list_collection_entries)
+               POST  /api/data/collections/{id}/make-habit     (convert_collection_to_habit)
+               POST  /api/data/collections/{id}/stop-habit     (convert_habit_to_collection)
                PATCH /api/data/insights/mark-acted-on          (mark_insight_acted_on)
                GET   /api/data/insights/by-quest              (list_quest_insights; the latest
                insights ASSIGNED to one quest, newest first, unacted by default. An older backend
