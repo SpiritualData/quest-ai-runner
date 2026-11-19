@@ -13,6 +13,8 @@ from hubofhubs.api import outage as provider_outage
 
 from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
 from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import any_model_available
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.usage_limit import reset_clause
 from quest_ai_runner.consciousness.request_intake.executor_support import ExecutionOutcome, utc_stamp
 from quest_ai_runner.consciousness.request_intake.executor_contracts import log
 
@@ -147,6 +149,32 @@ class PausesMixin:
             return recent
         return None
 
+    def _retry_on_another_model(self, task: Dict[str, Any], task_id: str, limit: "usage_limit.UsageLimit", *,
+                                conv_id: Optional[str], card_id: Optional[str],
+                                session_id: Optional[str]) -> ExecutionOutcome:
+        """Put a task whose model hit its own usage limit straight back in the queue, with no hold, to run on another model."""
+        note = (f"The {limit.model} model reached its {limit.kind or 'usage'} limit, so this continues on another model "
+                f"(that one is skipped {reset_clause(limit) and 'until it resets ' + reset_clause(limit) or 'for now'}).")
+        self._report_progress(task_id, "status", text=note, data={"phase": "model_usage_limit", "model": limit.model})
+        update = getattr(self._client, "update_task", None)
+        requeued = None
+        if callable(update):
+            body: Dict[str, Any] = {"status": "queued"}
+            if session_id:
+                body["resume_session_id"] = session_id
+            try:
+                requeued = update(task_id, body) or None
+            except Exception:  # noqa: BLE001
+                log.error("requeue for another model failed for task %s", task_id, exc_info=True)
+        if not requeued:
+            msg = f"{note} The task could not be put back in the queue automatically, so it is marked failed; run it again."
+            self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
+        log.info("task %s: model %s at its usage limit; requeued to run on another model", task_id, limit.model)
+        self._post_conv(conv_id, note, kind="progress", task_id=task_id, card_id=card_id)
+        return ExecutionOutcome(task_id, "waiting", note)
+
     def _pause_for_usage_limit(self, task: Dict[str, Any], task_id: str,
                                limit: "usage_limit.UsageLimit", *,
                                conv_id: Optional[str], card_id: Optional[str],
@@ -160,6 +188,14 @@ class PausesMixin:
         would sit in_progress forever, so it is reported failed instead, saying why.
         """
         limit = usage_limit.record(limit)
+        if limit.model:
+            # ONE model is at its limit: not an outage. While another model is available the task goes straight back to the queue (no hold) and
+            # runs on it, since model selection now skips the limited one. Only when none is left does the lane-wide pause apply, at this reset.
+            registry = getattr(getattr(self, "_orch", None), "registry", None)
+            if registry is not None and any_model_available(registry):
+                return self._retry_on_another_model(task, task_id, limit, conv_id=conv_id, card_id=card_id, session_id=session_id)
+            limit = usage_limit.record(usage_limit.UsageLimit(
+                message=limit.message, kind=limit.kind, resets_at=limit.resets_at))
         hits = int(task.get("limit_hit_count") or 0) + 1
         resume_at = limit.resume_at(hit_count=hits)
         note = (f"Claude Code reached its {limit.label()}, so this is paused, not failed. It will "

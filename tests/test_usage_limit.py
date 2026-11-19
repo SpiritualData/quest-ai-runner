@@ -444,3 +444,101 @@ def test_the_pause_status_says_when_it_resets_only_when_that_is_known(monkeypatc
     finally:
         monkeypatch.undo()
         time.tzset()
+
+
+# --- a limit on ONE model is not a lane outage ---------------------------------------------------------
+
+FABLE = ("You've hit your monthly spend limit · raise it at https://claude.ai/settings/usage?from=cc_cli_limit_message · "
+         "your Fable limit resets Nov 21, 12pm (America/Los_Angeles) · Switch to another model to continue.")
+NOV16 = datetime(2026, 11, 16, 20, 31, tzinfo=timezone.utc)
+
+
+def test_a_limit_that_names_a_model_reads_the_model_and_its_reset():
+    found = usage_limit.detect_usage_limit(FABLE, now=NOV16)
+    assert found.model == "fable"
+    assert found.resets_at == datetime(2026, 11, 21, 20, 0, tzinfo=timezone.utc)   # 12pm PST
+    assert usage_limit.UsageLimit.from_dict(found.to_dict()).model == "fable"
+
+
+@pytest.mark.parametrize("text", [WEEKLY, SESSION, SPEND, WEEKLY_DATED])
+def test_account_wide_caps_name_no_model(text):
+    assert usage_limit.detect_usage_limit(text, now=NOV16).model == ""
+
+
+def test_the_session_record_names_the_model_of_its_own_bucket(tmp_path):
+    reset = int((datetime.now(timezone.utc) + timedelta(hours=3)).timestamp())
+    record = {"type": "assistant", "isApiErrorMessage": True, "error": "rate_limit",
+              "quotaLimits": {"status": "rejected", "resetsAt": reset, "rateLimitType": "seven_day_opus"},
+              "message": {"content": [{"type": "text", "text": "You've hit your limit"}]}}
+    path = tmp_path / "s.jsonl"
+    path.write_text(json.dumps(record) + "\n")
+    assert usage_limit.limit_from_session_file(path).model == "opus"
+
+
+def test_a_model_limit_leaves_the_lane_running_and_skips_only_that_model(tmp_path):
+    usage_limit.configure_persistence(str(tmp_path / "lane_usage_limit.json"))
+    reset = datetime.now(timezone.utc) + timedelta(days=3)
+    usage_limit.record(usage_limit.UsageLimit(message=FABLE, kind="monthly spend", resets_at=reset, model="fable"))
+    assert usage_limit.active_limit() is None                      # no lane-wide pause
+    assert usage_limit.limited_models() == ("fable",)
+    assert usage_limit.model_limit("claude-fable-5-1") is not None
+    assert usage_limit.model_limit("claude-sonnet-5-5") is None
+    usage_limit.reset_for_tests()
+    usage_limit.configure_persistence(str(tmp_path / "lane_usage_limit.json"))   # a restart remembers it
+    assert usage_limit.limited_models() == ("fable",)
+
+
+def test_the_registry_steps_a_limited_tier_to_a_neighbour():
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.model_registry import drop_unavailable
+    top = {"fast": "haiku-x", "balanced": "sonnet-x", "quality": "fable-x", "best": "fable-x"}
+    assert drop_unavailable(top, ("fable",)) == {**top, "quality": "sonnet-x", "best": "sonnet-x"}
+    assert drop_unavailable({"fast": "fable-x", "balanced": "sonnet-x"}, ("fable",))["fast"] == "sonnet-x"
+    assert drop_unavailable(top, ()) == top
+
+
+def test_the_fallback_ladder_drops_the_limited_model_and_keeps_order():
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import fallback_ladder
+    usage_limit.record(usage_limit.UsageLimit(message=FABLE, resets_at=datetime.now(timezone.utc) + timedelta(days=1), model="fable"))
+    assert fallback_ladder(None, ["haiku", "fable", "sonnet"]) == ["haiku", "sonnet"]
+
+
+class RegistryStub:
+    def __init__(self, tiers):
+        self.tiers = tiers
+
+    def resolve_tier(self, tier):
+        return self.tiers[tier]
+
+
+def test_model_limited_run_is_requeued_at_once_on_another_model_not_held_to_the_reset():
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+
+    reset = datetime.now(timezone.utc) + timedelta(days=5)
+    limit = usage_limit.UsageLimit(message=FABLE, kind="monthly spend", resets_at=reset, model="fable")
+    result = OrchestratorResult(kind="deep", deep_results=[DeepResult(
+        met=False, error="Claude Code usage limit: " + FABLE, session_id="sess-9", usage_limited=True)])
+    client = RecordingClient()
+    orch = FixedOrchestrator(result, records=limit)
+    orch.registry = RegistryStub({"fast": "haiku", "balanced": "sonnet", "quality": "fable", "best": "fable"})
+    outcome = TaskExecutor(client, orch).execute({"task_id": "atask_1", "text": "write the report"})
+    assert outcome.status == "waiting"
+    assert not client.named("requeue_for_usage_limit")             # no hold until the reset
+    (_, args, kwargs), = client.named("update_task")
+    assert args[1]["status"] == "queued" and "start_at" not in args[1]
+    assert usage_limit.active_limit() is None
+
+
+def test_when_no_model_is_available_the_lane_wide_pause_applies():
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+
+    reset = datetime.now(timezone.utc) + timedelta(days=5)
+    limit = usage_limit.UsageLimit(message=FABLE, kind="monthly spend", resets_at=reset, model="fable")
+    result = OrchestratorResult(kind="deep", deep_results=[DeepResult(
+        met=False, error="Claude Code usage limit: " + FABLE, usage_limited=True)])
+    client = RecordingClient()
+    orch = FixedOrchestrator(result, records=limit)
+    orch.registry = RegistryStub({"fast": "fable", "balanced": "fable", "quality": "fable", "best": "fable"})
+    outcome = TaskExecutor(client, orch).execute({"task_id": "atask_1", "text": "write the report"})
+    (_, _, kwargs), = client.named("requeue_for_usage_limit")
+    assert kwargs["start_at"] == reset + usage_limit.RESUME_GRACE
+    assert usage_limit.active_limit() is not None

@@ -149,6 +149,33 @@ def tier_ladder(registry: Any, rung_key: Callable[[Optional[str]], str] = defaul
     return ladder
 
 
+def models_not_limited(models: Sequence[Optional[str]], allows: Optional[Callable[[str], bool]] = None) -> List[str]:
+    """``models`` without the ones whose own usage limit is in force (and, when ``allows`` is given, without those it refuses), order kept."""
+    from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit
+    return [str(m) for m in models if m and usage_limit.model_limit(str(m)) is None and (allows is None or allows(str(m)))]
+
+
+def fallback_ladder(registry: Any, current: Sequence[Optional[str]], allows: Optional[Callable[[str], bool]] = None) -> List[str]:
+    """The ladder to continue on when a model hit its own usage limit: the rungs of ``current`` that are still available, else the registry's
+    tiers in the same order (fast, balanced, quality; the registry already steps a limited tier to a neighbour) without the limited ones.
+    Empty when no model is available, which is the one case the lane-wide pause applies to."""
+    kept = models_not_limited(current, allows)
+    if kept:
+        return kept
+    try:
+        return models_not_limited(tier_ladder(registry) + [m for t, m in tier_models(registry).items() if t == "best"], allows)
+    except Exception:  # noqa: BLE001 (selection never breaks a run)
+        return []
+
+
+def any_model_available(registry: Any) -> bool:
+    """Whether some tier of the registry resolves to a model that is not at its own usage limit."""
+    try:
+        return bool(models_not_limited(list(tier_models(registry).values())))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def tier_of_model(model: Optional[str], models: Mapping[str, str], rung_key: Callable[[Optional[str]], str] = default_rung_key) -> str:
     """The tier whose resolved model is ``model``, else an empty string."""
     key = rung_key(model)

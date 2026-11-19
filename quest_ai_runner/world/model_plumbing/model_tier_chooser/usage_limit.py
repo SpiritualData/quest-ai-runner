@@ -77,7 +77,13 @@ _RESETS_IN = re.compile(r"resets\s+in\s+(?:(?P<h>\d+)\s*h(?:ours?|rs?)?)?\s*(?:(
                         re.IGNORECASE)
 _MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
-_RATE_LIMIT_TYPES = {"seven_day": "weekly", "five_hour": "session", "seven_day_opus": "weekly Opus"}
+_RATE_LIMIT_TYPES = {"seven_day": "weekly", "five_hour": "session"}
+# "your Fable limit resets ..." names ONE model; "your weekly limit" and "your monthly spend limit" name a kind of cap.
+_MODEL_LIMIT = re.compile(r"\byour\s+(?P<model>[A-Za-z][\w.\-]*)\s+limit\b", re.IGNORECASE)
+_NOT_A_MODEL = frozenset({"weekly", "session", "monthly", "spend", "usage", "daily", "hourly", "overall", "5-hour",
+                          "five-hour", "hour", "week", "month", "day", "rate", "token", "tokens", "usage-limit"})
+# A structured ``quotaLimits.rateLimitType`` such as ``seven_day_opus`` (a model's own weekly bucket).
+_RATE_TYPE_MODEL = re.compile(r"^(?:seven_day|five_hour)_(?P<model>[a-z][a-z0-9\-]*)$")
 
 
 @dataclass
@@ -87,6 +93,7 @@ class UsageLimit:
     kind: str = ""                                # "weekly", "session", "monthly spend", ...
     resets_at: Optional[datetime] = None          # aware UTC, None when it could not be read
     seen_at: float = field(default_factory=time.time)
+    model: str = ""                               # the one model this limit applies to ("" = the whole account)
 
     def resume_at(self, hit_count: int = 1, now: Optional[datetime] = None) -> datetime:
         """When work may be tried again: the reset plus grace, or a capped backoff when unknown."""
@@ -100,10 +107,12 @@ class UsageLimit:
     def label(self) -> str:
         """"weekly limit", "session limit", or plain "usage limit"."""
         kind = (self.kind or "").strip().lower()
+        if self.model and self.model.lower() not in kind:
+            kind = f"{self.model} {kind}".strip()
         return f"{kind} limit" if kind else "usage limit"
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"message": self.message, "kind": self.kind, "seen_at": self.seen_at,
+        return {"message": self.message, "kind": self.kind, "seen_at": self.seen_at, "model": self.model,
                 "resets_at": self.resets_at.isoformat() if self.resets_at else None}
 
     @classmethod
@@ -112,7 +121,8 @@ class UsageLimit:
             resets = data.get("resets_at")
             return cls(message=str(data.get("message") or ""), kind=str(data.get("kind") or ""),
                        resets_at=datetime.fromisoformat(resets) if resets else None,
-                       seen_at=float(data.get("seen_at") or time.time()))
+                       seen_at=float(data.get("seen_at") or time.time()),
+                       model=str(data.get("model") or ""))
         except (TypeError, ValueError):
             return None
 
@@ -208,8 +218,29 @@ def detect_usage_limit(text: Optional[str], now: Optional[datetime] = None) -> O
             if "kind" in pattern.groupindex and match.group("kind"):
                 kind = match.group("kind").strip().lower()
             message = head.splitlines()[0][:300] if head else ""
-            return UsageLimit(message=message, kind=kind, resets_at=parse_reset_time(head, now))
+            return UsageLimit(message=message, kind=kind, resets_at=parse_reset_time(head, now),
+                              model=model_named_in(head))
     return None
+
+
+def model_named_in(text: str) -> str:
+    """The model a limit message says it applies to ("your Fable limit resets ..."), lower case, else "".
+
+    A cap on the whole account ("your weekly limit", "your monthly spend limit") names no model. The hint
+    "Switch to another model to continue" alone does not name one either, so it cannot be attributed and the
+    limit stays lane-wide (a pause is safe, a wrong model note is not).
+    """
+    for match in _MODEL_LIMIT.finditer(text or ""):
+        word = match.group("model").lower()
+        if word not in _NOT_A_MODEL:
+            return word
+    return ""
+
+
+def model_matches(fragment: str, model: Optional[str]) -> bool:
+    """Whether a limited model name (a family word such as ``fable``) is the model id ``model``."""
+    frag = (fragment or "").strip().lower()
+    return bool(frag) and frag in str(model or "").strip().lower()
 
 
 def reset_clause(limit: Optional[UsageLimit], now: Optional[datetime] = None,
@@ -283,8 +314,13 @@ def limit_from_session_file(path: Optional[Path]) -> Optional[UsageLimit]:
         resets = quota.get("resetsAt")
         if isinstance(resets, (int, float)) and resets > 0:
             found.resets_at = datetime.fromtimestamp(float(resets), tz=timezone.utc)
-        if not found.kind and quota.get("rateLimitType") in _RATE_LIMIT_TYPES:
-            found.kind = _RATE_LIMIT_TYPES[quota["rateLimitType"]]
+        rate_type = str(quota.get("rateLimitType") or "")
+        if not found.kind and rate_type in _RATE_LIMIT_TYPES:
+            found.kind = _RATE_LIMIT_TYPES[rate_type]
+        typed = _RATE_TYPE_MODEL.match(rate_type)
+        if typed and not found.model:
+            found.model = typed.group("model")
+            found.kind = found.kind or ("weekly" if rate_type.startswith("seven_day") else "session")
         return found
     return None
 
@@ -294,6 +330,15 @@ def limit_from_session_file(path: Optional[Path]) -> Optional[UsageLimit]:
 _lock = threading.Lock()
 _current: Optional[UsageLimit] = None
 _persist_path: Optional[Path] = None
+# Per-model notes: a limit that names one model does not stop the lane, it makes that model unavailable until its reset.
+_models: Dict[str, UsageLimit] = {}
+
+
+def models_path() -> Optional[Path]:
+    """Where the per-model notes persist: beside the lane-wide note, with ``_models`` in the name."""
+    if _persist_path is None:
+        return None
+    return _persist_path.with_name(_persist_path.stem + "_models" + _persist_path.suffix)
 
 
 def configure_persistence(path: Optional[str]) -> None:
@@ -301,6 +346,15 @@ def configure_persistence(path: Optional[str]) -> None:
     global _persist_path, _current
     with _lock:
         _persist_path = Path(path) if path else None
+        saved = models_path()
+        if saved is not None and saved.is_file():
+            try:
+                for name, item in json.loads(saved.read_text()).items():
+                    loaded_model = UsageLimit.from_dict(item)
+                    if loaded_model and loaded_model.model and _is_active(loaded_model):
+                        _models.setdefault(name, loaded_model)
+            except (OSError, ValueError, AttributeError):
+                log.warning("could not read the per-model usage limits from %s", saved, exc_info=True)
         if _persist_path and _persist_path.is_file():
             try:
                 loaded = UsageLimit.from_dict(json.loads(_persist_path.read_text()))
@@ -316,6 +370,8 @@ def record(limit: UsageLimit) -> UsageLimit:
     Keeps the later reset when two concurrent runs report slightly different ones.
     """
     global _current
+    if limit.model:
+        return record_model(limit)
     with _lock:
         # seen_at is when the LANE learned of it, which is what "seen during this run" measures.
         limit.seen_at = time.time()
@@ -335,6 +391,44 @@ def record(limit: UsageLimit) -> UsageLimit:
             except OSError:
                 log.warning("could not persist the usage limit to %s", _persist_path, exc_info=True)
         return _current
+
+
+def record_model(limit: UsageLimit) -> UsageLimit:
+    """Note that ONE model is at its limit: it is unavailable until its reset, and the lane keeps working on others."""
+    name = limit.model.strip().lower()
+    with _lock:
+        limit.seen_at = time.time()
+        held = _models.get(name)
+        if held is not None and held.resets_at and limit.resets_at and held.resets_at > limit.resets_at and _is_active(held):
+            held.seen_at = max(held.seen_at, limit.seen_at)
+            limit = held
+        else:
+            _models[name] = limit
+        log.warning("Claude Code usage limit reached for model %s (%s); resets %s; other models stay available", name,
+                    limit.label(), reset_clause(limit) or "at an unknown time", extra={"in_transcript": False})
+        saved = models_path()
+        if saved is not None:
+            try:
+                saved.parent.mkdir(parents=True, exist_ok=True)
+                saved.write_text(json.dumps({k: v.to_dict() for k, v in _models.items()}))
+            except OSError:
+                log.warning("could not persist the per-model usage limits to %s", saved, exc_info=True)
+        return limit
+
+
+def limited_models(now: Optional[datetime] = None) -> tuple:
+    """The model names (family words such as ``fable``) whose own limit is in force right now."""
+    with _lock:
+        return tuple(name for name, held in _models.items() if _is_active(held, now))
+
+
+def model_limit(model: Optional[str], now: Optional[datetime] = None) -> Optional[UsageLimit]:
+    """The active limit of the model id ``model`` (a limit on its family word counts), else None."""
+    with _lock:
+        for name, held in _models.items():
+            if model_matches(name, model) and _is_active(held, now):
+                return held
+    return None
 
 
 def _is_active(limit: UsageLimit, now: Optional[datetime] = None) -> bool:
@@ -400,3 +494,4 @@ def reset_for_tests() -> None:
     with _lock:
         _current = None
         _persist_path = None
+        _models.clear()

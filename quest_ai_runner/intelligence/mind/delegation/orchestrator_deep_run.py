@@ -16,7 +16,7 @@ from hubofhubs.api import (
     CONTINUE, continue_decision, coverage_gap, coverage_progress, interim_data, parse_coverage, render_continue_plan, render_coverage_line)
 from hubofhubs.api import EVENT_EXEC, EVENT_INTERIM, EVENT_MILESTONE, EVENT_STATUS
 from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
-from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import pure_tier, start_status_text
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import fallback_ladder, pure_tier, start_status_text
 from quest_ai_runner.intelligence.mind.delegation.work_model import rung_allowed
 from quest_ai_runner.intelligence.critical_thinking.esoi_application import solution_consideration
 from quest_ai_runner.intelligence.critical_thinking.metric_translation.goal_metrics import GoalMetrics, run_hint, working_dir_of
@@ -909,6 +909,17 @@ class DeepRunMixin:
                 if multi and stopped_by_earlier_park(task_index):
                     break
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
+                # THE MODEL IS AT ITS OWN USAGE LIMIT (``usage_limit.record_model``): not a lane outage, so the run continues on the next available
+                # model in the same tier order instead of waiting for the reset. Only when no model is available does the lane-wide pause apply.
+                if run_model and usage_limit.model_limit(run_model) is not None:
+                    switched = fallback_ladder(self.registry, deep_models,
+                                               None if allowed_models is None else (lambda rung: rung_allowed(rung, allowed_models)))
+                    if not switched:
+                        switched = fallback_ladder(self.registry, [])
+                    if switched:
+                        if emit is not None:
+                            emit.status(f"{run_model} is at its usage limit, so the work continues on {switched[0]}.")
+                        deep_models, tier_idx, run_model = switched, 0, switched[0]
                 # WHICH RUNNER runs this attempt: the ladder indexed by attempt, cheapest rung
                 # first, with the terminal rung repeating for every further attempt — the same
                 # ``min(idx, len - 1)`` shape the model ladder uses one line above. With the
@@ -993,6 +1004,11 @@ class DeepRunMixin:
                 # refused the same way. Nothing to verify; the task executor puts the work back in
                 # the queue until the limit resets (``core.usage_limit``).
                 if getattr(res, "usage_limited", False):
+                    # A limit on this one model only: the next attempt starts at the top of the loop, which switches to an available model.
+                    if (run_model and usage_limit.model_limit(run_model) is not None
+                            and fallback_ladder(self.registry, [m for m in deep_models if m != run_model])):
+                        verified_not_met = False
+                        continue
                     if emit is not None:
                         # The reset time the runner recorded when it hit the limit, never a guess.
                         emit.status(usage_limit.pause_status(usage_limit.active_limit()))

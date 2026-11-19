@@ -130,6 +130,43 @@ def drop_excluded(top: Dict[str, str], patterns) -> Dict[str, str]:
     return out
 
 
+def no_unavailable() -> tuple:
+    return ()
+
+
+# Model-name fragments that are unavailable RIGHT NOW because that one model hit its own usage limit (wired to ``usage_limit.limited_models``).
+# Unlike ``excluded_source`` this is temporary and applies to a pin too, and a tier steps to the nearest lower tier's model that is
+# available, else the nearest higher one, so a tier never resolves to a model that would be refused.
+unavailable_source = no_unavailable
+
+
+def set_unavailable_source(source) -> None:
+    global unavailable_source
+    unavailable_source = source or no_unavailable
+
+
+def drop_unavailable(top: Dict[str, str], patterns) -> Dict[str, str]:
+    """``top`` with each tier whose model is unavailable moved to the nearest lower tier's available model, else the nearest higher one's
+    (every model unavailable: unchanged, and the caller's lane-wide pause applies)."""
+    pats = [p for p in (patterns or ()) if p]
+    if not pats:
+        return dict(top)
+
+    def bad(model: Optional[str]) -> bool:
+        return any(p in str(model or "").lower() for p in pats)
+
+    out = dict(top)
+    order = ["fast", "balanced", "quality", "best"]
+    for index, tier in enumerate(order):
+        if tier in top and bad(top[tier]):
+            lower = [t for t in reversed(order[:index]) if t in top and not bad(top[t])]
+            higher = [t for t in order[index + 1:] if t in top and not bad(top[t])]
+            pick = (lower or higher or [None])[0]
+            if pick:
+                out[tier] = top[pick]
+    return out
+
+
 def public_pick(got: Mapping[str, Any]) -> bool:
     """Whether the hub's choice for a tier came from the public metric (an arm priced, current and clearing the tier's minimums), and not from a
     held default or the cheapest price, which are preferences."""
@@ -437,7 +474,7 @@ class ModelRegistry:
             self._cache["top"] = bucket_top(all_models) if all_models else dict(DEFAULT_FALLBACK_TOP)
         # The hub's public choice replaces the live-list bucketing for its tier; an explicit pin still wins.
         chosen = drop_excluded({**self._cache["top"], **self.selected()}, excluded_source())
-        return {**chosen, **self._user_overrides}
+        return drop_unavailable({**chosen, **self._user_overrides}, unavailable_source())
 
     @staticmethod
     def is_tier_name(name: Optional[str]) -> bool:

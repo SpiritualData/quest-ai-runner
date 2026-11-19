@@ -35,6 +35,10 @@ model_registry.set_credit_source(_credits_from_environment)
 from quest_ai_runner.world.model_plumbing.vendor_model_caller.providers import excluded_models_from_environment as _excluded_models_from_environment  # noqa: E402
 
 model_registry.set_excluded_source(_excluded_models_from_environment)
+# a model that hit its own usage limit is skipped until its reset (``usage_limit.record_model``); the lane keeps working on the others.
+from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit as _usage_limit  # noqa: E402
+
+model_registry.set_unavailable_source(_usage_limit.limited_models)
 # core reads no environment variable (S13): its tunables arrive as ``core.runtime_settings`` values,
 # resolved by the config layer from the live environment unless a RunnerConfig pins its own.
 from quest_ai_runner.body.configuration.config_core_settings import install_environment_backed_core as _install_core_env  # noqa: E402
