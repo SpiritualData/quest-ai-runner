@@ -26,6 +26,11 @@ from quest_ai_runner.intelligence.mind.context_intake.reflections import DEFAULT
 from esoi import implementation
 
 
+def _format_sum(value: float) -> str:
+    """A total as the person would write it: 2340, not 2340.0; cents kept only when there are some."""
+    return str(int(value)) if float(value).is_integer() else f"{value:.2f}"
+
+
 @implementation("quest-context", "quest")
 class QuestRetrievalAdapter(RetrievalAdapter):
     """Query the Quest API for goal, task, and cross-environment context.
@@ -96,6 +101,10 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         """
         if not self.client.configured:
             return Observation(kind="error", error="Quest client not configured")
+
+        if spec.get("operation") is not None:
+            # A read of one of the person's own collections, named by list_operations: {"operation": ..., "args": {...}}.
+            return self._run_operation(spec)
 
         kind = spec.get("kind", "")
         try:
@@ -560,6 +569,93 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         except Exception as e:  # noqa: BLE001
             return Observation(kind="error", error=f"describe_source failed: {e}")
 
+    # The read-only collection operations a read step can call. Each one calls a read-only QuestClient
+    # method; a write (create, update, mark, add) is never reachable from a read.
+    _COLLECTION_ENTRY_LIMIT = 50
+    _COLLECTION_ENTRY_LIMIT_MAX = 100
+
+    def _run_operation(self, spec: Dict[str, Any]) -> Observation:
+        """Run one named read: ``{"operation": "list_collection_entries", "args": {...}}``.
+
+        An unknown name is a named error, so the re-plan sees which operations exist. A failed read is
+        an error observation, never an empty result: the client answers {} on any error, and only a
+        reply that carries its ``items`` list is a fact about the collection.
+        """
+        name = str(spec.get("operation") or "").strip()
+        args = spec.get("args") if isinstance(spec.get("args"), dict) else {}
+        if name == "list_collections":
+            return self._operation_list_collections()
+        if name == "list_collection_entries":
+            return self._operation_list_collection_entries(args, spec)
+        return Observation(kind="error", error=f"Unknown operation: {name or '(none)'}. Call list_operations to see the operations that can be read.")
+
+    def _operation_list_collections(self) -> Observation:
+        """The person's collections, each with the id a collection read needs."""
+        rows = self.client.list_collections() or []
+        lines = []
+        for coll in rows:
+            if not isinstance(coll, dict):
+                continue
+            cid = str(coll.get("id") or "").strip()
+            if cid:
+                lines.append(f"- {str(coll.get('name') or '').strip() or '(unnamed)'} (id: {cid})")
+        text = ("The person's collections, with the id to read each one with list_collection_entries:\n"
+                + "\n".join(lines)) if lines else "Quest returned no collections for this person."
+        return Observation(kind="query", locator="operation(list_collections)", text=text)
+
+    def _operation_list_collection_entries(self, args: Dict[str, Any], spec: Dict[str, Any]) -> Observation:
+        """One page of a collection's entries, newest first, with the sums of its number fields on this page."""
+        cid = str(args.get("collection_id") or spec.get("collection_id") or "").strip()
+        if not cid:
+            return Observation(kind="error", error="list_collection_entries needs args.collection_id. Call list_collections first and use the id of the collection the person named.")
+        try:
+            page = max(0, int(args.get("page") or 0))
+            limit = min(self._COLLECTION_ENTRY_LIMIT_MAX, max(1, int(args.get("limit") or self._COLLECTION_ENTRY_LIMIT)))
+        except (TypeError, ValueError):
+            return Observation(kind="error", error="list_collection_entries: page and limit must be whole numbers.")
+        resp = self.client.list_collection_entries(cid, page=page, limit=limit)
+        items = resp.get("items") if isinstance(resp, dict) else None
+        if not isinstance(items, list):
+            return Observation(kind="error", error=f"The entries of collection {cid} could not be read. Check the id with list_collections.")
+        pagination = resp.get("pagination") if isinstance(resp.get("pagination"), dict) else {}
+        total = pagination.get("total")
+        sums: Dict[str, float] = {}
+        lines = []
+        for entry in items:
+            if not isinstance(entry, dict):
+                continue
+            values = entry.get("fieldValues") or entry.get("field_values") or {}
+            if not isinstance(values, dict):
+                values = {}
+            parts = []
+            for key, value in values.items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    sums[key] = sums.get(key, 0) + value
+                rendered = self._render_entry_value(value)
+                if rendered:
+                    parts.append(f"{key}: {rendered}")
+            when = str(entry.get("createdAt") or entry.get("created_at") or "")[:10]
+            lines.append("- " + ", ".join(([when] if when else []) + parts))
+        count = len(lines)
+        head = f"{count} entr{'y' if count == 1 else 'ies'} in collection {cid}, newest first"
+        if total is not None:
+            head += f" ({total} in all)"
+        if pagination.get("has_next"):
+            head += f"; more exist: read page {page + 1} to see the rest"
+        out = [head] + lines
+        if sums and not pagination.get("has_next"):
+            out.append("Totals of the number fields over these entries: "
+                       + ", ".join(f"{k} {_format_sum(v)}" for k, v in sums.items()))
+        return Observation(kind="query", locator="operation(list_collection_entries)", text="\n".join(out))
+
+    @staticmethod
+    def _render_entry_value(value: Any) -> str:
+        """One field value as text; blank, empty and null values are left out."""
+        if value is None or value == "" or value == [] or value == {}:
+            return ""
+        text = str(value).strip()
+        return text if len(text) <= 120 else text[:117] + "..."
+
     def list_operations(self) -> Observation:
         """DISCOVERY: operations the brain can invoke.
 
@@ -579,6 +675,13 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "on next",
             "get_task: Read one task in full, including the result the person received. Use it "
             "when a goal note answers one of your emails and names the task it answers",
+            "list_collections: The person's own collections (trackers, habits and logs, e.g. an "
+            "expense log) with the id each one is read by. Read with query({operation: "
+            "'list_collections'})",
+            "list_collection_entries: One page of a collection's entries, newest first, with the "
+            "total count and the totals of its number fields. Needs the collection id from "
+            "list_collections. Read with query({operation: 'list_collection_entries', args: "
+            "{collection_id: '...'}}); args may also set page and limit",
         ]
         return Observation(kind="query", locator="list_operations", text="\n".join(lines))
 
@@ -609,6 +712,18 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 "asking for it here. When nothing is on record it returns a plain statement to "
                 "that effect, not an error, so read it before telling the person you cannot see "
                 "their reflection."
+            ),
+            "list_collections": (
+                "List the person's own collections with their ids. Usage: query({operation: "
+                "'list_collections'}). Read the collection by its name, then pass the id to "
+                "list_collection_entries."
+            ),
+            "list_collection_entries": (
+                "One page of a collection's entries, newest first, with the total count and the "
+                "totals of its number fields (e.g. the amounts of an expense log). Usage: "
+                "query({operation: 'list_collection_entries', args: {collection_id: '...', page: 0, "
+                "limit: 50}}). The collection id comes from list_collections. A page that says more "
+                "exist is not the whole collection: read the next page before totalling."
             ),
         }
         desc = ops.get(name)

@@ -94,7 +94,8 @@ def refusal_text(tool: str, arg: str, token: str, candidates: Mapping[str, str])
 
 
 #: The names of the retrieval adapter's operations (``list_operations``): the planner sees them in its catalog next to quest ids.
-RETRIEVAL_OPERATION_NAMES = frozenset(("get_goal_context", "query_quest", "discover_goals", "get_reflection_context", "get_task"))
+RETRIEVAL_OPERATION_NAMES = frozenset(("get_goal_context", "query_quest", "discover_goals", "get_reflection_context", "get_task",
+                                       "list_collections", "list_collection_entries"))
 
 
 def check_quest_ids(spec: Any, args: Mapping[str, Any], evidence: str, pinned: Optional[str] = None,
