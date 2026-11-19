@@ -482,23 +482,51 @@ def as_follow(sentence: str, follow: str, lead: str = "") -> str:
     return follow if len(set(LEAD_WORD.findall(bare.lower())) - known) <= REPEAT_SPARE_WORDS else sentence
 
 
-ASK_KIND_PROMPT = ("A person asked this about their quest:\n\n{question}\n\nDoes it ask what they should do next, first or now (NEXT), or how the quest is "
-                   "going, where it stands or how far it has come (STATUS)? Answer with one word on the last line: NEXT or STATUS.")
+ASK_KIND_PROMPT = ("A person asked this about their quest:\n\n{question}\n\nDoes it ask what they should do next, first or now (NEXT), for the list of "
+                   "their goals or what is on their plate or due (LIST), or how the quest is going, where it stands or how far it has come (STATUS)? Answer with "
+                   "one word on the last line: NEXT, LIST or STATUS.")
 
 
-def asks_next_step(question: str, decide: Any, reported: bool = False) -> bool:
-    """Whether a status-shaped question asks what to do next (its own opening and directive) or how the quest is going, from one forced-choice cheap call.
-    Measured live 2026-11-11: the request analyser's optional ``asks_next_step`` key, one of a dozen, was set for "How is this quest going?" and the
-    status got the next-step reply. ``reported`` (that key) decides only when the call cannot be made or gives neither word."""
+def ask_kind(question: str, decide: Any, reported: bool = False) -> str:
+    """What a status-shaped question asks, from one forced-choice cheap call: "next" (what to do next, its own opening and directive), "list" (the goals
+    themselves, "what are my open goals this week?", "what is on my plate today?") or "status" (how the quest is going). Measured live 2026-11-11: the
+    request analyser's optional ``asks_next_step`` key, one of a dozen, was set for "How is this quest going?" and the status got the next-step reply.
+    Measured in the browser 2026-11-19: "What are my open goals this week?" got the status lead (counts and the soonest goal) and never the list, and
+    the turn stopped at its try limit. ``reported`` (that key) decides only when the call cannot be made or gives no kind word."""
+    fallback = "next" if reported else "status"
     if decide is None or not str(question or "").strip():
-        return reported
+        return fallback
     try:
         lines = [line.strip().upper() for line in str(decide(ASK_KIND_PROMPT.format(question=str(question).strip()[:600])) or "").splitlines() if line.strip()]
     except Exception as error:      # noqa: BLE001  the analyser's report stands
         log.info("next-step check not made: %s: %s", type(error).__name__, error)
-        return reported
+        return fallback
     last = re.sub(r"[^A-Z]", "", lines[-1]) if lines else ""
-    return True if last == "NEXT" else False if last == "STATUS" else reported
+    return {"NEXT": "next", "LIST": "list", "STATUS": "status"}.get(last, fallback)
+
+
+def asks_next_step(question: str, decide: Any, reported: bool = False) -> bool:
+    """Whether a status-shaped question asks what to do next (``ask_kind`` is "next")."""
+    return ask_kind(question, decide, reported) == "next"
+
+
+def list_sentence(rows: List[Mapping[str, Any]], today: date) -> str:
+    """The open goals named one by one, written by code, for a question that asks for the list: overdue first (oldest first), then by due date, then those
+    with no date, at most ``OVERVIEW_MAX``. "" when no goal is open."""
+    open_rows = [g for g in rows if not g.get("completed") and not g.get("abandoned") and g.get("title")]
+    if not open_rows:
+        return ""
+    ordered = sorted(open_rows, key=lambda g: (not g.get("due"), str(g.get("due") or "")))
+    def one(g: Mapping[str, Any]) -> str:
+        title = " ".join(str(g.get("title")).split()).replace('"', "'")
+        if not g.get("due"):
+            return f"\"{title}\" (no date)"
+        due = date.fromisoformat(str(g.get("due"))[:10])
+        return f"\"{title}\" (" + ("overdue, " if days_overdue(g, today) else "") + f"due {due.day} {due.strftime('%B')})"
+    named = [one(g) for g in ordered[:OVERVIEW_MAX]]
+    more = len(ordered) - len(named)
+    body = named[0] if len(named) == 1 else ", ".join(named[:-1]) + (", " if more else " and ") + named[-1]
+    return ("Your open goal is " if len(open_rows) == 1 else "Your open goals are ") + body + (f", and {more} more." if more else ".")
 
 
 def next_goal(rows: Optional[List[Mapping[str, Any]]], today: date) -> Optional[Mapping[str, Any]]:
@@ -1226,7 +1254,8 @@ def snapshot_records(quest_id: str, quest_name: str, rows: Optional[List[Mapping
 
 def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = False, question: str = "", decide: Any = None,
           window_days: int = OVERVIEW_WINDOW_DAYS, plan: bool = False, today: Optional[date] = None, quest_title: str = "",
-          quest_name: str = "", quest_outcome: str = "", next_step: bool = False, started: str = "") -> Optional[Dict[str, Any]]:
+          quest_name: str = "", quest_outcome: str = "", next_step: bool = False, started: str = "",
+          list_goals: bool = False) -> Optional[Dict[str, Any]]:
     """The snapshot as one gathered read (locator ``status_snapshot``), or None when no part could be read. With ``question`` and ``decide``, a question about one
     milestone also gets that milestone's records (what blocks it, who owns it, its next step and date). ``plan`` (a request to lay out a coming period, ``window_days``
     long) adds the open goals with no date to the goals at a glance. ``quest_title`` (its name and outcome, ``quest_label``) heads the snapshot, so the reply
@@ -1267,6 +1296,9 @@ def build(registry: Any, quest_id: str, asker_user_id: str = "", own: bool = Fal
             open_rows = [g for g in everything if not g.get("completed") and not g.get("abandoned")]
             lead = ((plan_lead(open_rows, today, window_days, quest_name=quest_name) if everything else no_goals_lead(quest_name, plan=True)) if plan
                     else lead_sentence(list(everything), today, quest_name=quest_name, aim=said_aim, next_step=next_step, started=started))
+            if list_goals and not plan and not next_step and everything:
+                # The list is the answer to a question that asks for it, so code names every open goal after the counts (see ``ask_kind``).
+                lead = " ".join(x for x in (lead, list_sentence(list(everything), today)) if x)
         if own and asker_user_id:
             mine = [g for g in goal_rows(registry, quest_id, open_only=True, assignee_user_id=asker_user_id) if not g.get("completed") and not g.get("abandoned")][:OWN_MAX]
             if mine:

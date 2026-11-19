@@ -82,7 +82,7 @@ class StatusProvider(StubProvider):
         text = "\n".join(str(m.get("content")) for m in messages) + (system or "")
         if "request analyser" in text:
             return self.analyser
-        if "Answer with one word on the last line: NEXT or STATUS." in text:
+        if "Answer with one word on the last line: NEXT, LIST or STATUS." in text:
             return "STATUS"
         if "Write only the sentence." in text or "Write exactly two lines" in text:
             self.insight_prompts.append(text)      # status_snapshot.insight's narrow call, not the reply writer
@@ -964,3 +964,20 @@ def test_a_29_february_with_no_year_read_after_that_day_in_a_leap_year_names_no_
     assert status_snapshot.time_left("Launch by 29 February", today) == ""
     assert status_snapshot.outcome_day("Launch by 29 February", date(2028, 2, 1)) == date(2028, 2, 29)
     assert status_snapshot.outcome_day("Launch by 14 March", date(2028, 3, 20)) == date(2029, 3, 14)
+
+
+def test_a_question_that_asks_for_the_goals_gets_them_listed_by_code():
+    # Measured in the browser 2026-11-19: "What are my open goals this week?" got only the counts and the soonest goal, and stopped at its try limit.
+    assert status_snapshot.ask_kind("What are my open goals this week?", lambda p: "It asks for the goals.\nLIST") == "list"
+    assert status_snapshot.ask_kind("How is it going?", lambda p: "STATUS", reported=True) == "status"
+    assert status_snapshot.ask_kind("x", lambda p: "maybe", reported=True) == "next"
+    assert status_snapshot.asks_next_step("What are my open goals?", lambda p: "LIST", reported=True) is False
+    from datetime import date
+    today = date(2026, 11, 19)
+    rows = [{"title": "Read the hydration chapter", "due": "2026-11-22"}, {"title": "Bake one test loaf", "due": "2026-11-19"},
+            {"title": "Feed the starter", "due": "2026-11-15"}, {"title": "Old done goal", "due": "2026-11-10", "completed": True},
+            {"title": "Buy a scale"}]
+    assert status_snapshot.list_sentence(rows, today) == ('Your open goals are "Feed the starter" (overdue, due 15 November), "Bake one test loaf" (due 19 November), '
+                                                          '"Read the hydration chapter" (due 22 November) and "Buy a scale" (no date).')
+    assert status_snapshot.list_sentence(rows[:1], today) == 'Your open goal is "Read the hydration chapter" (due 22 November).'
+    assert status_snapshot.list_sentence([], today) == ""

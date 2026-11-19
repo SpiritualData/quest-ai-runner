@@ -492,11 +492,11 @@ class RunBeginMixin:
                 emit.status("Reading where the quest stands…")
                 own = (rs.retrieval_constraints or {}).get("actor") == "me"
                 row = next((q for q in quests if str(q.get("quest_id")) == str(snapshot_quest)), {})
+                kind = "plan" if plan else status_snapshot.ask_kind(rs.user_message, self.cheap_decision, bool(status_flags.get("asks_next_step")))
                 snapshot = status_snapshot.build(self.tools, snapshot_quest, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
                                                  question=rs.user_message, decide=self.cheap_decision, plan=plan, quest_title=str(row.get("title") or ""),
                                                  quest_name=str(row.get("name") or ""), quest_outcome=str(row.get("outcome") or ""),
-                                                 next_step=(not plan) and status_snapshot.asks_next_step(rs.user_message, self.cheap_decision, bool(status_flags.get("asks_next_step"))),
-                                                 started=str(row.get("started") or ""))
+                                                 next_step=kind == "next", started=str(row.get("started") or ""), list_goals=kind == "list")
             if snapshot is not None and rs.trace is not None:
                 rs.trace.records_read(snapshot.get("records"))     # what the snapshot read, shown under the reply when the reply draws on it
             if snapshot is not None and status_flags.get("plans_period"):
