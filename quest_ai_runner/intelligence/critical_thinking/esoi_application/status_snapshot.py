@@ -519,9 +519,12 @@ def list_sentence(rows: List[Mapping[str, Any]], today: date) -> str:
     ordered = sorted(open_rows, key=lambda g: (not g.get("due"), str(g.get("due") or "")))
     def one(g: Mapping[str, Any]) -> str:
         title = " ".join(str(g.get("title")).split()).replace('"', "'")
-        if not g.get("due"):
+        try:
+            due = date.fromisoformat(str(g.get("due"))[:10]) if g.get("due") else None
+        except ValueError:      # a malformed due day reads as no date, never a failed snapshot
+            due = None
+        if due is None:
             return f"\"{title}\" (no date)"
-        due = date.fromisoformat(str(g.get("due"))[:10])
         return f"\"{title}\" (" + ("overdue, " if days_overdue(g, today) else "") + f"due {due.day} {due.strftime('%B')})"
     named = [one(g) for g in ordered[:OVERVIEW_MAX]]
     more = len(ordered) - len(named)

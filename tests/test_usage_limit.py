@@ -542,3 +542,41 @@ def test_when_no_model_is_available_the_lane_wide_pause_applies():
     (_, _, kwargs), = client.named("requeue_for_usage_limit")
     assert kwargs["start_at"] == reset + usage_limit.RESUME_GRACE
     assert usage_limit.active_limit() is not None
+
+
+def test_a_limit_word_that_is_no_model_of_the_registry_pauses_the_lane_instead_of_requeueing_forever():
+    """"your Max limit" names no model: attributing it to one would requeue the task onto the same model with no hold, again and again."""
+    from quest_ai_runner.consciousness.judgment_calls.executor_pauses import PausesMixin
+
+    class Registry:
+        def resolve_tier(self, tier):
+            return {"fast": "claude-haiku-5-5", "balanced": "claude-sonnet-5-5", "quality": "claude-opus-5-5"}.get(tier)
+
+    class Client:
+        def __init__(self):
+            self.held, self.plain = [], []
+        def requeue_for_usage_limit(self, task_id, **kw):
+            self.held.append((task_id, kw)); return {"id": task_id}
+        def update_task(self, task_id, body):
+            self.plain.append((task_id, body)); return {"id": task_id}
+
+    class Orch:
+        registry = Registry()
+
+    class Executor(PausesMixin):
+        def __init__(self):
+            self._client, self._orch = Client(), Orch()
+        def _report_progress(self, *a, **k): pass
+        def _post_conv(self, *a, **k): pass
+        def _safe_report_failed(self, *a, **k): pass
+
+    usage_limit.clear()
+    try:
+        ex = Executor()
+        limit = usage_limit.UsageLimit(message="You've hit your Max limit", kind="", model="max")
+        ex._pause_for_usage_limit({"limit_hit_count": 0}, "t1", limit, conv_id=None, card_id=None, session_id=None)
+        assert ex._client.held, "an unattributable limit takes the lane-wide hold with a start time"
+        assert not ex._client.plain
+        assert usage_limit.limited_models() == ()
+    finally:
+        usage_limit.clear()

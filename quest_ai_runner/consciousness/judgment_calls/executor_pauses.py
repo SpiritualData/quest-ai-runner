@@ -13,7 +13,7 @@ from hubofhubs.api import outage as provider_outage
 
 from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
 from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit
-from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import any_model_available
+from quest_ai_runner.world.model_plumbing.model_tier_chooser.deep_model_selection import any_model_available, tier_models
 from quest_ai_runner.world.model_plumbing.model_tier_chooser.usage_limit import reset_clause
 from quest_ai_runner.consciousness.request_intake.executor_support import ExecutionOutcome, utc_stamp
 from quest_ai_runner.consciousness.request_intake.executor_contracts import log
@@ -187,11 +187,20 @@ class PausesMixin:
         holds it until then and tells its owner once. If the requeue write itself fails the task
         would sit in_progress forever, so it is reported failed instead, saying why.
         """
+        registry = getattr(getattr(self, "_orch", None), "registry", None)
+        if limit.model and registry is not None:
+            # A word read out of "your <word> limit" that is no model of this registry ("your Max limit", "your account limit") is a cap on the
+            # whole account: attributing it to a model would requeue the task onto the same model forever with no hold.
+            try:
+                known = any(usage_limit.model_matches(limit.model, m) for m in tier_models(registry).values())
+            except Exception:  # noqa: BLE001
+                known = False
+            if not known:
+                limit = usage_limit.UsageLimit(message=limit.message, kind=limit.kind, resets_at=limit.resets_at)
         limit = usage_limit.record(limit)
         if limit.model:
             # ONE model is at its limit: not an outage. While another model is available the task goes straight back to the queue (no hold) and
             # runs on it, since model selection now skips the limited one. Only when none is left does the lane-wide pause apply, at this reset.
-            registry = getattr(getattr(self, "_orch", None), "registry", None)
             if registry is not None and any_model_available(registry):
                 return self._retry_on_another_model(task, task_id, limit, conv_id=conv_id, card_id=card_id, session_id=session_id)
             limit = usage_limit.record(usage_limit.UsageLimit(
