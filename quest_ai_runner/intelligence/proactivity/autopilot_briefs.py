@@ -377,6 +377,29 @@ def _render_goal_ladder(ladder: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+#: The ESOI skill's folder name when the lane names no other (QAR_DEEP_WORK_SKILL names it for milestone work too).
+_ESOI_SKILL = "evolvable-structure"
+
+
+def esoi_skill_section() -> str:
+    """The brief line that sends every autopilot run to the ESOI skill first, "" when the lane has no skills root (QAR_SKILLS_ROOT) or the skill is not
+    under it. It points at the skill and never restates it: the skill holds its core principle (one home per value)."""
+    import os
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application.milestone_completion import skill_file
+    from quest_ai_runner.intelligence.critical_thinking.esoi_application.milestone_facts import work_skill
+    root = os.environ.get("QAR_SKILLS_ROOT", "").strip()
+    if not root:
+        log.warning("autopilot brief: QAR_SKILLS_ROOT is unset; the ESOI skill line is left out")
+        return ""
+    skill = work_skill() or _ESOI_SKILL
+    path = skill_file(skill, root)
+    if not path:
+        log.warning("autopilot brief: the skill %r is not under %s; the ESOI skill line is left out", skill, root)
+        return ""
+    return (f"ESOI SKILL: before working, read {path} (and the files it points to) and apply it throughout this run, "
+            "above all the core principle it asks you to remember if you remember only one thing.")
+
+
 def compose_batch_text(quest_outcome: str,
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,
@@ -628,6 +651,8 @@ def compose_batch_text(quest_outcome: str,
     if esoi_readiness:
         # Required, not optional: it is the choice the rule below asks for, already made by code.
         require(esoi_readiness.strip())
+    if esoi_line := esoi_skill_section():
+        require(esoi_line)
     require(_SOLUTION_IMPROVEMENT_RULE)
     if STANDING_WORK_STANDARD:
         require(STANDING_WORK_STANDARD)

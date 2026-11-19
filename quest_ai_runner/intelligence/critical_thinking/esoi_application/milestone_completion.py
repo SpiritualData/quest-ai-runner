@@ -31,15 +31,25 @@ def work_record_line(record: Mapping[str, Any]) -> str:
     return WORK_RECORD + json.dumps({k: record[k] for k in RECORD_FIELDS if k in record}, sort_keys=True, ensure_ascii=False)
 
 
+def skill_file(skill: str, skills_root: str) -> str:
+    """The path of the skill ``skill`` (a plain folder name) under ``skills_root``, or "" when either is unset, the name is not a plain folder name,
+    or the lane holds no such skill (the one place a skill is located; milestone work and the autopilot brief both use it)."""
+    import os
+    skill = str(skill or "").strip()
+    if not skill or not skills_root or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", skill):
+        return ""
+    path = os.path.join(skills_root, skill, "SKILL.md")
+    return path if os.path.isfile(path) else ""
+
+
 def with_work_skill(text: str, record: Mapping[str, Any], skills_root: str) -> str:
     """``text`` with an instruction to read and carry out the skill the work record names, found under this lane's ``skills_root``; ``text`` unchanged
     when no skill is named, the name is not a plain folder name, or the lane holds no such skill."""
-    import os
     skill = str(record.get("skill") or "").strip()
-    if not skill or not skills_root or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", skill):
+    if not skill or not skills_root:
         return text
-    path = os.path.join(skills_root, skill, "SKILL.md")
-    if not os.path.isfile(path):
+    path = skill_file(skill, skills_root)
+    if not path:
         log.warning("milestone work: the skill %r is not under this lane's skills root; the plain brief runs", skill)
         return text
     return f"First read the skill at {path} (and the files it points to) and carry it out for this work.\n\n{text}"

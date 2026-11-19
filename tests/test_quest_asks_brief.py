@@ -294,3 +294,18 @@ def test_a_person_reply_on_an_existing_ask_starts_a_reactive_pass_and_an_old_one
     assert new_ask_since([old_ask], "2026-10-15T12:00:00Z", NOW) is True
     assert new_ask_since([old_ask], "2026-10-16T12:00:00Z", NOW) is False
     assert new_ask_since([old_ask], None, NOW) is True
+
+
+def test_the_esoi_skill_line_rides_in_the_brief_only_with_a_skills_root(tmp_path, monkeypatch):
+    from quest_ai_runner.intelligence.proactivity.autopilot_briefs import _SOLUTION_IMPROVEMENT_RULE
+    monkeypatch.delenv("QAR_DEEP_WORK_SKILL", raising=False)
+    (tmp_path / "evolvable-structure").mkdir()
+    (tmp_path / "evolvable-structure" / "SKILL.md").write_text("x")
+    monkeypatch.setenv("QAR_SKILLS_ROOT", str(tmp_path))
+    text = compose_batch_text("Grow")
+    assert f"ESOI SKILL: before working, read {tmp_path}/evolvable-structure/SKILL.md" in text
+    assert text.index("ESOI SKILL") < text.index(_SOLUTION_IMPROVEMENT_RULE[:40])
+    monkeypatch.setenv("QAR_SKILLS_ROOT", str(tmp_path / "empty"))
+    assert "ESOI SKILL" not in compose_batch_text("Grow")
+    monkeypatch.delenv("QAR_SKILLS_ROOT")
+    assert "ESOI SKILL" not in compose_batch_text("Grow")
