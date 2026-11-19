@@ -187,6 +187,8 @@ def test_a_quest_with_hundreds_of_goals_keeps_its_priority_steps_past_the_first_
             rows = filler + keyed
             if args.get("text_contains"):
                 rows = [g for g in rows if args["text_contains"] in g["title"]]
+            if args.get("everything"):     # the snapshot reads the whole quest in ONE call (see goal_rows), no paging
+                return SimpleNamespace(ok=True, data=rows, text="")
             return SimpleNamespace(ok=True, data=rows[args.get("offset", 0):args.get("offset", 0) + args["limit"]], text="")
     snap = status_snapshot.build(Paged(), "q1", "u1")
     assert "First milestone next step" in snap["text"]
