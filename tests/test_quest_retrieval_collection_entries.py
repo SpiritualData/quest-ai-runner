@@ -53,7 +53,7 @@ def test_list_operations_names_both_collection_reads():
 def test_describe_operation_gives_the_usage_of_the_entries_read():
     obs = QuestRetrievalAdapter(client_with({})).describe_operation("list_collection_entries")
     assert obs.kind == "query"
-    assert "query({operation: 'list_collection_entries', args: {collection_id:" in (obs.text or "")
+    assert "query({operation: 'list_collection_entries', args: {collection: 'expenses'" in (obs.text or "")
 
 
 def test_list_collections_gives_each_collection_name_and_id():
@@ -98,11 +98,48 @@ def test_a_failed_read_is_an_error_not_an_empty_collection():
     assert "could not be read" in obs.error
 
 
-def test_an_entries_read_without_a_collection_id_is_named_not_sent():
+def test_an_entries_read_without_a_collection_is_named_not_sent():
     client = client_with({})
     obs = QuestRetrievalAdapter(client).query({"operation": "list_collection_entries", "args": {}})
-    assert obs.kind == "error" and "collection_id" in obs.error
+    assert obs.kind == "error" and "args.collection" in obs.error
     assert client.calls == []
+
+
+LISTING = {"/api/data/collections": [
+    {"id": "coll_expense_log", "name": "Launch Expenses"},
+    {"id": "coll_run_log", "name": "Morning run"},
+]}
+
+
+def test_the_entries_read_finds_the_collection_by_the_name_the_person_uses():
+    # One read, not two: the planner names the collection (here a word of its name) and the id is looked up here.
+    client = client_with({**LISTING, EXPENSE_LOG_PATH: entries_page(EXPENSE_ITEMS)})
+    obs = QuestRetrievalAdapter(client).query({"operation": "list_collection_entries", "args": {"collection": "expenses"}})
+    assert obs.kind == "query"
+    assert "Totals of the number fields over these entries: amount_usd 2340" in obs.text
+    assert [c["path"] for c in client.calls] == ["/api/data/collections", EXPENSE_LOG_PATH]
+
+
+def test_an_ambiguous_collection_name_is_named_with_the_choices_and_not_read():
+    client = client_with({"/api/data/collections": [
+        {"id": "coll_a", "name": "Expense log, venue"}, {"id": "coll_b", "name": "Expense log, print"}]})
+    obs = QuestRetrievalAdapter(client).query({"operation": "list_collection_entries", "args": {"collection": "expense log"}})
+    assert obs.kind == "error" and "matches more than one collection" in obs.error
+    assert "(id: coll_a)" in obs.error and "(id: coll_b)" in obs.error
+    assert all(c["path"] == "/api/data/collections" for c in client.calls)
+
+
+def test_a_name_no_collection_has_is_named_with_the_collections_that_exist():
+    client = client_with(LISTING)
+    obs = QuestRetrievalAdapter(client).query({"operation": "list_collection_entries", "args": {"collection": "gym"}})
+    assert obs.kind == "error" and "No collection of the person's is named 'gym'" in obs.error
+    assert "Launch Expenses (id: coll_expense_log)" in obs.error
+    assert all(c["path"] == "/api/data/collections" for c in client.calls)
+
+
+def test_the_menu_tells_the_planner_to_name_the_collection():
+    text = QuestRetrievalAdapter(client_with({})).list_operations().text or ""
+    assert "args: {collection: 'expenses'}" in text
 
 
 def test_a_write_or_unknown_operation_is_refused_without_a_request():

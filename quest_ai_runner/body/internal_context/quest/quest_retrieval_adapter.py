@@ -607,7 +607,13 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         """One page of a collection's entries, newest first, with the sums of its number fields on this page."""
         cid = str(args.get("collection_id") or spec.get("collection_id") or "").strip()
         if not cid:
-            return Observation(kind="error", error="list_collection_entries needs args.collection_id. Call list_collections first and use the id of the collection the person named.")
+            wanted = str(args.get("collection") or args.get("name") or args.get("collection_name") or "").strip()
+            if not wanted:
+                return Observation(kind="error", error="list_collection_entries needs args.collection (the collection's name, as the person says it) or args.collection_id.")
+            # One read, not two: the planner names the collection, and the id is looked up here.
+            cid, miss = self._resolve_collection(wanted)
+            if miss:
+                return Observation(kind="error", error=miss)
         try:
             page = max(0, int(args.get("page") or 0))
             limit = min(self._COLLECTION_ENTRY_LIMIT_MAX, max(1, int(args.get("limit") or self._COLLECTION_ENTRY_LIMIT)))
@@ -648,6 +654,32 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                        + ", ".join(f"{k} {_format_sum(v)}" for k, v in sums.items()))
         return Observation(kind="query", locator="operation(list_collection_entries)", text="\n".join(out))
 
+    def _resolve_collection(self, wanted: str) -> tuple:
+        """(collection_id, "") for the one collection the name picks, else ("", reason naming the choices).
+
+        A name matches exactly (any case), else when each of its words appears in the collection's name, so
+        "expenses" finds "Launch Expenses". A miss or several matches are named with every collection's name
+        and id, so the next step can read the right one.
+        """
+        named = []
+        for coll in self.client.list_collections() or []:
+            if isinstance(coll, dict) and str(coll.get("id") or "").strip():
+                named.append((str(coll["id"]).strip(), str(coll.get("name") or "").strip()))
+        if not named:
+            return "", f"No collection could be listed from Quest, so {wanted!r} was not read."
+        low = wanted.lower()
+        matches = [p for p in named if p[1].lower() == low]
+        if not matches:
+            words = low.split()
+            matches = [p for p in named if words and all(w in p[1].lower() for w in words)]
+        if len(matches) == 1:
+            return matches[0][0], ""
+        listing = "; ".join(f"{n or '(unnamed)'} (id: {i})" for i, n in named[:20])
+        if not matches:
+            return "", f"No collection of the person's is named {wanted!r}. Their collections: {listing}."
+        return "", (f"{wanted!r} matches more than one collection ({', '.join(n for _, n in matches)}). "
+                    f"Read one with args.collection_id. Their collections: {listing}.")
+
     @staticmethod
     def _render_entry_value(value: Any) -> str:
         """One field value as text; blank, empty and null values are left out."""
@@ -679,9 +711,10 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "expense log) with the id each one is read by. Read with query({operation: "
             "'list_collections'})",
             "list_collection_entries: One page of a collection's entries, newest first, with the "
-            "total count and the totals of its number fields. Needs the collection id from "
-            "list_collections. Read with query({operation: 'list_collection_entries', args: "
-            "{collection_id: '...'}}); args may also set page and limit",
+            "total count and the totals of its number fields (e.g. the amounts of an expense log). "
+            "Name the collection as the person does. Read with query({operation: "
+            "'list_collection_entries', args: {collection: 'expenses'}}); args may also set "
+            "collection_id (from list_collections), page and limit",
         ]
         return Observation(kind="query", locator="list_operations", text="\n".join(lines))
 
@@ -721,9 +754,11 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "list_collection_entries": (
                 "One page of a collection's entries, newest first, with the total count and the "
                 "totals of its number fields (e.g. the amounts of an expense log). Usage: "
-                "query({operation: 'list_collection_entries', args: {collection_id: '...', page: 0, "
-                "limit: 50}}). The collection id comes from list_collections. A page that says more "
-                "exist is not the whole collection: read the next page before totalling."
+                "query({operation: 'list_collection_entries', args: {collection: 'expenses', page: 0, "
+                "limit: 50}}); args.collection is the collection's name as the person says it, or "
+                "args.collection_id from list_collections. A reply that names several collections "
+                "asks for one by id. A page that says more exist is not the whole collection: read "
+                "the next page before totalling."
             ),
         }
         desc = ops.get(name)
