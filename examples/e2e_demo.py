@@ -92,8 +92,8 @@ def main() -> int:
     print(f"run_once handled (LIVE): {handled}")
 
     # 3) LIVE re-read both tasks to prove the reported status round-tripped through Quest.
-    a_final = client.get_task(aid) if aid else {}
-    h_final = client.get_task(hid) if hid else {}
+    a_final = client.get_task(aid, slim=False) if aid else {}
+    h_final = client.get_task(hid, slim=False) if hid else {}
     print(f"answerable {aid}: status={a_final.get('status')!r}")
     print(f"human-only {hid}: status={h_final.get('status')!r} "
           f"decision_id={h_final.get('decision_id')!r}")

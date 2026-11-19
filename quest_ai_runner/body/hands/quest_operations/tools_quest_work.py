@@ -66,7 +66,7 @@ def current_task_goal(client: Any, ctx: ToolContext) -> Dict[str, Any]:
     if not ctx.task_id:
         return {}
     try:
-        task = client.get_task(ctx.task_id) or {}
+        task = client.get_task(ctx.task_id, slim=False) or {}
     except Exception:  # noqa: BLE001 - a failed read means no default, never a failed create
         return {}
     return {"quest_id": task.get("goal_id"), "related_goal_id": task.get("related_goal_id")}

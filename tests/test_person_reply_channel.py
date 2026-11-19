@@ -464,7 +464,7 @@ class TaskClient:
         self.tasks = tasks
         self.asked = []
 
-    def get_task(self, task_id):
+    def get_task(self, task_id, **_kw):
         self.asked.append(task_id)
         return dict(self.tasks.get(task_id) or {})
 

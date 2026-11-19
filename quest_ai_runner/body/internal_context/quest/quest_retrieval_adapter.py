@@ -430,7 +430,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                        "message being answered."),
             )
 
-        task = self.client.get_task(task_id) or {}
+        task = self.client.get_task(task_id, slim=False) or {}
         if not task:
             return Observation(
                 kind="error",

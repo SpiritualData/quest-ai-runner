@@ -24,7 +24,7 @@ class FakeClient:
         self.assigned = None
         self.tasks = []
 
-    def get_task(self, task_id):
+    def get_task(self, task_id, **_kw):
         return self.task
 
     def list_quest_goals(self, quest_id):

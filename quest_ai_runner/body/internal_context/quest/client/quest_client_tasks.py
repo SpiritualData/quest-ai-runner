@@ -174,11 +174,12 @@ class TasksMixin:
             log.info("wait_for_interactive unavailable (%s) -- the fast lane will retry", e)
             return None
 
-    def get_task(self, task_id: str, *, slim: bool = False) -> Dict[str, Any]:
-        """GET one task. ``slim=True`` leaves out its progress log and result (control fields
-        only): a run's cancel/pause checks fire many times per run and a long run's log is
-        megabytes, so a whole-task read each time was ~1 GB in one hour on 2026-11-14. An older
-        backend ignores the flag and sends the whole task, which is still correct."""
+    def get_task(self, task_id: str, *, slim: bool = True) -> Dict[str, Any]:
+        """GET one task. By default only its control fields (status, cancel/pause flags, dates):
+        a long run's log is megabytes, so whole-task reads cost ~1 GB in one hour on 2026-11-14,
+        and an ad-hoc status loop over ten tasks every 30 s pulled 1.3 GB on 2026-11-19. Pass
+        ``slim=False`` only to read the brief, goal or result. An older backend ignores the flag
+        and sends the whole task, which is still correct."""
         try:
             params = {"slim": "true"} if slim else None
             return self._request("GET", f"/api/assistant-tasks/{task_id}", params=params) or {}
