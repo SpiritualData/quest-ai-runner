@@ -34,6 +34,9 @@ MESSAGE_CLAIM_INTERVAL_SECONDS = 15.0
 # quick: the worker looks for new messages, and for a stop or pause request, this often. The cost
 # is one cheap call per active run per interval. Used by the ``RunControl`` the executor builds.
 RUN_CONTROL_POLL_SECONDS = 2.0
+# Message claims in that session are a POST each; at 2 s they were the lane's main upload on the capped home line
+# (2026-11-20). A steering message waits at most this long; stop and pause keep the 2 s cadence.
+RUN_CONTROL_CLAIM_SECONDS = 10.0
 
 
 # Hard cap on the FALLBACK prior-conversation read in ``_build_context_view`` (the path taken only

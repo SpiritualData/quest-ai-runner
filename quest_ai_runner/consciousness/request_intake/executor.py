@@ -41,7 +41,7 @@ from quest_ai_runner.consciousness.request_intake.executor_contracts import (
     AUTOMATIC_DELIVERY_NOTE, CANCEL_CHECK_INTERVAL_SECONDS, RESULT_IS_THE_WORK_CONTRACT, earlier_run_block, log)
 from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_HEADER
 from quest_ai_runner.consciousness.request_intake.executor_support import (
-    ExecutionOutcome, MESSAGE_CLAIM_INTERVAL_SECONDS, RUN_CONTROL_POLL_SECONDS, _TaskProgressSink, _autopilot_composed_text, _is_autopilot_pass, _is_autopilot_run,
+    ExecutionOutcome, MESSAGE_CLAIM_INTERVAL_SECONDS, RUN_CONTROL_POLL_SECONDS, RUN_CONTROL_CLAIM_SECONDS, _TaskProgressSink, _autopilot_composed_text, _is_autopilot_pass, _is_autopilot_run,
     _run_accepts, across_pass_resume, task_scope_tags, terminal_session_id)
 from quest_ai_runner.consciousness.request_intake.executor_context import ContextViewMixin
 from quest_ai_runner.intelligence.mind.delegation.executor_followup import FollowUpMixin
@@ -223,8 +223,14 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         model. ``cancel_requested`` and ``pause_requested`` are read at the control poll cadence.
         Every callable is best-effort and never raises.
         """
+        claim_state = {"at": None}
+
         def claim_inputs() -> List[ControlMessage]:
             out: List[ControlMessage] = []
+            now = time.monotonic()
+            if claim_state["at"] is not None and now - claim_state["at"] < RUN_CONTROL_CLAIM_SECONDS:
+                return out          # a message waits for the next window, never lost (the claim is atomic)
+            claim_state["at"] = now
             for m in self._claim_task_messages(task_id):
                 text = str(m.get("text") or "").strip()
                 if text:

@@ -118,3 +118,21 @@ def test_a_client_without_the_new_methods_still_gives_a_safe_control():
     assert control.claim_inputs() == []
     control.mark_seen(["x"], "deep_worker")             # no such client method: nothing raised
     assert control.pause_requested() is False
+
+
+def test_message_claims_are_throttled_but_never_lost(monkeypatch):
+    import quest_ai_runner.consciousness.request_intake.executor as exmod
+    now = [1000.0]
+    monkeypatch.setattr(exmod.time, "monotonic", lambda: now[0])
+    client = ControlClient()
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    ex = TaskExecutor(client, Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                                           registry=ModelRegistry(provider)))
+    control = ex._build_run_control("task-9")
+    assert control.claim_inputs() == [ControlMessage(id="m1", text="also check the logs")]
+    now[0] += 2
+    control.claim_inputs()
+    assert client.claimed_for == ["task-9"]                  # inside the window: no call
+    now[0] += exmod.RUN_CONTROL_CLAIM_SECONDS
+    control.claim_inputs()
+    assert client.claimed_for == ["task-9", "task-9"]        # next window: claims again
