@@ -306,7 +306,7 @@ class ContextViewMixin:
             bundle = self._update_engine.collect(quest or {}, card_id=quest_id, card_kind="quest",
                                                  consumer="deep-run", folder=folder)
             self._context_bundle = bundle
-            if folder and bundle.updates:
+            if folder and (bundle.complete or bundle.updates):
                 # Same as an autopilot pass: the news is written in full to the quest folder, the run is handed an index.
                 from quest_ai_runner.body.intake_sources.context_updates_file import index_block, write_context_file
                 written = write_context_file(bundle, folder, consumer="deep-run")

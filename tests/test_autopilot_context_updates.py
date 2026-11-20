@@ -112,7 +112,7 @@ def test_the_watermark_moves_only_once_a_batch_carrying_the_material_was_created
     marks = Watermarks(None)
     _pass_with(client, _engine(client, marks)).run({"text": "autopilot pass"})
     assert client.created_tasks
-    assert marks.get("q1", "quest_notes") == NOW
+    assert any(key.startswith("q1") and key.endswith(":quest_notes") and when == NOW.isoformat() for key, when in marks._data.items())
 
 
 
@@ -290,7 +290,7 @@ def test_the_watermark_moves_once_the_delegated_run_has_had_the_material(tmp_pat
     ex.execute({"id": "t1", "text": "Work the dissertation", "quest_id": "q1"})
 
     assert deep.calls, "the deep run never happened"
-    assert marks.get("q1", "quest_notes") == NOW
+    assert marks.get("q1", "quest_notes", "deep-run") == NOW
     done = [r for r in client.reports if r[1] == "done"]
     assert done and "-> method first" in done[0][2]
 
@@ -329,7 +329,7 @@ def test_a_pasted_brief_is_not_mistaken_for_a_batch_the_pass_composed(tmp_path):
 
     assert deep.calls, "the deep run never happened"
     # Fresh context WAS collected despite the quoted block, so the watermark moved.
-    assert marks.get("q1", "quest_notes") == NOW
+    assert marks.get("q1", "quest_notes", "deep-run") == NOW
     done = [r for r in client.reports if r[1] == "done"]
     assert done
     reported = done[0][2]

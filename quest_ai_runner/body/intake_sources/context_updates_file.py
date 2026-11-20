@@ -37,7 +37,7 @@ MARKER_RE = re.compile(r"<!-- context-updates-section (\S+) -->")
 
 def source_counts(bundle: ContextUpdates) -> Dict[str, int]:
     counts: Dict[str, int] = {}
-    for u in bundle.updates:
+    for u in (bundle.complete or bundle.updates):
         counts[u.source] = counts.get(u.source, 0) + 1
     return counts
 
@@ -58,9 +58,9 @@ def render_section(bundle: ContextUpdates, consumer: str) -> str:
     stamp = bundle.collected_at.isoformat()
     lines = [MARKER.format(stamp=stamp),
              f"## {consumer or 'unnamed consumer'}: {window_of(bundle)}",
-             f"{len(bundle.updates)} item(s): {counts_line(bundle)}", ""]
+             f"{len(bundle.complete or bundle.updates)} item(s): {counts_line(bundle)}", ""]
     grouped: Dict[str, list] = {}
-    for u in bundle.updates:
+    for u in (bundle.complete or bundle.updates):
         grouped.setdefault(u.source, []).append(u)
     for source, rows in grouped.items():
         lines.append(f"### {source} ({len(rows)})")
@@ -71,9 +71,10 @@ def render_section(bundle: ContextUpdates, consumer: str) -> str:
             lines.append(f"#### {u.title or u.kind or source} ({when}{who})")
             if u.url:
                 lines.append(u.url)
-            if u.body:
+            full = (u.raw or {}).get("full_body") or u.body
+            if full:
                 lines.append("")
-                lines.append(str(u.body).rstrip())
+                lines.append(str(full).rstrip())
             lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -90,7 +91,7 @@ def write_context_file(bundle: ContextUpdates, folder: str, *, consumer: str = "
     Returns the path, or None when there is nothing new, no folder, or the write failed (best-effort: a
     file that cannot be written must never fail a run, and the caller then keeps the inline rendering).
     """
-    if not folder or not bundle.updates:
+    if not folder or not (bundle.complete or bundle.updates):
         return None
     now = now or _utcnow()
     path = Path(folder).expanduser() / FILE_NAME
@@ -125,7 +126,7 @@ def index_block(bundle: ContextUpdates, path: Path, *, max_items: int = INDEX_IT
     shown = plain[:max_items]
     lines = [BLOCK_START, _OFFER_PREAMBLE, "",
              f"Everything new since you last looked is written in full in `{path}` "
-             f"({len(bundle.updates)} item(s): {counts_line(bundle)}). Read the newest section of that file "
+             f"({len(bundle.complete or bundle.updates)} item(s): {counts_line(bundle)}). Read the newest section of that file "
              f"for what matters to this work; do not treat every item as an assignment.", ""]
     for u in shown:
         lines.append(u.manifest_line())

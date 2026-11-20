@@ -433,6 +433,10 @@ class UpdateEngine:
             self._cache.clear()
             self._cache_filled_at = now
         cid = str(card_id or card.get("quest_id") or card.get("id") or "")
+        if cid and not (card.get("quest_id") or card.get("id")):
+            # A card that failed to read (an empty record) still IS this quest: the spec resolver keys the deployment's
+            # context_sources_map by the card's id, so without it a quest's named collections silently vanish.
+            card = {**card, "quest_id": cid}
         bundle = ContextUpdates(
             card_id=cid,
             # _card_label, never the outcome: an outcome is a sentence about the future, and it
@@ -496,6 +500,7 @@ class UpdateEngine:
             bundle.reports.append(report)
             bundle.updates.extend(found)
 
+        bundle.complete = list(bundle.updates)
         self._apply_admission(bundle, card)
         self._apply_relevance(bundle, card)
         self._add_owed(bundle, cid, card)
@@ -507,6 +512,9 @@ class UpdateEngine:
             return (bool(u.addressed), u.occurred_at or datetime.min.replace(tzinfo=timezone.utc))
 
         bundle.updates.sort(key=order, reverse=True)
+        known = {id(u) for u in bundle.complete}
+        bundle.complete.extend(u for u in bundle.updates if id(u) not in known)
+        bundle.complete.sort(key=order, reverse=True)
         # Things waiting on an answer are never the ones dropped by the cap.
         if len(bundle.updates) > self._max_updates:
             keep = [u for u in bundle.updates if u.needs_response][:self._max_updates]

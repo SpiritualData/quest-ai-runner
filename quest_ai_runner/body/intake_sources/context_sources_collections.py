@@ -108,7 +108,11 @@ def render_entry(entry: Dict[str, Any], names: Dict[str, str], *, edited: bool =
         sessions = values.get("sessions")
         count = len(sessions) if isinstance(sessions, list) else 0
         lines.append(f"- Time: {spent}" + (f" over {count} session(s)" if count else ""))
-    for key, value in values.items():
+    flat = dict(values)
+    extra = flat.pop("extra_fields", None)
+    if isinstance(extra, dict):
+        flat.update({k: v for k, v in extra.items() if k not in flat})     # fields kept under extra_fields read by name too
+    for key, value in flat.items():
         if key in BOOKKEEPING_KEYS:
             continue
         text = render_value(value)
@@ -216,7 +220,7 @@ class QuestCollectionsSource(_BaseSource):
         if habit_parts:
             habit_parts.sort(key=lambda p: p[3], reverse=True)
             total = sum(p[2] for p in habit_parts)
-            body = "\n\n".join(f"### {p[0].get('name') or p[0].get('id')}\n{p[1]}" for p in habit_parts)
+            body = "\n\n".join(f"##### {p[0].get('name') or p[0].get('id')}\n{p[1]}" for p in habit_parts)
             updates.append(ContextUpdate(
                 source=self.name, kind="habits", item_id="habits",
                 title=f"Habits: {total} new or edited entr{'y' if total == 1 else 'ies'} in {len(habit_parts)} habit(s)",
@@ -265,7 +269,13 @@ class QuestCollectionsSource(_BaseSource):
         if key not in request.cache:
             getter = getattr(request.client, "get_quest", None)
             try:
-                request.cache[key] = (getter(request.card_id) if callable(getter) and request.card_id else {}) or {}
+                found = getter(request.card_id) if callable(getter) and request.card_id else {}
+                if not found and callable(getter):
+                    # The client's home team is not always the quest's owner: retry on the owning team.
+                    owner = getattr(request.client, "owning_team_for", None)
+                    team = owner(request.card_id) if callable(owner) else ""
+                    found = getter(request.card_id, team_id=team) if team else {}
+                request.cache[key] = found or {}
             except Exception as e:  # noqa: BLE001 -- discovery by category is a refinement
                 log.info("context updates: could not read quest %s for discovery (%s)", request.card_id, e)
                 request.cache[key] = {}

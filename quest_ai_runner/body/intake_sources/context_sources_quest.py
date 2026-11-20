@@ -823,7 +823,7 @@ class InsightsSource(_BaseSource):
                 how_to_respond="act on it and say so in your result, or say why it cannot be acted on yet",
                 needs_response=True,
                 summary=f"Unacted insight from {date}{tags}: {_clip(text, 220)}",
-                raw={"categories": cats},
+                raw={"categories": cats, "full_body": f"[{date}]{tags}\n      {getattr(row, 'full_text', '') or text}"},
             ))
         return out
 

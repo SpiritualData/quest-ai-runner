@@ -38,6 +38,9 @@ class ContextUpdates:
     # post one against; a caller collecting against some other kind of card is unaffected.
     card_kind: str = "quest"
     updates: List[ContextUpdate] = field(default_factory=list)
+    # EVERYTHING collected, before the relevance and admission judges and the per-bundle cap trimmed ``updates``
+    # (what the prompt is handed). The CONTEXT_UPDATES.md file is the complete record, so it is written from this.
+    complete: List[ContextUpdate] = field(default_factory=list)
     reports: List[SourceReport] = field(default_factory=list)
     collected_at: datetime = field(default_factory=_utcnow)
     # Set by the engine so ``mark_seen`` can advance exactly what was delivered.

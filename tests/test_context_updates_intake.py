@@ -160,3 +160,37 @@ def test_schedule_counts_activity():
     last = iso(1)
     assert new_activity_since([], [{"at": iso(0.1), "kind": "quest_collections"}], last, NOW)
     assert not new_activity_since([], [{"at": iso(3), "kind": "quest_collections"}], last, NOW)
+
+
+def test_named_includes_survive_an_empty_card_and_file_is_complete(tmp_path):
+    """A quest record that failed to read is still the quest: its mapped includes apply, and the file holds what the judges drop."""
+    from quest_ai_runner.body.intake_sources.context_updates import consumer_spec_resolver
+    client = Client()
+    client.get_quest = lambda quest_id, team_id=None: {}
+    spec_map = {"q1": [{"source": "quest_collections", "discover": False,
+                        "include": [{"id": "ins", "categories": ["PhD"]}]}]}
+    eng = UpdateEngine(client, watermarks=Watermarks(None), always=("quest_collections",), now_fn=lambda: NOW,
+                       spec_resolver=consumer_spec_resolver(spec_map), relevance_judge=lambda *a, **k: set())
+    bundle = eng.collect({}, card_id="q1", consumer="c")
+    assert [u.item_id for u in bundle.updates] == ["ins"]
+    long_text = "x" * 900
+    client.entries["ins"][0]["fieldValues"]["insight"] = long_text
+    bundle.complete[0].raw["full_body"] = long_text           # an insight carries its whole text for the file
+    path = write_context_file(bundle, str(tmp_path), consumer="c", now=NOW)
+    assert long_text in path.read_text()
+
+
+def test_judged_out_items_still_reach_the_file(tmp_path):
+    from quest_ai_runner.body.intake_sources.context_update_types import ContextUpdate
+    from quest_ai_runner.body.intake_sources.context_update_bundle import ContextUpdates
+    kept = ContextUpdate(source="a", title="kept", body="short", occurred_at=NOW, ref="U1")
+    dropped = ContextUpdate(source="insights", title="dropped by a judge", body="clipped [...truncated]",
+                            raw={"full_body": "the whole insight"}, occurred_at=NOW)
+    bundle = ContextUpdates(card_id="q1", collected_at=NOW, updates=[kept], complete=[kept, dropped])
+    text = write_context_file(bundle, str(tmp_path), consumer="c", now=NOW).read_text()
+    assert "the whole insight" in text and "[...truncated]" not in text and "2 item(s)" in text
+
+
+def test_extra_fields_render_by_name():
+    entry = {"createdAt": iso(1), "fieldValues": {"extra_fields": {"field_001": "Preparing for a church meal", "field_9": ""}}}
+    assert "- Title: Preparing for a church meal" in render_entry(entry, {"field_001": "Title"})

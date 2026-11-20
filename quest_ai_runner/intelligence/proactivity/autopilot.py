@@ -454,7 +454,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             reflection_note = bundle.slot_summary("reflection")
             insights_note = bundle.slot_summary("insights")
             context_updates_text = bundle.as_prompt_block(exclude_slots=("reflection", "insights")) or None
-            if folder and bundle.updates and not dry_run:
+            if folder and (bundle.complete or bundle.updates) and not dry_run:
                 # With a working folder the news is written there IN FULL and the brief carries a short index; without one (or on a dry run, which writes
                 # nothing) the old inline block stands.
                 written = write_context_file(bundle, folder, consumer=str(unit.get("id") or ""))

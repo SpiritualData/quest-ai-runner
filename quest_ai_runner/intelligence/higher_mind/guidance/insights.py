@@ -147,6 +147,8 @@ class Insight:
     text: str = ""
     categories: List[str] = field(default_factory=list)
     created_at: Optional[datetime] = None
+    # What the person wrote, whole. ``text`` is clipped for the prompt; a file that is the complete record reads this.
+    full_text: str = ""
 
     @property
     def date_label(self) -> str:
@@ -296,6 +298,7 @@ def collect_quest_insights(client: Any, quest_id: str, *,
         rows.append(Insight(
             entry_id=str(entry.get("id") or entry.get("_id") or ""),
             text=text,
+            full_text=str(values.get(INSIGHT_FIELD_ID) or "").strip(),
             categories=_categories(values.get(INSIGHT_CATEGORIES_FIELD_ID)),
             created_at=created,
         ))
