@@ -323,7 +323,7 @@ def test_an_esoi_without_skill_text_is_read_from_its_packaged_file_and_then_the_
     monkeypatch.setattr(esoi, "__getattr__", older)
     old = briefs.esoi_skill_section()
     assert "loaded from the ESOI library" in old and "# evolvable-structure" in old
-    monkeypatch.setattr(briefs, "_packaged_skill", lambda skill: ("", ""))   # no library skill at all
+    monkeypatch.setattr(briefs, "packaged_skill", lambda skill: ("", ""))   # no library skill at all
     (tmp_path / "evolvable-structure").mkdir()
     (tmp_path / "evolvable-structure" / "SKILL.md").write_text("x")
     monkeypatch.setenv("QAR_SKILLS_ROOT", str(tmp_path))
